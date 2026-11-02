@@ -17,15 +17,25 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-02 — Skills are project-neutral.** Every skill under `.agents/skills/` must work unchanged in another project; project specifics live in `docs/` and `AGENTS.md`. (`apple-design` was cleaned to follow this.)
 - **2026-11-02 — Code review skill.** `.agents/skills/code-review-guide/`, named `-guide` to avoid the built-in `code-review` skill. Complements `ponytail-review` (lean-ness) and `secure-development` (security requirements) instead of repeating them.
 - **2026-11-02 — project-setup skill lives outside this repo.** `~/Documents/projects/project-setup/` creates any new project with the 5 skills and a fixed structure (agent-neutral `AGENTS.md`, docs skeleton, secret-scan hook, graphify). It bundles copies of the skills; refresh procedure in its `SKILL.md`.
+- **2026-11-02 — Planning answers, round 1.** Platform: web/PWA first (works on iPhone via Home Screen and on Mac); Apple Health needs an iOS component, decided later. Users: only the owner for now, multi-user in the design (data isolated per account). Scope: most modules are wanted, built in tiers so the January demo stays safe; module order is decided in the Q&A. First module to design: Gym / sport.
+- **2026-11-02 — AI connector for food logging.** The app will expose a remote MCP server so the user's own Claude (Pro/Max) and Gemini (Google AI Plus) chats can log meals without an API. Data line: food (meals, macros, water, recipes, shopping list) yes; body weight, steps and health data never. Macros are AI estimates, flagged "estimated", with a manual entry fallback. Gemini consumer support for custom connectors is unconfirmed (may need Ultra). Needs threat-model and data-inventory entries and `ai-security.md` before building.
+- **2026-11-02 — Food and Money details.** Food: fixed weekly meal plan that can be edited per week; recipes kept with optional macros; shopping list grouped by category. Money: expenses only for now, quick-entry form, RON only, and finance data never goes through the AI connector.
+- **2026-11-02 — To-do.** Recurring plus single-day tasks, manual only (no auto-entries from other modules), web push notifications via the installed PWA.
+- **2026-11-02 — Wedding and Chess modules dropped.** The user removed both from the app's sections. Money no longer needs a wedding category link.
+- **2026-11-02 — Wishlist.** Private, owner-only, one list for the user's own wants (name, link, estimated price, priority). Bought items are deleted; no photo, no sharing, no link to Money.
+- **2026-11-02 — Health module dropped.** No Apple Health / Apple Fitness integration, so no native iOS component: the app stays web/PWA only. Steps and body weight remain manual daily entries in Food.
+- **2026-11-02 — Work opportunities and Projects modules dropped.** Remaining modules: Gym, Food + weight, Money, Daily to-do, Wishlist, Family business (in discussion).
+- **2026-11-02 — Family business.** Owner-only dashboard: income + expenses (profit) and a business to-do, separate from the personal modules; no customers/orders/stock for now; finance never goes through the AI connector.
+- **2026-11-02 — Tiers.** Tier 1: login, Gym, Food + weight. Tier 2: Money, To-do + notifications, Food AI connector. Tier 3: Business, Wishlist. Money and To-do carry a personal/business space field and are reused by Business.
+- **2026-11-02 — Stack and auth direction.** TypeScript full-stack (web/PWA); Microsoft Entra External ID for authentication (OAuth/OIDC, also used by the AI connector); a message queue carries push-notification reminders to a worker. Specific framework, database, compute service and IaC tool are still open.
 
 ## Open
 
 - App description / functionality (user will provide; goes to `docs/spec.md`).
-- Tech stack (language, framework, frontend or not).
+- Framework and frontend library (language chosen: TypeScript).
 - IaC tool: Terraform vs Azure CLI scripts vs Bicep/ARM (the course will discuss this in later lectures; wait unless told otherwise).
 - Compute choice (App Service, Container Apps, Functions, VM, ...).
 - Database / storage choice.
-- Auth provider (Microsoft Entra ID / Entra External ID / own JWT) and the authorization model (roles).
-- Message queue use (Service Bus / Storage Queue) and for what.
-- Whether to add a mobile client (optional per the course).
+- Authorization model details (owner-only now; account-scoped data).
+- Queue product (Service Bus vs Storage Queue); use is push-notification reminders.
 - Public vs private repo, and a license, once the project is shared.

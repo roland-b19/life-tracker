@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Planning. Repo scaffolding and agent tooling done. App idea captured; **no spec and no implementation until the planning round is finished.**
+Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is a draft awaiting the user's review. **No implementation until the user approves the spec.**
 
 ## Done
 
@@ -22,11 +22,12 @@ Planning. Repo scaffolding and agent tooling done. App idea captured; **no spec 
 - Generic `project-setup` skill outside this repo, in `~/Documents/projects/project-setup/` (script + template + the 5 skills), for starting any new project with the same structure.
 - Cleanup: `.pre-commit-config.yaml` (secret scan) added; `docs/security-plan.md` marked validated. The setup is ready for implementation once the plan is approved.
 
+- Planning Q&A done for Gym, Food + weight, Money, To-do, Wishlist, Family business; Wedding, Chess, Health, Work opportunities and Projects dropped. Draft in `docs/spec.md` (+ seed data `docs/spec/gym-sample.md`), tiers and stack direction in `docs/decisions.md`.
+
 ## Next
 
-1. **Planning round (no implementation yet):** the agent asks the user questions module by module and about the cross-cutting parts (users, auth, notifications, AI, platform, Apple Health integration), proposes improvements, then writes `docs/spec.md`.
-   During planning: write `docs/threat-model.md` v1 and `docs/security/data-inventory.md` from the skill templates (project files, not part of the skill).
-2. Decide the stack and IaC tool, recording them in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
+1. **Finish planning:** the user reviews `docs/spec.md`; remaining cross-cutting items (authorization details, notifications design, backup/export, privacy copy). Then write `docs/threat-model.md` v1 and `docs/security/data-inventory.md` from the skill templates (project files, not part of the skill).
+2. Decide framework, database, compute service, queue product and IaC tool, recording them in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 3. First iteration: skeleton app + deploy/teardown scripts.
 
 ## Open questions
@@ -39,5 +40,6 @@ None. (Azure CLI is not installed on the user's machine yet.)
 
 ## Session log (newest first)
 
+- 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
 - 2026-11-02 — Added code-review-guide, audited the 3 project skills, created project-setup, cleanup. No application code yet.
 - 2026-11-02 — Initial setup (Claude Code). No application code yet.
