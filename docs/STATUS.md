@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. **No implementation until the stack is chosen.**
+Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. Stack chosen (see `docs/decisions.md`); IaC tool still open. **No implementation until the first iteration is agreed.**
 
 ## Done
 
@@ -26,8 +26,8 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. **Choose the concrete stack** (next step, with the user): framework, database, compute, queue product, IaC tool. Then refine the **(stack)** items in `docs/threat-model.md`.
-2. Record the choices in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
+1. Choose the IaC tool (after the course lectures, or now if the user wants) and refine the **(stack)** items in `docs/threat-model.md`.
+2. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 3. First iteration: skeleton app + deploy/teardown scripts.
 
 ## Open questions
