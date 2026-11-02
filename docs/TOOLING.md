@@ -8,6 +8,7 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 |------|-----|-----------------|
 | git, gh | repo and GitHub | `brew install git gh`, then `gh auth login` |
 | uv | installs graphify | `brew install uv` |
+| pre-commit, gitleaks | local secret scan before each commit (`.pre-commit-config.yaml`) | `brew install pre-commit gitleaks`, then `pre-commit install` |
 | Azure CLI | deploy scripts (needed from the first iteration) | `brew install azure-cli`, then `az login` |
 | Terraform | only if chosen as the IaC tool | `brew install terraform` |
 
@@ -58,6 +59,15 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 - `.agents/skills/secure-development/`: `SKILL.md` (router + non-negotiables + refresh procedure), `references/*.md` (ASVS 5.0, Top 10:2025, NIST SSDF, cheat sheets, plus optional Azure, AI and iOS files), `templates/` (threat model, risk register, ASVS matrix, data inventory). `.claude/skills/secure-development` is a symlink to it.
 - Sources are mostly OWASP (CC BY-SA 4.0), rewritten with attribution in each `Sources` line; fetched 2026-11-02. Refresh procedure: `SKILL.md`, last section.
 - Project plan and decisions: `docs/security-plan.md`.
+
+## Code review skill
+
+- `.agents/skills/code-review-guide/`: `SKILL.md` (router + procedure), `references/` (reviewer guide, author guide, security review, reviewing agent-written code), `templates/pull-request.md`. `.claude/skills/code-review-guide` is a symlink to it. Named `-guide` to avoid a clash with the built-in `code-review` skill of Claude Code.
+- Sources: Google Engineering Practices, Microsoft Code-With Engineering Playbook, OWASP Code Review Guide (fetched 2026-11-02). Refresh procedure: `SKILL.md`, last section.
+
+## Starting other projects
+
+The generic setup for a new project (same structure and the same 5 skills) lives outside this repo: `~/Documents/projects/project-setup/` (`SKILL.md`, `setup.sh`).
 
 ## Agent support matrix
 

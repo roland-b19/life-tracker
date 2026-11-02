@@ -9,7 +9,7 @@ Procedure: `references/threat-modeling.md`.
 - Assumptions: <for example "cloud provider platform is trusted">
 
 ## 2. Assets
-| ID | Asset | Sensitivity (public / internal / sensitive / special-category) | Where stored | Impact if exposed, altered, lost |
+| ID | Asset | Sensitivity (public / internal / personal / secret / regulated, e.g. special-category) | Where stored | Impact if exposed, altered, lost |
 |---|---|---|---|---|
 
 ## 3. Actors

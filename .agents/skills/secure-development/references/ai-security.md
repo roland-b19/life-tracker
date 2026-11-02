@@ -1,9 +1,7 @@
-Read only if the project uses large language models or other AI services.
-
 # AI / LLM security
 
 ## When to read this
-You design, build, review or verify a feature that sends data to a model (hosted API or local), shows model output, lets a model call tools, or retrieves documents for a model. Core rule: **a model is an untrusted component that follows instructions found anywhere in its input.** No prompt wording is a security boundary; enforce controls in deterministic code outside the model.
+Only if the project uses large language models or other AI services, when you design, build, review or verify a feature that sends data to a model (hosted API or local), shows model output, lets a model call tools, or retrieves documents for a model. Core rule: **a model is an untrusted component that follows instructions found anywhere in its input.** No prompt wording is a security boundary; enforce controls in deterministic code outside the model.
 
 Checklist format: `- [ ] <ID> <rule>`. LLM01..LLM10 are OWASP Top 10 for LLM Applications 2025. ASVS IDs (5.0) keep their level (L1/L2/L3). `(note)` = not in the sources.
 

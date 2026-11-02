@@ -10,7 +10,7 @@ Hints (note, from the author's own knowledge, not from the HIG; each applies onl
 
 Rules:
 - Ask for health access only if the app really offers health/fitness functionality. Otherwise never request private health data.
-- Request permission in context, at the moment the data is needed (for example when the person logs weight), never right after launch. Permissions can be changed any time, so ask again whenever you need access (`requestAuthorization(toShare:read:completion:)`).
+- Request permission in context, at the moment the data is needed (for example when the person first records a measurement), never right after launch. Permissions can be changed any time, so ask again whenever you need access (`requestAuthorization(toShare:read:completion:)`).
 - Use the system permission sheet. Add a few short sentences explaining why you need the data and what the person gains. Do not build custom screens that imitate or replace that sheet.
 - Health sharing is managed only in system Settings > Privacy. Do not add in-app screens that change what flows to/from Health.
 - Provide a privacy policy URL at App Store submission; it must be clear and linked from the store page.

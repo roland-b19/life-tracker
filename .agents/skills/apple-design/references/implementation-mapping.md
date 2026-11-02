@@ -1,8 +1,8 @@
 # Implementation mapping: from HIG rules to code
 
-When to read this: when you are about to turn HIG guidance into code, especially if the target is not a pure native SwiftUI app (a web app/PWA, or a cross-platform framework). This file is NOT Apple guidance: it is the project's own translation layer, written from general platform knowledge. Everything in the other references is Apple guidance; verify any claim here against current docs before relying on it for a release.
+When to read this: when you are about to turn HIG guidance into code, especially if the target is not a pure native SwiftUI app (a web app/PWA, or a cross-platform framework). This file is NOT Apple guidance: it is a translation layer written from general platform knowledge. Everything in the other references is Apple guidance; verify any claim here against current docs before relying on it for a release.
 
-## 1. Choose the target first (decision lives in `docs/decisions.md`)
+## 1. Choose the target first (record the choice in the project's decision log)
 
 | Target | Fidelity to the HIG | Notes |
 |---|---|---|

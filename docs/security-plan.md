@@ -1,8 +1,8 @@
-# Security plan (DRAFT, awaiting user validation)
+# Security plan
 
-Status: **answers to section 10 received 2026-11-02; waiting for final OK on the plan itself.** Nothing in here is built yet. After the user validates it, it is executed as the work packages in section 9 and the result becomes the `secure-development` skill plus the artefacts listed in section 3.
+Status: **validated by the user on 2026-11-02.** The `secure-development` skill (D1), the local secret-scan hook config (`.pre-commit-config.yaml`; install with `pre-commit install`), its templates and the `AGENTS.md` security rules (D8) are done and fact-checked. Still open, waiting for the stack decision: CI security pipeline, cloud hardening, threat model v1 and data inventory (written during planning).
 
-Versions below were looked up on 2026-11-02 and must be re-checked when the skill is written.
+Versions below were looked up on 2026-11-02; the skill's `SKILL.md` has the refresh procedure.
 
 ## 1. Goal
 

@@ -1,7 +1,7 @@
 # Threat modeling procedure
 
 **When to read this:** before designing a feature or system, when a design change touches data, trust or external services, and when reviewing a design for security. It is the SSDF PW.1.1/PW.1.2 task in practice.
-Output: a small `threat-model` document in the repo (DFD + threat table + risk register), kept current. Size it to the system: a one-page model beats none.
+Output: a small threat-model document in the repo (DFD + threat table + risk register), kept current; start from `templates/threat-model.md` and `templates/risk-register.md`. Size it to the system: a one-page model beats none.
 
 ## The four questions (Threat Modeling Manifesto, via OWASP cheat sheet)
 1. What are we working on? 2. What can go wrong? 3. What are we going to do about it? 4. Did we do a good enough job?
@@ -12,7 +12,7 @@ Output: a small `threat-model` document in the repo (DFD + threat table + risk r
 ### 1. Scope and assets (question 1)
 (note) The cheat sheet only says "model the system"; this step's checklist is our synthesis.
 - [ ] State what is in and out of scope (system, version, environments).
-- [ ] List assets: data (classify each type: public / internal / personal / secret / regulated), credentials and keys, availability-critical functions, reputation/money-bearing business functions.
+- [ ] List assets: data (classify each type: public / internal / personal / secret / regulated, e.g. special-category health data), credentials and keys, availability-critical functions, reputation/money-bearing business functions.
 - [ ] List actors: legitimate roles (anonymous, user, admin, operator, service accounts) AND adversaries (curious user, malicious user, outsider, compromised dependency/vendor, insider, automated bots). Note goal and capability of each.
 - [ ] Note security requirements per asset (confidentiality, integrity, availability, authenticity).
 
@@ -56,7 +56,7 @@ Per threat choose and record one response (Shostack):
 
 ### 6. Risk register (with accepted risks)
 (note) Table and rules below are our synthesis; the sources only require recording each response, rationale and accepted residual risk (PW.1.2).
-Keep in the repo. One row per threat/abuse case:
+Keep in the repo (`templates/risk-register.md`). One row per threat/abuse case:
 
 | ID | Threat / abuse case | Asset | Likelihood | Impact | Response | Control / requirement | Status | Owner | Review by |
 |---|---|---|---|---|---|---|---|---|---|

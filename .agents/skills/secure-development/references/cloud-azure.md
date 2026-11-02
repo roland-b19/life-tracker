@@ -1,9 +1,6 @@
-Read only if the target hosting is Microsoft Azure.
-Skip it for any other cloud or for self-hosting.
-
 # Cloud security checklist: Microsoft cloud security benchmark (MCSB) for Azure
 
-**When to read this:** you design, deploy or review infrastructure and platform configuration on Azure (network exposure, identity, secrets, logging, backups, pipelines). It complements the application-level references; it does not replace them.
+**When to read this:** only if the target hosting is Microsoft Azure (skip it for any other cloud or for self-hosting), when you design, deploy or review infrastructure and platform configuration on Azure (network exposure, identity, secrets, logging, backups, pipelines). It complements the application-level references; it does not replace them.
 Line format: `- [ ] <MCSB id> (L<n>) rule`. MCSB itself has no levels, so L1/L2/L3 here is a `(note)` prioritisation: **L1** = small-project baseline (do always), **L2** = production with real user data, **L3** = multi-team / regulated organisations. L2 includes L1; L3 includes L1+L2. `(note)` = not from the sources.
 
 Contents: Version, Small-project baseline, Domains (NS IM PA DP AM LT PV ES BR DS GS, IR), Per-service notes, How to verify, Common mistakes, Sources.

@@ -9,8 +9,8 @@ Agent-neutral. Lives in `.agents/skills/apple-design/`. Source: Apple's public H
 
 ## How to use
 
-1. Before any UI work, read the references that match the task (table below). Read the whole section you need, not just a heading. Do not rely on memory of Apple's design: the guidance changed with Liquid Glass.
-2. Say the target platform(s) first (iPhone, iPad, Mac, web). Untagged rules apply everywhere; `[iOS]`, `[iPadOS]`, `[macOS]`, `[watchOS]`, `[tvOS]`, `[visionOS]` tags are platform-specific.
+1. Before any UI work, read the references that match the task (table below). References are long (up to 43 KB): list sections with `grep -n '^## ' <file>` and read each needed section completely, not just a heading. Do not rely on memory of Apple's design: the guidance changed with Liquid Glass.
+2. Say the target platform(s) first (iPhone, iPad, Mac, web). For web, PWA or cross-platform targets read `implementation-mapping.md` first (pt becomes CSS px, SF fonts and SF Symbols cannot be shipped, no HealthKit/haptics on the web) and then the HIG references for the rules themselves. Untagged rules apply everywhere; `[iOS]`, `[iPadOS]`, `[macOS]`, `[watchOS]`, `[tvOS]`, `[visionOS]` tags are platform-specific.
 3. Use the system component before building a custom one; when you must go custom, copy the system behaviour (states, accessibility, Dynamic Type, Dark Mode, Reduce Motion).
 4. Before finishing, run the checklist at the end of `references/accessibility.md` and the quality gate in `references/implementation-mapping.md`.
 5. If a rule here conflicts with the HIG page, the page wins; open it and fix the reference.
@@ -26,7 +26,8 @@ Agent-neutral. Lives in `.agents/skills/apple-design/`. Source: Apple's public H
 | SF Symbols, icons, app icon | `icons-symbols-appicon.md` |
 | Navigation (tab bar, sidebar, split view), lists, sheets, alerts, popovers, scroll views, windows, search field | `components-structure.md` |
 | Buttons, toolbars, menus, toggles, pickers, text fields, keyboards, sliders, progress, gauges, charts | `components-actions-input.md` |
-| Entering data, feedback, loading, search, settings, undo, modality, accounts, notification etiquette, help, sharing, drag and drop, haptics, workouts | `patterns-1.md`, `patterns-2.md` |
+| Charts as a pattern, entering data, feedback, loading, search, settings, undo, modality | `patterns-1.md` |
+| Accounts and sign-in, notification etiquette, help and tips, sharing, drag and drop, haptics, workouts, ratings prompts, file management, printing, full screen, multitasking, audio/video | `patterns-2.md` |
 | Widgets, Live Activities, notifications, Controls, App Shortcuts, status bars | `system-experiences.md` |
 | Gestures, hardware keyboard shortcuts, pointer, Apple Pencil, focus | `inputs.md` |
 | HealthKit, Sign in with Apple, iCloud, AI/ML features, Siri, Maps, Apple Pay, in-app purchase, Mac Catalyst, others | `technologies.md` |
@@ -40,6 +41,7 @@ Agent-neutral. Lives in `.agents/skills/apple-design/`. Source: Apple's public H
 - Default body size 17 pt on iOS/iPadOS (minimum 11 pt). Support Dynamic Type at every size including accessibility sizes; no truncation of important text.
 - Follow the system appearance (Light/Dark); no in-app theme switch. Every custom color has light, dark and increased-contrast variants. Text contrast at least 4.5:1 (aim 7:1 for small text).
 - Never convey meaning by color alone.
+- Web/cross-platform: the same rules apply with CSS equivalents (system font stack, `rem` sizes, `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, 44 CSS px targets, safe-area insets); see `implementation-mapping.md`.
 - Honor Reduce Motion, Reduce Transparency, Increase Contrast, Bold Text, VoiceOver, Voice Control.
 - Liquid Glass is for the controls/navigation layer floating above content (tab bars, sidebars, toolbars); do not use it in the content layer (cards, lists), do not stack many custom glass controls, use tint sparingly.
 - Onboarding and setup: ship defaults that work for most people, ideally no setup before use. Permissions: purpose string is one specific sentence in sentence case; a pre-alert screen has a single "Continue" button, never "Allow".

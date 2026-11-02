@@ -74,7 +74,7 @@ ASVS: not named in the source. (note) V2 Validation and Business Logic (V2.3 bus
 What: the system accepts an invalid or wrong identity as legitimate (credential stuffing/spraying, brute force, weak or default passwords, weak recovery, missing MFA, session ID exposure/reuse, bad logout, wrong audience).
 Defend:
 - [ ] MFA wherever possible; no default credentials; support password managers.
-- [ ] Check new passwords against a top-10,000 worst list and breached-credential lists; follow NIST 800-63B section 5.1.1; do not force periodic rotation unless a breach is suspected (then reset immediately).
+- [ ] Check new passwords against a top-10,000 worst list and breached-credential lists (ASVS 6.2.4 L1 floor: top 3000); follow NIST 800-63B section 5.1.1; do not force periodic rotation unless a breach is suspected (then reset immediately).
 - [ ] Same message for all outcomes in login, registration and recovery (no account enumeration); no knowledge-based answers.
 - [ ] Limit or progressively delay failed attempts without creating a DoS; log failures and alert on attack patterns.
 - [ ] Server-side session manager: new high-entropy ID after login, not in the URL, secure cookie, invalidated on logout, idle and absolute timeout.

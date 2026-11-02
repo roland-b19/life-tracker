@@ -110,15 +110,7 @@ Principle (A03): the pipeline must not be weaker than what it builds and deploys
 ## 3. Secrets hygiene (ASVS V13.3, Secrets Management cheat sheet)
 
 ### Checklist
-- [ ] V13.3.1 (L2) Use a secrets-management solution (vault/key vault or the platform's equivalent) to create, store, control access to and destroy backend secrets. Secrets are **not** in source code and **not** in build artifacts. (L3: hardware-backed, such as an HSM.)
-- [ ] V13.3.2 (L2) Least privilege for access to secrets: each service identity can read only its own secrets.
-- [ ] V13.3.3 (L3) Cryptographic operations happen inside an isolated security module so key material never leaves it.
-- [ ] V13.3.4 (L3) Secrets expire and are rotated per the documented schedule.
-- [ ] V13.1.4 (L3) Documentation lists the security-critical secrets and a rotation schedule.
-- [ ] V13.2.1 (L2) Service-to-service calls use individual service accounts, short-term tokens or certificates, not static passwords, API keys or shared privileged accounts.
-- [ ] V13.2.2 (L2) Backend components use accounts with the least privilege they need.
-- [ ] V13.2.3 (L2) No default credentials (root/root, admin/admin) on any service.
-- [ ] V13.4.1 (L1) Deploy without `.git`/`.svn` metadata, or make it unreachable externally and by the app.
+The ASVS secrets and service-credential items (V13.3.1-13.3.4, V13.1.4, V13.2.1-13.2.3, V13.4.1, levels included) are in `platform-data-ops.md` V13; apply them all here. In short: secrets in a secrets manager, never in source or build artifacts; each service identity reads only its own secrets; no static or default credentials between services; no `.git`/`.svn` metadata in deployments.
 
 ### Practices
 1. **Prefer identity over secrets**: managed/workload identity or short-lived tokens beat stored keys; the fewest secrets are the ones that do not exist.
@@ -271,7 +263,7 @@ Goal: block a commit that contains a credential, before it exists in history.
 ---
 
 ## Sources
-- OWASP ASVS 5.0, V13 Configuration (13.1.x, 13.2.x, 13.3.x, 13.4.x) and V15.1/V15.2 (`ASVS/5.0/en/0x22-V13-Configuration.md`, `0x24-V15-Secure-Coding-and-Architecture.md`). Git master checkout, commit `9ccce0e3cf47abd6a412fc8a8deadd7fd6da501f` (2026-10-26). Licence CC BY-SA 4.0. https://github.com/OWASP/ASVS. Items for 13.1.1-3, 13.2.4-6, 13.4.2-7, 15.1.3 and 15.2.2 are covered in `platform-data-ops.md` (or only referenced in sections 5 and 8 here); V15.3/V15.4 (defensive coding, concurrency) belong to other files.
+- OWASP ASVS 5.0, V13 Configuration (13.1.x, 13.2.x, 13.3.x, 13.4.x) and V15.1/V15.2 (`ASVS/5.0/en/0x22-V13-Configuration.md`, `0x24-V15-Secure-Coding-and-Architecture.md`). Git master checkout, commit `9ccce0e3cf47abd6a412fc8a8deadd7fd6da501f` (2026-10-26). Licence CC BY-SA 4.0. https://github.com/OWASP/ASVS. All V13 items, and 15.1.3 and 15.2.2, are listed in `platform-data-ops.md` (or only referenced in sections 5 and 8 here); V15.3/V15.4 (defensive coding, concurrency) belong to other files.
 - OWASP Top 10:2025, A03 Software Supply Chain Failures and A08 Software or Data Integrity Failures (`Top10/2025/docs/en/`), repository commit `3a31f35346c3f4e90f350395124382fa53af2afe` (2026-09-24). Licence CC BY-SA 4.0 (`Top10/LICENSE`). https://owasp.org/Top10/
 - OWASP Cheat Sheet Series (commit `1abd8667e9311f7ae54eb9be8fc1e28cc6a15de9`, 2026-11-01), CC BY-SA 4.0 (the IaC sheet carries its own header, CC BY-SA 3.0, Nokia): CI_CD_Security, Software_Supply_Chain_Security, Dependency_Graph_SBOM, Vulnerable_Dependency_Management, Secrets_Management, Docker_Security, Infrastructure_as_Code_Security, NPM_Security (also used for ecosystem-neutral supply chain rules). https://cheatsheetseries.owasp.org/
 - Not used: NIST SSDF (`ssdf.pdf`) was not consulted for this file. CI platform-specific hardening (GitHub Actions permissions, SHA pinning, fork-PR handling), minimal base images, `.dockerignore`, state-file handling and all tool pricing/feature statements are `(note)` items from general knowledge, not from the bundled sources.

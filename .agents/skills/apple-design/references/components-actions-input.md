@@ -1,6 +1,6 @@
 # Components: actions, selection and input, status, charts
 
-When to read this: before building any tappable control, bar, menu, form field, picker, progress/status indicator or chart (e.g. habit streaks, weight/spend graphs, goal progress). Rules are rewritten from Apple's HIG; platform tags appear only where a rule is platform-specific.
+When to read this: before building any tappable control, bar, menu, form field, picker, progress/status indicator or chart (e.g. trend graphs, goal progress). Rules are rewritten from Apple's HIG; platform tags appear only where a rule is platform-specific.
 
 ---
 

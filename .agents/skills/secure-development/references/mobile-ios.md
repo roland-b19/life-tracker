@@ -1,9 +1,7 @@
-Read only if the project ships a native mobile client (iOS focus).
-Android is not covered beyond the generic MASVS control rules.
-
 # Mobile client security (OWASP MASVS 2.x + iOS)
 
 ## When to read this
+- Only if the project ships a native mobile client (iOS focus). Android is not covered beyond the generic MASVS control rules.
 - Designing, writing, reviewing or verifying an iOS (or other native mobile) app that talks to a backend or stores user data.
 - The backend is NOT covered here: verify it against the web/API ASVS files. MASVS covers the client only.
 - Assume the device, the network and the app binary are attacker-controlled. Every client-side check must also exist server-side.

@@ -141,7 +141,7 @@ Numbers: up to 4 notification action buttons; watch long-look background white a
 
 Avoid: duplicate/reminder-spam notifications, instructions telling users what to do, errors as notifications, app name/icon inside content, badges for non-notification data, sensitive content in titles.
 
-(note) Grouping and timing are not covered on this HIG page. From platform knowledge: set a thread identifier (UNNotificationContent.threadIdentifier) so related notifications stack into one group (e.g. per section such as Gym or Money), set summaryArgument for grouped summaries, and for scheduled reminders use calendar/time-interval triggers with actions to complete or snooze. Respect interruption levels below when choosing timing.
+(note) Grouping and timing are not covered on this HIG page. From platform knowledge: set a thread identifier (UNNotificationContent.threadIdentifier) so related notifications stack into one group (e.g. per app section or category), set summaryArgument for grouped summaries, and for scheduled reminders use calendar/time-interval triggers with actions to complete or snooze. Respect interruption levels below when choosing timing.
 
 ---
 

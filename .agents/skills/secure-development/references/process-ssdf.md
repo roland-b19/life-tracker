@@ -56,19 +56,15 @@ Solo/small team: "organization" = you. "Qualified person not involved" (PW.2.1, 
 ### PW.2 Design review
 - [ ] **PW.2.1** Have a qualified person not involved in the design, and/or automated checks, review the design against requirements and the risk model; designer fixes failures; record findings. (note) Done: design/PR review note linked to the threat model.
 
-### PW.3 (moved)
-PW.3.1 moved to PO.1.3; PW.3.2 moved to PW.4.4.
+IDs moved in v1.1 (no task of their own): PW.3.1 -> PO.1.3; PW.3.2 -> PW.4.4; PW.4.3 -> PW.1.3; PW.4.5 -> PW.4.1 and PW.4.4; PW.5.2 -> PW.5.1.
 
 ### PW.4 Reuse well-secured software
 - [ ] **PW.4.1** Acquire and maintain vetted third-party components: evaluate for the intended use (re-evaluate if use changes), secure configs, provenance/SBOM, approved-version list, update process keeping old versions until migration ends; if binary provenance cannot be confirmed, build from verified source.
 - [ ] **PW.4.2** Build in-house reusable components under the same SDLC rules when no third-party option fits.
-- [ ] **PW.4.3** Moved to PW.1.3.
 - [ ] **PW.4.4** Verify third-party components against your requirements for their whole life: known-vulnerability checks in the toolchain, still-maintained/not-EOL check with a plan for abandoned ones, signature/integrity checks, review code where warranted.
-- [ ] **PW.4.5** Moved to PW.4.1 and PW.4.4.
 
 ### PW.5 Secure coding
 - [ ] **PW.5.1** Follow secure coding practices for your language/environment: validate inputs, validate and encode outputs, avoid unsafe functions, handle errors gracefully, provide logging/tracing, use linters/formatters, self-review to complement (not replace) peer review. See other references in this skill for the rules.
-- [ ] **PW.5.2** Moved into PW.5.1.
 
 ### PW.6 Compiler / interpreter / build configuration
 - [ ] **PW.6.1** Use current compiler/interpreter/build tools; apply change management and audit unexpected changes; validate tool authenticity/integrity.

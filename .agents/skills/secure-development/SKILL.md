@@ -20,7 +20,7 @@ Agent-neutral and project-neutral. Lives in `.agents/skills/secure-development/`
 | Task | Read |
 |---|---|
 | New system or feature, design review, "what can go wrong" | `threat-modeling.md`, then fill `templates/threat-model.md` |
-| Parsing input, database queries, HTML/JS output, redirects, outbound requests, HTTP/REST/GraphQL APIs, cookies and browser headers, uploads, downloads, spreadsheet/document import | `input-api-files.md` (ASVS V1-V5) |
+| Parsing input, database queries, HTML/JS output, redirects, outbound requests, HTTP/REST/GraphQL APIs, CORS, cookies and browser headers, uploads, downloads, spreadsheet/document import | `input-api-files.md` (ASVS V1-V5) |
 | Login, registration, password reset, MFA, sessions, API keys, JWT, OAuth/OIDC, roles, ownership, multi-user or tenant isolation, admin features | `identity-access.md` (ASVS V6-V10) |
 | Cryptography, TLS, configuration, secrets, sensitive-data protection, secure coding/architecture, logging, error handling | `platform-data-ops.md` (ASVS V11-V16) |
 | Personal, health, financial or location data; consent, retention, deletion, export, logs, third parties | `privacy-by-design.md`, then fill `templates/data-inventory.md` |

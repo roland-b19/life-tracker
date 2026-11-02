@@ -61,7 +61,7 @@ Status: A = approved, L = legacy (compat only), D = disallowed. When unsure use 
 | AES mode | GCM, then CCM (both authenticated) | CBC only with encrypt-then-MAC and constant-time padding check | ECB, CFB, OFB, CTR (unauthenticated), CCM-8 |
 | Authenticated encryption | AES-GCM, AES-CCM, ChaCha20-Poly1305, AEGIS, encrypt-then-MAC | MAC-then-encrypt | unauthenticated encryption (except disk encryption) |
 | General hash | SHA-256/384/512, SHA-512/256, SHA3, BLAKE2/3 | SHA-224, SHA-1 (not for HMAC/KDF/signatures) | MD5, MD4, CRC for security |
-| Password hash | argon2id (t=1: m>=47104 KiB; t=2: m>=19456 KiB; t>=3: m>=12288 KiB; p=1); scrypt (p=1: N>=2^17, r=8; p=2: N>=2^16; p>=3: N>=2^15); bcrypt cost>=10; PBKDF2-HMAC-SHA-512 >=210,000 iterations; PBKDF2-HMAC-SHA-256 >=600,000 | PBKDF2-HMAC-SHA-1 >=1,300,000 | plain or salted fast hashes |
+| Password hash | argon2id (t=1: m>=47104 KiB; t=2: m>=19456 KiB; t>=3: m>=12288 KiB; p=1); scrypt (p=1: N>=2^17, r=8; p=2: N>=2^16; p>=3: N>=2^15); bcrypt cost>=10 ((note) the Password Storage cheat sheet treats bcrypt as legacy only, prefer argon2id/scrypt); PBKDF2-HMAC-SHA-512 >=210,000 iterations; PBKDF2-HMAC-SHA-256 >=600,000 ((note) the cheat sheet asks SHA-512 220,000 and SHA-1 1,400,000; use the higher values, see `identity-access.md`) | PBKDF2-HMAC-SHA-1 >=1,300,000 | plain or salted fast hashes |
 | General KDF | HKDF | TLS 1.2 PRF | MD5/SHA-1-based KDFs |
 | MAC | HMAC-SHA-256/384/512, KMAC, BLAKE3 keyed, AES-CMAC, AES-GMAC, Poly1305 | HMAC-SHA-1 | HMAC-MD5 |
 | Signature | EdDSA (Ed25519/Ed448), ECDSA (P-256/384/521), RSA-PSS | | RSA PKCS#1 v1.5 signatures, DSA |
@@ -103,7 +103,7 @@ PQC (L3 planning): NIST FIPS 203, 204, 205 (Appendix C names only the numbers); 
 
 ### Secrets
 - [ ] 13.3.1 (L2) Use a secrets-management solution (key vault) to create, store, control access to and destroy backend secrets (passwords, keys, DB and third-party credentials, TOTP seeds, API keys). Secrets never in source code or build artifacts. L3 apps: hardware-backed (HSM).
-- [ ] 13.3.2 (L2) Least-privilege access to secrets.
+- [ ] 13.3.2 (L2) Least-privilege access to secrets: each service identity can read only its own secrets.
 - L3: 13.3.3 perform crypto operations inside an isolated security module (vault/HSM) so key material never leaves it; 13.3.4 secrets expire and are rotated per the documented schedule.
 - [ ] Secrets lifecycle (cheat sheet): create strong, minimally privileged; rotate (minutes to years by function; user passwords only on suspicion of compromise); revoke when unneeded or compromised and log attempts to use a revoked secret; set expiry; the consumer verifies the secret is still active.
 - [ ] Prefer dynamic short-lease credentials and automated rotation over static secrets; keep human access to secrets minimal.

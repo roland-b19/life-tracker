@@ -68,6 +68,10 @@ Security is graded and the app will hold personal data. The plan is `docs/securi
 - A new dependency, data type, external service or AI use updates `docs/threat-model.md` and `docs/security/data-inventory.md` in the same PR (templates: `.agents/skills/secure-development/templates/`).
 - No health data is ever sent to an AI provider (decision in `docs/decisions.md`).
 
+## Code review: code-review-guide skill
+
+When you review a change, prepare one for review, answer review comments, or review code another agent wrote, read the `code-review-guide` skill (`.agents/skills/code-review-guide/SKILL.md`). Say what you did not review or verify.
+
 ## Code map (graphify)
 
 Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (not committed; rebuilt locally by git hooks, or run `graphify update .`). The rules for using it are in the `## graphify` section at the end of this file. Setup and per-agent details: `docs/TOOLING.md`.
