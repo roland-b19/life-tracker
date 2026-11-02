@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Setup. Repo scaffolding and agent tooling done. **App spec not provided yet.**
+Planning. Repo scaffolding and agent tooling done. App idea captured; **no spec and no implementation until the planning round is finished.**
 
 ## Done
 
@@ -12,10 +12,13 @@ Setup. Repo scaffolding and agent tooling done. **App spec not provided yet.**
 - Agent-neutral setup: `AGENTS.md` is canonical; `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md` point to it.
 - Ponytail (coding philosophy + skills) and graphify (code knowledge graph) set up. See `docs/TOOLING.md`.
 
+- App idea received: `docs/idea.md` (13 modules, multi-user, notifications, Apple-level design, AI integration).
+- `apple-design` skill (distilled HIG) in `.agents/skills/apple-design/`.
+
 ## Next
 
-1. User provides the app description and any further setup instructions.
-2. Write `docs/spec.md`, then decide the stack and IaC tool, recording them in `docs/decisions.md`.
+1. **Planning round (no implementation yet):** the agent asks the user questions module by module and about the cross-cutting parts (users, auth, notifications, AI, platform, Apple Health integration), proposes improvements, then writes `docs/spec.md`.
+2. Decide the stack and IaC tool, recording them in `docs/decisions.md`.
 3. First iteration: skeleton app + deploy/teardown scripts.
 
 ## Open questions

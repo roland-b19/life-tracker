@@ -11,6 +11,9 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-02 — GitHub.** Private repo `life-tracker` under `roland-b19`, default branch `main`, SSH remote.
 - **2026-11-02 — Docs language.** Docs, code and commits in English; the user talks to agents in Romanian.
 
+- **2026-11-02 — Apple design skill.** `.agents/skills/apple-design/` distils all 158 pages of Apple's Human Interface Guidelines (fetched 2026-11-02) into agent-readable references; mandatory for UI work (see `AGENTS.md`). Chosen over designing from memory so every agent produces the same Apple-level result. Refresh procedure in its `SKILL.md`.
+- **2026-11-02 — No implementation before the plan.** The user's rule: planning (module-by-module Q&A, then `docs/spec.md`) comes first. App idea captured in `docs/idea.md`.
+
 ## Open
 
 - App description / functionality (user will provide; goes to `docs/spec.md`).

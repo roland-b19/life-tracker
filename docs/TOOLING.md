@@ -47,6 +47,12 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 - Update: re-copy `skills/` and the rules section from upstream, update the commit hash here, in `AGENTS.md` and in `docs/decisions.md`.
 - Optional, Claude Code only: the upstream plugin adds a cost/token "band" above the prompt. It is not needed and not enabled by this repo. To try it: `/plugin marketplace add DietrichGebert/ponytail`, then (separate prompt) `/plugin install ponytail@ponytail`. If you do, the rules are injected twice (plugin + `AGENTS.md`); harmless.
 
+## Apple design skill
+
+- `.agents/skills/apple-design/`: `SKILL.md` (router + non-negotiables), `references/*.md` (distilled HIG, one file per area), `scripts/` (re-fetch and convert the HIG). `.claude/skills/apple-design` is a symlink to it.
+- Source: Apple's public HIG, <https://developer.apple.com/design/human-interface-guidelines/>, fetched 2026-11-02. Apple's text is copyrighted: the references are rewrites, not copies. Refresh procedure: `SKILL.md`, last section.
+- Design assets (fonts, SF Symbols app, Icon Composer, UI kits) are downloaded by the user from <https://developer.apple.com/design/resources/>, not stored in the repo. Licence notes: `references/resources.md`.
+
 ## Agent support matrix
 
 | Agent | Reads | Skills |

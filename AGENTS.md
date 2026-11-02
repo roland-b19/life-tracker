@@ -52,6 +52,10 @@ At the end of every working session:
 
 When you start: read the files under "Read first", then `git log --oneline -15`, before touching anything.
 
+## UI design: Apple HIG
+
+The app must feel like Apple software. Before designing or building any UI, UX copy, icon, chart, notification or widget, read the `apple-design` skill (`.agents/skills/apple-design/SKILL.md`) and the references it routes to. Use system components, system colors and text styles before custom ones. The skill's accessibility checklist is part of "done" for every screen.
+
 ## Code map (graphify)
 
 Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (not committed; rebuilt locally by git hooks, or run `graphify update .`). The rules for using it are in the `## graphify` section at the end of this file. Setup and per-agent details: `docs/TOOLING.md`.
