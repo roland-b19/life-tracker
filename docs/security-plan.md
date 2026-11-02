@@ -1,6 +1,6 @@
 # Security plan (DRAFT, awaiting user validation)
 
-Status: **draft**. Nothing in here is built yet. After the user validates it, it is executed as the work packages in section 9 and the result becomes the `secure-development` skill plus the artefacts listed in section 3.
+Status: **answers to section 10 received 2026-11-02; waiting for final OK on the plan itself.** Nothing in here is built yet. After the user validates it, it is executed as the work packages in section 9 and the result becomes the `secure-development` skill plus the artefacts listed in section 3.
 
 Versions below were looked up on 2026-11-02 and must be re-checked when the skill is written.
 
@@ -43,7 +43,9 @@ Honest scope note: this is a solo, course-sized project. L2 here means "every L2
 
 ## 4. Security requirements by area (what the skill will cover)
 
-Each area becomes one reference file, with the ASVS chapters it maps to, concrete rules, and a verification checklist. Items marked **(this app)** are specific to Life Tracker.
+**Reusability rule (user requirement):** every skill must be usable unchanged in any other project and with any agent. So the `secure-development` skill contains only generic, stack-neutral guidance (and clearly scoped optional files, such as Azure or iOS, that apply only when that target is used). Everything specific to Life Tracker lives in project files (`docs/threat-model.md`, `docs/security/*`, `AGENTS.md`), never in the skill. The templates inside the skill are blank.
+
+Each area becomes one reference file, with the ASVS chapters it maps to, concrete rules, and a verification checklist. Items marked **(this app)** below are Life Tracker specifics: they go into the project threat model and data inventory, not into the skill; the skill carries the generic version of the same rule.
 
 1. **Authentication.** Use a managed identity provider (Microsoft Entra External ID or equivalent, decision pending), never home-made password storage. MFA option. OIDC with PKCE. Account recovery without user enumeration. Rate limiting and lockout.
 2. **Session and tokens.** Short-lived access tokens, refresh rotation, secure cookie flags if cookies are used, logout and revocation, token storage rules per client (web vs iOS Keychain).
@@ -95,13 +97,13 @@ Failing checks block merge to `main`. Agents may not weaken or skip a check; if 
   references/
     process-ssdf.md             how we work: threat model first, review, release checklist
     asvs-l2-checklist.md        ASVS 5.0 chapters rewritten as checkable items, mapped to our areas
-    authn-authz.md              areas 1-3 with the app-specific multi-user rules
+    authn-authz.md              areas 1-3, incl. generic multi-tenant isolation and role rules
     data-and-privacy.md         areas 6, 11 with the data classification
-    api-and-input.md            areas 4, 5 incl. Excel import rules
-    azure-hardening.md          area 10 mapped to MCSB
+    api-and-input.md            areas 4, 5 incl. generic file upload/import handling
+    cloud-azure.md              area 10 mapped to MCSB; optional, read only when the target is Azure
     supply-chain-and-ci.md      areas 9, 15, 16 and the pipeline
-    ai-security.md              area 13
-    mobile-ios.md               area 12
+    ai-security.md              area 13; optional, only if the project uses LLMs
+    mobile-ios.md               area 12; optional, only for native iOS clients
     threat-modeling.md          section 5 as a procedure with a template
   templates/
     threat-model.md  risk-register.md  asvs-matrix.md  data-inventory.md
@@ -134,14 +136,14 @@ Method (same as `apple-design`): read the primary sources (OWASP repositories, N
 
 S1-S4 can happen now. S5 is intertwined with the module-by-module planning (many security answers come from there). S6-S7 wait for the stack decision.
 
-## 10. Open questions for the user (S1)
+## 10. Decisions on the open questions (answered 2026-11-02)
 
-1. ASVS **L2** as the target, with L3 only where cheap (auth and authorization)? Or stay at L1 to save time?
-2. Are health and finance data allowed to leave the user's own tenant at all (for example to an AI provider)? Default proposed: **no, unless per-feature explicit consent**.
-3. Field-level encryption for health and finance data now, or platform encryption at rest only in the course phase?
-4. Who is the realistic user base in phase 2 (only you and family, or public sign-up)? This sets how strict anti-abuse, GDPR and support obligations are.
-5. Is a third-party penetration test out of scope (assumed yes), with a self-run ZAP scan and the ASVS walkthrough as the evidence for the course?
-6. Should the pipeline also run locally (pre-commit hooks) so agents on other machines get the same checks? (Proposed: yes.)
+1. **ASVS target: L2 overall, L3 only for authentication and authorization where cheap** (agent recommendation, accepted: the user delegated the choice).
+2. **No health data ever goes to an AI provider** (user decision). Finance and other data: only with explicit per-feature consent, default off.
+3. **Encryption:** platform-managed encryption at rest in the course phase; design the schema so sensitive columns can get field-level encryption later (agent recommendation; the user did not know). Revisit when the stack is chosen.
+4. **Users:** only the owner for now. Public release or other users will need a major security revision and is not designed for now. Multi-user isolation and roles are still built in, because the course requires authorization and the family-business module needs it.
+5. **No third-party penetration test.** Evidence is a self-run ZAP scan plus the ASVS walkthrough.
+6. **Local checks too:** pre-commit hooks run the same secret scan and basic checks so agents on any machine get them (user: yes if needed; agent judges it needed).
 
 ## 11. What this plan does not cover
 

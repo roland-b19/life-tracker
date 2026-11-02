@@ -13,6 +13,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-02 — Apple design skill.** `.agents/skills/apple-design/` distils all 158 pages of Apple's Human Interface Guidelines (fetched 2026-11-02) into agent-readable references; mandatory for UI work (see `AGENTS.md`). Chosen over designing from memory so every agent produces the same Apple-level result. Refresh procedure in its `SKILL.md`.
 - **2026-11-02 — No implementation before the plan.** The user's rule: planning (module-by-module Q&A, then `docs/spec.md`) comes first. App idea captured in `docs/idea.md`.
+- **2026-11-02 — Security approach.** ASVS L2 target, NIST SSDF process, MCSB for Azure; no health data ever to an AI provider; platform encryption at rest first; owner-only for now; no external pentest; local pre-commit checks. Details in `docs/security-plan.md`.
+- **2026-11-02 — Skills are project-neutral.** Every skill under `.agents/skills/` must work unchanged in another project; project specifics live in `docs/` and `AGENTS.md`. (`apple-design` was cleaned to follow this.)
 
 ## Open
 
