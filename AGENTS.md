@@ -25,6 +25,7 @@ Nothing about this project may live only in a chat or in an agent's private memo
 
 - **Language:** the user writes Romanian, so reply in the user's language. Code, comments, docs, commit messages and PRs are in English.
 - Ask before: choosing or changing the stack, adding a dependency, creating any Azure resource, anything that costs money.
+- **Mandatory tools.** Apply the ponytail rules (see Coding philosophy) to every coding task, and use graphify (see `## graphify`) for every codebase question. If `graphify-out/graph.json` is missing (it is git-ignored, so a fresh clone has none), run `graphify update .` first; if the `graphify` command is not installed, tell the user instead of skipping it silently.
 - Keep `docs/STATUS.md` current. Before you stop working, update it and commit (see Handoff).
 
 ## Cloud rules (Azure)
