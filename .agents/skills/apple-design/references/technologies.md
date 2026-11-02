@@ -2,7 +2,7 @@
 
 When to read this: you are adding or designing a feature that touches an Apple system technology. Deep sections: HealthKit (Apple Health), Sign in with Apple, iCloud, Generative AI, Machine learning (AI feature UX), Siri, Maps, Apple Pay, Apple In-App Purchase, Mac Catalyst. Everything else is short, under "Other technologies (brief)" at the end. Platform tags apply only where a rule is platform-specific.
 
-Project hints (note, from the author's own knowledge, not from the HIG; each applies only if you build that feature): the Health section could read/write Apple Health via HealthKit, but only in an iOS/iPadOS/watchOS app (not web or macOS); multi-user accounts could offer Sign in with Apple (the HIG says it is available on every platform, including web) alongside any other login; iCloud/CloudKit is one sync option for Apple-only data, not a fit for server-side multi-user data on an Azure backend; Apple Pay is for taking payment for goods/services you sell and In-App Purchase for selling digital content or subscriptions, so neither is needed to track Money/Wishlist entries, and do not use both for the same thing; AI summaries/suggestions fall under Generative AI + Machine learning; quick logging (water, weight, workout) could be exposed via Siri/App Intents.
+Hints (note, from the author's own knowledge, not from the HIG; each applies only if you build that feature): HealthKit exists only in iOS/iPadOS/watchOS apps (not web or macOS); Sign in with Apple is available on every platform including web (per the HIG) and can sit alongside any other login; iCloud/CloudKit is one sync option for Apple-only data, not a fit for server-side multi-user data on a non-Apple backend; Apple Pay is for taking payment for goods/services you sell and In-App Purchase for selling digital content or subscriptions, so neither is needed to merely record spending, and do not use both for the same thing; AI summaries/suggestions fall under Generative AI + Machine learning; quick-entry actions can be exposed via Siri/App Intents.
 
 ---
 
@@ -124,7 +124,7 @@ Avoid: pretending AI output is human; unconfirmed destructive or purchase action
 
 ## Machine learning
 
-(Companion to Generative AI. Use for suggestions, recommendations, classification, predictions, smart defaults in the tracker.)
+(Companion to Generative AI. Use for suggestions, recommendations, classification, predictions, smart defaults.)
 
 Rules (plan the ML role):
 - Classify each ML feature along five axes and design accordingly:

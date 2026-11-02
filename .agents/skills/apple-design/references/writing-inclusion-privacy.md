@@ -1,6 +1,6 @@
 # Writing, inclusion, right-to-left, privacy
 
-When to read this: before writing any UI text (labels, buttons, empty states, errors, settings, permission strings), when reviewing copy or imagery for inclusion, when adding or testing RTL (Arabic/Hebrew) or other locales, and before requesting any permission, handling sensitive data (health and money data in this app) or designing sign-in.
+When to read this: before writing any UI text (labels, buttons, empty states, errors, settings, permission strings), when reviewing copy or imagery for inclusion, when adding or testing RTL (Arabic/Hebrew) or other locales, and before requesting any permission, handling sensitive data (for example health or money data) or designing sign-in.
 
 ## Writing
 

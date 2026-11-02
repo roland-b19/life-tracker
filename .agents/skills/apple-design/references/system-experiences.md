@@ -1,6 +1,6 @@
 # System experiences: widgets, Live Activities, notifications, controls, App Shortcuts, snippets, status bars (+ watch/tv extras)
 
-When to read this: you are designing anything that lives outside the app's own screens: Home Screen / Lock Screen / StandBy widgets, Live Activities and the Dynamic Island, push or local notifications (content, actions, badges, interruption levels), Control Center / Lock Screen / Action button controls, App Shortcuts and Siri snippets, or the status bar. For this project the highest-value pages are Notifications (reminders for Health, Gym, Wedding, To-do) and Widgets (glanceable Money, To-do, Food, Gym). Watch complications, watch faces and tvOS Top Shelf are kept short at the end.
+When to read this: you are designing anything that lives outside the app's own screens: Home Screen / Lock Screen / StandBy widgets, Live Activities and the Dynamic Island, push or local notifications (content, actions, badges, interruption levels), Control Center / Lock Screen / Action button controls, App Shortcuts and Siri snippets, or the status bar. For apps with reminders and glanceable data the highest-value pages are Notifications and Widgets. Watch complications, watch faces and tvOS Top Shelf are kept short at the end.
 
 Sections: Widgets, Live Activities, Notifications, Managing notifications (interruption levels, from a neighbouring page), Controls, App Shortcuts, Snippets, Status bars, Complications, Watch faces, Top Shelf.
 
@@ -163,7 +163,7 @@ Rules:
 - Marketing/promotional notifications require explicit opt-in (alert, modal view or similar describing the content with a clear opt in/out). Never use Time Sensitive for marketing.
 - [watchOS] Phone notification settings apply to the watch by default; swiping left on a watch notification gives per-notification options (Mute 1 Hour, Turn off Time Sensitive).
 
-(note for this app) Reminders such as "take medication today" or "wedding deadline in 1 hour" qualify as Time Sensitive only if truly imminent; routine nudges (log your meal, weekly review) should be Passive or Active.
+(note) Reminders such as "take medication today" or "wedding deadline in 1 hour" qualify as Time Sensitive only if truly imminent; routine nudges (log your meal, weekly review) should be Passive or Active.
 
 ---
 

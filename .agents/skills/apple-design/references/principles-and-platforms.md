@@ -113,7 +113,7 @@ Numbers:
 
 ## Designing for iPhone Duo
 
-New dual-display iPhone form factor (page dated September 9, 2026). Still iPhone: iOS rules apply. Low priority for this project.
+New dual-display iPhone form factor (page dated September 9, 2026). Still iPhone: iOS rules apply. Low priority unless you target it specifically.
 
 Rules:
 - [iOS] Build layouts to resize: size classes (compact width on the outer display, regular width on the inner), layout margins, safe area insets. No fixed widths or display-specific dependencies. Do not design one layout per pose.

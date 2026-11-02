@@ -1,6 +1,6 @@
 # Components: actions, selection and input, status, charts
 
-When to read this: before building any tappable control, bar, menu, form field, picker, progress/status indicator or chart (e.g. habit streaks, weight/spend graphs, goal progress in a tracker app). Rules are rewritten from Apple's HIG; platform tags appear only where a rule is platform-specific.
+When to read this: before building any tappable control, bar, menu, form field, picker, progress/status indicator or chart (e.g. habit streaks, weight/spend graphs, goal progress). Rules are rewritten from Apple's HIG; platform tags appear only where a rule is platform-specific.
 
 ---
 
@@ -307,7 +307,7 @@ Rules:
 - Set other ring-like elements apart with padding, lines, labels, color or scale.
 - Do not send notifications that repeat the Activity app's, and do not show rings in notifications.
 - [iOS] `HKActivityRingView`: three rings with paired Apple Watch, only the Move ring (approximation from steps and other apps' workouts) without one. [watchOS] always three. Not in macOS/tvOS/visionOS.
-- (note) For a life tracker, do not clone these rings for Gym/Health goals; use a custom ring style that is visibly different, or a gauge/progress view.
+- (note) In a non-Apple-fitness app, do not clone these rings for your own goals; use a custom ring style that is visibly different, or a gauge/progress view.
 
 ## Rating indicators
 
@@ -359,7 +359,7 @@ Rules (accessibility, required for every chart):
 - Hide visible axis/tick labels from assistive tech (the mark labels and Audio Graphs carry the info).
 - [watchOS] Avoid complex chart interaction; show at-a-glance info, leave detail views and exploration to the iPhone version.
 
-(note) Tracker practice following these rules: bar charts for per-day sums (steps, spend, workouts) with a zero baseline; line plus points for trends (weight, sleep); a fixed 0-100 percent axis for goal completion; Health-like dynamic ranges for open-ended totals; a scrubbing plot area with a value readout; text title/subtitle stating the takeaway ("Spent 12 percent less than last month"); every chart with an accessibility summary.
+(note) Practice for data-tracking apps following these rules: bar charts for per-day sums (steps, spend, workouts) with a zero baseline; line plus points for trends (weight, sleep); a fixed 0-100 percent axis for goal completion; Health-like dynamic ranges for open-ended totals; a scrubbing plot area with a value readout; text title/subtitle stating the takeaway ("Spent 12 percent less than last month"); every chart with an accessibility summary.
 
 ---
 

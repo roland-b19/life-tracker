@@ -10,7 +10,7 @@ When to read this: when you are about to turn HIG guidance into code, especially
 | Web app / PWA | Medium. You re-implement the look; no native controls | No HealthKit, no haptics API on iOS Safari, Web Push on iOS only for installed home-screen web apps (verify current support) |
 | Cross-platform (React Native, Flutter, Capacitor, ...) | Medium to low unless you build native views per platform | Flutter's Cupertino widgets and React Native's native components approximate iOS; Liquid Glass and system materials usually need native modules |
 
-Consequence for this project: the Health module (Apple Health / Apple Fitness data) needs a native iOS client, or a user-driven export/import path. A pure web app cannot read HealthKit. Decide this before choosing the stack.
+Consequence: a feature that needs Apple Health / Fitness data requires a native iOS client, or a user-driven export/import path. A pure web app cannot read HealthKit. Decide this before choosing the stack.
 
 ## 2. HIG concept to SwiftUI
 
@@ -49,7 +49,7 @@ Rule of thumb: use the system component first; build custom only if no system co
 - **PWA.** Web manifest, `apple-touch-icon` (180 x 180 px), standalone display mode. Notifications on iOS require the web app to be installed to the Home Screen (verify current iOS support).
 - **Accessibility.** Semantic HTML, focus order, visible focus rings, ARIA only where HTML cannot express the role, labels for every control, no color-only state (see `accessibility.md`).
 
-## 4. Charts and dashboards (this project is chart-heavy)
+## 4. Charts and dashboards
 
 Follow `components-actions-input.md` (Charts section) and `patterns-1.md` (charting-data) for the rules. Implementation: Swift Charts on native; on web use a library that renders accessible SVG (add text alternatives / data tables for each chart). Keep axes, units and goals explicit; one story per chart.
 
