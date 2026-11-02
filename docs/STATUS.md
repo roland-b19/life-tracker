@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is a draft awaiting the user's review. **No implementation until the user approves the spec.**
+Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. **No implementation until the stack is chosen.**
 
 ## Done
 
@@ -26,8 +26,8 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. **Finish planning:** the user reviews `docs/spec.md`; remaining cross-cutting items (authorization details, notifications design, backup/export, privacy copy). Then write `docs/threat-model.md` v1 and `docs/security/data-inventory.md` from the skill templates (project files, not part of the skill).
-2. Decide framework, database, compute service, queue product and IaC tool, recording them in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
+1. **Choose the concrete stack** (next step, with the user): framework, database, compute, queue product, IaC tool. Then refine the **(stack)** items in `docs/threat-model.md`.
+2. Record the choices in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 3. First iteration: skeleton app + deploy/teardown scripts.
 
 ## Open questions
@@ -40,6 +40,7 @@ None. (Azure CLI is not installed on the user's machine yet.)
 
 ## Session log (newest first)
 
+- 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
 - 2026-11-02 — Added code-review-guide, audited the 3 project skills, created project-setup, cleanup. No application code yet.
 - 2026-11-02 — Initial setup (Claude Code). No application code yet.

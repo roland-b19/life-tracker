@@ -28,6 +28,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-02 — Family business.** Owner-only dashboard: income + expenses (profit) and a business to-do, separate from the personal modules; no customers/orders/stock for now; finance never goes through the AI connector.
 - **2026-11-02 — Tiers.** Tier 1: login, Gym, Food + weight. Tier 2: Money, To-do + notifications, Food AI connector. Tier 3: Business, Wishlist. Money and To-do carry a personal/business space field and are reused by Business.
 - **2026-11-02 — Stack and auth direction.** TypeScript full-stack (web/PWA); Microsoft Entra External ID for authentication (OAuth/OIDC, also used by the AI connector); a message queue carries push-notification reminders to a worker. Specific framework, database, compute service and IaC tool are still open.
+- **2026-11-02 — Spec approved.** The user approved `docs/spec.md` (modules, tiers, AI data line). Threat model v1 (`docs/threat-model.md`), data inventory and risk register (`docs/security/`) written from the approved spec; they get refined when the stack is chosen.
 
 ## Open
 

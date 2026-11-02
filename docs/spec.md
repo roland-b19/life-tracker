@@ -1,6 +1,6 @@
 # Spec (DRAFT, built module by module in the planning Q&A)
 
-Status: planning, all modules discussed (2026-11-02). Awaiting the user's review. Not approved. Nothing here is implemented. Cross-cutting decisions are in `docs/decisions.md`; the course checklist is `docs/requirements.md`.
+Status: APPROVED by the user on 2026-11-02. Changes after this date go through the user and are recorded in `docs/decisions.md`. Nothing here is implemented. Cross-cutting decisions are in `docs/decisions.md`; the course checklist is `docs/requirements.md`.
 
 ## Cross-cutting (agreed so far)
 
