@@ -163,7 +163,7 @@ Rules:
 - Marketing/promotional notifications require explicit opt-in (alert, modal view or similar describing the content with a clear opt in/out). Never use Time Sensitive for marketing.
 - [watchOS] Phone notification settings apply to the watch by default; swiping left on a watch notification gives per-notification options (Mute 1 Hour, Turn off Time Sensitive).
 
-(note) Reminders such as "take medication today" or "wedding deadline in 1 hour" qualify as Time Sensitive only if truly imminent; routine nudges (log your meal, weekly review) should be Passive or Active.
+(note) Reminders such as "take medication today" or "your appointment starts in 1 hour" qualify as Time Sensitive only if truly imminent; routine nudges (log your meal, weekly review) should be Passive or Active.
 
 ---
 
