@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. Stack chosen (see `docs/decisions.md`); IaC tool still open. **No implementation until the first iteration is agreed.**
+Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. Stack and IaC tool (Bicep) chosen, see `docs/decisions.md`. **No implementation until the first iteration is agreed.**
 
 ## Done
 
@@ -26,7 +26,7 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. Choose the IaC tool (after the course lectures, or now if the user wants) and refine the **(stack)** items in `docs/threat-model.md`.
+1. Refine the **(stack)** items in `docs/threat-model.md` while writing the Bicep.
 2. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 3. First iteration: skeleton app + deploy/teardown scripts.
 

@@ -30,9 +30,9 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-02 — Stack and auth direction.** TypeScript full-stack (web/PWA); Microsoft Entra External ID for authentication (OAuth/OIDC, also used by the AI connector); a message queue carries push-notification reminders to a worker. Specific framework, database, compute service and IaC tool are still open.
 - **2026-11-02 — Spec approved.** The user approved `docs/spec.md` (modules, tiers, AI data line). Threat model v1 (`docs/threat-model.md`), data inventory and risk register (`docs/security/`) written from the approved spec; they get refined when the stack is chosen.
 - **2026-11-02 — Stack chosen.** Next.js (TypeScript, one app for UI/PWA, API and MCP endpoint) + a separate worker process; Azure Database for PostgreSQL Flexible Server (private access only); Azure Container Apps (containers, scale-to-zero) with Azure Container Registry; Azure Storage Queue for push reminders (a per-minute job enqueues due reminders, the worker sends the web push). Auth: Entra External ID. Chosen for portability to the phase-2 near-free stack (standard SQL, containers, plain queue semantics). Costs are rough estimates from memory (PostgreSQL B1ms about 12-15 USD/month, ACR Basic about 5 USD/month): verify in the Azure pricing calculator before deploying. IaC tool still open.
+- **2026-11-02 — IaC tool: Bicep.** Azure-native, no state file to protect, fits the deploy / work / delete-the-resource-group cycle (`az deployment group create`, `az group delete`). Terraform not chosen: needs secret state kept outside the repo and does not help phase 2, which uses different hosting. Plain `az` scripts only for small glue steps. Nothing is deployed without the user's explicit OK.
 
 ## Open
 
-- IaC tool: Terraform vs Azure CLI scripts vs Bicep/ARM (the course will discuss this in later lectures; wait unless told otherwise).
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.

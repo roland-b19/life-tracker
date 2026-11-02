@@ -10,7 +10,7 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 | uv | installs graphify | `brew install uv` |
 | pre-commit, gitleaks | local secret scan before each commit (`.pre-commit-config.yaml`) | `brew install pre-commit gitleaks`, then `pre-commit install` |
 | Azure CLI | deploy scripts (needed from the first iteration) | `brew install azure-cli`, then `az login` |
-| Terraform | only if chosen as the IaC tool | `brew install terraform` |
+| Bicep | IaC (comes with Azure CLI, `az bicep install`) | included in `brew install azure-cli` |
 
 ## Graphify (code knowledge graph)
 
