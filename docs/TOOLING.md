@@ -53,6 +53,12 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 - Source: Apple's public HIG, <https://developer.apple.com/design/human-interface-guidelines/>, fetched 2026-11-02. Apple's text is copyrighted: the references are rewrites, not copies. Refresh procedure: `SKILL.md`, last section.
 - Design assets (fonts, SF Symbols app, Icon Composer, UI kits) are downloaded by the user from <https://developer.apple.com/design/resources/>, not stored in the repo. Licence notes: `references/resources.md`.
 
+## Secure development skill
+
+- `.agents/skills/secure-development/`: `SKILL.md` (router + non-negotiables + refresh procedure), `references/*.md` (ASVS 5.0, Top 10:2025, NIST SSDF, cheat sheets, plus optional Azure, AI and iOS files), `templates/` (threat model, risk register, ASVS matrix, data inventory). `.claude/skills/secure-development` is a symlink to it.
+- Sources are mostly OWASP (CC BY-SA 4.0), rewritten with attribution in each `Sources` line; fetched 2026-11-02. Refresh procedure: `SKILL.md`, last section.
+- Project plan and decisions: `docs/security-plan.md`.
+
 ## Agent support matrix
 
 | Agent | Reads | Skills |

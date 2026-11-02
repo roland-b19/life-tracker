@@ -14,13 +14,15 @@ Planning. Repo scaffolding and agent tooling done. App idea captured; **no spec 
 
 - App idea received: `docs/idea.md` (13 modules, multi-user, notifications, Apple-level design, AI integration).
 - `apple-design` skill (distilled HIG) in `.agents/skills/apple-design/`.
-- Security plan drafted: `docs/security-plan.md` (awaiting user validation; then build the `secure-development` skill, threat model, CI).
+- Security plan `docs/security-plan.md` validated by the user (2026-11-02).
+- `secure-development` skill in `.agents/skills/secure-development/`: `SKILL.md`, 11 references (ASVS 5.0, Top 10:2025, SSDF, privacy, supply chain/CI, optional Azure/AI/iOS), 4 templates. References were independently fact-checked against the primary sources. Security rules added to `AGENTS.md`.
 
 ## Next
 
-0. **Validate `docs/security-plan.md`** with the user (open questions in its section 10), then execute work packages S1-S4.
+0. The user names 2 more skills to add (generic, project-neutral).
 1. **Planning round (no implementation yet):** the agent asks the user questions module by module and about the cross-cutting parts (users, auth, notifications, AI, platform, Apple Health integration), proposes improvements, then writes `docs/spec.md`.
-2. Decide the stack and IaC tool, recording them in `docs/decisions.md`.
+   During planning: write `docs/threat-model.md` v1 and `docs/security/data-inventory.md` from the skill templates (project files, not part of the skill).
+2. Decide the stack and IaC tool, recording them in `docs/decisions.md`. After that: CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 3. First iteration: skeleton app + deploy/teardown scripts.
 
 ## Open questions

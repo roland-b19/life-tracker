@@ -56,6 +56,18 @@ When you start: read the files under "Read first", then `git log --oneline -15`,
 
 The app must feel like Apple software. Before designing or building any UI, UX copy, icon, chart, notification or widget, read the `apple-design` skill (`.agents/skills/apple-design/SKILL.md`) and the references it routes to. Use system components, system colors and text styles before custom ones. The skill's accessibility checklist is part of "done" for every screen.
 
+## Security: secure-development skill
+
+Security is graded and the app will hold personal data. The plan is `docs/security-plan.md`; the standards (ASVS 5.0 target L2, OWASP Top 10:2025, NIST SSDF, MCSB for Azure) are distilled in `.agents/skills/secure-development/`.
+
+- Before designing or changing authentication, authorization, data access, file handling or import, AI features, infrastructure or CI, read the `secure-development` skill (`.agents/skills/secure-development/SKILL.md`) and the references it routes to.
+- Security checks are part of "done" for every change, like tests.
+- Never disable, skip or weaken a security check, test, scanner or hook to make something pass. Fix the cause or ask the user.
+- Every new endpoint ships an authorization test: owner allowed, other user denied, anonymous denied.
+- Never log, commit or paste secrets, tokens, or health/finance data.
+- A new dependency, data type, external service or AI use updates `docs/threat-model.md` and `docs/security/data-inventory.md` in the same PR (templates: `.agents/skills/secure-development/templates/`).
+- No health data is ever sent to an AI provider (decision in `docs/decisions.md`).
+
 ## Code map (graphify)
 
 Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (not committed; rebuilt locally by git hooks, or run `graphify update .`). The rules for using it are in the `## graphify` section at the end of this file. Setup and per-agent details: `docs/TOOLING.md`.
