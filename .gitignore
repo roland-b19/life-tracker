@@ -16,7 +16,9 @@ Thumbs.db
 secrets.*
 local.settings.json
 
-# Per-user agent settings
+# Per-user agent settings. `!.claude/` re-includes the shared Claude Code config
+# (hooks, skills) in case a personal global gitignore ignores the whole folder.
+!.claude/
 .claude/settings.local.json
 .gemini/.env
 
