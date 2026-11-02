@@ -4,7 +4,7 @@ _Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
-Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. Stack and IaC tool (Bicep) chosen, see `docs/decisions.md`. **No implementation until the first iteration is agreed.**
+Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished; `docs/spec.md` is **approved** (2026-11-02). Threat model v1, data inventory and risk register written. Stack and IaC tool (Bicep) chosen, see `docs/decisions.md`. **Iteration 1 plan is approved (`docs/iteration-1.md`); implementation has not started, by the user's choice.**
 
 ## Done
 
@@ -26,9 +26,10 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. Refine the **(stack)** items in `docs/threat-model.md` while writing the Bicep.
-2. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
-3. First iteration: skeleton app + deploy/teardown scripts.
+1. **Iteration 1 is planned and approved, not started** (`docs/iteration-1.md`). Start it when the user says so: branch `feat/iteration-1`, first read the `secure-development` and `apple-design` skills, verify each dependency on npm before installing (use `ignore-scripts`).
+2. Refine the **(stack)** items in `docs/threat-model.md` while writing the Bicep.
+3. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
+4. Iteration 2: Entra External ID, Dockerfile, Bicep deploy/teardown scripts.
 
 ## Open questions
 
@@ -40,6 +41,7 @@ None. (Azure CLI is not installed on the user's machine yet.)
 
 ## Session log (newest first)
 
+- 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
 - 2026-11-02 — Added code-review-guide, audited the 3 project skills, created project-setup, cleanup. No application code yet.
