@@ -14,9 +14,11 @@ Planning. Repo scaffolding and agent tooling done. App idea captured; **no spec 
 
 - App idea received: `docs/idea.md` (13 modules, multi-user, notifications, Apple-level design, AI integration).
 - `apple-design` skill (distilled HIG) in `.agents/skills/apple-design/`.
+- Security plan drafted: `docs/security-plan.md` (awaiting user validation; then build the `secure-development` skill, threat model, CI).
 
 ## Next
 
+0. **Validate `docs/security-plan.md`** with the user (open questions in its section 10), then execute work packages S1-S4.
 1. **Planning round (no implementation yet):** the agent asks the user questions module by module and about the cross-cutting parts (users, auth, notifications, AI, platform, Apple Health integration), proposes improvements, then writes `docs/spec.md`.
 2. Decide the stack and IaC tool, recording them in `docs/decisions.md`.
 3. First iteration: skeleton app + deploy/teardown scripts.
