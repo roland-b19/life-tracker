@@ -6,7 +6,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-02 — Agent-neutral repo.** `AGENTS.md` is the single source of truth. `CLAUDE.md` / `GEMINI.md` import it; `.github/copilot-instructions.md` points to it. Project knowledge lives in the repo (`docs/`), never only in a chat or an agent's memory, so agents can be swapped mid-project.
 - **2026-11-02 — Ponytail vendored.** Rules inlined in `AGENTS.md`, skills copied to `.agents/skills/` (upstream `DietrichGebert/ponytail` at commit `96608e0`). Chosen over the Claude-only plugin so it works for every agent and has no third-party hooks. Update procedure: `docs/TOOLING.md`.
-- **2026-11-02 — Graphify installed project-scoped.** Local CLI (`graphifyy` from PyPI). Code is parsed locally with tree-sitter, nothing leaves the machine.
+- **2026-11-02 — Graphify installed project-scoped.** Local CLI (`graphifyy` 0.9.100 from PyPI). Code is parsed locally with tree-sitter, nothing leaves the machine. `graphify-out/` is git-ignored (derived, rewritten on every commit by the hook); each machine rebuilds it.
 - **2026-11-02 — Two hosting phases.** Phase 1 (course, until January): Azure, scripted, ephemeral. Phase 2 (after the presentation): migrate to a near-free personal stack. Prefer portable building blocks now.
 - **2026-11-02 — GitHub.** Private repo `life-tracker` under `roland-b19`, default branch `main`, SSH remote.
 - **2026-11-02 — Docs language.** Docs, code and commits in English; the user talks to agents in Romanian.

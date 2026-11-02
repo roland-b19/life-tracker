@@ -53,7 +53,7 @@ When you start: read the files under "Read first", then `git log --oneline -15`,
 
 ## Code map (graphify)
 
-Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (committed, so every agent shares it). The rules for using it are in the `## graphify` section at the end of this file. Setup and per-agent details: `docs/TOOLING.md`.
+Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (not committed; rebuilt locally by git hooks, or run `graphify update .`). The rules for using it are in the `## graphify` section at the end of this file. Setup and per-agent details: `docs/TOOLING.md`.
 
 ## Coding philosophy: ponytail
 

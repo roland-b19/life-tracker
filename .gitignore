@@ -50,5 +50,5 @@ target/
 crash.log
 .azure/
 
-# Graphify: commit graph.json and GRAPH_REPORT.md, not the cache
-graphify-out/cache/
+# Graphify output is derived and rebuilt locally (git hooks, `graphify update .`)
+graphify-out/

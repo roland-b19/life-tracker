@@ -20,7 +20,7 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
   graphify hook install      # rebuild the graph automatically on commit/checkout/merge
   ```
 - Generate or refresh the graph: ask the agent to run `/graphify .`, or run `graphify update .` (code only, no LLM needed).
-- Output is in `graphify-out/`. See `.gitignore` for what is committed.
+- Output is in `graphify-out/` (`graph.json`, `GRAPH_REPORT.md`, `graph.html`). It is git-ignored on purpose: it is derived, and the post-commit hook rewrites it on every commit, which would leave the tree dirty after each commit. Each machine builds its own.
 - Per-agent integration files are already committed. On a fresh machine nothing more is needed except the CLI above:
   - `AGENTS.md` (`## graphify` section): the usage rules, read by every agent
   - `.agents/skills/graphify/`: the skill (one real copy); `.claude/skills/graphify` is a symlink to it
