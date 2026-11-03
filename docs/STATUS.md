@@ -5,12 +5,12 @@ _Last updated: 2026-11-03 by Antigravity_
 ## Phase
 
 Iteration 1 is complete and merged in `main`. Iteration 2A (local implementation
-and hardened Azure contracts) is complete. Azure 2B preparation is completed:
-read-only regional audit, cost recalculation, Bicep telemetry/budget enhancements,
-and guarded what-if deployment scripts are validated locally. Phase 2B (Azure
-deployment and live validation) is paused awaiting explicit user decisions on
-target region/SKU, cost approval, and Entra tenant configuration. No Azure
-resources are deployed.
+and hardened Azure contracts) is complete. Phase 2B preparation and infrastructure
+remediation are complete: regional routing, Key Vault purge-protection conflict resolution,
+official Azure RBAC role GUIDs, and non-interactive token-based ACR deployment have been
+codified and validated. Target region `italynorth` with PostgreSQL Burstable (`Standard_B1ms` /
+`Standard_B2s`) was approved by the user. Previous deployment attempts in Poland and Belgium
+were torn down synchronously; deployment in `italynorth` is queued pending teardown completion.
 
 ## Verification status breakdown
 
@@ -88,6 +88,17 @@ None for Life Tracker. The subscription's pre-existing
 and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-03 — Phase 2B infrastructure root cause fixes and regional migration:
+  evaluated `polandcentral` (Burstable unsupported on subscription policy) and
+  `belgiumcentral` (Burstable capacity exhausted in data center). Cleaned up via
+  synchronous teardowns. Corrected Key Vault Secrets User role definition GUID to
+  `4633458b-17de-408a-b874-0445c86b69e6` (verified directly against Azure CLI role definitions).
+  Generated unique deterministic Key Vault resource names (`${suffix}kv${uniqueString(rg.id)}`)
+  to avoid soft-delete purge-protection retention conflicts. Added regional `registryName`
+  and token-based non-interactive ACR authentication (`az acr login --expose-token`) to
+  resolve global Traffic Manager DNS cache issues. User approved `italynorth` as the
+  next target region. 14 local tests pass.
 
 - 2026-11-03 — Azure 2B preparation and audit: verified read-only regional
   provisioning restrictions (`westeurope` restricted; `belgiumcentral`,

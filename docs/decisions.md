@@ -66,10 +66,22 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   `COST_GATE_APPROVED=YES`, `CONFIRM_DEPLOY=YES`) without echoing secrets. Revised cost estimate:
   ACR Premium (~$50/mo continuous, ~$0.07/hr ephemeral) + PostgreSQL Burstable (~$16-$28.50/mo, ~$0.022-$0.039/hr),
   costing ~$0.20 - $0.35 total for a short 1-2 hour validation test. No Azure resources were created.
+- **2026-11-03 — Phase 2B regional routing, Key Vault purge-protection conflict resolution, and Italy North target.**
+  Deployment attempts in `polandcentral` (`SkuNotAvailable` on Burstable) and `belgiumcentral` (`RegionalAllocationFailed`
+  due to data center capacity exhaustion on `Standard_B2s`) failed and were immediately torn down synchronously.
+  Three critical infrastructure root causes were resolved and codified:
+  1. The built-in Azure RBAC role definition GUID for "Key Vault Secrets User" was queried directly from the subscription
+     and set to `4633458b-17de-408a-b874-0445c86b69e6` in `infra/main.bicep` and contract tests.
+  2. Because Key Vault has purge protection enabled, deleted vaults cannot be purged until their retention period expires;
+     Key Vault names are now derived with a deterministic resource-group hash (`${suffix}kv${uniqueString(rg.id)}`),
+     preventing `ConflictError` on recreation.
+  3. ACR DNS caching on global Azure Traffic Manager after region switches was resolved by adding a regional `registryName`
+     parameter and switching ACR authentication in `scripts/azure-deploy.sh` to non-interactive short-lived OAuth tokens
+     (`az acr login --expose-token`), eliminating terminal interactive prompts.
+  4. The user approved target region `italynorth` with `Standard_B1ms` / `Standard_B2s` for the live validation retry.
 
 ## Open
 
-- Region and PostgreSQL SKU selection for Phase 2B (`belgiumcentral` with `Standard_B2s` vs `northeurope` with `Standard_B1ms`).
-- Entra External ID tenant configuration parameters (`AUTH_AZURE_TENANT_ID`, `AUTH_AZURE_CLIENT_ID`, `AUTH_AZURE_CLIENT_SECRET`, `AUTH_ISSUER`).
+- Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
