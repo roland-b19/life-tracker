@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const securityHeaders = [
   {
     key: "Content-Security-Policy",
-    value:
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+    value: isProduction
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+      : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },

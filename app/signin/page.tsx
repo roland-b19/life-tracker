@@ -14,7 +14,7 @@ export default function SignInPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const result = await signIn("credentials", { name, redirect: false });
+    const result = await signIn("credentials", { name, redirect: false, callbackUrl: "/" });
     if (result?.ok) {
       router.push("/");
       router.refresh();

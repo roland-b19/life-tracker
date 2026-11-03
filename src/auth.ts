@@ -67,20 +67,24 @@ function getProductionProvider() {
 const providers =
   process.env.AUTH_DEV === "true" ? devProvider : [getProductionProvider()];
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const authOptions: NextAuthOptions = {
   providers,
   session: { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 15 * 60 },
-  cookies: {
-    sessionToken: {
-      name: "__Host-next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-  },
+  cookies: isProduction
+    ? {
+        sessionToken: {
+          name: "__Host-next-auth.session-token",
+          options: {
+            httpOnly: true,
+            sameSite: "lax",
+            path: "/",
+            secure: true,
+          },
+        },
+      }
+    : undefined,
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "credentials") return true;
