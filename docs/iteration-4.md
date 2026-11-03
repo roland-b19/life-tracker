@@ -55,30 +55,30 @@ Specification reference: `docs/spec.md` (Module: Food + body weight) and sample 
 - [x] 0.2 Verify existing 23 Vitest tests pass on `life_tracker_test` (`npm test`).
 
 ### 1. Database Schema & Migrations
-- [ ] 1.1 Define Drizzle schema in `src/db/schema.ts` for `nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, and `shopping_items`.
-- [ ] 1.2 Generate migration script via `npx drizzle-kit generate`.
-- [ ] 1.3 Apply migrations to local PostgreSQL test and dev databases, granting permissions to `life_tracker_app`.
-- [ ] 1.4 Update `scripts/db-init.cjs` for future cloud parity.
+- [x] 1.1 Define Drizzle schema in `src/db/schema.ts` for `nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, and `shopping_items`.
+- [x] 1.2 Generate migration script via `npx drizzle-kit generate`.
+- [x] 1.3 Apply migrations to local PostgreSQL test and dev databases, granting permissions to `life_tracker_app`.
+- [x] 1.4 Update `scripts/db-init.cjs` for future cloud parity.
 
 ### 2. Seed Data & Defaults
-- [ ] 2.1 Implement seed helper in `src/lib/food-seed.ts` providing user default targets (3350 kcal, 170g protein, 300g carbs, 3000ml water, 10000 steps) and sample high-protein recipes.
+- [x] 2.1 Implement seed helper in `src/lib/food-seed.ts` providing user default targets (3350 kcal, 170g protein, 300g carbs, 3000ml water, 10000 steps) and sample high-protein recipes.
 
 ### 3. Data Access Layer & Business Logic
-- [ ] 3.1 Implement DAL functions in `src/lib/food.ts`:
+- [x] 3.1 Implement DAL functions in `src/lib/food.ts`:
   - Daily metrics: get/update daily water, steps, macros sum.
   - Meal management: log, list, and delete meals.
   - Body weight analytics: 7-day rolling average and weekly change rate.
   - Shopping list: generate aggregated list from meal plan, toggle item, add custom item.
-- [ ] 3.2 Unit tests for weight trend calculations and shopping list aggregation in `tests/food.test.ts`.
+- [x] 3.2 Unit tests for weight trend calculations and shopping list aggregation in `tests/food.test.ts`.
 
 ### 4. Server Actions & Security Layer
-- [ ] 4.1 Define Zod schemas in `src/lib/validations/food.ts`.
-- [ ] 4.2 Implement server actions in `src/app/actions/food.ts` guarded by `requireUser()`.
-- [ ] 4.3 Full Vitest authorization suite for Food operations (owner, foreign user, anonymous).
+- [x] 4.1 Define Zod schemas in `src/lib/validations/food.ts`.
+- [x] 4.2 Implement server actions in `src/app/actions/food.ts` guarded by `requireUser()`.
+- [x] 4.3 Full Vitest authorization suite for Food operations (owner, foreign user, anonymous).
 
 ### 5. User Interface — Apple HIG (`/food`)
-- [ ] 5.1 Update top navigation header with 3 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**.
-- [ ] 5.2 Build `/food` dashboard:
+- [x] 5.1 Update top navigation header with 3 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**.
+- [x] 5.2 Build `/food` dashboard:
   - Progress summary (calories, protein, carbs, fat against targets).
   - Water quick tap counter (+250ml, +500ml) & steps logger.
   - Daily meals logger grouped by meal type.
@@ -86,6 +86,6 @@ Specification reference: `docs/spec.md` (Module: Food + body weight) and sample 
   - Interactive shopping list with categories and checkboxes.
 
 ### 6. Verification & Handoff
-- [ ] 6.1 Run lint (`npm run lint`), typecheck (`npm run typecheck`), and tests (`npm test`).
-- [ ] 6.2 Test production build (`next build`).
-- [ ] 6.3 Update `docs/STATUS.md` and `docs/decisions.md`.
+- [x] 6.1 Run lint (`npm run lint`), typecheck (`npm run typecheck`), and tests (`npm test`).
+- [x] 6.2 Test production build (`next build`).
+- [x] 6.3 Update `docs/STATUS.md` and `docs/decisions.md`.

@@ -150,3 +150,135 @@ export const workoutSets = pgTable(
     check("workout_sets_extra_kg_non_negative", sql`${table.extraKg} >= 0`),
   ],
 );
+
+// --- FOOD & NUTRITION MODULE TABLES ---
+
+export const nutritionTargets = pgTable(
+  "nutrition_targets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    calories: integer("calories").default(3350).notNull(),
+    proteinGrams: integer("protein_grams").default(170).notNull(),
+    carbsGrams: integer("carbs_grams").default(300).notNull(),
+    fatGrams: integer("fat_grams").default(80).notNull(),
+    waterMl: integer("water_ml").default(3000).notNull(),
+    steps: integer("steps").default(10000).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [unique("nutrition_targets_user_unique").on(table.userId)],
+);
+
+export const dailyMetrics = pgTable(
+  "daily_metrics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    waterMl: integer("water_ml").default(0).notNull(),
+    steps: integer("steps").default(0).notNull(),
+    notes: varchar("notes", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [unique("daily_metrics_user_date_unique").on(table.userId, table.date)],
+);
+
+export const meals = pgTable(
+  "meals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    mealType: varchar("meal_type", { length: 30 }).notNull(), // 'breakfast', 'lunch', 'dinner', 'snack'
+    name: varchar("name", { length: 120 }).notNull(),
+    calories: integer("calories").default(0).notNull(),
+    protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
+    carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
+    fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const recipes = pgTable(
+  "recipes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: varchar("description", { length: 500 }),
+    calories: integer("calories").default(0).notNull(),
+    protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
+    carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
+    fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const recipeIngredients = pgTable(
+  "recipe_ingredients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipeId: uuid("recipeId")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    amount: numeric("amount", { precision: 6, scale: 2 }).default("1").notNull(),
+    unit: varchar("unit", { length: 30 }).default("g").notNull(),
+    category: varchar("category", { length: 50 }).default("pantry").notNull(), // 'meat', 'produce', 'dairy', 'bakery', 'pantry', 'other'
+  },
+);
+
+export const mealPlans = pgTable(
+  "meal_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).default("Weekly Meal Plan").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const mealPlanDays = pgTable(
+  "meal_plan_days",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => mealPlans.id, { onDelete: "cascade" }),
+    dayOfWeek: integer("day_of_week").notNull(), // 0 = Sun, ..., 6 = Sat
+    mealType: varchar("meal_type", { length: 30 }).notNull(),
+    recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "set null" }),
+    customName: varchar("custom_name", { length: 120 }),
+    calories: integer("calories").default(0).notNull(),
+    protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
+    carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
+    fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
+  },
+);
+
+export const shoppingItems = pgTable(
+  "shopping_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    amount: numeric("amount", { precision: 6, scale: 2 }).default("1").notNull(),
+    unit: varchar("unit", { length: 30 }).default("pcs").notNull(),
+    category: varchar("category", { length: 50 }).default("other").notNull(),
+    isBought: boolean("is_bought").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
