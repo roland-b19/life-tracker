@@ -80,6 +80,11 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
      (`az acr login --expose-token`), eliminating terminal interactive prompts.
   4. The user approved target region `italynorth` with `Standard_B1ms` / `Standard_B2s` for the live validation retry.
 
+- **2026-11-03 — Target region Italy North and capacity findings.** Poland Central was rejected by subscription policy (`SkuNotAvailable` for PostgreSQL Burstable), Belgium Central failed with physical host allocation limits (`RegionalAllocationFailed` on `Standard_B2s` and `Standard_B1ms`). Italy North was approved and succeeded with PostgreSQL Flexible Server `Standard_B1ms`, ACR Premium, Key Vault, and Container Apps.
+- **2026-11-03 — Bicep private DNS zone group dependency ordering.** Azure Container Apps in a VNet failed image resolution with `lookup <acr>: no such host` because ARM was executing the Container App revision creation concurrently with the ACR Private Endpoint and Private DNS Zone Group. Declared explicit dependencies in `infra/main.bicep` on `registryPrivateDnsGroup`, `vaultPrivateDnsGroup`, and secrets to guarantee private DNS A-record registration prior to image resolution.
+- **2026-11-03 — Automated database schema migration via Container App Job.** In private networking mode with public network access disabled on PostgreSQL, external clients cannot reach the database. Created `scripts/db-init.cjs` and automated database bootstrap (database creation, least-privilege `life_tracker_app` role provisioning, and DDL execution) via `Microsoft.App/jobs` (`lt-migrate-stage`) running inside the private VNet.
+- **2026-11-03 — Iteration 2 verified live and torn down.** All requirements of Iteration 2 (Azure foundation, private PostgreSQL, Key Vault secrets injection, ACR private link, live HTTPS `/health`, CSRF protection, and real Microsoft Entra ID OIDC redirect) were tested and verified on live Azure infrastructure. Full teardown completed cleanly with 0 project resources remaining.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

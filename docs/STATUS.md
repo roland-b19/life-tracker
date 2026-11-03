@@ -4,13 +4,10 @@ _Last updated: 2026-11-03 by Antigravity_
 
 ## Phase
 
-Iteration 1 is complete and merged in `main`. Iteration 2A (local implementation
-and hardened Azure contracts) is complete. Phase 2B preparation and infrastructure
-remediation are complete: regional routing, Key Vault purge-protection conflict resolution,
-official Azure RBAC role GUIDs, and non-interactive token-based ACR deployment have been
-codified and validated. Target region `italynorth` with PostgreSQL Burstable (`Standard_B1ms` /
-`Standard_B2s`) was approved by the user. Previous deployment attempts in Poland and Belgium
-were torn down synchronously; deployment in `italynorth` is queued pending teardown completion.
+Iteration 1 is complete and merged in `main`. Iteration 2 (Azure foundation, hardened
+infrastructure contracts, and live Microsoft Entra ID authentication) is complete
+and fully verified live on Azure (`italynorth`). All infrastructure resources were
+subsequently torn down synchronously; 0 active project resources remain in the subscription.
 
 ## Verification status breakdown
 
@@ -25,10 +22,11 @@ were torn down synchronously; deployment in `italynorth` is queued pending teard
     - Key Vault with private endpoint, RBAC and purge protection.
     - ACR Premium with private endpoint and admin user disabled.
     - Container Apps with VNet integration, HTTPS-only ingress, scale-to-zero, and user-assigned managed identity.
-    - Role assignments for ACR Pull and Key Vault Secrets User.
+    - Role assignments for ACR Pull (`7f951dda-4ed3-4680-a7ca-43fe172d538d`) and Key Vault Secrets User (`4633458b-17de-408a-b874-0445c86b69e6`).
+    - Explicit Bicep dependencies on `registryPrivateDnsGroup` and `vaultPrivateDnsGroup` to guarantee private DNS A-record registration prior to container image resolution.
     - Log Analytics diagnostic settings on PostgreSQL, Key Vault, ACR, and Container Apps.
     - Consumption budget alert resource (`Microsoft.Consumption/budgets`).
-  - Guarded scripts: `azure-preflight.sh`, `azure-deploy.sh` (runs what-if, validates parameters and immutable digest `sha256:...`, requires approvals), `azure-teardown.sh` (synchronous deletion with absence verification, targets only project resource group).
+  - Guarded scripts: `azure-preflight.sh`, `azure-deploy.sh` (runs what-if, validates parameters and immutable digest `sha256:...`, builds and pushes amd64 image, automates database migrations via `Microsoft.App/jobs`), `azure-teardown.sh` (synchronous deletion with absence verification, targets only project resource group).
 - **Verified via CI:**
   - Dependabot and Gitleaks secret scanning.
   - Syft/Anchore SPDX SBOM generation.
@@ -37,18 +35,22 @@ were torn down synchronously; deployment in `italynorth` is queued pending teard
 - **Verified via local tests:**
   - 14 Vitest unit, contract, and authorization tests passing.
   - Local PostgreSQL container tests passing with deterministic credentials.
-  - Production container build and `/health` probe verified.
+  - Production container build (`linux/amd64`) and `/health` probe verified.
   - `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` (production flags) passing.
   - `npm audit --audit-level=high --omit=optional` passing (0 high/critical).
-- **Verified via Azure deployment:**
-  - None. Azure 2B deployment has not been run in this phase.
-- **Unverified (requires live Azure deployment):**
-  - PostgreSQL private endpoint reachability from Container Apps.
-  - Key Vault secret resolution at Container App startup.
-  - Real Microsoft Entra External ID OIDC login flow (issuer, audience, PKCE, callback).
-  - Absence of public access to PostgreSQL, Key Vault, and ACR from external networks.
-  - Live backup retention and database restore.
-  - Real-world diagnostic log generation without sensitive payload leakage.
+- **Verified via live Azure deployment (`italynorth`):**
+  - PostgreSQL Flexible Server reachability from inside VNet: verified (`current_database()`, `current_user`).
+  - Key Vault secret resolution at Container App startup: verified (`database-url`, `nextauth-secret`, `auth-azure-client-secret`).
+  - Container image pull from ACR over Private Endpoint: verified (digest `sha256:75d80d6f194a410bd0d8c1f1dbfc6445ff2937c519f4bc720a6989e7cd64cb0e`).
+  - Live health check over HTTPS: `GET /health` -> `200 OK`, `{"status":"ok"}`.
+  - Live authorization rejection: `GET /api/weight` -> `401 Unauthorized`.
+  - CSRF / Origin protection: `POST /api/weight` -> `403 Forbidden`.
+  - Microsoft Entra ID OIDC flow: `POST /api/auth/signin/azure-ad` -> `302 Redirect` to `https://login.microsoftonline.com/83cf6faf-7c1d-4271-bbdb-2030c5678923/oauth2/v2.0/authorize?client_id=75ae56c6-ccc7-4081-b308-1b391deaa1f0&scope=openid%20profile%20email&...`.
+  - Security headers enforced: HSTS (`max-age=31536000; includeSubDomains`), CSP, X-Frame-Options (`DENY`), X-Content-Type-Options (`nosniff`), Referrer-Policy, Permissions-Policy.
+  - Absence of public access to PostgreSQL, Key Vault, and ACR from external networks: verified (`publicNetworkAccess: "Disabled"` on all three).
+  - Database schema bootstrap & migration: verified via `Microsoft.App/jobs` execution `lt-migrate-stage` (`status: Succeeded`).
+- **Unverified (deferred to future iterations):**
+  - Live backup retention window completion (7-day window) and point-in-time database restore.
 
 ## Regional audit and cost recalculation
 
@@ -70,12 +72,8 @@ were torn down synchronously; deployment in `italynorth` is queued pending teard
 
 ## Next
 
-1. Stop and obtain user decisions on:
-   - Target Azure region (`belgiumcentral` with `Standard_B2s` vs `northeurope` / `francecentral` with `Standard_B1ms`).
-   - Approval of revised cost estimate (ACR Premium + selected PostgreSQL SKU).
-   - Entra External ID tenant details (tenant ID, client ID, client secret, issuer).
-   - Approval to run Azure preflight, what-if, and live deployment.
-2. Once approved: run preflight, what-if, live deployment, smoke tests, and immediate teardown.
+1. Merge PR #12 (`feat/iteration-2-azure-prep`) into `main`.
+2. Plan Iteration 3 according to project roadmap and course requirements.
 
 ## Open questions
 
@@ -83,11 +81,26 @@ See "Open" in `docs/decisions.md`.
 
 ## Deployed Azure resources
 
-None for Life Tracker. The subscription's pre-existing
-`NetworkWatcherRG/NetworkWatcher_belgiumcentral` is not owned by this project
-and was intentionally left untouched.
+None for Life Tracker. All resources deployed for Iteration 2 testing were
+synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscription's
+pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-03 — Iteration 2 live deployment, verification, and teardown:
+  Deployed stage environment in approved region `italynorth`.
+  Resolved Bicep dependency ordering by making `containerApp` explicitly depend on
+  `registryPrivateDnsGroup`, `vaultPrivateDnsGroup`, and Key Vault secrets, eliminating
+  transient private DNS resolution errors (`lookup lifetrackerstageitacr.azurecr.io: no such host`).
+  Automated PostgreSQL schema bootstrap and table migration via `Microsoft.App/jobs`
+  (`lt-migrate-stage`), executing least-privilege role creation (`life_tracker_app`) and
+  Drizzle schema creation within the private VNet.
+  Verified live HTTPS endpoint (`/health` -> 200), authorization rejection (`/api/weight` -> 401),
+  CSRF protection (`POST /api/weight` -> 403), security headers (HSTS, CSP, X-Frame-Options,
+  Permissions-Policy), and live Microsoft Entra ID OIDC redirect (`/api/auth/signin/azure-ad` -> 302
+  to `login.microsoftonline.com`). Verified network isolation (`publicNetworkAccess: Disabled` on
+  PostgreSQL, Key Vault, and ACR). Completed full synchronous teardown; 0 project resources remain.
+  All 14 unit and contract tests passing.
 
 - 2026-11-03 — Phase 2B infrastructure root cause fixes and regional migration:
   evaluated `polandcentral` (Burstable unsupported on subscription policy) and
