@@ -40,6 +40,12 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-03 — Phase 2B first deployment attempt.** `belgiumcentral` passed `what-if`, but deployment failed because PostgreSQL `Standard_B1ms` had no capacity and ACR Basic does not support disabled public access. The partial resource group was deleted. A retry must use a capacity-available PostgreSQL SKU and ACR Premium (or a reviewed private-access alternative), with a new cost check.
 - **2026-11-03 — PR #8 infrastructure remediation.** ACR is set to Premium because Azure does not support private endpoints with Basic. This is a cost-increasing change from the rough Basic estimate; the existing cost gate remains mandatory and deployment must wait for the user's explicit approval of the revised regional estimate. Container Apps requires non-empty deployment parameters for the database URL, Auth.js secret, OIDC settings and callback URL; secret values are written to Key Vault and referenced by a pre-created user-assigned identity, while `AUTH_DEV=false` is fixed in the template.
 - **2026-11-03 — Azure cleanup and handoff.** The Life Tracker resource group and all project resources were verified absent. The teardown script now waits for deletion, verifies the group is gone, and succeeds safely when it is already absent. Pre-existing subscription resources such as Network Watcher are outside project ownership and must not be deleted.
+- **2026-11-03 — TypeScript 7 toolchain compatibility.** TypeScript 7.0 has no
+  compiler API, so the official migration guidance is used: the `typescript`
+  dependency aliases `@typescript/typescript6` for `typescript-eslint`, while
+  `@typescript/native` aliases TypeScript 7 and supplies the `tsc` binary.
+  This keeps linting on the supported API without weakening checks and makes
+  the TypeScript 7 compiler available to CI.
 
 ## Open
 
