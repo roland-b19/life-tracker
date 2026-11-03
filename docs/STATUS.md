@@ -61,12 +61,13 @@ Local PostgreSQL was used for validation and can be stopped with `docker compose
 
 ## Session log (newest first)
 
-- 2026-11-03 — Processed Dependabot PRs #2–#6 from current `main`: merged #6
-  (ESLint 10.14.0); #2–#4 are compatible with passing CI but remain open
-  because the available GitHub token lacks the `workflow` scope required to
-  merge workflow-file changes; #5 remains open because TypeScript 7.0.2 is
-  rejected by the installed `typescript-eslint` release. Post-merge `main` CI
-  passed. No Azure resources created.
+- 2026-11-03 — Processed Dependabot PRs #2–#6 from current `main`: #6 was
+  reverted via #10 because ESLint 10.14.0 leaves eslint-config-next's bundled
+  plugins with invalid peer ranges; #2–#4 are compatible with passing CI but
+  remain open because the available GitHub token lacks the `workflow` scope
+  required to merge workflow-file changes; #5 remains open because TypeScript
+  7.0.2 is rejected by the installed `typescript-eslint` release. Revert PR
+  #10 CI and post-merge `main` CI passed. No Azure resources created.
 - 2026-11-03 — Reconciled the merged Iteration 2 plan from PR #7 with the merged local implementation in PR #8; retained the plan as the phase 2B runbook and corrected stale approval wording. No Azure resources created.
 - 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token, pull-request read permission and full history required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
 - 2026-11-03 — Iteration 1 implemented locally: security spine, weigh-in slice, PostgreSQL, tests and CI. Validation passed; no Azure resources created.
