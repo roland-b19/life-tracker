@@ -45,3 +45,8 @@ tests, documentation, local configuration or development dependencies.
 ```bash
 docker build --tag life-tracker:local .
 ```
+
+Azure iteration scripts are under [`scripts/`](scripts/). Run
+`scripts/azure-preflight.sh westeurope` after `az login`. Teardown requires the
+literal confirmation argument, for example
+`scripts/azure-teardown.sh dev DELETE`; it deletes the matching resource group.

@@ -29,8 +29,8 @@ endpoint are implemented and tested. No Azure resources are deployed.
 
 ## Next
 
-1. Install/verify Azure CLI and Bicep, then resolve the region, cost estimate,
-   subscription and Entra External ID tenant/scriptability gates with the user.
+1. Azure CLI and Bicep are installed; run `az login` locally, then resolve the
+   cost estimate, subscription and Entra External ID tenant/scriptability gates.
 2. Implement Bicep and deploy/teardown scripts only after those gates pass and
    the user explicitly approves deployment.
 3. After iteration 2, stop again. Later iterations need their own plans.

@@ -98,9 +98,11 @@ identity and never accepts a `user_id` from the request.
 - [ ] Read `AGENTS.md`, `docs/STATUS.md`, `docs/requirements.md`,
   `docs/decisions.md`, this plan and the Azure security reference.
 - [ ] Create `feat/iteration-2` from `main`.
-- [ ] Verify `az`, `az bicep`, Docker, Node 24, npm, and the Bicep linter.
+- [x] Verify `az`, `az bicep`, Docker, Node 24, npm, and the Bicep linter.
 - [ ] Verify the logged-in account locally with `az account show`; do not print
   tokens, subscription IDs or tenant secrets.
+- [x] Add offline `scripts/azure-preflight.sh` and guarded
+  `scripts/azure-teardown.sh`; neither creates resources during validation.
 - [ ] Confirm the target region and pricing estimate with the user.
 
 **Check:** all tools work, no credentials are copied to files, and no Azure
