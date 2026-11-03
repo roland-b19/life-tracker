@@ -1,0 +1,460 @@
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { db } from "@/server/db";
+import {
+  exercises,
+  workoutSplits,
+  workoutSplitDays,
+  workoutSplitDayExercises,
+  workoutSessions,
+  workoutSets,
+} from "@/db/schema";
+import {
+  CreateCustomExerciseInput,
+  CreateSessionInput,
+  FinishSessionInput,
+  LogSetInput,
+} from "./validations/gym";
+import { ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
+
+export interface ExerciseContext {
+  previousSets: Array<{
+    reps: number;
+    loadType: string;
+    loadValue: string;
+    extraKg: string;
+    isFailure: boolean;
+    isPartial: boolean;
+    notes?: string | null;
+  }>;
+  pr?: {
+    loadType: string;
+    loadValue: string;
+    extraKg: string;
+    reps: number;
+    date: string;
+  } | null;
+  lastNote?: string | null;
+  suggestIncrease: boolean;
+}
+
+export interface DeloadStatus {
+  weeksSinceLastDeload: number;
+  currentCycleWeek: number; // 1 to 5
+  isDeloadDue: boolean;
+  lastDeloadDate: string | null;
+}
+
+/**
+ * Fetch all available exercises for a user (preloaded global + user custom)
+ */
+export async function getExercises(userId: string) {
+  await ensureDefaultExercises();
+  return db
+    .select()
+    .from(exercises)
+    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+    .orderBy(exercises.muscleGroup, exercises.name);
+}
+
+/**
+ * Create a custom user exercise
+ */
+export async function createCustomExercise(
+  userId: string,
+  input: CreateCustomExerciseInput,
+) {
+  const [created] = await db
+    .insert(exercises)
+    .values({
+      userId,
+      name: input.name,
+      muscleGroup: input.muscleGroup,
+      equipmentType: input.equipmentType,
+      isCustom: true,
+    })
+    .returning();
+  return created;
+}
+
+/**
+ * Get the user's active split and its days with exercises
+ */
+export async function getUserSplitWithDays(userId: string) {
+  await ensureUserDefaultSplit(userId);
+
+  const splits = await db
+    .select()
+    .from(workoutSplits)
+    .where(and(eq(workoutSplits.userId, userId), eq(workoutSplits.isActive, true)))
+    .limit(1);
+
+  if (splits.length === 0) return null;
+  const split = splits[0];
+
+  const days = await db
+    .select()
+    .from(workoutSplitDays)
+    .where(and(eq(workoutSplitDays.splitId, split.id), eq(workoutSplitDays.userId, userId)))
+    .orderBy(workoutSplitDays.dayOfWeek);
+
+  const daysWithExercises = await Promise.all(
+    days.map(async (day) => {
+      const dayExercises = await db
+        .select({
+          id: workoutSplitDayExercises.id,
+          exerciseId: exercises.id,
+          exerciseName: exercises.name,
+          muscleGroup: exercises.muscleGroup,
+          equipmentType: exercises.equipmentType,
+          targetSets: workoutSplitDayExercises.targetSets,
+          minReps: workoutSplitDayExercises.minReps,
+          maxReps: workoutSplitDayExercises.maxReps,
+          orderIndex: workoutSplitDayExercises.orderIndex,
+        })
+        .from(workoutSplitDayExercises)
+        .innerJoin(exercises, eq(workoutSplitDayExercises.exerciseId, exercises.id))
+        .where(eq(workoutSplitDayExercises.splitDayId, day.id))
+        .orderBy(workoutSplitDayExercises.orderIndex);
+
+      return {
+        ...day,
+        exercises: dayExercises,
+      };
+    }),
+  );
+
+  return {
+    ...split,
+    days: daysWithExercises,
+  };
+}
+
+/**
+ * Create a new workout session
+ */
+export async function createWorkoutSession(
+  userId: string,
+  input: CreateSessionInput,
+) {
+  const [session] = await db
+    .insert(workoutSessions)
+    .values({
+      userId,
+      date: input.date,
+      splitDayId: input.splitDayId ?? null,
+      isDeload: input.isDeload,
+      notes: input.notes ?? null,
+    })
+    .returning();
+
+  return session;
+}
+
+/**
+ * Finish a workout session
+ */
+export async function finishWorkoutSession(
+  userId: string,
+  input: FinishSessionInput,
+) {
+  const [updated] = await db
+    .update(workoutSessions)
+    .set({
+      durationMinutes: input.durationMinutes ?? null,
+      notes: input.notes ?? undefined,
+    })
+    .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
+    .returning();
+
+  return updated;
+}
+
+/**
+ * Log a workout set with automatic '!!' anomaly detection
+ */
+export async function logWorkoutSet(userId: string, input: LogSetInput) {
+  // Verify session belongs to user
+  const session = await db
+    .select({ id: workoutSessions.id })
+    .from(workoutSessions)
+    .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
+    .limit(1);
+
+  if (session.length === 0) {
+    throw new Error("Workout session not found or unauthorized");
+  }
+
+  // Automatic anomaly check: if reps < target min reps
+  let flagAnomaly = input.flagAnomaly;
+  let anomalyReason = input.anomalyReason;
+
+  if (input.minTargetReps && input.reps < input.minTargetReps) {
+    flagAnomaly = true;
+    if (!anomalyReason) {
+      anomalyReason = "too_heavy";
+    }
+  }
+
+  const [createdSet] = await db
+    .insert(workoutSets)
+    .values({
+      sessionId: input.sessionId,
+      userId,
+      exerciseId: input.exerciseId,
+      setOrder: input.setOrder,
+      reps: input.reps,
+      loadType: input.loadType,
+      loadValue: input.loadValue.toFixed(2),
+      extraKg: input.extraKg ? input.extraKg.toFixed(2) : "0.00",
+      isFailure: input.isFailure,
+      isPartial: input.isPartial,
+      flagAnomaly,
+      anomalyReason: anomalyReason ?? null,
+      notes: input.notes ?? null,
+    })
+    .returning();
+
+  return createdSet;
+}
+
+/**
+ * Delete a workout set
+ */
+export async function deleteWorkoutSet(userId: string, setId: string) {
+  const [deleted] = await db
+    .delete(workoutSets)
+    .where(and(eq(workoutSets.id, setId), eq(workoutSets.userId, userId)))
+    .returning();
+  return deleted;
+}
+
+/**
+ * Fetch a session with all its sets and exercise info
+ */
+export async function getWorkoutSessionDetails(userId: string, sessionId: string) {
+  const [session] = await db
+    .select()
+    .from(workoutSessions)
+    .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
+    .limit(1);
+
+  if (!session) return null;
+
+  const sets = await db
+    .select({
+      id: workoutSets.id,
+      sessionId: workoutSets.sessionId,
+      exerciseId: workoutSets.exerciseId,
+      exerciseName: exercises.name,
+      equipmentType: exercises.equipmentType,
+      muscleGroup: exercises.muscleGroup,
+      setOrder: workoutSets.setOrder,
+      reps: workoutSets.reps,
+      loadType: workoutSets.loadType,
+      loadValue: workoutSets.loadValue,
+      extraKg: workoutSets.extraKg,
+      isFailure: workoutSets.isFailure,
+      isPartial: workoutSets.isPartial,
+      flagAnomaly: workoutSets.flagAnomaly,
+      anomalyReason: workoutSets.anomalyReason,
+      notes: workoutSets.notes,
+      createdAt: workoutSets.createdAt,
+    })
+    .from(workoutSets)
+    .innerJoin(exercises, eq(workoutSets.exerciseId, exercises.id))
+    .where(and(eq(workoutSets.sessionId, sessionId), eq(workoutSets.userId, userId)))
+    .orderBy(workoutSets.exerciseId, workoutSets.setOrder);
+
+  return {
+    session,
+    sets,
+  };
+}
+
+/**
+ * Get in-workout context for an exercise (last session sets, PR, note, progressive overload hint)
+ */
+export async function getExerciseContext(
+  userId: string,
+  exerciseId: string,
+  currentSessionId?: string,
+  maxTargetReps?: number,
+): Promise<ExerciseContext> {
+  // Find previous sessions containing this exercise
+  let sessionDateLimit: string | undefined;
+  if (currentSessionId) {
+    const [curr] = await db
+      .select({ date: workoutSessions.date })
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.id, currentSessionId), eq(workoutSessions.userId, userId)))
+      .limit(1);
+    if (curr) sessionDateLimit = curr.date;
+  }
+
+  // Find the most recent previous session with sets for this exercise
+  const previousSessionsQuery = db
+    .select({
+      sessionId: workoutSessions.id,
+      date: workoutSessions.date,
+    })
+    .from(workoutSessions)
+    .innerJoin(workoutSets, eq(workoutSets.sessionId, workoutSessions.id))
+    .where(
+      and(
+        eq(workoutSessions.userId, userId),
+        eq(workoutSets.exerciseId, exerciseId),
+        sessionDateLimit
+          ? lt(workoutSessions.date, sessionDateLimit)
+          : undefined,
+        currentSessionId
+          ? sql`${workoutSessions.id} != ${currentSessionId}`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(workoutSessions.date))
+    .limit(1);
+
+  const prevSessionRes = await previousSessionsQuery;
+  let previousSets: ExerciseContext["previousSets"] = [];
+  let lastNote: string | null = null;
+  let suggestIncrease = false;
+
+  if (prevSessionRes.length > 0) {
+    const prevSessionId = prevSessionRes[0].sessionId;
+    const sets = await db
+      .select({
+        reps: workoutSets.reps,
+        loadType: workoutSets.loadType,
+        loadValue: workoutSets.loadValue,
+        extraKg: workoutSets.extraKg,
+        isFailure: workoutSets.isFailure,
+        isPartial: workoutSets.isPartial,
+        notes: workoutSets.notes,
+      })
+      .from(workoutSets)
+      .where(
+        and(
+          eq(workoutSets.sessionId, prevSessionId),
+          eq(workoutSets.userId, userId),
+          eq(workoutSets.exerciseId, exerciseId),
+        ),
+      )
+      .orderBy(workoutSets.setOrder);
+
+    previousSets = sets;
+    for (const s of sets) {
+      if (s.notes) {
+        lastNote = s.notes;
+      }
+    }
+
+    // Progressive overload: if maxTargetReps is defined and any set hit or exceeded it without anomaly
+    if (maxTargetReps && sets.length > 0) {
+      const hitTop = sets.some((s) => s.reps >= maxTargetReps);
+      if (hitTop) {
+        suggestIncrease = true;
+      }
+    }
+  }
+
+  // Find Personal Record (PR) for this exercise
+  const allSets = await db
+    .select({
+      loadType: workoutSets.loadType,
+      loadValue: workoutSets.loadValue,
+      extraKg: workoutSets.extraKg,
+      reps: workoutSets.reps,
+      date: workoutSessions.date,
+    })
+    .from(workoutSets)
+    .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
+    .where(
+      and(
+        eq(workoutSets.userId, userId),
+        eq(workoutSets.exerciseId, exerciseId),
+        eq(workoutSessions.isDeload, false), // Exclude deload from PRs
+      ),
+    )
+    .orderBy(desc(sql`CAST(${workoutSets.loadValue} AS numeric)`), desc(workoutSets.reps))
+    .limit(1);
+
+  const pr = allSets.length > 0 ? allSets[0] : null;
+
+  return {
+    previousSets,
+    pr,
+    lastNote,
+    suggestIncrease,
+  };
+}
+
+/**
+ * 5-Week Deload Tracker
+ */
+export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
+  const lastDeload = await db
+    .select({ date: workoutSessions.date })
+    .from(workoutSessions)
+    .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.isDeload, true)))
+    .orderBy(desc(workoutSessions.date))
+    .limit(1);
+
+  let referenceDate: Date;
+  let lastDeloadDate: string | null = null;
+
+  if (lastDeload.length > 0) {
+    lastDeloadDate = lastDeload[0].date;
+    referenceDate = new Date(lastDeloadDate);
+  } else {
+    // If no deload yet, find first workout session
+    const firstSession = await db
+      .select({ date: workoutSessions.date })
+      .from(workoutSessions)
+      .where(eq(workoutSessions.userId, userId))
+      .orderBy(workoutSessions.date)
+      .limit(1);
+
+    if (firstSession.length > 0) {
+      referenceDate = new Date(firstSession[0].date);
+    } else {
+      referenceDate = new Date(); // New user: week 1
+    }
+  }
+
+  const now = new Date();
+  const diffDays = Math.max(0, Math.floor((now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
+  const weeksPassed = Math.floor(diffDays / 7);
+
+  const currentCycleWeek = (weeksPassed % 5) + 1; // 1, 2, 3, 4, 5
+  const isDeloadDue = currentCycleWeek === 5 || weeksPassed >= 5;
+
+  return {
+    weeksSinceLastDeload: weeksPassed,
+    currentCycleWeek,
+    isDeloadDue,
+    lastDeloadDate,
+  };
+}
+
+/**
+ * List recent user workout sessions
+ */
+export async function getRecentWorkoutSessions(userId: string, limit = 15) {
+  return db
+    .select({
+      id: workoutSessions.id,
+      date: workoutSessions.date,
+      durationMinutes: workoutSessions.durationMinutes,
+      isDeload: workoutSessions.isDeload,
+      notes: workoutSessions.notes,
+      splitDayName: workoutSplitDays.name,
+      setCount: sql<number>`count(${workoutSets.id})::int`,
+    })
+    .from(workoutSessions)
+    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
+    .leftJoin(workoutSets, eq(workoutSessions.id, workoutSets.sessionId))
+    .where(eq(workoutSessions.userId, userId))
+    .groupBy(workoutSessions.id, workoutSplitDays.name)
+    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt))
+    .limit(limit);
+}

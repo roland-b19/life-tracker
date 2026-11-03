@@ -69,21 +69,21 @@ Work top to bottom. Commit frequently on branch `feat/iteration-3-gym` with Conv
 - [x] 2.2 Seed the user's default 5-day Upper/Lower split with target rep ranges and sets.
 
 ### 3. Data Access Layer & Business Logic
-- [ ] 3.1 Implement owner-scoped DAL functions in `src/lib/gym.ts`:
+- [x] 3.1 Implement owner-scoped DAL functions in `src/lib/gym.ts`:
   - Fetch splits and active split days.
   - Start/finish workout session.
   - Log set with automatic `!!` anomaly detection against target range.
   - Query previous session performance and calculate progressive overload suggestion.
   - Calculate 5-week deload tracker state.
-- [ ] 3.2 Unit tests for business logic in `src/lib/gym.test.ts`.
+- [x] 3.2 Unit tests for business logic in `src/lib/gym.test.ts`.
 
 ### 4. Server Actions & Security Layer
-- [ ] 4.1 Define Zod schemas for all Gym mutations in `src/lib/validations/gym.ts`.
-- [ ] 4.2 Create server actions in `src/app/actions/gym.ts` (or route handlers) guarded by `requireUser()`.
-- [ ] 4.3 Ensure no mass-assignment vulnerabilities, sanitize user input, and preserve strict multi-user tenant isolation.
+- [x] 4.1 Define Zod schemas for all Gym mutations in `src/lib/validations/gym.ts`.
+- [x] 4.2 Create server actions in `src/app/actions/gym.ts` (or route handlers) guarded by `requireUser()`.
+- [x] 4.3 Ensure no mass-assignment vulnerabilities, sanitize user input, and preserve strict multi-user tenant isolation.
 
 ### 5. Authorization & Contract Tests
-- [ ] 5.1 Implement Vitest authorization tests for Gym operations:
+- [x] 5.1 Implement Vitest authorization tests for Gym operations:
   - User A can log, view, and modify their own workouts.
   - User B cannot read or modify User A's workout sessions, sets, or custom exercises.
   - Anonymous requests are rejected (401 / redirect).
