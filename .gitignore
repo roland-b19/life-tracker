@@ -35,6 +35,7 @@ dist/
 build/
 .next/
 coverage/
+*.tsbuildinfo
 
 # .NET / Java
 bin/

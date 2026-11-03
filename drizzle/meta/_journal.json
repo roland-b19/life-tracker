@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793694490977,
+      "tag": "0000_silent_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793694548088,
+      "tag": "0001_romantic_retro_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793694900000,
+      "tag": "0002_allow_auth_subject_upsert",
+      "breakpoints": true
+    }
+  ]
+}
