@@ -256,6 +256,12 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+resource workloadIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${suffix}-identity'
+  location: location
+  tags: tags
+}
+
 resource databaseUrlSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'database-url'
@@ -387,7 +393,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   location: location
   tags: tags
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${workloadIdentity.id}': {}
+    }
   }
   properties: {
     managedEnvironmentId: containerEnv.id
@@ -401,24 +410,24 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: '${registryName}.azurecr.io'
-          identity: 'system'
+          identity: workloadIdentity.id
         }
       ]
       secrets: [
         {
           name: 'database-url'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/database-url'
-          identity: 'system'
+          identity: workloadIdentity.id
         }
         {
           name: 'nextauth-secret'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/nextauth-secret'
-          identity: 'system'
+          identity: workloadIdentity.id
         }
         {
           name: 'auth-azure-client-secret'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/auth-azure-client-secret'
-          identity: 'system'
+          identity: workloadIdentity.id
         }
       ]
     }
@@ -485,14 +494,16 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
   dependsOn: [
     registry
+    keyVaultSecretsUserRole
+    acrPullRole
   ]
 }
 
 resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, containerApp.id, 'kv-secrets-user')
+  name: guid(keyVault.id, workloadIdentity.id, 'kv-secrets-user')
   scope: keyVault
   properties: {
-    principalId: containerApp.identity.principalId
+    principalId: workloadIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
       'Microsoft.Authorization/roleDefinitions',
       '4633458b-17de-408a-b874-0445c86e6e6'
@@ -502,10 +513,10 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
 }
 
 resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, containerApp.id, 'acrpull')
+  name: guid(registry.id, workloadIdentity.id, 'acrpull')
   scope: registry
   properties: {
-    principalId: containerApp.identity.principalId
+    principalId: workloadIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
       'Microsoft.Authorization/roleDefinitions',
       '7f951dda-4ed3-4680-a7ca-43fe172d538d'

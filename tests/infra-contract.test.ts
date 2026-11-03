@@ -34,4 +34,14 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("secretRef: 'nextauth-secret'");
     expect(bicep).toContain("secretRef: 'auth-azure-client-secret'");
   });
+
+  it("grants private registry and Key Vault access before starting the app", () => {
+    expect(bicep).toContain(
+      "resource workloadIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31'",
+    );
+    expect(bicep).toContain("type: 'UserAssigned'");
+    expect(bicep).toContain("identity: workloadIdentity.id");
+    expect(bicep).toContain("keyVaultSecretsUserRole");
+    expect(bicep).toContain("acrPullRole");
+  });
 });

@@ -11,10 +11,10 @@ evidence before marking an item complete.
 - [x] Key Vault uses RBAC, soft delete, purge protection and a private endpoint.
 - [x] ACR uses the Premium SKU required for private endpoints, disables admin
   credentials and uses a private endpoint.
-- [x] Container Apps uses a VNet-integrated environment and managed identity
+- [x] Container Apps uses a VNet-integrated environment and user-assigned managed identity
   for ACR pull.
 - [x] Container Apps receives required database and authentication secrets via
-  Key Vault references; its system identity has only the Key Vault Secrets User
+  Key Vault references; its user-assigned identity has only the Key Vault Secrets User
   role at the vault scope, and `AUTH_DEV=false` is enforced.
 - [x] The application rejects production startup when `NEXTAUTH_SECRET` or
   required OIDC settings are missing.

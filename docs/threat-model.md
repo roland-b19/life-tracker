@@ -52,7 +52,7 @@ CI (GitHub) ==TB6== Azure deploy (scripted, federated identity, no static keys) 
 API ==TB3== Key Vault (secrets, managed identity)
 ```
 
-The Container App's system-assigned identity reads only the three runtime
+The Container App's user-assigned identity reads only the three runtime
 secrets it needs through Key Vault references. The Bicep deployment requires
 non-empty database, Auth.js and OIDC values and forces `AUTH_DEV=false`, so a
 production app cannot silently start with development authentication or
