@@ -35,6 +35,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-03 — Only iteration 1 is implemented now; the roadmap is an estimate.** `docs/roadmap.md` lists the later iterations as a rough order and size estimate only. After iteration 1 the work stops until the user and the agent agree the next iteration, which then gets its own plan. Rule added to `AGENTS.md` (scope guard).
 
 - **2026-11-03 — Iteration 1 implementation.** The local security spine uses Next.js 16, stable `next-auth` 4.24.15, Drizzle ORM, PostgreSQL 17, strict Zod validation, owner-scoped weight routes, and Vitest authorization tests. Development credentials are refused when `NODE_ENV=production`; Entra and Azure remain deferred.
+- **2026-11-03 — Iteration 2 plan drafted, not approved.** The next proposed iteration is Azure foundation plus real Entra External ID login for the existing weigh-in slice. Deployment remains gated by supported scripting, a region/SKU cost estimate, explicit user approval, private database networking and a tested teardown.
 
 ## Open
 

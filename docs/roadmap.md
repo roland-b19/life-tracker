@@ -1,6 +1,6 @@
 # Roadmap (ESTIMATE ONLY, not approved for implementation)
 
-**Do not implement anything from this file.** The only work to implement now is `docs/iteration-1.md`. This roadmap is a rough order and size estimate so the user can see the road ahead and so a later agent has a starting point. Each iteration below is agreed with the user, one at a time, **after** the previous one is finished and reviewed; at that point it gets its own detailed plan (like `docs/iteration-1.md`) and only then it is built. Order, scope and sizes can change.
+**Do not implement anything from this file.** Iteration 1 is complete. Iteration 2 now has a detailed, separate plan in `docs/iteration-2.md`, but it is not approved for implementation until the user accepts it and explicitly approves the first Azure deployment after the cost gate. This roadmap remains a rough order and size estimate; later iterations still need their own plans.
 
 Sources: `docs/spec.md` (what each module does, approved), `docs/decisions.md` (tiers, stack), `docs/requirements.md` (course checklist). Sizes are guesses of agent work: S under half a day, M about a day, L several days. Nothing was measured.
 
@@ -20,7 +20,7 @@ Note on words: the course calls every deploy-work-delete cycle an "iteration". H
 | 8 | Wishlist and Family business | 3 | M | 6 |
 | 9 | Course finish: hardening, demo, teardown | n/a | M | all |
 
-Iteration 1 is the current one. The rest are estimates.
+Iteration 2 is the next proposed iteration. The rest are estimates.
 
 ## 2. Azure foundation and real login
 Why second: the course grades the Azure parts and the security, and the deploy cycle should be rehearsed early, not in January.

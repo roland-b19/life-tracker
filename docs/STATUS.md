@@ -4,7 +4,7 @@ _Last updated: 2026-11-03 by Copilot_
 
 ## Phase
 
-Iteration 1 implementation complete locally. The app has a Next.js security spine, local PostgreSQL, Auth.js dev sign-in, owner-scoped weigh-ins, authorization tests and CI. No Azure resources are deployed.
+Iteration 1 implementation complete locally and merged in `main`. The detailed plan for proposed iteration 2 is in `docs/iteration-2.md`; it is awaiting user approval. No Azure resources are deployed.
 
 ## Done
 
@@ -27,8 +27,9 @@ Iteration 1 implementation complete locally. The app has a Next.js security spin
 
 ## Next
 
-1. **Stop after iteration 1.** The next iteration needs a new user-approved plan before any Azure, Entra or later module work.
-2. `docs/roadmap.md` is an **estimate only** of later iterations and is not a work order.
+1. **Iteration 2 plan:** review and approve `docs/iteration-2.md`; no Azure changes happen before explicit deployment approval after the cost gate.
+2. After iteration 2, stop again. Later iterations need their own user-approved plans.
+3. `docs/roadmap.md` remains an estimate only and is not a work order.
 
 ## Open questions
 
@@ -42,6 +43,7 @@ None. Local PostgreSQL was used for validation and can be stopped with `docker c
 
 - 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token, pull-request read permission and full history required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
 - 2026-11-03 — Iteration 1 implemented locally: security spine, weigh-in slice, PostgreSQL, tests and CI. Validation passed; no Azure resources created.
+- 2026-11-03 — Detailed plan for proposed iteration 2 added in `docs/iteration-2.md`; awaiting user approval. No Azure resources created.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
