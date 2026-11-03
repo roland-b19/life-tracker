@@ -37,6 +37,11 @@ postgres_sku="${POSTGRES_SKU:-Standard_B1ms}"
 owner_email="${OWNER_EMAIL:-$(az account show --query user.name -o tsv)}"
 resource_group="life-tracker-$environment"
 
+loc_suffix=$(echo "$location" | cut -c1-2)
+acr_name="lifetracker${environment}${loc_suffix}acr"
+acr_login_server="${acr_name}.azurecr.io"
+acr_image="$acr_login_server/life-tracker"
+
 echo "Ensuring resource group exists with required tags: $resource_group"
 az group create \
   --name "$resource_group" \
@@ -61,7 +66,8 @@ az deployment group what-if \
     authAzureTenantId="$AUTH_AZURE_TENANT_ID" \
     authAzureClientId="$AUTH_AZURE_CLIENT_ID" \
     authIssuer="$AUTH_ISSUER" \
-    postgresSku="$postgres_sku"
+    postgresSku="$postgres_sku" \
+    registryName="$acr_name"
 
 if [[ "${CONFIRM_DEPLOY:-}" != "YES" ]]; then
   echo "What-if preview complete. Set CONFIRM_DEPLOY=YES to proceed with live deployment."
@@ -71,11 +77,6 @@ fi
 # ── Step: Bootstrap ACR and push container image ─────────────────────────────
 # shortcut: ACR is bootstrapped and public access used briefly for image push;
 # Bicep will lock it down with private endpoint and publicNetworkAccess=Disabled.
-suffix="life-tracker-$environment"
-acr_name=$(echo "${suffix}acr" | tr -d '-')
-acr_login_server="${acr_name}.azurecr.io"
-acr_image="$acr_login_server/life-tracker"
-
 echo "Ensuring ACR exists for container image push: $acr_name"
 if ! az acr show --name "$acr_name" --resource-group "$resource_group" --output none 2>/dev/null; then
   az acr create \
@@ -87,8 +88,24 @@ if ! az acr show --name "$acr_name" --resource-group "$resource_group" --output 
     --output none
 fi
 
-echo "Logging in to ACR: $acr_login_server"
-az acr login --name "$acr_name" --output none
+echo "Authenticating to ACR: $acr_login_server"
+auth_ok=false
+for attempt in $(seq 1 6); do
+  if token=$(az acr login --name "$acr_name" --expose-token --output tsv --query accessToken 2>/dev/null); then
+    if echo "$token" | docker login "$acr_login_server" --username 00000000-0000-0000-0000-000000000000 --password-stdin >/dev/null 2>&1; then
+      echo "Successfully authenticated to ACR via token."
+      auth_ok=true
+      break
+    fi
+  fi
+  echo "Waiting for ACR endpoint DNS propagation (attempt $attempt/6)..."
+  sleep 5
+done
+
+if [[ "$auth_ok" != "true" ]]; then
+  echo "FATAL: Failed to authenticate to ACR $acr_name after 6 attempts." >&2
+  exit 1
+fi
 
 echo "Tagging and pushing image $acr_image@$image_digest"
 if docker image inspect "$image_digest" >/dev/null 2>&1; then
@@ -126,6 +143,7 @@ if ! az deployment group create \
     authAzureClientId="$AUTH_AZURE_CLIENT_ID" \
     authIssuer="$AUTH_ISSUER" \
     postgresSku="$postgres_sku" \
+    registryName="$acr_name" \
   --output none; then
   echo "Deployment failed! Run teardown immediately to prevent stray resources:" >&2
   echo "./scripts/azure-teardown.sh $environment DELETE" >&2

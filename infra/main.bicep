@@ -60,6 +60,9 @@ param authIssuer string
 @description('PostgreSQL compute SKU.')
 param postgresSku string = 'Standard_B1ms'
 
+@description('Optional explicit container registry name to allow regional and conflict-free naming.')
+param registryName string = ''
+
 @description('Optional budget alert amount in USD for the resource group (0 to disable).')
 param budgetAmount int = 25
 
@@ -74,13 +77,13 @@ var tags = {
 }
 var vnetName = '${suffix}-vnet'
 var postgresName = replace('${suffix}-pg', '-', '')
-var registryName = replace('${suffix}acr', '-', '')
+var effectiveRegistryName = !empty(registryName) ? registryName : replace('${suffix}acr', '-', '')
 var keyVaultName = take(replace('${suffix}kv${uniqueString(resourceGroup().id)}', '-', ''), 24)
 var workspaceName = '${suffix}-logs'
 var containerEnvName = '${suffix}-cae'
 var containerAppName = '${suffix}-app'
 var postgresDnsName = 'privatelink.postgres.database.azure.com'
-var containerImage = '${registryName}.azurecr.io/life-tracker@${imageDigest}'
+var containerImage = '${effectiveRegistryName}.azurecr.io/life-tracker@${imageDigest}'
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: workspaceName
@@ -238,7 +241,7 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
 }
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: registryName
+  name: effectiveRegistryName
   location: location
   tags: tags
   sku: {
@@ -298,7 +301,7 @@ resource authAzureClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-
 }
 
 resource registryPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
-  name: '${registryName}-pe'
+  name: '${effectiveRegistryName}-pe'
   location: location
   tags: tags
   properties: {
@@ -307,7 +310,7 @@ resource registryPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01'
     }
     privateLinkServiceConnections: [
       {
-        name: '${registryName}-connection'
+        name: '${effectiveRegistryName}-connection'
         properties: {
           privateLinkServiceId: registry.id
           groupIds: [
@@ -420,7 +423,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       }
       registries: [
         {
-          server: '${registryName}.azurecr.io'
+          server: '${effectiveRegistryName}.azurecr.io'
           identity: workloadIdentity.id
         }
       ]
@@ -577,7 +580,7 @@ resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-prev
 }
 
 resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: '${registryName}-diag'
+  name: '${effectiveRegistryName}-diag'
   scope: registry
   properties: {
     workspaceId: logAnalytics.id
