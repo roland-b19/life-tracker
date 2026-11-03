@@ -51,41 +51,41 @@ Specification reference: `docs/spec.md` (Module: Money) and Tier 2 roadmap in `d
 ## Runbook for the implementing agent
 
 ### 0. Pre-flight
-- [ ] 0.1 Confirm active branch `feat/iteration-5-money` and clean working tree.
-- [ ] 0.2 Verify existing 31 Vitest tests pass on `life_tracker_test` (`npm test`).
+- [x] 0.1 Confirm active branch `feat/iteration-5-money` and clean working tree.
+- [x] 0.2 Verify existing 31 Vitest tests pass on `life_tracker_test` (`npm test`).
 
 ### 1. Database Schema & Migrations
-- [ ] 1.1 Define Drizzle schema in `src/db/schema.ts` for `expenses` and `expense_categories`.
-- [ ] 1.2 Generate migration script via `npx drizzle-kit generate`.
-- [ ] 1.3 Apply migrations to local PostgreSQL test and dev databases, granting permissions to `life_tracker_app`.
-- [ ] 1.4 Update `scripts/db-init.cjs` for future cloud parity.
+- [x] 1.1 Define Drizzle schema in `src/db/schema.ts` for `expenses` and `expense_categories`.
+- [x] 1.2 Generate migration script via `npx drizzle-kit generate`.
+- [x] 1.3 Apply migrations to local PostgreSQL test and dev databases, granting permissions to `life_tracker_app`.
+- [x] 1.4 Update `scripts/db-init.cjs` for future cloud parity.
 
 ### 2. Seed Data & Preloaded Categories
-- [ ] 2.1 Implement seed helper in `src/lib/money-seed.ts` providing standard categories for personal and business spaces.
+- [x] 2.1 Implement seed helper in `src/lib/money-seed.ts` providing standard categories for personal and business spaces.
 
 ### 3. Data Access Layer & Business Logic
-- [ ] 3.1 Implement DAL functions in `src/lib/money.ts`:
+- [x] 3.1 Implement DAL functions in `src/lib/money.ts`:
   - List expenses filtered by user, space, and optional month.
   - Log, edit, and delete expense.
   - Calculate monthly summary (total, category breakdown, count).
   - Get most-used category for quick preselection.
   - Create custom expense category.
-- [ ] 3.2 Unit tests for monthly aggregations and calculations in `tests/money.test.ts`.
+- [x] 3.2 Unit tests for monthly aggregations and calculations in `tests/money.test.ts`.
 
 ### 4. Server Actions & Security Layer
-- [ ] 4.1 Define Zod schemas in `src/lib/validations/money.ts`.
-- [ ] 4.2 Implement server actions in `src/app/actions/money.ts` guarded by `requireUser()`.
-- [ ] 4.3 Full Vitest authorization suite for Money operations (owner, foreign user, anonymous).
+- [x] 4.1 Define Zod schemas in `src/lib/validations/money.ts`.
+- [x] 4.2 Implement server actions in `src/app/actions/money.ts` guarded by `requireUser()`.
+- [x] 4.3 Full Vitest authorization suite for Money operations (owner, foreign user, anonymous).
 
 ### 5. User Interface — Apple HIG (`/money`)
-- [ ] 5.1 Update top navigation header with 4 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, and **Money**.
-- [ ] 5.2 Build `/money` dashboard:
+- [x] 5.1 Update top navigation header with 4 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, and **Money**.
+- [x] 5.2 Build `/money` dashboard:
   - Space segmented control (`Personal` vs `Business`).
   - Fast expense entry form (2–3 taps).
   - Monthly summary card (total RON spent, category distribution).
   - Expense history list with category badge and delete action.
 
 ### 6. Verification & Handoff
-- [ ] 6.1 Run lint (`npm run lint`), typecheck (`npm run typecheck`), and tests (`npm test`).
-- [ ] 6.2 Test production build (`next build`).
-- [ ] 6.3 Update `docs/STATUS.md` and `docs/decisions.md`.
+- [x] 6.1 Run lint (`npm run lint`), typecheck (`npm run typecheck`), and tests (`npm test`).
+- [x] 6.2 Test production build (`next build`).
+- [x] 6.3 Update `docs/STATUS.md` and `docs/decisions.md`.

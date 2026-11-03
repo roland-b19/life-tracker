@@ -495,6 +495,257 @@ input:focus-visible {
   margin: 4rem auto;
 }
 
+/* Money Module Styles (Apple HIG) */
+.space-switcher {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.space-tab {
+  flex: 1;
+  text-align: center;
+  padding: 0.45rem 1rem;
+  border-radius: 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.space-tab.active {
+  background: var(--tint);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.money-hero-card {
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.month-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.month-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--secondary);
+  text-transform: capitalize;
+}
+
+.month-nav-btn {
+  background: var(--background);
+  border: 1px solid var(--separator);
+  color: var(--text);
+  border-radius: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.total-spent-display {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.total-spent-amount {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.total-spent-currency {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--secondary);
+}
+
+.quick-expense-card {
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.amount-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.amount-input-hero {
+  width: 100%;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.75rem 4.5rem 0.75rem 1rem;
+  border: 1.5px solid var(--separator);
+  border-radius: 0.75rem;
+  background: var(--background);
+  color: var(--text);
+}
+
+.amount-input-hero:focus {
+  border-color: var(--tint);
+  outline: none;
+}
+
+.amount-currency-tag {
+  position: absolute;
+  right: 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--secondary);
+  pointer-events: none;
+}
+
+.category-chips-scroll {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  scrollbar-width: thin;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 2rem;
+  border: 1px solid var(--separator);
+  background: var(--background);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.category-chip:hover {
+  border-color: var(--tint);
+}
+
+.category-chip.active {
+  background: var(--tint);
+  color: #ffffff;
+  border-color: var(--tint);
+}
+
+.breakdown-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.breakdown-cat-name {
+  font-weight: 600;
+}
+
+.breakdown-cat-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.expense-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.expense-row:last-child {
+  border-bottom: none;
+}
+
+.expense-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.expense-cat-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.expense-meta {
+  font-size: 0.8rem;
+  color: var(--secondary);
+}
+
+.expense-amount-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.expense-value-text {
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.delete-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--secondary);
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-icon-btn:hover {
+  color: var(--danger);
+  background: rgba(215, 0, 21, 0.08);
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

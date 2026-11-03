@@ -244,8 +244,28 @@ async function main() {
       "is_bought" boolean DEFAULT false NOT NULL,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS "expense_categories" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid REFERENCES "users"("id") ON DELETE cascade,
+      "name" varchar(50) NOT NULL,
+      "space" varchar(20) DEFAULT 'personal' NOT NULL,
+      "icon" varchar(30),
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "expenses" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "space" varchar(20) DEFAULT 'personal' NOT NULL,
+      "amount" numeric(10, 2) NOT NULL,
+      "currency" varchar(10) DEFAULT 'RON' NOT NULL,
+      "category" varchar(50) NOT NULL,
+      "date" date NOT NULL,
+      "notes" varchar(255),
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      CONSTRAINT "expenses_amount_positive" CHECK ("amount" > 0)
+    );
   `);
-  console.log("Verified Food & Nutrition tables.");
+  console.log("Verified Food & Nutrition and Money tables.");
 
   await appDbClient.query(`
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
@@ -266,6 +286,8 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plans" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plan_days" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expense_categories" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();

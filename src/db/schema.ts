@@ -282,3 +282,37 @@ export const shoppingItems = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );
+
+// --- MONEY MODULE TABLES ---
+
+export const expenseCategories = pgTable(
+  "expense_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 50 }).notNull(),
+    space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal', 'business', 'both'
+    icon: varchar("icon", { length: 30 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal' | 'business'
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 10 }).default("RON").notNull(),
+    category: varchar("category", { length: 50 }).notNull(),
+    date: date("date").notNull(),
+    notes: varchar("notes", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("expenses_amount_positive", sql`${table.amount} > 0`),
+  ],
+);

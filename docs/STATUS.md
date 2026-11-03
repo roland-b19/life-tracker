@@ -1,12 +1,11 @@
 # Status
 
-_Last updated: 2026-11-03 by Antigravity_
+_Last updated: 2026-11-04 by Antigravity_
 
 ## Phase
 
 Tier 1 (Iterations 1, 2, 3, and 4) is 100% complete, verified, and merged in `main`.
-Tier 2, Iteration 5 (Money module — Personal & Business Expenses) is planned and approved (`docs/iteration-5.md`),
-executing local-first on branch `feat/iteration-5-money`. All 31 existing Vitest tests pass.
+Tier 2, Iteration 5 (Money module — Personal & Business Expenses) is 100% implemented and verified locally on branch `feat/iteration-5-money` across all 40 Vitest tests (auth, multi-user isolation, space segregation, calculations, server actions) with 0 lint/typecheck errors and verified Next.js production build.
 
 ## Verification status breakdown
 
@@ -16,15 +15,15 @@ executing local-first on branch `feat/iteration-5-money`. All 31 existing Vitest
   - OIDC authentication with production guard (`AUTH_DEV=false`).
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
-  - Food & Nutrition module:
-    - PostgreSQL schema (`nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, `shopping_items`).
-    - Migration `0004_left_chimera.sql` with least-privilege role permissions.
-    - Owner-scoped DAL and Server Actions (`logMealAction`, `deleteMealAction`, `addWaterAction`, `updateStepsAction`, `updateTargetsAction`, `addShoppingItemAction`, `toggleShoppingItemAction`, `deleteShoppingItemAction`, `clearBoughtItemsAction`, `generateShoppingListAction`).
-    - Enhanced body weight analytics (7-day rolling average and weekly rate of change).
-    - Water tracker with quick tap counter (+250 ml, +500 ml) and daily steps logger.
-    - Categorized shopping list with automatic aggregation from user recipes.
-    - Apple HIG user interface at `/food` with progress cards for calories, protein, carbs, fat, water, and steps.
-    - Segmented top navigation supporting **Gym Split**, **Food & Macros**, and **Weigh-ins**.
+  - Food & Nutrition module: daily targets, meal logger, water tap counter (+250ml, +500ml), steps, shopping list with recipe generation.
+  - Money module:
+    - PostgreSQL schema (`expenses`, `expense_categories`) with `expenses_amount_positive` DB check and least-privilege role permissions.
+    - Standard preloaded categories for Personal and Business spaces (`src/lib/money-seed.ts`).
+    - Owner-scoped DAL (`src/lib/money.ts`): personal vs business space segregation, custom category creation, monthly expense aggregation with percentages, most-used category preselection, strict multi-user isolation.
+    - Server Actions (`src/app/actions/money.ts`) guarded by `requireUser()` and validated with Zod.
+    - Complete Vitest test suite (`tests/money.test.ts`, 9 tests, 40 total passing across repo).
+    - Apple HIG user interface (`/money`) with space segmented control, monthly overview with progress bars, fast 2–3 tap expense logging, and filterable transaction history.
+    - Updated navigation with 4 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, and **Money**.
 
 ## Verification status breakdown
 
