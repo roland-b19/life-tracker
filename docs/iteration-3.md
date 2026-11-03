@@ -55,9 +55,9 @@ Specification reference: `docs/spec.md` (Module: Gym / sport) and sample data `d
 Work top to bottom. Commit frequently on branch `feat/iteration-3-gym` with Conventional Commits and trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ### 0. Pre-flight
-- [ ] 0.1 Confirm active branch `feat/iteration-3-gym` and clean working tree.
-- [ ] 0.2 Verify local PostgreSQL container is running (`docker compose up -d`).
-- [ ] 0.3 Verify existing test suite passes (`npm test`).
+- [x] 0.1 Confirm active branch `feat/iteration-3-gym` and clean working tree.
+- [x] 0.2 Verify local PostgreSQL container is running (`docker compose up -d`).
+- [x] 0.3 Verify existing test suite passes (`npm test`).
 
 ### 1. Database Schema & Migrations
 - [ ] 1.1 Define Drizzle schema in `src/db/schema.ts` for `exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, and `workout_sets`.
