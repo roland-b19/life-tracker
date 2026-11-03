@@ -26,7 +26,7 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. **Iteration 1 is planned and approved, not started** (`docs/iteration-1.md`). Start it when the user says so: branch `feat/iteration-1`, first read the `secure-development` and `apple-design` skills, verify each dependency on npm before installing (use `ignore-scripts`).
+1. **Iteration 1 is planned and approved, not started** (`docs/iteration-1.md`). Start it when the user says so. Follow the **"Runbook for the implementing agent"** section in that file (pre-flight, 11 steps, done criteria, actions only the user can do).
 2. Refine the **(stack)** items in `docs/threat-model.md` while writing the Bicep.
 3. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
 4. Iteration 2: Entra External ID, Dockerfile, Bicep deploy/teardown scripts.
