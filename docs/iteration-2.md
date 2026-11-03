@@ -66,7 +66,11 @@ new product module.
    course credit without asking the user to paste credentials or IDs into chat.
 4. **Network gate:** do not accept a fallback to a public PostgreSQL endpoint.
    If private networking cannot be deployed in the chosen region/SKU, stop.
-5. **Teardown gate:** test `scripts/azure-teardown.sh` in the same iteration
+5. **Capacity gate:** verify the selected PostgreSQL SKU has regional capacity
+   before retrying. The first `belgiumcentral` attempt failed on B1ms capacity.
+6. **Registry gate:** ACR Basic cannot disable public access; use Premium for a
+   private endpoint or stop and obtain approval for a different design.
+7. **Teardown gate:** test `scripts/azure-teardown.sh` in the same iteration
    and confirm the resource group is gone before calling the iteration done.
 
 ## Architecture

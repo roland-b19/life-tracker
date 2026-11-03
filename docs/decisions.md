@@ -37,6 +37,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-03 — Iteration 1 implementation.** The local security spine uses Next.js 16, stable `next-auth` 4.24.15, Drizzle ORM, PostgreSQL 17, strict Zod validation, owner-scoped weight routes, and Vitest authorization tests. Development credentials are refused when `NODE_ENV=production`; Entra and Azure remain deferred.
 - **2026-11-03 — Iteration 2 plan drafted, not approved.** The next proposed iteration is Azure foundation plus real Entra External ID login for the existing weigh-in slice. Deployment remains gated by supported scripting, a region/SKU cost estimate, explicit user approval, private database networking and a tested teardown.
 - **2026-11-03 — Iteration 2A/2B split.** Iteration 2A is local-only: production container, environment-driven OIDC configuration, offline-compiled private-network Bicep and guarded scripts. Iteration 2B is a short Azure validation window, paused until the user explicitly starts it; no Azure resources are created during 2A.
+- **2026-11-03 — Phase 2B first deployment attempt.** `belgiumcentral` passed `what-if`, but deployment failed because PostgreSQL `Standard_B1ms` had no capacity and ACR Basic does not support disabled public access. The partial resource group was deleted. A retry must use a capacity-available PostgreSQL SKU and ACR Premium (or a reviewed private-access alternative), with a new cost check.
 
 ## Open
 
