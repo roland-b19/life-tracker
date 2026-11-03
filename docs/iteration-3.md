@@ -60,9 +60,9 @@ Work top to bottom. Commit frequently on branch `feat/iteration-3-gym` with Conv
 - [x] 0.3 Verify existing test suite passes (`npm test`).
 
 ### 1. Database Schema & Migrations
-- [ ] 1.1 Define Drizzle schema in `src/db/schema.ts` for `exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, and `workout_sets`.
-- [ ] 1.2 Generate migration script via `npx drizzle-kit generate`.
-- [ ] 1.3 Apply migrations to local PostgreSQL test and dev databases and verify table constraints and foreign keys.
+- [x] 1.1 Define Drizzle schema in `src/db/schema.ts` for `exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, and `workout_sets`.
+- [x] 1.2 Generate migration script via `npx drizzle-kit generate`.
+- [x] 1.3 Apply migrations to local PostgreSQL test and dev databases and verify table constraints and foreign keys.
 
 ### 2. Seed Data
 - [ ] 2.1 Create seed helper for default exercises (covering chest, back, legs, shoulders, arms, abs, calves).
