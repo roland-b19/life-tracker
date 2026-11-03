@@ -119,7 +119,17 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && typeof token.userId === "string") {
-        session.user.id = token.userId;
+        const [existingUser] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, token.userId))
+          .limit(1);
+
+        if (existingUser) {
+          session.user.id = existingUser.id;
+        } else {
+          session.user.id = undefined as unknown as string;
+        }
       }
       return session;
     },
