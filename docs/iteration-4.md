@@ -51,8 +51,8 @@ Specification reference: `docs/spec.md` (Module: Food + body weight) and sample 
 ## Runbook for the implementing agent
 
 ### 0. Pre-flight
-- [ ] 0.1 Confirm active branch `feat/iteration-4-food` and clean working tree.
-- [ ] 0.2 Verify existing 23 Vitest tests pass on `life_tracker_test` (`npm test`).
+- [x] 0.1 Confirm active branch `feat/iteration-4-food` and clean working tree.
+- [x] 0.2 Verify existing 23 Vitest tests pass on `life_tracker_test` (`npm test`).
 
 ### 1. Database Schema & Migrations
 - [ ] 1.1 Define Drizzle schema in `src/db/schema.ts` for `nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, and `shopping_items`.
