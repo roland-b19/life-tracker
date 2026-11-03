@@ -40,7 +40,7 @@ None. Local PostgreSQL was used for validation and can be stopped with `docker c
 
 ## Session log (newest first)
 
-- 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token and read permission required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
+- 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token, pull-request read permission and full history required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
 - 2026-11-03 — Iteration 1 implemented locally: security spine, weigh-in slice, PostgreSQL, tests and CI. Validation passed; no Azure resources created.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
