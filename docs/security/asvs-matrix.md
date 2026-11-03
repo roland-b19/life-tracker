@@ -14,3 +14,4 @@ Target level: 2 (L3 auth/authorization where cheap)  ·  ASVS version: 5.0.0  ·
 | V14.3.1 | Sensitive data | met locally | Weight is never logged or sent to external providers; Azure private storage and log retention remain phase 2B evidence |
 | V16.5.1 / V16.5.3 | Errors | met | API returns generic errors and fails closed on missing sessions |
 | V15.1.2 / V15.2.3 | Dependencies | open | Lockfile is committed; SBOM is deferred until release packaging |
+| V13.2.1 / V13.3.1 | Configuration and secrets | met locally | Required runtime values are deployment parameters, stored as Key Vault secrets, and referenced by Container Apps with a system-assigned identity; deployment and runtime evidence remains phase 2B |

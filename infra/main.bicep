@@ -24,6 +24,37 @@ param dbAdminLogin string
 @description('PostgreSQL administrator password. Supply from a secret-aware deployment mechanism.')
 param dbAdminPassword string
 
+@secure()
+@minLength(1)
+@description('Runtime PostgreSQL URL stored in Key Vault. Supply from a secret-aware deployment mechanism.')
+param databaseUrl string
+
+@secure()
+@minLength(1)
+@description('Auth.js signing secret stored in Key Vault. Supply from a secret-aware deployment mechanism.')
+param nextAuthSecret string
+
+@secure()
+@minLength(1)
+@description('Entra client secret stored in Key Vault. Supply from a secret-aware deployment mechanism.')
+param authAzureClientSecret string
+
+@minLength(1)
+@description('Public URL used by Auth.js for OIDC callbacks.')
+param nextAuthUrl string
+
+@minLength(1)
+@description('Entra External ID tenant identifier.')
+param authAzureTenantId string
+
+@minLength(1)
+@description('Entra External ID application client identifier.')
+param authAzureClientId string
+
+@minLength(1)
+@description('Entra External ID issuer URL.')
+param authIssuer string
+
 var suffix = '${project}-${environment}'
 var tags = {
   project: project
@@ -200,7 +231,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'Basic'
+    name: 'Premium'
   }
   properties: {
     adminUserEnabled: false
@@ -222,6 +253,30 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       family: 'A'
       name: 'standard'
     }
+  }
+}
+
+resource databaseUrlSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'database-url'
+  properties: {
+    value: databaseUrl
+  }
+}
+
+resource nextAuthSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'nextauth-secret'
+  properties: {
+    value: nextAuthSecret
+  }
+}
+
+resource authAzureClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'auth-azure-client-secret'
+  properties: {
+    value: authAzureClientSecret
   }
 }
 
@@ -349,13 +404,63 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           identity: 'system'
         }
       ]
-      secrets: []
+      secrets: [
+        {
+          name: 'database-url'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/database-url'
+          identity: 'system'
+        }
+        {
+          name: 'nextauth-secret'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/nextauth-secret'
+          identity: 'system'
+        }
+        {
+          name: 'auth-azure-client-secret'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/auth-azure-client-secret'
+          identity: 'system'
+        }
+      ]
     }
     template: {
       containers: [
         {
           name: 'web'
           image: containerImage
+          env: [
+            {
+              name: 'DATABASE_URL'
+              secretRef: 'database-url'
+            }
+            {
+              name: 'NEXTAUTH_SECRET'
+              secretRef: 'nextauth-secret'
+            }
+            {
+              name: 'NEXTAUTH_URL'
+              value: nextAuthUrl
+            }
+            {
+              name: 'AUTH_DEV'
+              value: 'false'
+            }
+            {
+              name: 'AUTH_AZURE_TENANT_ID'
+              value: authAzureTenantId
+            }
+            {
+              name: 'AUTH_AZURE_CLIENT_ID'
+              value: authAzureClientId
+            }
+            {
+              name: 'AUTH_AZURE_CLIENT_SECRET'
+              secretRef: 'auth-azure-client-secret'
+            }
+            {
+              name: 'AUTH_ISSUER'
+              value: authIssuer
+            }
+          ]
           probes: [
             {
               type: 'Liveness'
@@ -381,6 +486,19 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   dependsOn: [
     registry
   ]
+}
+
+resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, containerApp.id, 'kv-secrets-user')
+  scope: keyVault
+  properties: {
+    principalId: containerApp.identity.principalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '4633458b-17de-408a-b874-0445c86e6e6'
+    )
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

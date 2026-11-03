@@ -7,6 +7,11 @@ describe("development authentication guard", () => {
     vi.resetModules();
     delete env.AUTH_DEV;
     delete env.NODE_ENV;
+    delete env.NEXTAUTH_SECRET;
+    delete env.AUTH_AZURE_TENANT_ID;
+    delete env.AUTH_AZURE_CLIENT_ID;
+    delete env.AUTH_AZURE_CLIENT_SECRET;
+    delete env.AUTH_ISSUER;
   });
 
   it("refuses development authentication in production", async () => {
@@ -20,8 +25,22 @@ describe("development authentication guard", () => {
     env.AUTH_DEV = "false";
     env.NODE_ENV = "production";
     env.DATABASE_URL = "postgresql://unused";
+    env.NEXTAUTH_SECRET = "test-secret";
     await expect(import("@/auth")).rejects.toThrow(
       "Production authentication requires AUTH_AZURE_TENANT_ID",
+    );
+  });
+
+  it("refuses production authentication without the session signing secret", async () => {
+    env.AUTH_DEV = "false";
+    env.NODE_ENV = "production";
+    env.DATABASE_URL = "postgresql://unused";
+    env.AUTH_AZURE_TENANT_ID = "tenant";
+    env.AUTH_AZURE_CLIENT_ID = "client";
+    env.AUTH_AZURE_CLIENT_SECRET = "client-secret";
+    env.AUTH_ISSUER = "https://issuer.example.com";
+    await expect(import("@/auth")).rejects.toThrow(
+      "Production authentication requires NEXTAUTH_SECRET.",
     );
   });
 });

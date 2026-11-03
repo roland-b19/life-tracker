@@ -200,9 +200,10 @@ and a second test identity cannot see or delete the first identity's weight.
   pull permission.
 - [ ] Configure HTTPS ingress, minimum TLS supported by the service, health
   probes, revision mode and a conservative scale limit.
-- [ ] Put `NEXTAUTH_SECRET`, OIDC settings and database runtime settings in
-  Key Vault or managed configuration; no secret in Bicep parameters, logs,
-  image layers or GitHub output.
+- [x] Put `NEXTAUTH_SECRET`, OIDC settings and database runtime settings in
+  Key Vault or managed configuration. Bicep accepts required secure parameters
+  only through a secret-aware deployment mechanism; values must not appear in
+  logs, image layers or GitHub output.
 - [ ] Enable diagnostic settings to Log Analytics with a chosen retention;
   logs contain request metadata only, never weight values, tokens or cookies.
 - [ ] Configure budget/cost alerts if permitted by the subscription.

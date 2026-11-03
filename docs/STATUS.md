@@ -30,14 +30,19 @@ resources are deployed.
 - Iteration 2A: pinned non-root production container, `/health`, environment-driven
   OIDC provider, guarded Azure scripts, private-network Bicep and offline Azure
   hardening checklist.
+- PR #8 fixes: ACR uses Premium for private access; Container Apps receives
+  required production settings through Key Vault references and its managed
+  identity, with deployment-time required parameters and a least-privilege
+  Key Vault Secrets User role.
 
 - Planning Q&A done for Gym, Food + weight, Money, To-do, Wishlist, Family business; Wedding, Chess, Health, Work opportunities and Projects dropped. Draft in `docs/spec.md` (+ seed data `docs/spec/gym-sample.md`), tiers and stack direction in `docs/decisions.md`.
 
 ## Next
 
 1. Phase 2B is paused. Wait for the user to explicitly start Azure validation.
-2. Resolve the updated cost estimate and choose a PostgreSQL SKU with
-   capacity in `belgiumcentral`; ACR private access requires Premium, not Basic.
+2. Resolve the updated cost estimate: ACR Premium is required for private
+   access and costs more than the previously recorded Basic estimate. Choose a
+   PostgreSQL SKU with capacity in `belgiumcentral`.
 3. Then resolve the Entra External ID tenant/scriptability gates before retrying.
 4. After iteration 2, stop again. Later iterations need their own plans.
 5. `docs/roadmap.md` remains an estimate only and is not a work order.
@@ -62,6 +67,7 @@ Local PostgreSQL was used for validation and can be stopped with `docker compose
 - 2026-11-03 — Iteration 2A completed locally: OIDC production configuration, private-network Bicep template, guarded Azure scripts and CI validation added. Lint, typecheck, production build, Bicep compile and 8 tests pass. Phase 2B paused; no Azure resources created.
 - 2026-11-03 — Phase 2B deployment preview passed in `belgiumcentral`, but the approved deployment failed before completion: PostgreSQL B1ms had no regional capacity and ACR Basic rejected disabled public access. Partial resources were fully torn down; no Azure resources remain. Retry requires a cost/SKU decision.
 - 2026-11-03 — Verified the Life Tracker resource group and resources are absent. `NetworkWatcherRG/NetworkWatcher_belgiumcentral` is a pre-existing subscription resource and is excluded from project teardown. Teardown script strengthened to wait for deletion and verify absence.
+- 2026-11-03 — PR #8 HIGH findings fixed locally: private ACR SKU and Key Vault-backed Container App runtime contract. No Azure resources created; the revised Premium cost still requires explicit approval. Teardown script strengthened to wait for deletion and verify absence.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.

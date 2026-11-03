@@ -9,6 +9,10 @@ if (process.env.AUTH_DEV === "true" && process.env.NODE_ENV === "production") {
   throw new Error("AUTH_DEV must not be enabled in production.");
 }
 
+if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
+  throw new Error("Production authentication requires NEXTAUTH_SECRET.");
+}
+
 const devProvider =
   process.env.AUTH_DEV === "true"
     ? [
