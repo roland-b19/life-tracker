@@ -4,7 +4,12 @@ _Last updated: 2026-11-03 by Copilot_
 
 ## Phase
 
-Iteration 1 implementation complete locally. The app has a Next.js security spine, local PostgreSQL, Auth.js dev sign-in, owner-scoped weigh-ins, authorization tests and CI. No Azure resources are deployed.
+Iteration 1 implementation complete locally and merged in `main`. Iteration 2A
+(local implementation) is complete on the feature branch: production
+container, liveness endpoint, OIDC configuration, guarded Azure scripts and
+offline-compiled private-network Bicep are implemented and tested. Phase 2B
+(Azure validation) is paused until the user explicitly starts it. No Azure
+resources are deployed.
 
 ## Done
 
@@ -22,13 +27,25 @@ Iteration 1 implementation complete locally. The app has a Next.js security spin
 - Generic `project-setup` skill outside this repo, in `~/Documents/projects/project-setup/` (script + template + the 5 skills), for starting any new project with the same structure.
 - Cleanup: `.pre-commit-config.yaml` (secret scan) added; `docs/security-plan.md` marked validated. The setup is ready for implementation once the plan is approved.
 - Iteration 1: Next.js 16 TypeScript app, Drizzle schema/migrations, restricted PostgreSQL roles, Auth.js local-only sign-in, weight API/UI, security headers, tests, CI and Dependabot.
+- Iteration 2A: pinned non-root production container, `/health`, environment-driven
+  OIDC provider, guarded Azure scripts, private-network Bicep and offline Azure
+  hardening checklist.
+- PR #8 fixes: ACR uses Premium for private access; Container Apps receives
+  required production settings through Key Vault references and its managed
+  identity, with deployment-time required parameters and a least-privilege
+  Key Vault Secrets User role.
 
 - Planning Q&A done for Gym, Food + weight, Money, To-do, Wishlist, Family business; Wedding, Chess, Health, Work opportunities and Projects dropped. Draft in `docs/spec.md` (+ seed data `docs/spec/gym-sample.md`), tiers and stack direction in `docs/decisions.md`.
 
 ## Next
 
-1. **Stop after iteration 1.** The next iteration needs a new user-approved plan before any Azure, Entra or later module work.
-2. `docs/roadmap.md` is an **estimate only** of later iterations and is not a work order.
+1. Phase 2B is paused. Wait for the user to explicitly start Azure validation.
+2. Resolve the updated cost estimate: ACR Premium is required for private
+   access and costs more than the previously recorded Basic estimate. Choose a
+   PostgreSQL SKU with capacity in `belgiumcentral`.
+3. Then resolve the Entra External ID tenant/scriptability gates before retrying.
+4. After iteration 2, stop again. Later iterations need their own plans.
+5. `docs/roadmap.md` remains an estimate only and is not a work order.
 
 ## Open questions
 
@@ -36,12 +53,22 @@ See "Open" in `docs/decisions.md`.
 
 ## Deployed Azure resources
 
-None. Local PostgreSQL was used for validation and can be stopped with `docker compose down`.
+None for Life Tracker. The subscription's pre-existing
+`NetworkWatcherRG/NetworkWatcher_belgiumcentral` is not owned by this project
+and was intentionally left untouched.
+
+Local PostgreSQL was used for validation and can be stopped with `docker compose down`.
 
 ## Session log (newest first)
 
 - 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token, pull-request read permission and full history required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
 - 2026-11-03 — Iteration 1 implemented locally: security spine, weigh-in slice, PostgreSQL, tests and CI. Validation passed; no Azure resources created.
+- 2026-11-03 — Detailed plan for proposed iteration 2 added in `docs/iteration-2.md`; awaiting user approval. No Azure resources created.
+- 2026-11-03 — Iteration 2A completed locally: OIDC production configuration, private-network Bicep template, guarded Azure scripts and CI validation added. Lint, typecheck, production build, Bicep compile and 8 tests pass. Phase 2B paused; no Azure resources created.
+- 2026-11-03 — Phase 2B deployment preview passed in `belgiumcentral`, but the approved deployment failed before completion: PostgreSQL B1ms had no regional capacity and ACR Basic rejected disabled public access. Partial resources were fully torn down; no Azure resources remain. Retry requires a cost/SKU decision.
+- 2026-11-03 — Verified the Life Tracker resource group and resources are absent. `NetworkWatcherRG/NetworkWatcher_belgiumcentral` is a pre-existing subscription resource and is excluded from project teardown. Teardown script strengthened to wait for deletion and verify absence.
+- 2026-11-03 — PR #8 HIGH findings fixed locally: private ACR SKU and Key Vault-backed Container App runtime contract. No Azure resources created; the revised Premium cost still requires explicit approval. Teardown script strengthened to wait for deletion and verify absence.
+- 2026-11-03 — Final PR #8 review found that a system-assigned identity could race its RBAC grants during initial Container App creation. Replaced it with a pre-created user-assigned identity and made app creation wait for the ACR and Key Vault role assignments. No Azure resources created.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.

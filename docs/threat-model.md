@@ -52,6 +52,12 @@ CI (GitHub) ==TB6== Azure deploy (scripted, federated identity, no static keys) 
 API ==TB3== Key Vault (secrets, managed identity)
 ```
 
+The Container App's user-assigned identity reads only the three runtime
+secrets it needs through Key Vault references. The Bicep deployment requires
+non-empty database, Auth.js and OIDC values and forces `AUTH_DEV=false`, so a
+production app cannot silently start with development authentication or
+placeholder secrets.
+
 Entry points: login callback; REST API; MCP connector endpoint (+ its OAuth endpoints); web push subscription endpoint; static assets; CI deploy.
 Exits: web push messages; tool results returned to the AI provider (food data only, see section 6).
 

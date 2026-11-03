@@ -52,6 +52,14 @@ jobs:
         run: npm run typecheck
       - name: Tests
         run: npm test
+      - name: Build production container
+        run: docker build --tag life-tracker:ci .
+      - name: Validate Bicep
+        run: |
+          az bicep install
+          az bicep build --file infra/main.bicep --stdout >/dev/null
+      - name: Validate Azure scripts
+        run: bash -n scripts/azure-preflight.sh scripts/azure-deploy.sh scripts/azure-teardown.sh
       - name: Dependency audit
         run: npm audit --audit-level=high --omit=optional
       - name: Secret scan v2

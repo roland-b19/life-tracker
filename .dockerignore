@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.git
+.github
+.next
+coverage
+drizzle
+node_modules
+tests
+graphify-out
+Dockerfile
+docker-compose.yml
+README.md
+docs
+.agents
+*.log
