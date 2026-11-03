@@ -264,8 +264,32 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       CONSTRAINT "expenses_amount_positive" CHECK ("amount" > 0)
     );
+    CREATE TABLE IF NOT EXISTS "todos" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "space" varchar(20) DEFAULT 'personal' NOT NULL,
+      "title" varchar(150) NOT NULL,
+      "is_recurring" boolean DEFAULT false NOT NULL,
+      "recurrence_pattern" varchar(20) DEFAULT 'none' NOT NULL,
+      "due_date" date NOT NULL,
+      "reminder_time" varchar(10),
+      "is_completed" boolean DEFAULT false NOT NULL,
+      "completed_at" timestamp with time zone,
+      "is_carried_over" boolean DEFAULT false NOT NULL,
+      "streak" integer DEFAULT 0 NOT NULL,
+      "last_completed_date" date,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "endpoint" varchar(500) NOT NULL,
+      "p256dh_key" varchar(255) NOT NULL,
+      "auth_key" varchar(255) NOT NULL,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
   `);
-  console.log("Verified Food & Nutrition and Money tables.");
+  console.log("Verified Food, Money & Todo tables.");
 
   await appDbClient.query(`
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
@@ -288,6 +312,8 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expense_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();
