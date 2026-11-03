@@ -316,3 +316,41 @@ export const expenses = pgTable(
     check("expenses_amount_positive", sql`${table.amount} > 0`),
   ],
 );
+
+// --- TO-DO & HABITS MODULE TABLES ---
+
+export const todos = pgTable(
+  "todos",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal' | 'business'
+    title: varchar("title", { length: 150 }).notNull(),
+    isRecurring: boolean("is_recurring").default(false).notNull(),
+    recurrencePattern: varchar("recurrence_pattern", { length: 20 }).default("none").notNull(), // 'daily' | 'weekly' | 'none'
+    dueDate: date("due_date").notNull(),
+    reminderTime: varchar("reminder_time", { length: 10 }), // e.g. "09:00"
+    isCompleted: boolean("is_completed").default(false).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    isCarriedOver: boolean("is_carried_over").default(false).notNull(),
+    streak: integer("streak").default(0).notNull(),
+    lastCompletedDate: date("last_completed_date"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: varchar("endpoint", { length: 500 }).notNull(),
+    p256dhKey: varchar("p256dh_key", { length: 255 }).notNull(),
+    authKey: varchar("auth_key", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);

@@ -19,6 +19,8 @@ export function Navigation({ userName }: { userName: string }) {
               ? "Food & Nutrition"
               : pathname.startsWith("/money")
               ? "Money & Expenses"
+              : pathname.startsWith("/todos")
+              ? "Daily Tasks & Habits"
               : "Weigh-ins"}
           </h1>
         </div>
@@ -60,6 +62,12 @@ export function Navigation({ userName }: { userName: string }) {
           className={`segment-tab ${pathname.startsWith("/money") ? "active" : ""}`}
         >
           Money
+        </NextLink>
+        <NextLink
+          href="/todos"
+          className={`segment-tab ${pathname.startsWith("/todos") ? "active" : ""}`}
+        >
+          Tasks
         </NextLink>
       </nav>
     </header>

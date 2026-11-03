@@ -5,7 +5,8 @@ _Last updated: 2026-11-04 by Antigravity_
 ## Phase
 
 Tier 1 (Iterations 1, 2, 3, and 4) is 100% complete, verified, and merged in `main`.
-Tier 2, Iteration 5 (Money module — Personal & Business Expenses) is 100% implemented and verified locally on branch `feat/iteration-5-money` across all 40 Vitest tests (auth, multi-user isolation, space segregation, calculations, server actions) with 0 lint/typecheck errors and verified Next.js production build.
+Tier 2, Iteration 5 (Money module) is 100% complete and merged in `main`.
+Tier 2, Iteration 6 (Daily To-Do, Habits, Rollover, Web Push) is 100% complete and verified locally on branch `feat/iteration-6-todos` across all 49 Vitest tests with 0 lint/typecheck errors and verified Next.js production build.
 
 ## Verification status breakdown
 
@@ -16,14 +17,14 @@ Tier 2, Iteration 5 (Money module — Personal & Business Expenses) is 100% impl
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
   - Food & Nutrition module: daily targets, meal logger, water tap counter (+250ml, +500ml), steps, shopping list with recipe generation.
-  - Money module:
-    - PostgreSQL schema (`expenses`, `expense_categories`) with `expenses_amount_positive` DB check and least-privilege role permissions.
-    - Standard preloaded categories for Personal and Business spaces (`src/lib/money-seed.ts`).
-    - Owner-scoped DAL (`src/lib/money.ts`): personal vs business space segregation, custom category creation, monthly expense aggregation with percentages, most-used category preselection, strict multi-user isolation.
-    - Server Actions (`src/app/actions/money.ts`) guarded by `requireUser()` and validated with Zod.
-    - Complete Vitest test suite (`tests/money.test.ts`, 9 tests, 40 total passing across repo).
-    - Apple HIG user interface (`/money`) with space segmented control, monthly overview with progress bars, fast 2–3 tap expense logging, and filterable transaction history.
-    - Updated navigation with 4 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, and **Money**.
+  - Money module: personal & business expenses, RON currency, fast 2-3 tap entry, category breakdown, strict AI quarantine.
+  - To-Do & Habits module:
+    - PostgreSQL schema (`todos`, `push_subscriptions`) with least-privilege role permissions.
+    - Owner-scoped DAL (`src/lib/todos.ts`): automatic carry-over rollover for past unfinished one-off tasks, streak tracking for daily recurring habits, daily completion rate statistics, space segregation (`personal` vs `business`).
+    - Server Actions (`src/app/actions/todos.ts`) guarded by `requireUser()` and validated with Zod.
+    - Complete Vitest test suite (`tests/todos.test.ts`, 9 tests, 49 total passing across repo).
+    - Apple HIG user interface (`/todos`) with space segmented control, progress bar, habits & task groups, carry-over labels, streak flame counters, and Service Worker Web Push setup (`public/sw.js`).
+    - Top navigation updated to 5 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, **Money**, and **Tasks**.
 
 ## Verification status breakdown
 
