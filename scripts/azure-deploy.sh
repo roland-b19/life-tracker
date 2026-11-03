@@ -3,10 +3,10 @@ set -euo pipefail
 
 environment="${1:-}"
 location="${2:-westeurope}"
-image_tag="${3:-}"
+image_digest="${3:-}"
 
-if [[ ! "$environment" =~ ^[a-z0-9-]{1,12}$ || ! "$location" =~ ^[a-z0-9-]+$ || ! "$image_tag" =~ ^[A-Za-z0-9._-]{1,128}$ ]]; then
-  echo "Usage: $0 <environment> <location> <image-tag>" >&2
+if [[ ! "$environment" =~ ^[a-z0-9-]{1,12}$ || ! "$location" =~ ^[a-z0-9-]+$ || ! "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "Usage: $0 <environment> <location> <image-digest (sha256:<64 lowercase hex characters>)>" >&2
   exit 1
 fi
 
@@ -31,4 +31,4 @@ echo "subscription, owner, registry image and secret injection commands are"
 echo "approved and wired. No resources were created."
 echo "Validated resource group name: $resource_group"
 echo "Validated location: $location"
-echo "Validated image tag: $image_tag"
+echo "Validated image digest: $image_digest"

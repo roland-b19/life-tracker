@@ -34,6 +34,10 @@ npm run typecheck
 npm test
 ```
 
+`npm test` defaults to the non-secret local PostgreSQL fixture credentials
+used by `docker compose`; it still fails if PostgreSQL or migrations are not
+available. CI uses an ephemeral PostgreSQL service and creates its test role.
+
 The database is bound to `127.0.0.1` only. Stop it with `docker compose down`; add `-v` only when intentionally deleting local data.
 
 ## Production container
@@ -45,6 +49,10 @@ tests, documentation, local configuration or development dependencies.
 ```bash
 docker build --tag life-tracker:local .
 ```
+
+Production Container Apps deployments accept only an immutable digest such as
+`sha256:<64 lowercase hex characters>`; mutable image tags are rejected by
+`scripts/azure-deploy.sh` and are not accepted by `infra/main.bicep`.
 
 Azure iteration scripts are under [`scripts/`](scripts/). Run
 `scripts/azure-preflight.sh westeurope` after `az login`. The Bicep template is

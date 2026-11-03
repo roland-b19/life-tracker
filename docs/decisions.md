@@ -46,6 +46,15 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   `@typescript/native` aliases TypeScript 7 and supplies the `tsc` binary.
   This keeps linting on the supported API without weakening checks and makes
   the TypeScript 7 compiler available to CI.
+- **2026-11-03 — Immutable production images and deferred moderate advisories.**
+  Production infrastructure accepts only `sha256:<64 lowercase hex characters>`
+  image references; the deploy script performs the exact boundary check and
+  Bicep constructs an `@digest` reference, never a mutable tag. CI archives an
+  SPDX SBOM and fails on HIGH/CRITICAL container vulnerabilities. The remaining
+  moderate development dependency advisories are deferred because npm's
+  available fixes require major upgrades that would recreate the rejected
+  TypeScript/ESLint incompatibility; review them on the next compatible
+  toolchain release.
 
 ## Open
 

@@ -11,6 +11,11 @@ offline-compiled private-network Bicep are implemented and tested. Phase 2B
 (Azure validation) is paused until the user explicitly starts it. No Azure
 resources are deployed.
 
+The security audit fix is implemented on this short-lived branch: production
+images require immutable digests, CI produces an SBOM and scans the image, and
+local tests provide deterministic non-secret PostgreSQL defaults. Azure runtime
+controls remain unverified because nothing was deployed.
+
 ## Done
 
 - Git repo, `main` branch, private GitHub repo.
@@ -61,6 +66,9 @@ Local PostgreSQL was used for validation and can be stopped with `docker compose
 
 ## Session log (newest first)
 
+- 2026-11-03 — Security audit fix: mutable production image tags were removed
+  from the Bicep contract and deploy validation; CI SBOM/container scanning and
+  deterministic test setup were added. No Azure resources created.
 - 2026-11-03 — Merged Dependabot PRs #2–#4 after successful CI and verified
   post-merge `main` CI. PR #5 uses the official TypeScript 7.0/6.0
   compatibility aliases so `typescript-eslint` keeps its supported TypeScript

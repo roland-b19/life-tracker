@@ -13,5 +13,12 @@ Target level: 2 (L3 auth/authorization where cheap)  ·  ASVS version: 5.0.0  ·
 | V7.1.1 | Session lifetime | met | JWT session max age is 4 hours; session refresh window is 15 minutes |
 | V14.3.1 | Sensitive data | met locally | Weight is never logged or sent to external providers; Azure private storage and log retention remain phase 2B evidence |
 | V16.5.1 / V16.5.3 | Errors | met | API returns generic errors and fails closed on missing sessions |
-| V15.1.2 / V15.2.3 | Dependencies | open | Lockfile is committed; SBOM is deferred until release packaging |
+| V15.1.2 / V15.2.3 | Dependencies | met locally | CI generates and archives an SPDX SBOM for the built production image; moderate development-only npm findings remain deferred because available fixes require rejected major compatibility changes |
+| V15.2.1 / A03 | Container supply chain | met locally | CI scans the built image for HIGH and CRITICAL OS/library vulnerabilities with Trivy; local offline scans are not evidence of a complete advisory database |
+| V13.1.1 | Release integrity | met locally | Production image contract requires `sha256:<64 lowercase hex characters>`; Azure runtime pull and registry digest evidence remain unverified until deployment |
+
+The Trivy and SBOM actions run in GitHub CI, where their advisory database and
+container tooling can be downloaded. They are not treated as locally verified
+controls when the machine is offline; a failed or unavailable scanner is not
+silently bypassed.
 | V13.2.1 / V13.3.1 | Configuration and secrets | met locally | Required runtime values are deployment parameters, stored as Key Vault secrets, and referenced by Container Apps with a user-assigned identity; deployment and runtime evidence remains phase 2B |

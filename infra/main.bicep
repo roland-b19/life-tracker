@@ -14,8 +14,10 @@ param project string = 'life-tracker'
 @description('Resource owner tag.')
 param owner string
 
-@description('Immutable container image tag already pushed to ACR.')
-param imageTag string
+@minLength(71)
+@maxLength(71)
+@description('Immutable container image digest already pushed to ACR (sha256:<64 lowercase hex characters>).')
+param imageDigest string
 
 @description('PostgreSQL administrator login used only during bootstrap.')
 param dbAdminLogin string
@@ -69,7 +71,7 @@ var workspaceName = '${suffix}-logs'
 var containerEnvName = '${suffix}-cae'
 var containerAppName = '${suffix}-app'
 var postgresDnsName = 'privatelink.postgres.database.azure.com'
-var containerImage = '${registryName}.azurecr.io/life-tracker:${imageTag}'
+var containerImage = '${registryName}.azurecr.io/life-tracker@${imageDigest}'
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: workspaceName
