@@ -1,6 +1,6 @@
 # Data inventory and privacy design: Life Tracker
 
-Last reviewed: 2026-11-02 (v1, design stage). Update in the same change that adds a data type, a store, a recipient or a purpose.
+Last reviewed: 2026-11-03 (iteration 1 local implementation). Update in the same change that adds a data type, a store, a recipient or a purpose.
 Classification: personal / health (GDPR Art. 9 special category) / financial / secret. The legal basis is the owner's own use of their own data (single user); revisit if other users are ever added.
 
 | Data type | Examples | Classification | Purpose | Legal basis / consent | Stored where, how protected | Retention | Shared with (third parties, AI providers) | User can export | User can delete |
@@ -14,6 +14,9 @@ Classification: personal / health (GDPR Art. 9 special category) / financial / s
 | To-do tasks | recurring and single-day tasks, reminder time, personal and business space | personal | planning, reminders | owner's own data | database, queue (task id and title only) | until deleted | push gateway of the platform (Apple/Google) sees only a short notification | yes | yes |
 | Wishlist | name, URL, estimated price, priority | personal | purchase planning | owner's own data | database | until deleted | none | yes | yes |
 | Account identity | email, subject id, MFA | personal | login, authorization | contract/own account | Microsoft Entra External ID | while the account exists | Microsoft (identity provider) | n/a (provider) | yes (deletes account) |
+| Local development identity | issuer `dev`, subject user name | personal | local authentication and authorization tests | local development only | local PostgreSQL, owner-scoped | until local database is deleted | none | n/a | yes |
+| Auth.js session | signed JWT in an HttpOnly cookie | secret | keep the local user signed in | local development only | browser cookie, signed by `NEXTAUTH_SECRET` | 4 hours absolute | none | n/a | sign out |
+| Weight entry | date and kilograms | health | daily weigh-in | owner's own data | local PostgreSQL, owner-scoped | until deleted | none; never to an AI provider | yes (later export) | yes |
 | Connector grants | OAuth grants for Claude/Gemini | secret | let the AI act for the owner | owner grants it explicitly | Entra / database **(stack)** | until revoked | the AI client holds the access token | n/a | yes (revoke in settings) |
 | Push subscriptions | endpoint, keys per device | secret-ish | send reminders | owner enables notifications | database | until logout or revoke | platform push gateway | no | yes |
 | Operational logs | request id, user id, status codes, security events | personal (ids only) | security monitoring, debugging | legitimate interest of the owner | log store, access restricted | 30 days **(stack: confirm)** | none | no | expire |

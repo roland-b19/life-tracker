@@ -2,7 +2,7 @@
 
 A personal life-tracking app, built first as a university project for an Azure cloud course, then kept for personal use.
 
-> Status: setup phase. The app is not specified yet. See [`docs/STATUS.md`](docs/STATUS.md).
+> Status: iteration 1, local security spine. See [`docs/STATUS.md`](docs/STATUS.md).
 
 ## For people and for AI agents
 
@@ -11,3 +11,27 @@ A personal life-tracking app, built first as a university project for an Azure c
 - Course requirements: [`docs/requirements.md`](docs/requirements.md)
 - Decisions and open questions: [`docs/decisions.md`](docs/decisions.md)
 - Tooling setup (graphify, ponytail, Azure CLI): [`docs/TOOLING.md`](docs/TOOLING.md)
+
+## Run locally
+
+Requirements: Node 24 LTS, Docker Desktop, and npm.
+
+```bash
+cp .env.example .env
+docker compose up -d
+npm ci --ignore-scripts
+npm run db:migrate
+npm run dev
+```
+
+Open <http://localhost:3000>. Development sign-in accepts a local user name only; it is refused when `NODE_ENV=production`.
+
+Checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
+The database is bound to `127.0.0.1` only. Stop it with `docker compose down`; add `-v` only when intentionally deleting local data.

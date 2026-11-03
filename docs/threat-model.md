@@ -1,9 +1,9 @@
 # Threat model: Life Tracker
 
-Owner: the user (app owner)  ·  Last reviewed: 2026-11-02 (v1, design stage, no code yet)  ·  Review trigger: new module, new data type, new external service, new trust boundary, before each release.
+Owner: the user (app owner)  ·  Last reviewed: 2026-11-03 (iteration 1 local implementation)  ·  Review trigger: new module, new data type, new external service, new trust boundary, before each release.
 Procedure: `.agents/skills/secure-development/references/threat-modeling.md`. Spec: `docs/spec.md`. Data: `docs/security/data-inventory.md`. Accepted risks: `docs/security/risk-register.md`.
 
-Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Container Apps, PostgreSQL Flexible Server, Storage Queue, Entra External ID. Items marked **(stack)** still need a concrete setting (for example private networking details, managed identity to PostgreSQL) when the infrastructure scripts are written.
+Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Container Apps, PostgreSQL Flexible Server, Storage Queue, Entra External ID. Iteration 1 runs only Next.js and local PostgreSQL; Azure and Entra are deferred.
 
 ## 1. Scope and assumptions
 - In scope: the web/PWA frontend, the backend API, the database, the queue and push worker, the Food AI connector (remote MCP server), authentication through Microsoft Entra External ID, the Azure hosting and the CI pipeline.

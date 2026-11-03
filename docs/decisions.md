@@ -34,6 +34,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-02 — Iteration 1 plan approved (implementation deferred).** Plan in `docs/iteration-1.md`: local-only security spine with the weigh-in slice. Approved: npm, Next.js, Drizzle ORM (`drizzle-orm`, `drizzle-kit`, `pg`), zod, Auth.js (`next-auth`), Vitest, ESLint; local sign-in as a dev-only provider guarded against production (option a). The user chose not to start coding yet.
 - **2026-11-03 — Only iteration 1 is implemented now; the roadmap is an estimate.** `docs/roadmap.md` lists the later iterations as a rough order and size estimate only. After iteration 1 the work stops until the user and the agent agree the next iteration, which then gets its own plan. Rule added to `AGENTS.md` (scope guard).
 
+- **2026-11-03 — Iteration 1 implementation.** The local security spine uses Next.js 16, stable `next-auth` 4.24.15, Drizzle ORM, PostgreSQL 17, strict Zod validation, owner-scoped weight routes, and Vitest authorization tests. Development credentials are refused when `NODE_ENV=production`; Entra and Azure remain deferred.
+
 ## Open
 
 - Authorization model details (owner-only now; account-scoped data).
