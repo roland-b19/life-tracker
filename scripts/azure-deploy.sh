@@ -164,6 +164,14 @@ echo "$deployment_outputs"
 
 app_url=$(echo "$deployment_outputs" | grep -o '"appUrl": *"[^"]*"' | cut -d'"' -f4)
 
+# ── Step: Synchronize live FQDN into NEXTAUTH_URL ────────────────────────────
+echo "Synchronizing NEXTAUTH_URL on container app to live FQDN: $app_url"
+az containerapp update \
+  --name "life-tracker-$environment-app" \
+  --resource-group "$resource_group" \
+  --set-env-vars NEXTAUTH_URL="$app_url" \
+  --output none
+
 # ── Step: Update Entra redirect URIs ────────────────────────────────────────
 echo "Updating Entra app redirect URIs for: $app_url"
 az ad app update \
@@ -172,34 +180,80 @@ az ad app update \
   --output none
 
 # ── Step: Run database migrations via az container job ──────────────────────
-echo "Running database migrations..."
+echo "Running database migrations via containerapp job..."
 container_env_name=$(az containerapp env list --resource-group "$resource_group" --query "[0].name" -o tsv)
-az containerapp job create \
-  --name "lt-migrate-$environment" \
-  --resource-group "$resource_group" \
-  --environment "$container_env_name" \
-  --trigger-type Manual \
-  --replica-timeout 120 \
-  --image "$acr_image@$image_digest" \
-  --registry-server "$acr_login_server" \
-  --cpu 0.25 --memory 0.5Gi \
-  --env-vars DATABASE_URL=secretref:database-url \
-  --secrets "database-url=$DATABASE_URL" \
-  --command "node" \
-  --args "node_modules/.bin/drizzle-kit" "migrate" \
-  --output none 2>/dev/null || true
+container_env_id=$(az containerapp env show --name "$container_env_name" --resource-group "$resource_group" --query id -o tsv)
+workload_identity_id=$(az identity show --name "${environment}-identity" --resource-group "$resource_group" --query id -o tsv 2>/dev/null || az identity list --resource-group "$resource_group" --query "[0].id" -o tsv)
+migrate_b64=$(base64 < scripts/db-init.cjs | tr -d '\n')
+db_host="${postgres_server:-lifetracker${environment}pg}.postgres.database.azure.com"
 
-az containerapp job start \
-  --name "lt-migrate-$environment" \
-  --resource-group "$resource_group" \
-  --output none
+job_yaml_file=$(mktemp /tmp/migrate-job-XXXXXX.yaml)
+cat << YAML > "$job_yaml_file"
+location: $location
+name: lt-migrate-$environment
+properties:
+  environmentId: $container_env_id
+  configuration:
+    triggerType: Manual
+    replicaTimeout: 120
+    replicaRetryLimit: 1
+    manualTriggerConfig:
+      parallelism: 1
+      replicaCompletionCount: 1
+    registries:
+      - server: $acr_login_server
+        identity: $workload_identity_id
+  template:
+    containers:
+      - name: lt-migrate-$environment
+        image: $acr_image@$image_digest
+        command:
+          - node
+        args:
+          - -e
+          - "eval(Buffer.from(process.env.MIGRATE_B64,'base64').toString('utf8'))"
+        env:
+          - name: DB_ADMIN_PASSWORD
+            value: "${DB_ADMIN_PASSWORD}"
+          - name: DATABASE_URL
+            value: "${DATABASE_URL}"
+          - name: DB_HOST
+            value: "${db_host}"
+          - name: MIGRATE_B64
+            value: "${migrate_b64}"
+        resources:
+          cpu: 0.25
+          memory: 0.5Gi
+YAML
 
-echo "Waiting for migration job to complete..."
-for i in $(seq 1 30); do
-  job_status=$(az containerapp job execution list \
+if az containerapp job show --name "lt-migrate-$environment" --resource-group "$resource_group" --output none 2>/dev/null; then
+  az containerapp job update \
     --name "lt-migrate-$environment" \
     --resource-group "$resource_group" \
-    --query "[0].properties.status" -o tsv 2>/dev/null || echo "Unknown")
+    --yaml "$job_yaml_file" \
+    --output none
+else
+  az containerapp job create \
+    --name "lt-migrate-$environment" \
+    --resource-group "$resource_group" \
+    --yaml "$job_yaml_file" \
+    --mi-user-assigned "$workload_identity_id" \
+    --output none
+fi
+rm -f "$job_yaml_file"
+
+job_exec_name=$(az containerapp job start \
+  --name "lt-migrate-$environment" \
+  --resource-group "$resource_group" \
+  --query name -o tsv)
+
+echo "Waiting for migration job to complete ($job_exec_name)..."
+for i in $(seq 1 30); do
+  job_status=$(az containerapp job execution show \
+    --name "lt-migrate-$environment" \
+    --resource-group "$resource_group" \
+    --job-execution-name "$job_exec_name" \
+    --query "properties.status" -o tsv 2>/dev/null || echo "Unknown")
   echo "  Migration status: $job_status"
   if [[ "$job_status" == "Succeeded" ]]; then
     echo "Migrations completed successfully."
@@ -209,7 +263,7 @@ for i in $(seq 1 30); do
     echo "Run: ./scripts/azure-teardown.sh $environment DELETE" >&2
     exit 1
   fi
-  sleep 10
+  sleep 5
 done
 
 echo ""
