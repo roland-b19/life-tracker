@@ -64,5 +64,6 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
     expect(bicep).toContain("resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
     expect(bicep).toContain("resource budget 'Microsoft.Consumption/budgets@2023-05-01'");
+    expect(bicep).toContain("output acrLoginServer string = registry.properties.loginServer");
   });
 });

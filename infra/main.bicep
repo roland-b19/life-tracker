@@ -621,3 +621,4 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (budgetAmount > 
 output resourceGroupName string = resourceGroup().name
 output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output postgresServerName string = postgres.name
+output acrLoginServer string = registry.properties.loginServer
