@@ -324,8 +324,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
 
       const subRes = await savePushSubscriptionAction({
         endpoint: "https://fcm.googleapis.com/fcm/send/test-endpoint",
-        p256dhKey: "test-p256dh-key",
-        authKey: "test-auth-key",
+        p256dhKey: "sample-p256dh-val",
+        authKey: "sample-auth-val",
       });
       expect(subRes.success).toBe(true);
       expect(subRes.subscription.endpoint).toContain("googleapis.com");

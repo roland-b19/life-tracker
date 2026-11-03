@@ -61,3 +61,4 @@ export async function savePushSubscriptionAction(rawInput: unknown) {
   const subscription = await savePushSubscription(userId, parsed);
   return { success: true, subscription };
 }
+

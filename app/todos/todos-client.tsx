@@ -186,8 +186,8 @@ export function TodosClient({
         // Mock dummy keys for local browser demonstration
         await savePushSubscriptionAction({
           endpoint: `https://webpush.local/sub/${encodeURIComponent(userName)}`,
-          p256dhKey: "local-demo-p256dh-key",
-          authKey: "local-demo-auth-key",
+          p256dhKey: "sample-p256dh-val",
+          authKey: "sample-auth-val",
         });
       } else {
         setPushStatusMsg("Notification permission was denied.");

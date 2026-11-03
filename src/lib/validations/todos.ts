@@ -38,3 +38,4 @@ export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type DeleteTodoInput = z.infer<typeof deleteTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
+
