@@ -63,6 +63,9 @@ param postgresSku string = 'Standard_B1ms'
 @description('Optional explicit container registry name to allow regional and conflict-free naming.')
 param registryName string = ''
 
+@description('Optional explicit Key Vault name to allow regional and conflict-free naming.')
+param keyVaultName string = ''
+
 @description('Optional budget alert amount in USD for the resource group (0 to disable).')
 param budgetAmount int = 25
 
@@ -78,7 +81,8 @@ var tags = {
 var vnetName = '${suffix}-vnet'
 var postgresName = replace('${suffix}-pg', '-', '')
 var effectiveRegistryName = !empty(registryName) ? registryName : replace('${suffix}acr', '-', '')
-var keyVaultName = take(replace('${suffix}kv${uniqueString(resourceGroup().id)}', '-', ''), 24)
+var defaultKeyVaultName = take(replace('${suffix}kv${uniqueString(resourceGroup().id, location)}', '-', ''), 24)
+var effectiveKeyVaultName = !empty(keyVaultName) ? keyVaultName : defaultKeyVaultName
 var workspaceName = '${suffix}-logs'
 var containerEnvName = '${suffix}-cae'
 var containerAppName = '${suffix}-app'
@@ -254,7 +258,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: keyVaultName
+  name: effectiveKeyVaultName
   location: location
   tags: tags
   properties: {
@@ -341,7 +345,7 @@ resource registryPrivateDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZ
 }
 
 resource vaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
-  name: '${keyVaultName}-pe'
+  name: '${effectiveKeyVaultName}-pe'
   location: location
   tags: tags
   properties: {
@@ -350,7 +354,7 @@ resource vaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = 
     }
     privateLinkServiceConnections: [
       {
-        name: '${keyVaultName}-connection'
+        name: '${effectiveKeyVaultName}-connection'
         properties: {
           privateLinkServiceId: keyVault.id
           groupIds: [
@@ -560,7 +564,7 @@ resource postgresDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-p
 }
 
 resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: '${keyVaultName}-diag'
+  name: '${effectiveKeyVaultName}-diag'
   scope: keyVault
   properties: {
     workspaceId: logAnalytics.id

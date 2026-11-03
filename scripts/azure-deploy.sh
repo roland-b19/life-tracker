@@ -39,6 +39,7 @@ resource_group="life-tracker-$environment"
 
 loc_suffix=$(echo "$location" | cut -c1-2)
 acr_name="lifetracker${environment}${loc_suffix}acr"
+kv_name="lifetracker${environment}${loc_suffix}kv"
 acr_login_server="${acr_name}.azurecr.io"
 acr_image="$acr_login_server/life-tracker"
 
@@ -67,7 +68,8 @@ az deployment group what-if \
     authAzureClientId="$AUTH_AZURE_CLIENT_ID" \
     authIssuer="$AUTH_ISSUER" \
     postgresSku="$postgres_sku" \
-    registryName="$acr_name"
+    registryName="$acr_name" \
+    keyVaultName="$kv_name"
 
 if [[ "${CONFIRM_DEPLOY:-}" != "YES" ]]; then
   echo "What-if preview complete. Set CONFIRM_DEPLOY=YES to proceed with live deployment."
@@ -144,6 +146,7 @@ if ! az deployment group create \
     authIssuer="$AUTH_ISSUER" \
     postgresSku="$postgres_sku" \
     registryName="$acr_name" \
+    keyVaultName="$kv_name" \
   --output none; then
   echo "Deployment failed! Run teardown immediately to prevent stray resources:" >&2
   echo "./scripts/azure-teardown.sh $environment DELETE" >&2
