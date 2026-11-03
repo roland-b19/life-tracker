@@ -56,6 +56,8 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("identity: workloadIdentity.id");
     expect(bicep).toContain("keyVaultSecretsUserRole");
     expect(bicep).toContain("acrPullRole");
+    expect(bicep).toContain("registryPrivateDnsGroup");
+    expect(bicep).toContain("vaultPrivateDnsGroup");
   });
 
   it("configures diagnostic settings, budget alerts and flexible postgres SKU", () => {

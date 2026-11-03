@@ -403,6 +403,9 @@ resource containerEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   }
   dependsOn: [
     vnet
+    postgresDnsLink
+    registryDnsLink
+    vaultDnsLink
   ]
 }
 
@@ -512,8 +515,15 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
   dependsOn: [
     registry
+    registryPrivateEndpoint
+    registryPrivateDnsGroup
+    vaultPrivateEndpoint
+    vaultPrivateDnsGroup
     keyVaultSecretsUserRole
     acrPullRole
+    databaseUrlSecret
+    nextAuthSecretSecret
+    authAzureClientSecretSecret
   ]
 }
 
