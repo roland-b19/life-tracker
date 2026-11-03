@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-02 by Claude Code (Sonnet 5.5)_
+_Last updated: 2026-11-03 by Claude Code (Sonnet 5.5)_
 
 ## Phase
 
@@ -26,10 +26,9 @@ Planning. Repo scaffolding and agent tooling done. Module-by-module Q&A finished
 
 ## Next
 
-1. **Iteration 1 is planned and approved, not started** (`docs/iteration-1.md`). Start it when the user says so. Follow the **"Runbook for the implementing agent"** section in that file (pre-flight, 11 steps, done criteria, actions only the user can do).
-2. Refine the **(stack)** items in `docs/threat-model.md` while writing the Bicep.
-3. CI security pipeline, pre-commit hooks, Azure hardening (`docs/security-plan.md`).
-4. Iteration 2: Entra External ID, Dockerfile, Bicep deploy/teardown scripts.
+1. **Current iteration: 1, planned and approved, not started** (`docs/iteration-1.md`). Start it when the user says so, following the checklist in its "Runbook for the implementing agent" section (sub-steps 0 to 11).
+2. **When iteration 1 is done: stop and wait.** Do not start anything else. The user and the agent agree the next iteration first, then it gets its own detailed plan.
+3. `docs/roadmap.md` is an **estimate only** of the later iterations (Azure foundation, Gym, Food, Money, To-do + push, AI connector, Wishlist + Business, course finish). It is not approved for implementation.
 
 ## Open questions
 
@@ -40,6 +39,8 @@ See "Open" in `docs/decisions.md`.
 None. (Azure CLI is not installed on the user's machine yet.)
 
 ## Session log (newest first)
+
+- 2026-11-03 — Iteration 1 split into small checkable sub-steps; `docs/roadmap.md` written as an estimate only; scope guard added to `AGENTS.md` (only the current iteration is implemented). No application code yet.
 
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
