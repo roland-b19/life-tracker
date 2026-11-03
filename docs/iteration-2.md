@@ -112,7 +112,9 @@ identity and never accepts a `user_id` from the request.
 - [ ] Confirm the target region and pricing estimate with the user.
 
 **Check:** all tools work, no credentials are copied to files, and no Azure
-resource exists yet.
+resource exists yet. The failed first deployment was fully torn down; the
+teardown script waits for deletion and verifies the project resource group is
+absent. Pre-existing subscription resources are not project-owned.
 
 ### 1. Production configuration and container
 

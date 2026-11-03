@@ -15,16 +15,20 @@ evidence before marking an item complete.
 - [x] HTTPS-only ingress, a liveness probe and a scale limit are declared.
 - [x] The Bicep template compiles with `az bicep build`.
 - [x] Deploy and teardown scripts are versioned; the phase 2A deploy script
-  refuses to deploy without explicit cost and deployment gates.
+  refuses to deploy without explicit cost and deployment gates; teardown is
+  idempotent, waits for deletion and verifies the resource group is absent.
 
 ## Phase 2B: evidence required after explicit approval
 
-- [ ] `az deployment group what-if` reviewed before the first deployment.
+- [x] `az deployment group what-if` reviewed before the first deployment.
 - [ ] No public database, Key Vault or registry endpoint is reachable.
 - [ ] Runtime identity pulls from ACR without admin credentials.
 - [ ] Secrets are injected from Key Vault and absent from image layers, logs
   and CI output.
 - [ ] TLS, diagnostics, backup retention and budget alerts are verified.
 - [ ] Database restore is tested.
-- [ ] The resource group is deleted with the teardown script and the absence
+- [x] The resource group is deleted with the teardown script and the absence
   of deployed resources is recorded in `docs/STATUS.md`.
+- [x] The failed first deployment was torn down and the resource group absence
+  was verified. Pre-existing subscription resources are not project-owned and
+  are not deleted.

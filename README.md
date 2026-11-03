@@ -52,4 +52,6 @@ compiled locally by CI and with `az bicep build`; it is not deployed in phase
 2A. The deploy script refuses to continue until both explicit cost and deploy
 gates are set. Teardown requires the literal confirmation argument, for
 example `scripts/azure-teardown.sh dev DELETE`; it deletes the matching
-resource group.
+resource group, waits for deletion and verifies that it is gone. It is safe to
+run again when the group is already absent. It never deletes subscription
+resources outside the `life-tracker-*` project naming scope.

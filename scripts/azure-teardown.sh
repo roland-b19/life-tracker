@@ -15,5 +15,17 @@ if [[ "$confirmation" != "DELETE" ]]; then
 fi
 
 resource_group="life-tracker-$environment"
+if ! az group show --name "$resource_group" --output none 2>/dev/null; then
+  echo "Resource group is already absent: $resource_group"
+  exit 0
+fi
+
 az group delete --name "$resource_group" --yes --no-wait
-echo "Deletion requested for resource group: $resource_group"
+az group wait --name "$resource_group" --deleted --timeout 1800
+
+if az group show --name "$resource_group" --output none 2>/dev/null; then
+  echo "Resource group still exists after teardown: $resource_group" >&2
+  exit 1
+fi
+
+echo "Resource group deleted and verified absent: $resource_group"

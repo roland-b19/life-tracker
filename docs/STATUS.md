@@ -39,8 +39,8 @@ resources are deployed.
 2. Resolve the updated cost estimate and choose a PostgreSQL SKU with
    capacity in `belgiumcentral`; ACR private access requires Premium, not Basic.
 3. Then resolve the Entra External ID tenant/scriptability gates before retrying.
-3. After iteration 2, stop again. Later iterations need their own plans.
-4. `docs/roadmap.md` remains an estimate only and is not a work order.
+4. After iteration 2, stop again. Later iterations need their own plans.
+5. `docs/roadmap.md` remains an estimate only and is not a work order.
 
 ## Open questions
 
@@ -48,7 +48,11 @@ See "Open" in `docs/decisions.md`.
 
 ## Deployed Azure resources
 
-None. Local PostgreSQL was used for validation and can be stopped with `docker compose down`.
+None for Life Tracker. The subscription's pre-existing
+`NetworkWatcherRG/NetworkWatcher_belgiumcentral` is not owned by this project
+and was intentionally left untouched.
+
+Local PostgreSQL was used for validation and can be stopped with `docker compose down`.
 
 ## Session log (newest first)
 
@@ -57,6 +61,7 @@ None. Local PostgreSQL was used for validation and can be stopped with `docker c
 - 2026-11-03 — Detailed plan for proposed iteration 2 added in `docs/iteration-2.md`; awaiting user approval. No Azure resources created.
 - 2026-11-03 — Iteration 2A completed locally: OIDC production configuration, private-network Bicep template, guarded Azure scripts and CI validation added. Lint, typecheck, production build, Bicep compile and 8 tests pass. Phase 2B paused; no Azure resources created.
 - 2026-11-03 — Phase 2B deployment preview passed in `belgiumcentral`, but the approved deployment failed before completion: PostgreSQL B1ms had no regional capacity and ACR Basic rejected disabled public access. Partial resources were fully torn down; no Azure resources remain. Retry requires a cost/SKU decision.
+- 2026-11-03 — Verified the Life Tracker resource group and resources are absent. `NetworkWatcherRG/NetworkWatcher_belgiumcentral` is a pre-existing subscription resource and is excluded from project teardown. Teardown script strengthened to wait for deletion and verify absence.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
