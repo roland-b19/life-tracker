@@ -22,3 +22,5 @@ container tooling can be downloaded. They are not treated as locally verified
 controls when the machine is offline; a failed or unavailable scanner is not
 silently bypassed.
 | V13.2.1 / V13.3.1 | Configuration and secrets | met locally | Required runtime values are deployment parameters, stored as Key Vault secrets, and referenced by Container Apps with a user-assigned identity; deployment and runtime evidence remains phase 2B |
+| V16.2.1 / V16.3.1 | Logging & Diagnostics | met locally | Log Analytics diagnostic settings are declared in Bicep for PostgreSQL, Key Vault, ACR, and Container Apps; runtime log verification remains phase 2B |
+| V13.1.2 | Resource governance | met locally | Consumption budget alerts are declared in Bicep (`Microsoft.Consumption/budgets`) with 80% threshold notification; deployment verification remains phase 2B |

@@ -57,6 +57,15 @@ param authAzureClientId string
 @description('Entra External ID issuer URL.')
 param authIssuer string
 
+@description('PostgreSQL compute SKU.')
+param postgresSku string = 'Standard_B1ms'
+
+@description('Optional budget alert amount in USD for the resource group (0 to disable).')
+param budgetAmount int = 25
+
+@description('Contact email for budget alerts.')
+param budgetContactEmail string = owner
+
 var suffix = '${project}-${environment}'
 var tags = {
   project: project
@@ -194,8 +203,8 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'Standard_B1ms'
-    tier: 'Burstable'
+    name: postgresSku
+    tier: startsWith(postgresSku, 'Standard_B') ? 'Burstable' : 'GeneralPurpose'
   }
   properties: {
     administratorLogin: dbAdminLogin
@@ -524,6 +533,88 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
       '7f951dda-4ed3-4680-a7ca-43fe172d538d'
     )
     principalType: 'ServicePrincipal'
+  }
+}
+
+resource postgresDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${postgresName}-diag'
+  scope: postgres
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${keyVaultName}-diag'
+  scope: keyVault
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${registryName}-diag'
+  scope: registry
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (budgetAmount > 0 && !empty(budgetContactEmail)) {
+  name: '${suffix}-budget'
+  properties: {
+    timeGrain: 'Monthly'
+    amount: budgetAmount
+    timePeriod: {
+      startDate: '2026-11-01T00:00:00Z'
+    }
+    category: 'Cost'
+    notifications: {
+      Actual_GreaterThan_80_Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        contactEmails: [
+          budgetContactEmail
+        ]
+      }
+    }
   }
 }
 

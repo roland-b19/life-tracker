@@ -55,8 +55,21 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   available fixes require major upgrades that would recreate the rejected
   TypeScript/ESLint incompatibility; review them on the next compatible
   toolchain release.
+- **2026-11-03 — Azure 2B preparation: regional capacity, telemetry and multi-stage deploy script.**
+  Read-only audit showed `westeurope` and `germanywestcentral` restrict subscription provisioning;
+  permitted regions include `belgiumcentral`, `northeurope`, `francecentral`, `swedencentral`,
+  and `polandcentral`. In `belgiumcentral`, burstable PostgreSQL is limited to `Standard_B1ms` and
+  `Standard_B2s`; Bicep parameterizes `postgresSku` with default `Standard_B1ms`. Bicep was enhanced
+  with diagnostic settings on PostgreSQL, Key Vault, and ACR to Log Analytics, and a consumption
+  budget alert resource (`Microsoft.Consumption/budgets`). `scripts/azure-deploy.sh` was enhanced
+  to run `what-if` preview first and require multi-stage explicit approvals (`DEPLOY_APPROVED=YES`,
+  `COST_GATE_APPROVED=YES`, `CONFIRM_DEPLOY=YES`) without echoing secrets. Revised cost estimate:
+  ACR Premium (~$50/mo continuous, ~$0.07/hr ephemeral) + PostgreSQL Burstable (~$16-$28.50/mo, ~$0.022-$0.039/hr),
+  costing ~$0.20 - $0.35 total for a short 1-2 hour validation test. No Azure resources were created.
 
 ## Open
 
+- Region and PostgreSQL SKU selection for Phase 2B (`belgiumcentral` with `Standard_B2s` vs `northeurope` with `Standard_B1ms`).
+- Entra External ID tenant configuration parameters (`AUTH_AZURE_TENANT_ID`, `AUTH_AZURE_CLIENT_ID`, `AUTH_AZURE_CLIENT_SECRET`, `AUTH_ISSUER`).
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.

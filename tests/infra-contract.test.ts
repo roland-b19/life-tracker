@@ -57,4 +57,12 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("keyVaultSecretsUserRole");
     expect(bicep).toContain("acrPullRole");
   });
+
+  it("configures diagnostic settings, budget alerts and flexible postgres SKU", () => {
+    expect(bicep).toContain("param postgresSku string = 'Standard_B1ms'");
+    expect(bicep).toContain("resource postgresDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource budget 'Microsoft.Consumption/budgets@2023-05-01'");
+  });
 });

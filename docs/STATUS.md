@@ -1,56 +1,81 @@
 # Status
 
-_Last updated: 2026-11-03 by Copilot_
+_Last updated: 2026-11-03 by Antigravity_
 
 ## Phase
 
-Iteration 1 implementation complete locally and merged in `main`. Iteration 2A
-(local implementation) is complete on the feature branch: production
-container, liveness endpoint, OIDC configuration, guarded Azure scripts and
-offline-compiled private-network Bicep are implemented and tested. Phase 2B
-(Azure validation) is paused until the user explicitly starts it. No Azure
+Iteration 1 is complete and merged in `main`. Iteration 2A (local implementation
+and hardened Azure contracts) is complete. Azure 2B preparation is completed:
+read-only regional audit, cost recalculation, Bicep telemetry/budget enhancements,
+and guarded what-if deployment scripts are validated locally. Phase 2B (Azure
+deployment and live validation) is paused awaiting explicit user decisions on
+target region/SKU, cost approval, and Entra tenant configuration. No Azure
 resources are deployed.
 
-The security audit fix is implemented on this short-lived branch: production
-images require immutable digests, CI produces an SBOM and scans the image, and
-local tests provide deterministic non-secret PostgreSQL defaults. Azure runtime
-controls remain unverified because nothing was deployed.
+## Verification status breakdown
 
-## Done
+- **Implemented locally:**
+  - Pinned non-root container (`Dockerfile` with Node 24 LTS, `nextjs` user 1001).
+  - Health endpoint (`/health`) and security headers.
+  - OIDC authentication with production guard (`AUTH_DEV=false`).
+  - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
+  - Private-network Bicep template (`infra/main.bicep`) featuring:
+    - PostgreSQL Flexible Server with public network access disabled and private DNS.
+    - Configurable `postgresSku` parameter (default `Standard_B1ms`).
+    - Key Vault with private endpoint, RBAC and purge protection.
+    - ACR Premium with private endpoint and admin user disabled.
+    - Container Apps with VNet integration, HTTPS-only ingress, scale-to-zero, and user-assigned managed identity.
+    - Role assignments for ACR Pull and Key Vault Secrets User.
+    - Log Analytics diagnostic settings on PostgreSQL, Key Vault, ACR, and Container Apps.
+    - Consumption budget alert resource (`Microsoft.Consumption/budgets`).
+  - Guarded scripts: `azure-preflight.sh`, `azure-deploy.sh` (runs what-if, validates parameters and immutable digest `sha256:...`, requires approvals), `azure-teardown.sh` (synchronous deletion with absence verification, targets only project resource group).
+- **Verified via CI:**
+  - Dependabot and Gitleaks secret scanning.
+  - Syft/Anchore SPDX SBOM generation.
+  - Trivy container scan for HIGH and CRITICAL vulnerabilities.
+  - Bicep offline compilation and shell syntax validation (`bash -n`).
+- **Verified via local tests:**
+  - 14 Vitest unit, contract, and authorization tests passing.
+  - Local PostgreSQL container tests passing with deterministic credentials.
+  - Production container build and `/health` probe verified.
+  - `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` (production flags) passing.
+  - `npm audit --audit-level=high --omit=optional` passing (0 high/critical).
+- **Verified via Azure deployment:**
+  - None. Azure 2B deployment has not been run in this phase.
+- **Unverified (requires live Azure deployment):**
+  - PostgreSQL private endpoint reachability from Container Apps.
+  - Key Vault secret resolution at Container App startup.
+  - Real Microsoft Entra External ID OIDC login flow (issuer, audience, PKCE, callback).
+  - Absence of public access to PostgreSQL, Key Vault, and ACR from external networks.
+  - Live backup retention and database restore.
+  - Real-world diagnostic log generation without sensitive payload leakage.
 
-- Git repo, `main` branch, private GitHub repo.
-- Agent-neutral setup: `AGENTS.md` is canonical; `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md` point to it.
-- Ponytail (coding philosophy + skills) and graphify (code knowledge graph) set up. See `docs/TOOLING.md`.
+## Regional audit and cost recalculation
 
-- App idea received: `docs/idea.md` (13 modules, multi-user, notifications, Apple-level design, AI integration).
-- `apple-design` skill (distilled HIG) in `.agents/skills/apple-design/`.
-- Security plan `docs/security-plan.md` validated by the user (2026-11-02).
-- `secure-development` skill in `.agents/skills/secure-development/`: `SKILL.md`, 11 references (ASVS 5.0, Top 10:2025, SSDF, privacy, supply chain/CI, optional Azure/AI/iOS), 4 templates. References were independently fact-checked against the primary sources. Security rules added to `AGENTS.md`.
-
-- `code-review-guide` skill (reviewer guide, author guide, security review, reviewing agent-written code, PR template); sources fact-checked. Named `-guide` because Claude Code has a built-in `code-review` skill.
-- Final audit of the three skills made in this project (apple-design, secure-development, code-review-guide): frontmatter, routing, cross-references, no project-specific text, copyright overlap, usability dry-runs. Padding and duplicates removed.
-- Generic `project-setup` skill outside this repo, in `~/Documents/projects/project-setup/` (script + template + the 5 skills), for starting any new project with the same structure.
-- Cleanup: `.pre-commit-config.yaml` (secret scan) added; `docs/security-plan.md` marked validated. The setup is ready for implementation once the plan is approved.
-- Iteration 1: Next.js 16 TypeScript app, Drizzle schema/migrations, restricted PostgreSQL roles, Auth.js local-only sign-in, weight API/UI, security headers, tests, CI and Dependabot.
-- Iteration 2A: pinned non-root production container, `/health`, environment-driven
-  OIDC provider, guarded Azure scripts, private-network Bicep and offline Azure
-  hardening checklist.
-- PR #8 fixes: ACR uses Premium for private access; Container Apps receives
-  required production settings through Key Vault references and its managed
-  identity, with deployment-time required parameters and a least-privilege
-  Key Vault Secrets User role.
-
-- Planning Q&A done for Gym, Food + weight, Money, To-do, Wishlist, Family business; Wedding, Chess, Health, Work opportunities and Projects dropped. Draft in `docs/spec.md` (+ seed data `docs/spec/gym-sample.md`), tiers and stack direction in `docs/decisions.md`.
+- **Subscription:** Azure for Students (`rboldesco14@gmail.com`).
+- **Region provisioning check (read-only):**
+  - Restricted for subscription: `westeurope`, `germanywestcentral`, `eastus`, `eastus2`.
+  - Permitted without restrictions: `belgiumcentral`, `northeurope`, `francecentral`, `swedencentral`, `polandcentral`, `italynorth`, `spaincentral`, `uksouth`.
+  - In `belgiumcentral`, burstable SKUs are limited to `Standard_B1ms` (which previously had capacity exhaustion) and `Standard_B2s`.
+  - In `northeurope` and `francecentral`, broader burstable SKUs (`Standard_B1ms`, `Standard_B2s`, `Standard_B2ms`, etc.) are available.
+- **Cost recalculation:**
+  - **ACR Premium:** ~$50.00 / month (~$0.07 / hour). Required because Azure only supports private endpoints on ACR Premium. For an ephemeral test run (1-2 hours), cost is ~$0.14.
+  - **PostgreSQL Flexible Server B1ms:** ~$16.09 / month (~$0.022 / hour).
+  - **PostgreSQL Flexible Server B2s (if B1ms capacity lacks):** ~$28.50 / month (~$0.039 / hour).
+  - **Key Vault + Private Endpoint:** ~$7.30 / month (~$0.01 / hour).
+  - **Container Apps (Consumption):** Scale-to-zero ($0 idle; first 180k vCPU-s free; <$0.05 per test run).
+  - **Total 24/7 continuous monthly cost:** ~$80 - $90 (B1ms) or ~$92 - $102 (B2s).
+  - **Total ephemeral test run cost (1-2 hours until teardown):** ~$0.20 - $0.35 total.
+  - Well within course credit ($100), provided immediate teardown is enforced.
 
 ## Next
 
-1. Phase 2B is paused. Wait for the user to explicitly start Azure validation.
-2. Resolve the updated cost estimate: ACR Premium is required for private
-   access and costs more than the previously recorded Basic estimate. Choose a
-   PostgreSQL SKU with capacity in `belgiumcentral`.
-3. Then resolve the Entra External ID tenant/scriptability gates before retrying.
-4. After iteration 2, stop again. Later iterations need their own plans.
-5. `docs/roadmap.md` remains an estimate only and is not a work order.
+1. Stop and obtain user decisions on:
+   - Target Azure region (`belgiumcentral` with `Standard_B2s` vs `northeurope` / `francecentral` with `Standard_B1ms`).
+   - Approval of revised cost estimate (ACR Premium + selected PostgreSQL SKU).
+   - Entra External ID tenant details (tenant ID, client ID, client secret, issuer).
+   - Approval to run Azure preflight, what-if, and live deployment.
+2. Once approved: run preflight, what-if, live deployment, smoke tests, and immediate teardown.
 
 ## Open questions
 
@@ -62,9 +87,15 @@ None for Life Tracker. The subscription's pre-existing
 `NetworkWatcherRG/NetworkWatcher_belgiumcentral` is not owned by this project
 and was intentionally left untouched.
 
-Local PostgreSQL was used for validation and can be stopped with `docker compose down`.
-
 ## Session log (newest first)
+
+- 2026-11-03 — Azure 2B preparation and audit: verified read-only regional
+  provisioning restrictions (`westeurope` restricted; `belgiumcentral`,
+  `northeurope`, `francecentral` permitted). Recalculated ACR Premium and
+  PostgreSQL B1ms/B2s costs. Enhanced `infra/main.bicep` with diagnostic settings
+  for PostgreSQL, Key Vault, and ACR, consumption budget alert resource, and
+  configurable `postgresSku`. Updated `scripts/azure-deploy.sh` to require what-if
+  preview and multi-stage approval. 14 local tests pass. No Azure resources created.
 
 - 2026-11-03 — Security audit fix: mutable production image tags were removed
   from the Bicep contract and deploy validation; CI SBOM/container scanning and

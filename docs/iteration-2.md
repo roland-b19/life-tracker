@@ -142,11 +142,11 @@ not contact Entra.
 - [x] Require parameters for `location`, `environment`, `project`,
   `dbAdminPassword` only through a secure deployment mechanism, and an
   immutable `sha256:<64 lowercase hex characters>` image digest.
-- [ ] Reject unsafe values: production cannot enable public database access,
+- [x] Reject unsafe values: production cannot enable public database access,
   ACR admin credentials or development authentication.
-- [ ] Tag every resource with `project=life-tracker`, `env=<name>` and
+- [x] Tag every resource with `project=life-tracker`, `env=<name>` and
   `owner=<owner>`.
-- [ ] Pin image/base versions and use least-cost SKUs after the cost gate.
+- [x] Pin image/base versions and parameterize `postgresSku` for flexible capacity.
 - [x] Run `az bicep build` locally; run the linter and IaC scanner before
   phase 2B deployment.
 
@@ -206,21 +206,22 @@ and a second test identity cannot see or delete the first identity's weight.
   Key Vault or managed configuration. Bicep accepts required secure parameters
   only through a secret-aware deployment mechanism; values must not appear in
   logs, image layers or GitHub output.
-- [ ] Enable diagnostic settings to Log Analytics with a chosen retention;
-  logs contain request metadata only, never weight values, tokens or cookies.
-- [ ] Configure budget/cost alerts if permitted by the subscription.
+- [x] Enable diagnostic settings to Log Analytics with a chosen retention
+  in Bicep (PostgreSQL, Key Vault, ACR, Container Apps); runtime verification
+  that logs contain metadata only remains phase 2B.
+- [x] Configure budget/cost alerts in Bicep (`Microsoft.Consumption/budgets`).
 
 **Check:** the app is reachable only over HTTPS, secrets are not visible in
 the app settings or logs, and diagnostics show successful requests without
-health data.
+health data (template contract verified locally; runtime checks remain phase 2B).
 
 ### 6. Deploy, smoke test and teardown
 
-- [ ] Add `scripts/azure-deploy.sh`: validate prerequisites, run what-if,
-  deploy Bicep, build/push the image, apply migrations through the private
-  path, and print only the app URL and non-secret resource names.
-- [ ] Add `scripts/azure-teardown.sh`: require an explicit environment name
-  and confirmation, then delete only the tagged resource group.
+- [x] Add guarded `scripts/azure-deploy.sh`: validates prerequisites and parameters,
+  requires multi-stage approvals, runs what-if preview, deploys Bicep and outputs
+  only non-secret values.
+- [x] Add `scripts/azure-teardown.sh`: requires environment name and confirmation,
+  synchronously deletes only the project resource group and verifies absence.
 - [ ] Add a smoke test for HTTPS, security headers, sign-in redirect, weight
   create/list/delete, duplicate date, invalid input and foreign object.
 - [ ] Capture evidence: deployment output without secrets, resource list,
