@@ -119,6 +119,73 @@ export function WeightPage({ userName }: { userName: string }) {
           <h2 id="history-title">History</h2>
           <span className="muted">{busy ? "Loading..." : `${entries.length} entries`}</span>
         </div>
+
+        {entries.length > 0 && (
+          <div
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.75rem 1rem",
+              background: "var(--background)",
+              borderRadius: "0.65rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <span className="muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 600 }}>
+                7-Day Moving Average
+              </span>
+              <p style={{ margin: "0.15rem 0 0", fontSize: "1.1rem", fontWeight: 700 }}>
+                {(() => {
+                  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+                  const latestDate = new Date(sorted[0].date);
+                  const weekAgo = new Date(latestDate);
+                  weekAgo.setDate(weekAgo.getDate() - 6);
+                  const currentWeek = sorted.filter((e) => {
+                    const d = new Date(e.date);
+                    return d >= weekAgo && d <= latestDate;
+                  });
+                  if (currentWeek.length === 0) return `${sorted[0].kilograms} kg`;
+                  const avg = currentWeek.reduce((acc, e) => acc + parseFloat(e.kilograms), 0) / currentWeek.length;
+                  return `${Math.round(avg * 100) / 100} kg`;
+                })()}
+              </p>
+            </div>
+            {(() => {
+              const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+              const latestDate = new Date(sorted[0].date);
+              const weekAgo = new Date(latestDate);
+              weekAgo.setDate(weekAgo.getDate() - 6);
+              const twoWeeksAgo = new Date(latestDate);
+              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 13);
+              const currentWeek = sorted.filter((e) => {
+                const d = new Date(e.date);
+                return d >= weekAgo && d <= latestDate;
+              });
+              const prevWeek = sorted.filter((e) => {
+                const d = new Date(e.date);
+                return d >= twoWeeksAgo && d < weekAgo;
+              });
+              if (currentWeek.length === 0 || prevWeek.length === 0) return null;
+              const curAvg = currentWeek.reduce((acc, e) => acc + parseFloat(e.kilograms), 0) / currentWeek.length;
+              const prevAvg = prevWeek.reduce((acc, e) => acc + parseFloat(e.kilograms), 0) / prevWeek.length;
+              const diff = Math.round((curAvg - prevAvg) * 100) / 100;
+              return (
+                <span
+                  className="badge"
+                  style={{
+                    background: diff > 0 ? "rgba(52, 199, 89, 0.15)" : "rgba(255, 149, 0, 0.15)",
+                    color: diff > 0 ? "#34c759" : "#ff9500",
+                  }}
+                >
+                  {diff > 0 ? "+" : ""}{diff} kg/week
+                </span>
+              );
+            })()}
+          </div>
+        )}
+
         <div className="entries">
           {!busy && entries.length === 0 && <p className="muted">No weigh-ins yet.</p>}
           {entries.map((entry) => (
