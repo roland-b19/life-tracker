@@ -1,6 +1,6 @@
-# Roadmap (ESTIMATE ONLY, not approved for implementation)
+# Roadmap (ESTIMATE ONLY; Iteration 2 is separately approved)
 
-**Do not implement anything from this file.** Iteration 1 is complete. Iteration 2 now has a detailed, separate plan in `docs/iteration-2.md`, but it is not approved for implementation until the user accepts it and explicitly approves the first Azure deployment after the cost gate. This roadmap remains a rough order and size estimate; later iterations still need their own plans.
+**Do not implement anything from this file.** Iteration 1 is complete. Iteration 2 has a detailed, separately approved plan in `docs/iteration-2.md`; its local 2A phase is complete, while Azure deployment remains gated by the cost and explicit-approval requirements in that plan. This roadmap remains a rough order and size estimate; later iterations still need their own plans.
 
 Sources: `docs/spec.md` (what each module does, approved), `docs/decisions.md` (tiers, stack), `docs/requirements.md` (course checklist). Sizes are guesses of agent work: S under half a day, M about a day, L several days. Nothing was measured.
 
