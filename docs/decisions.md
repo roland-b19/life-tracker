@@ -36,6 +36,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-03 — Iteration 1 implementation.** The local security spine uses Next.js 16, stable `next-auth` 4.24.15, Drizzle ORM, PostgreSQL 17, strict Zod validation, owner-scoped weight routes, and Vitest authorization tests. Development credentials are refused when `NODE_ENV=production`; Entra and Azure remain deferred.
 - **2026-11-03 — Iteration 2 plan drafted, not approved.** The next proposed iteration is Azure foundation plus real Entra External ID login for the existing weigh-in slice. Deployment remains gated by supported scripting, a region/SKU cost estimate, explicit user approval, private database networking and a tested teardown.
+- **2026-11-03 — Iteration 2 started.** The production container uses Next.js standalone output on a pinned Node 24 LTS image and runs as an unprivileged user. Azure CLI is not installed locally; Azure region, pricing and Entra tenant details remain gates before infrastructure work or deployment.
 
 ## Open
 

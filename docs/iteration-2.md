@@ -1,9 +1,8 @@
-# Iteration 2: Azure foundation and real login (PLAN, awaiting approval)
+# Iteration 2: Azure foundation and real login (IN PROGRESS)
 
-**This is a plan only. Nothing in this document authorizes Azure changes.**
-Iteration 2 starts only after the user approves this plan and separately approves
-the first deployment after the cost estimate is shown. It is the only iteration
-to implement after iteration 1; do not start Gym, Food or another roadmap item.
+The user approved starting iteration 2 on 2026-11-03. Nothing in this document
+authorizes Azure resource creation without the separate deployment approval
+after the cost estimate is shown. Do not start Gym, Food or another roadmap item.
 
 ## Goal
 
@@ -112,11 +111,11 @@ resource exists yet.
 - [ ] Replace the development-only credentials provider with an OIDC provider
   selected by environment configuration; keep local development behind
   `AUTH_DEV=true` and the existing production guard.
-- [ ] Add a `Dockerfile` using a pinned Node 24 LTS base, multi-stage build,
+- [x] Add a `Dockerfile` using a pinned Node 24 LTS base, multi-stage build,
   `output: "standalone"` and a non-root runtime user.
-- [ ] Add `.dockerignore`; verify `.env`, source maps if not needed, tests and
+- [x] Add `.dockerignore`; verify `.env`, source maps if not needed, tests and
   secrets are absent from the image.
-- [ ] Add a container health endpoint that does not reveal configuration or
+- [x] Add a container health endpoint that does not reveal configuration or
   database contents.
 - [ ] Keep migrations as an explicit owner-only release step, never at every
   request or every app startup.
@@ -262,4 +261,3 @@ Iteration 2 is complete only when all are true:
 - **A deployment partially fails:** run the teardown script, inspect the
   resource group, and do not retry blindly.
 - **Cost differs materially from the approved estimate:** stop and ask again.
-

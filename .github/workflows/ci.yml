@@ -52,6 +52,8 @@ jobs:
         run: npm run typecheck
       - name: Tests
         run: npm test
+      - name: Build production container
+        run: docker build --tag life-tracker:ci .
       - name: Dependency audit
         run: npm audit --audit-level=high --omit=optional
       - name: Secret scan v2

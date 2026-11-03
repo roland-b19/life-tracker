@@ -20,7 +20,7 @@ Note on words: the course calls every deploy-work-delete cycle an "iteration". H
 | 8 | Wishlist and Family business | 3 | M | 6 |
 | 9 | Course finish: hardening, demo, teardown | n/a | M | all |
 
-Iteration 2 is the next proposed iteration. The rest are estimates.
+Iteration 2 is in progress. The rest are estimates.
 
 ## 2. Azure foundation and real login
 Why second: the course grades the Azure parts and the security, and the deploy cycle should be rehearsed early, not in January.

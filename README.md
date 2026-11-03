@@ -2,7 +2,7 @@
 
 A personal life-tracking app, built first as a university project for an Azure cloud course, then kept for personal use.
 
-> Status: iteration 1, local security spine. See [`docs/STATUS.md`](docs/STATUS.md).
+> Status: iteration 2, production container foundation in progress. See [`docs/STATUS.md`](docs/STATUS.md).
 
 ## For people and for AI agents
 
@@ -35,3 +35,13 @@ npm test
 ```
 
 The database is bound to `127.0.0.1` only. Stop it with `docker compose down`; add `-v` only when intentionally deleting local data.
+
+## Production container
+
+The production image uses Next.js standalone output and runs as the unprivileged
+`nextjs` user. It exposes `/health` for liveness checks and does not include
+tests, documentation, local configuration or development dependencies.
+
+```bash
+docker build --tag life-tracker:local .
+```
