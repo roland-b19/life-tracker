@@ -22,9 +22,12 @@ runtime evidence.
 - [x] HTTPS-only ingress, a liveness probe and a scale limit are declared.
 - [x] The Bicep template compiles with `az bicep build` and requires an
   immutable image digest.
-- [x] Deploy and teardown scripts are versioned; the phase 2A deploy script
-  refuses to deploy without explicit cost and deployment gates; teardown is
-  idempotent, waits for deletion and verifies the resource group is absent.
+- [x] Diagnostic settings to Log Analytics are declared for PostgreSQL, Key Vault,
+  ACR, and Container Apps.
+- [x] Budget alert resource is declared in Bicep (`Microsoft.Consumption/budgets`).
+- [x] Deploy and teardown scripts are versioned; `azure-deploy.sh` requires what-if
+  preview and multi-stage approvals; teardown is idempotent, waits for deletion
+  and verifies the resource group is absent.
 
 ## Phase 2B: evidence required after explicit approval
 

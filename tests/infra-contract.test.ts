@@ -42,7 +42,7 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("name: 'auth-azure-client-secret'");
     expect(bicep).toContain("name: 'AUTH_DEV'\n              value: 'false'");
     expect(bicep).toContain("roleDefinitionId");
-    expect(bicep).toContain("4633458b-17de-408a-b874-0445c86e6e6");
+    expect(bicep).toContain("4633458b-17de-408a-b874-0445c86b69e6");
     expect(bicep).toContain("secretRef: 'database-url'");
     expect(bicep).toContain("secretRef: 'nextauth-secret'");
     expect(bicep).toContain("secretRef: 'auth-azure-client-secret'");
@@ -56,5 +56,16 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("identity: workloadIdentity.id");
     expect(bicep).toContain("keyVaultSecretsUserRole");
     expect(bicep).toContain("acrPullRole");
+    expect(bicep).toContain("registryPrivateDnsGroup");
+    expect(bicep).toContain("vaultPrivateDnsGroup");
+  });
+
+  it("configures diagnostic settings, budget alerts and flexible postgres SKU", () => {
+    expect(bicep).toContain("param postgresSku string = 'Standard_B1ms'");
+    expect(bicep).toContain("resource postgresDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
+    expect(bicep).toContain("resource budget 'Microsoft.Consumption/budgets@2023-05-01'");
+    expect(bicep).toContain("output acrLoginServer string = registry.properties.loginServer");
   });
 });

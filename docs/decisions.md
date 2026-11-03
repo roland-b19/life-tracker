@@ -55,8 +55,38 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   available fixes require major upgrades that would recreate the rejected
   TypeScript/ESLint incompatibility; review them on the next compatible
   toolchain release.
+- **2026-11-03 — Azure 2B preparation: regional capacity, telemetry and multi-stage deploy script.**
+  Read-only audit showed `westeurope` and `germanywestcentral` restrict subscription provisioning;
+  permitted regions include `belgiumcentral`, `northeurope`, `francecentral`, `swedencentral`,
+  and `polandcentral`. In `belgiumcentral`, burstable PostgreSQL is limited to `Standard_B1ms` and
+  `Standard_B2s`; Bicep parameterizes `postgresSku` with default `Standard_B1ms`. Bicep was enhanced
+  with diagnostic settings on PostgreSQL, Key Vault, and ACR to Log Analytics, and a consumption
+  budget alert resource (`Microsoft.Consumption/budgets`). `scripts/azure-deploy.sh` was enhanced
+  to run `what-if` preview first and require multi-stage explicit approvals (`DEPLOY_APPROVED=YES`,
+  `COST_GATE_APPROVED=YES`, `CONFIRM_DEPLOY=YES`) without echoing secrets. Revised cost estimate:
+  ACR Premium (~$50/mo continuous, ~$0.07/hr ephemeral) + PostgreSQL Burstable (~$16-$28.50/mo, ~$0.022-$0.039/hr),
+  costing ~$0.20 - $0.35 total for a short 1-2 hour validation test. No Azure resources were created.
+- **2026-11-03 — Phase 2B regional routing, Key Vault purge-protection conflict resolution, and Italy North target.**
+  Deployment attempts in `polandcentral` (`SkuNotAvailable` on Burstable) and `belgiumcentral` (`RegionalAllocationFailed`
+  due to data center capacity exhaustion on `Standard_B2s`) failed and were immediately torn down synchronously.
+  Three critical infrastructure root causes were resolved and codified:
+  1. The built-in Azure RBAC role definition GUID for "Key Vault Secrets User" was queried directly from the subscription
+     and set to `4633458b-17de-408a-b874-0445c86b69e6` in `infra/main.bicep` and contract tests.
+  2. Because Key Vault has purge protection enabled, deleted vaults cannot be purged until their retention period expires;
+     Key Vault names are now derived with a deterministic resource-group hash (`${suffix}kv${uniqueString(rg.id)}`),
+     preventing `ConflictError` on recreation.
+  3. ACR DNS caching on global Azure Traffic Manager after region switches was resolved by adding a regional `registryName`
+     parameter and switching ACR authentication in `scripts/azure-deploy.sh` to non-interactive short-lived OAuth tokens
+     (`az acr login --expose-token`), eliminating terminal interactive prompts.
+  4. The user approved target region `italynorth` with `Standard_B1ms` / `Standard_B2s` for the live validation retry.
+
+- **2026-11-03 — Target region Italy North and capacity findings.** Poland Central was rejected by subscription policy (`SkuNotAvailable` for PostgreSQL Burstable), Belgium Central failed with physical host allocation limits (`RegionalAllocationFailed` on `Standard_B2s` and `Standard_B1ms`). Italy North was approved and succeeded with PostgreSQL Flexible Server `Standard_B1ms`, ACR Premium, Key Vault, and Container Apps.
+- **2026-11-03 — Bicep private DNS zone group dependency ordering.** Azure Container Apps in a VNet failed image resolution with `lookup <acr>: no such host` because ARM was executing the Container App revision creation concurrently with the ACR Private Endpoint and Private DNS Zone Group. Declared explicit dependencies in `infra/main.bicep` on `registryPrivateDnsGroup`, `vaultPrivateDnsGroup`, and secrets to guarantee private DNS A-record registration prior to image resolution.
+- **2026-11-03 — Automated database schema migration via Container App Job.** In private networking mode with public network access disabled on PostgreSQL, external clients cannot reach the database. Created `scripts/db-init.cjs` and automated database bootstrap (database creation, least-privilege `life_tracker_app` role provisioning, and DDL execution) via `Microsoft.App/jobs` (`lt-migrate-stage`) running inside the private VNet.
+- **2026-11-03 — Iteration 2 verified live and torn down.** All requirements of Iteration 2 (Azure foundation, private PostgreSQL, Key Vault secrets injection, ACR private link, live HTTPS `/health`, CSRF protection, and real Microsoft Entra ID OIDC redirect) were tested and verified on live Azure infrastructure. Full teardown completed cleanly with 0 project resources remaining.
 
 ## Open
 
+- Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.

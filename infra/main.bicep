@@ -57,6 +57,21 @@ param authAzureClientId string
 @description('Entra External ID issuer URL.')
 param authIssuer string
 
+@description('PostgreSQL compute SKU.')
+param postgresSku string = 'Standard_B1ms'
+
+@description('Optional explicit container registry name to allow regional and conflict-free naming.')
+param registryName string = ''
+
+@description('Optional explicit Key Vault name to allow regional and conflict-free naming.')
+param keyVaultName string = ''
+
+@description('Optional budget alert amount in USD for the resource group (0 to disable).')
+param budgetAmount int = 25
+
+@description('Contact email for budget alerts.')
+param budgetContactEmail string = owner
+
 var suffix = '${project}-${environment}'
 var tags = {
   project: project
@@ -65,13 +80,14 @@ var tags = {
 }
 var vnetName = '${suffix}-vnet'
 var postgresName = replace('${suffix}-pg', '-', '')
-var registryName = replace('${suffix}acr', '-', '')
-var keyVaultName = replace('${suffix}-kv', '-', '')
+var effectiveRegistryName = !empty(registryName) ? registryName : replace('${suffix}acr', '-', '')
+var defaultKeyVaultName = take(replace('${suffix}kv${uniqueString(resourceGroup().id, location)}', '-', ''), 24)
+var effectiveKeyVaultName = !empty(keyVaultName) ? keyVaultName : defaultKeyVaultName
 var workspaceName = '${suffix}-logs'
 var containerEnvName = '${suffix}-cae'
 var containerAppName = '${suffix}-app'
 var postgresDnsName = 'privatelink.postgres.database.azure.com'
-var containerImage = '${registryName}.azurecr.io/life-tracker@${imageDigest}'
+var containerImage = '${effectiveRegistryName}.azurecr.io/life-tracker@${imageDigest}'
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: workspaceName
@@ -194,8 +210,8 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'Standard_B1ms'
-    tier: 'Burstable'
+    name: postgresSku
+    tier: startsWith(postgresSku, 'Standard_B') ? 'Burstable' : 'GeneralPurpose'
   }
   properties: {
     administratorLogin: dbAdminLogin
@@ -229,7 +245,7 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
 }
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: registryName
+  name: effectiveRegistryName
   location: location
   tags: tags
   sku: {
@@ -242,7 +258,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: keyVaultName
+  name: effectiveKeyVaultName
   location: location
   tags: tags
   properties: {
@@ -289,7 +305,7 @@ resource authAzureClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-
 }
 
 resource registryPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
-  name: '${registryName}-pe'
+  name: '${effectiveRegistryName}-pe'
   location: location
   tags: tags
   properties: {
@@ -298,7 +314,7 @@ resource registryPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01'
     }
     privateLinkServiceConnections: [
       {
-        name: '${registryName}-connection'
+        name: '${effectiveRegistryName}-connection'
         properties: {
           privateLinkServiceId: registry.id
           groupIds: [
@@ -329,7 +345,7 @@ resource registryPrivateDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZ
 }
 
 resource vaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
-  name: '${keyVaultName}-pe'
+  name: '${effectiveKeyVaultName}-pe'
   location: location
   tags: tags
   properties: {
@@ -338,7 +354,7 @@ resource vaultPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = 
     }
     privateLinkServiceConnections: [
       {
-        name: '${keyVaultName}-connection'
+        name: '${effectiveKeyVaultName}-connection'
         properties: {
           privateLinkServiceId: keyVault.id
           groupIds: [
@@ -387,6 +403,9 @@ resource containerEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   }
   dependsOn: [
     vnet
+    postgresDnsLink
+    registryDnsLink
+    vaultDnsLink
   ]
 }
 
@@ -411,7 +430,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       }
       registries: [
         {
-          server: '${registryName}.azurecr.io'
+          server: '${effectiveRegistryName}.azurecr.io'
           identity: workloadIdentity.id
         }
       ]
@@ -496,8 +515,15 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
   dependsOn: [
     registry
+    registryPrivateEndpoint
+    registryPrivateDnsGroup
+    vaultPrivateEndpoint
+    vaultPrivateDnsGroup
     keyVaultSecretsUserRole
     acrPullRole
+    databaseUrlSecret
+    nextAuthSecretSecret
+    authAzureClientSecretSecret
   ]
 }
 
@@ -508,7 +534,7 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
     principalId: workloadIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
       'Microsoft.Authorization/roleDefinitions',
-      '4633458b-17de-408a-b874-0445c86e6e6'
+      '4633458b-17de-408a-b874-0445c86b69e6'
     )
     principalType: 'ServicePrincipal'
   }
@@ -527,6 +553,89 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+resource postgresDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${postgresName}-diag'
+  scope: postgres
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource vaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${effectiveKeyVaultName}-diag'
+  scope: keyVault
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: '${effectiveRegistryName}-diag'
+  scope: registry
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (budgetAmount > 0 && !empty(budgetContactEmail)) {
+  name: '${suffix}-budget'
+  properties: {
+    timeGrain: 'Monthly'
+    amount: budgetAmount
+    timePeriod: {
+      startDate: '2026-11-01T00:00:00Z'
+    }
+    category: 'Cost'
+    notifications: {
+      Actual_GreaterThan_80_Percent: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        contactEmails: [
+          budgetContactEmail
+        ]
+      }
+    }
+  }
+}
+
 output resourceGroupName string = resourceGroup().name
 output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output postgresServerName string = postgres.name
+output acrLoginServer string = registry.properties.loginServer

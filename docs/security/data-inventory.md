@@ -1,6 +1,6 @@
 # Data inventory and privacy design: Life Tracker
 
-Last reviewed: 2026-11-03 (local security audit fix). Update in the same change that adds a data type, a store, a recipient or a purpose.
+Last reviewed: 2026-11-03 (Azure 2B preparation audit). Update in the same change that adds a data type, a store, a recipient or a purpose.
 Classification: personal / health (GDPR Art. 9 special category) / financial / secret. The legal basis is the owner's own use of their own data (single user); revisit if other users are ever added.
 
 | Data type | Examples | Classification | Purpose | Legal basis / consent | Stored where, how protected | Retention | Shared with (third parties, AI providers) | User can export | User can delete |
