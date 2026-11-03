@@ -4,9 +4,9 @@ _Last updated: 2026-11-03 by Antigravity_
 
 ## Phase
 
-Iterations 1, 2, and 3 are complete and merged in `main`. Iteration 4 (Food & Nutrition + Body Weight Complete)
-is fully implemented and verified locally on branch `feat/iteration-4-food`.
-All 31 Vitest tests pass, typecheck and linting pass with 0 warnings, and production build succeeds.
+Tier 1 (Iterations 1, 2, 3, and 4) is 100% complete, verified, and merged in `main`.
+Tier 2, Iteration 5 (Money module — Personal & Business Expenses) is planned and approved (`docs/iteration-5.md`),
+executing local-first on branch `feat/iteration-5-money`. All 31 existing Vitest tests pass.
 
 ## Verification status breakdown
 
@@ -97,8 +97,8 @@ All 31 Vitest tests pass, typecheck and linting pass with 0 warnings, and produc
 
 ## Next
 
-1. Open PR for `feat/iteration-4-food` into `main` and review with the user.
-2. Plan Iteration 5 (Money module — personal and business expense tracking).
+1. Implement Iteration 5 (Money module) locally per `docs/iteration-5.md`: schema, categories, DAL, server actions, tests, and Apple HIG UI.
+2. Maintain local-only verification (no Azure deployments).
 
 ## Open questions
 
@@ -111,6 +111,8 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-04 — Tier 1 complete and Iteration 5 planned: PR #14 squashed and merged into `main` with all CI checks passing. Comprehensive verification of Tier 1 completed and polished (7-day moving average and rate of change added to weigh-in view). Created `docs/iteration-5.md` defining the Money module scope (expenses in RON, personal vs business spaces, fast 2-3 tap entry, category breakdown, strict AI quarantine). Local-first execution on branch `feat/iteration-5-money`.
 
 - 2026-11-04 — Iteration 4 implementation: Fully implemented Food & Nutrition and Body Weight Complete module on `feat/iteration-4-food`. Defined Drizzle schema for `nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, and `shopping_items` with migration `0004_left_chimera.sql`. Implemented owner-scoped DAL and Server Actions, daily metrics (water tap counter and steps), 7-day weight rolling average and weekly rate of change, smart categorized shopping list populated from recipes, and Apple HIG interface at `/food`. 31 Vitest tests pass (including authorization, math calculations, multi-user isolation), 0 lint/typecheck errors, production build verified. No Azure resources created.
 
