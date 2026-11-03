@@ -116,7 +116,11 @@ echo "Logging in to ACR: $acr_login_server"
 az acr login --name "$acr_name" --output none
 acr_image="$acr_login_server/life-tracker"
 echo "Tagging and pushing image $acr_image@$image_digest"
-docker build -t "$acr_image:deploy" .
+if docker image inspect "$image_digest" >/dev/null 2>&1; then
+  docker tag "$image_digest" "$acr_image:deploy"
+else
+  docker build -t "$acr_image:deploy" .
+fi
 docker push "$acr_image:deploy"
 pushed_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_image:deploy" | cut -d@ -f2)
 echo "Image pushed with digest: $pushed_digest"
