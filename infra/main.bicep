@@ -520,7 +520,7 @@ resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-0
     principalId: workloadIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
       'Microsoft.Authorization/roleDefinitions',
-      '4633458b-17de-408a-b874-0445c86b1f21'
+      '4633458b-17de-408a-b874-0445c86b69e6'
     )
     principalType: 'ServicePrincipal'
   }

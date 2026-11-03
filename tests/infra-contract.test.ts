@@ -42,7 +42,7 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("name: 'auth-azure-client-secret'");
     expect(bicep).toContain("name: 'AUTH_DEV'\n              value: 'false'");
     expect(bicep).toContain("roleDefinitionId");
-    expect(bicep).toContain("4633458b-17de-408a-b874-0445c86b1f21");
+    expect(bicep).toContain("4633458b-17de-408a-b874-0445c86b69e6");
     expect(bicep).toContain("secretRef: 'database-url'");
     expect(bicep).toContain("secretRef: 'nextauth-secret'");
     expect(bicep).toContain("secretRef: 'auth-azure-client-secret'");
