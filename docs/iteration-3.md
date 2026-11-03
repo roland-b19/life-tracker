@@ -65,8 +65,8 @@ Work top to bottom. Commit frequently on branch `feat/iteration-3-gym` with Conv
 - [x] 1.3 Apply migrations to local PostgreSQL test and dev databases and verify table constraints and foreign keys.
 
 ### 2. Seed Data
-- [ ] 2.1 Create seed helper for default exercises (covering chest, back, legs, shoulders, arms, abs, calves).
-- [ ] 2.2 Seed the user's default 5-day Upper/Lower split with target rep ranges and sets.
+- [x] 2.1 Create seed helper for default exercises (covering chest, back, legs, shoulders, arms, abs, calves).
+- [x] 2.2 Seed the user's default 5-day Upper/Lower split with target rep ranges and sets.
 
 ### 3. Data Access Layer & Business Logic
 - [ ] 3.1 Implement owner-scoped DAL functions in `src/lib/gym.ts`:
