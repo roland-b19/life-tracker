@@ -103,6 +103,8 @@ identity and never accepts a `user_id` from the request.
   tokens, subscription IDs or tenant secrets.
 - [x] Add offline `scripts/azure-preflight.sh` and guarded
   `scripts/azure-teardown.sh`; neither creates resources during validation.
+- [x] Add a phase-2A deploy-script guard that validates inputs and Bicep but
+  refuses deployment; the actual deployment command remains phase 2B.
 - [ ] Confirm the target region and pricing estimate with the user.
 
 **Check:** all tools work, no credentials are copied to files, and no Azure
@@ -110,7 +112,7 @@ resource exists yet.
 
 ### 1. Production configuration and container
 
-- [ ] Replace the development-only credentials provider with an OIDC provider
+- [x] Replace the development-only credentials provider with an OIDC provider
   selected by environment configuration; keep local development behind
   `AUTH_DEV=true` and the existing production guard.
 - [x] Add a `Dockerfile` using a pinned Node 24 LTS base, multi-stage build,
@@ -119,15 +121,17 @@ resource exists yet.
   secrets are absent from the image.
 - [x] Add a container health endpoint that does not reveal configuration or
   database contents.
-- [ ] Keep migrations as an explicit owner-only release step, never at every
+- [x] Keep migrations as an explicit owner-only release step, never at every
   request or every app startup.
 
 **Check:** local production image starts with `AUTH_DEV=false`, passes the
 existing tests, and an image inspection finds no secrets and no root process.
+The production provider is configured by environment variables; phase 2A does
+not contact Entra.
 
 ### 2. Bicep foundation
 
-- [ ] Add `infra/main.bicep` and small modules for network, database,
+- [x] Add `infra/main.bicep` and small modules for network, database,
   registry, Container Apps, Key Vault, monitoring and role assignments.
 - [ ] Require parameters for `location`, `environment`, `project`,
   `dbAdminPassword` only through a secure deployment mechanism, and image tag.
@@ -136,10 +140,12 @@ existing tests, and an image inspection finds no secrets and no root process.
 - [ ] Tag every resource with `project=life-tracker`, `env=<name>` and
   `owner=<owner>`.
 - [ ] Pin image/base versions and use least-cost SKUs after the cost gate.
-- [ ] Run `az bicep build`, linter and an IaC scanner before deployment.
+- [x] Run `az bicep build` locally; run the linter and IaC scanner before
+  phase 2B deployment.
 
-**Check:** a what-if deployment shows only the intended resources and no
-public database endpoint.
+**Check for phase 2A:** the template compiles offline and the deploy script
+refuses to continue without both approval gates. In phase 2B, a what-if
+deployment must show only intended resources and no public database endpoint.
 
 ### 3. Network and database
 
@@ -172,10 +178,13 @@ runtime identity cannot create tables.
 - [ ] Keep session cookies `HttpOnly`, `Secure`, `SameSite=Lax` or stricter,
   `__Host-` scoped, with documented idle and absolute lifetimes.
 - [ ] Remove the dev provider from the production build/configuration.
-- [ ] Add tests for anonymous denial, owner access, another account denial,
+- [x] Add production configuration guard tests; add tests for anonymous denial,
+  owner access and another account denial,
   invalid issuer/audience/expiry and callback failure.
 
-**Check:** real sign-in reaches the deployed app, logout clears the session,
+**Phase 2A check:** real sign-in is configured by environment and missing
+production OIDC settings fail closed. Phase 2B must prove that real sign-in
+reaches the deployed app, logout clears the session,
 and a second test identity cannot see or delete the first identity's weight.
 
 ### 5. Container Apps, secrets and monitoring
@@ -218,7 +227,8 @@ running course resources.
 - [ ] Update `docs/threat-model.md` for Azure trust boundaries and T3/T5/T7.
 - [ ] Update `docs/security/data-inventory.md` for Entra identity, Azure
   database, Key Vault, logs and backups.
-- [ ] Add `docs/security/azure-hardening.md` mapped to the cloud checklist.
+- [x] Add `docs/security/azure-hardening.md` mapped to the cloud checklist;
+  leave deployment evidence for phase 2B.
 - [ ] Update `docs/security/asvs-matrix.md` with evidence for authentication,
   transport, secrets, database isolation and deployment.
 - [ ] Update README deploy/teardown instructions without credentials.

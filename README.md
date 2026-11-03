@@ -47,6 +47,9 @@ docker build --tag life-tracker:local .
 ```
 
 Azure iteration scripts are under [`scripts/`](scripts/). Run
-`scripts/azure-preflight.sh westeurope` after `az login`. Teardown requires the
-literal confirmation argument, for example
-`scripts/azure-teardown.sh dev DELETE`; it deletes the matching resource group.
+`scripts/azure-preflight.sh westeurope` after `az login`. The Bicep template is
+compiled locally by CI and with `az bicep build`; it is not deployed in phase
+2A. The deploy script refuses to continue until both explicit cost and deploy
+gates are set. Teardown requires the literal confirmation argument, for
+example `scripts/azure-teardown.sh dev DELETE`; it deletes the matching
+resource group.

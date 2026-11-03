@@ -15,4 +15,13 @@ describe("development authentication guard", () => {
     env.DATABASE_URL = "postgresql://unused";
     await expect(import("@/auth")).rejects.toThrow("AUTH_DEV must not be enabled in production.");
   });
+
+  it("refuses production authentication without OIDC configuration", async () => {
+    env.AUTH_DEV = "false";
+    env.NODE_ENV = "production";
+    env.DATABASE_URL = "postgresql://unused";
+    await expect(import("@/auth")).rejects.toThrow(
+      "Production authentication requires AUTH_AZURE_TENANT_ID",
+    );
+  });
 });

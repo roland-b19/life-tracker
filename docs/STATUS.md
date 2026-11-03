@@ -4,9 +4,12 @@ _Last updated: 2026-11-03 by Copilot_
 
 ## Phase
 
-Iteration 1 implementation complete locally and merged in `main`. Iteration 2
-is in progress: the standalone non-root production container and liveness
-endpoint are implemented and tested. No Azure resources are deployed.
+Iteration 1 implementation complete locally and merged in `main`. Iteration 2A
+(local implementation) is complete on the feature branch: production
+container, liveness endpoint, OIDC configuration, guarded Azure scripts and
+offline-compiled private-network Bicep are implemented and tested. Phase 2B
+(Azure validation) is paused until the user explicitly starts it. No Azure
+resources are deployed.
 
 ## Done
 
@@ -24,15 +27,17 @@ endpoint are implemented and tested. No Azure resources are deployed.
 - Generic `project-setup` skill outside this repo, in `~/Documents/projects/project-setup/` (script + template + the 5 skills), for starting any new project with the same structure.
 - Cleanup: `.pre-commit-config.yaml` (secret scan) added; `docs/security-plan.md` marked validated. The setup is ready for implementation once the plan is approved.
 - Iteration 1: Next.js 16 TypeScript app, Drizzle schema/migrations, restricted PostgreSQL roles, Auth.js local-only sign-in, weight API/UI, security headers, tests, CI and Dependabot.
+- Iteration 2A: pinned non-root production container, `/health`, environment-driven
+  OIDC provider, guarded Azure scripts, private-network Bicep and offline Azure
+  hardening checklist.
 
 - Planning Q&A done for Gym, Food + weight, Money, To-do, Wishlist, Family business; Wedding, Chess, Health, Work opportunities and Projects dropped. Draft in `docs/spec.md` (+ seed data `docs/spec/gym-sample.md`), tiers and stack direction in `docs/decisions.md`.
 
 ## Next
 
-1. Azure CLI and Bicep are installed; run `az login` locally, then resolve the
-   cost estimate, subscription and Entra External ID tenant/scriptability gates.
-2. Implement Bicep and deploy/teardown scripts only after those gates pass and
-   the user explicitly approves deployment.
+1. Phase 2B is paused. Wait for the user to explicitly start Azure validation.
+2. Then resolve the cost estimate, subscription and Entra External ID
+   tenant/scriptability gates before any deployment.
 3. After iteration 2, stop again. Later iterations need their own plans.
 4. `docs/roadmap.md` remains an estimate only and is not a work order.
 
@@ -49,7 +54,7 @@ None. Local PostgreSQL was used for validation and can be stopped with `docker c
 - 2026-11-03 — PR #1 CI secret scan fixed with the GitHub token, pull-request read permission and full history required for pull-request scans; local lint, typecheck, migration and authorization tests passed.
 - 2026-11-03 — Iteration 1 implemented locally: security spine, weigh-in slice, PostgreSQL, tests and CI. Validation passed; no Azure resources created.
 - 2026-11-03 — Detailed plan for proposed iteration 2 added in `docs/iteration-2.md`; awaiting user approval. No Azure resources created.
-- 2026-11-03 — User started iteration 2. Added standalone non-root production container, `/health` liveness endpoint and container smoke test; lint, typecheck, build and 7 tests pass. Azure CLI is not installed; no Azure resources created.
+- 2026-11-03 — Iteration 2A completed locally: OIDC production configuration, private-network Bicep template, guarded Azure scripts and CI validation added. Lint, typecheck, production build, Bicep compile and 8 tests pass. Phase 2B paused; no Azure resources created.
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.

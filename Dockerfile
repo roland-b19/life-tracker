@@ -11,6 +11,10 @@ COPY . .
 RUN AUTH_DEV=false \
   NEXTAUTH_SECRET=build-only-placeholder \
   NEXTAUTH_URL=http://localhost:3000 \
+  AUTH_AZURE_TENANT_ID=build-tenant \
+  AUTH_AZURE_CLIENT_ID=build-client \
+  AUTH_AZURE_CLIENT_SECRET=build-client-secret \
+  AUTH_ISSUER=https://build.example.com/v2.0 \
   DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
   npm run build
 
