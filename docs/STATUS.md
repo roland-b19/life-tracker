@@ -8,6 +8,8 @@ Iteration 1 is complete and merged in `main`. Iteration 2 (Azure foundation, har
 infrastructure contracts, and live Microsoft Entra ID authentication) is complete
 and fully verified live on Azure (`italynorth`). All infrastructure resources were
 subsequently torn down synchronously; 0 active project resources remain in the subscription.
+Iteration 3 (Gym module) is planned and approved (`docs/iteration-3.md`), executing
+local-first on branch `feat/iteration-3-gym`.
 
 ## Verification status breakdown
 
@@ -72,8 +74,8 @@ subsequently torn down synchronously; 0 active project resources remain in the s
 
 ## Next
 
-1. Merge PR #12 (`feat/iteration-2-azure-prep`) into `main`.
-2. Plan Iteration 3 according to project roadmap and course requirements.
+1. Implement Iteration 3 (Gym module) locally per `docs/iteration-3.md`: schema, seed, DAL, server actions, tests, and Apple HIG UI.
+2. Maintain local-only verification (no Azure deployments).
 
 ## Open questions
 
@@ -86,6 +88,8 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-03 — Iteration 3 planning and approval: Created `docs/iteration-3.md` defining the complete Gym module scope (5-day Upper/Lower split, set logging with `reps x load`, automatic and manual `!!` anomaly markers, in-workout performance context, 5-week deload tracker, Apple HIG interface). Confirmed local-first execution on branch `feat/iteration-3-gym` without intermediate Azure deployments.
 
 - 2026-11-03 — Iteration 2 live deployment, verification, and teardown:
   Deployed stage environment in approved region `italynorth`.
