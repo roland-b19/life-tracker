@@ -54,6 +54,26 @@ jobs:
         run: npm test
       - name: Build production container
         run: docker build --tag life-tracker:ci .
+      - name: Generate production image SBOM
+        uses: anchore/sbom-action@9246b90769f852b3a8921f330c59e0b3f439d6e9
+        with:
+          image: life-tracker:ci
+          format: spdx-json
+          output-file: sbom.spdx.json
+      - name: Upload production image SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: life-tracker-sbom
+          path: sbom.spdx.json
+          if-no-files-found: error
+      - name: Scan production container
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: life-tracker:ci
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: "1"
       - name: Validate Bicep
         run: |
           az bicep install

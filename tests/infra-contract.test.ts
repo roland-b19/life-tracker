@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const bicep = readFileSync("infra/main.bicep", "utf8");
+const deployScript = readFileSync("scripts/azure-deploy.sh", "utf8");
 
 describe("Azure infrastructure contract", () => {
   it("uses a private-access ACR SKU and disables admin access", () => {
@@ -9,6 +10,18 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("publicNetworkAccess: 'Disabled'");
     expect(bicep).toContain("adminUserEnabled: false");
     expect(bicep).toContain("groupIds: [\n            'registry'");
+  });
+
+  it("requires an immutable image digest and never constructs a tag reference", () => {
+    expect(bicep).toContain("param imageDigest string");
+    expect(bicep).toContain("@minLength(71)");
+    expect(bicep).toContain("@maxLength(71)");
+    expect(bicep).toContain("@${imageDigest}");
+    expect(bicep).not.toContain(":${imageTag}");
+    expect(deployScript).toContain(
+      'image_digest" =~ ^sha256:[0-9a-f]{64}$',
+    );
+    expect(deployScript).not.toContain("image_tag");
   });
 
   it("requires and injects production runtime configuration from Key Vault", () => {

@@ -104,7 +104,8 @@ Work top to bottom. One commit per sub-step or small group of them (Conventional
 
 ### 11. Docs, review, handoff
 - [x] 11.1 Threat model and data inventory updated for local users, sessions and weight entries.
-- [x] 11.2 ASVS matrix created with iteration evidence and deferred SBOM item.
+- [x] 11.2 ASVS matrix created with iteration evidence; CI archives the
+  production-image SBOM and runs a container vulnerability scan.
 - [x] 11.3 Status, decisions and graph updated.
 - [ ] 11.4 Review and PR remain the handoff step after this implementation commit.
 

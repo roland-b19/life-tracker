@@ -139,8 +139,9 @@ not contact Entra.
 
 - [x] Add `infra/main.bicep` and small modules for network, database,
   registry, Container Apps, Key Vault, monitoring and role assignments.
-- [ ] Require parameters for `location`, `environment`, `project`,
-  `dbAdminPassword` only through a secure deployment mechanism, and image tag.
+- [x] Require parameters for `location`, `environment`, `project`,
+  `dbAdminPassword` only through a secure deployment mechanism, and an
+  immutable `sha256:<64 lowercase hex characters>` image digest.
 - [ ] Reject unsafe values: production cannot enable public database access,
   ACR admin credentials or development authentication.
 - [ ] Tag every resource with `project=life-tracker`, `env=<name>` and
@@ -195,7 +196,8 @@ and a second test identity cannot see or delete the first identity's weight.
 
 ### 5. Container Apps, secrets and monitoring
 
-- [ ] Push the image to ACR using a versioned immutable tag.
+- [x] Production image references use an immutable digest. The image push and
+  digest acquisition remain an explicit, gated release step.
 - [ ] Disable ACR admin user; grant only the Container Apps managed identity
   pull permission.
 - [ ] Configure HTTPS ingress, minimum TLS supported by the service, health
