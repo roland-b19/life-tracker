@@ -90,19 +90,19 @@ Work top to bottom. Commit frequently on branch `feat/iteration-3-gym` with Conv
   - Anomaly validation checks and deload calculations verified.
 
 ### 6. User Interface — Apple HIG (`/gym`)
-- [ ] 6.1 Add global top navigation header connecting Weigh-ins (`/`) and Gym (`/gym`).
-- [ ] 6.2 Implement `/gym` overview page:
+- [x] 6.1 Add global top navigation header connecting Weigh-ins (`/`) and Gym (`/gym`).
+- [x] 6.2 Implement `/gym` overview page:
   - Deload status card (e.g. *"Week 3 of 5 until deload"*).
   - 5-day Split view (Sun Upper, Mon Legs, Wed Upper, Thu Legs, Fri Arms).
   - Start Workout button for today's routine (or select any day).
-- [ ] 6.3 Implement In-Workout Session Logger:
+- [x] 6.3 Implement In-Workout Session Logger:
   - Exercise cards showing target sets x reps.
   - Contextual previous session hint ("Last time: 10 x 40 kg").
   - Fast set logger: input reps, load (`kg`, `plates`, `bodyweight`), failure toggle, partial reps toggle.
   - Visual `!!` anomaly badge and reason selector.
-- [ ] 6.4 Apply Apple HIG styling: system font typography, generous touch targets ($\ge 44 \times 44\text{ pt}$), accessible contrast, keyboard-friendly navigation.
+- [x] 6.4 Apply Apple HIG styling: system font typography, generous touch targets ($\ge 44 \times 44\text{ pt}$), accessible contrast, keyboard-friendly navigation.
 
 ### 7. Verification & Handoff
-- [ ] 7.1 Verify linting (`npm run lint`), type checking (`npm run typecheck`), and tests (`npm test`).
-- [ ] 7.2 Verify local browser functionality end-to-end.
-- [ ] 7.3 Update `docs/STATUS.md` and `docs/decisions.md`.
+- [x] 7.1 Verify linting (`npm run lint`), type checking (`npm run typecheck`), and tests (`npm test`).
+- [x] 7.2 Verify local browser functionality end-to-end.
+- [x] 7.3 Update `docs/STATUS.md` and `docs/decisions.md`.

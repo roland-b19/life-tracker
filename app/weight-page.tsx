@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { Navigation } from "./components/navigation";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -87,16 +87,7 @@ export function WeightPage({ userName }: { userName: string }) {
 
   return (
     <main>
-      <header className="topbar">
-        <div>
-          <p className="muted">Life Tracker</p>
-          <h1>Weigh-ins</h1>
-        </div>
-        <button className="secondary" type="button" onClick={() => signOut({ callbackUrl: "/signin" })}>
-          Sign out
-        </button>
-      </header>
-      <p className="muted">Signed in as {userName}</p>
+      <Navigation userName={userName} />
       <section className="surface" aria-labelledby="add-title">
         <h2 id="add-title">Add today&apos;s weight</h2>
         <form onSubmit={addEntry} className="form-row">

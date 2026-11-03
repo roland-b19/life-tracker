@@ -34,7 +34,6 @@ import {
   logWorkoutSet,
 } from "@/lib/gym";
 import {
-  createCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   getExerciseContextAction,
@@ -95,6 +94,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       muscleGroup: "legs",
       equipmentType: "barbell",
     });
+    expect(custom.id).toBeDefined();
 
     const userAExercises = await getExercises(userA);
     expect(userAExercises.some((e) => e.name === "B-Stance Hip Thrust")).toBe(true);
