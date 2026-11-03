@@ -41,7 +41,6 @@ None. (Azure CLI is not installed on the user's machine yet.)
 ## Session log (newest first)
 
 - 2026-11-03 — Iteration 1 split into small checkable sub-steps; `docs/roadmap.md` written as an estimate only; scope guard added to `AGENTS.md` (only the current iteration is implemented). No application code yet.
-
 - 2026-11-02 — Iteration 1 plan written and approved (`docs/iteration-1.md`); the user deferred implementation. No application code yet.
 - 2026-11-02 — Spec approved; threat model v1, data inventory and risk register written (`docs/threat-model.md`, `docs/security/`). No application code yet.
 - 2026-11-02 — Planning Q&A for all modules, tiers, stack direction (TypeScript, Entra External ID, queue for push). Spec drafted. No application code yet.
