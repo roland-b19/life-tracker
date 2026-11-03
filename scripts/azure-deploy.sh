@@ -39,7 +39,8 @@ resource_group="life-tracker-$environment"
 
 loc_suffix=$(echo "$location" | cut -c1-2)
 acr_name="lifetracker${environment}${loc_suffix}acr"
-kv_name="lifetracker${environment}${loc_suffix}kv"
+run_suffix=$(date +%s | tail -c 5)
+kv_name="lt${environment}${loc_suffix}kv${run_suffix}"
 acr_login_server="${acr_name}.azurecr.io"
 acr_image="$acr_login_server/life-tracker"
 
