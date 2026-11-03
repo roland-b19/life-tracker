@@ -113,7 +113,7 @@ echo "Tagging and pushing image $acr_image@$image_digest"
 if docker image inspect "$image_digest" >/dev/null 2>&1; then
   docker tag "$image_digest" "$acr_image:deploy"
 else
-  docker build -t "$acr_image:deploy" .
+  docker build --platform linux/amd64 -t "$acr_image:deploy" .
 fi
 docker push "$acr_image:deploy"
 pushed_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_image:deploy" | cut -d@ -f2)
