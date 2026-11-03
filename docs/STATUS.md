@@ -8,6 +8,8 @@ Iteration 1 is complete and merged in `main`. Iteration 2 (Azure foundation, har
 infrastructure contracts, and live Microsoft Entra ID authentication) is complete
 and fully verified live on Azure (`italynorth`). All infrastructure resources were
 subsequently torn down synchronously; 0 active project resources remain in the subscription.
+Iteration 3 (Gym module) is fully implemented and verified locally on branch `feat/iteration-3-gym`.
+All 23 Vitest tests pass, typecheck and linting pass with 0 warnings, production build succeeds.
 
 ## Verification status breakdown
 
@@ -16,6 +18,14 @@ subsequently torn down synchronously; 0 active project resources remain in the s
   - Health endpoint (`/health`) and security headers.
   - OIDC authentication with production guard (`AUTH_DEV=false`).
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
+  - Gym module:
+    - PostgreSQL schema (`exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, `workout_sets`).
+    - Seed data with default 5-day Upper/Lower split and preloaded exercises matching `gym-sample.md`.
+    - Owner-scoped DAL and Server Actions (`logSetAction`, `startSessionAction`, `finishSessionAction`, `deleteSetAction`, `createCustomExerciseAction`, `getExerciseContextAction`).
+    - Automatic `!!` anomaly detection when reps < target min reps, manual anomaly reason flagging.
+    - In-workout context: previous session performance, PR tracking (excluding deload sessions), and progressive overload suggestion.
+    - 5-week deload tracker cycle with reminder indicator.
+    - Apple HIG user interface at `/gym` and segmented navigation between `/` (Weigh-ins) and `/gym`.
   - Private-network Bicep template (`infra/main.bicep`) featuring:
     - PostgreSQL Flexible Server with public network access disabled and private DNS.
     - Configurable `postgresSku` parameter (default `Standard_B1ms`).
@@ -72,8 +82,8 @@ subsequently torn down synchronously; 0 active project resources remain in the s
 
 ## Next
 
-1. Merge PR #12 (`feat/iteration-2-azure-prep`) into `main`.
-2. Plan Iteration 3 according to project roadmap and course requirements.
+1. Open PR for `feat/iteration-3-gym` into `main` and review with the user.
+2. Plan Iteration 4 (Food & Nutrition + complete Body Weight module).
 
 ## Open questions
 
@@ -86,6 +96,8 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-03 — Iteration 3 implementation: Fully implemented the Gym module locally on `feat/iteration-3-gym`. Defined Drizzle schema for `exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, and `workout_sets` with migration `0003_curved_lady_bullseye.sql`. Implemented seed data for the 5-day Upper/Lower split, owner-scoped DAL and Server Actions, automatic `!!` anomaly marker detection, in-workout performance context, PR calculation (excluding deload sessions), 5-week deload cycle tracker, and Apple HIG interface at `/gym`. 23 Vitest tests pass (including multi-user isolation and authorization), 0 lint/typecheck errors, production build verified. No Azure resources created.
 
 - 2026-11-03 — Iteration 2 live deployment, verification, and teardown:
   Deployed stage environment in approved region `italynorth`.

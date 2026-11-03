@@ -74,6 +74,75 @@ async function main() {
   console.log("Verified table: weight_entries");
 
   await appDbClient.query(`
+    CREATE TABLE IF NOT EXISTS "exercises" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid,
+      "name" varchar(120) NOT NULL,
+      "muscle_group" varchar(50) NOT NULL,
+      "equipment_type" varchar(30) NOT NULL,
+      "is_custom" boolean DEFAULT false NOT NULL,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "workout_splits" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL,
+      "name" varchar(100) NOT NULL,
+      "is_active" boolean DEFAULT true NOT NULL,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "workout_split_days" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "split_id" uuid NOT NULL,
+      "user_id" uuid NOT NULL,
+      "day_of_week" integer NOT NULL,
+      "name" varchar(100) NOT NULL,
+      "is_rest" boolean DEFAULT false NOT NULL,
+      "order_index" integer DEFAULT 0 NOT NULL,
+      CONSTRAINT "workout_split_days_split_day_unique" UNIQUE("split_id","day_of_week")
+    );
+    CREATE TABLE IF NOT EXISTS "workout_split_day_exercises" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "split_day_id" uuid NOT NULL,
+      "exercise_id" uuid NOT NULL,
+      "order_index" integer NOT NULL,
+      "target_sets" integer DEFAULT 2 NOT NULL,
+      "min_reps" integer DEFAULT 5 NOT NULL,
+      "max_reps" integer DEFAULT 8 NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "workout_sessions" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL,
+      "split_day_id" uuid,
+      "date" date NOT NULL,
+      "duration_minutes" integer,
+      "is_deload" boolean DEFAULT false NOT NULL,
+      "notes" varchar(500),
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "workout_sets" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "session_id" uuid NOT NULL,
+      "user_id" uuid NOT NULL,
+      "exercise_id" uuid NOT NULL,
+      "set_order" integer NOT NULL,
+      "reps" integer NOT NULL,
+      "load_type" varchar(20) NOT NULL,
+      "load_value" numeric(6, 2) NOT NULL,
+      "extra_kg" numeric(5, 2) DEFAULT '0' NOT NULL,
+      "is_failure" boolean DEFAULT true NOT NULL,
+      "is_partial" boolean DEFAULT false NOT NULL,
+      "flag_anomaly" boolean DEFAULT false NOT NULL,
+      "anomaly_reason" varchar(50),
+      "notes" varchar(255),
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      CONSTRAINT "workout_sets_reps_positive" CHECK ("reps" > 0),
+      CONSTRAINT "workout_sets_load_non_negative" CHECK ("load_value" >= 0),
+      CONSTRAINT "workout_sets_extra_kg_non_negative" CHECK ("extra_kg" >= 0)
+    );
+  `);
+  console.log("Verified Gym tables.");
+
+  await appDbClient.query(`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -97,6 +166,12 @@ async function main() {
     GRANT SELECT, INSERT ON TABLE "users" TO life_tracker_app;
     GRANT UPDATE (subject) ON TABLE "users" TO life_tracker_app;
     GRANT SELECT, INSERT, DELETE ON TABLE "weight_entries" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "exercises" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_splits" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_split_days" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_split_day_exercises" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_sessions" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_sets" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();

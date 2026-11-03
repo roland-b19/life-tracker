@@ -22,6 +22,13 @@
       "when": 1793694900000,
       "tag": "0002_allow_auth_subject_upsert",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793742777468,
+      "tag": "0003_curved_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }
