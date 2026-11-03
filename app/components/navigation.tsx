@@ -13,7 +13,11 @@ export function Navigation({ userName }: { userName: string }) {
         <div>
           <span className="app-subtitle">Life Tracker</span>
           <h1 className="app-title">
-            {pathname.startsWith("/gym") ? "Gym & Training" : "Weigh-ins"}
+            {pathname.startsWith("/gym")
+              ? "Gym & Training"
+              : pathname.startsWith("/food")
+              ? "Food & Nutrition"
+              : "Weigh-ins"}
           </h1>
         </div>
         <div className="nav-user-actions">
@@ -32,16 +36,22 @@ export function Navigation({ userName }: { userName: string }) {
 
       <nav className="segmented-control" aria-label="Main Navigation">
         <NextLink
-          href="/"
-          className={`segment-tab ${pathname === "/" ? "active" : ""}`}
-        >
-          Weigh-ins
-        </NextLink>
-        <NextLink
           href="/gym"
           className={`segment-tab ${pathname.startsWith("/gym") ? "active" : ""}`}
         >
           Gym Split
+        </NextLink>
+        <NextLink
+          href="/food"
+          className={`segment-tab ${pathname.startsWith("/food") ? "active" : ""}`}
+        >
+          Food & Macros
+        </NextLink>
+        <NextLink
+          href="/"
+          className={`segment-tab ${pathname === "/" ? "active" : ""}`}
+        >
+          Weigh-ins
         </NextLink>
       </nav>
     </header>

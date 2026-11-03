@@ -4,12 +4,27 @@ _Last updated: 2026-11-03 by Antigravity_
 
 ## Phase
 
-Iteration 1 is complete and merged in `main`. Iteration 2 (Azure foundation, hardened
-infrastructure contracts, and live Microsoft Entra ID authentication) is complete
-and fully verified live on Azure (`italynorth`). All infrastructure resources were
-subsequently torn down synchronously; 0 active project resources remain in the subscription.
-Iteration 3 (Gym module) is fully implemented and verified locally on branch `feat/iteration-3-gym`.
-All 23 Vitest tests pass, typecheck and linting pass with 0 warnings, production build succeeds.
+Iterations 1, 2, and 3 are complete and merged in `main`. Iteration 4 (Food & Nutrition + Body Weight Complete)
+is fully implemented and verified locally on branch `feat/iteration-4-food`.
+All 31 Vitest tests pass, typecheck and linting pass with 0 warnings, and production build succeeds.
+
+## Verification status breakdown
+
+- **Implemented locally:**
+  - Pinned non-root container (`Dockerfile` with Node 24 LTS, `nextjs` user 1001).
+  - Health endpoint (`/health`) and security headers.
+  - OIDC authentication with production guard (`AUTH_DEV=false`).
+  - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
+  - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
+  - Food & Nutrition module:
+    - PostgreSQL schema (`nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, `shopping_items`).
+    - Migration `0004_left_chimera.sql` with least-privilege role permissions.
+    - Owner-scoped DAL and Server Actions (`logMealAction`, `deleteMealAction`, `addWaterAction`, `updateStepsAction`, `updateTargetsAction`, `addShoppingItemAction`, `toggleShoppingItemAction`, `deleteShoppingItemAction`, `clearBoughtItemsAction`, `generateShoppingListAction`).
+    - Enhanced body weight analytics (7-day rolling average and weekly rate of change).
+    - Water tracker with quick tap counter (+250 ml, +500 ml) and daily steps logger.
+    - Categorized shopping list with automatic aggregation from user recipes.
+    - Apple HIG user interface at `/food` with progress cards for calories, protein, carbs, fat, water, and steps.
+    - Segmented top navigation supporting **Gym Split**, **Food & Macros**, and **Weigh-ins**.
 
 ## Verification status breakdown
 
@@ -82,8 +97,8 @@ All 23 Vitest tests pass, typecheck and linting pass with 0 warnings, production
 
 ## Next
 
-1. Open PR for `feat/iteration-3-gym` into `main` and review with the user.
-2. Plan Iteration 4 (Food & Nutrition + complete Body Weight module).
+1. Open PR for `feat/iteration-4-food` into `main` and review with the user.
+2. Plan Iteration 5 (Money module — personal and business expense tracking).
 
 ## Open questions
 
@@ -96,6 +111,10 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-04 — Iteration 4 implementation: Fully implemented Food & Nutrition and Body Weight Complete module on `feat/iteration-4-food`. Defined Drizzle schema for `nutrition_targets`, `daily_metrics`, `meals`, `recipes`, `recipe_ingredients`, `meal_plans`, `meal_plan_days`, and `shopping_items` with migration `0004_left_chimera.sql`. Implemented owner-scoped DAL and Server Actions, daily metrics (water tap counter and steps), 7-day weight rolling average and weekly rate of change, smart categorized shopping list populated from recipes, and Apple HIG interface at `/food`. 31 Vitest tests pass (including authorization, math calculations, multi-user isolation), 0 lint/typecheck errors, production build verified. No Azure resources created.
+
+- 2026-11-04 — Iteration 3 merged and Iteration 4 planned: PR #13 squashed and merged into `main` with all CI checks passing; 0 open PRs. Created `docs/iteration-4.md` defining the complete Food & Nutrition module scope (daily macros with 3350 kcal / 170g protein / 300g carbs defaults, water tap counter 3L, steps 10k, 7-day weight moving average and rate of change, weekly meal plan, and auto-generated categorized shopping list). Local-first execution on branch `feat/iteration-4-food`.
 
 - 2026-11-03 — Iteration 3 implementation: Fully implemented the Gym module locally on `feat/iteration-3-gym`. Defined Drizzle schema for `exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, and `workout_sets` with migration `0003_curved_lady_bullseye.sql`. Implemented seed data for the 5-day Upper/Lower split, owner-scoped DAL and Server Actions, automatic `!!` anomaly marker detection, in-workout performance context, PR calculation (excluding deload sessions), 5-week deload cycle tracker, and Apple HIG interface at `/gym`. 23 Vitest tests pass (including multi-user isolation and authorization), 0 lint/typecheck errors, production build verified. No Azure resources created.
 
