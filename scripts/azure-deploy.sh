@@ -68,6 +68,45 @@ if [[ "${CONFIRM_DEPLOY:-}" != "YES" ]]; then
   exit 0
 fi
 
+# ── Step: Bootstrap ACR and push container image ─────────────────────────────
+# shortcut: ACR is bootstrapped and public access used briefly for image push;
+# Bicep will lock it down with private endpoint and publicNetworkAccess=Disabled.
+suffix="life-tracker-$environment"
+acr_name=$(echo "${suffix}acr" | tr -d '-')
+acr_login_server="${acr_name}.azurecr.io"
+acr_image="$acr_login_server/life-tracker"
+
+echo "Ensuring ACR exists for container image push: $acr_name"
+if ! az acr show --name "$acr_name" --resource-group "$resource_group" --output none 2>/dev/null; then
+  az acr create \
+    --name "$acr_name" \
+    --resource-group "$resource_group" \
+    --location "$location" \
+    --sku Premium \
+    --tags project=life-tracker env="$environment" owner="$owner_email" \
+    --output none
+fi
+
+echo "Logging in to ACR: $acr_login_server"
+az acr login --name "$acr_name" --output none
+
+echo "Tagging and pushing image $acr_image@$image_digest"
+if docker image inspect "$image_digest" >/dev/null 2>&1; then
+  docker tag "$image_digest" "$acr_image:deploy"
+else
+  docker build -t "$acr_image:deploy" .
+fi
+docker push "$acr_image:deploy"
+pushed_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_image:deploy" | cut -d@ -f2)
+echo "Image pushed with digest: $pushed_digest"
+
+# Verify digest matches the one passed to Bicep (immutable guarantee)
+if [[ "$pushed_digest" != "$image_digest" ]]; then
+  echo "FATAL: pushed digest ($pushed_digest) does not match expected ($image_digest)" >&2
+  echo "Run: ./scripts/azure-teardown.sh $environment DELETE" >&2
+  exit 1
+fi
+
 echo "Deploying infrastructure to $resource_group..."
 if ! az deployment group create \
   --name main \
@@ -101,39 +140,7 @@ deployment_outputs=$(az deployment group show \
   -o json)
 echo "$deployment_outputs"
 
-acr_login_server=$(echo "$deployment_outputs" | grep -o '"acrLoginServer": *"[^"]*"' | cut -d'"' -f4)
-acr_name="${acr_login_server%%.*}"
 app_url=$(echo "$deployment_outputs" | grep -o '"appUrl": *"[^"]*"' | cut -d'"' -f4)
-
-# ── Step: Push image to ACR ────────────────────────────────────────────────
-# shortcut: ACR public access is enabled briefly for the bootstrap push then
-# disabled immediately; a dedicated self-hosted runner inside the VNet would
-# eliminate this window. Acceptable for a course ephemeral deployment.
-echo "Temporarily enabling ACR public access for image push..."
-az acr update --name "$acr_name" --public-network-enabled true --output none
-
-echo "Logging in to ACR: $acr_login_server"
-az acr login --name "$acr_name" --output none
-acr_image="$acr_login_server/life-tracker"
-echo "Tagging and pushing image $acr_image@$image_digest"
-if docker image inspect "$image_digest" >/dev/null 2>&1; then
-  docker tag "$image_digest" "$acr_image:deploy"
-else
-  docker build -t "$acr_image:deploy" .
-fi
-docker push "$acr_image:deploy"
-pushed_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_image:deploy" | cut -d@ -f2)
-echo "Image pushed with digest: $pushed_digest"
-
-echo "Re-disabling ACR public access..."
-az acr update --name "$acr_name" --public-network-enabled false --output none
-
-# Verify digest matches the one passed to Bicep (immutable guarantee)
-if [[ "$pushed_digest" != "$image_digest" ]]; then
-  echo "FATAL: pushed digest ($pushed_digest) does not match expected ($image_digest)" >&2
-  echo "Run: ./scripts/azure-teardown.sh $environment DELETE" >&2
-  exit 1
-fi
 
 # ── Step: Update Entra redirect URIs ────────────────────────────────────────
 echo "Updating Entra app redirect URIs for: $app_url"
