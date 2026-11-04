@@ -25,13 +25,35 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="signin">
-      <section className="surface" aria-labelledby="signin-title">
-        <h1 id="signin-title">Sign in</h1>
-        <p className="muted">Development sign-in is enabled for local work only.</p>
-        <form onSubmit={submit} className="form-row">
-          <label>
-            User name
+    <main style={{ minHeight: "85vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <section
+        className="surface"
+        style={{
+          width: "100%",
+          maxWidth: "26rem",
+          padding: "2rem",
+          borderRadius: "1.5rem",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+        }}
+        aria-labelledby="signin-title"
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+          <span style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--tint)" }}>
+            Life Tracker
+          </span>
+          <span className="cloud-pulse-dot" />
+        </div>
+
+        <h1 id="signin-title" style={{ fontSize: "1.75rem", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
+          Welcome Back
+        </h1>
+        <p className="muted" style={{ margin: "0.35rem 0 1.5rem", fontSize: "0.875rem", lineHeight: 1.5 }}>
+          Local development session. Enter your username to sign in.
+        </p>
+
+        <form onSubmit={submit} style={{ display: "grid", gap: "1rem" }}>
+          <label style={{ display: "grid", gap: "0.4rem", fontWeight: 600, fontSize: "0.875rem" }}>
+            Username
             <input
               name="name"
               value={name}
@@ -39,15 +61,25 @@ export default function SignInPage() {
               autoComplete="username"
               required
               autoFocus
+              placeholder="e.g. owner"
+              style={{ fontSize: "1.05rem" }}
             />
           </label>
-          <button type="submit" disabled={busy}>
-            {busy ? "Signing in..." : "Sign in"}
+
+          <button
+            type="submit"
+            disabled={busy}
+            style={{ width: "100%", marginTop: "0.25rem", padding: "0.75rem", fontSize: "1rem" }}
+          >
+            {busy ? "Signing in..." : "Continue"}
           </button>
         </form>
-        <p className="error" aria-live="polite">
-          {error}
-        </p>
+
+        {error && (
+          <p className="error" aria-live="polite" style={{ marginTop: "1rem", textAlign: "center" }}>
+            {error}
+          </p>
+        )}
       </section>
     </main>
   );
