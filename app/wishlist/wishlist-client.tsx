@@ -8,7 +8,7 @@ import { WishlistItemData } from "@/lib/wishlist";
 interface WishlistClientProps {
   userName: string;
   initialItems: WishlistItemData[];
-  initialStats: {
+  initialStats?: {
     totalItems: number;
     totalEstimatedCost: number;
   };
@@ -91,218 +91,234 @@ export function WishlistClient({
     <main>
       <Navigation userName={userName} />
 
-      {/* Summary Header Card */}
-      <section className="surface" aria-labelledby="wishlist-summary-title">
-        <div className="section-heading">
-          <div>
-            <span className="badge badge-info">Private Wishlist</span>
-            <h2 id="wishlist-summary-title" style={{ marginTop: "0.25rem" }}>
-              Purchase Desires
-            </h2>
-          </div>
-          <span className="muted">{items.length} items planned</span>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "0.75rem", marginTop: "1rem" }}>
-          <div className="macro-card">
-            <span className="macro-title">Total Estimated Cost</span>
-            <span className="macro-numbers" style={{ fontSize: "1.4rem", color: "var(--tint)" }}>
-              {totalCost.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-              <span className="macro-target">RON</span>
-            </span>
-          </div>
-
-          <div className="macro-card">
-            <span className="macro-title">High Priority</span>
-            <span className="macro-numbers" style={{ fontSize: "1.4rem" }}>
-              {items.filter((i) => i.priority === "high").length}{" "}
-              <span className="macro-target">items</span>
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Add New Wishlist Item Form */}
-      <section className="surface" aria-labelledby="add-wishlist-title" style={{ marginTop: "1.25rem" }}>
-        <h2 id="add-wishlist-title" style={{ fontSize: "1.1rem" }}>
-          + Add Wishlist Item
-        </h2>
-
-        <form onSubmit={handleAddItem} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))", gap: "0.5rem" }}>
-            <label>
-              Item Title
-              <input
-                type="text"
-                placeholder="e.g. Sony WH-1000XM5 Headphones"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={busy}
-                required
-              />
-            </label>
-
-            <label>
-              Estimated Price (RON)
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="0.00"
-                value={estimatedPrice}
-                onChange={(e) => setEstimatedPrice(e.target.value)}
-                disabled={busy}
-                required
-              />
-            </label>
-
-            <label>
-              Priority
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
-                disabled={busy}
-                style={{
-                  minHeight: "2.75rem",
-                  borderRadius: "0.65rem",
-                  border: "1px solid var(--separator)",
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  padding: "0.5rem",
-                }}
-              >
-                <option value="high">🔴 High Priority</option>
-                <option value="medium">🟡 Medium Priority</option>
-                <option value="low">⚪ Low Priority</option>
-              </select>
-            </label>
-
-            <label>
-              Store Link (Optional)
-              <input
-                type="url"
-                placeholder="https://..."
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-          </div>
-
-          {errorMsg && (
-            <p className="error" style={{ color: "var(--tint)", margin: 0, fontSize: "0.85rem" }}>
-              {errorMsg}
-            </p>
-          )}
-
-          <button type="submit" disabled={busy || !name.trim() || !estimatedPrice} style={{ alignSelf: "start" }}>
-            {busy ? "Adding..." : "+ Add to Wishlist"}
-          </button>
-        </form>
-      </section>
-
-      {/* Items Filter & List */}
-      <section className="surface" aria-labelledby="wishlist-items-title" style={{ marginTop: "1.25rem" }}>
-        <div className="section-heading" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-          <h2 id="wishlist-items-title" style={{ fontSize: "1.1rem" }}>
-            Wishlist Items
-          </h2>
-
-          {/* Filter Pills */}
-          <div style={{ display: "flex", gap: "0.35rem" }}>
-            {(["all", "high", "medium", "low"] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={filterPriority === p ? "" : "secondary"}
-                style={{ minHeight: "1.9rem", padding: "0.2rem 0.65rem", fontSize: "0.8rem", textTransform: "capitalize" }}
-                onClick={() => setFilterPriority(p)}
-              >
-                {p === "all" ? `All (${items.length})` : p}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="entries" style={{ marginTop: "1rem" }}>
-          {filteredItems.length === 0 ? (
-            <p className="muted" style={{ padding: "0.5rem 0" }}>
-              {items.length === 0
-                ? "Your wishlist is empty. Add your desired purchases above!"
-                : `No items found with ${filterPriority} priority.`}
-            </p>
-          ) : (
-            filteredItems.map((item) => (
-              <div key={item.id} className="entry-row" style={{ alignItems: "center" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <strong>{item.name}</strong>
-                    <span
-                      className="badge"
-                      style={{
-                        fontSize: "0.75rem",
-                        background:
-                          item.priority === "high"
-                            ? "rgba(255, 59, 48, 0.15)"
-                            : item.priority === "medium"
-                            ? "rgba(255, 149, 0, 0.15)"
-                            : "rgba(142, 142, 147, 0.15)",
-                        color:
-                          item.priority === "high"
-                            ? "#ff3b30"
-                            : item.priority === "medium"
-                            ? "#ff9500"
-                            : "var(--muted)",
-                      }}
-                    >
-                      {item.priority}
-                    </span>
-                  </div>
-
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.9rem", color: "var(--tint)", fontWeight: "600" }}>
-                    {Number(item.estimatedPrice).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RON
-                  </p>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="secondary"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        padding: "0.25rem 0.65rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.8rem",
-                        textDecoration: "none",
-                        color: "var(--text)",
-                        background: "var(--surface)",
-                        border: "1px solid var(--separator)",
-                      }}
-                    >
-                      Store ↗
-                    </a>
-                  )}
-
-                  <button
-                    type="button"
-                    className="danger"
-                    style={{ minHeight: "2rem", padding: "0.25rem 0.65rem", fontSize: "0.8rem" }}
-                    onClick={() => handleDeleteItem(item.id)}
-                    disabled={busy}
-                    title="Mark as bought and remove from list"
-                  >
-                    Bought
-                  </button>
-                </div>
+      <div className="dashboard-grid">
+        {/* Left Column: Filterable Wishlist Items */}
+        <div className="dashboard-main">
+          <section className="surface" aria-labelledby="wishlist-items-title">
+            <div className="section-heading" style={{ flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <h2 id="wishlist-items-title">Purchase Desires</h2>
+                <span className="muted" style={{ fontSize: "0.85rem" }}>
+                  Showing {filteredItems.length} of {items.length} items
+                </span>
               </div>
-            ))
-          )}
+
+              {/* Filter Pills */}
+              <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                {(["all", "high", "medium", "low"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={filterPriority === p ? "" : "secondary"}
+                    style={{ minHeight: "2rem", padding: "0.25rem 0.75rem", fontSize: "0.8rem", textTransform: "capitalize" }}
+                    onClick={() => setFilterPriority(p)}
+                  >
+                    {p === "all" ? `All (${items.length})` : p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+              {filteredItems.length === 0 ? (
+                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                  {items.length === 0
+                    ? "Your wishlist is empty. Add your desired purchases using the panel on the right."
+                    : `No items with ${filterPriority} priority found.`}
+                </p>
+              ) : (
+                filteredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: "1rem 1.15rem",
+                      borderRadius: "0.85rem",
+                      border: "1px solid var(--separator)",
+                      background: "var(--surface-solid)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "1rem",
+                      transition: "transform 0.15s ease",
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 600, fontSize: "1.05rem" }}>{item.name}</span>
+                        <span
+                          className={`badge ${
+                            item.priority === "high"
+                              ? "badge-danger"
+                              : item.priority === "medium"
+                              ? "badge-warning"
+                              : "badge-rest"
+                          }`}
+                        >
+                          {item.priority}
+                        </span>
+                      </div>
+
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            fontSize: "0.8rem",
+                            color: "var(--tint)",
+                            textDecoration: "none",
+                            marginTop: "0.35rem",
+                          }}
+                        >
+                          <span>Visit Store Link ↗</span>
+                        </a>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontSize: "1.2rem",
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {Number(item.estimatedPrice).toLocaleString("ro-RO", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>RON</span>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        disabled={busy}
+                        style={{
+                          minHeight: "2rem",
+                          padding: "0.25rem 0.65rem",
+                          fontSize: "0.8rem",
+                          background: "var(--success-subtle)",
+                          color: "var(--success)",
+                          border: "1px solid rgba(52, 199, 89, 0.25)",
+                        }}
+                        title="Mark as bought and remove from list"
+                      >
+                        ✓ Bought
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
         </div>
-      </section>
+
+        {/* Right Column: Cost Summary & Add Item Form */}
+        <div className="dashboard-aside sticky">
+          {/* Summary Card */}
+          <section className="surface" aria-labelledby="wishlist-summary-title">
+            <span className="badge badge-info">Cost Estimation</span>
+            <h2 id="wishlist-summary-title" style={{ marginTop: "0.35rem", fontSize: "1.3rem" }}>
+              Budget Overview
+            </h2>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "1rem" }}>
+              <div className="macro-card">
+                <span className="macro-title">Total Estimated</span>
+                <span className="macro-numbers" style={{ fontSize: "1.4rem", color: "var(--tint)" }}>
+                  {totalCost.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+                  <span className="macro-target">RON</span>
+                </span>
+              </div>
+
+              <div className="macro-card">
+                <span className="macro-title">High Priority</span>
+                <span className="macro-numbers" style={{ fontSize: "1.4rem" }}>
+                  {items.filter((i) => i.priority === "high").length}{" "}
+                  <span className="macro-target">items</span>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* Add New Wishlist Item Form */}
+          <section className="surface" aria-labelledby="add-wishlist-title">
+            <h2 id="add-wishlist-title" style={{ fontSize: "1.15rem" }}>
+              + Add Purchase Desire
+            </h2>
+
+            <form onSubmit={handleAddItem} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
+              <label>
+                Item Name
+                <input
+                  type="text"
+                  placeholder="e.g. Sony WH-1000XM5 Headphones"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={busy}
+                  required
+                />
+              </label>
+
+              <label>
+                Estimated Price (RON)
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0.00"
+                  value={estimatedPrice}
+                  onChange={(e) => setEstimatedPrice(e.target.value)}
+                  disabled={busy}
+                  required
+                />
+              </label>
+
+              <label>
+                Priority Level
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                  disabled={busy}
+                >
+                  <option value="high">🔴 High Priority</option>
+                  <option value="medium">🟡 Medium Priority</option>
+                  <option value="low">⚪ Low Priority</option>
+                </select>
+              </label>
+
+              <label>
+                Store Link (Optional)
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+
+              {errorMsg && (
+                <p className="error" style={{ margin: 0 }}>
+                  {errorMsg}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy || !name.trim() || !estimatedPrice}
+                style={{ width: "100%", marginTop: "0.35rem" }}
+              >
+                {busy ? "Adding..." : "+ Add to Wishlist"}
+              </button>
+            </form>
+          </section>
+        </div>
+      </div>
     </main>
   );
 }

@@ -616,156 +616,176 @@ export function GymClient({
           </div>
         </section>
       ) : (
-        /* Routine / Split Overview */
-        <section className="surface" aria-labelledby="split-title">
-          <div className="section-heading">
-            <div>
-              <h2 id="split-title">5-Day Training Split</h2>
-              <span className="muted">Upper / Lower · High Intensity (0 RIR)</span>
-            </div>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowCustomModal(true)}
-            >
-              + Custom Exercise
-            </button>
-          </div>
-
-          <div className="split-grid">
-            {split?.days.map((day) => {
-              const isToday = day.dayOfWeek === todayDayOfWeek;
-              const isSelected = day.id === selectedDayId;
-              const dayNames = [
-                "Sunday",
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-              ];
-
-              return (
-                <div
-                  key={day.id}
-                  className={`split-day-card ${isToday ? "today" : ""}`}
-                  style={{
-                    outline: isSelected
-                      ? "2px solid var(--tint)"
-                      : "none",
-                  }}
-                  onClick={() => setSelectedDayId(day.id)}
-                >
+        /* Routine / Split Overview in Dashboard Grid */
+        <div className="dashboard-grid">
+          {/* Left Column: Planned Routine Preview & Recent History */}
+          <div className="dashboard-main">
+            {/* Selected Day Exercise Preview */}
+            {currentDay && !currentDay.isRest ? (
+              <section className="surface" aria-labelledby="preview-title">
+                <div className="section-heading">
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <strong>{dayNames[day.dayOfWeek]}</strong>
-                      {isToday && <span className="badge badge-info">Today</span>}
-                      {day.isRest ? (
-                        <span className="badge badge-rest">Rest</span>
-                      ) : (
-                        <span className="badge badge-info">{day.exercises.length} exercises</span>
-                      )}
-                    </div>
-                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.95rem" }}>
-                      {day.name}
-                    </p>
+                    <span className="badge badge-info">{currentDay.exercises.length} Exercises Planned</span>
+                    <h2 id="preview-title" style={{ marginTop: "0.25rem" }}>
+                      {currentDay.name} Routine
+                    </h2>
                   </div>
-
-                  {!day.isRest && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedDayId(day.id);
-                        void handleStartSession(day);
-                      }}
-                    >
-                      Start Workout
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleStartSession(currentDay)}
+                    style={{ padding: "0.5rem 1.15rem" }}
+                  >
+                    Start Workout Now →
+                  </button>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Selected Day Exercise Preview */}
-          {currentDay && !currentDay.isRest && (
-            <div
-              style={{
-                marginTop: "1.5rem",
-                borderTop: "1px solid var(--separator)",
-                paddingTop: "1rem",
-              }}
+                <div className="entries" style={{ marginTop: "1rem" }}>
+                  {currentDay.exercises.map((ex, idx) => (
+                    <div key={ex.id} className="entry-row">
+                      <div>
+                        <strong>{idx + 1}. {ex.exerciseName}</strong>
+                        <span className="badge badge-rest" style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}>
+                          {ex.muscleGroup}
+                        </span>
+                      </div>
+                      <span className="muted" style={{ fontSize: "0.9rem" }}>
+                        {ex.targetSets} sets × {ex.minReps}–{ex.maxReps} reps ({ex.equipmentType})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="surface">
+                <h2>Rest & Recovery Day</h2>
+                <p className="muted" style={{ marginTop: "0.5rem" }}>
+                  No high-intensity resistance training scheduled for this day. Hydrate, eat adequate protein, and allow central nervous system recovery.
+                </p>
+              </section>
+            )}
+
+            {/* Recent Workout History */}
+            <section
+              className="surface"
+              aria-labelledby="recent-title"
             >
               <div className="section-heading">
-                <h3 style={{ margin: 0 }}>Planned for {currentDay.name}</h3>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleStartSession(currentDay)}
-                >
-                  Start This Routine
-                </button>
+                <h2 id="recent-title">Recent Workouts</h2>
+                <span className="muted">{recentSessions.length} recorded</span>
               </div>
-
-              <div className="entries">
-                {currentDay.exercises.map((ex, idx) => (
-                  <div key={ex.id} className="entry-row">
-                    <span>
-                      {idx + 1}. {ex.exerciseName}
-                    </span>
-                    <span className="muted" style={{ fontSize: "0.9rem" }}>
-                      {ex.targetSets} sets × {ex.minReps}–{ex.maxReps} reps ({ex.equipmentType})
+              <div className="entries" style={{ marginTop: "0.75rem" }}>
+                {recentSessions.length === 0 && (
+                  <p className="muted" style={{ textAlign: "center", padding: "1.5rem 0" }}>
+                    No workouts logged yet. Start your first session above!
+                  </p>
+                )}
+                {recentSessions.map((s) => (
+                  <div key={s.id} className="entry-row">
+                    <div>
+                      <strong>{s.splitDayName || "Workout"}</strong>
+                      <span className="muted" style={{ marginLeft: "0.5rem", fontSize: "0.85rem" }}>
+                        {s.date}
+                      </span>
+                      {s.isDeload && (
+                        <span className="badge badge-warning" style={{ marginLeft: "0.4rem" }}>
+                          Deload
+                        </span>
+                      )}
+                      {s.notes && (
+                        <p style={{ margin: "0.15rem 0 0", fontSize: "0.85rem" }} className="muted">
+                          📝 {s.notes}
+                        </p>
+                      )}
+                    </div>
+                    <span className="entry-value">
+                      {s.setCount} sets {s.durationMinutes ? `· ${s.durationMinutes} min` : ""}
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </section>
-      )}
+            </section>
+          </div>
 
-      {/* Recent Workout History */}
-      <section
-        className="surface"
-        aria-labelledby="recent-title"
-        style={{ marginTop: "1.25rem" }}
-      >
-        <div className="section-heading">
-          <h2 id="recent-title">Recent Workouts</h2>
-          <span className="muted">{recentSessions.length} recorded</span>
-        </div>
-        <div className="entries">
-          {recentSessions.length === 0 && (
-            <p className="muted">No workouts logged yet. Start your first session above!</p>
-          )}
-          {recentSessions.map((s) => (
-            <div key={s.id} className="entry-row">
-              <div>
-                <strong>{s.splitDayName || "Workout"}</strong>
-                <span className="muted" style={{ marginLeft: "0.5rem", fontSize: "0.85rem" }}>
-                  {s.date}
-                </span>
-                {s.isDeload && (
-                  <span className="badge badge-warning" style={{ marginLeft: "0.4rem" }}>
-                    Deload
-                  </span>
-                )}
-                {s.notes && (
-                  <p style={{ margin: "0.15rem 0 0", fontSize: "0.85rem" }} className="muted">
-                    📝 {s.notes}
-                  </p>
-                )}
+          {/* Right Column: Split Days Selector & Custom Exercise CTA */}
+          <div className="dashboard-aside sticky">
+            <section className="surface" aria-labelledby="split-title">
+              <div className="section-heading" style={{ marginBottom: "0.85rem" }}>
+                <div>
+                  <h2 id="split-title" style={{ fontSize: "1.2rem" }}>Training Days</h2>
+                  <span className="muted" style={{ fontSize: "0.85rem" }}>5-Day Upper / Lower Split</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setShowCustomModal(true)}
+                  style={{ minHeight: "2.1rem", padding: "0.25rem 0.65rem", fontSize: "0.8rem" }}
+                >
+                  + Custom
+                </button>
               </div>
-              <span className="entry-value">
-                {s.setCount} sets {s.durationMinutes ? `· ${s.durationMinutes} min` : ""}
-              </span>
-            </div>
-          ))}
+
+              <div style={{ display: "grid", gap: "0.6rem" }}>
+                {split?.days.map((day) => {
+                  const isToday = day.dayOfWeek === todayDayOfWeek;
+                  const isSelected = day.id === selectedDayId;
+                  const dayNames = [
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                  ];
+
+                  return (
+                    <div
+                      key={day.id}
+                      className={`split-day-card ${isToday ? "today" : ""}`}
+                      style={{
+                        outline: isSelected ? "2px solid var(--tint)" : "none",
+                        padding: "0.85rem 1rem",
+                      }}
+                      onClick={() => setSelectedDayId(day.id)}
+                    >
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <strong style={{ fontSize: "0.95rem" }}>{dayNames[day.dayOfWeek]}</strong>
+                          {isToday && <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>Today</span>}
+                          {day.isRest ? (
+                            <span className="badge badge-rest" style={{ fontSize: "0.7rem" }}>Rest</span>
+                          ) : (
+                            <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>{day.exercises.length}</span>
+                          )}
+                        </div>
+                        <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem" }} className="muted">
+                          {day.name}
+                        </p>
+                      </div>
+
+                      {!day.isRest && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          style={{ minHeight: "2.1rem", padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDayId(day.id);
+                            void handleStartSession(day);
+                          }}
+                        >
+                          Start
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </div>
-      </section>
+      )}
 
       {/* Status banner */}
       {statusMessage && (

@@ -642,141 +642,172 @@ export function FoodClient({
             </div>
           </section>
 
-          {/* Add Meal Form */}
-          <section className="surface" aria-labelledby="add-meal-title" style={{ marginTop: "1.25rem" }}>
-            <h2 id="add-meal-title">Log a Meal</h2>
-            <form onSubmit={handleLogMeal} style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(8rem, 1fr))", gap: "0.5rem" }}>
-                <label>
-                  Meal Type
-                  <select
-                    style={{
-                      minHeight: "2.75rem",
-                      borderRadius: "0.65rem",
-                      border: "1px solid var(--separator)",
-                      background: "var(--surface)",
-                      color: "var(--text)",
-                      padding: "0.5rem",
-                    }}
-                    value={mealType}
-                    onChange={(e) =>
-                      setMealType(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")
-                    }
-                  >
-                    <option value="breakfast">Breakfast</option>
-                    <option value="lunch">Lunch</option>
-                    <option value="dinner">Dinner</option>
-                    <option value="snack">Snack</option>
-                  </select>
-                </label>
-
-                <label style={{ gridColumn: "span 2" }}>
-                  Meal Name / Description
-                  <input
-                    type="text"
-                    placeholder="e.g. 200g Chicken breast & 150g Rice"
-                    value={mealName}
-                    onChange={(e) => setMealName(e.target.value)}
-                    required
-                  />
-                </label>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(5.5rem, 1fr))", gap: "0.5rem" }}>
-                <label>
-                  Calories
-                  <input
-                    type="number"
-                    placeholder="kcal"
-                    value={mealCalories}
-                    onChange={(e) => setMealCalories(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Protein (g)
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="g"
-                    value={mealProtein}
-                    onChange={(e) => setMealProtein(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Carbs (g)
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="g"
-                    value={mealCarbs}
-                    onChange={(e) => setMealCarbs(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Fat (g)
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="g"
-                    value={mealFat}
-                    onChange={(e) => setMealFat(e.target.value)}
-                  />
-                </label>
-              </div>
-
-              <button type="submit" disabled={busy || !mealName.trim()} style={{ marginTop: "0.25rem" }}>
-                + Add Meal
-              </button>
-            </form>
-          </section>
-
-          {/* Logged Meals List */}
-          <section className="surface" aria-labelledby="meals-history-title" style={{ marginTop: "1.25rem" }}>
-            <div className="section-heading">
-              <h2 id="meals-history-title">Today&apos;s Meals</h2>
-              <span className="muted">{summary.meals.length} logged</span>
-            </div>
-
-            <div className="entries">
-              {summary.meals.length === 0 && (
-                <p className="muted">No meals logged for today yet.</p>
-              )}
-              {summary.meals.map((meal) => (
-                <div key={meal.id} className="entry-row">
+          {/* Daily Dashboard Grid: Meals & Fast Entry */}
+          <div className="dashboard-grid" style={{ marginTop: "1.25rem" }}>
+            {/* Left Column: Today's Meals Log */}
+            <div className="dashboard-main">
+              <section className="surface" aria-labelledby="meals-history-title">
+                <div className="section-heading">
                   <div>
-                    <span className="badge badge-info" style={{ marginRight: "0.5rem" }}>
-                      {meal.mealType}
-                    </span>
-                    <strong>{meal.name}</strong>
-                    {meal.isEstimated && (
-                      <span
-                        className="badge"
-                        style={{
-                          marginLeft: "0.4rem",
-                          background: "rgba(175, 82, 222, 0.15)",
-                          color: "#af52de",
-                          fontSize: "0.75rem",
-                        }}
-                      >
-                        AI Estimated
-                      </span>
-                    )}
-                    <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem" }} className="muted">
-                      {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
-                    </p>
+                    <span className="badge badge-info">{summary.meals.length} Logged Meals</span>
+                    <h2 id="meals-history-title" style={{ marginTop: "0.25rem" }}>
+                      Today&apos;s Meals
+                    </h2>
                   </div>
-                  <button
-                    type="button"
-                    className="danger"
-                    style={{ minHeight: "2rem", padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                    onClick={() => handleDeleteMeal(meal.id)}
-                  >
-                    Delete
-                  </button>
+                  <span className="muted" style={{ fontWeight: 600 }}>
+                    {summary.totals.calories} kcal total
+                  </span>
                 </div>
-              ))}
+
+                <div className="entries" style={{ marginTop: "1rem" }}>
+                  {summary.meals.length === 0 && (
+                    <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                      No meals logged for today yet. Use the quick logger on the right or ask the Food AI Chat.
+                    </p>
+                  )}
+                  {summary.meals.map((meal) => (
+                    <div key={meal.id} className="entry-row">
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                          <span className="badge badge-info">
+                            {meal.mealType}
+                          </span>
+                          <strong>{meal.name}</strong>
+                          {meal.isEstimated && (
+                            <span
+                              className="badge"
+                              style={{
+                                background: "rgba(175, 82, 222, 0.15)",
+                                color: "#af52de",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              AI Estimated
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }} className="muted">
+                          {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="danger"
+                        style={{ minHeight: "2rem", padding: "0.2rem 0.65rem", fontSize: "0.8rem" }}
+                        onClick={() => handleDeleteMeal(meal.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
-          </section>
+
+            {/* Right Column: Log a Meal Form & AI Assistant Prompt */}
+            <div className="dashboard-aside sticky">
+              <section className="surface" aria-labelledby="add-meal-title">
+                <h2 id="add-meal-title" style={{ fontSize: "1.2rem" }}>Log a Meal</h2>
+                <form onSubmit={handleLogMeal} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
+                  <label>
+                    Meal Type
+                    <select
+                      value={mealType}
+                      onChange={(e) =>
+                        setMealType(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")
+                      }
+                    >
+                      <option value="breakfast">Breakfast</option>
+                      <option value="lunch">Lunch</option>
+                      <option value="dinner">Dinner</option>
+                      <option value="snack">Snack</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Meal Name / Description
+                    <input
+                      type="text"
+                      placeholder="e.g. 200g Chicken breast & 150g Rice"
+                      value={mealName}
+                      onChange={(e) => setMealName(e.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <label>
+                      Calories (kcal)
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={mealCalories}
+                        onChange={(e) => setMealCalories(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Protein (g)
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={mealProtein}
+                        onChange={(e) => setMealProtein(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <label>
+                      Carbs (g)
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={mealCarbs}
+                        onChange={(e) => setMealCarbs(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Fat (g)
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={mealFat}
+                        onChange={(e) => setMealFat(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <button type="submit" disabled={busy || !mealName.trim()} style={{ width: "100%", marginTop: "0.35rem" }}>
+                    + Add Meal
+                  </button>
+                </form>
+              </section>
+
+              {/* Fast AI Chat Shortcut */}
+              <section className="surface" style={{ padding: "1.25rem", textAlign: "center" }}>
+                <span className="badge badge-info" style={{ marginBottom: "0.4rem" }}>
+                  Conversational Food AI
+                </span>
+                <h3 style={{ fontSize: "1rem", margin: "0.2rem 0 0.5rem" }}>
+                  Too lazy to type macros manually?
+                </h3>
+                <p className="muted" style={{ fontSize: "0.85rem", margin: "0 0 0.85rem", lineHeight: 1.4 }}>
+                  Just tell Food AI what you ate (e.g. &ldquo;am mâncat o ciorbă de pui cu smântână&rdquo;) and it estimates calories and logs it automatically.
+                </p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setActiveTab("chat")}
+                  style={{ width: "100%" }}
+                >
+                  💬 Open Food AI Chat
+                </button>
+              </section>
+            </div>
+          </div>
         </>
       )}
 

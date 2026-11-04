@@ -105,10 +105,9 @@ export function TodosClient({
     refreshDailyData(currentDate, newSpace);
   };
 
-  const handleCreateTodo = (e: React.FormEvent) => {
+  const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!titleInput.trim()) return;
-    setErrorMsg(null);
 
     startTransition(async () => {
       try {
@@ -118,10 +117,10 @@ export function TodosClient({
           isRecurring: isRecurringInput,
           recurrencePattern: isRecurringInput ? "daily" : "none",
           dueDate: currentDate,
-          reminderTime: reminderTimeInput || null,
+          reminderTime: reminderTimeInput.trim() || undefined,
         });
 
-        if (res.success) {
+        if (res.success && res.todo) {
           setTitleInput("");
           setIsRecurringInput(false);
           setReminderTimeInput("");
@@ -135,14 +134,12 @@ export function TodosClient({
     });
   };
 
-  const handleToggleTodo = (todo: TodoItem) => {
+  const handleToggleTodo = async (todo: TodoItem) => {
     startTransition(async () => {
       try {
-        const nextState = !todo.isCompleted;
         const res = await toggleTodoAction({
           id: todo.id,
-          isCompleted: nextState,
-          currentDate,
+          isCompleted: !todo.isCompleted,
         });
 
         if (res.success) {
@@ -156,14 +153,10 @@ export function TodosClient({
     });
   };
 
-  const handleDeleteTodo = (todoId: string) => {
-    if (!confirm("Are you sure you want to delete this task?")) {
-      return;
-    }
-
+  const handleDeleteTodo = async (id: string) => {
     startTransition(async () => {
       try {
-        const res = await deleteTodoAction(todoId);
+        const res = await deleteTodoAction(id);
         if (res.success) {
           refreshDailyData(currentDate, space);
         }
@@ -176,24 +169,36 @@ export function TodosClient({
   };
 
   const handleEnablePush = async () => {
-    if (!pushSupported) return;
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
+      const reg = await navigator.serviceWorker.ready;
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        setPushStatusMsg("Push notification permission denied.");
+        return;
+      }
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        setPushStatusMsg("Web push notifications enabled locally.");
         setPushSubscribed(true);
-        setPushStatusMsg("Push notifications enabled!");
-        await navigator.serviceWorker.ready;
-        // Mock dummy keys for local browser demonstration
-        await savePushSubscriptionAction({
-          endpoint: `https://webpush.local/sub/${encodeURIComponent(userName)}`,
-          p256dhKey: "sample-p256dh-val",
-          authKey: "sample-auth-val",
-        });
-      } else {
-        setPushStatusMsg("Notification permission was denied.");
+        return;
+      }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidPublicKey,
+      });
+
+      const res = await savePushSubscriptionAction({
+        subscription: sub.toJSON(),
+      });
+
+      if (res.success) {
+        setPushSubscribed(true);
+        setPushStatusMsg("Push notifications registered successfully.");
       }
     } catch {
-      setPushStatusMsg("Failed to subscribe to push notifications.");
+      setPushStatusMsg("Failed to register push subscription.");
     }
   };
 
@@ -230,7 +235,7 @@ export function TodosClient({
           <button
             type="button"
             className="secondary"
-            style={{ minHeight: "2rem", padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
+            style={{ minHeight: "2.1rem", padding: "0.25rem 0.85rem", fontSize: "0.85rem" }}
             onClick={handleEnablePush}
           >
             Enable Push
@@ -250,225 +255,234 @@ export function TodosClient({
         </div>
       )}
 
-      {/* Daily Progress & Date Header Card */}
-      <section className="todo-hero-card" aria-label="Daily Overview">
-        <div className="month-selector" style={{ marginBottom: "0.75rem" }}>
-          <button
-            type="button"
-            className="month-nav-btn"
-            onClick={() => handleDateChange(-1)}
-            aria-label="Previous Day"
-            disabled={isPending}
-          >
-            ‹
-          </button>
-          <span className="month-label" style={{ fontSize: "1.05rem" }}>
-            {currentDate === todayDate ? "Today" : currentDate}
-          </span>
-          <button
-            type="button"
-            className="month-nav-btn"
-            onClick={() => handleDateChange(1)}
-            aria-label="Next Day"
-            disabled={isPending}
-          >
-            ›
-          </button>
-        </div>
+      {/* Main Responsive Bento Grid */}
+      <div className="dashboard-grid">
+        {/* Left Column: Day Progress & Task Sections */}
+        <div className="dashboard-main">
+          {/* Daily Progress & Date Header Card */}
+          <section className="todo-hero-card" aria-label="Daily Overview">
+            <div className="month-selector" style={{ marginBottom: "0.75rem" }}>
+              <button
+                type="button"
+                className="month-nav-btn"
+                onClick={() => handleDateChange(-1)}
+                aria-label="Previous Day"
+                disabled={isPending}
+              >
+                ‹
+              </button>
+              <span className="month-label" style={{ fontSize: "1.1rem" }}>
+                {currentDate === todayDate ? "Today" : currentDate}
+              </span>
+              <button
+                type="button"
+                className="month-nav-btn"
+                onClick={() => handleDateChange(1)}
+                aria-label="Next Day"
+                disabled={isPending}
+              >
+                ›
+              </button>
+            </div>
 
-        <div className="todo-stats-header">
-          <span className="todo-stats-rate">
-            {currentStats.percentage}%
-          </span>
-          <span className="todo-stats-fraction">
-            {currentStats.completed} of {currentStats.total} completed
-          </span>
-        </div>
+            <div className="todo-stats-header">
+              <span className="todo-stats-rate">
+                {currentStats.percentage}%
+              </span>
+              <span className="todo-stats-fraction">
+                {currentStats.completed} of {currentStats.total} completed in {space}
+              </span>
+            </div>
 
-        <div className="progress-track" aria-hidden="true">
-          <div
-            className="progress-fill"
-            style={{ width: `${currentStats.percentage}%` }}
-          />
-        </div>
-      </section>
-
-      {/* Quick Task Creation Form */}
-      <section className="quick-expense-card" aria-label="Add Task">
-        <h2 style={{ fontSize: "1.15rem", marginBottom: "0.75rem" }}>
-          Add New Task
-        </h2>
-
-        <form onSubmit={handleCreateTodo}>
-          <div style={{ marginBottom: "0.75rem" }}>
-            <input
-              type="text"
-              required
-              maxLength={150}
-              placeholder="What do you need to do?"
-              value={titleInput}
-              onChange={(e) => setTitleInput(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.75rem 1rem",
-                borderRadius: "0.75rem",
-                border: "1.5px solid var(--separator)",
-                background: "var(--background)",
-                color: "var(--text)",
-                fontSize: "1rem",
-              }}
-              aria-label="Task Title"
-            />
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem" }}>
-            <label className="toggle-label" style={{ cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={isRecurringInput}
-                onChange={(e) => setIsRecurringInput(e.target.checked)}
-              />
-              <span>Daily recurring habit</span>
-            </label>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>⏰ Reminder:</span>
-              <input
-                type="time"
-                value={reminderTimeInput}
-                onChange={(e) => setReminderTimeInput(e.target.value)}
-                style={{
-                  padding: "0.35rem 0.5rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid var(--separator)",
-                  background: "var(--background)",
-                  color: "var(--text)",
-                  fontSize: "0.85rem",
-                }}
-                aria-label="Reminder Time"
+            <div className="progress-track" aria-hidden="true">
+              <div
+                className="progress-fill"
+                style={{ width: `${currentStats.percentage}%` }}
               />
             </div>
-          </div>
+          </section>
 
-          <button
-            type="submit"
-            disabled={isPending || !titleInput.trim()}
-            style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", fontWeight: 600 }}
-          >
-            {isPending ? "Adding..." : "Add Task"}
-          </button>
-        </form>
-      </section>
-
-      {/* Recurring Habits Section */}
-      {recurringHabits.length > 0 && (
-        <section className="quick-expense-card" aria-label="Daily Habits">
-          <div className="todo-section-title" style={{ marginTop: 0 }}>
-            <span>🔥 Daily Habits & Routines</span>
-            <span>{recurringHabits.filter((h) => h.isCompleted).length}/{recurringHabits.length}</span>
-          </div>
-
-          <div>
-            {recurringHabits.map((habit) => (
-              <div key={habit.id} className="todo-row">
-                <div className="todo-left">
-                  <button
-                    type="button"
-                    className={`todo-checkbox-btn ${habit.isCompleted ? "checked" : ""}`}
-                    onClick={() => handleToggleTodo(habit)}
-                    aria-label={`Mark ${habit.title} as ${habit.isCompleted ? "incomplete" : "complete"}`}
-                  >
-                    {habit.isCompleted && "✓"}
-                  </button>
-                  <div>
-                    <span className={`todo-title ${habit.isCompleted ? "completed" : ""}`}>
-                      {habit.title}
-                    </span>
-                    <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.2rem" }}>
-                      {habit.streak > 0 && (
-                        <span className="badge badge-streak">
-                          🔥 {habit.streak} {habit.streak === 1 ? "day" : "days"} streak
-                        </span>
-                      )}
-                      {habit.reminderTime && (
-                        <span className="badge badge-reminder">
-                          ⏰ {habit.reminderTime}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="delete-icon-btn"
-                  onClick={() => handleDeleteTodo(habit.id)}
-                  aria-label={`Delete habit ${habit.title}`}
-                >
-                  🗑️
-                </button>
+          {/* Recurring Habits Section */}
+          {recurringHabits.length > 0 && (
+            <section className="quick-expense-card" aria-label="Daily Habits">
+              <div className="todo-section-title" style={{ marginTop: 0 }}>
+                <span>🔥 Daily Habits & Routines</span>
+                <span className="badge badge-streak">
+                  {recurringHabits.filter((h) => h.isCompleted).length}/{recurringHabits.length} Done
+                </span>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
 
-      {/* One-off Tasks Section */}
-      <section className="quick-expense-card" aria-label="Today's Tasks">
-        <div className="todo-section-title" style={{ marginTop: 0 }}>
-          <span>📋 Today&apos;s Tasks</span>
-          <span>{oneOffTasks.filter((t) => t.isCompleted).length}/{oneOffTasks.length}</span>
+              <div>
+                {recurringHabits.map((habit) => (
+                  <div key={habit.id} className="todo-row">
+                    <div className="todo-left">
+                      <button
+                        type="button"
+                        className={`todo-checkbox-btn ${habit.isCompleted ? "checked" : ""}`}
+                        onClick={() => handleToggleTodo(habit)}
+                        aria-label={`Mark ${habit.title} as ${habit.isCompleted ? "incomplete" : "complete"}`}
+                      >
+                        {habit.isCompleted && "✓"}
+                      </button>
+                      <div>
+                        <span className={`todo-title ${habit.isCompleted ? "completed" : ""}`}>
+                          {habit.title}
+                        </span>
+                        <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.2rem", flexWrap: "wrap" }}>
+                          {habit.streak > 0 && (
+                            <span className="badge badge-streak">
+                              🔥 {habit.streak} {habit.streak === 1 ? "day" : "days"} streak
+                            </span>
+                          )}
+                          {habit.reminderTime && (
+                            <span className="badge badge-reminder">
+                              ⏰ {habit.reminderTime}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="delete-icon-btn"
+                      onClick={() => handleDeleteTodo(habit.id)}
+                      aria-label={`Delete habit ${habit.title}`}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* One-off Tasks Section */}
+          <section className="quick-expense-card" aria-label="Today's Tasks">
+            <div className="todo-section-title" style={{ marginTop: 0 }}>
+              <span>📋 Today&apos;s Action Tasks</span>
+              <span className="badge badge-info">
+                {oneOffTasks.filter((t) => t.isCompleted).length}/{oneOffTasks.length} Done
+              </span>
+            </div>
+
+            {oneOffTasks.length > 0 ? (
+              <div>
+                {oneOffTasks.map((task) => (
+                  <div key={task.id} className="todo-row">
+                    <div className="todo-left">
+                      <button
+                        type="button"
+                        className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
+                        onClick={() => handleToggleTodo(task)}
+                        aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                      >
+                        {task.isCompleted && "✓"}
+                      </button>
+                      <div>
+                        <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
+                          {task.title}
+                        </span>
+                        <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.2rem", flexWrap: "wrap" }}>
+                          {task.isCarriedOver && (
+                            <span className="badge badge-carried">
+                              Carried Over
+                            </span>
+                          )}
+                          {task.reminderTime && (
+                            <span className="badge badge-reminder">
+                              ⏰ {task.reminderTime}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="delete-icon-btn"
+                      onClick={() => handleDeleteTodo(task.id)}
+                      aria-label={`Delete task ${task.title}`}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: "var(--secondary)", fontSize: "0.9rem", margin: "0.5rem 0 0", textAlign: "center", padding: "1.5rem 0" }}>
+                No action tasks scheduled for this day.
+              </p>
+            )}
+          </section>
         </div>
 
-        {oneOffTasks.length > 0 ? (
-          <div>
-            {oneOffTasks.map((task) => (
-              <div key={task.id} className="todo-row">
-                <div className="todo-left">
-                  <button
-                    type="button"
-                    className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                    onClick={() => handleToggleTodo(task)}
-                    aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                  >
-                    {task.isCompleted && "✓"}
-                  </button>
-                  <div>
-                    <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
-                      {task.title}
-                    </span>
-                    <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.2rem" }}>
-                      {task.isCarriedOver && (
-                        <span className="badge badge-carried">
-                          Carried Over
-                        </span>
-                      )}
-                      {task.reminderTime && (
-                        <span className="badge badge-reminder">
-                          ⏰ {task.reminderTime}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+        {/* Right Column: Quick Add Task & Insights */}
+        <div className="dashboard-aside sticky">
+          {/* Quick Task Creation Form */}
+          <section className="quick-expense-card" aria-label="Add Task">
+            <h2 style={{ fontSize: "1.2rem", marginBottom: "0.85rem" }}>
+              + Add New Task
+            </h2>
 
-                <button
-                  type="button"
-                  className="delete-icon-btn"
-                  onClick={() => handleDeleteTodo(task.id)}
-                  aria-label={`Delete task ${task.title}`}
-                >
-                  🗑️
-                </button>
+            <form onSubmit={handleCreateTodo}>
+              <div style={{ marginBottom: "0.85rem" }}>
+                <input
+                  type="text"
+                  required
+                  maxLength={150}
+                  placeholder="Task title or habit name..."
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  aria-label="Task Title"
+                />
               </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: "var(--secondary)", fontSize: "0.9rem", margin: "0.5rem 0 0" }}>
-            No one-off tasks for this day.
-          </p>
-        )}
-      </section>
+
+              <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1rem" }}>
+                <label className="toggle-label" style={{ cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={isRecurringInput}
+                    onChange={(e) => setIsRecurringInput(e.target.checked)}
+                  />
+                  <span>Daily recurring habit (tracks streaks)</span>
+                </label>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                  <span style={{ fontSize: "0.85rem", color: "var(--secondary)", fontWeight: 600 }}>
+                    ⏰ Reminder:
+                  </span>
+                  <input
+                    type="time"
+                    value={reminderTimeInput}
+                    onChange={(e) => setReminderTimeInput(e.target.value)}
+                    aria-label="Reminder Time"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isPending || !titleInput.trim()}
+                style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", fontWeight: 600 }}
+              >
+                {isPending ? "Adding..." : "+ Create Task"}
+              </button>
+            </form>
+          </section>
+
+          {/* Automatic Carry-over Note */}
+          <section className="surface" style={{ padding: "1.25rem" }}>
+            <h3 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em" }}>
+              🔄 Automatic Carry-Over
+            </h3>
+            <p className="muted" style={{ fontSize: "0.85rem", margin: "0.45rem 0 0", lineHeight: 1.5 }}>
+              Any unfinished one-off tasks from past days automatically roll over to today with an amber <strong>Carried Over</strong> badge. No tasks ever get lost or forgotten.
+            </p>
+          </section>
+        </div>
+      </div>
     </main>
   );
 }
