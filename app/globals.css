@@ -49,15 +49,23 @@
 
 * {
   box-sizing: border-box;
+  /* Remove 300ms tap delay on iOS — instant response */
+  touch-action: manipulation;
+  /* Remove blue flash on tap in mobile browsers */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
   background: var(--background);
+  /* Stop the rubber-band overscroll showing a different colour */
+  overscroll-behavior: none;
+  /* Prevent iOS swipe-back navigation gesture from triggering browser history */
+  overscroll-behavior-x: none;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--text);
   background: var(--background);
   background-image: var(--bg-radial);
@@ -66,6 +74,31 @@ body {
   font-size: 1.0625rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Match overscroll colour with page background */
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  /* Prevent callout (copy/paste menu) on long press for non-text elements */
+  -webkit-touch-callout: none;
+}
+
+/* Re-enable text selection where needed */
+input,
+textarea,
+p,
+h1, h2, h3,
+span,
+label {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Buttons and links: no callout, no text selection */
+button,
+a {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Dynamic Responsive Container: No more cramped 42rem on desktop! */
@@ -73,6 +106,8 @@ main {
   width: min(100% - 1.5rem, 82rem);
   margin: 0 auto;
   padding: calc(1rem + env(safe-area-inset-top)) 0 calc(3rem + env(safe-area-inset-bottom));
+  /* Native iOS momentum scrolling */
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (min-width: 640px) {

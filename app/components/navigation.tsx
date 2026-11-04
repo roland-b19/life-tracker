@@ -176,9 +176,8 @@ export function Navigation({ userName }: NavigationProps) {
           <div className="more-scrim" onClick={() => setMoreOpen(false)} />
           <div className="more-menu" id="more-menu" aria-label="More">
             <div className="more-user">
-              <span className="user-avatar-circle">{initial}</span>
-              <span>{userName}</span>
-            </div>
+            <span>{userName}</span>
+          </div>
             {overflow.map((link) => (
               <NextLink
                 key={link.href}
