@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
-import { CheckIcon } from "../components/icons";
+import { CheckIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { Modal } from "../components/modal";
+import { useToast } from "../components/toast";
 import { addWishlistItemAction, deleteWishlistItemAction } from "@/app/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
 
@@ -21,6 +23,9 @@ export function WishlistClient({
 }: WishlistClientProps) {
   const [items, setItems] = useState<WishlistItemData[]>(initialItems);
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const { showToast } = useToast();
 
   // Form state
   const [name, setName] = useState("");
@@ -66,6 +71,11 @@ export function WishlistClient({
         setEstimatedPrice("");
         setUrl("");
         setPriority("medium");
+        setIsAddModalOpen(false);
+        showToast({
+          message: `Added "${res.item.name}" (${parsedPrice.toFixed(2)} RON)`,
+          type: "success",
+        });
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to add item");
@@ -74,14 +84,36 @@ export function WishlistClient({
     }
   }
 
-  async function handleDeleteItem(id: string) {
+  async function handleDeleteItem(id: string, reason: "bought" | "deleted" = "deleted") {
+    const target = items.find((i) => i.id === id);
+    if (!target) return;
+
+    // Optimistic removal
+    setItems((prev) => prev.filter((item) => item.id !== id));
+
     setBusy(true);
     try {
       const res = await deleteWishlistItemAction(id);
       if (res.success) {
-        setItems((prev) => prev.filter((item) => item.id !== id));
+        showToast({
+          message: reason === "bought" ? `Purchased "${target.name}"!` : `Removed "${target.name}"`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            const reRes = await addWishlistItemAction({
+              name: target.name,
+              estimatedPrice: Number(target.estimatedPrice),
+              priority: target.priority as "low" | "medium" | "high",
+              url: target.url || undefined,
+            });
+            if (reRes.success && reRes.item) {
+              setItems((prev) => [reRes.item as WishlistItemData, ...prev]);
+            }
+          },
+        });
       }
     } catch {
+      // Revert if error
+      setItems((prev) => [target, ...prev]);
       setErrorMsg("Failed to delete item.");
     } finally {
       setBusy(false);
@@ -91,6 +123,27 @@ export function WishlistClient({
   return (
     <main>
       <Navigation userName={userName} />
+
+      {/* Action Bar Header */}
+      <div className="action-bar-header">
+        <div>
+          <span className="badge badge-info">Cost & Priority Planning</span>
+          <h2 style={{ marginTop: "0.25rem" }}>Personal Wishlist</h2>
+        </div>
+
+        <button
+          type="button"
+          className="btn-open-modal"
+          onClick={() => {
+            setErrorMsg("");
+            setIsAddModalOpen(true);
+          }}
+          aria-label="Open add wishlist item dialog"
+        >
+          <PlusIcon size={16} />
+          <span>Add Desire</span>
+        </button>
+      </div>
 
       <div className="dashboard-grid">
         {/* Left Column: Filterable Wishlist Items */}
@@ -120,86 +173,70 @@ export function WishlistClient({
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: "0.75rem" }}>
+            <div className="entries">
               {filteredItems.length === 0 ? (
-                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                <p className="muted" style={{ textAlign: "center", padding: "2.5rem 0" }}>
                   {items.length === 0
-                    ? "Your wishlist is empty. Add your desired purchases using the panel on the right."
-                    : `No items with ${filterPriority} priority found.`}
+                    ? "Your wishlist is empty. Tap Add Desire to save your first goal."
+                    : "No items match this priority filter."}
                 </p>
               ) : (
                 filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      padding: "1rem 1.15rem",
-                      borderRadius: "0.85rem",
-                      border: "1px solid var(--separator)",
-                      background: "var(--surface-solid)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "1rem",
-                      transition: "transform 0.15s ease",
-                    }}
-                  >
+                  <div key={item.id} className="entry-row" style={{ alignItems: "center" }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 600, fontSize: "1.05rem" }}>{item.name}</span>
                         <span
-                          className={`badge ${
-                            item.priority === "high"
-                              ? "badge-danger"
-                              : item.priority === "medium"
-                              ? "badge-warning"
-                              : "badge-rest"
-                          }`}
+                          className="badge"
+                          style={{
+                            fontSize: "0.75rem",
+                            textTransform: "capitalize",
+                            background:
+                              item.priority === "high"
+                                ? "rgba(255, 59, 48, 0.15)"
+                                : item.priority === "medium"
+                                ? "rgba(255, 149, 0, 0.15)"
+                                : "rgba(142, 142, 147, 0.15)",
+                            color:
+                              item.priority === "high"
+                                ? "#ff3b30"
+                                : item.priority === "medium"
+                                ? "#ff9500"
+                                : "var(--secondary)",
+                          }}
                         >
                           {item.priority}
                         </span>
+                        <strong style={{ fontSize: "1rem" }}>{item.name}</strong>
                       </div>
 
-                      {item.url && (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.3rem",
-                            fontSize: "0.8rem",
-                            color: "var(--tint)",
-                            textDecoration: "none",
-                            marginTop: "0.35rem",
-                          }}
-                        >
-                          <span>Visit Store Link ↗</span>
-                        </a>
-                      )}
+                      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.3rem", fontSize: "0.85rem" }}>
+                        <span className="number-tabular" style={{ fontWeight: 600, color: "var(--tint)" }}>
+                          {Number(item.estimatedPrice).toLocaleString("ro-RO", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          RON
+                        </span>
+                        {item.url && (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--secondary)", textDecoration: "underline" }}
+                          >
+                            Store Link ↗
+                          </a>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
-                      <span
-                        style={{
-                          fontSize: "1.2rem",
-                          fontWeight: 700,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {Number(item.estimatedPrice).toLocaleString("ro-RO", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>RON</span>
-                      </span>
-
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                       <button
                         type="button"
-                        onClick={() => handleDeleteItem(item.id)}
+                        onClick={() => handleDeleteItem(item.id, "bought")}
                         disabled={busy}
                         style={{
-                          minHeight: "2rem",
+                          minHeight: "2.1rem",
                           padding: "0.25rem 0.65rem",
                           fontSize: "0.8rem",
                           background: "var(--success-subtle)",
@@ -213,6 +250,17 @@ export function WishlistClient({
                       >
                         <CheckIcon size={12} strokeWidth={2.5} /> Bought
                       </button>
+
+                      <button
+                        type="button"
+                        className="delete-icon-btn"
+                        onClick={() => handleDeleteItem(item.id, "deleted")}
+                        disabled={busy}
+                        aria-label={`Delete ${item.name}`}
+                        title="Delete item"
+                      >
+                        <TrashIcon size={15} />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -221,108 +269,143 @@ export function WishlistClient({
           </section>
         </div>
 
-        {/* Right Column: Cost Summary & Add Item Form */}
-        <div className="dashboard-aside sticky">
+        {/* Right Column: Cost Summary & Guidelines */}
+        <div className="dashboard-aside">
           {/* Summary Card */}
           <section className="surface" aria-labelledby="wishlist-summary-title">
-            <span className="badge badge-info">Cost Estimation</span>
-            <h2 id="wishlist-summary-title" style={{ marginTop: "0.35rem", fontSize: "1.3rem" }}>
-              Budget Overview
+            <span className="badge badge-info">Budget Allocation</span>
+            <h2 id="wishlist-summary-title" style={{ marginTop: "0.35rem", fontSize: "1.25rem" }}>
+              Estimated Investment
             </h2>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.75rem", marginTop: "1rem" }}>
               <div className="macro-card">
                 <span className="macro-title">Total Estimated</span>
-                <span className="macro-numbers" style={{ fontSize: "1.4rem", color: "var(--tint)" }}>
+                <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "var(--tint)" }}>
                   {totalCost.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                  <span className="macro-target">RON</span>
+                  <span className="macro-target" style={{ fontSize: "1rem" }}>RON</span>
                 </span>
               </div>
 
               <div className="macro-card">
-                <span className="macro-title">High Priority</span>
-                <span className="macro-numbers" style={{ fontSize: "1.4rem" }}>
+                <span className="macro-title">High Priority Items</span>
+                <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem" }}>
                   {items.filter((i) => i.priority === "high").length}{" "}
-                  <span className="macro-target">items</span>
+                  <span className="macro-target" style={{ fontSize: "1rem" }}>items</span>
                 </span>
               </div>
             </div>
           </section>
 
-          {/* Add New Wishlist Item Form */}
-          <section className="surface" aria-labelledby="add-wishlist-title">
-            <h2 id="add-wishlist-title" style={{ fontSize: "1.15rem" }}>
-              + Add Purchase Desire
-            </h2>
-
-            <form onSubmit={handleAddItem} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
-              <label>
-                Item Name
-                <input
-                  type="text"
-                  placeholder="e.g. Sony WH-1000XM5 Headphones"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={busy}
-                  required
-                />
-              </label>
-
-              <label>
-                Estimated Price (RON)
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="0.00"
-                  value={estimatedPrice}
-                  onChange={(e) => setEstimatedPrice(e.target.value)}
-                  disabled={busy}
-                  required
-                />
-              </label>
-
-              <label>
-                Priority Level
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
-                  disabled={busy}
-                >
-                  <option value="high">High Priority</option>
-                  <option value="medium">Medium Priority</option>
-                  <option value="low">Low Priority</option>
-                </select>
-              </label>
-
-              <label>
-                Store Link (Optional)
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={busy}
-                />
-              </label>
-
-              {errorMsg && (
-                <p className="error" style={{ margin: 0 }}>
-                  {errorMsg}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={busy || !name.trim() || !estimatedPrice}
-                style={{ width: "100%", marginTop: "0.35rem" }}
-              >
-                {busy ? "Adding..." : "+ Add to Wishlist"}
-              </button>
-            </form>
+          {/* Decision Rule Card */}
+          <section className="surface" style={{ padding: "1.35rem" }}>
+            <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", margin: "0 0 0.5rem" }}>
+              72-Hour Rule
+            </h3>
+            <p className="muted" style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5 }}>
+              Wait at least 72 hours before purchasing non-essential items. If the desire remains strong after 3 days, it represents genuine value rather than impulse.
+            </p>
           </section>
         </div>
       </div>
+
+      {/* Floating Action Button for Mobile */}
+      <button
+        type="button"
+        className="mobile-fab-btn"
+        onClick={() => {
+          setErrorMsg("");
+          setIsAddModalOpen(true);
+        }}
+        aria-label="Add purchase desire"
+      >
+        <PlusIcon size={24} />
+      </button>
+
+      {/* Pop-up Modal with Heavy Blurred Background */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Add Purchase Desire"
+      >
+        <form onSubmit={handleAddItem} style={{ display: "grid", gap: "0.85rem" }}>
+          <label>
+            Item Name
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. Sony WH-1000XM5 Headphones"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+              required
+            />
+          </label>
+
+          <label>
+            Estimated Price (RON)
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              value={estimatedPrice}
+              onChange={(e) => setEstimatedPrice(e.target.value)}
+              disabled={busy}
+              required
+              className="number-tabular"
+            />
+          </label>
+
+          <label>
+            Priority Level
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+              disabled={busy}
+            >
+              <option value="high">High Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
+          </label>
+
+          <label>
+            Store Link (Optional)
+            <input
+              type="url"
+              placeholder="https://..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+
+          {errorMsg && (
+            <p className="error" style={{ margin: 0 }}>
+              {errorMsg}
+            </p>
+          )}
+
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setIsAddModalOpen(false)}
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !name.trim() || !estimatedPrice}
+              style={{ flex: 2 }}
+            >
+              {busy ? "Adding..." : "+ Save to Wishlist"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
+import { Modal } from "../components/modal";
 import {
   createCustomExerciseAction,
   deleteSetAction,
@@ -794,113 +795,99 @@ export function GymClient({
         </p>
       )}
 
-      {/* Modal: Custom Exercise */}
-      {showCustomModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "grid",
-            placeItems: "center",
-            padding: "1rem",
-            zIndex: 100,
-          }}
-          onClick={() => setShowCustomModal(false)}
-        >
-          <div
-            className="surface"
-            style={{ width: "min(100%, 28rem)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Create Custom Exercise</h2>
-            <div style={{ display: "grid", gap: "0.75rem", marginTop: "1rem" }}>
-              <label>
-                Exercise Name
-                <input
-                  type="text"
-                  placeholder="e.g. Incline Smith Machine Press"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                />
-              </label>
+      {/* Modal: Custom Exercise with Heavy Blurred Background */}
+      <Modal
+        isOpen={showCustomModal}
+        onClose={() => setShowCustomModal(false)}
+        title="Create Custom Exercise"
+      >
+        <div style={{ display: "grid", gap: "0.85rem" }}>
+          <label>
+            Exercise Name
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. Incline Smith Machine Press"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+            />
+          </label>
 
-              <label>
-                Muscle Group
-                <select
-                  style={{
-                    minHeight: "2.75rem",
-                    borderRadius: "0.65rem",
-                    border: "1px solid var(--separator)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
-                    padding: "0.5rem",
-                  }}
-                  value={customMuscle}
-                  onChange={(e) =>
-                    setCustomMuscle(
-                      e.target.value as "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other",
-                    )
-                  }
-                >
-                  <option value="chest">Chest</option>
-                  <option value="back">Back</option>
-                  <option value="legs">Legs</option>
-                  <option value="shoulders">Shoulders</option>
-                  <option value="arms">Arms</option>
-                  <option value="calves">Calves</option>
-                  <option value="abs">Abs</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
+          <label>
+            Muscle Group
+            <select
+              style={{
+                minHeight: "2.75rem",
+                borderRadius: "0.65rem",
+                border: "1px solid var(--separator)",
+                background: "var(--surface)",
+                color: "var(--text)",
+                padding: "0.5rem",
+              }}
+              value={customMuscle}
+              onChange={(e) =>
+                setCustomMuscle(
+                  e.target.value as "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other",
+                )
+              }
+            >
+              <option value="chest">Chest</option>
+              <option value="back">Back</option>
+              <option value="legs">Legs</option>
+              <option value="shoulders">Shoulders</option>
+              <option value="arms">Arms</option>
+              <option value="calves">Calves</option>
+              <option value="abs">Abs</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
 
-              <label>
-                Equipment
-                <select
-                  style={{
-                    minHeight: "2.75rem",
-                    borderRadius: "0.65rem",
-                    border: "1px solid var(--separator)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
-                    padding: "0.5rem",
-                  }}
-                  value={customEquipment}
-                  onChange={(e) =>
-                    setCustomEquipment(
-                      e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight",
-                    )
-                  }
-                >
-                  <option value="barbell">Barbell</option>
-                  <option value="dumbbell">Dumbbell</option>
-                  <option value="cable">Cable</option>
-                  <option value="machine">Machine</option>
-                  <option value="bodyweight">Bodyweight</option>
-                </select>
-              </label>
+          <label>
+            Equipment
+            <select
+              style={{
+                minHeight: "2.75rem",
+                borderRadius: "0.65rem",
+                border: "1px solid var(--separator)",
+                background: "var(--surface)",
+                color: "var(--text)",
+                padding: "0.5rem",
+              }}
+              value={customEquipment}
+              onChange={(e) =>
+                setCustomEquipment(
+                  e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight",
+                )
+              }
+            >
+              <option value="barbell">Barbell</option>
+              <option value="dumbbell">Dumbbell</option>
+              <option value="cable">Cable</option>
+              <option value="machine">Machine</option>
+              <option value="bodyweight">Bodyweight</option>
+            </select>
+          </label>
 
-              <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-                <button
-                  type="button"
-                  style={{ flex: 1 }}
-                  disabled={busy || !customName.trim()}
-                  onClick={handleCreateCustomExercise}
-                >
-                  Save Exercise
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setShowCustomModal(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowCustomModal(false)}
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{ flex: 2 }}
+              disabled={busy || !customName.trim()}
+              onClick={handleCreateCustomExercise}
+            >
+              Save Exercise
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </main>
   );
 }

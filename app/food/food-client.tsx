@@ -9,7 +9,11 @@ import {
   ChatIcon,
   LockIcon,
   CheckIcon,
+  PlusIcon,
+  TrashIcon,
 } from "../components/icons";
+import { Modal } from "../components/modal";
+import { useToast } from "../components/toast";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -105,6 +109,9 @@ export function FoodClient({
   const [tokenNameInput, setTokenNameInput] = useState("");
   const [generatedPlaintextToken, setGeneratedPlaintextToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+
+  const { showToast } = useToast();
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -182,7 +189,11 @@ export function FoodClient({
         setMealProtein("");
         setMealCarbs("");
         setMealFat("");
-        setStatusMessage("Meal logged successfully!");
+        setIsMealModalOpen(false);
+        showToast({
+          message: `Logged meal "${res.meal.name}" (${res.meal.calories} kcal)`,
+          type: "success",
+        });
       }
     } catch {
       setStatusMessage("Failed to log meal.");
@@ -192,24 +203,63 @@ export function FoodClient({
   }
 
   async function handleDeleteMeal(mealId: string) {
+    const deleted = summary.meals.find((m) => m.id === mealId);
+    if (!deleted) return;
+
+    // Optimistic removal
+    setSummary((prev) => ({
+      ...prev,
+      meals: prev.meals.filter((m) => m.id !== mealId),
+      totals: {
+        calories: Math.max(0, prev.totals.calories - deleted.calories),
+        protein: Math.max(0, Math.round((prev.totals.protein - parseFloat(deleted.protein)) * 10) / 10),
+        carbs: Math.max(0, Math.round((prev.totals.carbs - parseFloat(deleted.carbs)) * 10) / 10),
+        fat: Math.max(0, Math.round((prev.totals.fat - parseFloat(deleted.fat)) * 10) / 10),
+      },
+    }));
+
     setBusy(true);
     try {
-      const deleted = summary.meals.find((m) => m.id === mealId);
       await deleteMealAction(mealId);
-
-      if (deleted) {
-        setSummary((prev) => ({
-          ...prev,
-          meals: prev.meals.filter((m) => m.id !== mealId),
-          totals: {
-            calories: Math.max(0, prev.totals.calories - deleted.calories),
-            protein: Math.max(0, Math.round((prev.totals.protein - parseFloat(deleted.protein)) * 10) / 10),
-            carbs: Math.max(0, Math.round((prev.totals.carbs - parseFloat(deleted.carbs)) * 10) / 10),
-            fat: Math.max(0, Math.round((prev.totals.fat - parseFloat(deleted.fat)) * 10) / 10),
-          },
-        }));
-      }
+      showToast({
+        message: `Deleted "${deleted.name}"`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const res = await logMealAction({
+            date: deleted.date,
+            mealType: deleted.mealType as "breakfast" | "lunch" | "dinner" | "snack",
+            name: deleted.name,
+            calories: deleted.calories,
+            protein: parseFloat(deleted.protein),
+            carbs: parseFloat(deleted.carbs),
+            fat: parseFloat(deleted.fat),
+          });
+          if (res.success && res.meal) {
+            setSummary((prev) => ({
+              ...prev,
+              meals: [...prev.meals, res.meal as MealData],
+              totals: {
+                calories: prev.totals.calories + res.meal.calories,
+                protein: Math.round((prev.totals.protein + parseFloat(res.meal.protein)) * 10) / 10,
+                carbs: Math.round((prev.totals.carbs + parseFloat(res.meal.carbs)) * 10) / 10,
+                fat: Math.round((prev.totals.fat + parseFloat(res.meal.fat)) * 10) / 10,
+              },
+            }));
+          }
+        },
+      });
     } catch {
+      // Revert if error
+      setSummary((prev) => ({
+        ...prev,
+        meals: [...prev.meals, deleted],
+        totals: {
+          calories: prev.totals.calories + deleted.calories,
+          protein: Math.round((prev.totals.protein + parseFloat(deleted.protein)) * 10) / 10,
+          carbs: Math.round((prev.totals.carbs + parseFloat(deleted.carbs)) * 10) / 10,
+          fat: Math.round((prev.totals.fat + parseFloat(deleted.fat)) * 10) / 10,
+        },
+      }));
       setStatusMessage("Failed to delete meal.");
     } finally {
       setBusy(false);
@@ -668,9 +718,20 @@ export function FoodClient({
                       Today&apos;s Meals
                     </h2>
                   </div>
-                  <span className="muted" style={{ fontWeight: 600 }}>
-                    {summary.totals.calories} kcal total
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span className="muted number-tabular" style={{ fontWeight: 600 }}>
+                      {summary.totals.calories} kcal total
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-open-modal"
+                      onClick={() => setIsMealModalOpen(true)}
+                      style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem", minHeight: "38px" }}
+                    >
+                      <PlusIcon size={14} />
+                      <span>Log Meal</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="entries" style={{ marginTop: "1rem" }}>
@@ -706,11 +767,12 @@ export function FoodClient({
                       </div>
                       <button
                         type="button"
-                        className="danger"
-                        style={{ minHeight: "2rem", padding: "0.2rem 0.65rem", fontSize: "0.8rem" }}
+                        className="delete-icon-btn"
                         onClick={() => handleDeleteMeal(meal.id)}
+                        aria-label={`Delete meal ${meal.name}`}
+                        title="Delete meal"
                       >
-                        Delete
+                        <TrashIcon size={15} />
                       </button>
                     </div>
                   ))}
@@ -718,108 +780,38 @@ export function FoodClient({
               </section>
             </div>
 
-            {/* Right Column: Log a Meal Form & AI Assistant Prompt */}
-            <div className="dashboard-aside sticky">
-              <section className="surface" aria-labelledby="add-meal-title">
-                <h2 id="add-meal-title" style={{ fontSize: "1.2rem" }}>Log a Meal</h2>
-                <form onSubmit={handleLogMeal} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
-                  <label>
-                    Meal Type
-                    <select
-                      value={mealType}
-                      onChange={(e) =>
-                        setMealType(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")
-                      }
-                    >
-                      <option value="breakfast">Breakfast</option>
-                      <option value="lunch">Lunch</option>
-                      <option value="dinner">Dinner</option>
-                      <option value="snack">Snack</option>
-                    </select>
-                  </label>
-
-                  <label>
-                    Meal Name / Description
-                    <input
-                      type="text"
-                      placeholder="e.g. 200g Chicken breast & 150g Rice"
-                      value={mealName}
-                      onChange={(e) => setMealName(e.target.value)}
-                      required
-                    />
-                  </label>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <label>
-                      Calories (kcal)
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={mealCalories}
-                        onChange={(e) => setMealCalories(e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Protein (g)
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={mealProtein}
-                        onChange={(e) => setMealProtein(e.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <label>
-                      Carbs (g)
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={mealCarbs}
-                        onChange={(e) => setMealCarbs(e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Fat (g)
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={mealFat}
-                        onChange={(e) => setMealFat(e.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  <button type="submit" disabled={busy || !mealName.trim()} style={{ width: "100%", marginTop: "0.35rem" }}>
-                    + Add Meal
-                  </button>
-                </form>
-              </section>
-
+            {/* Right Column: AI Assistant Prompt & Nutrition Coaching */}
+            <div className="dashboard-aside">
               {/* Fast AI Chat Shortcut */}
-              <section className="surface" style={{ padding: "1.25rem", textAlign: "center" }}>
+              <section className="surface" style={{ padding: "1.35rem", textAlign: "center" }}>
                 <span className="badge badge-info" style={{ marginBottom: "0.4rem" }}>
                   Conversational Food AI
                 </span>
-                <h3 style={{ fontSize: "1rem", margin: "0.2rem 0 0.5rem" }}>
-                  Too lazy to type macros manually?
+                <h3 style={{ fontSize: "1.05rem", margin: "0.3rem 0 0.5rem" }}>
+                  Natural Language Logging
                 </h3>
-                <p className="muted" style={{ fontSize: "0.85rem", margin: "0 0 0.85rem", lineHeight: 1.4 }}>
-                  Just tell Food AI what you ate (e.g. &ldquo;am mâncat o ciorbă de pui cu smântână&rdquo;) and it estimates calories and logs it automatically.
+                <p className="muted" style={{ fontSize: "0.85rem", margin: "0 0 1rem", lineHeight: 1.5 }}>
+                  Simply tell Food AI what you ate (e.g. &ldquo;am mâncat o ciorbă de pui cu smântână&rdquo;) and it computes macros and logs it automatically.
                 </p>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => setActiveTab("chat")}
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.45rem", minHeight: "44px" }}
                 >
-                  <ChatIcon size={15} />
-                  Open Food Assistant
+                  <ChatIcon size={16} />
+                  <span>Open Food Assistant</span>
                 </button>
+              </section>
+
+              {/* Nutrition Guidelines Card */}
+              <section className="surface" style={{ padding: "1.35rem" }}>
+                <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", margin: "0 0 0.5rem" }}>
+                  Macro Priorities
+                </h3>
+                <p className="muted" style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5 }}>
+                  Hit your daily protein target first to preserve lean muscle mass. Water and steps directly correlate with energetic deficit consistency.
+                </p>
               </section>
             </div>
           </div>
@@ -1395,6 +1387,121 @@ export function FoodClient({
           {statusMessage}
         </p>
       )}
+
+      {/* Floating Action Button for Mobile */}
+      {activeTab === "daily" && (
+        <button
+          type="button"
+          className="mobile-fab-btn"
+          onClick={() => setIsMealModalOpen(true)}
+          aria-label="Log meal"
+        >
+          <PlusIcon size={24} />
+        </button>
+      )}
+
+      {/* Pop-up Modal with Heavy Blurred Background */}
+      <Modal
+        isOpen={isMealModalOpen}
+        onClose={() => setIsMealModalOpen(false)}
+        title="Log a Meal"
+      >
+        <form onSubmit={handleLogMeal} style={{ display: "grid", gap: "0.85rem" }}>
+          <label>
+            Meal Type
+            <select
+              value={mealType}
+              onChange={(e) =>
+                setMealType(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")
+              }
+            >
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+          </label>
+
+          <label>
+            Meal Name / Description
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. 200g Chicken breast & 150g Rice"
+              value={mealName}
+              onChange={(e) => setMealName(e.target.value)}
+              required
+            />
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <label>
+              Calories (kcal)
+              <input
+                type="number"
+                placeholder="0"
+                value={mealCalories}
+                onChange={(e) => setMealCalories(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
+            <label>
+              Protein (g)
+              <input
+                type="number"
+                step="0.1"
+                placeholder="0.0"
+                value={mealProtein}
+                onChange={(e) => setMealProtein(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <label>
+              Carbs (g)
+              <input
+                type="number"
+                step="0.1"
+                placeholder="0.0"
+                value={mealCarbs}
+                onChange={(e) => setMealCarbs(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
+            <label>
+              Fat (g)
+              <input
+                type="number"
+                step="0.1"
+                placeholder="0.0"
+                value={mealFat}
+                onChange={(e) => setMealFat(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setIsMealModalOpen(false)}
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !mealName.trim()}
+              style={{ flex: 2 }}
+            >
+              + Save Meal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </main>
   );
 }

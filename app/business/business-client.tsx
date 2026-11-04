@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "../components/navigation";
-import { CloseIcon, LockIcon } from "../components/icons";
+import { LockIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { Modal } from "../components/modal";
+import { useToast } from "../components/toast";
 import { BusinessDashboardData, BusinessIncomeItem } from "@/lib/business";
 import { addBusinessIncomeAction, deleteBusinessIncomeAction } from "@/app/actions/business";
 import { logExpenseAction, deleteExpenseAction } from "@/app/actions/money";
@@ -24,6 +26,12 @@ export function BusinessClient({
   const router = useRouter();
   const [dashboard, setDashboard] = useState<BusinessDashboardData>(initialDashboard);
 
+  // Modal & Tab states
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [transactionTab, setTransactionTab] = useState<"income" | "expense">("income");
+
+  const { showToast } = useToast();
+
   // Income form
   const [incomeAmount, setIncomeAmount] = useState("");
   const [incomeCategory, setIncomeCategory] = useState("Sales");
@@ -41,7 +49,6 @@ export function BusinessClient({
 
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
   const monthDate = new Date(dashboard.year, dashboard.month - 1, 1);
   const monthLabel = monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -64,7 +71,6 @@ export function BusinessClient({
   async function handleAddIncome(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg("");
-    setSuccessMsg("");
 
     const parsedAmount = parseFloat(incomeAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -95,7 +101,11 @@ export function BusinessClient({
         });
         setIncomeAmount("");
         setIncomeNote("");
-        setSuccessMsg("Income recorded successfully.");
+        setIsTransactionModalOpen(false);
+        showToast({
+          message: `Recorded income: +${parsedAmount.toFixed(2)} RON (${incomeCategory})`,
+          type: "success",
+        });
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to add income");
@@ -106,24 +116,65 @@ export function BusinessClient({
 
   // Handle Income Delete
   async function handleDeleteIncome(id: string, amount: number) {
+    const target = dashboard.incomes.find((i) => i.id === id);
+    if (!target) return;
+
+    // Optimistic removal
+    setDashboard((prev) => {
+      const newIncomes = prev.incomes.filter((i) => i.id !== id);
+      const newTotalIncome = Math.max(0, Math.round((prev.totalIncome - amount) * 100) / 100);
+      const newNetProfit = Math.round((newTotalIncome - prev.totalExpenses) * 100) / 100;
+      return {
+        ...prev,
+        incomes: newIncomes,
+        totalIncome: newTotalIncome,
+        netProfit: newNetProfit,
+      };
+    });
+
     setBusy(true);
-    setErrorMsg("");
     try {
       const res = await deleteBusinessIncomeAction(id);
       if (res.success) {
-        setDashboard((prev) => {
-          const newIncomes = prev.incomes.filter((i) => i.id !== id);
-          const newTotalIncome = Math.max(0, Math.round((prev.totalIncome - amount) * 100) / 100);
-          const newNetProfit = Math.round((newTotalIncome - prev.totalExpenses) * 100) / 100;
-          return {
-            ...prev,
-            incomes: newIncomes,
-            totalIncome: newTotalIncome,
-            netProfit: newNetProfit,
-          };
+        showToast({
+          message: `Deleted income +${amount.toFixed(2)} RON (${target.category})`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            const reRes = await addBusinessIncomeAction({
+              amount: target.amount,
+              category: target.category,
+              date: target.date,
+              note: target.note || undefined,
+            });
+            if (reRes.success && reRes.income) {
+              setDashboard((prev) => {
+                const newIncomes = [reRes.income as BusinessIncomeItem, ...prev.incomes];
+                const newTotalIncome = Math.round((prev.totalIncome + target.amount) * 100) / 100;
+                const newNetProfit = Math.round((newTotalIncome - prev.totalExpenses) * 100) / 100;
+                return {
+                  ...prev,
+                  incomes: newIncomes,
+                  totalIncome: newTotalIncome,
+                  netProfit: newNetProfit,
+                };
+              });
+            }
+          },
         });
       }
     } catch (err) {
+      // Revert if error
+      setDashboard((prev) => {
+        const newIncomes = [target, ...prev.incomes];
+        const newTotalIncome = Math.round((prev.totalIncome + amount) * 100) / 100;
+        const newNetProfit = Math.round((newTotalIncome - prev.totalExpenses) * 100) / 100;
+        return {
+          ...prev,
+          incomes: newIncomes,
+          totalIncome: newTotalIncome,
+          netProfit: newNetProfit,
+        };
+      });
       setErrorMsg(err instanceof Error ? err.message : "Failed to delete income");
     } finally {
       setBusy(false);
@@ -134,7 +185,6 @@ export function BusinessClient({
   async function handleAddExpense(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg("");
-    setSuccessMsg("");
 
     const parsedAmount = parseFloat(expenseAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -173,7 +223,11 @@ export function BusinessClient({
         });
         setExpenseAmount("");
         setExpenseNotes("");
-        setSuccessMsg("Business expense logged successfully.");
+        setIsTransactionModalOpen(false);
+        showToast({
+          message: `Recorded expense: -${parsedAmount.toFixed(2)} RON (${expenseCategory})`,
+          type: "success",
+        });
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to log expense");
@@ -184,24 +238,73 @@ export function BusinessClient({
 
   // Handle Expense Delete
   async function handleDeleteExpense(id: string, amount: number) {
+    const target = dashboard.recentExpenses.find((e) => e.id === id);
+    if (!target) return;
+
+    // Optimistic removal
+    setDashboard((prev) => {
+      const newExpenses = prev.recentExpenses.filter((e) => e.id !== id);
+      const newTotalExpenses = Math.max(0, Math.round((prev.totalExpenses - amount) * 100) / 100);
+      const newNetProfit = Math.round((prev.totalIncome - newTotalExpenses) * 100) / 100;
+      return {
+        ...prev,
+        recentExpenses: newExpenses,
+        totalExpenses: newTotalExpenses,
+        netProfit: newNetProfit,
+      };
+    });
+
     setBusy(true);
-    setErrorMsg("");
     try {
       const res = await deleteExpenseAction(id);
       if (res.success) {
-        setDashboard((prev) => {
-          const newExpenses = prev.recentExpenses.filter((e) => e.id !== id);
-          const newTotalExpenses = Math.max(0, Math.round((prev.totalExpenses - amount) * 100) / 100);
-          const newNetProfit = Math.round((prev.totalIncome - newTotalExpenses) * 100) / 100;
-          return {
-            ...prev,
-            recentExpenses: newExpenses,
-            totalExpenses: newTotalExpenses,
-            netProfit: newNetProfit,
-          };
+        showToast({
+          message: `Deleted expense -${amount.toFixed(2)} RON (${target.category})`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            const reRes = await logExpenseAction({
+              space: "business",
+              amount: target.amount,
+              category: target.category,
+              date: target.date,
+              notes: target.notes || undefined,
+            });
+            if (reRes.success && reRes.expense) {
+              const restored = {
+                id: reRes.expense.id,
+                amount: Number(reRes.expense.amount),
+                category: reRes.expense.category,
+                date: reRes.expense.date,
+                notes: reRes.expense.notes,
+              };
+              setDashboard((prev) => {
+                const newExpenses = [restored, ...prev.recentExpenses];
+                const newTotalExpenses = Math.round((prev.totalExpenses + target.amount) * 100) / 100;
+                const newNetProfit = Math.round((prev.totalIncome - newTotalExpenses) * 100) / 100;
+                return {
+                  ...prev,
+                  recentExpenses: newExpenses,
+                  totalExpenses: newTotalExpenses,
+                  netProfit: newNetProfit,
+                };
+              });
+            }
+          },
         });
       }
     } catch (err) {
+      // Revert if error
+      setDashboard((prev) => {
+        const newExpenses = [target, ...prev.recentExpenses];
+        const newTotalExpenses = Math.round((prev.totalExpenses + amount) * 100) / 100;
+        const newNetProfit = Math.round((prev.totalIncome - newTotalExpenses) * 100) / 100;
+        return {
+          ...prev,
+          recentExpenses: newExpenses,
+          totalExpenses: newTotalExpenses,
+          netProfit: newNetProfit,
+        };
+      });
       setErrorMsg(err instanceof Error ? err.message : "Failed to delete expense");
     } finally {
       setBusy(false);
@@ -214,15 +317,12 @@ export function BusinessClient({
     if (!taskTitle.trim()) return;
 
     setBusy(true);
-    setErrorMsg("");
     try {
-      const today = new Date().toISOString().slice(0, 10);
       const res = await createTodoAction({
         space: "business",
         title: taskTitle.trim(),
-        dueDate: today,
         isRecurring: false,
-        recurrencePattern: "none",
+        dueDate: new Date().toISOString().slice(0, 10),
       });
 
       if (res.success && res.todo) {
@@ -231,6 +331,10 @@ export function BusinessClient({
           pendingTasks: [res.todo as TodoItem, ...prev.pendingTasks],
         }));
         setTaskTitle("");
+        showToast({
+          message: `Created task "${taskTitle.trim()}"`,
+          type: "success",
+        });
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to add task");
@@ -241,42 +345,63 @@ export function BusinessClient({
 
   // Handle Task Toggle
   async function handleToggleTask(task: TodoItem) {
-    setBusy(true);
-    setErrorMsg("");
+    const nextCompleted = !task.isCompleted;
+    setDashboard((prev) => ({
+      ...prev,
+      pendingTasks: nextCompleted
+        ? prev.pendingTasks.filter((t) => t.id !== task.id)
+        : [...prev.pendingTasks, { ...task, isCompleted: false }],
+    }));
+
     try {
-      const res = await toggleTodoAction({
+      await toggleTodoAction({
         id: task.id,
-        isCompleted: !task.isCompleted,
+        isCompleted: nextCompleted,
       });
-      if (res.success) {
-        setDashboard((prev) => ({
-          ...prev,
-          pendingTasks: prev.pendingTasks.filter((t) => t.id !== task.id),
-        }));
-      }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to update task");
-    } finally {
-      setBusy(false);
+    } catch {
+      // Revert
+      setDashboard((prev) => ({
+        ...prev,
+        pendingTasks: [...prev.pendingTasks, task],
+      }));
     }
   }
 
   // Handle Task Delete
-  async function handleDeleteTask(taskId: string) {
-    setBusy(true);
-    setErrorMsg("");
+  async function handleDeleteTask(id: string) {
+    const target = dashboard.pendingTasks.find((t) => t.id === id);
+    if (!target) return;
+
+    setDashboard((prev) => ({
+      ...prev,
+      pendingTasks: prev.pendingTasks.filter((t) => t.id !== id),
+    }));
+
     try {
-      const res = await deleteTodoAction(taskId);
-      if (res.success) {
-        setDashboard((prev) => ({
-          ...prev,
-          pendingTasks: prev.pendingTasks.filter((t) => t.id !== taskId),
-        }));
-      }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to delete task");
-    } finally {
-      setBusy(false);
+      await deleteTodoAction(id);
+      showToast({
+        message: `Deleted task "${target.title}"`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const reRes = await createTodoAction({
+            space: "business",
+            title: target.title,
+            isRecurring: false,
+            dueDate: target.dueDate,
+          });
+          if (reRes.success && reRes.todo) {
+            setDashboard((prev) => ({
+              ...prev,
+              pendingTasks: [reRes.todo as TodoItem, ...prev.pendingTasks],
+            }));
+          }
+        },
+      });
+    } catch {
+      setDashboard((prev) => ({
+        ...prev,
+        pendingTasks: [...prev.pendingTasks, target],
+      }));
     }
   }
 
@@ -290,59 +415,54 @@ export function BusinessClient({
     <main>
       <Navigation userName={userName} />
 
-      {/* Month Selector Bar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1.25rem",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => changeMonth(-1)}
-          className="secondary"
-          style={{ minHeight: "2.4rem", padding: "0 0.85rem" }}
-          aria-label="Previous Month"
-        >
-          ← Prev Month
-        </button>
-        <div style={{ textAlign: "center" }}>
-          <span className="badge badge-info" style={{ marginBottom: "0.2rem" }}>
-            Monthly Accounting
-          </span>
-          <h2 style={{ fontSize: "1.35rem", margin: 0 }}>{monthLabel}</h2>
+      {/* Action Bar Header */}
+      <div className="action-bar-header">
+        {/* Month Selector */}
+        <div className="month-selector" style={{ margin: 0 }}>
+          <button
+            type="button"
+            className="month-nav-btn"
+            onClick={() => changeMonth(-1)}
+            aria-label="Previous Month"
+            disabled={busy}
+          >
+            ‹
+          </button>
+          <span className="month-label">{monthLabel}</span>
+          <button
+            type="button"
+            className="month-nav-btn"
+            onClick={() => changeMonth(1)}
+            aria-label="Next Month"
+            disabled={busy}
+          >
+            ›
+          </button>
         </div>
+
         <button
           type="button"
-          onClick={() => changeMonth(1)}
-          className="secondary"
-          style={{ minHeight: "2.4rem", padding: "0 0.85rem" }}
-          aria-label="Next Month"
+          className="btn-open-modal"
+          onClick={() => {
+            setErrorMsg("");
+            setIsTransactionModalOpen(true);
+          }}
+          aria-label="Open record transaction dialog"
         >
-          Next Month →
+          <PlusIcon size={16} />
+          <span>Record Transaction</span>
         </button>
       </div>
 
-      {/* Hero Financial Health Banner */}
-      <section className="surface" aria-labelledby="kpi-title" style={{ marginBottom: "1.5rem" }}>
-        <div className="section-heading">
-          <div>
-            <span className="badge badge-info">Family Business Dashboard</span>
-            <h2 id="kpi-title" style={{ marginTop: "0.25rem" }}>
-              Profit & Loss Overview
-            </h2>
-          </div>
-          <span
-            className={`badge ${isProfit ? "badge-success" : "badge-danger"}`}
-            style={{ fontSize: "0.85rem" }}
-          >
-            {isProfit ? "● Profitable Period" : "● Deficit Period"}
-          </span>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))", gap: "1rem", marginTop: "1.25rem" }}>
+      {/* Hero Financial Summary Banner */}
+      <section className="surface" style={{ marginBottom: "1.25rem", padding: "1.5rem" }} aria-label="Business Performance">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+            gap: "1rem",
+          }}
+        >
           {/* Net Profit Card */}
           <div
             className="macro-card"
@@ -354,6 +474,7 @@ export function BusinessClient({
           >
             <span className="macro-title">Monthly Net Profit (Incomes − Expenses)</span>
             <div
+              className="number-tabular"
               style={{
                 fontSize: "2.1rem",
                 fontWeight: 800,
@@ -369,34 +490,34 @@ export function BusinessClient({
               <span style={{ fontSize: "1rem", fontWeight: 600 }}>RON</span>
             </div>
             <span className="macro-target">
-              Profit Margin: <strong>{profitMargin}%</strong>
+              Profit Margin: <strong className="number-tabular">{profitMargin}%</strong>
             </span>
           </div>
 
           {/* Incomes Card */}
           <div className="macro-card">
             <span className="macro-title">Total Incomes Recorded</span>
-            <span className="macro-numbers" style={{ fontSize: "1.6rem", color: "#34c759" }}>
+            <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "#34c759" }}>
               +{dashboard.totalIncome.toLocaleString("ro-RO", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
               <span className="macro-target">RON</span>
             </span>
-            <span className="macro-target">{dashboard.incomes.length} incoming transactions</span>
+            <span className="macro-target number-tabular">{dashboard.incomes.length} incoming transactions</span>
           </div>
 
           {/* Expenses Card */}
           <div className="macro-card">
             <span className="macro-title">Total Business Expenses</span>
-            <span className="macro-numbers" style={{ fontSize: "1.6rem", color: "var(--danger)" }}>
+            <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "var(--danger)" }}>
               -{dashboard.totalExpenses.toLocaleString("ro-RO", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
               <span className="macro-target">RON</span>
             </span>
-            <span className="macro-target">{dashboard.recentExpenses.length} expense entries</span>
+            <span className="macro-target number-tabular">{dashboard.recentExpenses.length} expense entries</span>
           </div>
         </div>
       </section>
@@ -407,109 +528,31 @@ export function BusinessClient({
           {errorMsg}
         </p>
       )}
-      {successMsg && (
-        <p style={{ color: "#34c759", marginBottom: "1rem", padding: "0.6rem 0.85rem", background: "var(--success-subtle)", borderRadius: "0.65rem", fontSize: "0.9rem" }}>
-          {successMsg}
-        </p>
-      )}
 
-      {/* Main Responsive Bento Grid */}
+      {/* Main Responsive Grid */}
       <div className="dashboard-grid">
         {/* Left Column: Financial Records & Ledgers */}
         <div className="dashboard-main">
           {/* Incomes Ledger Card */}
-          <section className="surface" aria-labelledby="incomes-list-title">
+          <section className="surface" aria-labelledby="incomes-list-title" style={{ marginBottom: "1.25rem" }}>
             <div className="section-heading">
               <h2 id="incomes-list-title" style={{ fontSize: "1.2rem" }}>
                 Recorded Business Incomes
               </h2>
-              <span className="badge badge-success">+{dashboard.totalIncome.toFixed(2)} RON</span>
+              <span className="badge badge-success number-tabular">+{dashboard.totalIncome.toFixed(2)} RON</span>
             </div>
 
-            {/* Quick Add Income Form */}
-            <form onSubmit={handleAddIncome} style={{ marginTop: "1rem", display: "grid", gap: "0.75rem", padding: "1rem", background: "var(--surface-secondary)", borderRadius: "0.85rem", border: "1px solid var(--separator)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))", gap: "0.5rem" }}>
-                <label>
-                  Amount (RON)
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={incomeAmount}
-                    onChange={(e) => setIncomeAmount(e.target.value)}
-                    disabled={busy}
-                    required
-                  />
-                </label>
-
-                <label>
-                  Category
-                  <input
-                    type="text"
-                    placeholder="e.g. Sales, Consulting"
-                    value={incomeCategory}
-                    onChange={(e) => setIncomeCategory(e.target.value)}
-                    disabled={busy}
-                    required
-                  />
-                </label>
-
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={incomeDate}
-                    onChange={(e) => setIncomeDate(e.target.value)}
-                    disabled={busy}
-                    required
-                  />
-                </label>
-
-                <label>
-                  Note (Optional)
-                  <input
-                    type="text"
-                    placeholder="Client or Invoice #"
-                    value={incomeNote}
-                    onChange={(e) => setIncomeNote(e.target.value)}
-                    disabled={busy}
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={busy || !incomeAmount || !incomeCategory}
-                style={{ alignSelf: "start", background: "#34c759" }}
-              >
-                {busy ? "Saving..." : "+ Record Income"}
-              </button>
-            </form>
-
-            {/* Incomes List */}
-            <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.5rem" }}>
+            <div className="entries" style={{ marginTop: "1rem" }}>
               {dashboard.incomes.length === 0 ? (
-                <p className="muted" style={{ padding: "1.5rem 0", textAlign: "center" }}>
-                  No incomes recorded for {monthLabel}.
+                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                  No incomes recorded for {monthLabel}. Tap <strong>Record Transaction</strong> to add one.
                 </p>
               ) : (
                 dashboard.incomes.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "0.75rem 1rem",
-                      border: "1px solid var(--separator)",
-                      borderRadius: "0.65rem",
-                      background: "var(--surface-solid)",
-                    }}
-                  >
+                  <div key={item.id} className="entry-row">
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <span style={{ fontWeight: 600 }}>{item.category}</span>
+                        <strong>{item.category}</strong>
                         <span className="muted" style={{ fontSize: "0.8rem" }}>
                           {item.date}
                         </span>
@@ -521,24 +564,19 @@ export function BusinessClient({
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-                      <span style={{ fontWeight: 700, color: "#34c759", fontSize: "1.1rem" }}>
+                      <span className="number-tabular" style={{ fontWeight: 700, color: "#34c759", fontSize: "1.1rem" }}>
                         +{item.amount.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
                         RON
                       </span>
                       <button
                         type="button"
+                        className="delete-icon-btn"
                         onClick={() => handleDeleteIncome(item.id, item.amount)}
                         disabled={busy}
                         aria-label={`Delete income ${item.category}`}
-                        style={{
-                          padding: "0.25rem 0.55rem",
-                          fontSize: "0.75rem",
-                          background: "transparent",
-                          color: "var(--danger)",
-                          border: "1px solid var(--separator)",
-                        }}
+                        title="Delete income"
                       >
-                        Delete
+                        <TrashIcon size={15} />
                       </button>
                     </div>
                   </div>
@@ -553,31 +591,20 @@ export function BusinessClient({
               <h2 id="expenses-list-title" style={{ fontSize: "1.2rem" }}>
                 Recent Business Expenses
               </h2>
-              <span className="badge badge-danger">-{dashboard.totalExpenses.toFixed(2)} RON</span>
+              <span className="badge badge-danger number-tabular">-{dashboard.totalExpenses.toFixed(2)} RON</span>
             </div>
 
-            <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+            <div className="entries" style={{ marginTop: "1rem" }}>
               {dashboard.recentExpenses.length === 0 ? (
-                <p className="muted" style={{ padding: "1.5rem 0", textAlign: "center" }}>
-                  No business expenses logged yet.
+                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                  No business expenses logged yet for this month.
                 </p>
               ) : (
                 dashboard.recentExpenses.map((exp) => (
-                  <div
-                    key={exp.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "0.75rem 1rem",
-                      border: "1px solid var(--separator)",
-                      borderRadius: "0.65rem",
-                      background: "var(--surface-solid)",
-                    }}
-                  >
+                  <div key={exp.id} className="entry-row">
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <span style={{ fontWeight: 600 }}>{exp.category}</span>
+                        <strong>{exp.category}</strong>
                         <span className="muted" style={{ fontSize: "0.8rem" }}>
                           {exp.date}
                         </span>
@@ -589,24 +616,19 @@ export function BusinessClient({
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-                      <span style={{ fontWeight: 700, color: "var(--danger)", fontSize: "1.1rem" }}>
+                      <span className="number-tabular" style={{ fontWeight: 700, color: "var(--danger)", fontSize: "1.1rem" }}>
                         -{exp.amount.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
                         RON
                       </span>
                       <button
                         type="button"
+                        className="delete-icon-btn"
                         onClick={() => handleDeleteExpense(exp.id, exp.amount)}
                         disabled={busy}
                         aria-label={`Delete expense ${exp.category}`}
-                        style={{
-                          padding: "0.25rem 0.55rem",
-                          fontSize: "0.75rem",
-                          background: "transparent",
-                          color: "var(--danger)",
-                          border: "1px solid var(--separator)",
-                        }}
+                        title="Delete expense"
                       >
-                        Delete
+                        <TrashIcon size={15} />
                       </button>
                     </div>
                   </div>
@@ -616,77 +638,9 @@ export function BusinessClient({
           </section>
         </div>
 
-        {/* Right Column: Fast Expense Logger & Operations Tasks */}
-        <div className="dashboard-aside sticky">
-          {/* Quick Business Expense Form Card */}
-          <section className="surface" aria-labelledby="add-expense-title">
-            <h2 id="add-expense-title" style={{ fontSize: "1.15rem" }}>
-              + Quick Business Expense
-            </h2>
-
-            <form onSubmit={handleAddExpense} style={{ marginTop: "0.85rem", display: "grid", gap: "0.75rem" }}>
-              <label>
-                Amount (RON)
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="0.00"
-                  value={expenseAmount}
-                  onChange={(e) => setExpenseAmount(e.target.value)}
-                  disabled={busy}
-                  required
-                />
-              </label>
-
-              <label>
-                Expense Category
-                <select
-                  value={expenseCategory}
-                  onChange={(e) => setExpenseCategory(e.target.value)}
-                  disabled={busy}
-                >
-                  {Array.from(new Set(businessCategories)).map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={expenseDate}
-                  onChange={(e) => setExpenseDate(e.target.value)}
-                  disabled={busy}
-                  required
-                />
-              </label>
-
-              <label>
-                Notes (Optional)
-                <input
-                  type="text"
-                  placeholder="Supplier, invoice, receipt"
-                  value={expenseNotes}
-                  onChange={(e) => setExpenseNotes(e.target.value)}
-                  disabled={busy}
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={busy || !expenseAmount || !expenseCategory}
-                style={{ width: "100%", marginTop: "0.35rem" }}
-              >
-                {busy ? "Logging..." : "+ Log Business Expense"}
-              </button>
-            </form>
-          </section>
-
-          {/* Business Operations Tasks (Todos) */}
+        {/* Right Column: Operations Tasks & Privacy */}
+        <div className="dashboard-aside">
+          {/* Business Operations Tasks */}
           <section className="surface" aria-labelledby="tasks-title">
             <div className="section-heading">
               <div>
@@ -695,13 +649,13 @@ export function BusinessClient({
                   Pending Business Tasks
                 </h2>
               </div>
-              <span className="muted" style={{ fontSize: "0.85rem" }}>
+              <span className="muted number-tabular" style={{ fontSize: "0.85rem" }}>
                 {dashboard.pendingTasks.length} active
               </span>
             </div>
 
             {/* Quick Add Task */}
-            <form onSubmit={handleAddTask} style={{ display: "flex", gap: "0.5rem", marginTop: "0.85rem" }}>
+            <form onSubmit={handleAddTask} style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
               <input
                 type="text"
                 placeholder="New business task..."
@@ -710,7 +664,7 @@ export function BusinessClient({
                 disabled={busy}
                 style={{ flex: 1 }}
               />
-              <button type="submit" disabled={busy || !taskTitle.trim()}>
+              <button type="submit" disabled={busy || !taskTitle.trim()} style={{ padding: "0.4rem 0.85rem" }}>
                 + Add
               </button>
             </form>
@@ -718,7 +672,7 @@ export function BusinessClient({
             {/* Tasks list */}
             <div style={{ marginTop: "0.85rem", display: "grid", gap: "0.45rem" }}>
               {dashboard.pendingTasks.length === 0 ? (
-                <p className="muted" style={{ fontSize: "0.85rem", padding: "1rem 0", textAlign: "center" }}>
+                <p className="muted" style={{ fontSize: "0.85rem", padding: "1.25rem 0", textAlign: "center" }}>
                   All business tasks completed!
                 </p>
               ) : (
@@ -729,10 +683,10 @@ export function BusinessClient({
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "0.55rem 0.75rem",
+                      padding: "0.6rem 0.85rem",
                       border: "1px solid var(--separator)",
-                      borderRadius: "0.55rem",
-                      background: "var(--surface-solid)",
+                      borderRadius: "0.65rem",
+                      background: "var(--surface-secondary)",
                     }}
                   >
                     <label
@@ -743,34 +697,27 @@ export function BusinessClient({
                         cursor: "pointer",
                         margin: 0,
                         fontSize: "0.9rem",
+                        flex: 1,
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={t.isCompleted}
                         onChange={() => handleToggleTask(t)}
-                        disabled={busy}
-                        style={{ width: "1.15rem", height: "1.15rem" }}
+                        style={{ cursor: "pointer", width: "1.1rem", height: "1.1rem" }}
                       />
-                      <span>{t.title}</span>
+                      <span style={{ textDecoration: t.isCompleted ? "line-through" : "none" }}>
+                        {t.title}
+                      </span>
                     </label>
                     <button
                       type="button"
+                      className="delete-icon-btn"
                       onClick={() => handleDeleteTask(t.id)}
-                      disabled={busy}
-                      aria-label={`Delete task ${t.title}`}
-                      style={{
-                        padding: "0.2rem 0.45rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: "transparent",
-                        color: "var(--danger)",
-                        border: "1px solid var(--separator)",
-                        borderRadius: "0.35rem",
-                      }}
+                      aria-label="Delete task"
+                      title="Delete task"
                     >
-                      <CloseIcon size={12} />
+                      <TrashIcon size={14} />
                     </button>
                   </div>
                 ))
@@ -778,27 +725,210 @@ export function BusinessClient({
             </div>
           </section>
 
-          {/* Privacy & Quarantine Badge */}
+          {/* Privacy Card */}
           <div
             style={{
-              padding: "0.85rem",
-              borderRadius: "0.85rem",
+              padding: "1.15rem",
+              borderRadius: "0.95rem",
               background: "var(--surface-secondary)",
               border: "1px solid var(--separator)",
               textAlign: "center",
-              fontSize: "0.78rem",
+              fontSize: "0.8125rem",
               color: "var(--secondary)",
-              lineHeight: 1.4,
             }}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LockIcon size={14} />
-              <strong>Private Business Vault:</strong>
-            </span>{" "}
-            Excluded from Food AI, MCP tools, and external LLMs. Data is isolated in your dedicated tenant database.
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "var(--text)", fontWeight: 600 }}>
+              <LockIcon size={14} /> Strict Enterprise Privacy
+            </span>
+            <p style={{ margin: "0.35rem 0 0", lineHeight: 1.5 }}>
+              All business incomes, expenses, margins, and operational tasks are isolated from AI providers and course audit logs.
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Floating Action Button for Mobile */}
+      <button
+        type="button"
+        className="mobile-fab-btn"
+        onClick={() => {
+          setErrorMsg("");
+          setIsTransactionModalOpen(true);
+        }}
+        aria-label="Record transaction"
+      >
+        <PlusIcon size={24} />
+      </button>
+
+      {/* Pop-up Modal with Heavy Blurred Background */}
+      <Modal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
+        title="Record Business Transaction"
+      >
+        {/* Transaction Type Segmented Switcher */}
+        <div className="space-switcher" style={{ margin: "0 0 1.25rem" }}>
+          <button
+            type="button"
+            className={`space-tab ${transactionTab === "income" ? "active" : ""}`}
+            onClick={() => setTransactionTab("income")}
+          >
+            Income (+)
+          </button>
+          <button
+            type="button"
+            className={`space-tab ${transactionTab === "expense" ? "active" : ""}`}
+            onClick={() => setTransactionTab("expense")}
+          >
+            Expense (−)
+          </button>
+        </div>
+
+        {transactionTab === "income" ? (
+          <form onSubmit={handleAddIncome} style={{ display: "grid", gap: "0.85rem" }}>
+            <label>
+              Amount (RON)
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                autoFocus
+                value={incomeAmount}
+                onChange={(e) => setIncomeAmount(e.target.value)}
+                disabled={busy}
+                required
+                className="number-tabular"
+              />
+            </label>
+
+            <label>
+              Income Category
+              <input
+                type="text"
+                placeholder="e.g. Sales, Consulting, Retainer"
+                value={incomeCategory}
+                onChange={(e) => setIncomeCategory(e.target.value)}
+                disabled={busy}
+                required
+              />
+            </label>
+
+            <label>
+              Date
+              <input
+                type="date"
+                value={incomeDate}
+                onChange={(e) => setIncomeDate(e.target.value)}
+                disabled={busy}
+                required
+              />
+            </label>
+
+            <label>
+              Note (Optional)
+              <input
+                type="text"
+                placeholder="Client or Invoice #"
+                value={incomeNote}
+                onChange={(e) => setIncomeNote(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setIsTransactionModalOpen(false)}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={busy || !incomeAmount || !incomeCategory}
+                style={{ flex: 2, background: "#34c759", color: "#000" }}
+              >
+                {busy ? "Saving..." : "+ Record Income"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleAddExpense} style={{ display: "grid", gap: "0.85rem" }}>
+            <label>
+              Amount (RON)
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                autoFocus
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(e.target.value)}
+                disabled={busy}
+                required
+                className="number-tabular"
+              />
+            </label>
+
+            <label>
+              Expense Category
+              <select
+                value={expenseCategory}
+                onChange={(e) => setExpenseCategory(e.target.value)}
+                disabled={busy}
+              >
+                {Array.from(new Set(businessCategories)).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Date
+              <input
+                type="date"
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+                disabled={busy}
+                required
+              />
+            </label>
+
+            <label>
+              Notes (Optional)
+              <input
+                type="text"
+                placeholder="Supplier, invoice, receipt"
+                value={expenseNotes}
+                onChange={(e) => setExpenseNotes(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setIsTransactionModalOpen(false)}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={busy || !expenseAmount || !expenseCategory}
+                style={{ flex: 2 }}
+              >
+                {busy ? "Logging..." : "+ Log Business Expense"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </main>
   );
 }
