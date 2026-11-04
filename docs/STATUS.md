@@ -28,7 +28,8 @@ Tier 2, Iteration 7 (Food AI Connector — MCP for Claude & Function Calling for
     - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
     - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
     - UI in `/food` under "AI Connector (Claude & Gemini)" tab with single-click token generation, secure one-time copy, active token revocation, and copyable config snippets for Claude Desktop and Gemini cURL.
-    - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, 8 tests, 57 total passing across repo).
+    - In-App Food AI Chat: interactive conversational assistant inside the Food UI powered by Gemini 2.5 Flash via native fetch; automatically estimates calories/macros from freeform text, executes the quarantined `log_meal` or `add_shopping_item` tools, and updates the UI real-time.
+    - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, `tests/food-chat.test.ts`, 60 total passing across repo).
 
 ## Verification status breakdown
 
