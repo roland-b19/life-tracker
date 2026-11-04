@@ -1,31 +1,37 @@
 :root {
   /* Moody Minimalist Semi-Dark Theme (Cupertino Pro) */
-  --background: #0b0c10;
-  --surface: rgba(19, 22, 31, 0.72);
-  --surface-solid: #13151f;
-  --surface-secondary: #1a1d2b;
-  --surface-modal: #151824;
-  --text: #f3f4f8;
+  --background: #090b10;
+  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(30, 48, 80, 0.32) 0%, rgba(9, 11, 16, 0) 100%),
+               radial-gradient(800px 400px at 100% 100%, rgba(20, 30, 50, 0.22) 0%, rgba(9, 11, 16, 0) 100%);
+  --surface: rgba(18, 22, 33, 0.78);
+  --surface-solid: #131622;
+  --surface-secondary: rgba(26, 32, 48, 0.65);
+  --surface-modal: #151825;
+  --surface-highlight: rgba(255, 255, 255, 0.06);
+  --text: #f8fafc;
   --secondary: #94a3b8;
   --tint: #38bdf8;
-  --tint-hover: #0ea5e9;
-  --tint-subtle: rgba(56, 189, 248, 0.12);
-  --success: #10b981;
-  --success-subtle: rgba(16, 185, 129, 0.14);
-  --warning: #f59e0b;
-  --warning-subtle: rgba(245, 158, 11, 0.14);
-  --danger: #f43f5e;
-  --danger-subtle: rgba(244, 63, 94, 0.14);
+  --tint-hover: #7dd3fc;
+  --tint-glow: 0 0 24px rgba(56, 189, 248, 0.28);
+  --tint-subtle: rgba(56, 189, 248, 0.14);
+  --tint-border: rgba(56, 189, 248, 0.35);
+  --success: #34d399;
+  --success-glow: 0 0 20px rgba(52, 211, 153, 0.25);
+  --success-subtle: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.15);
+  --danger: #fb7185;
+  --danger-subtle: rgba(251, 113, 133, 0.15);
   --separator: rgba(255, 255, 255, 0.08);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --card-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.55), 0 2px 6px 0 rgba(0, 0, 0, 0.3);
-  --card-shadow-hover: 0 16px 40px -4px rgba(0, 0, 0, 0.7), 0 4px 12px 0 rgba(0, 0, 0, 0.4);
-  --glass-blur: blur(24px) saturate(190%);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --card-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), 0 12px 32px -4px rgba(0, 0, 0, 0.65), 0 2px 6px 0 rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), 0 18px 44px -4px rgba(0, 0, 0, 0.8), 0 4px 12px 0 rgba(0, 0, 0, 0.4);
+  --glass-blur: blur(28px) saturate(190%);
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --background: #0b0c10;
+    --background: #090b10;
   }
 }
 
@@ -49,7 +55,9 @@ body {
   min-height: 100vh;
   color: var(--text);
   background: var(--background);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  background-image: var(--bg-radial);
+  background-attachment: fixed;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 1.0625rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -194,7 +202,7 @@ h3 {
 
 /* Navigation Component */
 .nav-header {
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.5rem;
   background: var(--surface);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -215,9 +223,19 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.9rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
   border-bottom: 1px solid var(--separator);
+}
+
+.nav-brand-group {
+  min-width: 0;
+}
+
+.nav-app-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .app-subtitle {
@@ -229,16 +247,32 @@ h3 {
   color: var(--tint);
 }
 
+.cloud-pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+}
+
 .app-title {
   font-size: 1.6rem;
   font-weight: 800;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 @media (min-width: 768px) {
   .app-title {
     font-size: 1.85rem;
   }
+}
+
+.app-description {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--secondary);
 }
 
 .nav-user-actions {
@@ -264,12 +298,12 @@ h3 {
   height: 1.65rem;
   border-radius: 50%;
   background: var(--tint);
-  color: #ffffff;
+  color: #090b10;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .signout-btn {
@@ -290,7 +324,7 @@ h3 {
   transform: none;
 }
 
-/* Segmented Control Navigation */
+/* Desktop Segmented Control Navigation */
 .segmented-control-wrapper {
   position: relative;
   width: 100%;
@@ -299,7 +333,7 @@ h3 {
 
 .segmented-control {
   display: flex;
-  background: var(--surface-secondary);
+  background: var(--surface-solid);
   border: 1px solid var(--separator);
   border-radius: 0.85rem;
   padding: 0.25rem;
@@ -321,7 +355,7 @@ h3 {
   gap: 0.45rem;
   padding: 0.55rem 0.95rem;
   border-radius: 0.65rem;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
   color: var(--secondary);
@@ -334,13 +368,14 @@ h3 {
 
 .segment-tab:hover {
   color: var(--text);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .segment-tab.active {
-  background: var(--surface-solid);
+  background: var(--tint-subtle);
   color: var(--tint);
-  box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--tint-border);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
 }
 
 .segment-tab svg {
@@ -354,42 +389,212 @@ h3 {
   opacity: 1;
 }
 
-/* Gym specific components */
+/* ==========================================================================
+   Mobile Native Bottom Tab Bar (App Experience)
+   ========================================================================== */
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Hide desktop header segments on phone */
+  .desktop-nav-bar {
+    display: none !important;
+  }
+
+  /* Compact minimal top bar on phone */
+  .nav-header {
+    padding: 0.75rem 1rem !important;
+    margin-bottom: 1rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .nav-top {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: none !important;
+  }
+
+  .app-title {
+    font-size: 1.3rem !important;
+  }
+
+  .app-description {
+    display: none !important;
+  }
+
+  .command-trigger-btn .command-trigger-label,
+  .command-trigger-btn .command-kbd {
+    display: none !important;
+  }
+
+  .command-trigger-btn {
+    min-width: 38px;
+    padding: 0.4rem !important;
+    justify-content: center;
+  }
+
+  .user-name-text {
+    display: none !important;
+  }
+
+  .user-profile-badge {
+    padding: 0.2rem !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  .signout-btn {
+    padding: 0.25rem 0.55rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Main container safe area on phone */
+  main {
+    padding-top: calc(0.75rem + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+    width: min(100% - 1.25rem, 82rem) !important;
+  }
+
+  /* Native Apple Mobile Tab Bar */
+  .mobile-bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 850;
+    background: rgba(12, 14, 21, 0.92);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom));
+    height: calc(3.85rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    color: var(--secondary);
+    text-decoration: none;
+    gap: 0.2rem;
+    transition: all 0.15s ease;
+    padding: 0.2rem 0;
+  }
+
+  .mobile-nav-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    stroke-width: 2.1;
+    transition: transform 0.15s ease;
+  }
+
+  .mobile-nav-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .mobile-nav-item.active {
+    color: var(--tint);
+  }
+
+  .mobile-nav-item.active .mobile-nav-icon svg {
+    transform: scale(1.12);
+  }
+
+  /* Floating Action Button (FAB) sits comfortably above bottom tab bar on mobile */
+  .mobile-fab-btn {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+    right: 1.15rem !important;
+    z-index: 860 !important;
+  }
+
+  /* On phone: declutter secondary desktop sidebars */
+  .dashboard-aside {
+    display: none !important;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
+
+.segment-tab.active svg {
+  opacity: 1;
+}
+
+/* Badges & Pills */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.22rem 0.6rem;
-  border-radius: 0.5rem;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.6rem;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 
 .badge-info {
-  background: var(--tint-subtle);
-  color: var(--tint);
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.28);
 }
 
 .badge-warning {
-  background: var(--warning-subtle);
-  color: var(--warning);
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.28);
 }
 
 .badge-danger {
-  background: var(--danger-subtle);
-  color: var(--danger);
+  background: rgba(251, 113, 133, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.28);
 }
 
 .badge-rest {
-  background: rgba(142, 142, 147, 0.15);
+  background: rgba(148, 163, 184, 0.12);
   color: var(--secondary);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .badge-success {
-  background: var(--success-subtle);
-  color: var(--success);
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+}
+
+.badge-streak {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  font-weight: 800;
+}
+
+.badge-carried {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.28);
+}
+
+.badge-reminder {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  font-size: 0.75rem;
 }
 
 .deload-card {
@@ -668,10 +873,11 @@ input,
 select,
 textarea {
   width: 100%;
-  padding: 0.6rem 0.85rem;
+  padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: var(--surface-solid);
-  border: 1px solid var(--separator);
+  background: rgba(14, 18, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.85rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -684,24 +890,26 @@ textarea:focus {
 }
 
 button {
-  padding: 0.6rem 1.25rem;
-  color: #ffffff;
+  padding: 0.65rem 1.25rem;
+  color: #090b10;
   background: var(--tint);
   border: 0;
   cursor: pointer;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.01em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  border-radius: 0.85rem;
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.3);
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 button:hover:not(:disabled) {
-  filter: brightness(0.96);
+  background: var(--tint-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px -2px rgba(0, 113, 227, 0.35);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.45);
 }
 
 button:active:not(:disabled) {
@@ -710,20 +918,22 @@ button:active:not(:disabled) {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
   transform: none;
   box-shadow: none;
 }
 
 button.secondary {
-  color: var(--tint);
-  background: transparent;
-  border: 1px solid var(--tint);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: none;
 }
 
 button.secondary:hover:not(:disabled) {
-  background: var(--tint-subtle);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 button.danger {
@@ -946,9 +1156,10 @@ textarea:focus-visible {
 }
 
 .category-chip.active {
-  background: var(--tint);
-  color: #ffffff;
+  background: var(--tint-subtle);
+  color: var(--tint);
   border-color: var(--tint);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
 }
 
 .breakdown-row {
@@ -1124,7 +1335,8 @@ textarea:focus-visible {
 .todo-checkbox-btn.checked {
   background: var(--tint);
   border-color: var(--tint);
-  color: #ffffff;
+  color: #090b10;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
 }
 
 .todo-title {
@@ -1219,9 +1431,9 @@ textarea:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(7, 9, 14, 0.72);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  background: rgba(5, 7, 12, 0.78);
+  backdrop-filter: blur(32px) saturate(200%) brightness(0.65);
+  -webkit-backdrop-filter: blur(32px) saturate(200%) brightness(0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1240,10 +1452,10 @@ textarea:focus-visible {
 
 .modal-card {
   width: 100%;
-  background: var(--surface-modal);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1.35rem;
-  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: #141724;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.5rem;
+  box-shadow: 0 30px 70px -10px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   overflow: hidden;
