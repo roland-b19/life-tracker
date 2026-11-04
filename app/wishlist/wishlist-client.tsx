@@ -309,19 +309,6 @@ export function WishlistClient({
         </div>
       </div>
 
-      {/* Floating Action Button for Mobile */}
-      <button
-        type="button"
-        className="mobile-fab-btn"
-        onClick={() => {
-          setErrorMsg("");
-          setIsAddModalOpen(true);
-        }}
-        aria-label="Add purchase desire"
-      >
-        <PlusIcon size={24} />
-      </button>
-
       {/* Pop-up Modal with Heavy Blurred Background */}
       <Modal
         isOpen={isAddModalOpen}

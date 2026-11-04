@@ -552,19 +552,6 @@ export function MoneyClient({
         </div>
       </div>
 
-      {/* Floating Action Button on Mobile */}
-      <button
-        type="button"
-        className="mobile-fab-btn"
-        onClick={() => {
-          setErrorMsg(null);
-          setIsExpenseModalOpen(true);
-        }}
-        aria-label="Log new expense"
-      >
-        <PlusIcon size={24} />
-      </button>
-
       {/* Modal: Log Expense with Blurred Backdrop */}
       <Modal
         isOpen={isExpenseModalOpen}

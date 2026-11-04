@@ -357,19 +357,6 @@ export function WeightPage({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {/* Floating Action Button for Mobile Single-Thumb Usage */}
-      <button
-        type="button"
-        className="mobile-fab-btn"
-        onClick={() => {
-          setError("");
-          setIsModalOpen(true);
-        }}
-        aria-label="Add weigh-in"
-      >
-        <PlusIcon size={24} />
-      </button>
-
       {/* Pop-up Modal with Heavy Blurred Background */}
       <Modal
         isOpen={isModalOpen}

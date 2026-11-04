@@ -104,6 +104,12 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   3. Repositioned the mobile FAB `+` button above the bottom tab bar (`calc(4.75rem + env(safe-area-inset-bottom))`).
   4. Redesigned color tokens to deliver a deep velvet moody atmosphere (`#090b10` with subtle top ambient radial glow), smoked glass cards (`rgba(18, 22, 33, 0.78)` with `backdrop-filter: blur(28px)` and inner top hairline highlights `inset 0 1px 0 0 rgba(255, 255, 255, 0.09)`), and electric jewel accents (luminous ice cyan `#38bdf8`, neon emerald `#34d399`, golden amber `#fbbf24`, coral rose `#fb7185`).
   5. Completely restyled the sign-in screen (`app/signin/page.tsx`) to match the smoked glass aesthetic with glowing status indicators and high-contrast inputs. Zero new dependencies. All 67 Vitest tests pass.
+- **2026-11-04 — Crisp Flat Glass, Centered Popup Modals & Removal of Redundant Controls.** User-directed refinement:
+  1. Removed keyboard shortcut indicators and the command menu trigger from the navigation header.
+  2. Stripped all drop/glow shadows from buttons, cards, chips, tabs, inputs, and modals (`box-shadow: none`), delivering a clean, crisp, flat smoked glass aesthetic.
+  3. Ensured full parity across desktop and mobile: stopped hiding secondary dashboard sidebars on mobile (`.dashboard-aside`) so features like Gym split day selectors and Business task management remain directly accessible.
+  4. Standardized all add/log entry dialogs as centered popup modals on both desktop and mobile with heavy blurred backdrops (`backdrop-filter: blur(28px)`), completely removing the sliding mobile bottom-sheet behavior.
+  5. Removed redundant bottom-right floating action buttons (FAB) across all modules (Weight, Money, Food, Tasks, Wishlist, Business) since each module already features a clear in-page action button. Zero new dependencies. All 67 Vitest tests pass.
 
 ## Open
 
