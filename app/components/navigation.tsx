@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -10,6 +11,14 @@ interface NavigationProps {
 
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
 
   const getPageTitle = () => {
     if (pathname.startsWith("/gym")) return "Gym";
@@ -107,66 +116,113 @@ export function Navigation({ userName }: NavigationProps) {
     },
   ];
 
+  const primary = navLinks.slice(0, 4);
+  const overflow = navLinks.slice(4);
+  const moreActive = overflow.some((l) => l.isActive);
+  const initial = userName.charAt(0).toUpperCase();
+  const signOutNow = () => signOut({ callbackUrl: "/signin" });
+
   return (
     <>
-      {/* Top Header */}
-      <header className="nav-header">
-        <div className="nav-top">
-          <div className="nav-brand-group">
-            <div className="nav-app-tag">
-              <span className="app-subtitle">Life Tracker</span>
-              <span className="cloud-pulse-dot" title="Cloud database online & secure" />
-            </div>
-            <h1 className="app-title">{getPageTitle()}</h1>
-            <p className="app-description">{getPageSubtitle()}</p>
-          </div>
-
-          <div className="nav-user-actions">
-            <div className="user-profile-badge">
-              <span className="user-avatar-circle">{userName.charAt(0).toUpperCase()}</span>
-              <span className="user-name-text">{userName}</span>
-            </div>
-
-            <button
-              className="signout-btn"
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/signin" })}
-              title="Sign out of your account"
-            >
-              Sign out
-            </button>
-          </div>
+      {/* Desktop sidebar (>= 1024px) */}
+      <aside className="side" aria-label="Sidebar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 13l5 5L20 6" />
+            </svg>
+          </span>
+          Life Tracker
         </div>
+        <nav aria-label="Main Navigation" style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+          {navLinks.map((link) => (
+            <NextLink
+              key={link.href}
+              href={link.href}
+              className={`nav-link ${link.isActive ? "active" : ""}`}
+              aria-current={link.isActive ? "page" : undefined}
+            >
+              {link.icon}
+              <span>{link.label}</span>
+            </NextLink>
+          ))}
+        </nav>
+        <div className="side-user">
+          <div className="side-user-row">
+            <span className="user-avatar-circle">{initial}</span>
+            <span>{userName}</span>
+          </div>
+          <button className="signout-btn" type="button" onClick={signOutNow}>
+            Sign out
+          </button>
+        </div>
+      </aside>
 
-        {/* Desktop Segmented Tabs (hidden on phone, replaced by native bottom tab bar) */}
-        <div className="segmented-control-wrapper desktop-nav-bar">
-          <nav className="segmented-control" aria-label="Main Navigation">
-            {navLinks.map((link) => (
+      {/* Page title */}
+      <header className="page-head">
+        <div>
+          <div className="eyebrow">
+            <span>Life Tracker</span>
+            <span className="cloud-pulse-dot" title="Cloud database online & secure" />
+          </div>
+          <h1 className="app-title">{getPageTitle()}</h1>
+          <p className="app-description">{getPageSubtitle()}</p>
+        </div>
+      </header>
+
+      {/* Phone and tablet: floating tab bar with a More menu */}
+      {moreOpen && (
+        <>
+          <div className="more-scrim" onClick={() => setMoreOpen(false)} />
+          <div className="more-menu" id="more-menu" aria-label="More">
+            <div className="more-user">
+              <span className="user-avatar-circle">{initial}</span>
+              <span>{userName}</span>
+            </div>
+            {overflow.map((link) => (
               <NextLink
                 key={link.href}
                 href={link.href}
-                className={`segment-tab ${link.isActive ? "active" : ""}`}
+                className={`nav-link ${link.isActive ? "active" : ""}`}
+                onClick={() => setMoreOpen(false)}
               >
                 {link.icon}
                 <span>{link.label}</span>
               </NextLink>
             ))}
-          </nav>
-        </div>
-      </header>
-
-      {/* Mobile Native-Style Bottom Tab Bar (fixed at bottom of phone screen) */}
-      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
-        {navLinks.map((link) => (
+            <button className="signout-btn" type="button" onClick={signOutNow}>
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+      <nav className="tabbar" aria-label="Mobile Navigation">
+        {primary.map((link) => (
           <NextLink
             key={link.href}
             href={link.href}
-            className={`mobile-nav-item ${link.isActive ? "active" : ""}`}
+            className={`tab-item ${link.isActive ? "active" : ""}`}
+            aria-current={link.isActive ? "page" : undefined}
+            onClick={() => setMoreOpen(false)}
           >
-            <div className="mobile-nav-icon">{link.icon}</div>
-            <span className="mobile-nav-label">{link.label}</span>
+            {link.icon}
+            <span>{link.label}</span>
           </NextLink>
         ))}
+        <button
+          type="button"
+          className={`tab-item ${moreActive || moreOpen ? "active" : ""}`}
+          aria-expanded={moreOpen}
+          aria-controls="more-menu"
+          onClick={() => setMoreOpen((v) => !v)}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="19" cy="12" r="1.8" />
+          </svg>
+          <span>More</span>
+        </button>
       </nav>
     </>
   );

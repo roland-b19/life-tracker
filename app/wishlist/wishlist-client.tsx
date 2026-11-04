@@ -192,15 +192,15 @@ export function WishlistClient({
                             textTransform: "capitalize",
                             background:
                               item.priority === "high"
-                                ? "rgba(255, 59, 48, 0.15)"
+                                ? "rgba(240, 138, 138, 0.15)"
                                 : item.priority === "medium"
-                                ? "rgba(255, 149, 0, 0.15)"
-                                : "rgba(142, 142, 147, 0.15)",
+                                ? "rgba(239, 197, 111, 0.15)"
+                                : "rgba(179, 168, 161, 0.15)",
                             color:
                               item.priority === "high"
-                                ? "#ff3b30"
+                                ? "var(--danger)"
                                 : item.priority === "medium"
-                                ? "#ff9500"
+                                ? "var(--warning)"
                                 : "var(--secondary)",
                           }}
                         >
@@ -241,7 +241,7 @@ export function WishlistClient({
                           fontSize: "0.8rem",
                           background: "var(--success-subtle)",
                           color: "var(--success)",
-                          border: "1px solid rgba(52, 199, 89, 0.25)",
+                          border: "1px solid rgba(143, 209, 158, 0.25)",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.25rem",

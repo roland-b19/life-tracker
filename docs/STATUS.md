@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-04 by Antigravity (Crisp Flat Glass & Centered Popups)_
+_Last updated: 2026-11-04 by Claude Code (Ember design system)_
 
 ## Phase
 
@@ -10,13 +10,14 @@ Tier 3, Iteration 8 (Wishlist & Family Business Dashboard) is 100% complete, ver
 Responsive UI/UX Overhaul (Unslop + UI-UX-Pro-Max Bento Architecture + Apple HIG) across all 7 modules is 100% complete and merged in `main` (PR #22).
 Experience Elevation (Moody Minimalist Theme Option B, Blurred Modal Popups & Bottom Sheets, Command Menu ⌘K, Undo Toasts, Tabular Numbers, and 20 Precision Details) is 100% complete and verified.
 Mobile-First Elevation (Native iOS Frosted Bottom Tab Bar, 54px Compact Header, Decluttered Mobile Feed, Smoked Glass Depth & Specular Highlights, Glowing Jewel Accents, Smoked Glass Sign-In) is 100% complete and verified.
+Ember Design System (dark warm graphite palette, SF Pro system font, Apple spring motion, no visible scrollbars, desktop sidebar plus mobile floating tab bar with More; see `docs/decisions.md` and `.agents/skills/apple-design/references/project-design-system.md`) is implemented on branch `feat/ember-design-system`, pending PR review and merge.
 Clean Flat Polish (No Button Shadows, Centered Blurred Popups, Removal of Redundant FABs & Shortcut Hints, Full Desktop & Mobile Feature Parity) is 100% complete and verified.
 
 ## Current focus
 
 Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud Deployment.
 
-## Verification status breakdown
+## Application features (local)
 
 - **Implemented locally:**
   - Pinned non-root container (`Dockerfile` with Node 24 LTS, `nextjs` user 1001).
@@ -109,13 +110,9 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. Implement Tier 3, Iteration 8 locally per `docs/iteration-8.md`:
-   - Drizzle schema for `wishlist_items` and `business_incomes` with least-privilege permissions.
-   - Owner-scoped DAL and Server Actions for Wishlist and Business.
-   - Comprehensive Vitest test suites (`tests/wishlist.test.ts` and `tests/business.test.ts`).
-   - Apple HIG interfaces at `/wishlist` and `/business` with top navigation updates.
-   - Pull request and merge into `main`.
-2. Maintain local-only verification (no Azure deployments).
+1. Review and merge the Ember design PR (`feat/ember-design-system`).
+2. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
+3. Maintain local-only verification until then (no Azure deployments).
 
 ## Open questions
 
@@ -128,6 +125,14 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-04 — Ember Design System (Claude Code):
+  - Applied the user-validated artifact choices: palette Ember, SF Pro system stack, Apple spring motion, no visible scrollbars, dark only.
+  - New navigation: translucent sidebar on desktop (1024 px and up); floating blurred tab bar on phones with four modules plus a More menu (Tasks, Wishlist, Business, user, Sign out).
+  - All UI colors now come from tokens in `app/globals.css`; the leftover iOS hex colors in Weight, Food, Business and Wishlist were mapped to Ember tokens. Added `--on-tint`, press scale on buttons, card entrance rise, border-tint hover and a `prefers-reduced-transparency` fallback.
+  - Added `.agents/skills/apple-design/references/project-design-system.md` (tokens, rules, documented deviations) and linked it from the skill; `.claude/skills/*` are symlinks, so they stay in sync.
+  - Project clean-up: tracked files reviewed, nothing irrelevant to remove (`.next`, `.env*`, `tsconfig.tsbuildinfo`, `graphify-out/` are git-ignored local files and were left alone); removed the stale "Next" list and the duplicated heading in this file.
+  - Verification: lint, typecheck, 67 Vitest tests and the production build (Dockerfile env) pass; checked visually in headless Chrome for Weight, Money (390 px and 1440 px), Gym and Food (1440 px). Self-review then checked Tasks, Wishlist, Business and sign-in at 1440 px, Wishlist, Business and sign-in at 375 px (no horizontal overflow), and the More menu (open, Escape and scrim close, link navigation, 44 px targets). Review fixes: sign-in card off-center (sidebar offset now scoped with `main:has(.side)`), invalid menu ARIA roles removed, last hard-coded `#000` and white border replaced by tokens, five unused CSS tokens deleted. Not checked: Safari/iOS devices, VoiceOver, Gym/Food/Weight/Money on a real phone.
 
 - 2026-11-04 — Total De-sloppification & Native Apple HIG Vector Icons (Unslop + Impeccable + Apple HIG):
   - Completely purged emojis across all 7 modules (headers, buttons, badges, notifications, AI chat prompt pills).

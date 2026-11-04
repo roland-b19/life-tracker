@@ -36,6 +36,8 @@ Rule of thumb: use the system component first; build custom only if no system co
 
 ## 3. HIG concept to web (HTML/CSS)
 
+Life Tracker overrides several defaults below (dark only, Ember tokens, spring motion, no visible scrollbars): see `project-design-system.md` first.
+
 - **Font.** `font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;` gives SF on Apple devices and the native UI font elsewhere. Do not self-host SF fonts on the web (licensing: see `resources.md`).
 - **Type scale.** Use the iOS text-style table in `foundations-visual.md` as the scale (body 17 pt maps to 17 CSS px at default). Size in `rem` so browser text-size settings work; Safari also exposes `font: -apple-system-body` for Dynamic Type (verify before depending on it). Support zoom to 200% without loss of content.
 - **Color.** Define semantic tokens as CSS custom properties on `:root` (`--label`, `--secondary-label`, `--background`, `--grouped-background`, `--separator`, `--tint`, ...), override under `@media (prefers-color-scheme: dark)`, and under `@media (prefers-contrast: more)`. Set `color-scheme: light dark`. Follow the system appearance; do not add an in-app light/dark switch (HIG Dark Mode rule). Contrast at least 4.5:1, aim for 7:1 for small text.
