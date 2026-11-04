@@ -66,7 +66,7 @@ STRICT SECURITY & PRIVACY QUARANTINE RULES:
     },
   ];
 
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   try {
@@ -94,6 +94,7 @@ STRICT SECURITY & PRIVACY QUARANTINE RULES:
     const parts = (candidate?.content?.parts as Array<{
       text?: string;
       functionCall?: { name: string; args: Record<string, unknown> };
+      [key: string]: unknown;
     }>) || [];
 
     const functionCallPart = parts.find((p) => p.functionCall);
@@ -115,7 +116,7 @@ STRICT SECURITY & PRIVACY QUARANTINE RULES:
         ...contents,
         {
           role: "model",
-          parts: [{ functionCall: { name, args: args || {} } }],
+          parts: [functionCallPart],
         },
         {
           role: "user",
@@ -143,8 +144,10 @@ STRICT SECURITY & PRIVACY QUARANTINE RULES:
       let finalReply = "";
       if (followUpResponse.ok) {
         const followUpData = await followUpResponse.json();
-        finalReply =
-          followUpData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const followUpParts = (followUpData.candidates?.[0]?.content?.parts as Array<{
+          text?: string;
+        }>) || [];
+        finalReply = followUpParts.map((p) => p.text || "").join("").trim();
       }
 
       if (!finalReply) {
