@@ -928,7 +928,7 @@ export function FoodClient({
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-heading">
             <div>
-              <span className="badge badge-info">Gemini 2.5 Flash</span>
+              <span className="badge badge-info">Gemini Flash AI</span>
               <h2 id="chat-title" style={{ marginTop: "0.25rem" }}>
                 💬 Food AI Assistant
               </h2>

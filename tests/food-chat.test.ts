@@ -72,7 +72,7 @@ describe("Food AI In-App Chat with Gemini & Strict Quarantine", () => {
           },
         ],
       }),
-    } as any);
+    } as unknown as Response);
 
     // Call 2: Gemini returns friendly text response after tool execution
     fetchMock.mockResolvedValueOnce({
@@ -91,7 +91,7 @@ describe("Food AI In-App Chat with Gemini & Strict Quarantine", () => {
           },
         ],
       }),
-    } as any);
+    } as unknown as Response);
 
     const result = await sendFoodChatMessage(
       userId,
@@ -112,3 +112,4 @@ describe("Food AI In-App Chat with Gemini & Strict Quarantine", () => {
     expect(loggedMeal?.calories).toBe(550);
   });
 });
+
