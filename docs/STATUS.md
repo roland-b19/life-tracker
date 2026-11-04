@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-04 by Claude Code (Ember design system)_
+_Last updated: 2026-11-04 by Antigravity (Native iOS PWA Standalone & Gesture Polish)_
 
 ## Phase
 
@@ -10,8 +10,9 @@ Tier 3, Iteration 8 (Wishlist & Family Business Dashboard) is 100% complete, ver
 Responsive UI/UX Overhaul (Unslop + UI-UX-Pro-Max Bento Architecture + Apple HIG) across all 7 modules is 100% complete and merged in `main` (PR #22).
 Experience Elevation (Moody Minimalist Theme Option B, Blurred Modal Popups & Bottom Sheets, Command Menu ⌘K, Undo Toasts, Tabular Numbers, and 20 Precision Details) is 100% complete and verified.
 Mobile-First Elevation (Native iOS Frosted Bottom Tab Bar, 54px Compact Header, Decluttered Mobile Feed, Smoked Glass Depth & Specular Highlights, Glowing Jewel Accents, Smoked Glass Sign-In) is 100% complete and verified.
-Ember Design System (dark warm graphite palette, SF Pro system font, Apple spring motion, no visible scrollbars, desktop sidebar plus mobile floating tab bar with More; see `docs/decisions.md` and `.agents/skills/apple-design/references/project-design-system.md`) is implemented on branch `feat/ember-design-system`, pending PR review and merge.
-Clean Flat Polish (No Button Shadows, Centered Blurred Popups, Removal of Redundant FABs & Shortcut Hints, Full Desktop & Mobile Feature Parity) is 100% complete and verified.
+Ember Design System & Navigation (dark warm graphite palette, SF Pro font, spring physics, desktop sidebar & mobile floating tab bar) is 100% complete and merged in `main` (PR #28).
+Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
+Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
 ## Current focus
 
