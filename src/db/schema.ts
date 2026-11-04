@@ -7,6 +7,7 @@ import {
   pgTable,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -297,6 +298,11 @@ export const expenseCategories = pgTable(
     icon: varchar("icon", { length: 30 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+  (table) => [
+    uniqueIndex("expense_categories_default_unique_idx")
+      .on(table.space, table.name)
+      .where(sql`${table.userId} IS NULL`),
+  ],
 );
 
 export const expenses = pgTable(

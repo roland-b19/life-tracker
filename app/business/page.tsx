@@ -41,7 +41,7 @@ export default async function BusinessPage(props: PageProps) {
     <BusinessClient
       userName={session.user.name ?? "User"}
       initialDashboard={dashboard}
-      businessCategories={businessCategories.map((c) => c.name)}
+      businessCategories={Array.from(new Set(businessCategories.map((c) => c.name)))}
     />
   );
 }

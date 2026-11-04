@@ -96,6 +96,19 @@ describe("Money module: Data Access, Analytics & Authorization", () => {
     expect(userBCats.some((c) => c.name === "Freelance Tools")).toBe(false);
   });
 
+  it("prevents duplicate default categories during concurrent seeding", async () => {
+    await Promise.all([
+      getExpenseCategories(userA, "business"),
+      getExpenseCategories(userA, "business"),
+      getExpenseCategories(userB, "business"),
+    ]);
+
+    const businessCats = await getExpenseCategories(userA, "business");
+    const names = businessCats.map((c) => c.name);
+    const uniqueNames = Array.from(new Set(names));
+    expect(names.length).toBe(uniqueNames.length);
+  });
+
   it("enforces multi-user isolation on expenses", async () => {
     await logExpense(userA, {
       space: "personal",

@@ -126,6 +126,13 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-04 — Expense Category Concurrency & Deduplication Fix:
+  - Eliminated duplicate React child key warnings (`Business Other`, `Inventory & Stock`, etc.).
+  - Added PostgreSQL partial unique index `expense_categories_default_unique_idx` on `(space, name) WHERE user_id IS NULL` via migration `0009_cold_golden_guardian.sql`.
+  - Added in-memory promise locking and `onConflictDoNothing()` in `ensureDefaultCategories()` to protect against parallel seeding race conditions.
+  - Added defensive `Set` deduplication in `getExpenseCategories()` and React select option lists.
+  - Cleaned up duplicate rows in dev and test databases; all 67 Vitest tests passing.
+
 - 2026-11-04 — Responsive Bento UI/UX Overhaul (Unslop + UI-UX-Pro-Max + Apple HIG) merged into `main` (PR #22):
   - Fixed narrow single-column layout constraint (`main` expanded from fixed 42rem to responsive 84rem container).
   - Implemented dynamic 2-column Bento Dashboard layout (`.dashboard-grid`, `.dashboard-main`, `.dashboard-aside`) on desktop across all 7 views (Weigh-ins, Gym, Food, Money, Tasks, Wishlist, Business).

@@ -53,7 +53,12 @@ export async function getExpenseCategories(
     )
     .orderBy(expenseCategories.name);
 
-  return rows;
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (seen.has(r.name)) return false;
+    seen.add(r.name);
+    return true;
+  });
 }
 
 export async function createCustomCategory(
