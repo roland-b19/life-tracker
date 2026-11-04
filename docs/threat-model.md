@@ -1,6 +1,6 @@
 # Threat model: Life Tracker
 
-Owner: the user (app owner)  ·  Last reviewed: 2026-11-03 (Azure 2B preparation audit)  ·  Review trigger: new module, new data type, new external service, new trust boundary, before each release.
+Owner: the user (app owner)  ·  Last reviewed: 2026-11-04 (Iteration 7 Food AI Connector)  ·  Review trigger: new module, new data type, new external service, new trust boundary, before each release.
 Procedure: `.agents/skills/secure-development/references/threat-modeling.md`. Spec: `docs/spec.md`. Data: `docs/security/data-inventory.md`. Accepted risks: `docs/security/risk-register.md`.
 
 Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Container Apps, PostgreSQL Flexible Server, Storage Queue, Entra External ID. Iteration 1 runs only Next.js and local PostgreSQL; Azure and Entra are deferred. The infrastructure contract now requires an immutable image digest; no Azure registry or runtime has been deployed to verify it.
@@ -21,7 +21,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 | A6 | To-do tasks and reminders (personal and business) | personal | database, queue | low |
 | A7 | Wishlist | personal | database | low |
 | A8 | Account identity and sessions (Entra tokens, refresh tokens) | secret | Entra; tokens in browser/session | account takeover exposes A1-A7 |
-| A9 | Connector credentials (OAuth grants issued to Claude/Gemini) | secret | database (hashed or Entra-issued) **(stack)** | attacker acts as the user on food tools |
+| A9 | Connector credentials (SHA-256 hashed personal bearer tokens for Claude MCP / Gemini) | secret | database (`api_tokens` table, SHA-256 hashed, plaintext shown once) | attacker acts as the user on food tools |
 | A10 | Push subscriptions (endpoint + keys per device) | secret-ish | database | spam or tracking of the device |
 | A11 | Application secrets and infra credentials (Key Vault, CI) | secret | Key Vault, CI secrets | full compromise |
 | A12 | Availability of the app and data integrity (backups) | n/a | Azure | loss of history; nuisance only |

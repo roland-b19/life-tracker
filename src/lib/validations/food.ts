@@ -8,6 +8,7 @@ export const logMealSchema = z.object({
   protein: z.number().min(0).max(1000),
   carbs: z.number().min(0).max(1000),
   fat: z.number().min(0).max(1000),
+  isEstimated: z.boolean().default(false).optional(),
 });
 
 export const updateMetricsSchema = z.object({
