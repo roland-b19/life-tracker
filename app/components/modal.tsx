@@ -58,7 +58,6 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <div className="modal-grabber" aria-hidden="true" />
           <div className="modal-header-row">
             <h2 id="modal-title" className="modal-title">
               {title}

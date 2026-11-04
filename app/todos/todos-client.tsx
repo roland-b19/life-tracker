@@ -551,19 +551,6 @@ export function TodosClient({
         </div>
       </div>
 
-      {/* Floating Action Button for Mobile */}
-      <button
-        type="button"
-        className="mobile-fab-btn"
-        onClick={() => {
-          setErrorMsg(null);
-          setIsTaskModalOpen(true);
-        }}
-        aria-label="Add new task"
-      >
-        <PlusIcon size={24} />
-      </button>
-
       {/* Modal: Create Task with Blurred Backdrop */}
       <Modal
         isOpen={isTaskModalOpen}

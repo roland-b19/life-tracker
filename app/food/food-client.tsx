@@ -1388,18 +1388,6 @@ export function FoodClient({
         </p>
       )}
 
-      {/* Floating Action Button for Mobile */}
-      {activeTab === "daily" && (
-        <button
-          type="button"
-          className="mobile-fab-btn"
-          onClick={() => setIsMealModalOpen(true)}
-          aria-label="Log meal"
-        >
-          <PlusIcon size={24} />
-        </button>
-      )}
-
       {/* Pop-up Modal with Heavy Blurred Background */}
       <Modal
         isOpen={isMealModalOpen}

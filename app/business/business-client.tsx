@@ -747,19 +747,6 @@ export function BusinessClient({
         </div>
       </div>
 
-      {/* Floating Action Button for Mobile */}
-      <button
-        type="button"
-        className="mobile-fab-btn"
-        onClick={() => {
-          setErrorMsg("");
-          setIsTransactionModalOpen(true);
-        }}
-        aria-label="Record transaction"
-      >
-        <PlusIcon size={24} />
-      </button>
-
       {/* Pop-up Modal with Heavy Blurred Background */}
       <Modal
         isOpen={isTransactionModalOpen}
