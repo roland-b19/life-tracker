@@ -30,6 +30,7 @@ export async function createTodoAction(rawInput: unknown) {
   const parsed = createTodoSchema.parse(rawInput);
   const todo = await createTodo(userId, parsed);
   safeRevalidate("/todos");
+  safeRevalidate("/business");
   return { success: true, todo };
 }
 
@@ -38,6 +39,7 @@ export async function toggleTodoAction(rawInput: unknown) {
   const parsed = toggleTodoSchema.parse(rawInput);
   const updated = await toggleTodo(userId, parsed);
   safeRevalidate("/todos");
+  safeRevalidate("/business");
   return { success: true, updated };
 }
 
@@ -46,6 +48,7 @@ export async function deleteTodoAction(todoId: string) {
   const parsed = deleteTodoSchema.parse({ id: todoId });
   const deleted = await deleteTodo(userId, parsed.id);
   safeRevalidate("/todos");
+  safeRevalidate("/business");
   return { success: true, deleted };
 }
 

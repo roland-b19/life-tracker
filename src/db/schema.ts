@@ -373,3 +373,43 @@ export const apiTokens = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );
+
+// --- TIER 3: WISHLIST ---
+
+export const wishlistItems = pgTable(
+  "wishlist_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    url: varchar("url", { length: 500 }),
+    estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2 }).notNull(),
+    priority: varchar("priority", { length: 10 }).default("medium").notNull(), // 'low', 'medium', 'high'
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("wishlist_price_positive", sql`${table.estimatedPrice} > 0`),
+  ],
+);
+
+// --- TIER 3: FAMILY BUSINESS ---
+
+export const businessIncomes = pgTable(
+  "business_incomes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    category: varchar("category", { length: 50 }).default("Sales").notNull(),
+    date: date("date").notNull(),
+    note: varchar("note", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("business_income_positive", sql`${table.amount} > 0`),
+  ],
+);
