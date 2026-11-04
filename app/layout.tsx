@@ -5,6 +5,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Life Tracker",
   description: "Private daily tracking for your life.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Life Tracker",
+  },
 };
 
 export const viewport: Viewport = {
