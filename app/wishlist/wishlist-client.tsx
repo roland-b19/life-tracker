@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
+import { CheckIcon } from "../components/icons";
 import { addWishlistItemAction, deleteWishlistItemAction } from "@/app/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
 
@@ -204,10 +205,13 @@ export function WishlistClient({
                           background: "var(--success-subtle)",
                           color: "var(--success)",
                           border: "1px solid rgba(52, 199, 89, 0.25)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.25rem",
                         }}
                         title="Mark as bought and remove from list"
                       >
-                        ✓ Bought
+                        <CheckIcon size={12} strokeWidth={2.5} /> Bought
                       </button>
                     </div>
                   </div>
@@ -285,9 +289,9 @@ export function WishlistClient({
                   onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
                   disabled={busy}
                 >
-                  <option value="high">🔴 High Priority</option>
-                  <option value="medium">🟡 Medium Priority</option>
-                  <option value="low">⚪ Low Priority</option>
+                  <option value="high">High Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="low">Low Priority</option>
                 </select>
               </label>
 

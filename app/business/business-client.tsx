@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "../components/navigation";
+import { CloseIcon, LockIcon } from "../components/icons";
 import { BusinessDashboardData, BusinessIncomeItem } from "@/lib/business";
 import { addBusinessIncomeAction, deleteBusinessIncomeAction } from "@/app/actions/business";
 import { logExpenseAction, deleteExpenseAction } from "@/app/actions/money";
@@ -760,13 +761,16 @@ export function BusinessClient({
                       aria-label={`Delete task ${t.title}`}
                       style={{
                         padding: "0.2rem 0.45rem",
-                        fontSize: "0.75rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                         background: "transparent",
                         color: "var(--danger)",
                         border: "1px solid var(--separator)",
+                        borderRadius: "0.35rem",
                       }}
                     >
-                      ✕
+                      <CloseIcon size={12} />
                     </button>
                   </div>
                 ))
@@ -787,7 +791,11 @@ export function BusinessClient({
               lineHeight: 1.4,
             }}
           >
-            🔒 <strong>Private Business Vault:</strong> Excluded from Food AI, MCP tools, and external LLMs. Data is isolated in your dedicated tenant database.
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <LockIcon size={14} />
+              <strong>Private Business Vault:</strong>
+            </span>{" "}
+            Excluded from Food AI, MCP tools, and external LLMs. Data is isolated in your dedicated tenant database.
           </div>
         </div>
       </div>

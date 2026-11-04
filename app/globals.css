@@ -735,7 +735,8 @@ button.danger:hover:not(:disabled) {
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 0.2rem solid var(--tint);
   outline-offset: 0.15rem;
 }
@@ -1017,18 +1018,24 @@ select:focus-visible {
   background: transparent;
   border: none;
   color: var(--secondary);
-  font-size: 1.15rem;
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 0.4rem;
+  padding: 0.35rem;
+  border-radius: 0.45rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .delete-icon-btn:hover {
   color: var(--danger);
   background: var(--danger-subtle);
+}
+
+.delete-icon-btn:active {
+  transform: scale(0.92);
 }
 
 /* To-Do & Habits Module Styles (Apple HIG) */

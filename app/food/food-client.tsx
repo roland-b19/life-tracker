@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
 import {
+  DropIcon,
+  FootstepsIcon,
+  ScaleIcon,
+  ChatIcon,
+  LockIcon,
+  CheckIcon,
+} from "../components/icons";
+import {
   addShoppingItemAction,
   addWaterAction,
   clearBoughtItemsAction,
@@ -453,7 +461,7 @@ export function FoodClient({
           className={activeTab === "chat" ? "" : "secondary"}
           onClick={() => setActiveTab("chat")}
         >
-          💬 Food AI Chat
+          Food Assistant
         </button>
         <button
           type="button"
@@ -539,7 +547,9 @@ export function FoodClient({
             {/* Water Tap Counter */}
             <div className="water-card">
               <div>
-                <strong style={{ fontSize: "1.05rem" }}>💧 Water Tracker</strong>
+                <span style={{ fontSize: "1.05rem", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <DropIcon size={16} /> Water Tracker
+                </span>
                 <p style={{ margin: "0.15rem 0 0" }} className="muted">
                   {summary.metrics.waterMl} ml / {targets.waterMl} ml ({waterPct}%)
                 </p>
@@ -581,7 +591,9 @@ export function FoodClient({
             >
               {/* Daily Steps */}
               <div className="surface" style={{ padding: "0.85rem", background: "var(--background)" }}>
-                <span className="macro-title">👟 Daily Steps</span>
+                <span className="macro-title" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <FootstepsIcon size={14} /> Daily Steps
+                </span>
                 <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
                   <input
                     type="number"
@@ -606,7 +618,9 @@ export function FoodClient({
 
               {/* 7-Day Weight Analytics */}
               <div className="surface" style={{ padding: "0.85rem", background: "var(--background)" }}>
-                <span className="macro-title">⚖️ Weight Trend</span>
+                <span className="macro-title" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <ScaleIcon size={14} /> Weight Trend
+                </span>
                 <div style={{ marginTop: "0.4rem" }}>
                   <strong style={{ fontSize: "1.1rem" }}>
                     {weightAnalytics.sevenDayAverage
@@ -801,9 +815,10 @@ export function FoodClient({
                   type="button"
                   className="secondary"
                   onClick={() => setActiveTab("chat")}
-                  style={{ width: "100%" }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
                 >
-                  💬 Open Food AI Chat
+                  <ChatIcon size={15} />
+                  Open Food Assistant
                 </button>
               </section>
             </div>
@@ -959,16 +974,16 @@ export function FoodClient({
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-heading">
             <div>
-              <span className="badge badge-info">Gemini Flash AI</span>
-              <h2 id="chat-title" style={{ marginTop: "0.25rem" }}>
-                💬 Food AI Assistant
+              <span className="badge badge-info">Gemini Flash</span>
+              <h2 id="chat-title" style={{ marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <ChatIcon size={20} /> Food AI Assistant
               </h2>
             </div>
             <span
               className="badge"
-              style={{ background: "rgba(52, 199, 89, 0.15)", color: "#34c759" }}
+              style={{ background: "rgba(52, 199, 89, 0.15)", color: "#34c759", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
             >
-              🔒 Restricted: Food &amp; Macros Only
+              <LockIcon size={12} /> Restricted: Food &amp; Macros Only
             </span>
           </div>
 
@@ -979,11 +994,11 @@ export function FoodClient({
           {/* Prompt suggestions pills */}
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
             {[
-              "🍕 2 felii de pizza la prânz",
-              "🍳 Omletă din 3 ouă cu telemea",
-              "🍗 200g piept de pui cu 150g orez",
-              "📊 Ce calorii mai am pentru azi?",
-              "🛒 Adaugă lapte de ovăz și 6 ouă pe listă",
+              "2 felii de pizza la prânz",
+              "Omletă din 3 ouă cu telemea",
+              "200g piept de pui cu 150g orez",
+              "Ce calorii mai am pentru azi?",
+              "Adaugă lapte de ovăz și 6 ouă pe listă",
             ].map((prompt) => (
               <button
                 key={prompt}
@@ -1056,7 +1071,7 @@ export function FoodClient({
                     >
                       {msg.toolExecuted.name === "log_meal" && (
                         <span>
-                          ✨ <strong>Masă adăugată:</strong>{" "}
+                          <strong>Masă adăugată:</strong>{" "}
                           {String(msg.toolExecuted.args.name || "")} —{" "}
                           {String(msg.toolExecuted.args.calories || 0)} kcal ·{" "}
                           {String(msg.toolExecuted.args.protein || 0)}g P ·{" "}
@@ -1066,15 +1081,15 @@ export function FoodClient({
                       )}
                       {msg.toolExecuted.name === "add_shopping_item" && (
                         <span>
-                          🛒 <strong>Adăugat pe listă:</strong>{" "}
+                          <strong>Adăugat pe listă:</strong>{" "}
                           {String(msg.toolExecuted.args.name || "")}
                         </span>
                       )}
                       {msg.toolExecuted.name === "get_daily_food_summary" && (
-                        <span>📊 <strong>Sumar zilnic actualizat</strong></span>
+                        <span><strong>Sumar zilnic actualizat</strong></span>
                       )}
                       {msg.toolExecuted.name === "get_recipes" && (
-                        <span>📖 <strong>Rețete preluate</strong></span>
+                        <span><strong>Rețete preluate</strong></span>
                       )}
                     </div>
                   )}
@@ -1151,7 +1166,11 @@ export function FoodClient({
               lineHeight: "1.4",
             }}
           >
-            <strong>🔒 Strict AI Data Line Quarantine:</strong> Connected AI assistants can
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <LockIcon size={14} />
+              <strong>Strict AI Data Line Quarantine:</strong>
+            </span>{" "}
+            Connected AI assistants can
             log meals, read recipes, and check today&apos;s food totals. By security design,
             they have <em>zero access</em> to your body weight, steps, money, habits, or tasks.
           </div>
@@ -1176,7 +1195,9 @@ export function FoodClient({
                   gap: "0.5rem",
                 }}
               >
-                <strong style={{ color: "#34c759" }}>✨ New Food API Token Generated</strong>
+                <strong style={{ color: "#34c759", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                  <CheckIcon size={14} /> New Food API Token Generated
+                </strong>
                 <button
                   type="button"
                   style={{ minHeight: "2rem", padding: "0.2rem 0.75rem", fontSize: "0.85rem" }}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Navigation } from "../components/navigation";
+import { TrashIcon, PlusIcon, CloseIcon, LockIcon, TagIcon } from "../components/icons";
 import {
   createCategoryAction,
   deleteExpenseAction,
@@ -91,7 +92,7 @@ export function MoneyClient({
   // New category modal / inline state
   const [showNewCatModal, setShowNewCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("🏷️");
+  const [newCatIcon, setNewCatIcon] = useState("");
 
   const [isPending, startTransition] = useTransition();
 
@@ -221,7 +222,7 @@ export function MoneyClient({
         const res = await createCategoryAction({
           name: newCatName.trim(),
           space,
-          icon: newCatIcon || "🏷️",
+          icon: newCatIcon.trim() || null,
         });
 
         if (res.success && res.category) {
@@ -260,7 +261,7 @@ export function MoneyClient({
           className={`space-tab ${space === "personal" ? "active" : ""}`}
           onClick={() => handleSpaceChange("personal")}
         >
-          👤 Personal Expenses
+          Personal
         </button>
         <button
           type="button"
@@ -269,7 +270,7 @@ export function MoneyClient({
           className={`space-tab ${space === "business" ? "active" : ""}`}
           onClick={() => handleSpaceChange("business")}
         >
-          💼 Business Expenses
+          Business
         </button>
       </div>
 
@@ -390,7 +391,7 @@ export function MoneyClient({
                         onClick={() => handleDeleteExpense(exp.id)}
                         aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
                       >
-                        🗑️
+                        <TrashIcon size={15} />
                       </button>
                     </div>
                   </div>
@@ -439,7 +440,9 @@ export function MoneyClient({
                     className={`category-chip ${selectedCategory === c.name ? "active" : ""}`}
                     onClick={() => setSelectedCategory(c.name)}
                   >
-                    <span>{c.icon ?? "🏷️"}</span>
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      {c.icon ? c.icon : <TagIcon size={14} />}
+                    </span>
                     <span>{c.name}</span>
                   </button>
                 ))}
@@ -449,7 +452,7 @@ export function MoneyClient({
                   onClick={() => setShowNewCatModal(true)}
                   style={{ borderStyle: "dashed" }}
                 >
-                  <span>➕</span>
+                  <PlusIcon size={14} />
                   <span>New</span>
                 </button>
               </div>
@@ -496,8 +499,9 @@ export function MoneyClient({
                   type="button"
                   className="delete-icon-btn"
                   onClick={() => setShowNewCatModal(false)}
+                  aria-label="Close modal"
                 >
-                  ✕
+                  <CloseIcon size={16} />
                 </button>
               </div>
               <form onSubmit={handleCreateCategory}>
@@ -507,9 +511,9 @@ export function MoneyClient({
                     maxLength={4}
                     value={newCatIcon}
                     onChange={(e) => setNewCatIcon(e.target.value)}
-                    placeholder="🏷️"
-                    style={{ textAlign: "center", fontSize: "1.2rem", padding: "0.5rem" }}
-                    aria-label="Category Emoji Icon"
+                    placeholder="Tag"
+                    style={{ textAlign: "center", fontSize: "0.9rem", padding: "0.5rem" }}
+                    aria-label="Category Tag Icon"
                   />
                   <input
                     type="text"
@@ -549,7 +553,11 @@ export function MoneyClient({
               color: "var(--secondary)",
             }}
           >
-            🔒 <strong>Strict Financial Privacy:</strong> All expenses and budget summaries are 100% quarantined from AI and MCP endpoints.
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <LockIcon size={14} />
+              <strong>Strict Financial Privacy:</strong>
+            </span>{" "}
+            All expenses and budget summaries are 100% quarantined from AI and MCP endpoints.
           </div>
         </div>
       </div>

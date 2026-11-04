@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Navigation } from "./components/navigation";
+import { InfoIcon } from "./components/icons";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -281,8 +282,8 @@ export function WeightPage({ userName }: { userName: string }) {
 
           {/* Context Card: Consistent Weigh-in Tips */}
           <section className="surface" style={{ padding: "1.25rem" }}>
-            <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em" }}>
-              💡 Measurement Consistency
+            <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <InfoIcon size={15} /> Measurement Consistency
             </h3>
             <p className="muted" style={{ fontSize: "0.875rem", margin: "0.5rem 0 0", lineHeight: 1.5 }}>
               For the most accurate moving average, weigh yourself every morning immediately upon waking, after using the bathroom, and before eating or drinking water.
