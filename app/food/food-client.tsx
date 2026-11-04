@@ -17,6 +17,7 @@ import {
   generateFoodTokenAction,
   revokeFoodTokenAction,
 } from "@/app/actions/api-tokens";
+import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { WeightAnalytics } from "@/lib/food";
 
 interface MealData {
@@ -92,10 +93,30 @@ export function FoodClient({
   const [summary, setSummary] = useState(initialSummary);
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
   const [tokens, setTokens] = useState<ApiTokenData[]>(initialTokens);
-  const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "ai">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat" | "api">("daily");
   const [tokenNameInput, setTokenNameInput] = useState("");
   const [generatedPlaintextToken, setGeneratedPlaintextToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // In-app Food AI Chat state
+  const [chatMessages, setChatMessages] = useState<
+    Array<{
+      role: "user" | "model";
+      text: string;
+      toolExecuted?: {
+        name: string;
+        args: Record<string, unknown>;
+        result: Record<string, unknown>;
+      };
+    }>
+  >([
+    {
+      role: "model",
+      text: "Salut! Sunt asistentul tău de nutriție. Spune-mi ce ai mâncat sau băut (de exemplu: „la prânz am avut o ciorbă de pui și 2 felii de pâine”), iar eu voi calcula caloriile și macro-urile și le voi înregistra direct în aplicație. Mă poți întreba și despre rețete sau poți adăuga alimente pe lista de cumpărături!",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   // Meal input state
   const [mealType, setMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
@@ -359,6 +380,48 @@ export function FoodClient({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleSendChatMessage(textToSend?: string) {
+    const text = (textToSend || chatInput).trim();
+    if (!text || chatLoading) return;
+
+    const userMsg = { role: "user" as const, text };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const history = chatMessages.map((m) => ({ role: m.role, text: m.text }));
+      const res = await sendFoodChatMessageAction(text, history, selectedDate);
+      if (res.success) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            text: res.reply,
+            toolExecuted: res.toolExecuted,
+          },
+        ]);
+
+        if (res.freshSummary) {
+          setSummary(res.freshSummary);
+        }
+        if (res.freshShoppingList) {
+          setShoppingList(res.freshShoppingList);
+        }
+      }
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "model",
+          text: "A apărut o eroare la procesarea mesajului. Te rog să reîncerci.",
+        },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
   const caloriePct = Math.min(100, Math.round((summary.totals.calories / targets.calories) * 100));
   const proteinPct = Math.min(100, Math.round((summary.totals.protein / targets.proteinGrams) * 100));
   const carbsPct = Math.min(100, Math.round((summary.totals.carbs / targets.carbsGrams) * 100));
@@ -369,7 +432,7 @@ export function FoodClient({
     <main>
       <Navigation userName={userName} />
 
-      {/* Sub tabs: Daily Log vs Shopping List vs AI Connector */}
+      {/* Sub tabs: Daily Log vs Shopping List vs Food AI Chat vs AI Connector API */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button
           type="button"
@@ -387,10 +450,17 @@ export function FoodClient({
         </button>
         <button
           type="button"
-          className={activeTab === "ai" ? "" : "secondary"}
-          onClick={() => setActiveTab("ai")}
+          className={activeTab === "chat" ? "" : "secondary"}
+          onClick={() => setActiveTab("chat")}
         >
-          AI Connector (Claude & Gemini)
+          💬 Food AI Chat
+        </button>
+        <button
+          type="button"
+          className={activeTab === "api" ? "" : "secondary"}
+          onClick={() => setActiveTab("api")}
+        >
+          AI Connector API (MCP)
         </button>
       </div>
 
@@ -854,7 +924,175 @@ export function FoodClient({
         </section>
       )}
 
-      {activeTab === "ai" && (
+      {activeTab === "chat" && (
+        <section className="surface" aria-labelledby="chat-title">
+          <div className="section-heading">
+            <div>
+              <span className="badge badge-info">Gemini 2.5 Flash</span>
+              <h2 id="chat-title" style={{ marginTop: "0.25rem" }}>
+                💬 Food AI Assistant
+              </h2>
+            </div>
+            <span
+              className="badge"
+              style={{ background: "rgba(52, 199, 89, 0.15)", color: "#34c759" }}
+            >
+              🔒 Restricted: Food &amp; Macros Only
+            </span>
+          </div>
+
+          <p className="muted" style={{ fontSize: "0.9rem", margin: "0.5rem 0 1rem" }}>
+            Scrie în limbaj natural ce ai mâncat sau băut (ex: <em>„la prânz am mâncat o ciorbă de pui și 2 felii de pâine”</em>). AI-ul va estima automat caloriile și macronutrienții și îi va salva în jurnalul de astăzi!
+          </p>
+
+          {/* Prompt suggestions pills */}
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            {[
+              "🍕 2 felii de pizza la prânz",
+              "🍳 Omletă din 3 ouă cu telemea",
+              "🍗 200g piept de pui cu 150g orez",
+              "📊 Ce calorii mai am pentru azi?",
+              "🛒 Adaugă lapte de ovăz și 6 ouă pe listă",
+            ].map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                className="secondary"
+                style={{ fontSize: "0.8rem", padding: "0.25rem 0.65rem", borderRadius: "1rem" }}
+                disabled={chatLoading}
+                onClick={() => handleSendChatMessage(prompt)}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          {/* Chat messages container */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+              maxHeight: "26rem",
+              overflowY: "auto",
+              padding: "0.85rem",
+              background: "var(--background)",
+              borderRadius: "0.75rem",
+              border: "1px solid var(--separator)",
+            }}
+          >
+            {chatMessages.map((msg, index) => {
+              const isUser = msg.role === "user";
+              return (
+                <div
+                  key={index}
+                  style={{
+                    alignSelf: isUser ? "flex-end" : "flex-start",
+                    maxWidth: "85%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isUser ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "0.65rem 0.9rem",
+                      borderRadius: isUser
+                        ? "1rem 1rem 0.2rem 1rem"
+                        : "1rem 1rem 1rem 0.2rem",
+                      background: isUser ? "var(--tint)" : "var(--surface)",
+                      color: isUser ? "#ffffff" : "var(--text)",
+                      border: isUser ? "none" : "1px solid var(--separator)",
+                      fontSize: "0.9rem",
+                      lineHeight: "1.4",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+
+                  {msg.toolExecuted && (
+                    <div
+                      style={{
+                        marginTop: "0.35rem",
+                        fontSize: "0.78rem",
+                        padding: "0.3rem 0.6rem",
+                        borderRadius: "0.4rem",
+                        background: "rgba(175, 82, 222, 0.12)",
+                        color: "#af52de",
+                        border: "1px solid rgba(175, 82, 222, 0.25)",
+                      }}
+                    >
+                      {msg.toolExecuted.name === "log_meal" && (
+                        <span>
+                          ✨ <strong>Masă adăugată:</strong>{" "}
+                          {String(msg.toolExecuted.args.name || "")} —{" "}
+                          {String(msg.toolExecuted.args.calories || 0)} kcal ·{" "}
+                          {String(msg.toolExecuted.args.protein || 0)}g P ·{" "}
+                          {String(msg.toolExecuted.args.carbs || 0)}g C ·{" "}
+                          {String(msg.toolExecuted.args.fat || 0)}g F (AI Estimated)
+                        </span>
+                      )}
+                      {msg.toolExecuted.name === "add_shopping_item" && (
+                        <span>
+                          🛒 <strong>Adăugat pe listă:</strong>{" "}
+                          {String(msg.toolExecuted.args.name || "")}
+                        </span>
+                      )}
+                      {msg.toolExecuted.name === "get_daily_food_summary" && (
+                        <span>📊 <strong>Sumar zilnic actualizat</strong></span>
+                      )}
+                      {msg.toolExecuted.name === "get_recipes" && (
+                        <span>📖 <strong>Rețete preluate</strong></span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {chatLoading && (
+              <div
+                style={{
+                  alignSelf: "flex-start",
+                  padding: "0.5rem 0.8rem",
+                  borderRadius: "1rem 1rem 1rem 0.2rem",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  border: "1px solid var(--separator)",
+                  fontSize: "0.85rem",
+                  fontStyle: "italic",
+                }}
+              >
+                Asistentul analizează și calculează macro-urile...
+              </div>
+            )}
+          </div>
+
+          {/* Chat input form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendChatMessage();
+            }}
+            style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}
+          >
+            <input
+              type="text"
+              placeholder="Ex: Am mâncat 200g friptură de vită cu piure de cartofi..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              disabled={chatLoading}
+              style={{ flex: 1 }}
+            />
+            <button type="submit" disabled={chatLoading || !chatInput.trim()}>
+              {chatLoading ? "Se trimite..." : "Trimite"}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {activeTab === "api" && (
         <section className="surface" aria-labelledby="ai-connector-title">
           <div className="section-heading">
             <div>
