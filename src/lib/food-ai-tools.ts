@@ -109,8 +109,32 @@ export const FOOD_GEMINI_TOOLS = {
 };
 
 const dateParamSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)")
+    .default(() => {
+      const d = new Date();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${d.getFullYear()}-${month}-${day}`;
+    }),
 });
+
+function normalizeDate(rawArgs: unknown): unknown {
+  if (typeof rawArgs === "object" && rawArgs !== null) {
+    const record = rawArgs as Record<string, unknown>;
+    if (!record.date) {
+      const d = new Date();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return {
+        ...record,
+        date: `${d.getFullYear()}-${month}-${day}`,
+      };
+    }
+  }
+  return rawArgs;
+}
 
 export async function executeFoodAiTool(
   userId: string,
@@ -119,7 +143,8 @@ export async function executeFoodAiTool(
 ) {
   switch (toolName) {
     case "log_meal": {
-      const parsed = logMealSchema.parse(args);
+      const normalized = normalizeDate(args);
+      const parsed = logMealSchema.parse(normalized);
       const meal = await logMeal(userId, {
         ...parsed,
         isEstimated: true,
@@ -143,7 +168,8 @@ export async function executeFoodAiTool(
     }
 
     case "get_daily_food_summary": {
-      const { date } = dateParamSchema.parse(args);
+      const normalized = normalizeDate(args);
+      const { date } = dateParamSchema.parse(normalized);
       const [summary, targets] = await Promise.all([
         getDailyFoodSummary(userId, date),
         getNutritionTargets(userId),
