@@ -1,6 +1,6 @@
 # Data inventory and privacy design: Life Tracker
 
-Last reviewed: 2026-11-03 (Azure 2B preparation audit). Update in the same change that adds a data type, a store, a recipient or a purpose.
+Last reviewed: 2026-11-04 (Iteration 7 Food AI Connector). Update in the same change that adds a data type, a store, a recipient or a purpose.
 Classification: personal / health (GDPR Art. 9 special category) / financial / secret. The legal basis is the owner's own use of their own data (single user); revisit if other users are ever added.
 
 | Data type | Examples | Classification | Purpose | Legal basis / consent | Stored where, how protected | Retention | Shared with (third parties, AI providers) | User can export | User can delete |
@@ -18,7 +18,7 @@ Classification: personal / health (GDPR Art. 9 special category) / financial / s
 | Auth.js session | signed JWT in an HttpOnly cookie | secret | keep the user signed in | owner authentication | browser cookie, signed by `NEXTAUTH_SECRET` from Key Vault in Azure | 4 hours absolute | none | n/a | sign out |
 | Runtime configuration secrets | database URL, Auth.js signing secret, Entra client secret | secret | connect the app to private services and authenticate OIDC | service operation | Azure Key Vault, private endpoint, user-assigned identity with vault-scoped Secrets User role (template only; runtime reachability and secret absence from logs are unverified) | rotate on compromise or scheduled review | none | n/a | remove with deployment |
 | Weight entry | date and kilograms | health | daily weigh-in | owner's own data | local PostgreSQL, owner-scoped | until deleted | none; never to an AI provider | yes (later export) | yes |
-| Connector grants | OAuth grants for Claude/Gemini | secret | let the AI act for the owner | owner grants it explicitly | Entra / database **(stack)** | until revoked | the AI client holds the access token | n/a | yes (revoke in settings) |
+| Connector tokens | Scoped bearer tokens for Claude MCP / Gemini | secret | let the AI act for the owner | owner generates explicitly | database (`api_tokens` table, SHA-256 hashed, plaintext shown once) | until revoked | the AI client holds the bearer token | n/a | yes (revoke in `/food` AI Connector tab) |
 | Push subscriptions | endpoint, keys per device | secret-ish | send reminders | owner enables notifications | database | until logout or revoke | platform push gateway | no | yes |
 | Operational logs | request id, user id, status codes, security events | personal (ids only) | security monitoring, debugging | legitimate interest of the owner | log store, access restricted | 30 days **(stack: confirm)** | none | no | expire |
 | Backups | database snapshots | same as the data inside | recovery | same | planned platform backup, encrypted; no Azure backup or restore has been deployed or tested | 35 days or less, set when the database is chosen | none | no | expire |

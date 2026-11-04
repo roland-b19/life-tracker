@@ -7,6 +7,7 @@ import {
   getShoppingList,
   getWeightAnalytics,
 } from "@/lib/food";
+import { listApiTokens } from "@/lib/api-tokens";
 import { FoodClient } from "./food-client";
 
 function getTodayString() {
@@ -25,10 +26,13 @@ export default async function FoodPage() {
   const userId = session.user.id;
   const today = getTodayString();
 
-  const targets = await getNutritionTargets(userId);
-  const summary = await getDailyFoodSummary(userId, today);
-  const weightAnalytics = await getWeightAnalytics(userId);
-  const shoppingList = await getShoppingList(userId);
+  const [targets, summary, weightAnalytics, shoppingList, tokens] = await Promise.all([
+    getNutritionTargets(userId),
+    getDailyFoodSummary(userId, today),
+    getWeightAnalytics(userId),
+    getShoppingList(userId),
+    listApiTokens(userId),
+  ]);
 
   return (
     <FoodClient
@@ -38,6 +42,7 @@ export default async function FoodPage() {
       initialSummary={summary}
       weightAnalytics={weightAnalytics}
       initialShoppingList={shoppingList}
+      initialTokens={tokens}
     />
   );
 }

@@ -6,7 +6,8 @@ _Last updated: 2026-11-04 by Antigravity_
 
 Tier 1 (Iterations 1, 2, 3, and 4) is 100% complete, verified, and merged in `main`.
 Tier 2, Iteration 5 (Money module) is 100% complete and merged in `main`.
-Tier 2, Iteration 6 (Daily To-Do, Habits, Rollover, Web Push) is 100% complete and verified locally on branch `feat/iteration-6-todos` across all 49 Vitest tests with 0 lint/typecheck errors and verified Next.js production build.
+Tier 2, Iteration 6 (Daily To-Do & Habits) is 100% complete and merged in `main`.
+Tier 2, Iteration 7 (Food AI Connector — MCP for Claude & Function Calling for Gemini) is 100% complete, verified with 57 Vitest tests passing on branch `feat/iteration-7-food-ai`.
 
 ## Verification status breakdown
 
@@ -18,13 +19,16 @@ Tier 2, Iteration 6 (Daily To-Do, Habits, Rollover, Web Push) is 100% complete a
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
   - Food & Nutrition module: daily targets, meal logger, water tap counter (+250ml, +500ml), steps, shopping list with recipe generation.
   - Money module: personal & business expenses, RON currency, fast 2-3 tap entry, category breakdown, strict AI quarantine.
-  - To-Do & Habits module:
-    - PostgreSQL schema (`todos`, `push_subscriptions`) with least-privilege role permissions.
-    - Owner-scoped DAL (`src/lib/todos.ts`): automatic carry-over rollover for past unfinished one-off tasks, streak tracking for daily recurring habits, daily completion rate statistics, space segregation (`personal` vs `business`).
-    - Server Actions (`src/app/actions/todos.ts`) guarded by `requireUser()` and validated with Zod.
-    - Complete Vitest test suite (`tests/todos.test.ts`, 9 tests, 49 total passing across repo).
-    - Apple HIG user interface (`/todos`) with space segmented control, progress bar, habits & task groups, carry-over labels, streak flame counters, and Service Worker Web Push setup (`public/sw.js`).
-    - Top navigation updated to 5 tabs: **Gym Split**, **Food & Macros**, **Weigh-ins**, **Money**, and **Tasks**.
+  - To-Do & Habits module: automatic carry-over rollover, streak tracking, space segregation (`personal` vs `business`), Web Push notifications.
+  - Food AI Connector (Claude MCP & Gemini Function Calling):
+    - Dual protocols: `/api/mcp` (JSON-RPC 2.0 / MCP) and `/api/ai/food` (Google Function Calling / OpenAPI).
+    - Scoped personal bearer tokens (`api_tokens` table, SHA-256 hashed, narrow scope `food`).
+    - 4 isolated food tools: `log_meal`, `get_daily_food_summary`, `get_recipes`, `add_shopping_item`.
+    - Strict AI Data Line Quarantine: weight, steps, gym, money, tasks, and business data are physically unreachable from the AI endpoints.
+    - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
+    - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
+    - UI in `/food` under "AI Connector (Claude & Gemini)" tab with single-click token generation, secure one-time copy, active token revocation, and copyable config snippets for Claude Desktop and Gemini cURL.
+    - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, 8 tests, 57 total passing across repo).
 
 ## Verification status breakdown
 
@@ -97,8 +101,8 @@ Tier 2, Iteration 6 (Daily To-Do, Habits, Rollover, Web Push) is 100% complete a
 
 ## Next
 
-1. Implement Iteration 5 (Money module) locally per `docs/iteration-5.md`: schema, categories, DAL, server actions, tests, and Apple HIG UI.
-2. Maintain local-only verification (no Azure deployments).
+1. Merge Iteration 7 PR (`feat/iteration-7-food-ai` -> `main`) after all CI checks pass.
+2. Plan Tier 2, Iteration 8 (Async Queue & Web Push Notifications for Habits, Deload, and Meal reminders).
 
 ## Open questions
 
@@ -111,6 +115,15 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-04 — Tier 2, Iteration 7 (Food AI Connector) completed locally on `feat/iteration-7-food-ai`:
+  implemented dual-protocol connector (`/api/mcp` JSON-RPC 2.0 for Claude Desktop and `/api/ai/food`
+  Google Function Calling / REST for Gemini). Personal scoped bearer tokens with SHA-256 storage (`api_tokens` table),
+  4 isolated food tools (`log_meal`, `get_daily_food_summary`, `get_recipes`, `add_shopping_item`),
+  strict AI Data Line Quarantine (weight, steps, gym, money, tasks, and business data physically unreachable),
+  automatic `isEstimated: true` flag and UI badge on AI-logged meals, global kill switch (`AI_CONNECTOR_ENABLED=false`),
+  Apple HIG UI under `/food` AI Connector tab with token generator, one-click copy, active token revocation,
+  and copyable config snippets for Claude Desktop JSON and Gemini cURL. All 57 tests passing. No Azure resources created.
 
 - 2026-11-04 — Tier 1 complete and Iteration 5 planned: PR #14 squashed and merged into `main` with all CI checks passing. Comprehensive verification of Tier 1 completed and polished (7-day moving average and rate of change added to weigh-in view). Created `docs/iteration-5.md` defining the Money module scope (expenses in RON, personal vs business spaces, fast 2-3 tap entry, category breakdown, strict AI quarantine). Local-first execution on branch `feat/iteration-5-money`.
 

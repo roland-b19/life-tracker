@@ -121,6 +121,7 @@ export async function logMeal(userId: string, input: LogMealInput) {
       protein: input.protein.toFixed(1),
       carbs: input.carbs.toFixed(1),
       fat: input.fat.toFixed(1),
+      isEstimated: input.isEstimated ?? false,
     })
     .returning();
 
@@ -325,6 +326,22 @@ export async function clearBoughtShoppingItems(userId: string) {
 /**
  * Generate Shopping List automatically from User Recipes
  */
+export async function getUserRecipes(userId: string) {
+  await ensureUserSampleRecipes(userId);
+  return db
+    .select({
+      id: recipes.id,
+      name: recipes.name,
+      description: recipes.description,
+      calories: recipes.calories,
+      protein: recipes.protein,
+      carbs: recipes.carbs,
+      fat: recipes.fat,
+    })
+    .from(recipes)
+    .where(eq(recipes.userId, userId));
+}
+
 export async function populateShoppingListFromRecipes(userId: string) {
   await ensureUserSampleRecipes(userId);
 

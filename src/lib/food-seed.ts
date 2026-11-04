@@ -89,9 +89,20 @@ export async function ensureUserNutritionTargets(userId: string) {
       userId,
       ...DEFAULT_NUTRITION_TARGETS,
     })
+    .onConflictDoNothing()
     .returning();
 
-  return created;
+  if (created) {
+    return created;
+  }
+
+  const [fallback] = await db
+    .select()
+    .from(nutritionTargets)
+    .where(eq(nutritionTargets.userId, userId))
+    .limit(1);
+
+  return fallback;
 }
 
 export async function ensureUserSampleRecipes(userId: string) {

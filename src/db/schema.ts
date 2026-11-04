@@ -201,6 +201,7 @@ export const meals = pgTable(
     protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
     carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
     fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
+    isEstimated: boolean("is_estimated").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );
@@ -218,6 +219,7 @@ export const recipes = pgTable(
     protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
     carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
     fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
+    isEstimated: boolean("is_estimated").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );
@@ -351,6 +353,23 @@ export const pushSubscriptions = pgTable(
     endpoint: varchar("endpoint", { length: 500 }).notNull(),
     p256dhKey: varchar("p256dh_key", { length: 255 }).notNull(),
     authKey: varchar("auth_key", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+// --- AI CONNECTOR / API TOKENS ---
+
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 50 }).default("Claude / Gemini Food Connector").notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    scope: varchar("scope", { length: 30 }).default("food").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );

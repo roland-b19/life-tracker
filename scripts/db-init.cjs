@@ -288,8 +288,17 @@ async function main() {
       "auth_key" varchar(255) NOT NULL,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS "api_tokens" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "name" varchar(50) DEFAULT 'Claude / Gemini Food Connector' NOT NULL,
+      "token_hash" varchar(64) NOT NULL,
+      "scope" varchar(30) DEFAULT 'food' NOT NULL,
+      "last_used_at" timestamp with time zone,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
   `);
-  console.log("Verified Food, Money & Todo tables.");
+  console.log("Verified Food, Money, Todo & AI tables.");
 
   await appDbClient.query(`
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
@@ -314,6 +323,7 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();
