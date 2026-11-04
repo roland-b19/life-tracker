@@ -196,6 +196,29 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
     expect(res.consumed && "steps" in res.consumed).toBe(false);
   });
 
+  it("defaults to today's date if date is omitted in log_meal and get_daily_food_summary", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const mealRes = (await executeFoodAiTool(userA, "log_meal", {
+      mealType: "snack",
+      name: "Apple & Almonds",
+      calories: 220,
+      protein: 5,
+      carbs: 28,
+      fat: 10,
+    })) as { success: boolean; meal: { date: string } };
+
+    expect(mealRes.success).toBe(true);
+    expect(mealRes.meal.date).toBe(today);
+
+    const summaryRes = (await executeFoodAiTool(userA, "get_daily_food_summary", {})) as {
+      success: boolean;
+      date: string;
+    };
+    expect(summaryRes.success).toBe(true);
+    expect(summaryRes.date).toBe(today);
+  });
+
   it("Gemini Function Calling API routes function declarations and executes tools", async () => {
     const tokenData = await generateApiToken(userA);
 
