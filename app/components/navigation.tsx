@@ -174,7 +174,7 @@ export function Navigation({ userName }: NavigationProps) {
       {moreOpen && (
         <>
           <div className="more-scrim" onClick={() => setMoreOpen(false)} />
-          <div className="more-menu" role="menu" aria-label="More">
+          <div className="more-menu" id="more-menu" aria-label="More">
             <div className="more-user">
               <span className="user-avatar-circle">{initial}</span>
               <span>{userName}</span>
@@ -183,7 +183,6 @@ export function Navigation({ userName }: NavigationProps) {
               <NextLink
                 key={link.href}
                 href={link.href}
-                role="menuitem"
                 className={`nav-link ${link.isActive ? "active" : ""}`}
                 onClick={() => setMoreOpen(false)}
               >
@@ -214,7 +213,7 @@ export function Navigation({ userName }: NavigationProps) {
           type="button"
           className={`tab-item ${moreActive || moreOpen ? "active" : ""}`}
           aria-expanded={moreOpen}
-          aria-haspopup="menu"
+          aria-controls="more-menu"
           onClick={() => setMoreOpen((v) => !v)}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

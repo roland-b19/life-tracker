@@ -7,17 +7,13 @@
   --surface-solid: #292524;
   --surface-secondary: rgba(51, 46, 44, 0.65);
   --surface-modal: #2b2624;
-  --surface-highlight: rgba(255, 255, 255, 0.06);
   --text: #f3eeea;
   --secondary: #b3a8a1;
   --tint: #e8946a;
   --tint-hover: #f0a984;
   --on-tint: #1f120a;
-  --tint-glow: none;
   --tint-subtle: rgba(232, 148, 106, 0.14);
-  --tint-border: rgba(232, 148, 106, 0.35);
   --success: #8fd19e;
-  --success-glow: none;
   --success-subtle: rgba(143, 209, 158, 0.14);
   --warning: #efc56f;
   --warning-subtle: rgba(239, 197, 111, 0.15);
@@ -26,7 +22,6 @@
   --separator: #3a3431;
   --card-border: #463f3b;
   --card-shadow: none;
-  --card-shadow-hover: none;
   --glass-blur: blur(28px) saturate(160%);
   /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
   --dur: 420ms;
@@ -499,7 +494,7 @@ main {
     white-space: nowrap;
   }
 
-  main {
+  main:has(.side) {
     width: auto;
     max-width: 84rem;
     margin: 0 2rem 0 calc(248px + 2rem);
@@ -508,7 +503,7 @@ main {
 }
 
 @media (min-width: 1480px) {
-  main {
+  main:has(.side) {
     margin-left: auto;
     margin-right: auto;
     padding-left: 248px;

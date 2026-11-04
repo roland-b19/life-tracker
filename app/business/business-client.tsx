@@ -835,7 +835,7 @@ export function BusinessClient({
               <button
                 type="submit"
                 disabled={busy || !incomeAmount || !incomeCategory}
-                style={{ flex: 2, background: "var(--success)", color: "#000" }}
+                style={{ flex: 2, background: "var(--success)", color: "var(--on-tint)" }}
               >
                 {busy ? "Saving..." : "+ Record Income"}
               </button>

@@ -33,7 +33,7 @@ export default function SignInPage() {
           maxWidth: "26rem",
           padding: "2rem",
           borderRadius: "1.5rem",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          border: "1px solid var(--card-border)",
         }}
         aria-labelledby="signin-title"
       >
