@@ -33,13 +33,14 @@ Agent-neutral. Lives in `.agents/skills/apple-design/`. Source: Apple's public H
 | HealthKit, Sign in with Apple, iCloud, AI/ML features, Siri, Maps, Apple Pay, in-app purchase, Mac Catalyst, others | `technologies.md` |
 | Design assets, fonts, SF Symbols app, Icon Composer, UI kits, licences | `resources.md` |
 | Turning rules into SwiftUI / web code, web or cross-platform apps, PWA | `implementation-mapping.md` |
+| **Any UI work in Life Tracker**: palette tokens, font, motion, navigation, no-scrollbar rule, deliberate deviations (dark only) | `project-design-system.md` (read it first; it overrides the generic rules where it says so) |
 
 ## Non-negotiables (summary; details and exceptions in the references)
 
 - System first: system components, system colors, system fonts (text styles), SF Symbols. No hard-coded colors or fixed font sizes.
 - Hit targets at least 44 x 44 pt (60 x 60 pt in visionOS). Custom buttons need a press state.
 - Default body size 17 pt on iOS/iPadOS (minimum 11 pt). Support Dynamic Type at every size including accessibility sizes; no truncation of important text.
-- Follow the system appearance (Light/Dark); no in-app theme switch. Every custom color has light, dark and increased-contrast variants. Text contrast at least 4.5:1 (aim 7:1 for small text).
+- Follow the system appearance (Light/Dark); no in-app theme switch. (Life Tracker is the documented exception: dark only, see `project-design-system.md`.) Every custom color has light, dark and increased-contrast variants. Text contrast at least 4.5:1 (aim 7:1 for small text).
 - Never convey meaning by color alone.
 - Web/cross-platform: the same rules apply with CSS equivalents (system font stack, `rem` sizes, `prefers-color-scheme`, `prefers-reduced-motion`, `prefers-contrast`, 44 CSS px targets, safe-area insets); see `implementation-mapping.md`.
 - Honor Reduce Motion, Reduce Transparency, Increase Contrast, Bold Text, VoiceOver, Voice Control.

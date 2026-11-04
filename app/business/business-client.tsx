@@ -467,8 +467,8 @@ export function BusinessClient({
           <div
             className="macro-card"
             style={{
-              background: isProfit ? "rgba(52, 199, 89, 0.08)" : "rgba(255, 59, 48, 0.08)",
-              border: `1.5px solid ${isProfit ? "rgba(52, 199, 89, 0.25)" : "rgba(255, 59, 48, 0.25)"}`,
+              background: isProfit ? "rgba(143, 209, 158, 0.08)" : "rgba(240, 138, 138, 0.08)",
+              border: `1.5px solid ${isProfit ? "rgba(143, 209, 158, 0.25)" : "rgba(240, 138, 138, 0.25)"}`,
               gridColumn: "span 1",
             }}
           >
@@ -478,7 +478,7 @@ export function BusinessClient({
               style={{
                 fontSize: "2.1rem",
                 fontWeight: 800,
-                color: isProfit ? "#34c759" : "var(--danger)",
+                color: isProfit ? "var(--success)" : "var(--danger)",
                 letterSpacing: "-0.02em",
               }}
             >
@@ -497,7 +497,7 @@ export function BusinessClient({
           {/* Incomes Card */}
           <div className="macro-card">
             <span className="macro-title">Total Incomes Recorded</span>
-            <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "#34c759" }}>
+            <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "var(--success)" }}>
               +{dashboard.totalIncome.toLocaleString("ro-RO", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -564,7 +564,7 @@ export function BusinessClient({
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-                      <span className="number-tabular" style={{ fontWeight: 700, color: "#34c759", fontSize: "1.1rem" }}>
+                      <span className="number-tabular" style={{ fontWeight: 700, color: "var(--success)", fontSize: "1.1rem" }}>
                         +{item.amount.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
                         RON
                       </span>
@@ -835,7 +835,7 @@ export function BusinessClient({
               <button
                 type="submit"
                 disabled={busy || !incomeAmount || !incomeCategory}
-                style={{ flex: 2, background: "#34c759", color: "#000" }}
+                style={{ flex: 2, background: "var(--success)", color: "#000" }}
               >
                 {busy ? "Saving..." : "+ Record Income"}
               </button>

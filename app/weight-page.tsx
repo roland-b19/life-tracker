@@ -198,9 +198,9 @@ export function WeightPage({ userName }: { userName: string }) {
                   style={{
                     background:
                       weeklyDelta > 0
-                        ? "rgba(52, 199, 89, 0.15)"
-                        : "rgba(255, 149, 0, 0.15)",
-                    color: weeklyDelta > 0 ? "#34c759" : "#ff9500",
+                        ? "rgba(143, 209, 158, 0.15)"
+                        : "rgba(239, 197, 111, 0.15)",
+                    color: weeklyDelta > 0 ? "var(--success)" : "var(--warning)",
                     fontSize: "0.85rem",
                   }}
                 >

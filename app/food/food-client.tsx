@@ -686,10 +686,10 @@ export function FoodClient({
                         marginLeft: "0.5rem",
                         background:
                           weightAnalytics.trend === "gaining"
-                            ? "rgba(52, 199, 89, 0.15)"
-                            : "rgba(255, 149, 0, 0.15)",
+                            ? "rgba(143, 209, 158, 0.15)"
+                            : "rgba(239, 197, 111, 0.15)",
                         color:
-                          weightAnalytics.trend === "gaining" ? "#34c759" : "#ff9500",
+                          weightAnalytics.trend === "gaining" ? "var(--success)" : "var(--warning)",
                       }}
                     >
                       {weightAnalytics.weeklyRateOfChange > 0 ? "+" : ""}
@@ -752,8 +752,8 @@ export function FoodClient({
                             <span
                               className="badge"
                               style={{
-                                background: "rgba(175, 82, 222, 0.15)",
-                                color: "#af52de",
+                                background: "rgba(232, 148, 106, 0.15)",
+                                color: "var(--tint)",
                                 fontSize: "0.75rem",
                               }}
                             >
@@ -973,7 +973,7 @@ export function FoodClient({
             </div>
             <span
               className="badge"
-              style={{ background: "rgba(52, 199, 89, 0.15)", color: "#34c759", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+              style={{ background: "rgba(143, 209, 158, 0.15)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
             >
               <LockIcon size={12} /> Restricted: Food &amp; Macros Only
             </span>
@@ -1039,7 +1039,7 @@ export function FoodClient({
                         ? "1rem 1rem 0.2rem 1rem"
                         : "1rem 1rem 1rem 0.2rem",
                       background: isUser ? "var(--tint)" : "var(--surface)",
-                      color: isUser ? "#ffffff" : "var(--text)",
+                      color: isUser ? "var(--on-tint)" : "var(--text)",
                       border: isUser ? "none" : "1px solid var(--separator)",
                       fontSize: "0.9rem",
                       lineHeight: "1.4",
@@ -1056,9 +1056,9 @@ export function FoodClient({
                         fontSize: "0.78rem",
                         padding: "0.3rem 0.6rem",
                         borderRadius: "0.4rem",
-                        background: "rgba(175, 82, 222, 0.12)",
-                        color: "#af52de",
-                        border: "1px solid rgba(175, 82, 222, 0.25)",
+                        background: "rgba(232, 148, 106, 0.12)",
+                        color: "var(--tint)",
+                        border: "1px solid rgba(232, 148, 106, 0.25)",
                       }}
                     >
                       {msg.toolExecuted.name === "log_meal" && (
@@ -1141,7 +1141,7 @@ export function FoodClient({
             </div>
             <span
               className="badge"
-              style={{ background: "rgba(52, 199, 89, 0.15)", color: "#34c759" }}
+              style={{ background: "rgba(143, 209, 158, 0.15)", color: "var(--success)" }}
             >
               Quarantined Scope: Food Only
             </span>
@@ -1152,8 +1152,8 @@ export function FoodClient({
               marginTop: "0.75rem",
               padding: "0.75rem",
               borderRadius: "0.5rem",
-              background: "rgba(0, 122, 255, 0.08)",
-              border: "1px solid rgba(0, 122, 255, 0.2)",
+              background: "rgba(232, 148, 106, 0.08)",
+              border: "1px solid rgba(232, 148, 106, 0.2)",
               fontSize: "0.85rem",
               lineHeight: "1.4",
             }}
@@ -1174,8 +1174,8 @@ export function FoodClient({
                 marginTop: "1rem",
                 padding: "1rem",
                 borderRadius: "0.65rem",
-                background: "rgba(52, 199, 89, 0.1)",
-                border: "1px solid rgba(52, 199, 89, 0.3)",
+                background: "rgba(143, 209, 158, 0.1)",
+                border: "1px solid rgba(143, 209, 158, 0.3)",
               }}
             >
               <div
@@ -1187,7 +1187,7 @@ export function FoodClient({
                   gap: "0.5rem",
                 }}
               >
-                <strong style={{ color: "#34c759", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                <strong style={{ color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
                   <CheckIcon size={14} /> New Food API Token Generated
                 </strong>
                 <button

@@ -110,6 +110,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
   3. Ensured full parity across desktop and mobile: stopped hiding secondary dashboard sidebars on mobile (`.dashboard-aside`) so features like Gym split day selectors and Business task management remain directly accessible.
   4. Standardized all add/log entry dialogs as centered popup modals on both desktop and mobile with heavy blurred backdrops (`backdrop-filter: blur(28px)`), completely removing the sliding mobile bottom-sheet behavior.
   5. Removed redundant bottom-right floating action buttons (FAB) across all modules (Weight, Money, Food, Tasks, Wishlist, Business) since each module already features a clear in-page action button. Zero new dependencies. All 67 Vitest tests pass.
+- **2026-11-04 — Ember design system.** The user validated the design options artifact and chose palette **Ember** (dark, warm graphite, terracotta accent `#e8946a`), font **SF Pro** via the system stack, motion **Apple spring** (420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`), and **no visible scrollbars anywhere**. Dark only (a deliberate deviation from the HIG "follow system appearance" rule). Navigation: fixed sidebar on desktop, floating tab bar with 4 modules plus More on phones. Supersedes the earlier "moody velvet" colors and the top segmented navigation. Tokens and rules live in `.agents/skills/apple-design/references/project-design-system.md`.
 
 ## Open
 
