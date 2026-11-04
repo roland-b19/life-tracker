@@ -297,8 +297,28 @@ async function main() {
       "last_used_at" timestamp with time zone,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS "wishlist_items" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "name" varchar(120) NOT NULL,
+      "url" varchar(500),
+      "estimated_price" numeric(10, 2) NOT NULL,
+      "priority" varchar(10) DEFAULT 'medium' NOT NULL,
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      CONSTRAINT "wishlist_price_positive" CHECK ("wishlist_items"."estimated_price" > 0)
+    );
+    CREATE TABLE IF NOT EXISTS "business_incomes" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "amount" numeric(12, 2) NOT NULL,
+      "category" varchar(50) DEFAULT 'Sales' NOT NULL,
+      "date" date NOT NULL,
+      "note" varchar(255),
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      CONSTRAINT "business_income_positive" CHECK ("business_incomes"."amount" > 0)
+    );
   `);
-  console.log("Verified Food, Money, Todo & AI tables.");
+  console.log("Verified Food, Money, Todo, AI, Wishlist & Business tables.");
 
   await appDbClient.query(`
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
@@ -324,6 +344,8 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "business_incomes" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();

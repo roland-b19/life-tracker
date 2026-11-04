@@ -5,9 +5,12 @@ _Last updated: 2026-11-04 by Antigravity_
 ## Phase
 
 Tier 1 (Iterations 1, 2, 3, and 4) is 100% complete, verified, and merged in `main`.
-Tier 2, Iteration 5 (Money module) is 100% complete and merged in `main`.
-Tier 2, Iteration 6 (Daily To-Do & Habits) is 100% complete and merged in `main`.
-Tier 2, Iteration 7 (Food AI Connector — MCP for Claude & Function Calling for Gemini) is 100% complete, verified with 57 Vitest tests passing on branch `feat/iteration-7-food-ai`.
+Tier 2 (Iterations 5, 6, and 7: Money, Daily To-Do & Habits, Food AI Connector & In-App Chat) is 100% complete, verified, and merged in `main`.
+Tier 3, Iteration 8 (Wishlist & Family Business Dashboard) is 100% complete, verified, and tested locally with 66 Vitest unit and integration tests passing.
+
+## Current focus
+
+Tier 3, Iteration 8 PR merge and transitioning to Iteration 9 (Final Polish, End-to-End Azure Deployment & Verification).
 
 ## Verification status breakdown
 
@@ -102,8 +105,13 @@ Tier 2, Iteration 7 (Food AI Connector — MCP for Claude & Function Calling for
 
 ## Next
 
-1. Merge Iteration 7 PR (`feat/iteration-7-food-ai` -> `main`) after all CI checks pass.
-2. Plan Tier 2, Iteration 8 (Async Queue & Web Push Notifications for Habits, Deload, and Meal reminders).
+1. Implement Tier 3, Iteration 8 locally per `docs/iteration-8.md`:
+   - Drizzle schema for `wishlist_items` and `business_incomes` with least-privilege permissions.
+   - Owner-scoped DAL and Server Actions for Wishlist and Business.
+   - Comprehensive Vitest test suites (`tests/wishlist.test.ts` and `tests/business.test.ts`).
+   - Apple HIG interfaces at `/wishlist` and `/business` with top navigation updates.
+   - Pull request and merge into `main`.
+2. Maintain local-only verification (no Azure deployments).
 
 ## Open questions
 
@@ -116,6 +124,14 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-04 — Tier 3, Iteration 8 (Wishlist & Family Business Dashboard) completed locally on `feat/iteration-8-tier-3`:
+  - Schema & DB Migrations: added `wishlist_items` and `business_incomes` tables with positive check constraints and migration `0008_puzzling_screwball.sql`. Applied to both dev and test DBs with role permissions granted to `life_tracker_app`.
+  - Reused existing modules per Ponytail: business expenses tracked via `expenses` table with `space = 'business'`, business tasks tracked via `todos` table with `space = 'business'`.
+  - Family Business Dashboard at `/business`: monthly net profit calculation (`Net Profit = Total Incomes - Business Expenses`), profit margin %, monthly income recorder, quick business expense logger, and pending business task list.
+  - Wishlist at `/wishlist`: private purchase desires with priority filtering (High/Medium/Low), total estimated cost in RON, store links, and one-tap deletion when purchased.
+  - Strict AI Data Line Quarantine: verified through tests that business financial data, income records, and wishlist desires are 100% excluded and physically unreachable by Food AI tools and MCP endpoints.
+  - Test suites: 66/66 Vitest tests passing across 12 test suites with multi-user isolation and authorization checks. 0 lint/typecheck errors. Production build verified. No Azure resources created.
 
 - 2026-11-04 — Tier 2, Iteration 7 (Food AI Connector) completed locally on `feat/iteration-7-food-ai`:
   implemented dual-protocol connector (`/api/mcp` JSON-RPC 2.0 for Claude Desktop and `/api/ai/food`
