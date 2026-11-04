@@ -232,7 +232,7 @@ export function GymClient({
 
         if (res.set.flagAnomaly) {
           setStatusMessage(
-            `⚠️ Set logged with '!!' anomaly (reps below target ${exercise.minReps}-${exercise.maxReps})`,
+            `Set logged with '!!' anomaly (reps below target ${exercise.minReps}-${exercise.maxReps})`,
           );
         } else {
           setStatusMessage(`Set ${setOrder} logged!`);
@@ -316,7 +316,7 @@ export function GymClient({
           <span className="badge badge-warning">5-Week Cycle</span>
           <h2 id="deload-title" style={{ marginTop: "0.25rem" }}>
             {deload.isDeloadDue
-              ? "⚡ Deload Week Due"
+              ? "Deload Week Due"
               : `Week ${deload.currentCycleWeek} of 5`}
           </h2>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
@@ -410,7 +410,7 @@ export function GymClient({
                                 className="badge badge-danger"
                                 style={{ marginLeft: "0.5rem" }}
                               >
-                                ⚠️ !! {s.anomalyReason || "Anomaly"}
+                                !! {s.anomalyReason || "Anomaly"}
                               </span>
                             )}
                           </span>
@@ -694,7 +694,7 @@ export function GymClient({
                       )}
                       {s.notes && (
                         <p style={{ margin: "0.15rem 0 0", fontSize: "0.85rem" }} className="muted">
-                          📝 {s.notes}
+                          {s.notes}
                         </p>
                       )}
                     </div>

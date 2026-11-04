@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Navigation } from "../components/navigation";
+import { CheckIcon, TrashIcon, FlameIcon, RefreshIcon, BellIcon } from "../components/icons";
 import {
   createTodoAction,
   deleteTodoAction,
@@ -215,7 +216,7 @@ export function TodosClient({
           className={`space-tab ${space === "personal" ? "active" : ""}`}
           onClick={() => handleSpaceChange("personal")}
         >
-          👤 Personal Tasks
+          Personal
         </button>
         <button
           type="button"
@@ -224,14 +225,16 @@ export function TodosClient({
           className={`space-tab ${space === "business" ? "active" : ""}`}
           onClick={() => handleSpaceChange("business")}
         >
-          💼 Business Tasks
+          Business
         </button>
       </div>
 
       {/* Web Push Notification Banner */}
       {pushSupported && !pushSubscribed && (
         <div className="push-toggle-card">
-          <span>🔔 Enable browser reminders for due tasks?</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+            <BellIcon size={16} /> Enable browser reminders for due tasks?
+          </span>
           <button
             type="button"
             className="secondary"
@@ -306,7 +309,7 @@ export function TodosClient({
           {recurringHabits.length > 0 && (
             <section className="quick-expense-card" aria-label="Daily Habits">
               <div className="todo-section-title" style={{ marginTop: 0 }}>
-                <span>🔥 Daily Habits & Routines</span>
+                <span>Daily Habits &amp; Routines</span>
                 <span className="badge badge-streak">
                   {recurringHabits.filter((h) => h.isCompleted).length}/{recurringHabits.length} Done
                 </span>
@@ -322,7 +325,7 @@ export function TodosClient({
                         onClick={() => handleToggleTodo(habit)}
                         aria-label={`Mark ${habit.title} as ${habit.isCompleted ? "incomplete" : "complete"}`}
                       >
-                        {habit.isCompleted && "✓"}
+                        {habit.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
                       </button>
                       <div>
                         <span className={`todo-title ${habit.isCompleted ? "completed" : ""}`}>
@@ -330,13 +333,13 @@ export function TodosClient({
                         </span>
                         <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.2rem", flexWrap: "wrap" }}>
                           {habit.streak > 0 && (
-                            <span className="badge badge-streak">
-                              🔥 {habit.streak} {habit.streak === 1 ? "day" : "days"} streak
+                            <span className="badge badge-streak" style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                              <FlameIcon size={12} /> {habit.streak} {habit.streak === 1 ? "day" : "days"} streak
                             </span>
                           )}
                           {habit.reminderTime && (
                             <span className="badge badge-reminder">
-                              ⏰ {habit.reminderTime}
+                              {habit.reminderTime}
                             </span>
                           )}
                         </div>
@@ -349,7 +352,7 @@ export function TodosClient({
                       onClick={() => handleDeleteTodo(habit.id)}
                       aria-label={`Delete habit ${habit.title}`}
                     >
-                      🗑️
+                      <TrashIcon size={15} />
                     </button>
                   </div>
                 ))}
@@ -360,7 +363,7 @@ export function TodosClient({
           {/* One-off Tasks Section */}
           <section className="quick-expense-card" aria-label="Today's Tasks">
             <div className="todo-section-title" style={{ marginTop: 0 }}>
-              <span>📋 Today&apos;s Action Tasks</span>
+              <span>Today&apos;s Action Tasks</span>
               <span className="badge badge-info">
                 {oneOffTasks.filter((t) => t.isCompleted).length}/{oneOffTasks.length} Done
               </span>
@@ -377,7 +380,7 @@ export function TodosClient({
                         onClick={() => handleToggleTodo(task)}
                         aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
                       >
-                        {task.isCompleted && "✓"}
+                        {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
                       </button>
                       <div>
                         <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
@@ -391,7 +394,7 @@ export function TodosClient({
                           )}
                           {task.reminderTime && (
                             <span className="badge badge-reminder">
-                              ⏰ {task.reminderTime}
+                              {task.reminderTime}
                             </span>
                           )}
                         </div>
@@ -404,7 +407,7 @@ export function TodosClient({
                       onClick={() => handleDeleteTodo(task.id)}
                       aria-label={`Delete task ${task.title}`}
                     >
-                      🗑️
+                      <TrashIcon size={15} />
                     </button>
                   </div>
                 ))}
@@ -467,15 +470,15 @@ export function TodosClient({
                 disabled={isPending || !titleInput.trim()}
                 style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", fontWeight: 600 }}
               >
-                {isPending ? "Adding..." : "+ Create Task"}
+                {isPending ? "Adding..." : "Create Task"}
               </button>
             </form>
           </section>
 
           {/* Automatic Carry-over Note */}
           <section className="surface" style={{ padding: "1.25rem" }}>
-            <h3 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em" }}>
-              🔄 Automatic Carry-Over
+            <h3 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <RefreshIcon size={14} /> Automatic Carry-Over
             </h3>
             <p className="muted" style={{ fontSize: "0.85rem", margin: "0.45rem 0 0", lineHeight: 1.5 }}>
               Any unfinished one-off tasks from past days automatically roll over to today with an amber <strong>Carried Over</strong> badge. No tasks ever get lost or forgotten.
