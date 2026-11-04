@@ -64,6 +64,13 @@
       "when": 1793782439420,
       "tag": "0008_puzzling_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793787198111,
+      "tag": "0009_cold_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

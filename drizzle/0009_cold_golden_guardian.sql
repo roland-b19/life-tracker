@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "expense_categories_default_unique_idx" ON "expense_categories" USING btree ("space","name") WHERE "expense_categories"."user_id" IS NULL;

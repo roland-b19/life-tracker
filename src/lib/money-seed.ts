@@ -20,26 +20,39 @@ export const DEFAULT_CATEGORIES = [
   { name: "Business Other", space: "business", icon: "💼" },
 ] as const;
 
+let ensurePromise: Promise<void> | null = null;
+
 export async function ensureDefaultCategories(): Promise<void> {
-  const existing = await db
-    .select({ name: expenseCategories.name, space: expenseCategories.space })
-    .from(expenseCategories)
-    .where(isNull(expenseCategories.userId));
+  if (ensurePromise) return ensurePromise;
 
-  const existingSet = new Set(existing.map((c) => `${c.space}_${c.name}`));
+  ensurePromise = (async () => {
+    const existing = await db
+      .select({ name: expenseCategories.name, space: expenseCategories.space })
+      .from(expenseCategories)
+      .where(isNull(expenseCategories.userId));
 
-  const toInsert = DEFAULT_CATEGORIES.filter(
-    (c) => !existingSet.has(`${c.space}_${c.name}`),
-  );
+    const existingSet = new Set(existing.map((c) => `${c.space}_${c.name}`));
 
-  if (toInsert.length > 0) {
-    await db.insert(expenseCategories).values(
-      toInsert.map((c) => ({
-        name: c.name,
-        space: c.space,
-        icon: c.icon,
-        userId: null,
-      })),
+    const toInsert = DEFAULT_CATEGORIES.filter(
+      (c) => !existingSet.has(`${c.space}_${c.name}`),
     );
-  }
+
+    if (toInsert.length > 0) {
+      await db
+        .insert(expenseCategories)
+        .values(
+          toInsert.map((c) => ({
+            name: c.name,
+            space: c.space,
+            icon: c.icon,
+            userId: null,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+  })().finally(() => {
+    ensurePromise = null;
+  });
+
+  return ensurePromise;
 }

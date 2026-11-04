@@ -645,7 +645,7 @@ export function BusinessClient({
                   onChange={(e) => setExpenseCategory(e.target.value)}
                   disabled={busy}
                 >
-                  {businessCategories.map((c) => (
+                  {Array.from(new Set(businessCategories)).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
