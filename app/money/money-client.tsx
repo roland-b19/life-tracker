@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
+import { BarChart } from "../components/charts";
 import { useToast } from "../components/toast";
 import {
   createCategoryAction,
@@ -309,6 +310,15 @@ export function MoneyClient({
     }
   };
 
+  // Spending per day of the shown month; the list the page loaded is already limited to this month.
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const perDay = Array.from({ length: daysInMonth }, (_, i) => {
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+    return { day: i + 1, iso, total: expenses.filter((e) => e.date === iso).reduce((n, e) => n + Number(e.amount), 0) };
+  });
+  const maxDay = Math.max(...perDay.map((d) => d.total), 1);
+  const activeDays = perDay.filter((d) => d.total > 0).length;
+
   const fmt = (n: number) =>
     n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -419,6 +429,26 @@ export function MoneyClient({
         </div>
 
         <div className="dashboard-aside">
+          <section className="surface" aria-labelledby="perday-title">
+            <div className="section-head">
+              <h2 id="perday-title" className="section-title">
+                Spending by day
+              </h2>
+              <span className="muted number-tabular">{activeDays} active {activeDays === 1 ? "day" : "days"}</span>
+            </div>
+            <BarChart
+              max={maxDay}
+              data={perDay.map((d) => ({
+                label: d.day % 5 === 1 ? String(d.day) : "",
+                value: d.total,
+                empty: d.total === 0,
+                highlight: d.total === maxDay && d.total > 0,
+                title: `${formatDMY(d.iso)}: ${fmt(d.total)} RON`,
+              }))}
+              summary={`Daily spending in ${MONTH_NAMES[month - 1]}, highest day ${fmt(maxDay)} RON`}
+            />
+          </section>
+
           <section className="surface" aria-labelledby="categories-title">
             <div className="section-head">
               <h2 id="categories-title" className="section-title">

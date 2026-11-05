@@ -280,6 +280,17 @@ async function main() {
       "last_completed_date" date,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS "todo_day_stats" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "space" varchar(20) NOT NULL,
+      "is_recurring" boolean NOT NULL,
+      "date" date NOT NULL,
+      "total" integer NOT NULL,
+      "done" integer NOT NULL,
+      CONSTRAINT "todo_day_stats_unique" UNIQUE("user_id","space","is_recurring","date"),
+      CONSTRAINT "todo_day_stats_range" CHECK ("done" >= 0 AND "done" <= "total")
+    );
     CREATE TABLE IF NOT EXISTS "push_subscriptions" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -342,6 +353,7 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expense_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;

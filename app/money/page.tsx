@@ -25,7 +25,7 @@ export default async function MoneyPage() {
     getExpenseCategories(userId, "personal"),
     getMostUsedCategory(userId, "personal"),
     getMonthlyMoneySummary(userId, "personal", currentYear, currentMonth),
-    getExpenses(userId, "personal", { month: monthStr, limit: 50 }),
+    getExpenses(userId, "personal", { month: monthStr }),
   ]);
 
   return (

@@ -4,19 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, TrashIcon, FlameIcon, BellIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { Segmented } from "../components/segmented";
+import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import {
   createTodoAction,
   deleteTodoAction,
   getDailyTodosAction,
+  getTodoHistoryAction,
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
-import { TodoItem } from "@/lib/todos";
+import type { TodoDayStat, TodoItem } from "@/lib/todos";
 import { TodoSpace } from "@/lib/validations/todos";
-import { formatDMY } from "@/lib/format-date";
+import { formatDMY, toISODate } from "@/lib/format-date";
 
 type TaskTab = "daily" | "one-day";
 
@@ -25,18 +27,23 @@ interface TodosClientProps {
   todayDate: string;
   initialPersonalTodos: TodoItem[];
   initialBusinessTodos: TodoItem[];
+  initialHistory: Record<TodoSpace, TodoDayStat[]>;
 }
+
+const HISTORY_DAYS = 14;
 
 export function TodosClient({
   userName,
   todayDate,
   initialPersonalTodos,
   initialBusinessTodos,
+  initialHistory,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [currentDate, setCurrentDate] = useState(todayDate);
   const [tab, setTab] = useState<TaskTab>("daily");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [history, setHistory] = useState(initialHistory);
 
   const { showToast } = useToast();
 
@@ -61,10 +68,36 @@ export function TodosClient({
 
   const currentTodos = todosMap[space];
   const isDaily = tab === "daily";
+  // Daily tasks always belong to today; only the Today filter can browse other days.
+  const activeDate = isDaily ? todayDate : currentDate;
   const visibleTodos = currentTodos.filter((t) => t.isRecurring === isDaily);
   const doneCount = visibleTodos.filter((t) => t.isCompleted).length;
-  // An empty list counts as fully done.
-  const percentage = visibleTodos.length ? Math.round((doneCount / visibleTodos.length) * 100) : 100;
+  const percentage = visibleTodos.length ? Math.round((doneCount / visibleTodos.length) * 100) : 0;
+
+  // Last N days for the active filter; days without a snapshot are shown as empty.
+  const byDate = new Map(
+    history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]),
+  );
+  const today = new Date(`${todayDate}T00:00:00`);
+  const days = Array.from({ length: HISTORY_DAYS }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (HISTORY_DAYS - 1 - i));
+    const iso = toISODate(d);
+    return { iso, label: String(d.getDate()), stat: byDate.get(iso) };
+  });
+  const tracked = days.filter((d) => d.stat);
+  const avg = tracked.length
+    ? Math.round(tracked.reduce((n, d) => n + (d.stat!.done / d.stat!.total) * 100, 0) / tracked.length)
+    : 0;
+  const perfectDays = tracked.filter((d) => d.stat!.done === d.stat!.total).length;
+  const doneTotal = tracked.reduce((n, d) => n + d.stat!.done, 0);
+  const bars = days.map((d) => ({
+    label: d.label,
+    value: d.stat ? (d.stat.done / d.stat.total) * 100 : 0,
+    empty: !d.stat,
+    highlight: d.iso === activeDate,
+    title: d.stat ? `${formatDMY(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${formatDMY(d.iso)}: no tasks`,
+  }));
 
   // Check push notification availability on mount
   useEffect(() => {
@@ -81,16 +114,19 @@ export function TodosClient({
     }
   }, []);
 
-  // Loads both spaces and swaps them in with a single state update, so the list never flashes empty.
+  // Loads both spaces (and their history) and swaps them in with one state update, so the list never flashes empty.
   const loadDay = async (date: string) => {
     const id = ++requestId.current;
     try {
-      const [personal, business] = await Promise.all([
+      const [personal, business, hp, hb] = await Promise.all([
         getDailyTodosAction("personal", date),
         getDailyTodosAction("business", date),
+        getTodoHistoryAction("personal"),
+        getTodoHistoryAction("business"),
       ]);
       if (id === requestId.current) {
         setTodosMap({ personal: personal.todos, business: business.todos });
+        setHistory({ personal: hp.history ?? [], business: hb.history ?? [] });
       }
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
@@ -100,11 +136,16 @@ export function TodosClient({
   const handleDateChange = (daysDelta: number) => {
     const d = new Date(currentDate);
     d.setDate(d.getDate() + daysDelta);
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const newDateStr = `${d.getFullYear()}-${m}-${day}`;
+    const newDateStr = toISODate(d);
     setCurrentDate(newDateStr);
     void loadDay(newDateStr);
+  };
+
+  const changeTab = (next: TaskTab) => {
+    setTab(next);
+    // Switching to Today shows the chosen day, so make sure its tasks are loaded.
+    if (next === "one-day" && currentDate !== todayDate) void loadDay(currentDate);
+    else if (next === "daily" && currentDate !== todayDate) void loadDay(todayDate);
   };
 
   const openForm = (todo?: TodoItem) => {
@@ -138,7 +179,7 @@ export function TodosClient({
             actionLabel: "Undo",
             onAction: async () => {
               await updateTodoAction({ id: before.id, title: before.title, reminderTime: before.reminderTime });
-              await loadDay(currentDate);
+              await loadDay(activeDate);
             },
           });
         }
@@ -147,7 +188,7 @@ export function TodosClient({
           space,
           title,
           isRecurring: isDaily,
-          dueDate: currentDate,
+          dueDate: activeDate,
           reminderTime,
         });
         if (res.success && res.todo) {
@@ -158,13 +199,13 @@ export function TodosClient({
             actionLabel: "Undo",
             onAction: async () => {
               await deleteTodoAction(createdId);
-              await loadDay(currentDate);
+              await loadDay(activeDate);
             },
           });
         }
       }
       closeForm();
-      await loadDay(currentDate);
+      await loadDay(activeDate);
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     } finally {
@@ -181,7 +222,7 @@ export function TodosClient({
 
   const handleToggleTodo = async (todo: TodoItem) => {
     const next = !todo.isCompleted;
-    const date = currentDate;
+    const date = activeDate;
     setCompleted(todo.id, next);
     try {
       await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
@@ -220,14 +261,14 @@ export function TodosClient({
               dueDate: target.dueDate,
               reminderTime: target.reminderTime,
             });
-            await loadDay(currentDate);
+            await loadDay(activeDate);
           },
         });
       }
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     }
-    await loadDay(currentDate);
+    await loadDay(activeDate);
   };
 
   const handleEnablePush = async () => {
@@ -278,6 +319,15 @@ export function TodosClient({
           ]}
           onChange={setSpace}
         />
+        <Segmented
+          label="Task type"
+          value={tab}
+          options={[
+            { value: "daily", label: "Daily" },
+            { value: "one-day", label: "Today" },
+          ]}
+          onChange={changeTab}
+        />
       </div>
 
       {/* Web Push Notification Banner */}
@@ -304,124 +354,152 @@ export function TodosClient({
         </div>
       )}
 
-      <div className="dashboard-main">
-        <section className="todo-hero-card" aria-label="Day overview">
-          <div className="month-selector">
-            <button
-              type="button"
-              className="month-nav-btn"
-              onClick={() => handleDateChange(-1)}
-              aria-label="Previous day"
-            >
-              ‹
-            </button>
-            <span className="month-label">
-              {currentDate === todayDate ? "Today" : formatDMY(currentDate)}
-            </span>
-            <button
-              type="button"
-              className="month-nav-btn"
-              onClick={() => handleDateChange(1)}
-              aria-label="Next day"
-            >
-              ›
-            </button>
-          </div>
-
-          <div className="todo-stats-header">
-            <span className="todo-stats-rate number-tabular">{percentage}%</span>
-            <span className="todo-stats-fraction number-tabular">
-              {doneCount} of {visibleTodos.length} done
-            </span>
-          </div>
-
-          <div className="progress-track" aria-hidden="true">
-            <div className="progress-fill" style={{ width: `${percentage}%` }} />
-          </div>
-        </section>
-
-        <section className="surface" aria-labelledby="tasks-title">
-          <div className="section-head">
-            <h2 id="tasks-title" className="section-title">
-              Tasks
-            </h2>
-            <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-              <PlusIcon size={14} />
-              Add task
-            </button>
-          </div>
-
-          <Segmented
-            label="Task type"
-            value={tab}
-            options={[
-              { value: "daily", label: "Daily" },
-              { value: "one-day", label: "Today" },
-            ]}
-            onChange={setTab}
-          />
-
-          {visibleTodos.length > 0 ? (
-            <div className="todo-list">
-              {visibleTodos.map((task) => (
-                <div key={task.id} className="todo-row">
-                  <button
-                    type="button"
-                    className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                    onClick={() => handleToggleTodo(task)}
-                    aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                  >
-                    {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                  </button>
-
-                  <div className="todo-main">
-                    <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
-                      {task.title}
-                    </span>
-                    {((!isDaily && task.isCarriedOver) || task.reminderTime) && (
-                      <div className="badge-row">
-                        {!isDaily && task.isCarriedOver && (
-                          <span className="badge badge-carried">Carried over</span>
-                        )}
-                        {task.reminderTime && (
-                          <span className="badge badge-reminder">{task.reminderTime}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {isDaily && task.streak > 0 && (
-                    <span className="streak number-tabular" title={`${task.streak}-day streak`}>
-                      <FlameIcon size={15} />
-                      {task.streak}
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    className="delete-icon-btn edit"
-                    onClick={() => openForm(task)}
-                    aria-label={`Edit ${task.title}`}
-                    title="Edit"
-                  >
-                    <PencilIcon size={17} />
-                  </button>
-                  <button
-                    type="button"
-                    className="delete-icon-btn"
-                    onClick={() => handleDeleteTodo(task)}
-                    aria-label={`Delete ${task.title}`}
-                    title="Delete"
-                  >
-                    <TrashIcon size={17} />
-                  </button>
-                </div>
-              ))}
+      <div className="dashboard-grid">
+        <div className="dashboard-main">
+          <section className="surface" aria-labelledby="tasks-title">
+            <div className="section-head">
+              <h2 id="tasks-title" className="section-title">
+                {isDaily ? "Daily tasks" : "Today"}
+              </h2>
+              <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                <PlusIcon size={14} />
+                Add task
+              </button>
             </div>
-          ) : (
-            <p className="empty-note">{isDaily ? "No daily tasks yet." : "Nothing planned for this day."}</p>
-          )}
-        </section>
+
+            {!isDaily && (
+              <div className="month-selector">
+                <button
+                  type="button"
+                  className="month-nav-btn"
+                  onClick={() => handleDateChange(-1)}
+                  aria-label="Previous day"
+                >
+                  ‹
+                </button>
+                <span className="month-label">
+                  {currentDate === todayDate ? "Today" : formatDMY(currentDate)}
+                </span>
+                <button
+                  type="button"
+                  className="month-nav-btn"
+                  onClick={() => handleDateChange(1)}
+                  aria-label="Next day"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+
+            {visibleTodos.length > 0 ? (
+              <div className="todo-list">
+                {visibleTodos.map((task) => (
+                  <div key={task.id} className="todo-row">
+                    <button
+                      type="button"
+                      className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
+                      onClick={() => handleToggleTodo(task)}
+                      aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                    >
+                      {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                    </button>
+
+                    <div className="todo-main">
+                      <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
+                        {task.title}
+                      </span>
+                      {((!isDaily && task.isCarriedOver) || task.reminderTime) && (
+                        <div className="badge-row">
+                          {!isDaily && task.isCarriedOver && (
+                            <span className="badge badge-carried">Carried over</span>
+                          )}
+                          {task.reminderTime && (
+                            <span className="badge badge-reminder">{task.reminderTime}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {isDaily && task.streak > 0 && (
+                      <span className="streak number-tabular" title={`${task.streak}-day streak`}>
+                        <FlameIcon size={15} />
+                        {task.streak}
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      className="delete-icon-btn edit"
+                      onClick={() => openForm(task)}
+                      aria-label={`Edit ${task.title}`}
+                      title="Edit"
+                    >
+                      <PencilIcon size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      className="delete-icon-btn"
+                      onClick={() => handleDeleteTodo(task)}
+                      aria-label={`Delete ${task.title}`}
+                      title="Delete"
+                    >
+                      <TrashIcon size={17} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-note">{isDaily ? "No daily tasks yet." : "Nothing planned for this day."}</p>
+            )}
+          </section>
+        </div>
+
+        <div className="dashboard-aside">
+          <section className="surface" aria-labelledby="progress-title">
+            <div className="section-head">
+              <h2 id="progress-title" className="section-title">
+                Progress
+              </h2>
+            </div>
+            <div className="dash-hero">
+              <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "day's"} tasks done`} />
+              <div className="dash-hero-text">
+                <span className="todo-stats-fraction number-tabular">
+                  {doneCount} of {visibleTodos.length} done
+                </span>
+                <span className="muted">
+                  {isDaily || currentDate === todayDate ? "Today" : formatDMY(currentDate)}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="surface" aria-labelledby="history-title">
+            <div className="section-head">
+              <h2 id="history-title" className="section-title">
+                Last {HISTORY_DAYS} days
+              </h2>
+            </div>
+            <div className="stat-row">
+              <div className="stat-tile">
+                <strong className="number-tabular">{tracked.length ? `${avg}%` : "–"}</strong>
+                <span>Average</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">{perfectDays}</strong>
+                <span>Perfect days</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">{doneTotal}</strong>
+                <span>Tasks done</span>
+              </div>
+            </div>
+            <BarChart
+              data={bars}
+              summary={`Completion per day over the last ${HISTORY_DAYS} days, average ${avg}%`}
+            />
+          </section>
+        </div>
       </div>
 
       <Modal

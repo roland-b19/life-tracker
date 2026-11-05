@@ -14,6 +14,7 @@ import {
   createTodo,
   deleteTodo,
   getDailyTodos,
+  getTodoHistory,
   savePushSubscription,
   toggleTodo,
   updateTodo,
@@ -63,6 +64,11 @@ export async function getDailyTodosAction(space: TodoSpace, date: string) {
   const userId = await requireUser();
   const result = await getDailyTodos(userId, space, date);
   return { success: true, ...result };
+}
+
+export async function getTodoHistoryAction(space: TodoSpace) {
+  const userId = await requireUser();
+  return { success: true, history: await getTodoHistory(userId, space) };
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {

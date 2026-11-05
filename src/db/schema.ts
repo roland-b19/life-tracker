@@ -349,6 +349,26 @@ export const todos = pgTable(
   },
 );
 
+// One frozen row per user, space, kind and day: how many tasks existed and how many were done.
+export const todoDayStats = pgTable(
+  "todo_day_stats",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    space: varchar("space", { length: 20 }).notNull(),
+    isRecurring: boolean("is_recurring").notNull(),
+    date: date("date").notNull(),
+    total: integer("total").notNull(),
+    done: integer("done").notNull(),
+  },
+  (table) => [
+    unique("todo_day_stats_unique").on(table.userId, table.space, table.isRecurring, table.date),
+    check("todo_day_stats_range", sql`${table.done} >= 0 AND ${table.done} <= ${table.total}`),
+  ],
+);
+
 export const pushSubscriptions = pgTable(
   "push_subscriptions",
   {

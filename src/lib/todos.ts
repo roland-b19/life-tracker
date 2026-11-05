@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { pushSubscriptions, todos } from "@/db/schema";
+import { pushSubscriptions, todoDayStats, todos } from "@/db/schema";
+import { toISODate } from "./format-date";
 import {
   CreateTodoInput,
   PushSubscriptionInput,
@@ -124,6 +125,62 @@ export async function getDailyTodos(
   };
 }
 
+export interface TodoDayStat {
+  date: string;
+  isRecurring: boolean;
+  total: number;
+  done: number;
+}
+
+/** Freezes how many tasks existed and were done on `date`, one row per kind (daily / one-off). */
+async function recordDayStats(userId: string, space: TodoSpace, date: string): Promise<void> {
+  const rows = await db
+    .select()
+    .from(todos)
+    .where(
+      and(
+        eq(todos.userId, userId),
+        eq(todos.space, space),
+        or(eq(todos.dueDate, date), and(eq(todos.isRecurring, true), eq(todos.recurrencePattern, "daily"))),
+      ),
+    );
+
+  for (const isRecurring of [true, false]) {
+    const kind = rows.filter((r) => r.isRecurring === isRecurring);
+    const total = kind.length;
+    const done = kind.filter((r) => (isRecurring ? r.lastCompletedDate === date : r.isCompleted)).length;
+    await db
+      .insert(todoDayStats)
+      .values({ userId, space, isRecurring, date, total, done })
+      .onConflictDoUpdate({
+        target: [todoDayStats.userId, todoDayStats.space, todoDayStats.isRecurring, todoDayStats.date],
+        set: { total, done },
+      });
+  }
+}
+
+export async function getTodoHistory(userId: string, space: TodoSpace, days = 30): Promise<TodoDayStat[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - days + 1);
+  return db
+    .select({
+      date: todoDayStats.date,
+      isRecurring: todoDayStats.isRecurring,
+      total: todoDayStats.total,
+      done: todoDayStats.done,
+    })
+    .from(todoDayStats)
+    .where(
+      and(
+        eq(todoDayStats.userId, userId),
+        eq(todoDayStats.space, space),
+        gte(todoDayStats.date, toISODate(since)),
+        sql`${todoDayStats.total} > 0`,
+      ),
+    )
+    .orderBy(asc(todoDayStats.date));
+}
+
 export async function createTodo(userId: string, input: CreateTodoInput): Promise<TodoItem> {
   const isRecurring = Boolean(input.isRecurring);
   const recurrencePattern = isRecurring
@@ -147,6 +204,8 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
       streak: 0,
     })
     .returning();
+
+  await recordDayStats(userId, input.space, isRecurring ? toISODate() : input.dueDate);
 
   return {
     ...created,
@@ -206,6 +265,7 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
       .where(eq(todos.id, existing.id));
   }
 
+  await recordDayStats(userId, existing.space as TodoSpace, input.currentDate);
   return true;
 }
 
@@ -223,8 +283,12 @@ export async function deleteTodo(userId: string, todoId: string): Promise<boolea
   const deleted = await db
     .delete(todos)
     .where(and(eq(todos.id, todoId), eq(todos.userId, userId)))
-    .returning({ id: todos.id });
+    .returning({ id: todos.id, space: todos.space, isRecurring: todos.isRecurring, dueDate: todos.dueDate });
 
+  if (deleted[0]) {
+    const { space, isRecurring, dueDate } = deleted[0];
+    await recordDayStats(userId, space as TodoSpace, isRecurring ? toISODate() : dueDate);
+  }
   return deleted.length > 0;
 }
 

@@ -4,6 +4,7 @@ import { formatDMY } from "@/lib/format-date";
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
 import { Modal } from "../components/modal";
+import { MuscleExplorer } from "./muscle-map";
 import {
   createCustomExerciseAction,
   deleteSetAction,
@@ -616,7 +617,11 @@ export function GymClient({
           </div>
         </section>
       ) : (
-        /* Routine / Split Overview in Dashboard Grid */
+        <>
+          <MuscleExplorer
+            planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
+          />
+        {/* Routine / Split Overview in Dashboard Grid */}
         <div className="dashboard-grid">
           {/* Left Column: Planned Routine Preview & Recent History */}
           <div className="dashboard-main">
@@ -773,6 +778,7 @@ export function GymClient({
             </section>
           </div>
         </div>
+        </>
       )}
 
       {/* Status banner */}

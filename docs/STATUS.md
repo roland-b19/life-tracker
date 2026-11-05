@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (UI polish 2)_
+_Last updated: 2026-11-05 by Claude (desktop dashboards and muscle map)_
 
 ## Phase
 
@@ -14,6 +14,7 @@ Ember Design System & Navigation (dark warm graphite palette, SF Pro font, sprin
 Storm palette (cool graphite, steel blue accent; replaces Ember's terracotta, see `docs/decisions.md` 2026-11-05) is merged in `main` (PR #32).
 UI cleanup (minimal, consistent pages; business finances removed; Tasks tabs; editable wishlist; d.m.y dates; modal fixes) is merged in `main` (PR #34).
 UI polish 2 (Health page with Weight inside, editable tasks/categories/expenses/water/steps/weigh-ins, Undo on every action, no sticky hover, no zoom) is on `fix/ui-polish-2`, awaiting CI and the user's manual test. It adds migration `0010_allow_weight_update` (GRANT UPDATE on `weight_entries`); it must be applied wherever `db:migrate` runs.
+Desktop dashboards (auto wishlist price ranges, Tasks Space/Today/Daily filters with a progress dashboard, spending and weight charts, 3D Gym muscle map) are on `fix/ui-polish-2`, awaiting CI and the user's manual test. They add migration `0011_todo_day_stats` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `three` dependency. Mobile redesign comes after all desktop functions are done.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 

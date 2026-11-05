@@ -1,5 +1,6 @@
 "use client";
 
+import { LineChart } from "../components/charts";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
@@ -208,6 +209,24 @@ export function WeightPanel() {
             </div>
           </div>
         </section>
+
+        {sorted.length >= 2 && (
+          <section className="surface" aria-labelledby="chart-title">
+            <div className="section-head">
+              <h2 id="chart-title" className="section-title">
+                Weight over time
+              </h2>
+              <span className="muted">kg</span>
+            </div>
+            <LineChart
+              points={sorted
+                .slice(0, 30)
+                .reverse()
+                .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
+              summary="Weight over the last recorded entries"
+            />
+          </section>
+        )}
 
         <section className="surface" aria-labelledby="history-title">
           <div className="section-head">
