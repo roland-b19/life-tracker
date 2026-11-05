@@ -5,6 +5,7 @@ import { Navigation } from "../components/navigation";
 import { CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { BarChart, DonutChart } from "../components/charts";
+import { DatePicker } from "../components/date-picker";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
@@ -211,24 +212,34 @@ export function MoneyClient({
     }
   };
 
-  const handleDeleteExpense = async (target: ExpenseItem) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== target.id));
-    try {
-      const res = await deleteExpenseAction(target.id);
-      if (res.success) {
-        showToast({
-          message: `Deleted ${target.amount.toFixed(2)} RON (${target.category})`,
-          actionLabel: "Undo",
-          onAction: async () => {
-            await logExpenseAction(expenseInput(target));
-            await refreshMonthData();
-          },
-        });
+  // The server call runs while the row fades, so nothing waits on the network; the toast comes as the row closes.
+  const handleDeleteExpense = (target: ExpenseItem) => {
+    const deleted = deleteExpenseAction(target.id).then(
+      (res) => res.success,
+      () => false,
+    );
+    leave(target.id, async () => {
+      setExpenses((prev) => prev.filter((e) => e.id !== target.id));
+      if (!(await deleted)) {
+        showToast({ message: "Failed to delete expense", type: "warning" });
+        await refreshMonthData();
+        return;
       }
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
-    }
-    await refreshMonthData();
+      void refreshMonthData();
+      showToast({
+        message: `Deleted ${target.amount.toFixed(2)} RON (${target.category})`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const back = await logExpenseAction(expenseInput(target)).catch(() => null);
+          if (!back?.expense) {
+            showToast({ message: "Failed to restore expense", type: "warning" });
+            return;
+          }
+          enter(back.expense.id);
+          await refreshMonthData();
+        },
+      });
+    });
   };
 
   const openCatForm = (cat?: CategoryData) => {
@@ -373,18 +384,14 @@ export function MoneyClient({
           <button type="button" className="month-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month">
             ‹
           </button>
-          <button
-            type="button"
-            className="month-label-btn"
-            onClick={() => {
-              const now = new Date();
-              shiftMonth((now.getFullYear() - year) * 12 + now.getMonth() + 1 - month);
-            }}
-            disabled={isCurrentMonth}
-            title={isCurrentMonth ? undefined : "Back to this month"}
-          >
-            {MONTH_NAMES[month - 1]} {year}
-          </button>
+          <DatePicker
+            mode="month"
+            value={`${year}-${String(month).padStart(2, "0")}`}
+            today={todayIso.slice(0, 7)}
+            max={todayIso.slice(0, 7)}
+            label={`${MONTH_NAMES[month - 1]} ${year}`}
+            onChange={(v) => shiftMonth((Number(v.slice(0, 4)) - year) * 12 + Number(v.slice(5, 7)) - month)}
+          />
           <button
             type="button"
             className="month-nav-btn"
@@ -432,9 +439,11 @@ export function MoneyClient({
                   {shownExpenses.map((exp) => (
                     <div key={exp.id} ref={rowRef(exp.id)} className="expense-row">
                       <div className="expense-info">
-                        <span className="expense-cat-title">{exp.category}</span>
+                        <span className="expense-head">
+                          <span className="expense-cat-title">{exp.category}</span>
+                          <span className="expense-meta number-tabular">{formatDMY(exp.date)}</span>
+                        </span>
                         <span className="expense-value-text number-tabular">{fmt(exp.amount)} RON</span>
-                        <span className="expense-meta">{formatDMY(exp.date)}</span>
                       </div>
                       <div className="row-actions">
                         <button
@@ -449,7 +458,7 @@ export function MoneyClient({
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => leave(exp.id, () => handleDeleteExpense(exp))}
+                          onClick={() => handleDeleteExpense(exp)}
                           aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
                           title="Delete"
                         >
@@ -623,7 +632,7 @@ export function MoneyClient({
             </label>
             <label>
               Date
-              <input type="date" required value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
+              <input type="date" required max={todayIso} value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
             </label>
           </div>
 

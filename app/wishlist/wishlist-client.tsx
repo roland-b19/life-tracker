@@ -11,6 +11,7 @@ import { useToast } from "../components/toast";
 import {
   addWishlistItemAction,
   deleteWishlistItemAction,
+  restoreWishlistItemAction,
   updateWishlistItemAction,
 } from "@/app/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
@@ -155,9 +156,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
           type: "success",
           actionLabel: "Undo",
-          onAction: async () => {
-            await deleteWishlistItemAction(added.id);
-            leave(added.id, () => setItems((prev) => prev.filter((i) => i.id !== added.id)));
+          onAction: () => {
+            dropRow(added.id);
+            void deleteWishlistItemAction(added.id);
           },
         });
       }
@@ -169,37 +170,45 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     }
   }
 
-  async function handleRemove(id: string) {
-    const target = items.find((i) => i.id === id);
-    if (!target) return;
+  const putBack = (item: WishlistItemData) => {
+    enter(item.id);
+    setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
+  };
+  const dropRow = (id: string) => leave(id, () => setItems((prev) => prev.filter((i) => i.id !== id)));
 
-    // Optimistic removal
-    setItems((prev) => prev.filter((item) => item.id !== id));
-
-    setBusy(true);
-    try {
-      const res = await deleteWishlistItemAction(id);
-      if (res.success) {
+  // The server call runs while the row fades, so nothing waits on the network; the toast comes as the row closes.
+  function handleRemove(target: WishlistItemData) {
+    const deleted = deleteWishlistItemAction(target.id).then(
+      () => true,
+      () => false,
+    );
+    leave(target.id, () => {
+      setItems((prev) => prev.filter((i) => i.id !== target.id));
+      void deleted.then((ok) => {
+        if (!ok) {
+          putBack(target);
+          showToast({ message: "Failed to remove item", type: "warning" });
+          return;
+        }
         showToast({
           message: `Removed "${target.name}"`,
           actionLabel: "Undo",
+          // Same id and date, so the row comes back where it was.
           onAction: async () => {
-            const reRes = await addWishlistItemAction(toInput(target));
-            if (reRes.success && reRes.item) {
-              const back = reRes.item as WishlistItemData;
-              enter(back.id);
-              setItems((prev) => [back, ...prev]);
+            putBack(target);
+            const back = await restoreWishlistItemAction({
+              ...toInput(target),
+              id: target.id,
+              createdAt: target.createdAt,
+            }).catch(() => null);
+            if (!back?.success) {
+              dropRow(target.id);
+              showToast({ message: "Failed to restore item", type: "warning" });
             }
           },
         });
-      }
-    } catch {
-      enter(target.id);
-      setItems((prev) => [target, ...prev]);
-      showToast({ message: "Failed to remove item", type: "warning" });
-    } finally {
-      setBusy(false);
-    }
+      });
+    });
   }
 
   return (
@@ -231,7 +240,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
 
             <AutoHeight className="entries">
               {filteredItems.length === 0 ? (
-                <p ref={rowRef("empty")} className="empty-note">
+                // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
+                <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
@@ -261,7 +271,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => leave(item.id, () => handleRemove(item.id))}
+                          onClick={() => handleRemove(item)}
                           aria-label={`Delete ${item.name}`}
                           title="Delete"
                         >

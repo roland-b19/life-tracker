@@ -1,7 +1,13 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { wishlistItems } from "@/db/schema";
-import { CreateWishlistItemInput, createWishlistItemSchema, priorityForPrice } from "./validations/wishlist";
+import {
+  CreateWishlistItemInput,
+  createWishlistItemSchema,
+  priorityForPrice,
+  RestoreWishlistItemInput,
+  restoreWishlistItemSchema,
+} from "./validations/wishlist";
 
 export interface WishlistItemData {
   id: string;
@@ -54,6 +60,40 @@ export async function addWishlistItem(
     });
 
   return item as WishlistItemData;
+}
+
+/**
+ * Puts a deleted item back with its old id and creation time. An id that is already taken
+ * (by this or another user) is left alone and returns null.
+ */
+export async function restoreWishlistItem(
+  userId: string,
+  rawInput: RestoreWishlistItemInput,
+): Promise<WishlistItemData | null> {
+  const validated = restoreWishlistItemSchema.parse(rawInput);
+
+  const [item] = await db
+    .insert(wishlistItems)
+    .values({
+      id: validated.id,
+      userId,
+      name: validated.name,
+      url: validated.url || null,
+      estimatedPrice: String(validated.estimatedPrice),
+      priority: priorityForPrice(validated.estimatedPrice),
+      createdAt: validated.createdAt,
+    })
+    .onConflictDoNothing()
+    .returning({
+      id: wishlistItems.id,
+      name: wishlistItems.name,
+      url: wishlistItems.url,
+      estimatedPrice: wishlistItems.estimatedPrice,
+      priority: wishlistItems.priority,
+      createdAt: wishlistItems.createdAt,
+    });
+
+  return (item as WishlistItemData | undefined) ?? null;
 }
 
 export async function updateWishlistItem(

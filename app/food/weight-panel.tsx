@@ -269,7 +269,7 @@ export function WeightPanel() {
           <div className="form-stack">
             <label>
               Date
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+              <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} required />
             </label>
             <label>
               Weight (kg)

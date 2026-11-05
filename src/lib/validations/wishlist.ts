@@ -11,6 +11,12 @@ export const createWishlistItemSchema = z.object({
     .max(10000000, "Price exceeds maximum threshold"),
 });
 
+/** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
+export const restoreWishlistItemSchema = createWishlistItemSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+});
+
 export type Priority = "low" | "medium" | "high";
 
 /** Priority is derived from the price: under 250 low, under 750 medium, otherwise high. */
@@ -19,3 +25,4 @@ export function priorityForPrice(price: number): Priority {
 }
 
 export type CreateWishlistItemInput = z.infer<typeof createWishlistItemSchema>;
+export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;

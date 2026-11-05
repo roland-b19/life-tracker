@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
-import { addWishlistItem, deleteWishlistItem, updateWishlistItem } from "@/lib/wishlist";
-import { CreateWishlistItemInput, createWishlistItemSchema } from "@/lib/validations/wishlist";
+import { addWishlistItem, deleteWishlistItem, restoreWishlistItem, updateWishlistItem } from "@/lib/wishlist";
+import { CreateWishlistItemInput, createWishlistItemSchema, RestoreWishlistItemInput } from "@/lib/validations/wishlist";
 
 function safeRevalidate(path: string) {
   try {
@@ -40,4 +40,11 @@ export async function deleteWishlistItemAction(itemId: string) {
   const deleted = await deleteWishlistItem(userId, itemId);
   safeRevalidate("/wishlist");
   return { success: true, deleted };
+}
+
+export async function restoreWishlistItemAction(rawInput: RestoreWishlistItemInput) {
+  const userId = await requireUser();
+  const item = await restoreWishlistItem(userId, rawInput);
+  safeRevalidate("/wishlist");
+  return { success: item !== null, item };
 }

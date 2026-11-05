@@ -870,6 +870,17 @@ textarea {
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--lift);
 }
 
+/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
+select {
+  appearance: none;
+  padding-right: 2.6rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a1a9b2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.75rem;
+  cursor: pointer;
+}
+
 /* Checkboxes and radios are not text fields: undo the field sizing above and use the system control in the tint. */
 input[type="checkbox"],
 input[type="radio"] {
@@ -886,7 +897,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background: rgba(47, 53, 60, 0.95);
+  background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
   border-color: rgba(134, 180, 234, 0.6);
   box-shadow: inset 0 0 0 1px rgba(134, 180, 234, 0.6);
 }
@@ -1027,6 +1038,15 @@ textarea:focus-visible {
 .expense-meta {
   font-size: 0.8rem;
   color: var(--secondary);
+}
+
+/* Category and date share the first line; the price sits under them */
+.expense-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 0.5rem;
+  min-width: 0;
 }
 
 .expense-amount-actions {
@@ -1782,6 +1802,135 @@ main > .error {
   cursor: default;
 }
 
+/* The stepper's label opens a calendar popover below it (app/components/date-picker.tsx) */
+.toolbar {
+  position: relative;
+  z-index: 20; /* the popover floats over the cards below */
+}
+
+.picker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.picker > .month-label-btn {
+  border-radius: 0.7rem;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.picker > .month-label-btn:hover,
+.picker > .month-label-btn[aria-expanded="true"] {
+  background: var(--tint-subtle);
+}
+
+.picker-pop {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 50%;
+  translate: -50% 0;
+  width: 19rem;
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--surface-modal);
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  transform-origin: top center;
+  animation: picker-in calc(var(--dur) + 60ms) var(--pop) both;
+}
+
+@keyframes picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9375rem;
+}
+
+.picker-head .month-nav-btn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.picker-grid {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.picker-grid.days {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.picker-grid.months {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.picker-weekdays span {
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--secondary);
+}
+
+.picker-cell {
+  min-height: 2.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift);
+}
+
+.picker-grid.months .picker-cell {
+  min-height: 2.75rem;
+  border-radius: 0.8rem;
+}
+
+.picker-cell:hover:not(:disabled) {
+  background: var(--tint-subtle);
+}
+
+.picker-cell:active:not(:disabled) {
+  transform: scale(var(--press));
+}
+
+.picker-cell.today {
+  color: var(--tint);
+  font-weight: 700;
+}
+
+.picker-cell[aria-pressed="true"] {
+  background: var(--tint);
+  color: var(--on-tint);
+  font-weight: 700;
+}
+
+.picker-cell:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.picker-today {
+  align-self: center;
+}
+
 .readonly-note {
   display: flex;
   align-items: center;
@@ -2065,7 +2214,7 @@ main > .error {
   flex-shrink: 0;
 }
 
-/* Expense rows: category, price right below, date last; edit and delete on the right */
+/* Expense rows: category and date, price right below; edit and delete on the right */
 .expense-info {
   min-width: 0;
   gap: 0.1rem;
@@ -2374,6 +2523,42 @@ button.bars-col:focus-visible {
 .donut-legend .number-tabular {
   color: var(--secondary);
   font-weight: 600;
+}
+
+/* Hovering (or tapping) a slice or its legend row brings it forward: it thickens, the rest dim */
+.donut-slice,
+.donut-legend li {
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease), stroke-width var(--dur) var(--pop);
+}
+
+.donut[data-active] .donut-slice:not(.on),
+.donut[data-active] .donut-legend li:not(.on) {
+  opacity: 0.3;
+}
+
+.donut-slice.on {
+  stroke-width: 30px;
+}
+
+.donut-center {
+  pointer-events: none;
+  padding-inline: 1.6rem;
+  animation: donut-center-in 260ms var(--ease) both;
+}
+
+@keyframes donut-center-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.donut-center-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Gym muscle map */

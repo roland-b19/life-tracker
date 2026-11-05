@@ -127,6 +127,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-05 — Wishlist tweaks.** (1) Fields (inputs, selects, textareas) and segmented tabs lift on hover but carry **no shadow**; a focused field shows only its focus ring (supersedes Motion consistency point on the focused-field shadow). Cards, buttons and nav links keep `--hover-shadow`. (2) The wishlist **Buy** button is removed: it did exactly what Delete does (bought items are deleted, no history). (3) Row fades are faster: fade-out 180ms, fade-in 260ms (`FADE`/`FADE_IN` in `list-motion.tsx`, `row-in` in `globals.css`); space and list resizing keep `--dur`.
 
+- **2026-11-06 — Pages polish.** (1) Planning: one-off tasks may be due from today up to 7 days ahead (`PLAN_AHEAD_DAYS`, enforced by the server with a day of timezone slack); Daily tasks and past days stay as before. Money and weigh-ins never move into the future. (2) Undo of a delete restores the **same row** (id and createdAt) where a restore action exists (wishlist, tasks), inserted with `onConflictDoNothing` and the user id from the session; a task keeps its streak (supersedes UI polish 2 point 3 for tasks). Money undo still re-logs with a new id. (3) Streak rule: ticking a daily task on day D sets the streak to (streak on D-1) + 1; unticking D gives back the previous streak; a streak whose last tick is older than yesterday reads 0. (4) Date pickers are a house component (`DatePicker`), no dependency. (5) Donut charts highlight the hovered or tapped category.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

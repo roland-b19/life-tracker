@@ -8,19 +8,22 @@ import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
+import { DatePicker } from "../components/date-picker";
 import { useToast } from "../components/toast";
 import {
   createTodoAction,
   deleteTodoAction,
   getDailyTodosAction,
   getTodoHistoryAction,
+  restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
-import { TodoSpace } from "@/lib/validations/todos";
-import { formatDMY, toISODate } from "@/lib/format-date";
+import { PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
+import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { applyToggle } from "@/lib/streak";
 
 type TaskTab = "daily" | "one-day";
 type Period = "7" | "30" | "90";
@@ -91,6 +94,8 @@ export function TodosClient({
   const requestId = useRef(0);
 
   const isDaily = tab === "daily";
+  // Daily tasks live in the present; one-off tasks can be planned a week ahead.
+  const maxDate = isDaily ? todayDate : addDays(todayDate, PLAN_AHEAD_DAYS);
   // Past days are read-only: they show what was done, never edit, delete or tick.
   const isPast = date < todayDate;
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
@@ -187,11 +192,7 @@ export function TodosClient({
 
   const goTo = (next: string) => switchView({ date: next });
 
-  const stepDay = (delta: number) => {
-    const d = new Date(`${date}T00:00:00`);
-    d.setDate(d.getDate() + delta);
-    goTo(toISODate(d));
-  };
+  const stepDay = (delta: number) => goTo(addDays(date, delta));
 
   // Daily tasks have no future: coming back from a future one-off day lands on today.
   const changeTab = (next: TaskTab) =>
@@ -263,10 +264,13 @@ export function TodosClient({
     }
   };
 
+  // The streak moves with the tick, using the same rule as the server.
   const setCompleted = (id: string, isCompleted: boolean) => {
     setTodosMap((prev) => ({
       ...prev,
-      [space]: prev[space].map((t) => (t.id === id ? { ...t, isCompleted } : t)),
+      [space]: prev[space].map((t) =>
+        t.id !== id ? t : { ...t, isCompleted, ...(t.isRecurring ? applyToggle(t, isCompleted, date) : {}) },
+      ),
     }));
   };
 
@@ -290,35 +294,55 @@ export function TodosClient({
     await loadDay(date);
   };
 
-  const handleDeleteTodo = async (target: TodoItem) => {
+  // Back in the list where the server would sort it: open first, carried over first, then oldest first.
+  const putBack = (task: TodoItem) => {
+    enter(task.id);
     setTodosMap((prev) => ({
       ...prev,
-      [space]: prev[space].filter((t) => t.id !== target.id),
+      [task.space]: prev[task.space].some((t) => t.id === task.id)
+        ? prev[task.space]
+        : [...prev[task.space], task].sort(
+            (a, b) =>
+              +a.isCompleted - +b.isCompleted ||
+              +b.isCarriedOver - +a.isCarriedOver ||
+              +new Date(a.createdAt) - +new Date(b.createdAt),
+          ),
     }));
+  };
 
-    try {
-      const res = await deleteTodoAction(target.id);
-      if (res.success) {
+  // The server call runs while the row fades, so nothing waits on the network; undo restores the same task, streak included.
+  const handleDeleteTodo = (target: TodoItem) => {
+    const deleted = deleteTodoAction(target.id).then(
+      (res) => res.success,
+      () => false,
+    );
+    leave(target.id, () => {
+      setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) }));
+      void deleted.then((ok) => {
+        if (!ok) {
+          putBack(target);
+          showToast({ message: "Failed to delete task", type: "warning" });
+          return;
+        }
+        void loadDay(date);
         showToast({
           message: `Deleted "${target.title}"`,
           actionLabel: "Undo",
           onAction: async () => {
-            const back = await createTodoAction({
-              space: target.space,
-              title: target.title,
-              isRecurring: target.isRecurring,
-              dueDate: target.dueDate,
-              reminderTime: target.reminderTime,
-            });
-            if (back.success && back.todo) enter(back.todo.id);
+            putBack(target);
+            const { id, space, title, isRecurring, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt } = target;
+            const back = await restoreTodoAction({
+              id, space, title, isRecurring, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt,
+            }).catch(() => null);
+            if (!back?.success) {
+              leave(target.id, () => setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) })));
+              showToast({ message: "Failed to restore task", type: "warning" });
+            }
             await loadDay(date);
           },
         });
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
-    }
-    await loadDay(date);
+      });
+    });
   };
 
   const handleEnablePush = async () => {
@@ -384,20 +408,12 @@ export function TodosClient({
           <button type="button" className="month-nav-btn" onClick={() => stepDay(-1)} aria-label="Previous day">
             ‹
           </button>
-          <button
-            type="button"
-            className="month-label-btn number-tabular"
-            onClick={() => goTo(todayDate)}
-            disabled={date === todayDate}
-            title={date === todayDate ? undefined : "Back to today"}
-          >
-            {dayLabel(date)}
-          </button>
+          <DatePicker mode="day" value={date} today={todayDate} max={maxDate} label={dayLabel(date)} onChange={goTo} />
           <button
             type="button"
             className="month-nav-btn"
             onClick={() => stepDay(1)}
-            disabled={isDaily && date >= todayDate}
+            disabled={date >= maxDate}
             aria-label="Next day"
           >
             ›
@@ -504,7 +520,7 @@ export function TodosClient({
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => leave(task.id, () => handleDeleteTodo(task))}
+                          onClick={() => handleDeleteTodo(task)}
                           aria-label={`Delete ${task.title}`}
                           title="Delete"
                         >
@@ -516,7 +532,8 @@ export function TodosClient({
                 ))}
                 </Fragment>
               ) : (
-                <p ref={rowRef("empty")} className="empty-note">
+                // Keyed by the view like the rows: a reused note keeps fadeAll's faded-out state and stays invisible.
+                <p key={`empty-${view.n}`} ref={rowRef("empty")} className="empty-note">
                   {listDaily ? "No daily tasks yet." : listPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
                 </p>
               )}

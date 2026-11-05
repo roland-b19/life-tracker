@@ -34,9 +34,12 @@ import {
   createTodoAction,
   deleteTodoAction,
   getDailyTodosAction,
+  restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
 } from "@/app/actions/todos";
+import { applyToggle, liveStreak } from "@/lib/streak";
+import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
@@ -215,6 +218,75 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect(day5Result.todos[0].streak).toBe(1);
   });
 
+  it("keeps the streak through untick, re-tick, double ticks and missed days", async () => {
+    const habit = await createTodo(userA, {
+      space: "personal",
+      title: "Read",
+      dueDate: "2026-11-01",
+      isRecurring: true,
+      recurrencePattern: "daily",
+    });
+    const tick = (day: string, isCompleted = true) => toggleTodo(userA, { id: habit.id, isCompleted, currentDate: day });
+    const view = async (day: string) => (await getDailyTodos(userA, "personal", day)).todos[0];
+
+    await tick("2026-11-01");
+    await tick("2026-11-02");
+    await tick("2026-11-03");
+    expect((await view("2026-11-03")).streak).toBe(3);
+
+    // Untick takes back only today's tick; re-ticking lands on the same streak.
+    await tick("2026-11-03", false);
+    expect(await view("2026-11-03")).toMatchObject({ isCompleted: false, streak: 2 });
+    await tick("2026-11-03");
+    expect((await view("2026-11-03")).streak).toBe(3);
+
+    // A double tick does not reset or double count.
+    await tick("2026-11-03");
+    expect((await view("2026-11-03")).streak).toBe(3);
+
+    // Tick the next day: the run goes on.
+    await tick("2026-11-04");
+    expect((await view("2026-11-04")).streak).toBe(4);
+
+    // Unticking a day that was not ticked changes nothing.
+    await tick("2026-11-02", false);
+    expect((await view("2026-11-04")).streak).toBe(4);
+
+    // Tomorrow still shows the run; a whole missed day shows it broken.
+    expect((await view("2026-11-05")).streak).toBe(4);
+    expect((await view("2026-11-06")).streak).toBe(0);
+
+    // A day left unticked breaks the run: the next tick starts again at 1.
+    await tick("2026-11-06");
+    expect((await view("2026-11-06")).streak).toBe(1);
+  });
+
+  it("computes streaks as pure functions, timezone-proof", () => {
+    const none = { streak: 0, lastCompletedDate: null };
+    expect(applyToggle(none, true, "2026-03-01")).toEqual({ streak: 1, lastCompletedDate: "2026-03-01" });
+    // Month and leap-day boundaries.
+    expect(applyToggle({ streak: 4, lastCompletedDate: "2028-02-29" }, true, "2028-03-01").streak).toBe(5);
+    expect(applyToggle({ streak: 4, lastCompletedDate: "2026-12-31" }, true, "2027-01-01").streak).toBe(5);
+    // First tick untick goes back to nothing.
+    expect(applyToggle({ streak: 1, lastCompletedDate: "2026-03-01" }, false, "2026-03-01")).toEqual(none);
+    // A tick on an earlier day than the last one is ignored.
+    const later = { streak: 2, lastCompletedDate: "2026-03-05" };
+    expect(applyToggle(later, true, "2026-03-04")).toBe(later);
+    expect(liveStreak(later, "2026-03-06")).toBe(2);
+    expect(liveStreak(later, "2026-03-07")).toBe(0);
+    expect(addDays("2026-03-29", 1)).toBe("2026-03-30"); // DST change in Europe
+  });
+
+  it("never carries overdue tasks into a future day being planned", async () => {
+    await createTodo(userA, { space: "personal", title: "Overdue", dueDate: "2026-11-01", isRecurring: false, recurrencePattern: "none" });
+    await createTodo(userA, { space: "personal", title: "Planned", dueDate: "2026-11-07", isRecurring: false, recurrencePattern: "none" });
+
+    const future = await getDailyTodos(userA, "personal", "2026-11-07", "2026-11-04");
+    expect(future.todos.map((t) => t.title)).toEqual(["Planned"]);
+    const today = await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04");
+    expect(today.todos.map((t) => [t.title, t.dueDate, t.isCarriedOver])).toEqual([["Overdue", "2026-11-04", true]]);
+  });
+
   it("prevents cross-user task modification or deletion", async () => {
     const task = await createTodo(userA, {
       space: "personal",
@@ -319,10 +391,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("executes server actions successfully for authenticated owner", async () => {
       authState.id = userA;
 
+      const today = toISODate();
       const createRes = await createTodoAction({
         space: "personal",
         title: "Action Test Task",
-        dueDate: "2026-11-04",
+        dueDate: today,
         reminderTime: "14:30",
         isRecurring: false,
       });
@@ -334,11 +407,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const toggleRes = await toggleTodoAction({
         id: createRes.todo.id,
         isCompleted: true,
-        currentDate: "2026-11-04",
+        currentDate: today,
       });
       expect(toggleRes.success).toBe(true);
 
-      const listRes = await getDailyTodosAction("personal", "2026-11-04");
+      const listRes = await getDailyTodosAction("personal", today);
       expect(listRes.success).toBe(true);
       expect(listRes.todos).toHaveLength(1);
       expect(listRes.todos[0].isCompleted).toBe(true);
@@ -354,6 +427,43 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       });
       expect(subRes.success).toBe(true);
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
+    });
+
+    it("plans one-off tasks from today up to a week ahead only", async () => {
+      const today = toISODate();
+      const task = (dueDate: string) => ({ space: "personal", title: "Plan", dueDate, isRecurring: false });
+      expect((await createTodoAction(task(addDays(today, 7)))).success).toBe(true);
+      await expect(createTodoAction(task(addDays(today, 30)))).rejects.toThrow("up to 7 days ahead");
+      await expect(createTodoAction(task(addDays(today, -5)))).rejects.toThrow("up to 7 days ahead");
+    });
+
+    it("restores a deleted task with its streak, owner only", async () => {
+      const today = toISODate();
+      const habit = await createTodo(userA, {
+        space: "personal",
+        title: "Stretch",
+        dueDate: addDays(today, -2),
+        isRecurring: true,
+        recurrencePattern: "daily",
+      });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: addDays(today, -1) });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: today });
+      const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      const input = { ...before, reminderTime: null };
+
+      authState.id = "";
+      await expect(restoreTodoAction(input)).rejects.toThrow("Authentication required.");
+
+      // While the row exists, another user cannot take its id.
+      authState.id = userB;
+      expect((await restoreTodoAction(input)).success).toBe(false);
+      expect((await getDailyTodos(userB, "personal", today)).todos).toHaveLength(0);
+
+      authState.id = userA;
+      await deleteTodoAction(habit.id);
+      expect((await restoreTodoAction(input)).success).toBe(true);
+      const [back] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, lastCompletedDate: today });
     });
   });
 });
