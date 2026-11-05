@@ -1,5 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+const authState = vi.hoisted(() => ({
+  id: "",
+  UnauthorizedError: class UnauthorizedError extends Error {},
+}));
+
+vi.mock("@/server/auth", () => ({
+  UnauthorizedError: authState.UnauthorizedError,
+  requireUser: vi.fn(async () => {
+    if (!authState.id) throw new authState.UnauthorizedError();
+    return authState.id;
+  }),
+}));
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import {
@@ -7,8 +20,10 @@ import {
   deleteWishlistItem,
   getWishlist,
   getWishlistStats,
+  restoreWishlistItem,
   updateWishlistItem,
 } from "@/lib/wishlist";
+import { restoreWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/validations/wishlist";
 
 async function seedUser(subject: string) {
@@ -118,6 +133,40 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
         name: "Negative item",
         estimatedPrice: -50,
       }),
+    ).rejects.toThrow();
+  });
+
+  it("restores a deleted item with its id and date, for the owner only", async () => {
+    const item = await addWishlistItem(userA, { name: "Headphones", estimatedPrice: 600 });
+    const input = { name: item.name, estimatedPrice: 600, id: item.id, createdAt: item.createdAt };
+
+    // Anonymous is rejected before anything is written.
+    authState.id = "";
+    await expect(restoreWishlistItemAction(input)).rejects.toThrow();
+
+    // While the row exists another user cannot take its id.
+    authState.id = userB;
+    expect((await restoreWishlistItemAction(input)).success).toBe(false);
+    expect((await getWishlist(userB)).find((i) => i.id === item.id)).toBeUndefined();
+
+    await deleteWishlistItem(userA, item.id);
+    authState.id = userA;
+    const back = await restoreWishlistItemAction(input);
+    expect(back.success).toBe(true);
+    expect(back.item?.id).toBe(item.id);
+    expect(back.item?.createdAt.getTime()).toBe(item.createdAt.getTime());
+    expect((await getWishlist(userA)).find((i) => i.id === item.id)?.priority).toBe("medium");
+
+    // A second restore of a live row is a no-op.
+    expect(await restoreWishlistItem(userA, input)).toBeNull();
+    authState.id = "";
+  });
+
+  it("rejects a restore with a bad id or a future date", async () => {
+    const base = { name: "X", estimatedPrice: 10 };
+    await expect(restoreWishlistItem(userA, { ...base, id: "nope", createdAt: new Date() })).rejects.toThrow();
+    await expect(
+      restoreWishlistItem(userA, { ...base, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000) }),
     ).rejects.toThrow();
   });
 });
