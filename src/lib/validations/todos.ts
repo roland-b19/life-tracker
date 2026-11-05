@@ -16,6 +16,21 @@ export const createTodoSchema = z.object({
     .nullable(),
 });
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
+
+/** Undo of a delete: the same row back, with its id, ticks and streak. */
+export const restoreTodoSchema = createTodoSchema.extend({
+  id: z.string().uuid(),
+  isCompleted: z.boolean(),
+  isCarriedOver: z.boolean(),
+  streak: z.number().int().min(0).max(100000),
+  lastCompletedDate: isoDate.nullable(),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+});
+
+/** How far ahead one-off tasks can be planned. */
+export const PLAN_AHEAD_DAYS = 7;
+
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
@@ -41,6 +56,7 @@ export const pushSubscriptionSchema = z.object({
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;
 export type RecurrencePattern = z.infer<typeof recurrencePatternSchema>;
 export type CreateTodoInput = z.infer<typeof createTodoSchema>;
+export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
 export type DeleteTodoInput = z.infer<typeof deleteTodoSchema>;

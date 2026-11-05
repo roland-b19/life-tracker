@@ -2,9 +2,12 @@ import { and, asc, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoDayStats, todos } from "@/db/schema";
 import { toISODate } from "./format-date";
+import { applyToggle, liveStreak } from "./streak";
 import {
   CreateTodoInput,
   PushSubscriptionInput,
+  RestoreTodoInput,
+  restoreTodoSchema,
   TodoSpace,
   ToggleTodoInput,
   UpdateTodoInput,
@@ -38,26 +41,19 @@ export interface DailyTodosResult {
   stats: TodoStats;
 }
 
-function getYesterday(dateStr: string): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() - 1);
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 export async function getDailyTodos(
   userId: string,
   space: TodoSpace,
   targetDate: string,
   today = toISODate(),
 ): Promise<DailyTodosResult> {
-  // 1. Rollover: carry unfinished one-off tasks from past dates to targetDate.
-  // Never when reading a past day: that view is read-only and must not move tasks back in time.
+  // 1. Rollover: carry unfinished one-off tasks from past dates to today.
+  // Never when reading a past day (read-only), and never into a future day being planned:
+  // an overdue task belongs to today, not to whatever day is on screen.
   if (targetDate >= today) await db
     .update(todos)
     .set({
-      dueDate: targetDate,
+      dueDate: today,
       isCarriedOver: true,
     })
     .where(
@@ -66,7 +62,7 @@ export async function getDailyTodos(
         eq(todos.space, space),
         eq(todos.isRecurring, false),
         eq(todos.isCompleted, false),
-        lt(todos.dueDate, targetDate),
+        lt(todos.dueDate, today),
       ),
     );
 
@@ -107,7 +103,8 @@ export async function getDailyTodos(
       isCompleted: completed,
       completedAt: r.completedAt,
       isCarriedOver: r.isCarriedOver,
-      streak: r.streak,
+      // A stored streak whose last tick is older than yesterday is already broken.
+      streak: r.isRecurring ? liveStreak(r, targetDate) : r.streak,
       lastCompletedDate: r.lastCompletedDate,
       createdAt: r.createdAt,
     };
@@ -215,6 +212,35 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
   };
 }
 
+/** Puts a deleted task back as it was. An id that is already taken is left alone and returns null. */
+export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): Promise<TodoItem | null> {
+  const input = restoreTodoSchema.parse(rawInput);
+  const [restored] = await db
+    .insert(todos)
+    .values({
+      id: input.id,
+      userId,
+      space: input.space,
+      title: input.title,
+      isRecurring: input.isRecurring,
+      recurrencePattern: input.isRecurring ? "daily" : "none",
+      dueDate: input.dueDate,
+      reminderTime: input.reminderTime ?? null,
+      isCompleted: input.isCompleted,
+      completedAt: input.isCompleted ? new Date() : null,
+      isCarriedOver: input.isCarriedOver,
+      streak: input.streak,
+      lastCompletedDate: input.lastCompletedDate,
+      createdAt: input.createdAt,
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (!restored) return null;
+
+  await recordDayStats(userId, input.space, input.isRecurring ? toISODate() : input.dueDate);
+  return { ...restored, space: restored.space as TodoSpace };
+}
+
 export async function toggleTodo(userId: string, input: ToggleTodoInput): Promise<boolean> {
   const [existing] = await db
     .select()
@@ -226,34 +252,13 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
   }
 
   if (existing.isRecurring) {
-    if (input.isCompleted) {
-      const yesterday = getYesterday(input.currentDate);
-      let newStreak = 1;
-      if (existing.lastCompletedDate === yesterday) {
-        newStreak = (existing.streak ?? 0) + 1;
-      }
+    const before = { streak: existing.streak ?? 0, lastCompletedDate: existing.lastCompletedDate };
+    const next = applyToggle(before, input.isCompleted, input.currentDate);
+    const done = next.lastCompletedDate === input.currentDate;
+    if (next !== before) {
       await db
         .update(todos)
-        .set({
-          isCompleted: true,
-          completedAt: new Date(),
-          lastCompletedDate: input.currentDate,
-          streak: newStreak,
-        })
-        .where(eq(todos.id, existing.id));
-    } else {
-      let newStreak = existing.streak;
-      if (existing.lastCompletedDate === input.currentDate) {
-        newStreak = Math.max(0, (existing.streak ?? 1) - 1);
-      }
-      await db
-        .update(todos)
-        .set({
-          isCompleted: false,
-          completedAt: null,
-          lastCompletedDate: null,
-          streak: newStreak,
-        })
+        .set({ ...next, isCompleted: done, completedAt: done ? new Date() : null })
         .where(eq(todos.id, existing.id));
     }
   } else {
@@ -267,7 +272,8 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
       .where(eq(todos.id, existing.id));
   }
 
-  await recordDayStats(userId, existing.space as TodoSpace, input.currentDate);
+  // A one-off task counts on its own day, whichever day it was ticked from.
+  await recordDayStats(userId, existing.space as TodoSpace, existing.isRecurring ? input.currentDate : existing.dueDate);
   return true;
 }
 
