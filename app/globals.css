@@ -1782,6 +1782,135 @@ main > .error {
   cursor: default;
 }
 
+/* The stepper's label opens a calendar popover below it (app/components/date-picker.tsx) */
+.toolbar {
+  position: relative;
+  z-index: 20; /* the popover floats over the cards below */
+}
+
+.picker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.picker > .month-label-btn {
+  border-radius: 0.7rem;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.picker > .month-label-btn:hover,
+.picker > .month-label-btn[aria-expanded="true"] {
+  background: var(--tint-subtle);
+}
+
+.picker-pop {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 50%;
+  translate: -50% 0;
+  width: 19rem;
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--surface-modal);
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  transform-origin: top center;
+  animation: picker-in calc(var(--dur) + 60ms) var(--pop) both;
+}
+
+@keyframes picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9375rem;
+}
+
+.picker-head .month-nav-btn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.picker-grid {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.picker-grid.days {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.picker-grid.months {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.picker-weekdays span {
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--secondary);
+}
+
+.picker-cell {
+  min-height: 2.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift);
+}
+
+.picker-grid.months .picker-cell {
+  min-height: 2.75rem;
+  border-radius: 0.8rem;
+}
+
+.picker-cell:hover:not(:disabled) {
+  background: var(--tint-subtle);
+}
+
+.picker-cell:active:not(:disabled) {
+  transform: scale(var(--press));
+}
+
+.picker-cell.today {
+  color: var(--tint);
+  font-weight: 700;
+}
+
+.picker-cell[aria-pressed="true"] {
+  background: var(--tint);
+  color: var(--on-tint);
+  font-weight: 700;
+}
+
+.picker-cell:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.picker-today {
+  align-self: center;
+}
+
 .readonly-note {
   display: flex;
   align-items: center;
