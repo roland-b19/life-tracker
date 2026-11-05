@@ -58,11 +58,13 @@ function ItemLink({ value }: { value: string }) {
 export function WishlistClient({ userName, initialItems }: WishlistClientProps) {
   const [items, setItems] = useState<WishlistItemData[]>(initialItems);
   const [filterRange, setFilterRange] = useState<"all" | Priority>("all");
+  // The rows switch only after the old ones have faded out, while the tab moves at once.
+  const [listRange, setListRange] = useState<"all" | Priority>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave } = useListMotion();
+  const { rowRef, enter, leave, fadeAll } = useListMotion();
 
   // Form state
   const [name, setName] = useState("");
@@ -74,7 +76,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   // Newest first; the range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
   const filteredItems = items
-    .filter((item) => filterRange === "all" || rangeOf(item) === filterRange)
+    .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
@@ -83,6 +85,12 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     estimatedPrice: Number(item.estimatedPrice),
     url: item.url || undefined,
   });
+
+  function switchRange(next: "all" | Priority) {
+    if (next === filterRange) return;
+    setFilterRange(next);
+    fadeAll(() => setListRange(next));
+  }
 
   function openForm(item?: WishlistItemData) {
     setErrorMsg("");
@@ -218,23 +226,23 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               label="Filter by price range"
               value={filterRange}
               options={FILTERS}
-              onChange={setFilterRange}
+              onChange={switchRange}
             />
 
             <AutoHeight className="entries">
               {filteredItems.length === 0 ? (
-                <p className="empty-note">
+                <p ref={rowRef("empty")} className="empty-note">
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
                 // Keyed by the filter so every row replays its entrance when the tab changes.
-                <Fragment key={filterRange}>
+                <Fragment key={listRange}>
                   {filteredItems.map((item) => (
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
                         <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
-                        {filterRange === "all" && (
+                        {listRange === "all" && (
                           <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}
                         {item.url && <ItemLink value={item.url} />}
@@ -244,7 +252,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         <button
                           type="button"
                           className="btn-sm tint"
-                          onClick={() => leave(item.id, () => handleRemove(item.id, "bought"), "buy")}
+                          onClick={() => leave(item.id, () => handleRemove(item.id, "bought"))}
                           title="Mark as bought and remove from the list"
                         >
                           <CheckIcon size={12} strokeWidth={2.5} /> Buy
