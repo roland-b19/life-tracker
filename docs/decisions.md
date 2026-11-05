@@ -125,6 +125,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-05 — Motion consistency.** (1) Every lifting element (cards, buttons, segmented tabs, nav links, fields) grows by the same pixels, not the same scale: `--grow`/`--press` are computed from the element's width in `app/providers.tsx` (CSS cannot read width), with one `--hover-shadow` and one `--lift` timing. (2) A focused field keeps the lift and shadow. (3) Lists resize first and new rows fade in after (`AutoHeight` `data-resizing`). (4) Signing out fades the page before the sign-in card appears.
 
+- **2026-11-05 — Wishlist tweaks.** (1) Fields (inputs, selects, textareas) and segmented tabs lift on hover but carry **no shadow**; a focused field shows only its focus ring (supersedes Motion consistency point on the focused-field shadow). Cards, buttons and nav links keep `--hover-shadow`. (2) The wishlist **Buy** button is removed: it did exactly what Delete does (bought items are deleted, no history). (3) Row fades are faster: fade-out 180ms, fade-in 260ms (`FADE`/`FADE_IN` in `list-motion.tsx`, `row-in` in `globals.css`); space and list resizing keep `--dur`.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

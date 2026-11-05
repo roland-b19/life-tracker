@@ -77,7 +77,8 @@ const FADE_OUT: Keyframe[] = [
   { opacity: 1, transform: "none", filter: "none" },
   { opacity: 0, transform: "scale(0.97)", filter: "blur(3px)" },
 ];
-const FADE = { duration: 240, easing: EASE, fill: "forwards" } as const;
+const FADE = { duration: 180, easing: EASE, fill: "forwards" } as const;
+const FADE_IN = 260; // matches row-in in globals.css
 
 /**
  * Row motion for lists: `leave` fades a row out while it keeps its space, then closes the
@@ -104,7 +105,7 @@ export function useListMotion() {
           .then(() => {
             el.style.overflow = "";
             delete el.dataset.rowMotion;
-            return el.animate([...FADE_OUT].reverse(), { duration: DUR - 60, easing: EASE }).finished;
+            return el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, easing: EASE }).finished;
           })
           .catch(() => {});
       }

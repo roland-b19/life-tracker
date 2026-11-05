@@ -806,8 +806,8 @@ main {
   }
 }
 
-/* Hover, one rule for every card, button, tab and field: a spring "breath" (overshoot, then settle) and one low shadow.
-   A focused field stays lifted, so moving the pointer away never drops its shadow. */
+/* Hover, one rule for every card, button, tab and field: a spring "breath" (overshoot, then settle).
+   A focused field stays lifted. Fields and tabs get no shadow, everything else gets one low shadow. */
 @media (hover: hover) {
   .surface:hover,
   .split-day-card:hover,
@@ -821,12 +821,17 @@ main {
   button:not(.bars-col, .segmented button.active):hover:not(:disabled),
   .month-nav-btn:hover {
     transform: scale(var(--grow));
-    box-shadow: var(--hover-shadow);
   }
 
-  /* Same shadow plus the focus ring, so hover and focus blend instead of swapping. */
-  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus:not(:disabled) {
-    box-shadow: var(--hover-shadow), inset 0 0 0 1px rgba(134, 180, 234, 0.6);
+  .surface:hover,
+  .split-day-card:hover,
+  .macro-card:hover,
+  .routine-row:hover,
+  .side-user:hover,
+  .nav-link:hover,
+  button:not(.bars-col, .segmented button):hover:not(:disabled),
+  .month-nav-btn:hover {
+    box-shadow: var(--hover-shadow);
   }
 }
 
@@ -1652,10 +1657,10 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--lift);
 }
 
-/* An idle tab lifts like any button (it needs a fill to carry the shadow); the selected tab stays on its thumb. */
+/* An idle tab lifts and lightens on hover, without a shadow; the selected tab stays on its thumb. */
 @media (hover: hover) {
   .segmented button:not(.active):hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.06);
@@ -2744,7 +2749,7 @@ button.bars-col:focus-visible {
 .split-day-card,
 .routine-row,
 :is(.entries, .todo-list) > .empty-note {
-  animation: row-in calc(var(--dur) - 60ms) var(--ease) both;
+  animation: row-in 260ms var(--ease) both; /* FADE_IN in list-motion.tsx */
 }
 /* While a list resizes (AutoHeight), new rows wait invisible and fade in once the size has settled. */
 .auto-height[data-resizing] :is(.entry-row, .expense-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, .empty-note) {

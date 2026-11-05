@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (motion consistency: one hover size and shadow, resize-then-rows, Tasks view fades, sign-out fade)_
+_Last updated: 2026-11-05 by Claude (wishlist tweaks: no shadow on fields and tabs, Buy removed, faster row fades)_
 
 ## Phase
 
@@ -20,6 +20,7 @@ Motion polish (page enter/exit transitions, numbers count up on every page entry
 Wishlist polish (in-place fades with a soft blur on every list change, tab switches fade the old rows out first, Buy without the green flash, forms shrink and blur the page behind them, hover on form fields and the account card, full-width Sign out) is merged in `main` (PR #39). No migration, no new dependency.
 List motion (rows open their space then fade in, fade out then close their space, a Buy animation on wishlist, lists resize smoothly on tab switches, rows replay their entrance on every tab, uniform list spacing, subtle Sign out, tinted row icon buttons, Credits link removed) is merged in `main` (PR #38). No migration, no new dependency.
 Motion consistency (every card, button, tab and field grows by the same pixels with one shadow, a focused field keeps its lift, lists resize before new rows fade in, Tasks tabs and days fade the old rows out first, add/undo motion on Tasks, sign-out fades the page before the sign-in card, subtler Continue that keeps its colour while signing in) is merged in `main` (PR #40). No migration, no new dependency.
+Wishlist tweaks (no shadow on fields and segmented tabs, Buy button removed, faster row fades) are on branch `fix/wishlist-tweaks` (PR open, not merged).
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -136,6 +137,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-05 — Wishlist tweaks (Claude Code): fields and segmented tabs no longer get the hover shadow (they still grow; a focused field shows only its ring), the wishlist Buy button is gone (Delete does the same), row fades are faster (out 180ms, in 260ms). Verified in the browser; tsc, eslint, 77/77 vitest.
 - 2026-11-05 — Motion consistency (Claude Code), from the user's sign-in, wishlist and tasks feedback:
   - One hover for everything: `--grow` and `--press` are set per element by a `pointerover`/`focusin` listener in `app/providers.tsx` (4px wider on hover, 8px narrower on press, capped at 1.06 / 0.92 for tiny controls), because a fixed scale grew wide buttons far more than small ones. One `--hover-shadow`, one `--lift` timing. Idle segmented tabs and nav links now lift too; the selected tab stays on its thumb.
   - Focused fields stay lifted with the hover shadow plus the focus ring, so the shadow no longer drops when the pointer leaves.
