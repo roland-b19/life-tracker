@@ -19,6 +19,8 @@ export const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   output: "standalone",
+  // Dev only: lets a phone on the home Wi-Fi load HMR and hydrate pages; ignored by `next build`.
+  allowedDevOrigins: ["192.168.*.*"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
