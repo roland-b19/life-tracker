@@ -1,4 +1,4 @@
-# Life Tracker design system (Ember)
+# Life Tracker design system (Storm)
 
 Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04 from the design options artifact ("Life Tracker Design Options"). Implemented in `app/globals.css` and `app/components/navigation.tsx`. When this file and a generic HIG reference disagree, this file wins for Life Tracker, and the deviation is listed below on purpose.
 
@@ -6,7 +6,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 
 | Area | Choice |
 |---|---|
-| Palette | **Ember**: dark, warm graphite with a terracotta accent. Dark only. |
+| Palette | **Storm**: dark, cool graphite with a steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
 | Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, small overshoot on controls only. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
@@ -17,16 +17,16 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 
 | Token | Value | Use |
 |---|---|---|
-| `--background` | `#1f1c1b` | page |
-| `--surface-solid` | `#292524` | cards (translucent `--surface` on top of blur) |
-| `--surface-secondary` | `#332e2c` at 65% | raised controls, inputs |
-| `--card-border` | `#463f3b` | card and control borders |
-| `--separator` | `#3a3431` | hairlines |
-| `--text` | `#f3eeea` | primary text (contrast above 12:1 on `--background`) |
-| `--secondary` | `#b3a8a1` | secondary text (above 7:1) |
-| `--tint` / `--tint-hover` | `#e8946a` / `#f0a984` | the single accent: primary buttons, active tab, links |
-| `--on-tint` | `#1f120a` | text and icons on the accent (never white) |
-| `--success` `--warning` `--danger` | `#8fd19e` `#efc56f` `#f08a8a` | status, always paired with an icon or text, never color alone |
+| `--background` | `#1b1e22` | page |
+| `--surface-solid` | `#252a30` | cards (translucent `--surface` on top of blur) |
+| `--surface-secondary` | `#2f353c` at 65% | raised controls, inputs |
+| `--card-border` | `#434b56` | card and control borders |
+| `--separator` | `#353c45` | hairlines |
+| `--text` | `#eaedf0` | primary text (contrast above 12:1 on `--background`) |
+| `--secondary` | `#a1a9b2` | secondary text (7:1 on `--background`, 6:1 on cards) |
+| `--tint` / `--tint-hover` | `#86b4ea` / `#9bc2ef` | the single accent: primary buttons, active tab, links |
+| `--on-tint` | `#0b1b30` | text and icons on the accent (never white) |
+| `--success` `--warning` `--danger` | `#8fd4a3` `#ebc673` `#ef8f8f` | status, always paired with an icon or text, never color alone |
 | `--dur` `--ease` `--pop` `--press` | 420 ms, spring ease, overshoot ease, 0.96 | all motion |
 
 Rules:
@@ -37,7 +37,7 @@ Rules:
 
 ## Deliberate deviations from the generic HIG references
 
-- **Dark only, no light mode and no in-app switch.** The generic rule says to follow the system appearance. The user chose a single moody dark identity; the viewport declares `colorScheme: "dark"`. Contrast must therefore be checked against Ember only. If a light theme is ever added, it is a new decision in `docs/decisions.md`.
+- **Dark only, no light mode and no in-app switch.** The generic rule says to follow the system appearance. The user chose a single moody dark identity; the viewport declares `colorScheme: "dark"`. Contrast must therefore be checked against Storm only. If a light theme is ever added, it is a new decision in `docs/decisions.md`.
 - **Liquid Glass is approximated** with `backdrop-filter: blur(28px) saturate(160%)` on the sidebar, tab bar, popover and modals only. Cards use a lighter translucent surface; do not add glass to list rows.
 - **SF Symbols cannot be shipped on the web.** Icons are inline stroke SVGs (1.75 px stroke, round caps) in the style of SF Symbols. Do not use emoji as UI icons. Emoji that the user types into data (for example a category name) are content and stay as they are.
 

@@ -686,8 +686,8 @@ export function FoodClient({
                         marginLeft: "0.5rem",
                         background:
                           weightAnalytics.trend === "gaining"
-                            ? "rgba(143, 209, 158, 0.15)"
-                            : "rgba(239, 197, 111, 0.15)",
+                            ? "rgba(143, 212, 163, 0.15)"
+                            : "rgba(235, 198, 115, 0.15)",
                         color:
                           weightAnalytics.trend === "gaining" ? "var(--success)" : "var(--warning)",
                       }}
@@ -752,7 +752,7 @@ export function FoodClient({
                             <span
                               className="badge"
                               style={{
-                                background: "rgba(232, 148, 106, 0.15)",
+                                background: "rgba(134, 180, 234, 0.15)",
                                 color: "var(--tint)",
                                 fontSize: "0.75rem",
                               }}
@@ -973,7 +973,7 @@ export function FoodClient({
             </div>
             <span
               className="badge"
-              style={{ background: "rgba(143, 209, 158, 0.15)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+              style={{ background: "rgba(143, 212, 163, 0.15)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
             >
               <LockIcon size={12} /> Restricted: Food &amp; Macros Only
             </span>
@@ -1056,9 +1056,9 @@ export function FoodClient({
                         fontSize: "0.78rem",
                         padding: "0.3rem 0.6rem",
                         borderRadius: "0.4rem",
-                        background: "rgba(232, 148, 106, 0.12)",
+                        background: "rgba(134, 180, 234, 0.12)",
                         color: "var(--tint)",
-                        border: "1px solid rgba(232, 148, 106, 0.25)",
+                        border: "1px solid rgba(134, 180, 234, 0.25)",
                       }}
                     >
                       {msg.toolExecuted.name === "log_meal" && (
@@ -1141,7 +1141,7 @@ export function FoodClient({
             </div>
             <span
               className="badge"
-              style={{ background: "rgba(143, 209, 158, 0.15)", color: "var(--success)" }}
+              style={{ background: "rgba(143, 212, 163, 0.15)", color: "var(--success)" }}
             >
               Quarantined Scope: Food Only
             </span>
@@ -1152,8 +1152,8 @@ export function FoodClient({
               marginTop: "0.75rem",
               padding: "0.75rem",
               borderRadius: "0.5rem",
-              background: "rgba(232, 148, 106, 0.08)",
-              border: "1px solid rgba(232, 148, 106, 0.2)",
+              background: "rgba(134, 180, 234, 0.08)",
+              border: "1px solid rgba(134, 180, 234, 0.2)",
               fontSize: "0.85rem",
               lineHeight: "1.4",
             }}
@@ -1174,8 +1174,8 @@ export function FoodClient({
                 marginTop: "1rem",
                 padding: "1rem",
                 borderRadius: "0.65rem",
-                background: "rgba(143, 209, 158, 0.1)",
-                border: "1px solid rgba(143, 209, 158, 0.3)",
+                background: "rgba(143, 212, 163, 0.1)",
+                border: "1px solid rgba(143, 212, 163, 0.3)",
               }}
             >
               <div

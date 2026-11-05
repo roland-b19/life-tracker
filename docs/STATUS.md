@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (Full app verification & PWA hardening)_
+_Last updated: 2026-11-05 by Claude (Storm palette)_
 
 ## Phase
 
@@ -11,6 +11,7 @@ Responsive UI/UX Overhaul (Unslop + UI-UX-Pro-Max Bento Architecture + Apple HIG
 Experience Elevation (Moody Minimalist Theme Option B, Blurred Modal Popups & Bottom Sheets, Command Menu ⌘K, Undo Toasts, Tabular Numbers, and 20 Precision Details) is 100% complete and verified.
 Mobile-First Elevation (Native iOS Frosted Bottom Tab Bar, 54px Compact Header, Decluttered Mobile Feed, Smoked Glass Depth & Specular Highlights, Glowing Jewel Accents, Smoked Glass Sign-In) is 100% complete and verified.
 Ember Design System & Navigation (dark warm graphite palette, SF Pro font, spring physics, desktop sidebar & mobile floating tab bar) is 100% complete and merged in `main` (PR #28).
+Storm palette (cool graphite, steel blue accent; replaces Ember's terracotta, see `docs/decisions.md` 2026-11-05) is applied on `feat/storm-palette`, awaiting the user's manual test and merge.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -111,7 +112,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. Review and merge the Ember design PR (`feat/ember-design-system`).
+1. The user tests the app with the Storm palette, then reviews and merges the Storm PR (`feat/storm-palette`).
 2. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
 3. Maintain local-only verification until then (no Azure deployments).
 
