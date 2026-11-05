@@ -48,7 +48,7 @@ export async function deleteMealAction(mealId: string) {
 
 export async function addWaterAction(date: string, amountMl: number) {
   const userId = await requireUser();
-  if (!date || typeof amountMl !== "number") {
+  if (!date || !Number.isInteger(amountMl) || Math.abs(amountMl) > 20000) {
     throw new Error("Invalid water parameters");
   }
   const metrics = await addWater(userId, date, amountMl);
@@ -58,7 +58,7 @@ export async function addWaterAction(date: string, amountMl: number) {
 
 export async function updateStepsAction(date: string, steps: number) {
   const userId = await requireUser();
-  if (!date || typeof steps !== "number") {
+  if (!date || !Number.isInteger(steps) || steps < 0 || steps > 200000) {
     throw new Error("Invalid steps parameter");
   }
   const metrics = await updateDailySteps(userId, date, steps);

@@ -26,12 +26,11 @@ export function CommandMenu({
 
   const commands: CommandItem[] = useMemo(
     () => [
-      { id: "nav-weight", title: "Weigh-ins & Body Weight", category: "Navigation", url: "/", shortcut: "1" },
-      { id: "nav-gym", title: "Gym & Workout Logger", category: "Navigation", url: "/gym", shortcut: "2" },
-      { id: "nav-food", title: "Food, Nutrition & Macros", category: "Navigation", url: "/food", shortcut: "3" },
-      { id: "nav-money", title: "Expenses", category: "Navigation", url: "/money", shortcut: "4" },
-      { id: "nav-todos", title: "Tasks", category: "Navigation", url: "/todos", shortcut: "5" },
-      { id: "nav-wishlist", title: "Wishlist", category: "Navigation", url: "/wishlist", shortcut: "6" },
+      { id: "nav-gym", title: "Gym & Workout Logger", category: "Navigation", url: "/gym", shortcut: "1" },
+      { id: "nav-food", title: "Health: Food, Water & Weight", category: "Navigation", url: "/food", shortcut: "2" },
+      { id: "nav-money", title: "Expenses", category: "Navigation", url: "/money", shortcut: "3" },
+      { id: "nav-todos", title: "Tasks", category: "Navigation", url: "/todos", shortcut: "4" },
+      { id: "nav-wishlist", title: "Wishlist", category: "Navigation", url: "/wishlist", shortcut: "5" },
       { id: "action-food-ai", title: "Open Food AI Assistant", category: "Quick Action", url: "/food" },
     ],
     [],

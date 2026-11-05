@@ -6,6 +6,7 @@ import {
   CreateCategoryInput,
   ExpenseSpace,
   LogExpenseInput,
+  UpdateExpenseInput,
 } from "./validations/money";
 
 export interface ExpenseItem {
@@ -109,6 +110,43 @@ export async function deleteExpense(userId: string, expenseId: string): Promise<
     .delete(expenses)
     .where(and(eq(expenses.id, expenseId), eq(expenses.userId, userId)))
     .returning({ id: expenses.id });
+
+  return deleted.length > 0;
+}
+
+export async function updateExpense(userId: string, input: UpdateExpenseInput): Promise<boolean> {
+  const updated = await db
+    .update(expenses)
+    .set({ amount: Number(input.amount).toFixed(2), category: input.category, date: input.date })
+    .where(and(eq(expenses.id, input.id), eq(expenses.userId, userId)))
+    .returning({ id: expenses.id });
+
+  return updated.length > 0;
+}
+
+/** Renames one of the user's own categories (shared defaults are never touched) and the expenses that use it. */
+export async function renameCustomCategory(userId: string, id: string, name: string): Promise<string | null> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ name: expenseCategories.name })
+      .from(expenseCategories)
+      .where(and(eq(expenseCategories.id, id), eq(expenseCategories.userId, userId)));
+    if (!current) return null;
+
+    await tx.update(expenseCategories).set({ name }).where(eq(expenseCategories.id, id));
+    await tx
+      .update(expenses)
+      .set({ category: name })
+      .where(and(eq(expenses.userId, userId), eq(expenses.category, current.name)));
+    return current.name;
+  });
+}
+
+export async function deleteCustomCategory(userId: string, id: string): Promise<boolean> {
+  const deleted = await db
+    .delete(expenseCategories)
+    .where(and(eq(expenseCategories.id, id), eq(expenseCategories.userId, userId)))
+    .returning({ id: expenseCategories.id });
 
   return deleted.length > 0;
 }

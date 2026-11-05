@@ -9,6 +9,7 @@ import {
   getWishlistStats,
   updateWishlistItem,
 } from "@/lib/wishlist";
+import { priorityForPrice } from "@/lib/validations/wishlist";
 
 async function seedUser(subject: string) {
   const [user] = await db
@@ -32,14 +33,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
       name: "Ergonomic Office Chair",
       url: "https://example.com/chair",
       estimatedPrice: 1200.5,
-      priority: "high",
     });
 
     const item2 = await addWishlistItem(userA, {
       name: "Mechanical Keyboard",
       url: null,
       estimatedPrice: 450,
-      priority: "medium",
     });
 
     expect(item1.id).toBeDefined();
@@ -59,7 +58,6 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     const itemA = await addWishlistItem(userA, {
       name: "User A Secret Gadget",
       estimatedPrice: 300,
-      priority: "low",
     });
 
     // User B should not see User A's item
@@ -83,9 +81,8 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     const item = await addWishlistItem(userA, {
       name: "Desk Lamp",
       estimatedPrice: 80,
-      priority: "low",
     });
-    const edit = { name: "Desk Lamp Pro", estimatedPrice: 99.9, priority: "high" as const };
+    const edit = { name: "Desk Lamp Pro", estimatedPrice: 99.9 };
 
     expect(await updateWishlistItem(userB, item.id, edit)).toBeNull();
     const unchanged = (await getWishlist(userA)).find((i) => i.id === item.id);
@@ -94,7 +91,18 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     const updated = await updateWishlistItem(userA, item.id, edit);
     expect(updated?.name).toBe("Desk Lamp Pro");
     expect(Number(updated?.estimatedPrice)).toBe(99.9);
-    expect(updated?.priority).toBe("high");
+    expect(updated?.priority).toBe("low");
+  });
+
+  it("derives the priority from the price", () => {
+    expect([0.01, 249.99, 250, 749.99, 750, 5000].map(priorityForPrice)).toEqual([
+      "low", "low", "medium", "medium", "high", "high",
+    ]);
+  });
+
+  it("accepts any text as a link", async () => {
+    const item = await addWishlistItem(userA, { name: "Lamp", url: "emag", estimatedPrice: 50 });
+    expect(item.url).toBe("emag");
   });
 
   it("rejects invalid input and negative prices", async () => {
@@ -102,7 +110,6 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
       addWishlistItem(userA, {
         name: "",
         estimatedPrice: 100,
-        priority: "medium",
       }),
     ).rejects.toThrow();
 
@@ -110,16 +117,6 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
       addWishlistItem(userA, {
         name: "Negative item",
         estimatedPrice: -50,
-        priority: "medium",
-      }),
-    ).rejects.toThrow();
-
-    await expect(
-      addWishlistItem(userA, {
-        name: "Invalid URL item",
-        url: "not-a-valid-url",
-        estimatedPrice: 50,
-        priority: "medium",
       }),
     ).rejects.toThrow();
   });

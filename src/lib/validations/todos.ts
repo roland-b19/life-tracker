@@ -22,6 +22,12 @@ export const toggleTodoSchema = z.object({
   currentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
 });
 
+export const updateTodoSchema = z.object({
+  id: z.string().uuid(),
+  title: createTodoSchema.shape.title,
+  reminderTime: createTodoSchema.shape.reminderTime,
+});
+
 export const deleteTodoSchema = z.object({
   id: z.string().uuid(),
 });
@@ -36,6 +42,7 @@ export type TodoSpace = z.infer<typeof todoSpaceSchema>;
 export type RecurrencePattern = z.infer<typeof recurrencePatternSchema>;
 export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
+export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
 export type DeleteTodoInput = z.infer<typeof deleteTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 

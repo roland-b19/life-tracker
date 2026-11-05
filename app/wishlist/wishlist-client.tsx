@@ -12,13 +12,12 @@ import {
   updateWishlistItemAction,
 } from "@/app/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
+import { Priority, priorityForPrice } from "@/lib/validations/wishlist";
 
 interface WishlistClientProps {
   userName: string;
   initialItems: WishlistItemData[];
 }
-
-type Priority = "low" | "medium" | "high";
 
 const PRIORITY_BADGE: Record<Priority, string> = {
   high: "badge-danger",
@@ -26,19 +25,37 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   low: "badge-rest",
 };
 
+const RANGE_LABEL: Record<Priority, string> = {
+  low: "Under 250",
+  medium: "250 – 750",
+  high: "750+",
+};
+
 const FILTERS: { value: "all" | Priority; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "high", label: "High" },
-  { value: "medium", label: "Medium" },
-  { value: "low", label: "Low" },
+  { value: "low", label: RANGE_LABEL.low },
+  { value: "medium", label: RANGE_LABEL.medium },
+  { value: "high", label: RANGE_LABEL.high },
 ];
 
 const formatRon = (n: number) =>
   n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** A typed URL opens as a link; anything else (a store name) is shown as plain text. */
+function ItemLink({ value }: { value: string }) {
+  const href = /^https?:\/\/\S+$/i.test(value) ? value : /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(value) ? `https://${value}` : null;
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link">
+      {value.replace(/^https?:\/\//i, "").split("/")[0]} ↗
+    </a>
+  ) : (
+    <span className="item-link-text">{value}</span>
+  );
+}
+
 export function WishlistClient({ userName, initialItems }: WishlistClientProps) {
   const [items, setItems] = useState<WishlistItemData[]>(initialItems);
-  const [filterPriority, setFilterPriority] = useState<"all" | Priority>("all");
+  const [filterRange, setFilterRange] = useState<"all" | Priority>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -47,20 +64,28 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   // Form state
   const [name, setName] = useState("");
   const [estimatedPrice, setEstimatedPrice] = useState("");
-  const [priority, setPriority] = useState<Priority>("medium");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const totalCost = items.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
-  const filteredItems = items.filter((item) => filterPriority === "all" || item.priority === filterPriority);
+  // Newest first; the range comes from the price, never from the stored column.
+  const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
+  const filteredItems = items
+    .filter((item) => filterRange === "all" || rangeOf(item) === filterRange)
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
+
+  const toInput = (item: WishlistItemData) => ({
+    name: item.name,
+    estimatedPrice: Number(item.estimatedPrice),
+    url: item.url || undefined,
+  });
 
   function openForm(item?: WishlistItemData) {
     setErrorMsg("");
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
     setEstimatedPrice(item ? String(Number(item.estimatedPrice)) : "");
-    setPriority((item?.priority as Priority) ?? "medium");
     setUrl(item?.url ?? "");
     setIsModalOpen(true);
   }
@@ -82,7 +107,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     const input = {
       name: name.trim(),
       estimatedPrice: parsedPrice,
-      priority,
       url: url.trim() || undefined,
     };
 
@@ -95,13 +119,35 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           return;
         }
         const updated = res.item as WishlistItemData;
+        const before = items.find((i) => i.id === editingId);
         setItems((prev) => prev.map((i) => (i.id === editingId ? updated : i)));
-        showToast({ message: `Saved "${updated.name}"`, type: "success" });
+        showToast({
+          message: `Saved "${updated.name}"`,
+          type: "success",
+          actionLabel: before ? "Undo" : undefined,
+          onAction: before
+            ? async () => {
+                const back = await updateWishlistItemAction(updated.id, toInput(before));
+                if (back.success && back.item) {
+                  setItems((prev) => prev.map((i) => (i.id === updated.id ? (back.item as WishlistItemData) : i)));
+                }
+              }
+            : undefined,
+        });
       } else {
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         setItems((prev) => [res.item as WishlistItemData, ...prev]);
-        showToast({ message: `Added "${res.item.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
+        const added = res.item as WishlistItemData;
+        showToast({
+          message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            await deleteWishlistItemAction(added.id);
+            setItems((prev) => prev.filter((i) => i.id !== added.id));
+          },
+        });
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -126,12 +172,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           message: reason === "bought" ? `Bought "${target.name}"` : `Removed "${target.name}"`,
           actionLabel: "Undo",
           onAction: async () => {
-            const reRes = await addWishlistItemAction({
-              name: target.name,
-              estimatedPrice: Number(target.estimatedPrice),
-              priority: target.priority as Priority,
-              url: target.url || undefined,
-            });
+            const reRes = await addWishlistItemAction(toInput(target));
             if (reRes.success && reRes.item) {
               setItems((prev) => [reRes.item as WishlistItemData, ...prev]);
             }
@@ -150,13 +191,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     <main>
       <Navigation userName={userName} />
 
-      <div className="toolbar toolbar-end">
-        <button type="button" className="btn-open-modal" onClick={() => openForm()}>
-          <PlusIcon size={16} />
-          <span>Add item</span>
-        </button>
-      </div>
-
       <div className="dashboard-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="wishlist-items-title">
@@ -164,33 +198,37 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               <h2 id="wishlist-items-title" className="section-title">
                 Items
               </h2>
-              <span className="muted number-tabular">{items.length}</span>
+              <span className="head-actions">
+                <span className="muted number-tabular">{filteredItems.length}</span>
+                <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                  <PlusIcon size={14} />
+                  Add item
+                </button>
+              </span>
             </div>
 
             <Segmented
-              label="Filter by priority"
-              value={filterPriority}
+              label="Filter by price range"
+              value={filterRange}
               options={FILTERS}
-              onChange={setFilterPriority}
+              onChange={setFilterRange}
             />
 
             <div className="entries">
               {filteredItems.length === 0 ? (
                 <p className="empty-note">
-                  {items.length === 0 ? "No items yet." : "No items with this priority."}
+                  {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
                 filteredItems.map((item) => (
                   <div key={item.id} className="entry-row item-row">
                     <strong className="item-name">{item.name}</strong>
                     <div className="item-meta">
-                      <span className={`badge ${PRIORITY_BADGE[item.priority as Priority]}`}>{item.priority}</span>
                       <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
-                      {item.url && (
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="item-link">
-                          Link ↗
-                        </a>
+                      {filterRange === "all" && (
+                        <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
                       )}
+                      {item.url && <ItemLink value={item.url} />}
                     </div>
 
                     <div className="item-actions">
@@ -198,7 +236,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         type="button"
                         className="btn-sm tint"
                         onClick={() => handleRemove(item.id, "bought")}
-                        disabled={busy}
                         title="Mark as bought and remove from the list"
                       >
                         <CheckIcon size={12} strokeWidth={2.5} /> Buy
@@ -207,21 +244,19 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         type="button"
                         className="delete-icon-btn edit"
                         onClick={() => openForm(item)}
-                        disabled={busy}
                         aria-label={`Edit ${item.name}`}
                         title="Edit"
                       >
-                        <PencilIcon size={15} />
+                        <PencilIcon size={17} />
                       </button>
                       <button
                         type="button"
                         className="delete-icon-btn"
                         onClick={() => handleRemove(item.id, "deleted")}
-                        disabled={busy}
                         aria-label={`Delete ${item.name}`}
                         title="Delete"
                       >
-                        <TrashIcon size={15} />
+                        <TrashIcon size={17} />
                       </button>
                     </div>
                   </div>
@@ -238,12 +273,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                 Estimated Investment
               </h2>
             </div>
-            <div className="macro-card">
-              <span className="macro-title">Total Estimated</span>
-              <span className="macro-numbers number-tabular item-total">
-                {formatRon(totalCost)} <span className="macro-target">RON</span>
-              </span>
-            </div>
+            <p className="item-total number-tabular">
+              {formatRon(totalCost)} <span className="muted">RON</span>
+            </p>
           </section>
         </div>
       </div>
@@ -285,19 +317,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
             </label>
 
             <label>
-              Priority
-              <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)} disabled={busy}>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </label>
-
-            <label>
-              Link (optional)
+              Link or store (optional)
               <input
-                type="url"
-                placeholder="https://..."
+                type="text"
+                maxLength={500}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={busy}
@@ -307,11 +330,11 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
             {errorMsg && <p className="error">{errorMsg}</p>}
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button type="button" className="secondary" onClick={() => setIsModalOpen(false)} style={{ flex: 1 }}>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setIsModalOpen(false)}>
               Cancel
             </button>
-            <button type="submit" disabled={busy || !name.trim() || !estimatedPrice} style={{ flex: 2 }}>
+            <button type="submit" disabled={busy || !name.trim() || !estimatedPrice}>
               {busy ? "Saving..." : "Save"}
             </button>
           </div>

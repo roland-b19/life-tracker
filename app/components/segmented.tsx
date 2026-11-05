@@ -13,7 +13,7 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
   const index = Math.max(0, options.findIndex((o) => o.value === value));
   return (
     <div
-      className="segmented"
+      className={options.length > 4 ? "segmented dense" : "segmented"}
       role="tablist"
       aria-label={label}
       style={{ "--n": options.length, "--i": index } as CSSProperties}

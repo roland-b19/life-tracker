@@ -10,11 +10,13 @@ import {
   ScaleIcon,
   LockIcon,
   CheckIcon,
+  PencilIcon,
   PlusIcon,
   TrashIcon,
 } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
+import { WeightPanel } from "./weight-panel";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -106,11 +108,14 @@ export function FoodClient({
   const [summary, setSummary] = useState(initialSummary);
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
   const [tokens, setTokens] = useState<ApiTokenData[]>(initialTokens);
-  const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat" | "api">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat" | "api">("daily");
   const [tokenNameInput, setTokenNameInput] = useState("");
   const [generatedPlaintextToken, setGeneratedPlaintextToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+  const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
+  const [metricInput, setMetricInput] = useState("");
 
   const { showToast } = useToast();
 
@@ -142,9 +147,6 @@ export function FoodClient({
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
 
-  // Steps input state
-  const [stepsInput, setStepsInput] = useState(String(summary.metrics.steps || ""));
-
   // Shopping input state
   const [shopName, setShopName] = useState("");
   const [shopAmount, setShopAmount] = useState("1");
@@ -155,6 +157,22 @@ export function FoodClient({
 
   const [busy, setBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+
+  // sign 1 adds the meal to the day, -1 removes it
+  function applyMeal(meal: MealData, sign: 1 | -1) {
+    setSummary((prev) => ({
+      ...prev,
+      meals: sign === 1 ? [...prev.meals, meal] : prev.meals.filter((m) => m.id !== meal.id),
+      totals: {
+        calories: Math.max(0, prev.totals.calories + sign * meal.calories),
+        protein: Math.max(0, round1(prev.totals.protein + sign * parseFloat(meal.protein))),
+        carbs: Math.max(0, round1(prev.totals.carbs + sign * parseFloat(meal.carbs))),
+        fat: Math.max(0, round1(prev.totals.fat + sign * parseFloat(meal.fat))),
+      },
+    }));
+  }
 
   async function handleLogMeal(e: React.FormEvent) {
     e.preventDefault();
@@ -174,17 +192,8 @@ export function FoodClient({
       });
 
       if (res.success && res.meal) {
-        setSummary((prev) => ({
-          ...prev,
-          meals: [...prev.meals, res.meal as MealData],
-          totals: {
-            calories: prev.totals.calories + res.meal.calories,
-            protein: Math.round((prev.totals.protein + parseFloat(res.meal.protein)) * 10) / 10,
-            carbs: Math.round((prev.totals.carbs + parseFloat(res.meal.carbs)) * 10) / 10,
-            fat: Math.round((prev.totals.fat + parseFloat(res.meal.fat)) * 10) / 10,
-          },
-        }));
-
+        const meal = res.meal as MealData;
+        applyMeal(meal, 1);
         setMealName("");
         setMealCalories("");
         setMealProtein("");
@@ -192,8 +201,13 @@ export function FoodClient({
         setMealFat("");
         setIsMealModalOpen(false);
         showToast({
-          message: `Logged meal "${res.meal.name}" (${res.meal.calories} kcal)`,
+          message: `Logged "${meal.name}" (${meal.calories} kcal)`,
           type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            await deleteMealAction(meal.id);
+            applyMeal(meal, -1);
+          },
         });
       }
     } catch {
@@ -207,19 +221,7 @@ export function FoodClient({
     const deleted = summary.meals.find((m) => m.id === mealId);
     if (!deleted) return;
 
-    // Optimistic removal
-    setSummary((prev) => ({
-      ...prev,
-      meals: prev.meals.filter((m) => m.id !== mealId),
-      totals: {
-        calories: Math.max(0, prev.totals.calories - deleted.calories),
-        protein: Math.max(0, Math.round((prev.totals.protein - parseFloat(deleted.protein)) * 10) / 10),
-        carbs: Math.max(0, Math.round((prev.totals.carbs - parseFloat(deleted.carbs)) * 10) / 10),
-        fat: Math.max(0, Math.round((prev.totals.fat - parseFloat(deleted.fat)) * 10) / 10),
-      },
-    }));
-
-    setBusy(true);
+    applyMeal(deleted, -1);
     try {
       await deleteMealAction(mealId);
       showToast({
@@ -235,79 +237,70 @@ export function FoodClient({
             carbs: parseFloat(deleted.carbs),
             fat: parseFloat(deleted.fat),
           });
-          if (res.success && res.meal) {
-            setSummary((prev) => ({
-              ...prev,
-              meals: [...prev.meals, res.meal as MealData],
-              totals: {
-                calories: prev.totals.calories + res.meal.calories,
-                protein: Math.round((prev.totals.protein + parseFloat(res.meal.protein)) * 10) / 10,
-                carbs: Math.round((prev.totals.carbs + parseFloat(res.meal.carbs)) * 10) / 10,
-                fat: Math.round((prev.totals.fat + parseFloat(res.meal.fat)) * 10) / 10,
-              },
-            }));
-          }
+          if (res.success && res.meal) applyMeal(res.meal as MealData, 1);
         },
       });
     } catch {
-      // Revert if error
-      setSummary((prev) => ({
-        ...prev,
-        meals: [...prev.meals, deleted],
-        totals: {
-          calories: prev.totals.calories + deleted.calories,
-          protein: Math.round((prev.totals.protein + parseFloat(deleted.protein)) * 10) / 10,
-          carbs: Math.round((prev.totals.carbs + parseFloat(deleted.carbs)) * 10) / 10,
-          fat: Math.round((prev.totals.fat + parseFloat(deleted.fat)) * 10) / 10,
-        },
-      }));
+      applyMeal(deleted, 1);
       setStatusMessage("Failed to delete meal.");
-    } finally {
-      setBusy(false);
     }
   }
 
-  async function handleAddWater(amountMl: number) {
-    setBusy(true);
+  async function changeWater(delta: number, message: string) {
     try {
-      const res = await addWaterAction(selectedDate, amountMl);
-      if (res.success && res.metrics) {
-        setSummary((prev) => ({
-          ...prev,
-          metrics: {
-            ...prev.metrics,
-            waterMl: res.metrics.waterMl,
-          },
-        }));
-      }
+      const res = await addWaterAction(selectedDate, delta);
+      if (!res.success || !res.metrics) return;
+      const setWater = (waterMl: number) =>
+        setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl } }));
+      setWater(res.metrics.waterMl);
+      showToast({
+        message,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const undone = await addWaterAction(selectedDate, -delta);
+          if (undone.success && undone.metrics) setWater(undone.metrics.waterMl);
+        },
+      });
     } catch {
       setStatusMessage("Could not update water.");
-    } finally {
-      setBusy(false);
     }
   }
 
-  async function handleUpdateSteps() {
-    const stepsNum = parseInt(stepsInput, 10);
-    if (isNaN(stepsNum) || stepsNum < 0) return;
-
-    setBusy(true);
+  async function changeSteps(next: number) {
+    const previous = summary.metrics.steps;
     try {
-      const res = await updateStepsAction(selectedDate, stepsNum);
-      if (res.success && res.metrics) {
-        setSummary((prev) => ({
-          ...prev,
-          metrics: {
-            ...prev.metrics,
-            steps: res.metrics.steps,
-          },
-        }));
-        setStatusMessage("Steps updated!");
-      }
+      const res = await updateStepsAction(selectedDate, next);
+      if (!res.success || !res.metrics) return;
+      const setSteps = (steps: number) =>
+        setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, steps } }));
+      setSteps(res.metrics.steps);
+      showToast({
+        message: `Steps set to ${next}`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const undone = await updateStepsAction(selectedDate, previous);
+          if (undone.success && undone.metrics) setSteps(undone.metrics.steps);
+        },
+      });
     } catch {
       setStatusMessage("Could not update steps.");
-    } finally {
-      setBusy(false);
+    }
+  }
+
+  function openMetricEdit(metric: "water" | "steps") {
+    setMetricInput(String(metric === "water" ? summary.metrics.waterMl : summary.metrics.steps));
+    setMetricEdit(metric);
+  }
+
+  async function handleMetricSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const value = parseInt(metricInput, 10);
+    if (!metricEdit || !Number.isInteger(value) || value < 0) return;
+    setMetricEdit(null);
+    if (metricEdit === "water") {
+      await changeWater(value - summary.metrics.waterMl, `Water set to ${value} ml`);
+    } else {
+      await changeSteps(value);
     }
   }
 
@@ -325,9 +318,20 @@ export function FoodClient({
       });
 
       if (res.success && res.item) {
-        setShoppingList((prev) => [...prev, res.item as ShoppingItemData]);
+        const item = res.item as ShoppingItemData;
+        setShoppingList((prev) => [...prev, item]);
         setShopName("");
         setShopAmount("1");
+        setIsShopModalOpen(false);
+        showToast({
+          message: `Added "${item.name}"`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            await deleteShoppingItemAction(item.id);
+            setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
+          },
+        });
       }
     } catch {
       setStatusMessage("Could not add shopping item.");
@@ -337,22 +341,45 @@ export function FoodClient({
   }
 
   async function handleToggleShopping(itemId: string, currentState: boolean) {
+    const setBought = (isBought: boolean) =>
+      setShoppingList((prev) => prev.map((item) => (item.id === itemId ? { ...item, isBought } : item)));
     try {
       await toggleShoppingItemAction(itemId, !currentState);
-      setShoppingList((prev) =>
-        prev.map((item) =>
-          item.id === itemId ? { ...item, isBought: !currentState } : item,
-        ),
-      );
+      setBought(!currentState);
+      showToast({
+        message: currentState ? "Marked as not bought" : "Marked as bought",
+        actionLabel: "Undo",
+        onAction: async () => {
+          await toggleShoppingItemAction(itemId, currentState);
+          setBought(currentState);
+        },
+      });
     } catch {
       setStatusMessage("Could not update item.");
     }
   }
 
-  async function handleDeleteShoppingItem(itemId: string) {
+  async function handleDeleteShoppingItem(item: ShoppingItemData) {
     try {
-      await deleteShoppingItemAction(itemId);
-      setShoppingList((prev) => prev.filter((item) => item.id !== itemId));
+      await deleteShoppingItemAction(item.id);
+      setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
+      showToast({
+        message: `Deleted "${item.name}"`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const res = await addShoppingItemAction({
+            name: item.name,
+            amount: parseFloat(item.amount),
+            unit: item.unit,
+            category: item.category,
+          });
+          if (res.success && res.item) {
+            const restored = { ...(res.item as ShoppingItemData), isBought: item.isBought };
+            if (item.isBought) await toggleShoppingItemAction(restored.id, true);
+            setShoppingList((prev) => [...prev, restored]);
+          }
+        },
+      });
     } catch {
       setStatusMessage("Could not delete item.");
     }
@@ -363,8 +390,16 @@ export function FoodClient({
     try {
       const res = await generateShoppingListAction();
       if (res.success && res.items) {
-        setShoppingList((prev) => [...prev, ...(res.items as ShoppingItemData[])]);
-        setStatusMessage("Shopping list populated from recipes!");
+        const added = res.items as ShoppingItemData[];
+        setShoppingList((prev) => [...prev, ...added]);
+        showToast({
+          message: `Added ${added.length} item${added.length === 1 ? "" : "s"} from recipes`,
+          actionLabel: added.length ? "Undo" : undefined,
+          onAction: async () => {
+            await Promise.all(added.map((i) => deleteShoppingItemAction(i.id)));
+            setShoppingList((prev) => prev.filter((i) => !added.some((a) => a.id === i.id)));
+          },
+        });
       }
     } catch {
       setStatusMessage("Failed to generate shopping list.");
@@ -374,11 +409,31 @@ export function FoodClient({
   }
 
   async function handleClearBought() {
+    const cleared = shoppingList.filter((i) => i.isBought);
     setBusy(true);
     try {
       await clearBoughtItemsAction();
       setShoppingList((prev) => prev.filter((item) => !item.isBought));
-      setStatusMessage("Cleared bought items!");
+      showToast({
+        message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          const restored: ShoppingItemData[] = [];
+          for (const item of cleared) {
+            const res = await addShoppingItemAction({
+              name: item.name,
+              amount: parseFloat(item.amount),
+              unit: item.unit,
+              category: item.category,
+            });
+            if (res.success && res.item) {
+              await toggleShoppingItemAction((res.item as ShoppingItemData).id, true);
+              restored.push({ ...(res.item as ShoppingItemData), isBought: true });
+            }
+          }
+          setShoppingList((prev) => [...prev, ...restored]);
+        },
+      });
     } catch {
       setStatusMessage("Failed to clear bought items.");
     } finally {
@@ -493,10 +548,11 @@ export function FoodClient({
 
       <div className="toolbar">
         <Segmented
-          label="Food sections"
+          label="Health sections"
           value={activeTab}
           options={[
             { value: "daily", label: "Today" },
+            { value: "weight", label: "Weight" },
             { value: "shopping", label: "Shopping" },
             { value: "chat", label: "Assistant" },
             { value: "api", label: "API" },
@@ -504,6 +560,8 @@ export function FoodClient({
           onChange={setActiveTab}
         />
       </div>
+
+      {activeTab === "weight" && <WeightPanel />}
 
       {activeTab === "daily" && (
         <>
@@ -591,21 +649,20 @@ export function FoodClient({
                 </div>
               </div>
               <div className="tap-buttons">
-                <button
-                  type="button"
-                  className="secondary tap-btn"
-                  disabled={busy}
-                  onClick={() => handleAddWater(250)}
-                >
+                <button type="button" className="secondary tap-btn" onClick={() => changeWater(250, "Added 250 ml")}>
                   +250 ml
+                </button>
+                <button type="button" className="secondary tap-btn" onClick={() => changeWater(500, "Added 500 ml")}>
+                  +500 ml
                 </button>
                 <button
                   type="button"
-                  className="secondary tap-btn"
-                  disabled={busy}
-                  onClick={() => handleAddWater(500)}
+                  className="delete-icon-btn edit"
+                  onClick={() => openMetricEdit("water")}
+                  aria-label="Edit water amount"
+                  title="Edit"
                 >
-                  +500 ml
+                  <PencilIcon size={17} />
                 </button>
               </div>
             </div>
@@ -624,21 +681,18 @@ export function FoodClient({
                 <span className="macro-title" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
                   <FootstepsIcon size={14} /> Daily Steps
                 </span>
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
-                  <input
-                    type="number"
-                    style={{ minHeight: "2.2rem", padding: "0.2rem 0.5rem" }}
-                    placeholder="Steps count"
-                    value={stepsInput}
-                    onChange={(e) => setStepsInput(e.target.value)}
-                  />
+                <div className="section-head" style={{ margin: "0.4rem 0 0" }}>
+                  <strong className="number-tabular" style={{ fontSize: "1.1rem" }}>
+                    {summary.metrics.steps} steps
+                  </strong>
                   <button
                     type="button"
-                    style={{ minHeight: "2.2rem", padding: "0.2rem 0.75rem", fontSize: "0.85rem" }}
-                    disabled={busy}
-                    onClick={handleUpdateSteps}
+                    className="delete-icon-btn edit"
+                    onClick={() => openMetricEdit("steps")}
+                    aria-label="Edit steps"
+                    title="Edit"
                   >
-                    Save
+                    <PencilIcon size={17} />
                   </button>
                 </div>
                 <span className="muted" style={{ fontSize: "0.8rem", marginTop: "0.3rem", display: "block" }}>
@@ -680,7 +734,7 @@ export function FoodClient({
                 <span className="muted" style={{ fontSize: "0.8rem", marginTop: "0.25rem", display: "block" }}>
                   {weightAnalytics.previousWeekAverage
                     ? `Previous week avg: ${weightAnalytics.previousWeekAverage} kg`
-                    : "Log daily weigh-ins in Weigh-ins tab for rolling trends"}
+                    : "Log weigh-ins in the Weight tab for rolling trends"}
                 </span>
               </div>
             </div>
@@ -695,13 +749,9 @@ export function FoodClient({
                   <h2 id="meals-history-title" className="section-title">
                     Today&apos;s Meals
                   </h2>
-                  <button
-                    type="button"
-                    className="btn-open-modal"
-                    onClick={() => setIsMealModalOpen(true)}
-                  >
+                  <button type="button" className="btn-sm tint" onClick={() => setIsMealModalOpen(true)}>
                     <PlusIcon size={14} />
-                    <span>Log Meal</span>
+                    Add meal
                   </button>
                 </div>
 
@@ -741,7 +791,7 @@ export function FoodClient({
                         aria-label={`Delete meal ${meal.name}`}
                         title="Delete meal"
                       >
-                        <TrashIcon size={15} />
+                        <TrashIcon size={17} />
                       </button>
                     </div>
                   ))}
@@ -757,96 +807,25 @@ export function FoodClient({
         <section className="surface" aria-labelledby="shopping-title">
           <div className="section-head">
             <h2 id="shopping-title" className="section-title">Shopping List</h2>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={handleGenerateShoppingList}
-              >
-                + From Recipes
-              </button>
-              <button
-                type="button"
-                className="danger"
-                disabled={busy || shoppingList.filter((i) => i.isBought).length === 0}
-                onClick={handleClearBought}
-              >
-                Clear Bought
-              </button>
-            </div>
+            <button type="button" className="btn-sm tint" onClick={() => setIsShopModalOpen(true)}>
+              <PlusIcon size={14} />
+              Add item
+            </button>
           </div>
 
-          {/* Quick Add Shopping Item Form */}
-          <form
-            onSubmit={handleAddShoppingItem}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(6.5rem, 1fr))",
-              gap: "0.5rem",
-              marginTop: "1rem",
-              alignItems: "end",
-            }}
-          >
-            <label style={{ gridColumn: "span 2" }}>
-              Item Name
-              <input
-                type="text"
-                placeholder="e.g. Eggs"
-                value={shopName}
-                onChange={(e) => setShopName(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Amount
-              <input
-                type="number"
-                step="0.5"
-                min="0.5"
-                value={shopAmount}
-                onChange={(e) => setShopAmount(e.target.value)}
-              />
-            </label>
-            <label>
-              Unit
-              <input
-                type="text"
-                placeholder="g, ml, pcs"
-                value={shopUnit}
-                onChange={(e) => setShopUnit(e.target.value)}
-              />
-            </label>
-            <label>
-              Category
-              <select
-                style={{
-                  minHeight: "2.75rem",
-                  borderRadius: "0.65rem",
-                  border: "1px solid var(--separator)",
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  padding: "0.4rem",
-                }}
-                value={shopCategory}
-                onChange={(e) =>
-                  setShopCategory(
-                    e.target.value as "meat" | "produce" | "dairy" | "bakery" | "pantry" | "other",
-                  )
-                }
-              >
-                <option value="meat">Meat</option>
-                <option value="produce">Produce</option>
-                <option value="dairy">Dairy</option>
-                <option value="bakery">Bakery</option>
-                <option value="pantry">Pantry</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <button type="submit" disabled={busy || !shopName.trim()}>
-              + Add
+          <div className="head-actions" style={{ marginBottom: "0.75rem" }}>
+            <button type="button" className="secondary btn-sm" onClick={handleGenerateShoppingList}>
+              From recipes
             </button>
-          </form>
+            <button
+              type="button"
+              className="secondary btn-sm"
+              disabled={shoppingList.every((i) => !i.isBought)}
+              onClick={handleClearBought}
+            >
+              Clear bought
+            </button>
+          </div>
 
           {/* Items by Category */}
           <div style={{ marginTop: "1.25rem" }}>
@@ -877,11 +856,12 @@ export function FoodClient({
                         </label>
                         <button
                           type="button"
-                          className="danger"
-                          style={{ minHeight: "1.8rem", padding: "0.2rem 0.5rem", fontSize: "0.8rem" }}
-                          onClick={() => handleDeleteShoppingItem(item.id)}
+                          className="delete-icon-btn"
+                          onClick={() => handleDeleteShoppingItem(item)}
+                          aria-label={`Delete ${item.name}`}
+                          title="Delete"
                         >
-                          Delete
+                          <TrashIcon size={17} />
                         </button>
                       </div>
                     ))}
@@ -1301,9 +1281,10 @@ export function FoodClient({
       <Modal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
-        title="Log a Meal"
+        title="New meal"
       >
-        <form onSubmit={handleLogMeal} style={{ display: "grid", gap: "0.85rem" }}>
+        <form onSubmit={handleLogMeal}>
+          <div className="form-stack">
           <label>
             Meal Type
             <select
@@ -1379,21 +1360,110 @@ export function FoodClient({
             </label>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setIsMealModalOpen(false)}
-              style={{ flex: 1 }}
-            >
+          </div>
+
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setIsMealModalOpen(false)}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={busy || !mealName.trim()}
-              style={{ flex: 2 }}
-            >
-              + Save Meal
+            <button type="submit" disabled={busy || !mealName.trim()}>
+              Add meal
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isShopModalOpen} onClose={() => setIsShopModalOpen(false)} title="New shopping item">
+        <form onSubmit={handleAddShoppingItem}>
+          <div className="form-stack">
+            <label>
+              Item name
+              <input
+                type="text"
+                placeholder="e.g. Eggs"
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                required
+              />
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <label>
+                Amount
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={shopAmount}
+                  onChange={(e) => setShopAmount(e.target.value)}
+                />
+              </label>
+              <label>
+                Unit
+                <input
+                  type="text"
+                  placeholder="g, ml, pcs"
+                  value={shopUnit}
+                  onChange={(e) => setShopUnit(e.target.value)}
+                />
+              </label>
+            </div>
+            <label>
+              Category
+              <select
+                value={shopCategory}
+                onChange={(e) =>
+                  setShopCategory(
+                    e.target.value as "meat" | "produce" | "dairy" | "bakery" | "pantry" | "other",
+                  )
+                }
+              >
+                <option value="meat">Meat</option>
+                <option value="produce">Produce</option>
+                <option value="dairy">Dairy</option>
+                <option value="bakery">Bakery</option>
+                <option value="pantry">Pantry</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setIsShopModalOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" disabled={busy || !shopName.trim()}>
+              Add item
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={metricEdit !== null}
+        onClose={() => setMetricEdit(null)}
+        title={metricEdit === "water" ? "Edit water" : "Edit steps"}
+      >
+        <form onSubmit={handleMetricSubmit}>
+          <div className="form-stack">
+            <label>
+              {metricEdit === "water" ? "Water today (ml)" : "Steps today"}
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max={metricEdit === "water" ? 20000 : 200000}
+                step="1"
+                required
+                value={metricInput}
+                onChange={(e) => setMetricInput(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setMetricEdit(null)}>
+              Cancel
+            </button>
+            <button type="submit" disabled={metricInput === ""}>
+              Save
             </button>
           </div>
         </form>

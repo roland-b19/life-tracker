@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { wishlistItems } from "@/db/schema";
-import { CreateWishlistItemInput, createWishlistItemSchema } from "./validations/wishlist";
+import { CreateWishlistItemInput, createWishlistItemSchema, priorityForPrice } from "./validations/wishlist";
 
 export interface WishlistItemData {
   id: string;
@@ -42,7 +42,7 @@ export async function addWishlistItem(
       name: validated.name,
       url: validated.url || null,
       estimatedPrice: String(validated.estimatedPrice),
-      priority: validated.priority,
+      priority: priorityForPrice(validated.estimatedPrice),
     })
     .returning({
       id: wishlistItems.id,
@@ -69,7 +69,7 @@ export async function updateWishlistItem(
       name: validated.name,
       url: validated.url || null,
       estimatedPrice: String(validated.estimatedPrice),
-      priority: validated.priority,
+      priority: priorityForPrice(validated.estimatedPrice),
     })
     .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)))
     .returning({

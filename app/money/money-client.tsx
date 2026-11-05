@@ -1,16 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { TrashIcon, PlusIcon } from "../components/icons";
+import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
+import { BarChart } from "../components/charts";
 import { useToast } from "../components/toast";
 import {
   createCategoryAction,
+  deleteCategoryAction,
   deleteExpenseAction,
   getExpensesAction,
   getMonthlySummaryAction,
   logExpenseAction,
+  updateCategoryAction,
+  updateExpenseAction,
 } from "@/app/actions/money";
 import { ExpenseItem, MonthlyMoneySummary } from "@/lib/money";
 import { formatDMY } from "@/lib/format-date";
@@ -20,6 +24,7 @@ interface CategoryData {
   name: string;
   space: string;
   icon: string | null;
+  userId: string | null; // null = shared default, read-only
 }
 
 interface MoneyClientProps {
@@ -58,206 +63,268 @@ export function MoneyClient({
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
 
-  // Modals state
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [showNewCatModal, setShowNewCatModal] = useState(false);
-
   const { showToast } = useToast();
 
   const [categories, setCategories] = useState(initialCategories);
   const [summary, setSummary] = useState(initialSummary);
   const [expenses, setExpenses] = useState(initialExpenses);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const requestId = useRef(0);
 
-  // Quick form state
+  // Expense form (create or edit)
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
-    initialMostUsedCategory || (categories[0]?.name ?? "Food & Groceries"),
+    initialMostUsedCategory || (initialCategories[0]?.name ?? "Food & Groceries"),
   );
   const [dateInput, setDateInput] = useState(getTodayString());
-  const [notesInput, setNotesInput] = useState("");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // New category modal state
-  const [newCatName, setNewCatName] = useState("");
+  // Category form (create or edit)
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [editingCat, setEditingCat] = useState<CategoryData | null>(null);
+  const [catName, setCatName] = useState("");
 
-  const [isPending, startTransition] = useTransition();
-
-  const refreshMonthData = (targetYear: number, targetMonth: number) => {
-    startTransition(async () => {
-      try {
-        const monthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
-        const [sumRes, expRes] = await Promise.all([
-          getMonthlySummaryAction(SPACE, targetYear, targetMonth),
-          getExpensesAction(SPACE, monthStr),
-        ]);
-
-        if (sumRes.success && sumRes.summary) {
-          setSummary(sumRes.summary);
-        }
-        if (expRes.success && expRes.expenses) {
-          setExpenses(expRes.expenses);
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
+  const refreshMonthData = async (targetYear = year, targetMonth = month) => {
+    const id = ++requestId.current;
+    try {
+      const monthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+      const [sumRes, expRes] = await Promise.all([
+        getMonthlySummaryAction(SPACE, targetYear, targetMonth),
+        getExpensesAction(SPACE, monthStr),
+      ]);
+      // One swap for both, ignoring answers that arrive after a newer request.
+      if (id === requestId.current && sumRes.success && expRes.success) {
+        setSummary(sumRes.summary);
+        setExpenses(expRes.expenses);
       }
-    });
-  };
-
-  const handlePrevMonth = () => {
-    let nextY = year;
-    let nextM = month - 1;
-    if (nextM < 1) {
-      nextM = 12;
-      nextY -= 1;
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
     }
-    setYear(nextY);
-    setMonth(nextM);
-    refreshMonthData(nextY, nextM);
   };
 
-  const handleNextMonth = () => {
-    let nextY = year;
-    let nextM = month + 1;
-    if (nextM > 12) {
-      nextM = 1;
-      nextY += 1;
-    }
-    setYear(nextY);
-    setMonth(nextM);
-    refreshMonthData(nextY, nextM);
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month - 1 + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth() + 1);
+    void refreshMonthData(d.getFullYear(), d.getMonth() + 1);
   };
 
-  const handleLogExpense = async (e: React.FormEvent) => {
+  const openExpenseForm = (exp?: ExpenseItem) => {
+    setErrorMsg(null);
+    setEditingExpense(exp ?? null);
+    setAmountInput(exp ? String(exp.amount) : "");
+    setDateInput(exp?.date.slice(0, 10) ?? getTodayString());
+    if (exp) setSelectedCategory(exp.category);
+    setIsExpenseModalOpen(true);
+  };
+
+  const closeExpenseForm = () => {
+    setIsExpenseModalOpen(false);
+    setAmountInput("");
+  };
+
+  const expenseInput = (e: ExpenseItem) => ({
+    space: SPACE,
+    amount: e.amount,
+    currency: "RON" as const,
+    category: e.category,
+    date: e.date.slice(0, 10),
+    notes: e.notes || undefined,
+  });
+
+  const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amountInput);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       setErrorMsg("Please enter a valid positive amount.");
       return;
     }
-
-    startTransition(async () => {
-      try {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (editingExpense) {
+        const before = editingExpense;
+        const res = await updateExpenseAction({
+          id: before.id,
+          amount: parsedAmount,
+          category: selectedCategory,
+          date: dateInput,
+        });
+        if (res.success) {
+          showToast({
+            message: `Saved ${parsedAmount.toFixed(2)} RON (${selectedCategory})`,
+            type: "success",
+            actionLabel: "Undo",
+            onAction: async () => {
+              await updateExpenseAction({
+                id: before.id,
+                amount: before.amount,
+                category: before.category,
+                date: before.date.slice(0, 10),
+              });
+              await refreshMonthData();
+            },
+          });
+        }
+      } else {
         const res = await logExpenseAction({
           space: SPACE,
           amount: parsedAmount,
           currency: "RON",
           category: selectedCategory,
           date: dateInput,
-          notes: notesInput.trim() || undefined,
         });
-
         if (res.success && res.expense) {
-          setAmountInput("");
-          setNotesInput("");
-          setDateInput(getTodayString());
-          setIsExpenseModalOpen(false);
+          const createdId = res.expense.id;
           showToast({
             message: `Logged ${parsedAmount.toFixed(2)} RON (${selectedCategory})`,
             type: "success",
-          });
-          refreshMonthData(year, month);
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
-      }
-    });
-  };
-
-  const handleDeleteExpense = async (id: string) => {
-    const target = expenses.find((e) => e.id === id);
-    if (!target) return;
-
-    // Optimistic removal
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
-
-    startTransition(async () => {
-      try {
-        const res = await deleteExpenseAction(id);
-        if (res.success) {
-          showToast({
-            message: `Deleted ${target.amount.toFixed(2)} RON (${target.category})`,
             actionLabel: "Undo",
             onAction: async () => {
-              await logExpenseAction({
-                space: SPACE,
-                amount: target.amount,
-                currency: "RON",
-                category: target.category,
-                date: target.date,
-                notes: target.notes || undefined,
-              });
-              refreshMonthData(year, month);
+              await deleteExpenseAction(createdId);
+              await refreshMonthData();
             },
           });
-          refreshMonthData(year, month);
-        }
-      } catch (err: unknown) {
-        // Revert
-        setExpenses((prev) => [...prev, target].sort((a, b) => b.date.localeCompare(a.date)));
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
         }
       }
-    });
+      closeExpenseForm();
+      await refreshMonthData();
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatName.trim()) return;
-
-    startTransition(async () => {
-      try {
-        const res = await createCategoryAction({
-          name: newCatName.trim(),
-          space: SPACE,
+  const handleDeleteExpense = async (target: ExpenseItem) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== target.id));
+    try {
+      const res = await deleteExpenseAction(target.id);
+      if (res.success) {
+        showToast({
+          message: `Deleted ${target.amount.toFixed(2)} RON (${target.category})`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            await logExpenseAction(expenseInput(target));
+            await refreshMonthData();
+          },
         });
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    }
+    await refreshMonthData();
+  };
 
-        if (res.success && res.category) {
-          const newCat: CategoryData = {
-            id: res.category.id,
-            name: res.category.name,
-            space: res.category.space,
-            icon: res.category.icon,
-          };
-          setCategories((prev) => [...prev, newCat]);
-          setSelectedCategory(newCat.name);
-          setNewCatName("");
-          setShowNewCatModal(false);
+  const openCatForm = (cat?: CategoryData) => {
+    setErrorMsg(null);
+    setEditingCat(cat ?? null);
+    setCatName(cat?.name ?? "");
+    setIsCatModalOpen(true);
+  };
+
+  const closeCatForm = () => {
+    setIsCatModalOpen(false);
+    setCatName("");
+  };
+
+  const toCategoryData = (c: CategoryData): CategoryData => ({
+    id: c.id,
+    name: c.name,
+    space: c.space,
+    icon: c.icon,
+    userId: c.userId,
+  });
+
+  const handleSubmitCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = catName.trim();
+    if (!name || saving) return;
+    setSaving(true);
+    try {
+      if (editingCat) {
+        const before = editingCat;
+        const res = await updateCategoryAction({ id: before.id, name });
+        if (res.success && res.previousName) {
+          const previousName = res.previousName;
+          setCategories((prev) => prev.map((c) => (c.id === before.id ? { ...c, name } : c)));
+          if (selectedCategory === previousName) setSelectedCategory(name);
           showToast({
-            message: `Category "${newCat.name}" created`,
+            message: `Renamed to "${name}"`,
             type: "success",
+            actionLabel: "Undo",
+            onAction: async () => {
+              await updateCategoryAction({ id: before.id, name: previousName });
+              setCategories((prev) => prev.map((c) => (c.id === before.id ? { ...c, name: previousName } : c)));
+              await refreshMonthData();
+            },
+          });
+          await refreshMonthData();
+        }
+      } else {
+        const res = await createCategoryAction({ name, space: SPACE });
+        if (res.success && res.category) {
+          const created = toCategoryData(res.category as CategoryData);
+          setCategories((prev) => [...prev, created]);
+          setSelectedCategory(created.name);
+          showToast({
+            message: `Category "${created.name}" created`,
+            type: "success",
+            actionLabel: "Undo",
+            onAction: async () => {
+              await deleteCategoryAction(created.id);
+              setCategories((prev) => prev.filter((c) => c.id !== created.id));
+            },
           });
         }
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
       }
-    });
+      closeCatForm();
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleDeleteCategory = async (target: CategoryData) => {
+    setCategories((prev) => prev.filter((c) => c.id !== target.id));
+    try {
+      const res = await deleteCategoryAction(target.id);
+      if (res.success) {
+        showToast({
+          message: `Deleted category "${target.name}"`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            const back = await createCategoryAction({ name: target.name, space: SPACE });
+            if (back.success && back.category) {
+              setCategories((prev) => [...prev, toCategoryData(back.category as CategoryData)]);
+            }
+          },
+        });
+      }
+    } catch (err: unknown) {
+      setCategories((prev) => [...prev, target]);
+      if (err instanceof Error) setErrorMsg(err.message);
+    }
+  };
+
+  // Spending per day of the shown month; the list the page loaded is already limited to this month.
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const perDay = Array.from({ length: daysInMonth }, (_, i) => {
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+    return { day: i + 1, iso, total: expenses.filter((e) => e.date === iso).reduce((n, e) => n + Number(e.amount), 0) };
+  });
+  const maxDay = Math.max(...perDay.map((d) => d.total), 1);
+  const activeDays = perDay.filter((d) => d.total > 0).length;
+
+  const fmt = (n: number) =>
+    n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <main>
       <Navigation userName={userName} />
-
-      <div className="toolbar toolbar-end">
-        <button
-          type="button"
-          className="btn-open-modal"
-          onClick={() => {
-            setErrorMsg(null);
-            setIsExpenseModalOpen(true);
-          }}
-          aria-label="Open log expense dialog"
-        >
-          <PlusIcon size={16} />
-          <span>Log expense</span>
-        </button>
-      </div>
 
       {errorMsg && (
         <div className="error" role="alert">
@@ -265,47 +332,31 @@ export function MoneyClient({
         </div>
       )}
 
-      {/* Main Responsive Grid */}
       <div className="dashboard-grid">
-        {/* Left Column: Monthly Overview & Breakdown */}
         <div className="dashboard-main">
-          {/* Monthly Overview Hero Card */}
           <section className="money-hero-card" aria-label="Monthly Overview">
             <div className="month-selector">
-              <button
-                type="button"
-                className="month-nav-btn"
-                onClick={handlePrevMonth}
-                aria-label="Previous Month"
-                disabled={isPending}
-              >
+              <button type="button" className="month-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous Month">
                 ‹
               </button>
               <span className="month-label">
                 {MONTH_NAMES[month - 1]} {year}
               </span>
-              <button
-                type="button"
-                className="month-nav-btn"
-                onClick={handleNextMonth}
-                aria-label="Next Month"
-                disabled={isPending}
-              >
+              <button type="button" className="month-nav-btn" onClick={() => shiftMonth(1)} aria-label="Next Month">
                 ›
               </button>
             </div>
 
-            <div className="total-spent-display">
-              <span className="total-spent-amount number-tabular">
-                {summary.totalSpent.toLocaleString("ro-RO", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+            <div className="total-row">
+              <div className="total-spent-display">
+                <span className="total-spent-amount number-tabular">{fmt(summary.totalSpent)}</span>
+                <span className="total-spent-currency">RON</span>
+              </div>
+              <span className="muted number-tabular">
+                {summary.expenseCount} {summary.expenseCount === 1 ? "transaction" : "transactions"}
               </span>
-              <span className="total-spent-currency">RON</span>
             </div>
 
-            {/* Category Breakdown Progress Bars */}
             {summary.categories.length > 0 ? (
               <div className="category-breakdown-list">
                 {summary.categories.map((cat) => (
@@ -313,23 +364,12 @@ export function MoneyClient({
                     <div className="breakdown-header">
                       <span className="breakdown-cat-name">
                         {cat.category}{" "}
-                        <span style={{ color: "var(--secondary)", fontSize: "0.8rem" }}>
-                          ({cat.percentage}%)
-                        </span>
+                        <span style={{ color: "var(--secondary)", fontSize: "0.8rem" }}>({cat.percentage}%)</span>
                       </span>
-                      <span className="breakdown-cat-val number-tabular">
-                        {cat.total.toLocaleString("ro-RO", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        RON
-                      </span>
+                      <span className="breakdown-cat-val number-tabular">{fmt(cat.total)} RON</span>
                     </div>
                     <div className="progress-track" aria-hidden="true">
-                      <div
-                        className="progress-fill"
-                        style={{ width: `${Math.min(100, cat.percentage)}%` }}
-                      />
+                      <div className="progress-fill" style={{ width: `${Math.min(100, cat.percentage)}%` }} />
                     </div>
                   </div>
                 ))}
@@ -339,20 +379,16 @@ export function MoneyClient({
             )}
           </section>
 
-          {/* Expense History List */}
-          <section className="quick-expense-card" aria-label="Expense History">
+          <section className="quick-expense-card" aria-labelledby="expenses-title">
             <div className="section-head">
-              <h2 className="section-title">Transactions</h2>
-              <span className="muted">{expenses.length}</span>
+              <h2 id="expenses-title" className="section-title">
+                Expenses
+              </h2>
+              <button type="button" className="btn-sm tint" onClick={() => openExpenseForm()}>
+                <PlusIcon size={14} />
+                Add expense
+              </button>
             </div>
-
-            {isPending && expenses.length === 0 && (
-              <div style={{ display: "grid", gap: "0.5rem", padding: "0.5rem 0" }}>
-                <div className="skeleton skeleton-row" />
-                <div className="skeleton skeleton-row" />
-                <div className="skeleton skeleton-row" />
-              </div>
-            )}
 
             {expenses.length > 0 ? (
               <div>
@@ -360,187 +396,175 @@ export function MoneyClient({
                   <div key={exp.id} className="expense-row">
                     <div className="expense-info">
                       <span className="expense-cat-title">{exp.category}</span>
-                      <span className="expense-meta">
-                        {formatDMY(exp.date)}{exp.notes ? ` • ${exp.notes}` : ""}
-                      </span>
+                      <span className="expense-value-text number-tabular">{fmt(exp.amount)} RON</span>
+                      <span className="expense-meta">{formatDMY(exp.date)}</span>
                     </div>
-                    <div className="expense-amount-actions">
-                      <span className="expense-value-text number-tabular">
-                        {exp.amount.toLocaleString("ro-RO", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        RON
-                      </span>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="delete-icon-btn edit"
+                        onClick={() => openExpenseForm(exp)}
+                        aria-label={`Edit ${exp.category} expense of ${exp.amount} RON`}
+                        title="Edit"
+                      >
+                        <PencilIcon size={17} />
+                      </button>
                       <button
                         type="button"
                         className="delete-icon-btn"
-                        onClick={() => handleDeleteExpense(exp.id)}
+                        onClick={() => handleDeleteExpense(exp)}
                         aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
-                        title="Delete expense"
+                        title="Delete"
                       >
-                        <TrashIcon size={15} />
+                        <TrashIcon size={17} />
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              !isPending && <p className="empty-note">No expenses this month.</p>
+              <p className="empty-note">No expenses this month.</p>
             )}
           </section>
         </div>
 
         <div className="dashboard-aside">
-          <section className="surface" aria-label="Categories">
+          <section className="surface" aria-labelledby="perday-title">
             <div className="section-head">
-              <h2 className="section-title">Categories</h2>
-              <button type="button" className="btn-sm" onClick={() => setShowNewCatModal(true)}>
+              <h2 id="perday-title" className="section-title">
+                Spending by day
+              </h2>
+              <span className="muted number-tabular">{activeDays} active {activeDays === 1 ? "day" : "days"}</span>
+            </div>
+            <BarChart
+              max={maxDay}
+              data={perDay.map((d) => ({
+                label: d.day % 5 === 1 ? String(d.day) : "",
+                value: d.total,
+                empty: d.total === 0,
+                highlight: d.total === maxDay && d.total > 0,
+                title: `${formatDMY(d.iso)}: ${fmt(d.total)} RON`,
+              }))}
+              summary={`Daily spending in ${MONTH_NAMES[month - 1]}, highest day ${fmt(maxDay)} RON`}
+            />
+          </section>
+
+          <section className="surface" aria-labelledby="categories-title">
+            <div className="section-head">
+              <h2 id="categories-title" className="section-title">
+                Categories
+              </h2>
+              <button type="button" className="btn-sm tint" onClick={() => openCatForm()}>
                 <PlusIcon size={14} />
-                <span>New</span>
+                Add category
               </button>
             </div>
-            <div className="tag-list">
+            <div>
               {categories.map((c) => (
-                <span key={c.id} className="tag">
-                  {c.name}
-                </span>
+                <div key={c.id} className="expense-row">
+                  <span className="expense-cat-title">{c.name}</span>
+                  {c.userId && (
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="delete-icon-btn edit"
+                        onClick={() => openCatForm(c)}
+                        aria-label={`Edit category ${c.name}`}
+                        title="Edit"
+                      >
+                        <PencilIcon size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="delete-icon-btn"
+                        onClick={() => handleDeleteCategory(c)}
+                        aria-label={`Delete category ${c.name}`}
+                        title="Delete"
+                      >
+                        <TrashIcon size={17} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </section>
         </div>
       </div>
 
-      {/* Modal: Log Expense with Blurred Backdrop */}
       <Modal
         isOpen={isExpenseModalOpen}
-        onClose={() => setIsExpenseModalOpen(false)}
-        title="Log expense"
+        onClose={closeExpenseForm}
+        title={editingExpense ? "Edit expense" : "Log expense"}
       >
-        <form onSubmit={handleLogExpense}>
-          <div className="amount-input-container">
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              required
-              placeholder="0.00"
-              value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
-              className="amount-input-hero number-tabular"
-              aria-label="Expense Amount in RON"
-            />
-            <span className="amount-currency-tag">RON</span>
-          </div>
-
-          {/* Category Chips Scroll */}
-          <div className="category-chips-scroll" role="radiogroup" aria-label="Select Category">
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                role="radio"
-                aria-checked={selectedCategory === c.name}
-                className={`category-chip ${selectedCategory === c.name ? "active" : ""}`}
-                onClick={() => setSelectedCategory(c.name)}
-              >
-                <span>{c.name}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              className="category-chip add"
-              onClick={() => {
-                setIsExpenseModalOpen(false);
-                setShowNewCatModal(true);
-              }}
-            >
-              <PlusIcon size={14} />
-              <span>New category</span>
-            </button>
-          </div>
-
-          {/* Date & Note input row */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: "0.75rem",
-              marginBottom: "1.25rem",
-            }}
-          >
+        <form onSubmit={handleSubmitExpense}>
+          <div className="form-stack">
+            <label>
+              Amount (RON)
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
+            <label>
+              Category
+              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Date
-              <input
-                type="date"
-                required
-                value={dateInput}
-                onChange={(e) => setDateInput(e.target.value)}
-                aria-label="Expense Date"
-              />
-            </label>
-            <label>
-              Note (optional)
-              <input
-                type="text"
-                placeholder="e.g. Weekly grocery run"
-                maxLength={255}
-                value={notesInput}
-                onChange={(e) => setNotesInput(e.target.value)}
-                aria-label="Expense Note"
-              />
+              <input type="date" required value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
             </label>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setIsExpenseModalOpen(false)}
-              style={{ flex: 1 }}
-            >
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={closeExpenseForm}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isPending || !amountInput}
-              style={{ flex: 2 }}
-            >
-              {isPending ? "Logging..." : `+ Log ${amountInput ? `${amountInput} RON` : "Expense"}`}
+            <button type="submit" disabled={saving || !amountInput}>
+              {editingExpense ? "Save" : "Add expense"}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal: New Custom Category */}
       <Modal
-        isOpen={showNewCatModal}
-        onClose={() => setShowNewCatModal(false)}
-        title="New category"
+        isOpen={isCatModalOpen}
+        onClose={closeCatForm}
+        title={editingCat ? "Edit category" : "New category"}
       >
-        <form onSubmit={handleCreateCategory}>
-          <label style={{ marginBottom: "1.25rem" }}>
-            Name
-            <input
-              type="text"
-              required
-              maxLength={50}
-              placeholder="e.g. Subscriptions"
-              value={newCatName}
-              onChange={(e) => setNewCatName(e.target.value)}
-              aria-label="Category Name"
-            />
-          </label>
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowNewCatModal(false)}
-            >
+        <form onSubmit={handleSubmitCategory}>
+          <div className="form-stack">
+            <label>
+              Name
+              <input
+                type="text"
+                required
+                maxLength={50}
+                placeholder="e.g. Subscriptions"
+                value={catName}
+                onChange={(e) => setCatName(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={closeCatForm}>
               Cancel
             </button>
-            <button type="submit" disabled={isPending || !newCatName.trim()}>
-              Save
+            <button type="submit" disabled={saving || !catName.trim()}>
+              {editingCat ? "Save" : "Add category"}
             </button>
           </div>
         </form>

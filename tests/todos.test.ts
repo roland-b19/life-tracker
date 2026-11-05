@@ -26,7 +26,9 @@ import {
   createTodo,
   deleteTodo,
   getDailyTodos,
+  getTodoHistory,
   toggleTodo,
+  updateTodo,
 } from "@/lib/todos";
 import {
   createTodoAction,
@@ -225,6 +227,10 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     });
     expect(toggleByB).toBe(false);
 
+    // User B tries to edit
+    expect(await updateTodo(userB, { id: task.id, title: "Hijacked", reminderTime: null })).toBe(false);
+    expect(await updateTodo(userA, { id: task.id, title: "Renamed", reminderTime: "08:30" })).toBe(true);
+
     // User B tries to delete
     const deleteByB = await deleteTodo(userB, task.id);
     expect(deleteByB).toBe(false);
@@ -264,6 +270,20 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect(res.stats.total).toBe(3);
     expect(res.stats.completed).toBe(2);
     expect(res.stats.percentage).toBe(67);
+  });
+
+  it("keeps a per-day history of finished tasks, owner only", async () => {
+    const day = "2026-11-04";
+    const a = await createTodo(userA, { space: "personal", title: "A", dueDate: day, isRecurring: false, recurrencePattern: "none" });
+    await createTodo(userA, { space: "personal", title: "B", dueDate: day, isRecurring: false, recurrencePattern: "none" });
+    await toggleTodo(userA, { id: a.id, isCompleted: true, currentDate: day });
+
+    expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: day, isRecurring: false, total: 2, done: 1 });
+    expect(await getTodoHistory(userA, "business")).toEqual([]);
+    expect(await getTodoHistory(userB, "personal")).toEqual([]);
+
+    await deleteTodo(userA, a.id);
+    expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: day, isRecurring: false, total: 1, done: 0 });
   });
 
   describe("Server Actions authorization & validation guards", () => {
