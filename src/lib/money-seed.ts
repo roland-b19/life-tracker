@@ -3,21 +3,13 @@ import { db } from "@/server/db";
 import { expenseCategories } from "@/db/schema";
 
 export const DEFAULT_CATEGORIES = [
-  // Personal space
-  { name: "Food & Groceries", space: "personal", icon: "🛒" },
-  { name: "Gym & Supplements", space: "personal", icon: "🏋️" },
-  { name: "Transport & Fuel", space: "personal", icon: "🚗" },
-  { name: "Utilities & Bills", space: "personal", icon: "💡" },
-  { name: "Dining & Leisure", space: "personal", icon: "☕" },
-  { name: "Health & Pharmacy", space: "personal", icon: "💊" },
-  { name: "Personal Other", space: "personal", icon: "📦" },
-
-  // Business space
-  { name: "Inventory & Stock", space: "business", icon: "📦" },
-  { name: "Shipping & Logistics", space: "business", icon: "🚚" },
-  { name: "Marketing & Ads", space: "business", icon: "📢" },
-  { name: "Services & Software", space: "business", icon: "💻" },
-  { name: "Business Other", space: "business", icon: "💼" },
+  { name: "Food & Groceries", space: "personal" },
+  { name: "Gym & Supplements", space: "personal" },
+  { name: "Transport & Fuel", space: "personal" },
+  { name: "Utilities & Bills", space: "personal" },
+  { name: "Dining & Leisure", space: "personal" },
+  { name: "Health & Pharmacy", space: "personal" },
+  { name: "Personal Other", space: "personal" },
 ] as const;
 
 let ensurePromise: Promise<void> | null = null;
@@ -44,7 +36,6 @@ export async function ensureDefaultCategories(): Promise<void> {
           toInsert.map((c) => ({
             name: c.name,
             space: c.space,
-            icon: c.icon,
             userId: null,
           })),
         )

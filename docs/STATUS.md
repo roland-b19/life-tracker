@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (Storm palette)_
+_Last updated: 2026-11-05 by Claude (UI cleanup)_
 
 ## Phase
 
@@ -11,7 +11,8 @@ Responsive UI/UX Overhaul (Unslop + UI-UX-Pro-Max Bento Architecture + Apple HIG
 Experience Elevation (Moody Minimalist Theme Option B, Blurred Modal Popups & Bottom Sheets, Command Menu ⌘K, Undo Toasts, Tabular Numbers, and 20 Precision Details) is 100% complete and verified.
 Mobile-First Elevation (Native iOS Frosted Bottom Tab Bar, 54px Compact Header, Decluttered Mobile Feed, Smoked Glass Depth & Specular Highlights, Glowing Jewel Accents, Smoked Glass Sign-In) is 100% complete and verified.
 Ember Design System & Navigation (dark warm graphite palette, SF Pro font, spring physics, desktop sidebar & mobile floating tab bar) is 100% complete and merged in `main` (PR #28).
-Storm palette (cool graphite, steel blue accent; replaces Ember's terracotta, see `docs/decisions.md` 2026-11-05) is applied on `feat/storm-palette`, awaiting the user's manual test and merge.
+Storm palette (cool graphite, steel blue accent; replaces Ember's terracotta, see `docs/decisions.md` 2026-11-05) is merged in `main` (PR #32).
+UI cleanup (minimal, consistent pages; business finances removed; Tasks tabs; editable wishlist; d.m.y dates; modal fixes) is on `feat/ui-cleanup`, awaiting the user's manual test and merge.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -112,7 +113,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. The user tests the app with the Storm palette, then reviews and merges the Storm PR (`feat/storm-palette`).
+1. The user tests the UI cleanup on a phone, then reviews and merges its PR (`feat/ui-cleanup`) after PR #33 (LAN dev origins, sign-out fix).
 2. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
 3. Maintain local-only verification until then (no Azure deployments).
 
@@ -128,6 +129,12 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-05 — UI cleanup (Claude Code), from the user's phone-test feedback:
+  - Removed the Business finances page, actions, lib, validation and test (business **tasks** stay in Tasks). DB schema and migrations are untouched, so `business_incomes` and `space='business'` expenses stay as unused data.
+  - Shared UI primitives in `app/globals.css` and `app/components/segmented.tsx` (sliding `Segmented` control, `.toolbar`, `.section-head`, `.btn-sm`, `.empty-note`, `.tag`) now used by every page; all `transition: all` replaced by named properties; pages lost their explanatory notes, badges and info cards (e.g. "72 hour rule").
+  - Tasks: "Daily habits" is now "Tasks", with Daily / One-day tabs for Personal and Business. Wishlist: "desire" is now "item", "Bought" is "Buy", items are editable (`updateWishlistItem`, owner-scoped, tested), priority and price share a line under the name, budget and priority-count boxes removed. Money categories have no emojis; New category button restyled. Dates show as d.m.y everywhere (`formatDMY`).
+  - Modals: body scroll is locked (position fixed, scroll position restored), the backdrop follows `visualViewport` so the keyboard no longer pushes the page, and inputs are at least 16px with no `autoFocus` so iOS does not zoom. Nav icons no longer blur after a tap (no transforms on `.tab-item`). Next.js dev "N" indicator disabled (`devIndicators: false`). More menu: "Life Tracker" only appears there, Sign out sits on the user's row.
+  - Verified: tsc, eslint, 68 Vitest tests, production build (with dummy `AUTH_*` env; the build refuses `AUTH_DEV=true` by design), and mobile 375 px screenshots of Weight, Gym, Food, Money, Tasks, Wishlist and the More menu. Not checked: real iOS Safari (keyboard, zoom, scroll lock), desktop layouts after the cleanup, VoiceOver.
 - 2026-11-05 — Phone testing over Wi-Fi (Claude Code): Next.js 16 blocks dev resources from other hosts, so a phone on `http://<LAN-IP>:3000` never hydrated and could not sign in. `next.config.ts` now sets `allowedDevOrigins: ["192.168.*.*"]` (dev only). Also: running `npm run build` while `.next` is shared with `next dev` leaves a stale cache that makes the page reload in a loop; stop dev and delete `.next` after a build.
 - 2026-11-04 — Ember Design System (Claude Code):
   - Applied the user-validated artifact choices: palette Ember, SF Pro system stack, Apple spring motion, no visible scrollbars, dark only.

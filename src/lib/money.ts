@@ -71,7 +71,7 @@ export async function createCustomCategory(
       userId,
       name: input.name,
       space: input.space,
-      icon: input.icon ?? "🏷️",
+      icon: input.icon ?? null,
     })
     .returning();
 

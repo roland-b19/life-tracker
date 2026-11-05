@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMY } from "@/lib/format-date";
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
 import { Modal } from "../components/modal";
@@ -314,16 +315,15 @@ export function GymClient({
         aria-labelledby="deload-title"
       >
         <div>
-          <span className="badge badge-warning">5-Week Cycle</span>
-          <h2 id="deload-title" style={{ marginTop: "0.25rem" }}>
+          <h2 id="deload-title" className="section-title">
             {deload.isDeloadDue
               ? "Deload Week Due"
               : `Week ${deload.currentCycleWeek} of 5`}
           </h2>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
             {deload.isDeloadDue
-              ? "Time for recovery. Deload sessions reduce fatigue and are excluded from PR calculations."
-              : `${5 - deload.currentCycleWeek} week(s) until your scheduled deload week.`}
+              ? "Deload sessions are excluded from PRs."
+              : `${5 - deload.currentCycleWeek} week(s) until deload.`}
           </p>
         </div>
         <label className="toggle-label" style={{ minWidth: "8.5rem" }}>
@@ -339,14 +339,13 @@ export function GymClient({
       {/* Active Workout Session Logger */}
       {activeSession ? (
         <section className="surface" aria-labelledby="active-session-title">
-          <div className="section-heading">
+          <div className="section-head">
             <div>
-              <span className="badge badge-info">Active Workout</span>
-              <h2 id="active-session-title" style={{ marginTop: "0.25rem" }}>
+              <h2 id="active-session-title" className="section-title">
                 {activeSession.splitDayName || "Workout Session"}
               </h2>
               <span className="muted">
-                {activeSession.date} {activeSession.isDeload ? "· Deload" : ""}
+                {formatDMY(activeSession.date)} {activeSession.isDeload ? "· Deload" : ""}
               </span>
             </div>
             <button
@@ -624,20 +623,17 @@ export function GymClient({
             {/* Selected Day Exercise Preview */}
             {currentDay && !currentDay.isRest ? (
               <section className="surface" aria-labelledby="preview-title">
-                <div className="section-heading">
-                  <div>
-                    <span className="badge badge-info">{currentDay.exercises.length} Exercises Planned</span>
-                    <h2 id="preview-title" style={{ marginTop: "0.25rem" }}>
-                      {currentDay.name} Routine
-                    </h2>
-                  </div>
+                <div className="section-head">
+                  <h2 id="preview-title" className="section-title">
+                    {currentDay.name}
+                  </h2>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void handleStartSession(currentDay)}
-                    style={{ padding: "0.5rem 1.15rem" }}
+                    className="btn-sm"
                   >
-                    Start Workout Now →
+                    Start
                   </button>
                 </div>
 
@@ -659,10 +655,7 @@ export function GymClient({
               </section>
             ) : (
               <section className="surface">
-                <h2>Rest & Recovery Day</h2>
-                <p className="muted" style={{ marginTop: "0.5rem" }}>
-                  No high-intensity resistance training scheduled for this day. Hydrate, eat adequate protein, and allow central nervous system recovery.
-                </p>
+                <h2 className="section-title">Rest day</h2>
               </section>
             )}
 
@@ -671,22 +664,20 @@ export function GymClient({
               className="surface"
               aria-labelledby="recent-title"
             >
-              <div className="section-heading">
-                <h2 id="recent-title">Recent Workouts</h2>
-                <span className="muted">{recentSessions.length} recorded</span>
+              <div className="section-head">
+                <h2 id="recent-title" className="section-title">Recent Workouts</h2>
+                <span className="muted number-tabular">{recentSessions.length}</span>
               </div>
               <div className="entries" style={{ marginTop: "0.75rem" }}>
                 {recentSessions.length === 0 && (
-                  <p className="muted" style={{ textAlign: "center", padding: "1.5rem 0" }}>
-                    No workouts logged yet. Start your first session above!
-                  </p>
+                  <p className="empty-note">No workouts yet.</p>
                 )}
                 {recentSessions.map((s) => (
                   <div key={s.id} className="entry-row">
                     <div>
                       <strong>{s.splitDayName || "Workout"}</strong>
                       <span className="muted" style={{ marginLeft: "0.5rem", fontSize: "0.85rem" }}>
-                        {s.date}
+                        {formatDMY(s.date)}
                       </span>
                       {s.isDeload && (
                         <span className="badge badge-warning" style={{ marginLeft: "0.4rem" }}>
@@ -711,16 +702,12 @@ export function GymClient({
           {/* Right Column: Split Days Selector & Custom Exercise CTA */}
           <div className="dashboard-aside sticky">
             <section className="surface" aria-labelledby="split-title">
-              <div className="section-heading" style={{ marginBottom: "0.85rem" }}>
-                <div>
-                  <h2 id="split-title" style={{ fontSize: "1.2rem" }}>Training Days</h2>
-                  <span className="muted" style={{ fontSize: "0.85rem" }}>5-Day Upper / Lower Split</span>
-                </div>
+              <div className="section-head">
+                <h2 id="split-title" className="section-title">Training Days</h2>
                 <button
                   type="button"
-                  className="secondary"
+                  className="secondary btn-sm"
                   onClick={() => setShowCustomModal(true)}
-                  style={{ minHeight: "2.1rem", padding: "0.25rem 0.65rem", fontSize: "0.8rem" }}
                 >
                   + Custom
                 </button>
@@ -769,7 +756,7 @@ export function GymClient({
                         <button
                           type="button"
                           disabled={busy}
-                          style={{ minHeight: "2.1rem", padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
+                          className="btn-sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedDayId(day.id);
@@ -806,7 +793,6 @@ export function GymClient({
             Exercise Name
             <input
               type="text"
-              autoFocus
               placeholder="e.g. Incline Smith Machine Press"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}

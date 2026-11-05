@@ -17,7 +17,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 | A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
 | A3 | Food logs, meal plan, recipes, shopping list | personal | database; also read and written through the AI connector | low to medium privacy harm |
 | A4 | Personal expenses | personal, financial | database | privacy harm |
-| A5 | Family-business income and expenses | personal, financial, business | database | commercial harm; never leaves our system |
+| A5 | Family-business income and expenses (legacy rows, no UI since 2026-11-05) | personal, financial, business | database | commercial harm; never leaves our system |
 | A6 | To-do tasks and reminders (personal and business) | personal | database, queue | low |
 | A7 | Wishlist | personal | database | low |
 | A8 | Account identity and sessions (Entra tokens, refresh tokens) | secret | Entra; tokens in browser/session | account takeover exposes A1-A7 |

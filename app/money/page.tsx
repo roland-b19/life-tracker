@@ -21,22 +21,11 @@ export default async function MoneyPage() {
   const currentMonth = now.getMonth() + 1;
   const monthStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
 
-  const [
-    personalCategories,
-    businessCategories,
-    mostUsedPersonal,
-    personalSummary,
-    businessSummary,
-    personalExpenses,
-    businessExpenses,
-  ] = await Promise.all([
+  const [categories, mostUsedCategory, summary, expenses] = await Promise.all([
     getExpenseCategories(userId, "personal"),
-    getExpenseCategories(userId, "business"),
     getMostUsedCategory(userId, "personal"),
     getMonthlyMoneySummary(userId, "personal", currentYear, currentMonth),
-    getMonthlyMoneySummary(userId, "business", currentYear, currentMonth),
     getExpenses(userId, "personal", { month: monthStr, limit: 50 }),
-    getExpenses(userId, "business", { month: monthStr, limit: 50 }),
   ]);
 
   return (
@@ -44,13 +33,10 @@ export default async function MoneyPage() {
       userName={session.user.name ?? "User"}
       initialYear={currentYear}
       initialMonth={currentMonth}
-      personalCategories={personalCategories}
-      businessCategories={businessCategories}
-      initialMostUsedCategory={mostUsedPersonal}
-      initialPersonalSummary={personalSummary}
-      initialBusinessSummary={businessSummary}
-      initialPersonalExpenses={personalExpenses}
-      initialBusinessExpenses={businessExpenses}
+      categories={categories}
+      initialMostUsedCategory={mostUsedCategory}
+      initialSummary={summary}
+      initialExpenses={expenses}
     />
   );
 }

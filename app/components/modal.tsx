@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
 import { CloseIcon } from "./icons";
 
 interface ModalProps {
@@ -27,16 +27,43 @@ export function Modal({
     [onClose],
   );
 
+  const backdropRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", handleKeyDown);
-    } else {
-      document.body.style.overflow = "";
-    }
+    if (!isOpen) return;
+    window.addEventListener("keydown", handleKeyDown);
+
+    // iOS ignores overflow:hidden on body, so pin it in place and restore the scroll position on close.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    body.style.position = "fixed";
+    body.style.top = `${-scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+
+    // Keep the backdrop the size of the visible area so the keyboard never pushes or zooms the card.
+    const vv = window.visualViewport;
+    const fit = () => {
+      const el = backdropRef.current;
+      if (!el || !vv) return;
+      el.style.height = `${vv.height}px`;
+      el.style.transform = `translateY(${vv.offsetTop}px)`;
+    };
+    fit();
+    vv?.addEventListener("resize", fit);
+    vv?.addEventListener("scroll", fit);
+
     return () => {
-      document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
+      vv?.removeEventListener("resize", fit);
+      vv?.removeEventListener("scroll", fit);
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
     };
   }, [isOpen, handleKeyDown]);
 
@@ -44,6 +71,7 @@ export function Modal({
 
   return (
     <div
+      ref={backdropRef}
       className="modal-backdrop"
       role="dialog"
       aria-modal="true"

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Navigation } from "../components/navigation";
-import { TrashIcon, PlusIcon, LockIcon, TagIcon } from "../components/icons";
+import { TrashIcon, PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import {
@@ -13,7 +13,7 @@ import {
   logExpenseAction,
 } from "@/app/actions/money";
 import { ExpenseItem, MonthlyMoneySummary } from "@/lib/money";
-import { ExpenseSpace } from "@/lib/validations/money";
+import { formatDMY } from "@/lib/format-date";
 
 interface CategoryData {
   id: string;
@@ -26,14 +26,13 @@ interface MoneyClientProps {
   userName: string;
   initialYear: number;
   initialMonth: number;
-  personalCategories: CategoryData[];
-  businessCategories: CategoryData[];
+  categories: CategoryData[];
   initialMostUsedCategory: string;
-  initialPersonalSummary: MonthlyMoneySummary;
-  initialBusinessSummary: MonthlyMoneySummary;
-  initialPersonalExpenses: ExpenseItem[];
-  initialBusinessExpenses: ExpenseItem[];
+  initialSummary: MonthlyMoneySummary;
+  initialExpenses: ExpenseItem[];
 }
+
+const SPACE = "personal" as const;
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -51,15 +50,11 @@ export function MoneyClient({
   userName,
   initialYear,
   initialMonth,
-  personalCategories,
-  businessCategories,
+  categories: initialCategories,
   initialMostUsedCategory,
-  initialPersonalSummary,
-  initialBusinessSummary,
-  initialPersonalExpenses,
-  initialBusinessExpenses,
+  initialSummary,
+  initialExpenses,
 }: MoneyClientProps) {
-  const [space, setSpace] = useState<ExpenseSpace>("personal");
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
 
@@ -69,29 +64,14 @@ export function MoneyClient({
 
   const { showToast } = useToast();
 
-  // Categories per space
-  const [categoriesMap, setCategoriesMap] = useState<Record<ExpenseSpace, CategoryData[]>>({
-    personal: personalCategories,
-    business: businessCategories,
-  });
-
-  // Summaries per space
-  const [summaries, setSummaries] = useState<Record<ExpenseSpace, MonthlyMoneySummary>>({
-    personal: initialPersonalSummary,
-    business: initialBusinessSummary,
-  });
-
-  // Expense lists per space
-  const [expensesMap, setExpensesMap] = useState<Record<ExpenseSpace, ExpenseItem[]>>({
-    personal: initialPersonalExpenses,
-    business: initialBusinessExpenses,
-  });
+  const [categories, setCategories] = useState(initialCategories);
+  const [summary, setSummary] = useState(initialSummary);
+  const [expenses, setExpenses] = useState(initialExpenses);
 
   // Quick form state
-  const currentCategories = categoriesMap[space];
   const [amountInput, setAmountInput] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
-    initialMostUsedCategory || (currentCategories[0]?.name ?? "Food & Groceries"),
+    initialMostUsedCategory || (categories[0]?.name ?? "Food & Groceries"),
   );
   const [dateInput, setDateInput] = useState(getTodayString());
   const [notesInput, setNotesInput] = useState("");
@@ -99,27 +79,23 @@ export function MoneyClient({
 
   // New category modal state
   const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("");
 
   const [isPending, startTransition] = useTransition();
-
-  const currentSummary = summaries[space];
-  const currentExpenses = expensesMap[space];
 
   const refreshMonthData = (targetYear: number, targetMonth: number) => {
     startTransition(async () => {
       try {
         const monthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
         const [sumRes, expRes] = await Promise.all([
-          getMonthlySummaryAction(space, targetYear, targetMonth),
-          getExpensesAction(space, monthStr),
+          getMonthlySummaryAction(SPACE, targetYear, targetMonth),
+          getExpensesAction(SPACE, monthStr),
         ]);
 
         if (sumRes.success && sumRes.summary) {
-          setSummaries((prev) => ({ ...prev, [space]: sumRes.summary }));
+          setSummary(sumRes.summary);
         }
         if (expRes.success && expRes.expenses) {
-          setExpensesMap((prev) => ({ ...prev, [space]: expRes.expenses }));
+          setExpenses(expRes.expenses);
         }
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -153,14 +129,6 @@ export function MoneyClient({
     refreshMonthData(nextY, nextM);
   };
 
-  const handleSpaceChange = (newSpace: ExpenseSpace) => {
-    setSpace(newSpace);
-    const cats = categoriesMap[newSpace];
-    if (cats.length > 0 && !cats.some((c) => c.name === selectedCategory)) {
-      setSelectedCategory(cats[0].name);
-    }
-  };
-
   const handleLogExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amountInput);
@@ -172,7 +140,7 @@ export function MoneyClient({
     startTransition(async () => {
       try {
         const res = await logExpenseAction({
-          space,
+          space: SPACE,
           amount: parsedAmount,
           currency: "RON",
           category: selectedCategory,
@@ -200,14 +168,11 @@ export function MoneyClient({
   };
 
   const handleDeleteExpense = async (id: string) => {
-    const target = currentExpenses.find((e) => e.id === id);
+    const target = expenses.find((e) => e.id === id);
     if (!target) return;
 
     // Optimistic removal
-    setExpensesMap((prev) => ({
-      ...prev,
-      [space]: prev[space].filter((e) => e.id !== id),
-    }));
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
 
     startTransition(async () => {
       try {
@@ -218,7 +183,7 @@ export function MoneyClient({
             actionLabel: "Undo",
             onAction: async () => {
               await logExpenseAction({
-                space,
+                space: SPACE,
                 amount: target.amount,
                 currency: "RON",
                 category: target.category,
@@ -232,10 +197,7 @@ export function MoneyClient({
         }
       } catch (err: unknown) {
         // Revert
-        setExpensesMap((prev) => ({
-          ...prev,
-          [space]: [...prev[space], target].sort((a, b) => b.date.localeCompare(a.date)),
-        }));
+        setExpenses((prev) => [...prev, target].sort((a, b) => b.date.localeCompare(a.date)));
         if (err instanceof Error) {
           setErrorMsg(err.message);
         }
@@ -251,8 +213,7 @@ export function MoneyClient({
       try {
         const res = await createCategoryAction({
           name: newCatName.trim(),
-          space,
-          icon: newCatIcon.trim() || null,
+          space: SPACE,
         });
 
         if (res.success && res.category) {
@@ -262,10 +223,7 @@ export function MoneyClient({
             space: res.category.space,
             icon: res.category.icon,
           };
-          setCategoriesMap((prev) => ({
-            ...prev,
-            [space]: [...prev[space], newCat],
-          }));
+          setCategories((prev) => [...prev, newCat]);
           setSelectedCategory(newCat.name);
           setNewCatName("");
           setShowNewCatModal(false);
@@ -286,29 +244,7 @@ export function MoneyClient({
     <main>
       <Navigation userName={userName} />
 
-      {/* Top Action Bar */}
-      <div className="action-bar-header">
-        <div className="space-switcher" role="tablist" aria-label="Money Space Switcher" style={{ margin: 0 }}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={space === "personal"}
-            className={`space-tab ${space === "personal" ? "active" : ""}`}
-            onClick={() => handleSpaceChange("personal")}
-          >
-            Personal
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={space === "business"}
-            className={`space-tab ${space === "business" ? "active" : ""}`}
-            onClick={() => handleSpaceChange("business")}
-          >
-            Business
-          </button>
-        </div>
-
+      <div className="toolbar toolbar-end">
         <button
           type="button"
           className="btn-open-modal"
@@ -319,12 +255,12 @@ export function MoneyClient({
           aria-label="Open log expense dialog"
         >
           <PlusIcon size={16} />
-          <span>Log Expense</span>
+          <span>Log expense</span>
         </button>
       </div>
 
       {errorMsg && (
-        <div className="error" style={{ marginBottom: "1rem" }} role="alert">
+        <div className="error" role="alert">
           {errorMsg}
         </div>
       )}
@@ -361,28 +297,18 @@ export function MoneyClient({
 
             <div className="total-spent-display">
               <span className="total-spent-amount number-tabular">
-                {currentSummary.totalSpent.toLocaleString("ro-RO", {
+                {summary.totalSpent.toLocaleString("ro-RO", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </span>
               <span className="total-spent-currency">RON</span>
             </div>
-            <div
-              style={{
-                fontSize: "0.85rem",
-                color: "var(--secondary)",
-                marginBottom: "1.25rem",
-              }}
-            >
-              {currentSummary.expenseCount}{" "}
-              {currentSummary.expenseCount === 1 ? "expense" : "expenses"} recorded in {space}
-            </div>
 
             {/* Category Breakdown Progress Bars */}
-            {currentSummary.categories.length > 0 ? (
+            {summary.categories.length > 0 ? (
               <div className="category-breakdown-list">
-                {currentSummary.categories.map((cat) => (
+                {summary.categories.map((cat) => (
                   <div key={cat.category} className="breakdown-row">
                     <div className="breakdown-header">
                       <span className="breakdown-cat-name">
@@ -409,31 +335,18 @@ export function MoneyClient({
                 ))}
               </div>
             ) : (
-              <p style={{ color: "var(--secondary)", fontSize: "0.9rem", margin: 0 }}>
-                No expenses recorded for this month.
-              </p>
+              <p className="empty-note">No expenses this month.</p>
             )}
           </section>
 
           {/* Expense History List */}
           <section className="quick-expense-card" aria-label="Expense History">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <h2 style={{ fontSize: "1.2rem", margin: 0 }}>
-                {space === "personal" ? "Personal" : "Business"} Transactions
-              </h2>
-              <span className="badge badge-info">
-                {currentExpenses.length} entries
-              </span>
+            <div className="section-head">
+              <h2 className="section-title">Transactions</h2>
+              <span className="muted">{expenses.length}</span>
             </div>
 
-            {isPending && currentExpenses.length === 0 && (
+            {isPending && expenses.length === 0 && (
               <div style={{ display: "grid", gap: "0.5rem", padding: "0.5rem 0" }}>
                 <div className="skeleton skeleton-row" />
                 <div className="skeleton skeleton-row" />
@@ -441,14 +354,14 @@ export function MoneyClient({
               </div>
             )}
 
-            {currentExpenses.length > 0 ? (
+            {expenses.length > 0 ? (
               <div>
-                {currentExpenses.map((exp) => (
+                {expenses.map((exp) => (
                   <div key={exp.id} className="expense-row">
                     <div className="expense-info">
                       <span className="expense-cat-title">{exp.category}</span>
                       <span className="expense-meta">
-                        {exp.date} {exp.notes ? `• ${exp.notes}` : ""}
+                        {formatDMY(exp.date)}{exp.notes ? ` • ${exp.notes}` : ""}
                       </span>
                     </div>
                     <div className="expense-amount-actions">
@@ -473,82 +386,28 @@ export function MoneyClient({
                 ))}
               </div>
             ) : (
-              !isPending && (
-                <p
-                  style={{
-                    color: "var(--secondary)",
-                    fontSize: "0.9rem",
-                    margin: "0.5rem 0 0",
-                    textAlign: "center",
-                    padding: "2rem 0",
-                  }}
-                >
-                  No expenses recorded for this month in {space}. Tap <strong>Log Expense</strong> to add one.
-                </p>
-              )
+              !isPending && <p className="empty-note">No expenses this month.</p>
             )}
           </section>
         </div>
 
-        {/* Right Column: Categories & Privacy Note */}
         <div className="dashboard-aside">
-          {/* Quick Categories Overview */}
-          <section className="surface" style={{ padding: "1.25rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-              <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", margin: 0 }}>
-                {space === "personal" ? "Personal" : "Business"} Categories
-              </h3>
-              <button
-                type="button"
-                className="category-chip"
-                onClick={() => setShowNewCatModal(true)}
-                style={{ padding: "0.25rem 0.6rem", fontSize: "0.8rem", borderStyle: "dashed" }}
-              >
-                <PlusIcon size={12} />
+          <section className="surface" aria-label="Categories">
+            <div className="section-head">
+              <h2 className="section-title">Categories</h2>
+              <button type="button" className="btn-sm" onClick={() => setShowNewCatModal(true)}>
+                <PlusIcon size={14} />
                 <span>New</span>
               </button>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-              {currentCategories.map((c) => (
-                <span
-                  key={c.id}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    padding: "0.35rem 0.65rem",
-                    borderRadius: "0.6rem",
-                    background: "var(--surface-secondary)",
-                    border: "1px solid var(--separator)",
-                    fontSize: "0.825rem",
-                  }}
-                >
-                  {c.icon ? c.icon : <TagIcon size={12} />}
-                  <span>{c.name}</span>
+            <div className="tag-list">
+              {categories.map((c) => (
+                <span key={c.id} className="tag">
+                  {c.name}
                 </span>
               ))}
             </div>
           </section>
-
-          {/* Privacy Notice */}
-          <div
-            style={{
-              padding: "1rem",
-              borderRadius: "0.95rem",
-              background: "var(--surface-secondary)",
-              border: "1px solid var(--separator)",
-              textAlign: "center",
-              fontSize: "0.8125rem",
-              color: "var(--secondary)",
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "var(--text)", fontWeight: 600 }}>
-              <LockIcon size={14} /> Strict Financial Privacy
-            </span>
-            <p style={{ margin: "0.35rem 0 0", lineHeight: 1.5 }}>
-              All expenses, incomes, and budgets are strictly quarantined from AI providers and MCP servers.
-            </p>
-          </div>
         </div>
       </div>
 
@@ -556,7 +415,7 @@ export function MoneyClient({
       <Modal
         isOpen={isExpenseModalOpen}
         onClose={() => setIsExpenseModalOpen(false)}
-        title={`Log ${space === "personal" ? "Personal" : "Business"} Expense`}
+        title="Log expense"
       >
         <form onSubmit={handleLogExpense}>
           <div className="amount-input-container">
@@ -565,7 +424,6 @@ export function MoneyClient({
               step="0.01"
               min="0.01"
               required
-              autoFocus
               placeholder="0.00"
               value={amountInput}
               onChange={(e) => setAmountInput(e.target.value)}
@@ -577,7 +435,7 @@ export function MoneyClient({
 
           {/* Category Chips Scroll */}
           <div className="category-chips-scroll" role="radiogroup" aria-label="Select Category">
-            {currentCategories.map((c) => (
+            {categories.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -586,23 +444,19 @@ export function MoneyClient({
                 className={`category-chip ${selectedCategory === c.name ? "active" : ""}`}
                 onClick={() => setSelectedCategory(c.name)}
               >
-                <span style={{ display: "inline-flex", alignItems: "center" }}>
-                  {c.icon ? c.icon : <TagIcon size={14} />}
-                </span>
                 <span>{c.name}</span>
               </button>
             ))}
             <button
               type="button"
-              className="category-chip"
+              className="category-chip add"
               onClick={() => {
                 setIsExpenseModalOpen(false);
                 setShowNewCatModal(true);
               }}
-              style={{ borderStyle: "dashed" }}
             >
               <PlusIcon size={14} />
-              <span>New Category</span>
+              <span>New category</span>
             </button>
           </div>
 
@@ -662,43 +516,21 @@ export function MoneyClient({
       <Modal
         isOpen={showNewCatModal}
         onClose={() => setShowNewCatModal(false)}
-        title="Add Custom Category"
+        title="New category"
       >
         <form onSubmit={handleCreateCategory}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "4.5rem 1fr",
-              gap: "0.75rem",
-              marginBottom: "1.25rem",
-            }}
-          >
-            <label>
-              Tag
-              <input
-                type="text"
-                maxLength={4}
-                value={newCatIcon}
-                onChange={(e) => setNewCatIcon(e.target.value)}
-                placeholder="Tag"
-                style={{ textAlign: "center", fontSize: "0.95rem" }}
-                aria-label="Category Tag Icon"
-              />
-            </label>
-            <label>
-              Category Name
-              <input
-                type="text"
-                required
-                autoFocus
-                maxLength={50}
-                placeholder="e.g. Subscriptions"
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                aria-label="Category Name"
-              />
-            </label>
-          </div>
+          <label style={{ marginBottom: "1.25rem" }}>
+            Name
+            <input
+              type="text"
+              required
+              maxLength={50}
+              placeholder="e.g. Subscriptions"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              aria-label="Category Name"
+            />
+          </label>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
             <button
               type="button"
@@ -708,7 +540,7 @@ export function MoneyClient({
               Cancel
             </button>
             <button type="submit" disabled={isPending || !newCatName.trim()}>
-              Save Category
+              Save
             </button>
           </div>
         </form>
