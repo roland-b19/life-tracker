@@ -1,26 +1,26 @@
 :root {
-  /* Ember: warm graphite, dark but not black. Validated in the design review (docs/decisions.md, 2026-11-04). */
-  --background: #1f1c1b;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(232, 148, 106, 0.07) 0%, rgba(31, 28, 27, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(232, 148, 106, 0.04) 0%, rgba(31, 28, 27, 0) 100%);
-  --surface: rgba(41, 37, 36, 0.78);
-  --surface-solid: #292524;
-  --surface-secondary: rgba(51, 46, 44, 0.65);
-  --surface-modal: #2b2624;
-  --text: #f3eeea;
-  --secondary: #b3a8a1;
-  --tint: #e8946a;
-  --tint-hover: #f0a984;
-  --on-tint: #1f120a;
-  --tint-subtle: rgba(232, 148, 106, 0.14);
-  --success: #8fd19e;
-  --success-subtle: rgba(143, 209, 158, 0.14);
-  --warning: #efc56f;
-  --warning-subtle: rgba(239, 197, 111, 0.15);
-  --danger: #f08a8a;
-  --danger-subtle: rgba(240, 138, 138, 0.15);
-  --separator: #3a3431;
-  --card-border: #463f3b;
+  /* Storm: cool graphite with a steel blue accent. Chosen in the palette review (docs/decisions.md, 2026-11-05). */
+  --background: #1b1e22;
+  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(134, 180, 234, 0.07) 0%, rgba(27, 30, 34, 0) 100%),
+               radial-gradient(800px 400px at 100% 100%, rgba(134, 180, 234, 0.04) 0%, rgba(27, 30, 34, 0) 100%);
+  --surface: rgba(37, 42, 48, 0.78);
+  --surface-solid: #252a30;
+  --surface-secondary: rgba(47, 53, 60, 0.65);
+  --surface-modal: #282e34;
+  --text: #eaedf0;
+  --secondary: #a1a9b2;
+  --tint: #86b4ea;
+  --tint-hover: #9bc2ef;
+  --on-tint: #0b1b30;
+  --tint-subtle: rgba(134, 180, 234, 0.14);
+  --success: #8fd4a3;
+  --success-subtle: rgba(143, 212, 163, 0.14);
+  --warning: #ebc673;
+  --warning-subtle: rgba(235, 198, 115, 0.15);
+  --danger: #ef8f8f;
+  --danger-subtle: rgba(239, 143, 143, 0.15);
+  --separator: #353c45;
+  --card-border: #434b56;
   --card-shadow: none;
   --glass-blur: blur(28px) saturate(160%);
   /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
@@ -359,7 +359,7 @@ h3 {
   display: flex;
   align-items: stretch;
   padding: 0.25rem;
-  background: rgba(41, 37, 36, 0.72);
+  background: rgba(37, 42, 48, 0.72);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   border: 1px solid var(--card-border);
@@ -411,7 +411,7 @@ h3 {
   position: fixed;
   inset: 0;
   z-index: 840;
-  background: rgba(15, 13, 12, 0.5);
+  background: rgba(10, 12, 15, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   animation: modalFadeIn var(--dur) var(--ease) both;
@@ -571,52 +571,52 @@ main {
 }
 
 .badge-info {
-  background: rgba(232, 148, 106, 0.15);
-  color: #e8946a;
-  border: 1px solid rgba(232, 148, 106, 0.28);
+  background: rgba(134, 180, 234, 0.15);
+  color: #86b4ea;
+  border: 1px solid rgba(134, 180, 234, 0.28);
 }
 
 .badge-warning {
-  background: rgba(239, 197, 111, 0.15);
-  color: #efc56f;
-  border: 1px solid rgba(239, 197, 111, 0.28);
+  background: rgba(235, 198, 115, 0.15);
+  color: #ebc673;
+  border: 1px solid rgba(235, 198, 115, 0.28);
 }
 
 .badge-danger {
-  background: rgba(240, 138, 138, 0.15);
-  color: #f08a8a;
-  border: 1px solid rgba(240, 138, 138, 0.28);
+  background: rgba(239, 143, 143, 0.15);
+  color: #ef8f8f;
+  border: 1px solid rgba(239, 143, 143, 0.28);
 }
 
 .badge-rest {
-  background: rgba(179, 168, 161, 0.12);
+  background: rgba(161, 169, 178, 0.12);
   color: var(--secondary);
-  border: 1px solid rgba(179, 168, 161, 0.2);
+  border: 1px solid rgba(161, 169, 178, 0.2);
 }
 
 .badge-success {
-  background: rgba(143, 209, 158, 0.15);
-  color: #8fd19e;
-  border: 1px solid rgba(143, 209, 158, 0.28);
+  background: rgba(143, 212, 163, 0.15);
+  color: #8fd4a3;
+  border: 1px solid rgba(143, 212, 163, 0.28);
 }
 
 .badge-streak {
-  background: rgba(239, 197, 111, 0.15);
-  color: #efc56f;
-  border: 1px solid rgba(239, 197, 111, 0.28);
+  background: rgba(235, 198, 115, 0.15);
+  color: #ebc673;
+  border: 1px solid rgba(235, 198, 115, 0.28);
   font-weight: 800;
 }
 
 .badge-carried {
-  background: rgba(222, 164, 120, 0.15);
-  color: #dea478;
-  border: 1px solid rgba(222, 164, 120, 0.28);
+  background: rgba(168, 191, 224, 0.15);
+  color: #a8bfe0;
+  border: 1px solid rgba(168, 191, 224, 0.28);
 }
 
 .badge-reminder {
-  background: rgba(232, 148, 106, 0.12);
-  color: #e8946a;
-  border: 1px solid rgba(232, 148, 106, 0.22);
+  background: rgba(134, 180, 234, 0.12);
+  color: #86b4ea;
+  border: 1px solid rgba(134, 180, 234, 0.22);
   font-size: 0.75rem;
 }
 
@@ -797,7 +797,7 @@ main {
   margin-top: 1rem;
   padding: 1.1rem 1.35rem;
   background: var(--tint-subtle);
-  border: 1px solid rgba(232, 148, 106, 0.2);
+  border: 1px solid rgba(134, 180, 234, 0.2);
   border-radius: 1rem;
 }
 
@@ -927,7 +927,7 @@ textarea {
   width: 100%;
   padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: rgba(41, 37, 36, 0.85);
+  background: rgba(37, 42, 48, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
@@ -1430,8 +1430,8 @@ textarea:focus-visible {
 }
 
 .badge-streak {
-  background: rgba(240, 138, 138, 0.12);
-  color: #f08a8a;
+  background: rgba(239, 143, 143, 0.12);
+  color: #ef8f8f;
   font-weight: 700;
 }
 
@@ -1504,7 +1504,7 @@ textarea:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(15, 13, 12, 0.6);
+  background: rgba(10, 12, 15, 0.6);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   display: flex;
@@ -1526,7 +1526,7 @@ textarea:focus-visible {
 .modal-card {
   width: 100%;
   max-width: 34rem;
-  background: #2b2624;
+  background: #282e34;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 1.25rem;
   box-shadow: none;
@@ -1771,7 +1771,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(41, 37, 36, 0.95);
+  background: rgba(37, 42, 48, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1810,7 +1810,7 @@ textarea:focus-visible {
 .toast-action-btn {
   background: var(--tint-subtle);
   color: var(--tint);
-  border: 1px solid rgba(232, 148, 106, 0.3);
+  border: 1px solid rgba(134, 180, 234, 0.3);
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.5rem;
@@ -1822,7 +1822,7 @@ textarea:focus-visible {
 }
 
 .toast-action-btn:hover {
-  background: rgba(232, 148, 106, 0.22);
+  background: rgba(134, 180, 234, 0.22);
 }
 
 .toast-close-btn {
@@ -1907,8 +1907,8 @@ textarea:focus-visible {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #332e2c;
-    --surface-modal: #2b2624;
+    --surface-secondary: #2f353c;
+    --surface-modal: #282e34;
     --glass-blur: none;
   }
 
