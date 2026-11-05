@@ -51,6 +51,14 @@ interface ShoppingItemData {
   isBought: boolean;
 }
 
+interface RecipeIngredientOption {
+  key: string;
+  name: string;
+  amount: number;
+  unit: string;
+  recipes: string[];
+}
+
 interface FoodClientProps {
   userName: string;
   todayDate: string;
@@ -79,6 +87,7 @@ interface FoodClientProps {
   };
   weightAnalytics: WeightAnalytics;
   initialShoppingList: ShoppingItemData[];
+  recipeOptions: RecipeIngredientOption[];
 }
 
 export function FoodClient({
@@ -88,6 +97,7 @@ export function FoodClient({
   initialSummary,
   weightAnalytics,
   initialShoppingList,
+  recipeOptions,
 }: FoodClientProps) {
   const [selectedDate] = useState(todayDate);
   const [summary, setSummary] = useState(initialSummary);
@@ -95,6 +105,8 @@ export function FoodClient({
   const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [isRecipePickOpen, setIsRecipePickOpen] = useState(false);
+  const [pickedKeys, setPickedKeys] = useState<string[]>([]);
   const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
   const [metricInput, setMetricInput] = useState("");
 
@@ -368,10 +380,16 @@ export function FoodClient({
     }
   }
 
+  function togglePicked(key: string) {
+    setPickedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
   async function handleGenerateShoppingList() {
     setBusy(true);
     try {
-      const res = await generateShoppingListAction();
+      const res = await generateShoppingListAction({ keys: pickedKeys });
+      setIsRecipePickOpen(false);
+      setPickedKeys([]);
       if (res.success && res.items) {
         const added = res.items as ShoppingItemData[];
         setShoppingList((prev) => [...prev, ...added]);
@@ -671,7 +689,7 @@ export function FoodClient({
           </div>
 
           <div className="head-actions">
-            <button type="button" className="secondary btn-sm" onClick={handleGenerateShoppingList}>
+            <button type="button" className="secondary btn-sm" onClick={() => setIsRecipePickOpen(true)}>
               From recipes
             </button>
             <button
@@ -890,6 +908,30 @@ export function FoodClient({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isRecipePickOpen} onClose={() => setIsRecipePickOpen(false)} title="Add from recipes">
+        <div className="pick-list">
+          {recipeOptions.map((o) => (
+            <label key={o.key} className="pick-row">
+              <input type="checkbox" checked={pickedKeys.includes(o.key)} onChange={() => togglePicked(o.key)} />
+              <span className="pick-text">
+                <span>
+                  {o.name} · {Math.round(o.amount * 100) / 100} {o.unit}
+                </span>
+                <span className="card-sub muted">{o.recipes.join(", ")}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => setIsRecipePickOpen(false)}>
+            Cancel
+          </button>
+          <button type="button" disabled={busy || pickedKeys.length === 0} onClick={handleGenerateShoppingList}>
+            {pickedKeys.length ? `Add ${pickedKeys.length}` : "Add"}
+          </button>
+        </div>
       </Modal>
 
       <Modal isOpen={isShopModalOpen} onClose={() => setIsShopModalOpen(false)} title="New shopping item">

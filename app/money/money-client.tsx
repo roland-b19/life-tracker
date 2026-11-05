@@ -536,8 +536,8 @@ export function MoneyClient({
                 label="Bar height"
                 value={metric}
                 options={[
-                  { value: "amount", label: "Amount" },
-                  { value: "count", label: "Count" },
+                  { value: "amount", label: "RON spent" },
+                  { value: "count", label: "Expenses" },
                 ]}
                 onChange={setMetric}
               />

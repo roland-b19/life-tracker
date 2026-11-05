@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
-import { InfoIcon } from "../components/icons";
+import { Segmented } from "../components/segmented";
 import {
   GROUP_COLOR,
   GROUP_LABEL,
@@ -28,6 +28,7 @@ function MuscleMap({
   const api = useRef<MapApi | null>(null);
   const selectedRef = useRef(selected);
   const onSelectRef = useRef(onSelect);
+  const [side, setSide] = useState<"front" | "back">("front");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -215,34 +216,20 @@ function MuscleMap({
       )}
       {status === "ready" && (
         <div className="muscle-views">
-          <button
-            type="button"
-            className="secondary btn-sm"
-            onClick={() => api.current?.setView("front")}
-          >
-            Front
-          </button>
-          <button
-            type="button"
-            className="secondary btn-sm"
-            onClick={() => api.current?.setView("back")}
-          >
-            Back
-          </button>
+          <Segmented
+            label="Model side"
+            value={side}
+            options={[
+              { value: "front", label: "Front" },
+              { value: "back", label: "Back" },
+            ]}
+            onChange={(v) => {
+              setSide(v);
+              api.current?.setView(v);
+            }}
+          />
         </div>
       )}
-      {/* CC BY-SA requires attribution; kept as a small info disclosure */}
-      <details className="muscle-credit">
-        <summary aria-label="Model credits">
-          <InfoIcon size={16} />
-        </summary>
-        <p>
-          BodyParts3D, © The Database Center for Life Science, CC BY-SA 2.1 JP, via{" "}
-          <a href="https://github.com/organui/muscles-3d" target="_blank" rel="noopener noreferrer">
-            organui/muscles-3d
-          </a>
-        </p>
-      </details>
     </div>
   );
 }

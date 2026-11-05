@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import {
   createShoppingItemSchema,
+  shoppingFromRecipesSchema,
   logMealSchema,
   updateNutritionTargetsSchema,
 } from "@/lib/validations/food";
@@ -109,9 +110,10 @@ export async function clearBoughtItemsAction() {
   return { success: true, deletedCount: deleted.length };
 }
 
-export async function generateShoppingListAction() {
+export async function generateShoppingListAction(rawInput: unknown) {
   const userId = await requireUser();
-  const items = await populateShoppingListFromRecipes(userId);
+  const { keys } = shoppingFromRecipesSchema.parse(rawInput);
+  const items = await populateShoppingListFromRecipes(userId, keys);
   safeRevalidate("/food");
   return { success: true, items };
 }

@@ -31,8 +31,9 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: "90", label: "90D" },
 ];
 const METRICS: { value: Metric; label: string }[] = [
-  { value: "rate", label: "Rate" },
-  { value: "done", label: "Done" },
+  // Bar height: share of that day's tasks completed, or how many were completed.
+  { value: "rate", label: "% done" },
+  { value: "done", label: "Tasks done" },
 ];
 // Sparse day labels so 30 and 90 bars stay readable.
 const LABEL_EVERY: Record<Period, number> = { "7": 1, "30": 5, "90": 15 };
@@ -507,7 +508,7 @@ export function TodosClient({
             {noRecord ? (
               <p className="empty-note">No record for {dayLabel(date, "long")}.</p>
             ) : (
-              <div className="dash-hero">
+              <div className="dash-hero" key={`${date}-${space}-${tab}`}>
                 <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   <span className="todo-stats-fraction number-tabular">
@@ -550,7 +551,7 @@ export function TodosClient({
               </div>
             </div>
             <BarChart
-              key={`${period}-${metric}-${space}-${tab}`}
+              key={`${period}-${metric}-${space}-${tab}-${date}`}
               data={bars}
               max={metric === "rate" ? 100 : maxDone}
               summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%. Choose a day to open it.`}

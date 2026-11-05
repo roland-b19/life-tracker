@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (dashboards 2: Tasks history, Money dashboard, routine editor, motion)_
+_Last updated: 2026-11-05 by Claude (motion polish: page transitions, hover/radius rules, shopping picker)_
 
 ## Phase
 
@@ -16,6 +16,7 @@ UI cleanup (minimal, consistent pages; business finances removed; Tasks tabs; ed
 UI polish 2 (Health page with Weight inside, editable tasks/categories/expenses/water/steps/weigh-ins, Undo on every action, no sticky hover, no zoom) is merged in `main` (PR #35). It adds migration `0010_allow_weight_update` (GRANT UPDATE on `weight_entries`); it must be applied wherever `db:migrate` runs.
 Desktop dashboards (auto wishlist price ranges, Tasks Space/Today/Daily filters with a progress dashboard, spending and weight charts, 3D Gym muscle map) are merged in `main` (PR #35). They add migration `0011_todo_day_stats` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `three` dependency. Mobile redesign comes after all desktop functions are done.
 Dashboards 2 (Tasks: read-only past days, bar chart periods with tap-to-open day, centred ring; Money: Tasks-style dashboard plus a category donut; Gym: routine editor, no Recent workouts, deduplicated muscle map, credit behind an info disclosure; Health: one layout system, API tab removed; animated numbers, modal and row motion, hover border; stale-module error fix in the service worker) is merged in `main` (PR #36). No migration, no new dependency.
+Motion polish (page enter/exit transitions, numbers count up on every page entry, charts replay on every filter change, one subtle hover rule, proportional radii, no separators, Gym Front/Back segmented control and custom exercise inside the day editor, Health shopping list picks ingredients from recipes, muscle map credit moved to a Credits link) is on branch `feat/motion-polish`, PR open. No migration, no new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 

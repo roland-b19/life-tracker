@@ -342,48 +342,54 @@ export async function getUserRecipes(userId: string) {
     .where(eq(recipes.userId, userId));
 }
 
-export async function populateShoppingListFromRecipes(userId: string) {
+/** Ingredients of the user's recipes, summed by name and unit; `key` identifies one for selection. */
+export async function getRecipeIngredientOptions(userId: string) {
   await ensureUserSampleRecipes(userId);
 
-  const userRecipes = await db
+  const rows = await db
     .select({
-      id: recipes.id,
-      name: recipes.name,
+      recipe: recipes.name,
+      name: recipeIngredients.name,
+      amount: recipeIngredients.amount,
+      unit: recipeIngredients.unit,
+      category: recipeIngredients.category,
     })
-    .from(recipes)
+    .from(recipeIngredients)
+    .innerJoin(recipes, eq(recipeIngredients.recipeId, recipes.id))
     .where(eq(recipes.userId, userId));
 
-  if (userRecipes.length === 0) return [];
-
-  const recipeIds = userRecipes.map((r) => r.id);
-  const ingredients = await db
-    .select()
-    .from(recipeIngredients)
-    .where(sql`${recipeIngredients.recipeId} IN ${recipeIds}`);
-
-  // Aggregate amounts by ingredient name & category
   const aggregated = new Map<
     string,
-    { name: string; amount: number; unit: string; category: string }
+    { key: string; name: string; amount: number; unit: string; category: string; recipes: string[] }
   >();
 
-  for (const ing of ingredients) {
+  for (const ing of rows) {
     const key = `${ing.name.toLowerCase()}_${ing.unit}`;
     const amountNum = parseFloat(ing.amount) || 1;
-    if (aggregated.has(key)) {
-      const prev = aggregated.get(key)!;
+    const prev = aggregated.get(key);
+    if (prev) {
       prev.amount += amountNum;
+      if (!prev.recipes.includes(ing.recipe)) prev.recipes.push(ing.recipe);
     } else {
       aggregated.set(key, {
+        key,
         name: ing.name,
         amount: amountNum,
         unit: ing.unit,
         category: ing.category,
+        recipes: [ing.recipe],
       });
     }
   }
 
-  const itemsToInsert = Array.from(aggregated.values());
+  return Array.from(aggregated.values());
+}
+
+/** Adds only the chosen recipe ingredients (by `key`) to the shopping list. */
+export async function populateShoppingListFromRecipes(userId: string, keys: string[]) {
+  const wanted = new Set(keys);
+  const options = await getRecipeIngredientOptions(userId);
+  const itemsToInsert = options.filter((o) => wanted.has(o.key));
   const created: (typeof shoppingItems.$inferSelect)[] = [];
 
   for (const item of itemsToInsert) {
