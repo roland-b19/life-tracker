@@ -6,6 +6,7 @@ import {
   PushSubscriptionInput,
   TodoSpace,
   ToggleTodoInput,
+  UpdateTodoInput,
 } from "./validations/todos";
 
 export interface TodoItem {
@@ -206,6 +207,16 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
   }
 
   return true;
+}
+
+export async function updateTodo(userId: string, input: UpdateTodoInput): Promise<boolean> {
+  const updated = await db
+    .update(todos)
+    .set({ title: input.title, reminderTime: input.reminderTime ?? null })
+    .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
+    .returning({ id: todos.id });
+
+  return updated.length > 0;
 }
 
 export async function deleteTodo(userId: string, todoId: string): Promise<boolean> {

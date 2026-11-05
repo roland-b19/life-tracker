@@ -324,7 +324,7 @@ async function main() {
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
     GRANT SELECT, INSERT ON TABLE "users" TO life_tracker_app;
     GRANT UPDATE (subject) ON TABLE "users" TO life_tracker_app;
-    GRANT SELECT, INSERT, DELETE ON TABLE "weight_entries" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "weight_entries" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "exercises" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_splits" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "workout_split_days" TO life_tracker_app;

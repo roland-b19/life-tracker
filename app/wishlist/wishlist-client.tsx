@@ -55,6 +55,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const totalCost = items.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
   const filteredItems = items.filter((item) => filterPriority === "all" || item.priority === filterPriority);
 
+  const toInput = (item: WishlistItemData) => ({
+    name: item.name,
+    estimatedPrice: Number(item.estimatedPrice),
+    priority: item.priority as Priority,
+    url: item.url || undefined,
+  });
+
   function openForm(item?: WishlistItemData) {
     setErrorMsg("");
     setEditingId(item?.id ?? null);
@@ -95,13 +102,35 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           return;
         }
         const updated = res.item as WishlistItemData;
+        const before = items.find((i) => i.id === editingId);
         setItems((prev) => prev.map((i) => (i.id === editingId ? updated : i)));
-        showToast({ message: `Saved "${updated.name}"`, type: "success" });
+        showToast({
+          message: `Saved "${updated.name}"`,
+          type: "success",
+          actionLabel: before ? "Undo" : undefined,
+          onAction: before
+            ? async () => {
+                const back = await updateWishlistItemAction(updated.id, toInput(before));
+                if (back.success && back.item) {
+                  setItems((prev) => prev.map((i) => (i.id === updated.id ? (back.item as WishlistItemData) : i)));
+                }
+              }
+            : undefined,
+        });
       } else {
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         setItems((prev) => [res.item as WishlistItemData, ...prev]);
-        showToast({ message: `Added "${res.item.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
+        const added = res.item as WishlistItemData;
+        showToast({
+          message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            await deleteWishlistItemAction(added.id);
+            setItems((prev) => prev.filter((i) => i.id !== added.id));
+          },
+        });
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -126,12 +155,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           message: reason === "bought" ? `Bought "${target.name}"` : `Removed "${target.name}"`,
           actionLabel: "Undo",
           onAction: async () => {
-            const reRes = await addWishlistItemAction({
-              name: target.name,
-              estimatedPrice: Number(target.estimatedPrice),
-              priority: target.priority as Priority,
-              url: target.url || undefined,
-            });
+            const reRes = await addWishlistItemAction(toInput(target));
             if (reRes.success && reRes.item) {
               setItems((prev) => [reRes.item as WishlistItemData, ...prev]);
             }
@@ -150,13 +174,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     <main>
       <Navigation userName={userName} />
 
-      <div className="toolbar toolbar-end">
-        <button type="button" className="btn-open-modal" onClick={() => openForm()}>
-          <PlusIcon size={16} />
-          <span>Add item</span>
-        </button>
-      </div>
-
       <div className="dashboard-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="wishlist-items-title">
@@ -164,7 +181,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               <h2 id="wishlist-items-title" className="section-title">
                 Items
               </h2>
-              <span className="muted number-tabular">{items.length}</span>
+              <span className="head-actions">
+                <span className="muted number-tabular">{filteredItems.length}</span>
+                <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                  <PlusIcon size={14} />
+                  Add item
+                </button>
+              </span>
             </div>
 
             <Segmented
@@ -198,7 +221,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         type="button"
                         className="btn-sm tint"
                         onClick={() => handleRemove(item.id, "bought")}
-                        disabled={busy}
                         title="Mark as bought and remove from the list"
                       >
                         <CheckIcon size={12} strokeWidth={2.5} /> Buy
@@ -207,21 +229,19 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         type="button"
                         className="delete-icon-btn edit"
                         onClick={() => openForm(item)}
-                        disabled={busy}
                         aria-label={`Edit ${item.name}`}
                         title="Edit"
                       >
-                        <PencilIcon size={15} />
+                        <PencilIcon size={17} />
                       </button>
                       <button
                         type="button"
                         className="delete-icon-btn"
                         onClick={() => handleRemove(item.id, "deleted")}
-                        disabled={busy}
                         aria-label={`Delete ${item.name}`}
                         title="Delete"
                       >
-                        <TrashIcon size={15} />
+                        <TrashIcon size={17} />
                       </button>
                     </div>
                   </div>
@@ -297,8 +317,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               Link (optional)
               <input
                 type="url"
-                placeholder="https://..."
-                value={url}
+                                value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={busy}
               />

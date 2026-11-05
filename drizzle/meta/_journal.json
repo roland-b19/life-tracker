@@ -71,6 +71,13 @@
       "when": 1793787198111,
       "tag": "0009_cold_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0010_allow_weight_update",
+      "breakpoints": true
     }
   ]
 }

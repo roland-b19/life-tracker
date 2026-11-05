@@ -24,12 +24,15 @@ import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import {
   createCustomCategory,
+  deleteCustomCategory,
   deleteExpense,
   getExpenseCategories,
   getExpenses,
   getMonthlyMoneySummary,
   getMostUsedCategory,
   logExpense,
+  renameCustomCategory,
+  updateExpense,
 } from "@/lib/money";
 import {
   createCategoryAction,
@@ -187,6 +190,30 @@ describe("Money module: Data Access, Analytics & Authorization", () => {
 
     const listEmpty = await getExpenses(userA, "personal");
     expect(listEmpty).toHaveLength(0);
+  });
+
+  it("edits expenses and own categories, never another user's", async () => {
+    const expense = await logExpense(userA, {
+      space: "personal",
+      amount: 10,
+      currency: "RON",
+      category: "Utilities & Bills",
+      date: "2026-11-04",
+    });
+    const edit = { id: expense.id, amount: 12.5, category: "Dining & Leisure", date: "2026-11-03" };
+    expect(await updateExpense(userB, edit)).toBe(false);
+    expect(await updateExpense(userA, edit)).toBe(true);
+    const [after] = await getExpenses(userA, "personal");
+    expect([after.amount, after.category, after.date]).toEqual([12.5, "Dining & Leisure", "2026-11-03"]);
+
+    const cat = await createCustomCategory(userA, { name: "Pets", space: "personal" });
+    await logExpense(userA, { space: "personal", amount: 5, currency: "RON", category: "Pets", date: "2026-11-04" });
+    expect(await renameCustomCategory(userB, cat.id, "Hijacked")).toBeNull();
+    expect(await renameCustomCategory(userA, cat.id, "Animals")).toBe("Pets");
+    const renamed = await getExpenses(userA, "personal");
+    expect(renamed.some((e) => e.category === "Animals")).toBe(true);
+    expect(await deleteCustomCategory(userB, cat.id)).toBe(false);
+    expect(await deleteCustomCategory(userA, cat.id)).toBe(true);
   });
 
   it("calculates monthly summary and category breakdown accurately", async () => {

@@ -22,24 +22,14 @@ export function Navigation({ userName }: NavigationProps) {
 
   const getPageTitle = () => {
     if (pathname.startsWith("/gym")) return "Gym";
-    if (pathname.startsWith("/food")) return "Food & Macros";
+    if (pathname.startsWith("/food")) return "Health";
     if (pathname.startsWith("/money")) return "Expenses";
     if (pathname.startsWith("/todos")) return "Tasks";
     if (pathname.startsWith("/wishlist")) return "Wishlist";
-    return "Weigh-ins";
+    return "Life Tracker";
   };
 
   const navLinks = [
-    {
-      href: "/",
-      label: "Weight",
-      isActive: pathname === "/",
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 3v18h18M18 9l-5 5-4-4-3 3" />
-        </svg>
-      ),
-    },
     {
       href: "/gym",
       label: "Gym",
@@ -52,7 +42,7 @@ export function Navigation({ userName }: NavigationProps) {
     },
     {
       href: "/food",
-      label: "Food",
+      label: "Health",
       isActive: pathname.startsWith("/food"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

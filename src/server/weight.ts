@@ -33,3 +33,16 @@ export async function removeWeightEntry(userId: string, id: string) {
     .returning({ id: weightEntries.id });
   return entry;
 }
+
+export async function updateWeightEntry(userId: string, id: string, date: string, kilograms: number) {
+  const [entry] = await db
+    .update(weightEntries)
+    .set({ date, kilograms: kilograms.toFixed(2) })
+    .where(and(eq(weightEntries.id, id), eq(weightEntries.userId, userId)))
+    .returning({
+      id: weightEntries.id,
+      date: weightEntries.date,
+      kilograms: weightEntries.kilograms,
+    });
+  return entry;
+}

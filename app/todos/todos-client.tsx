@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { CheckIcon, TrashIcon, FlameIcon, BellIcon, PlusIcon } from "../components/icons";
+import { CheckIcon, TrashIcon, FlameIcon, BellIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { Segmented } from "../components/segmented";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
@@ -12,6 +12,7 @@ import {
   getDailyTodosAction,
   savePushSubscriptionAction,
   toggleTodoAction,
+  updateTodoAction,
 } from "@/app/actions/todos";
 import { TodoItem } from "@/lib/todos";
 import { TodoSpace } from "@/lib/validations/todos";
@@ -48,19 +49,22 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TodoItem | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Push notifications state
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushStatusMsg, setPushStatusMsg] = useState<string | null>(null);
 
-  const [isPending, startTransition] = useTransition();
+  const requestId = useRef(0);
 
   const currentTodos = todosMap[space];
   const isDaily = tab === "daily";
   const visibleTodos = currentTodos.filter((t) => t.isRecurring === isDaily);
   const doneCount = visibleTodos.filter((t) => t.isCompleted).length;
-  const percentage = visibleTodos.length ? Math.round((doneCount / visibleTodos.length) * 100) : 0;
+  // An empty list counts as fully done.
+  const percentage = visibleTodos.length ? Math.round((doneCount / visibleTodos.length) * 100) : 100;
 
   // Check push notification availability on mount
   useEffect(() => {
@@ -77,19 +81,20 @@ export function TodosClient({
     }
   }, []);
 
-  const refreshDailyData = (date: string, targetSpace = space) => {
-    startTransition(async () => {
-      try {
-        const res = await getDailyTodosAction(targetSpace, date);
-        if (res.success && res.todos) {
-          setTodosMap((prev) => ({ ...prev, [targetSpace]: res.todos }));
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
+  // Loads both spaces and swaps them in with a single state update, so the list never flashes empty.
+  const loadDay = async (date: string) => {
+    const id = ++requestId.current;
+    try {
+      const [personal, business] = await Promise.all([
+        getDailyTodosAction("personal", date),
+        getDailyTodosAction("business", date),
+      ]);
+      if (id === requestId.current) {
+        setTodosMap({ personal: personal.todos, business: business.todos });
       }
-    });
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    }
   };
 
   const handleDateChange = (daysDelta: number) => {
@@ -99,119 +104,130 @@ export function TodosClient({
     const day = String(d.getDate()).padStart(2, "0");
     const newDateStr = `${d.getFullYear()}-${m}-${day}`;
     setCurrentDate(newDateStr);
-    refreshDailyData(newDateStr, space);
+    void loadDay(newDateStr);
   };
 
-  const handleSpaceChange = (newSpace: TodoSpace) => {
-    setSpace(newSpace);
-    refreshDailyData(currentDate, newSpace);
+  const openForm = (todo?: TodoItem) => {
+    setErrorMsg(null);
+    setEditing(todo ?? null);
+    setTitleInput(todo?.title ?? "");
+    setReminderTimeInput(todo?.reminderTime ?? "");
+    setIsTaskModalOpen(true);
   };
 
-  const handleCreateTodo = async (e: React.FormEvent) => {
+  const closeForm = () => {
+    setIsTaskModalOpen(false);
+    setTitleInput("");
+    setReminderTimeInput("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titleInput.trim()) return;
-
-    startTransition(async () => {
-      try {
+    const title = titleInput.trim();
+    if (!title || saving) return;
+    const reminderTime = reminderTimeInput.trim() || null;
+    setSaving(true);
+    try {
+      if (editing) {
+        const before = editing;
+        const res = await updateTodoAction({ id: before.id, title, reminderTime });
+        if (res.success) {
+          showToast({
+            message: `Saved "${title}"`,
+            type: "success",
+            actionLabel: "Undo",
+            onAction: async () => {
+              await updateTodoAction({ id: before.id, title: before.title, reminderTime: before.reminderTime });
+              await loadDay(currentDate);
+            },
+          });
+        }
+      } else {
         const res = await createTodoAction({
           space,
-          title: titleInput.trim(),
+          title,
           isRecurring: isDaily,
           dueDate: currentDate,
-          reminderTime: reminderTimeInput.trim() || undefined,
+          reminderTime,
         });
-
         if (res.success && res.todo) {
-          const createdTitle = titleInput.trim();
-          setTitleInput("");
-          setReminderTimeInput("");
-          setIsTaskModalOpen(false);
+          const createdId = res.todo.id;
           showToast({
-            message: `Added "${createdTitle}"`,
+            message: `Added "${title}"`,
             type: "success",
+            actionLabel: "Undo",
+            onAction: async () => {
+              await deleteTodoAction(createdId);
+              await loadDay(currentDate);
+            },
           });
-          refreshDailyData(currentDate, space);
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
         }
       }
-    });
+      closeForm();
+      await loadDay(currentDate);
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setCompleted = (id: string, isCompleted: boolean) => {
+    setTodosMap((prev) => ({
+      ...prev,
+      [space]: prev[space].map((t) => (t.id === id ? { ...t, isCompleted } : t)),
+    }));
   };
 
   const handleToggleTodo = async (todo: TodoItem) => {
-    // Optimistic toggle
-    const nextCompleted = !todo.isCompleted;
-    setTodosMap((prev) => ({
-      ...prev,
-      [space]: prev[space].map((t) => (t.id === todo.id ? { ...t, isCompleted: nextCompleted } : t)),
-    }));
-
-    startTransition(async () => {
-      try {
-        const res = await toggleTodoAction({
-          id: todo.id,
-          isCompleted: nextCompleted,
-          currentDate,
-        });
-
-        if (res.success) {
-          refreshDailyData(currentDate, space);
-        } else {
-          // Revert if error
-          refreshDailyData(currentDate, space);
-        }
-      } catch (err: unknown) {
-        refreshDailyData(currentDate, space);
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
-      }
-    });
+    const next = !todo.isCompleted;
+    const date = currentDate;
+    setCompleted(todo.id, next);
+    try {
+      await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
+      showToast({
+        message: next ? `Done "${todo.title}"` : `Reopened "${todo.title}"`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          await toggleTodoAction({ id: todo.id, isCompleted: !next, currentDate: date });
+          await loadDay(date);
+        },
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    }
+    // Refresh to pick up the server-computed streak.
+    await loadDay(date);
   };
 
-  const handleDeleteTodo = async (id: string) => {
-    const target = currentTodos.find((t) => t.id === id);
-    if (!target) return;
-
-    // Optimistic removal
+  const handleDeleteTodo = async (target: TodoItem) => {
     setTodosMap((prev) => ({
       ...prev,
-      [space]: prev[space].filter((t) => t.id !== id),
+      [space]: prev[space].filter((t) => t.id !== target.id),
     }));
 
-    startTransition(async () => {
-      try {
-        const res = await deleteTodoAction(id);
-        if (res.success) {
-          showToast({
-            message: `Deleted "${target.title}"`,
-            actionLabel: "Undo",
-            onAction: async () => {
-              await createTodoAction({
-                space,
-                title: target.title,
-                isRecurring: target.isRecurring,
-                dueDate: target.dueDate,
-                reminderTime: target.reminderTime || undefined,
-              });
-              refreshDailyData(currentDate, space);
-            },
-          });
-          refreshDailyData(currentDate, space);
-        }
-      } catch (err: unknown) {
-        // Revert
-        setTodosMap((prev) => ({
-          ...prev,
-          [space]: [...prev[space], target],
-        }));
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        }
+    try {
+      const res = await deleteTodoAction(target.id);
+      if (res.success) {
+        showToast({
+          message: `Deleted "${target.title}"`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            await createTodoAction({
+              space: target.space,
+              title: target.title,
+              isRecurring: target.isRecurring,
+              dueDate: target.dueDate,
+              reminderTime: target.reminderTime,
+            });
+            await loadDay(currentDate);
+          },
+        });
       }
-    });
+    } catch (err: unknown) {
+      if (err instanceof Error) setErrorMsg(err.message);
+    }
+    await loadDay(currentDate);
   };
 
   const handleEnablePush = async () => {
@@ -260,20 +276,8 @@ export function TodosClient({
             { value: "personal", label: "Personal" },
             { value: "business", label: "Business" },
           ]}
-          onChange={handleSpaceChange}
+          onChange={setSpace}
         />
-        <button
-          type="button"
-          className="btn-open-modal"
-          onClick={() => {
-            setErrorMsg(null);
-            setIsTaskModalOpen(true);
-          }}
-          aria-label="Add task"
-        >
-          <PlusIcon size={16} />
-          <span>Add</span>
-        </button>
       </div>
 
       {/* Web Push Notification Banner */}
@@ -282,11 +286,7 @@ export function TodosClient({
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
             <BellIcon size={16} /> Task reminders
           </span>
-          <button
-            type="button"
-            className="secondary btn-sm"
-            onClick={handleEnablePush}
-          >
+          <button type="button" className="secondary btn-sm" onClick={handleEnablePush}>
             Enable
           </button>
         </div>
@@ -312,7 +312,6 @@ export function TodosClient({
               className="month-nav-btn"
               onClick={() => handleDateChange(-1)}
               aria-label="Previous day"
-              disabled={isPending}
             >
               ‹
             </button>
@@ -324,7 +323,6 @@ export function TodosClient({
               className="month-nav-btn"
               onClick={() => handleDateChange(1)}
               aria-label="Next day"
-              disabled={isPending}
             >
               ›
             </button>
@@ -342,86 +340,96 @@ export function TodosClient({
           </div>
         </section>
 
-        <section className="quick-expense-card" aria-label="Tasks">
+        <section className="surface" aria-labelledby="tasks-title">
+          <div className="section-head">
+            <h2 id="tasks-title" className="section-title">
+              Tasks
+            </h2>
+            <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+              <PlusIcon size={14} />
+              Add task
+            </button>
+          </div>
+
           <Segmented
             label="Task type"
             value={tab}
             options={[
               { value: "daily", label: "Daily" },
-              { value: "one-day", label: "One day" },
+              { value: "one-day", label: "Today" },
             ]}
             onChange={setTab}
           />
 
-          {isPending && visibleTodos.length === 0 && (
-            <div style={{ display: "grid", gap: "0.5rem", paddingTop: "1rem" }}>
-              <div className="skeleton skeleton-row" />
-              <div className="skeleton skeleton-row" />
-            </div>
-          )}
-
           {visibleTodos.length > 0 ? (
-            <div style={{ marginTop: "0.5rem" }}>
+            <div className="todo-list">
               {visibleTodos.map((task) => (
                 <div key={task.id} className="todo-row">
-                  <div className="todo-left">
-                    <button
-                      type="button"
-                      className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                      onClick={() => handleToggleTodo(task)}
-                      aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                    >
-                      {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                    </button>
-                    <div>
-                      <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
-                        {task.title}
-                      </span>
-                      {(task.streak > 0 || task.isCarriedOver || task.reminderTime) && (
-                        <div className="badge-row">
-                          {isDaily && task.streak > 0 && (
-                            <span className="badge badge-streak number-tabular">
-                              <FlameIcon size={12} /> {task.streak} {task.streak === 1 ? "day" : "days"}
-                            </span>
-                          )}
-                          {!isDaily && task.isCarriedOver && (
-                            <span className="badge badge-carried">Carried over</span>
-                          )}
-                          {task.reminderTime && (
-                            <span className="badge badge-reminder">{task.reminderTime}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                  <button
+                    type="button"
+                    className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
+                    onClick={() => handleToggleTodo(task)}
+                    aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                  >
+                    {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                  </button>
+
+                  <div className="todo-main">
+                    <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
+                      {task.title}
+                    </span>
+                    {((!isDaily && task.isCarriedOver) || task.reminderTime) && (
+                      <div className="badge-row">
+                        {!isDaily && task.isCarriedOver && (
+                          <span className="badge badge-carried">Carried over</span>
+                        )}
+                        {task.reminderTime && (
+                          <span className="badge badge-reminder">{task.reminderTime}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
+
+                  {isDaily && task.streak > 0 && (
+                    <span className="streak number-tabular" title={`${task.streak}-day streak`}>
+                      <FlameIcon size={15} />
+                      {task.streak}
+                    </span>
+                  )}
 
                   <button
                     type="button"
+                    className="delete-icon-btn edit"
+                    onClick={() => openForm(task)}
+                    aria-label={`Edit ${task.title}`}
+                    title="Edit"
+                  >
+                    <PencilIcon size={17} />
+                  </button>
+                  <button
+                    type="button"
                     className="delete-icon-btn"
-                    onClick={() => handleDeleteTodo(task.id)}
+                    onClick={() => handleDeleteTodo(task)}
                     aria-label={`Delete ${task.title}`}
                     title="Delete"
                   >
-                    <TrashIcon size={15} />
+                    <TrashIcon size={17} />
                   </button>
                 </div>
               ))}
             </div>
           ) : (
-            !isPending && (
-              <p className="empty-note">{isDaily ? "No daily tasks yet." : "Nothing planned for this day."}</p>
-            )
+            <p className="empty-note">{isDaily ? "No daily tasks yet." : "Nothing planned for this day."}</p>
           )}
         </section>
       </div>
 
-      {/* Modal: Create Task with Blurred Backdrop */}
       <Modal
         isOpen={isTaskModalOpen}
-        onClose={() => setIsTaskModalOpen(false)}
-        title={isDaily ? "New daily task" : "New task"}
+        onClose={closeForm}
+        title={editing ? "Edit task" : isDaily ? "New daily task" : "New task"}
       >
-        <form onSubmit={handleCreateTodo}>
+        <form onSubmit={handleSubmit}>
           <div className="form-stack">
             <label>
               Title
@@ -444,21 +452,12 @@ export function TodosClient({
             </label>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setIsTaskModalOpen(false)}
-              style={{ flex: 1 }}
-            >
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={closeForm}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isPending || !titleInput.trim()}
-              style={{ flex: 2 }}
-            >
-              {isPending ? "Adding..." : "Add"}
+            <button type="submit" disabled={saving || !titleInput.trim()}>
+              {editing ? "Save" : "Add task"}
             </button>
           </div>
         </form>

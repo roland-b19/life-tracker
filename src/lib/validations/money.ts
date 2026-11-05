@@ -15,6 +15,18 @@ export const deleteExpenseSchema = z.object({
   id: z.string().uuid(),
 });
 
+export const updateExpenseSchema = z.object({
+  id: z.string().uuid(),
+  amount: logExpenseSchema.shape.amount,
+  category: logExpenseSchema.shape.category,
+  date: logExpenseSchema.shape.date,
+});
+
+export const updateCategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, "Name is required").max(50).trim(),
+});
+
 export const createCategorySchema = z.object({
   name: z.string().min(1, "Name is required").max(50).trim(),
   space: expenseSpaceSchema.default("personal"),
@@ -28,6 +40,7 @@ export const getExpensesFilterSchema = z.object({
 
 export type ExpenseSpace = z.infer<typeof expenseSpaceSchema>;
 export type LogExpenseInput = z.infer<typeof logExpenseSchema>;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type DeleteExpenseInput = z.infer<typeof deleteExpenseSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type GetExpensesFilterInput = z.infer<typeof getExpensesFilterSchema>;

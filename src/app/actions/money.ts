@@ -5,15 +5,20 @@ import { requireUser } from "@/server/auth";
 import {
   createCategorySchema,
   deleteExpenseSchema,
+  updateCategorySchema,
+  updateExpenseSchema,
   ExpenseSpace,
   logExpenseSchema,
 } from "@/lib/validations/money";
 import {
   createCustomCategory,
+  deleteCustomCategory,
   deleteExpense,
   getExpenses,
   getMonthlyMoneySummary,
   logExpense,
+  renameCustomCategory,
+  updateExpense,
 } from "@/lib/money";
 
 function safeRevalidate(path: string) {
@@ -38,6 +43,30 @@ export async function deleteExpenseAction(expenseId: string) {
   const deleted = await deleteExpense(userId, parsed.id);
   safeRevalidate("/money");
   return { success: true, deleted };
+}
+
+export async function updateExpenseAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = updateExpenseSchema.parse(rawInput);
+  const updated = await updateExpense(userId, parsed);
+  safeRevalidate("/money");
+  return { success: updated };
+}
+
+export async function updateCategoryAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = updateCategorySchema.parse(rawInput);
+  const previousName = await renameCustomCategory(userId, parsed.id, parsed.name);
+  safeRevalidate("/money");
+  return { success: previousName !== null, previousName };
+}
+
+export async function deleteCategoryAction(categoryId: string) {
+  const userId = await requireUser();
+  const parsed = deleteExpenseSchema.parse({ id: categoryId });
+  const deleted = await deleteCustomCategory(userId, parsed.id);
+  safeRevalidate("/money");
+  return { success: deleted };
 }
 
 export async function createCategoryAction(rawInput: unknown) {

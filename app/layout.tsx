@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // No zoom: iOS also zooms into focused inputs and leaves the page enlarged afterwards.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   colorScheme: "dark",
   themeColor: "#1b1e22",

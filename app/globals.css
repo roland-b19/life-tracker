@@ -10,7 +10,7 @@
   --text: #eaedf0;
   --secondary: #a1a9b2;
   --tint: #86b4ea;
-  --tint-hover: #9bc2ef;
+  --tint-hover: #8dbaec;
   --on-tint: #0b1b30;
   --tint-subtle: rgba(134, 180, 234, 0.14);
   --success: #8fd4a3;
@@ -27,7 +27,7 @@
   --dur: 420ms;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --pop: cubic-bezier(0.34, 1.45, 0.64, 1);
-  --press: 0.96;
+  --press: 0.92;
   color-scheme: dark;
 }
 
@@ -143,7 +143,7 @@ h3,
 .calendar-day-header,
 .gym-set-row input,
 .todo-title,
-.badge-streak,
+.streak,
 .badge-carried,
 .wishlist-price {
   font-variant-numeric: tabular-nums;
@@ -290,11 +290,13 @@ h3 {
   border: 1px solid var(--separator);
 }
 
-.signout-btn:hover {
-  color: var(--danger);
-  border-color: var(--danger-subtle);
-  background: var(--danger-subtle);
-  transform: none;
+@media (hover: hover) {
+  .signout-btn:hover {
+    color: var(--danger);
+    border-color: var(--danger-subtle);
+    background: var(--danger-subtle);
+    transform: none;
+  }
 }
 
 .nav-link {
@@ -317,9 +319,11 @@ h3 {
   flex: none;
 }
 
-.nav-link:hover {
-  background: var(--surface-secondary);
-  color: var(--text);
+@media (hover: hover) {
+  .nav-link:hover {
+    background: var(--surface-secondary);
+    color: var(--text);
+  }
 }
 
 .nav-link:active {
@@ -375,10 +379,6 @@ h3 {
 .tab-item svg {
   width: 1.4rem;
   height: 1.4rem;
-}
-
-.tab-item:active {
-  background: var(--surface-secondary);
 }
 
 .tab-item.active {
@@ -594,13 +594,6 @@ main {
   border: 1px solid rgba(143, 212, 163, 0.28);
 }
 
-.badge-streak {
-  background: rgba(235, 198, 115, 0.15);
-  color: #ebc673;
-  border: 1px solid rgba(235, 198, 115, 0.28);
-  font-weight: 800;
-}
-
 .badge-carried {
   background: rgba(168, 191, 224, 0.15);
   color: #a8bfe0;
@@ -645,9 +638,11 @@ main {
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-.split-day-card:hover {
-  border-color: var(--tint);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .split-day-card:hover {
+    border-color: var(--tint);
+    transform: translateY(-1px);
+  }
 }
 
 .split-day-card.today {
@@ -737,8 +732,10 @@ main {
   transition: transform var(--dur) var(--ease);
 }
 
-.macro-card:hover {
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .macro-card:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .macro-title {
@@ -797,6 +794,7 @@ main {
 
 .tap-buttons {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -871,8 +869,10 @@ main {
   }
 }
 
-.surface:hover {
-  border-color: var(--tint);
+@media (hover: hover) {
+  .surface:hover {
+    border-color: var(--tint);
+  }
 }
 
 .form-row {
@@ -947,9 +947,11 @@ button {
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
 
-button:hover:not(:disabled) {
-  background: var(--tint-hover);
-  box-shadow: none;
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    background: var(--tint-hover);
+    box-shadow: none;
+  }
 }
 
 button:active:not(:disabled) {
@@ -970,10 +972,12 @@ button.secondary {
   box-shadow: none;
 }
 
-button.secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+@media (hover: hover) {
+  button.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
 }
 
 button.danger {
@@ -983,8 +987,10 @@ button.danger {
   box-shadow: none;
 }
 
-button.danger:hover:not(:disabled) {
-  background: var(--danger-subtle);
+@media (hover: hover) {
+  button.danger:hover:not(:disabled) {
+    background: var(--danger-subtle);
+  }
 }
 
 button:focus-visible,
@@ -1065,9 +1071,11 @@ textarea:focus-visible {
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-.month-nav-btn:hover {
-  border-color: var(--tint);
-  color: var(--tint);
+@media (hover: hover) {
+  .month-nav-btn:hover {
+    border-color: var(--tint);
+    color: var(--tint);
+  }
 }
 
 .total-spent-display {
@@ -1161,9 +1169,11 @@ textarea:focus-visible {
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-.category-chip:hover:not(:disabled) {
-  background: var(--surface-secondary);
-  border-color: var(--tint);
+@media (hover: hover) {
+  .category-chip:hover:not(:disabled) {
+    background: var(--surface-secondary);
+    border-color: var(--tint);
+  }
 }
 
 .category-chip.add {
@@ -1257,13 +1267,15 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur) var(--pop);
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
-.delete-icon-btn:hover {
-  color: var(--danger);
-  background: var(--danger-subtle);
+@media (hover: hover) {
+  .delete-icon-btn:hover {
+    color: var(--danger);
+    background: var(--danger-subtle);
+  }
 }
 
 .delete-icon-btn:active {
@@ -1367,12 +1379,6 @@ textarea:focus-visible {
 .badge-carried {
   background: var(--warning-subtle);
   color: var(--warning);
-}
-
-.badge-streak {
-  background: rgba(239, 143, 143, 0.12);
-  color: #ef8f8f;
-  font-weight: 700;
 }
 
 .badge-reminder {
@@ -1526,9 +1532,11 @@ textarea:focus-visible {
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-.modal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--text);
+@media (hover: hover) {
+  .modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+  }
 }
 
 .modal-body {
@@ -1615,9 +1623,11 @@ textarea:focus-visible {
   transition: background var(--dur) var(--ease);
 }
 
-.command-item.selected,
-.command-item:hover {
-  background: var(--tint-subtle);
+@media (hover: hover) {
+  .command-item.selected,
+  .command-item:hover {
+    background: var(--tint-subtle);
+  }
 }
 
 .command-item-title {
@@ -1627,9 +1637,11 @@ textarea:focus-visible {
   display: block;
 }
 
-.command-item.selected .command-item-title,
-.command-item:hover .command-item-title {
-  color: var(--tint);
+@media (hover: hover) {
+  .command-item.selected .command-item-title,
+  .command-item:hover .command-item-title {
+    color: var(--tint);
+  }
 }
 
 .command-item-category {
@@ -1681,10 +1693,12 @@ textarea:focus-visible {
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-.command-trigger-btn:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+@media (hover: hover) {
+  .command-trigger-btn:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 /* ==========================================================================
@@ -1766,8 +1780,10 @@ textarea:focus-visible {
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-.toast-action-btn:hover {
-  background: rgba(134, 180, 234, 0.22);
+@media (hover: hover) {
+  .toast-action-btn:hover {
+    background: rgba(134, 180, 234, 0.22);
+  }
 }
 
 .toast-close-btn {
@@ -1785,39 +1801,15 @@ textarea:focus-visible {
   transition: color var(--dur) var(--ease);
 }
 
-.toast-close-btn:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .toast-close-btn:hover {
+    color: var(--text);
+  }
 }
 
 /* ==========================================================================
    Clean Action Buttons (No Shadows)
    ========================================================================== */
-
-.btn-open-modal {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  background: var(--tint);
-  color: var(--on-tint);
-  font-weight: 600;
-  font-size: 0.9375rem;
-  padding: 0.65rem 1.15rem;
-  border-radius: 0.85rem;
-  border: none;
-  cursor: pointer;
-  min-height: 44px;
-  white-space: nowrap;
-  box-shadow: none;
-  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-
-.btn-open-modal:hover {
-  background: var(--tint-hover);
-}
-
-.btn-open-modal:active {
-  transform: scale(var(--press));
-}
 
 /* Small secondary action used inside lists and card headers */
 button.btn-sm {
@@ -1830,8 +1822,10 @@ button.btn-sm {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-button.btn-sm:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
+@media (hover: hover) {
+  button.btn-sm:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+  }
 }
 
 button.btn-sm.tint {
@@ -1844,7 +1838,7 @@ button.btn-sm.tint {
 .segmented {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--n), 1fr);
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
   padding: 0.25rem;
   background: var(--surface-secondary);
   border: 1px solid var(--separator);
@@ -1871,6 +1865,7 @@ button.btn-sm.tint {
   padding: 0.3rem 0.85rem;
   font-size: 0.9375rem;
   font-weight: 600;
+  text-align: center;
   background: transparent;
   color: var(--secondary);
   border: 0;
@@ -1878,18 +1873,31 @@ button.btn-sm.tint {
   transition: color var(--dur) var(--ease);
 }
 
-.segmented button:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text);
+@media (hover: hover) {
+  .segmented button:hover:not(:disabled) {
+    background: transparent;
+    color: var(--text);
+  }
 }
 
 .segmented button:active:not(:disabled) {
   transform: none;
 }
 
-.segmented button.active,
-.segmented button.active:hover:not(:disabled) {
+/* Five or more tabs need the room on a phone */
+.segmented.dense button {
+  padding-inline: 0.1rem;
+  font-size: 0.8125rem;
+}
+
+.segmented button.active {
   color: var(--on-tint);
+}
+
+@media (hover: hover) {
+  .segmented button.active:hover:not(:disabled) {
+    color: var(--on-tint);
+  }
 }
 
 /* Shared row for a segmented control and a primary action */
@@ -1911,7 +1919,6 @@ main > .error {
 
 .toolbar .segmented {
   flex: 1;
-  max-width: 22rem;
 }
 
 /* ==========================================================================
@@ -2052,13 +2059,85 @@ main > .error {
   color: var(--tint);
 }
 
-.delete-icon-btn.edit:hover {
-  color: var(--tint);
-  background: var(--tint-subtle, var(--surface-secondary));
+@media (hover: hover) {
+  .delete-icon-btn.edit:hover {
+    color: var(--tint);
+    background: var(--tint-subtle, var(--surface-secondary));
+  }
 }
 
 .item-actions .btn-sm {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+/* Task rows: checkbox, title (wraps) with badges below, streak, edit, delete */
+.todo-list {
+  margin-top: 0.75rem;
+}
+
+.todo-row {
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.todo-row:last-child {
+  padding-bottom: 0;
+}
+
+.todo-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0.25rem;
+}
+
+.streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  color: var(--success);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.segmented + .empty-note {
+  padding-bottom: 0.5rem;
+}
+
+/* Title, optional counter and add button on one row */
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Shared modal footer: Cancel and the primary action share the width evenly */
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.form-actions button {
+  flex: 1;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* Expense rows: category, price right below, date last; edit and delete on the right */
+.expense-info {
+  min-width: 0;
+  gap: 0.1rem;
 }

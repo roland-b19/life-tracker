@@ -27,6 +27,7 @@ import {
   deleteTodo,
   getDailyTodos,
   toggleTodo,
+  updateTodo,
 } from "@/lib/todos";
 import {
   createTodoAction,
@@ -224,6 +225,10 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       currentDate: "2026-11-04",
     });
     expect(toggleByB).toBe(false);
+
+    // User B tries to edit
+    expect(await updateTodo(userB, { id: task.id, title: "Hijacked", reminderTime: null })).toBe(false);
+    expect(await updateTodo(userA, { id: task.id, title: "Renamed", reminderTime: "08:30" })).toBe(true);
 
     // User B tries to delete
     const deleteByB = await deleteTodo(userB, task.id);

@@ -8,6 +8,7 @@ import {
   pushSubscriptionSchema,
   TodoSpace,
   toggleTodoSchema,
+  updateTodoSchema,
 } from "@/lib/validations/todos";
 import {
   createTodo,
@@ -15,6 +16,7 @@ import {
   getDailyTodos,
   savePushSubscription,
   toggleTodo,
+  updateTodo,
 } from "@/lib/todos";
 
 function safeRevalidate(path: string) {
@@ -30,7 +32,6 @@ export async function createTodoAction(rawInput: unknown) {
   const parsed = createTodoSchema.parse(rawInput);
   const todo = await createTodo(userId, parsed);
   safeRevalidate("/todos");
-  safeRevalidate("/business");
   return { success: true, todo };
 }
 
@@ -39,8 +40,15 @@ export async function toggleTodoAction(rawInput: unknown) {
   const parsed = toggleTodoSchema.parse(rawInput);
   const updated = await toggleTodo(userId, parsed);
   safeRevalidate("/todos");
-  safeRevalidate("/business");
   return { success: true, updated };
+}
+
+export async function updateTodoAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = updateTodoSchema.parse(rawInput);
+  const updated = await updateTodo(userId, parsed);
+  safeRevalidate("/todos");
+  return { success: updated };
 }
 
 export async function deleteTodoAction(todoId: string) {
@@ -48,7 +56,6 @@ export async function deleteTodoAction(todoId: string) {
   const parsed = deleteTodoSchema.parse({ id: todoId });
   const deleted = await deleteTodo(userId, parsed.id);
   safeRevalidate("/todos");
-  safeRevalidate("/business");
   return { success: true, deleted };
 }
 

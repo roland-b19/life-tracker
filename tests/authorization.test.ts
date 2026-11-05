@@ -18,7 +18,7 @@ vi.mock("@/server/auth", () => ({
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import { GET, POST } from "@/../app/api/weight/route";
-import { DELETE } from "@/../app/api/weight/[id]/route";
+import { DELETE, PATCH } from "@/../app/api/weight/[id]/route";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { securityHeaders } from "@/../next.config";
@@ -114,6 +114,25 @@ describe("weight authorization", () => {
       params: Promise.resolve({ id: entry.id }),
     });
     expect(deleteResponse.status).toBe(404);
+
+    const patchResponse = await PATCH(
+      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 99 }),
+      { params: Promise.resolve({ id: entry.id }) },
+    );
+    expect(patchResponse.status).toBe(404);
+
+    authState.id = ownerId;
+    const ownerPatch = await PATCH(
+      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 79.5 }),
+      { params: Promise.resolve({ id: entry.id }) },
+    );
+    expect(ownerPatch.status).toBe(200);
+    authState.id = "";
+    const anonPatch = await PATCH(
+      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 70 }),
+      { params: Promise.resolve({ id: entry.id }) },
+    );
+    expect(anonPatch.status).toBe(401);
     authState.id = ownerId;
   });
 
