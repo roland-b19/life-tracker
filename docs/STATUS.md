@@ -128,6 +128,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-05 — Phone testing over Wi-Fi (Claude Code): Next.js 16 blocks dev resources from other hosts, so a phone on `http://<LAN-IP>:3000` never hydrated and could not sign in. `next.config.ts` now sets `allowedDevOrigins: ["192.168.*.*"]` (dev only). Also: running `npm run build` while `.next` is shared with `next dev` leaves a stale cache that makes the page reload in a loop; stop dev and delete `.next` after a build.
 - 2026-11-04 — Ember Design System (Claude Code):
   - Applied the user-validated artifact choices: palette Ember, SF Pro system stack, Apple spring motion, no visible scrollbars, dark only.
   - New navigation: translucent sidebar on desktop (1024 px and up); floating blurred tab bar on phones with four modules plus a More menu (Tasks, Wishlist, Business, user, Sign out).
