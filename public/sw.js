@@ -2,7 +2,9 @@
 // Caches only content-hashed static bundles (/_next/static/*) so the app opens fast.
 // HTML pages, server actions and /api/* are never cached: they hold personal data and must stay live.
 
-const CACHE = "life-tracker-v2";
+const CACHE = "life-tracker-v3";
+// Registered as /sw.js?dev by the dev server: Turbopack dev chunks keep their URL when their content changes.
+const DEV = new URL(self.location.href).searchParams.has("dev");
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -13,7 +15,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => DEV || k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -22,7 +24,7 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  if (request.method !== "GET" || !url.pathname.startsWith("/_next/static/")) return;
+  if (DEV || request.method !== "GET" || !url.pathname.startsWith("/_next/static/")) return;
 
   event.respondWith(
     caches.match(request).then(

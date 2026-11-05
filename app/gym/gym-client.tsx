@@ -4,14 +4,42 @@ import { formatDMY } from "@/lib/format-date";
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
 import { Modal } from "../components/modal";
+import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import {
   createCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   logSetAction,
+  saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+interface LibraryExercise {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  equipmentType: string;
+}
+
+/** Edit-form row: numbers stay strings so a cleared field is not silently 0. */
+interface DraftExercise {
+  exerciseId: string;
+  targetSets: string;
+  minReps: string;
+  maxReps: string;
+}
+
+interface DayDraft {
+  id: string;
+  dayOfWeek: number;
+  name: string;
+  isRest: boolean;
+  exercises: DraftExercise[];
+}
 
 interface ExerciseItem {
   id: string;
@@ -72,15 +100,7 @@ interface GymClientProps {
     days: SplitDay[];
   } | null;
   deload: DeloadInfo;
-  recentSessions: Array<{
-    id: string;
-    date: string;
-    durationMinutes: number | null;
-    isDeload: boolean;
-    notes: string | null;
-    splitDayName: string | null;
-    setCount: number;
-  }>;
+  exercises: LibraryExercise[];
 }
 
 function getTodayString() {
@@ -94,8 +114,12 @@ export function GymClient({
   userName,
   split,
   deload,
-  recentSessions,
+  exercises,
 }: GymClientProps) {
+  const { showToast } = useToast();
+  const setStatusMessage = (message: string) => {
+    if (message) showToast({ message });
+  };
   const todayDayOfWeek = new Date().getDay(); // 0 = Sun, 1 = Mon, ...
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
     const todayMatch = split?.days.find((d) => d.dayOfWeek === todayDayOfWeek);
@@ -106,7 +130,6 @@ export function GymClient({
   const [sessionNotes, setSessionNotes] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("60");
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue);
-  const [statusMessage, setStatusMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   // Per-exercise quick log input state
@@ -136,6 +159,79 @@ export function GymClient({
   >("barbell");
 
   const currentDay = split?.days.find((d) => d.id === selectedDayId);
+
+  // Routine editor
+  const [draft, setDraft] = useState<DayDraft | null>(null);
+  const [addId, setAddId] = useState("");
+  const nameOf = (id: string) => exercises.find((e) => e.id === id)?.name ?? "Exercise";
+  const addable = exercises.filter((e) => !draft?.exercises.some((d) => d.exerciseId === e.id));
+  const groups = [...new Set(addable.map((e) => e.muscleGroup))];
+
+  function openEditor(day: SplitDay) {
+    setDraft({
+      id: day.id,
+      dayOfWeek: day.dayOfWeek,
+      name: day.name,
+      isRest: day.isRest,
+      exercises: day.exercises.map((e) => ({
+        exerciseId: e.exerciseId,
+        targetSets: String(e.targetSets),
+        minReps: String(e.minReps),
+        maxReps: String(e.maxReps),
+      })),
+    });
+    setAddId("");
+  }
+
+  function patchRow(i: number, patch: Partial<DraftExercise>) {
+    setDraft((d) => d && { ...d, exercises: d.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
+  }
+
+  function moveRow(i: number, by: number) {
+    setDraft((d) => {
+      if (!d) return d;
+      const list = [...d.exercises];
+      [list[i], list[i + by]] = [list[i + by], list[i]];
+      return { ...d, exercises: list };
+    });
+  }
+
+  function addRow() {
+    const id = addId || addable[0]?.id;
+    if (!id) return;
+    setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId: id, targetSets: "2", minReps: "5", maxReps: "8" }] });
+    setAddId("");
+  }
+
+  async function handleSaveDay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft) return;
+    const rows = draft.exercises.map((x) => ({
+      exerciseId: x.exerciseId,
+      targetSets: Number(x.targetSets),
+      minReps: Number(x.minReps),
+      maxReps: Number(x.maxReps),
+    }));
+    const bad = rows.find((r) => r.minReps > r.maxReps);
+    if (bad) {
+      showToast({ message: `${nameOf(bad.exerciseId)}: min reps must not be above max reps.`, type: "warning" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
+      if (res.success) {
+        setDraft(null);
+        showToast({ message: "Routine saved.", type: "success" });
+      } else {
+        showToast({ message: "Could not save this day.", type: "warning" });
+      }
+    } catch {
+      showToast({ message: "Could not save this day.", type: "warning" });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleStartSession(day: SplitDay) {
     if (day.isRest) return;
@@ -318,22 +414,22 @@ export function GymClient({
         <div>
           <h2 id="deload-title" className="section-title">
             {deload.isDeloadDue
-              ? "Deload Week Due"
+              ? "Deload week due"
               : `Week ${deload.currentCycleWeek} of 5`}
           </h2>
-          <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+          <p className="muted card-sub">
             {deload.isDeloadDue
               ? "Deload sessions are excluded from PRs."
-              : `${5 - deload.currentCycleWeek} week(s) until deload.`}
+              : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`}
           </p>
         </div>
-        <label className="toggle-label" style={{ minWidth: "8.5rem" }}>
+        <label className="toggle-label">
           <input
             type="checkbox"
             checked={isDeloadMode}
             onChange={(e) => setIsDeloadMode(e.target.checked)}
           />
-          Deload Session
+          Deload session
         </label>
       </section>
 
@@ -355,11 +451,11 @@ export function GymClient({
               disabled={busy}
               onClick={handleFinishSession}
             >
-              Finish Workout
+              Finish workout
             </button>
           </div>
 
-          <div style={{ marginTop: "1rem" }}>
+          <div>
             {currentDay?.exercises.map((exercise) => {
               const exerciseSets = activeSession.sets.filter(
                 (s) => s.exerciseId === exercise.exerciseId,
@@ -383,10 +479,10 @@ export function GymClient({
                 <div key={exercise.id} className="workout-exercise-card">
                   <div className="exercise-header">
                     <div>
-                      <h3 style={{ margin: 0, fontSize: "1.15rem" }}>
+                      <h3 className="exercise-title">
                         {exercise.exerciseName}
                       </h3>
-                      <span className="muted" style={{ fontSize: "0.85rem" }}>
+                      <span className="muted exercise-meta">
                         Target: {exercise.targetSets} sets · {exercise.minReps}–
                         {exercise.maxReps} reps · 0 RIR failure
                       </span>
@@ -398,7 +494,7 @@ export function GymClient({
 
                   {/* Previous logged sets */}
                   {exerciseSets.length > 0 && (
-                    <div style={{ margin: "0.5rem 0" }}>
+                    <div className="set-list">
                       {exerciseSets.map((s) => (
                         <div key={s.id} className="set-row">
                           <span>
@@ -407,25 +503,19 @@ export function GymClient({
                             {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
                             {s.isPartial ? " (partials)" : ""}
                             {s.flagAnomaly && (
-                              <span
-                                className="badge badge-danger"
-                                style={{ marginLeft: "0.5rem" }}
-                              >
+                              <span className="badge badge-danger set-flag">
                                 !! {s.anomalyReason || "Anomaly"}
                               </span>
                             )}
                           </span>
                           <button
                             type="button"
-                            className="danger"
-                            style={{
-                              minHeight: "1.8rem",
-                              padding: "0.2rem 0.5rem",
-                              fontSize: "0.8rem",
-                            }}
+                            className="delete-icon-btn"
                             onClick={() => handleDeleteSet(s.id)}
+                            aria-label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`}
+                            title="Delete"
                           >
-                            Delete
+                            <TrashIcon size={17} />
                           </button>
                         </div>
                       ))}
@@ -456,15 +546,6 @@ export function GymClient({
                     <label>
                       Load Type
                       <select
-                        style={{
-                          minHeight: "2.75rem",
-                          borderRadius: "0.65rem",
-                          border: "1px solid var(--separator)",
-                          background: "var(--surface)",
-                          color: "var(--text)",
-                          padding: "0.5rem",
-                          font: "inherit",
-                        }}
                         value={currentState.loadType}
                         onChange={(e) =>
                           setInputStates((prev) => ({
@@ -508,7 +589,6 @@ export function GymClient({
                         step="0.25"
                         min="0"
                         value={currentState.extraKg}
-                        placeholder="+ kg"
                         onChange={(e) =>
                           setInputStates((prev) => ({
                             ...prev,
@@ -526,17 +606,12 @@ export function GymClient({
                       disabled={busy}
                       onClick={() => handleLogSet(exercise)}
                     >
-                      + Log Set
+                      <PlusIcon size={14} />
+                      Log set
                     </button>
                   </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "1.25rem",
-                      marginTop: "0.5rem",
-                    }}
-                  >
+                  <div className="toggle-row">
                     <label className="toggle-label">
                       <input
                         type="checkbox"
@@ -576,16 +651,8 @@ export function GymClient({
             })}
           </div>
 
-          <div
-            style={{
-              marginTop: "1.25rem",
-              borderTop: "1px solid var(--separator)",
-              paddingTop: "1rem",
-              display: "grid",
-              gap: "0.75rem",
-            }}
-          >
-            <div className="form-row" style={{ margin: 0 }}>
+          <div className="session-footer">
+            <div className="form-row">
               <label>
                 Duration (min)
                 <input
@@ -596,11 +663,10 @@ export function GymClient({
                   onChange={(e) => setDurationMinutes(e.target.value)}
                 />
               </label>
-              <label style={{ flex: "2 1 15rem" }}>
-                Session Notes
+              <label className="grow-2">
+                Session notes
                 <input
                   type="text"
-                  placeholder="How did the session feel?"
                   value={sessionNotes}
                   onChange={(e) => setSessionNotes(e.target.value)}
                 />
@@ -621,201 +687,298 @@ export function GymClient({
           <MuscleExplorer
             planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
           />
-        {/* Routine / Split Overview in Dashboard Grid */}
-        <div className="dashboard-grid">
-          {/* Left Column: Planned Routine Preview & Recent History */}
-          <div className="dashboard-main">
-            {/* Selected Day Exercise Preview */}
-            {currentDay && !currentDay.isRest ? (
-              <section className="surface" aria-labelledby="preview-title">
-                <div className="section-head">
-                  <h2 id="preview-title" className="section-title">
-                    {currentDay.name}
-                  </h2>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleStartSession(currentDay)}
-                    className="btn-sm"
-                  >
-                    Start
-                  </button>
-                </div>
-
-                <div className="entries" style={{ marginTop: "1rem" }}>
-                  {currentDay.exercises.map((ex, idx) => (
-                    <div key={ex.id} className="entry-row">
-                      <div>
-                        <strong>{idx + 1}. {ex.exerciseName}</strong>
-                        <span className="badge badge-rest" style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}>
-                          {ex.muscleGroup}
-                        </span>
-                      </div>
-                      <span className="muted" style={{ fontSize: "0.9rem" }}>
-                        {ex.targetSets} sets × {ex.minReps}–{ex.maxReps} reps ({ex.equipmentType})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <section className="surface">
-                <h2 className="section-title">Rest day</h2>
-              </section>
-            )}
-
-            {/* Recent Workout History */}
-            <section
-              className="surface"
-              aria-labelledby="recent-title"
-            >
-              <div className="section-head">
-                <h2 id="recent-title" className="section-title">Recent Workouts</h2>
-                <span className="muted number-tabular">{recentSessions.length}</span>
-              </div>
-              <div className="entries" style={{ marginTop: "0.75rem" }}>
-                {recentSessions.length === 0 && (
-                  <p className="empty-note">No workouts yet.</p>
-                )}
-                {recentSessions.map((s) => (
-                  <div key={s.id} className="entry-row">
+          <div className="dashboard-grid">
+            <div className="dashboard-main">
+              {currentDay && (
+                <section className="surface" aria-labelledby="preview-title">
+                  <div className="section-head">
                     <div>
-                      <strong>{s.splitDayName || "Workout"}</strong>
-                      <span className="muted" style={{ marginLeft: "0.5rem", fontSize: "0.85rem" }}>
-                        {formatDMY(s.date)}
-                      </span>
-                      {s.isDeload && (
-                        <span className="badge badge-warning" style={{ marginLeft: "0.4rem" }}>
-                          Deload
-                        </span>
-                      )}
-                      {s.notes && (
-                        <p style={{ margin: "0.15rem 0 0", fontSize: "0.85rem" }} className="muted">
-                          {s.notes}
-                        </p>
-                      )}
+                      <h2 id="preview-title" className="section-title">
+                        {currentDay.isRest ? "Rest day" : currentDay.name}
+                      </h2>
+                      <p className="muted card-sub">{DAY_NAMES[currentDay.dayOfWeek]}</p>
                     </div>
-                    <span className="entry-value">
-                      {s.setCount} sets {s.durationMinutes ? `· ${s.durationMinutes} min` : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          {/* Right Column: Split Days Selector & Custom Exercise CTA */}
-          <div className="dashboard-aside sticky">
-            <section className="surface" aria-labelledby="split-title">
-              <div className="section-head">
-                <h2 id="split-title" className="section-title">Training Days</h2>
-                <button
-                  type="button"
-                  className="secondary btn-sm"
-                  onClick={() => setShowCustomModal(true)}
-                >
-                  + Custom
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gap: "0.6rem" }}>
-                {split?.days.map((day) => {
-                  const isToday = day.dayOfWeek === todayDayOfWeek;
-                  const isSelected = day.id === selectedDayId;
-                  const dayNames = [
-                    "Sunday",
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                  ];
-
-                  return (
-                    <div
-                      key={day.id}
-                      className={`split-day-card ${isToday ? "today" : ""}`}
-                      style={{
-                        outline: isSelected ? "2px solid var(--tint)" : "none",
-                        padding: "0.85rem 1rem",
-                      }}
-                      onClick={() => setSelectedDayId(day.id)}
-                    >
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <strong style={{ fontSize: "0.95rem" }}>{dayNames[day.dayOfWeek]}</strong>
-                          {isToday && <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>Today</span>}
-                          {day.isRest ? (
-                            <span className="badge badge-rest" style={{ fontSize: "0.7rem" }}>Rest</span>
-                          ) : (
-                            <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>{day.exercises.length}</span>
-                          )}
-                        </div>
-                        <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem" }} className="muted">
-                          {day.name}
-                        </p>
-                      </div>
-
-                      {!day.isRest && (
+                    <div className="row-actions gap">
+                      <button type="button" className="secondary btn-sm" onClick={() => openEditor(currentDay)}>
+                        <PencilIcon size={14} />
+                        Edit
+                      </button>
+                      {!currentDay.isRest && (
                         <button
                           type="button"
-                          disabled={busy}
                           className="btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDayId(day.id);
-                            void handleStartSession(day);
-                          }}
+                          disabled={busy || currentDay.exercises.length === 0}
+                          onClick={() => void handleStartSession(currentDay)}
                         >
                           Start
                         </button>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </section>
+                  </div>
+
+                  {!currentDay.isRest &&
+                    (currentDay.exercises.length > 0 ? (
+                      <div className="entries">
+                        {currentDay.exercises.map((ex, idx) => (
+                          <div key={ex.id} className="entry-row">
+                            <div className="entry-main">
+                              <strong>
+                                {idx + 1}. {ex.exerciseName}
+                              </strong>
+                              <span className="badge badge-rest">{ex.muscleGroup}</span>
+                            </div>
+                            <span className="muted number-tabular entry-side">
+                              {ex.targetSets} × {ex.minReps}–{ex.maxReps}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-note">No exercises yet. Use Edit to add some.</p>
+                    ))}
+                </section>
+              )}
+            </div>
+
+            <div className="dashboard-aside">
+              <section className="surface" aria-labelledby="split-title">
+                <div className="section-head">
+                  <h2 id="split-title" className="section-title">
+                    Training days
+                  </h2>
+                  <button type="button" className="secondary btn-sm" onClick={() => setShowCustomModal(true)}>
+                    <PlusIcon size={14} />
+                    Custom exercise
+                  </button>
+                </div>
+
+                <div className="split-day-list">
+                  {split?.days.map((day) => {
+                    const isToday = day.dayOfWeek === todayDayOfWeek;
+                    const isSelected = day.id === selectedDayId;
+                    return (
+                      <div
+                        key={day.id}
+                        className={`split-day-card${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          className="split-day-select"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelectedDayId(day.id)}
+                        >
+                          <span className="split-day-title">
+                            <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
+                            {isToday && <span className="badge badge-info">Today</span>}
+                            {day.isRest ? (
+                              <span className="badge badge-rest">Rest</span>
+                            ) : (
+                              <span className="badge badge-info number-tabular">{day.exercises.length}</span>
+                            )}
+                          </span>
+                          <span className="muted split-day-sub">{day.name}</span>
+                        </button>
+                        {!day.isRest && day.exercises.length > 0 && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn-sm"
+                            onClick={() => {
+                              setSelectedDayId(day.id);
+                              void handleStartSession(day);
+                            }}
+                          >
+                            Start
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
         </>
       )}
 
-      {/* Status banner */}
-      {statusMessage && (
-        <p className="error" style={{ color: "var(--tint)", marginTop: "1rem" }}>
-          {statusMessage}
-        </p>
-      )}
+      <Modal
+        isOpen={draft !== null}
+        onClose={() => setDraft(null)}
+        title={draft ? `Edit ${DAY_NAMES[draft.dayOfWeek]}` : "Edit day"}
+      >
+        {draft && (
+          <form onSubmit={handleSaveDay}>
+            <div className="form-stack">
+              <label>
+                Name
+                <input
+                  type="text"
+                  required
+                  maxLength={100}
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                />
+              </label>
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={draft.isRest}
+                  onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })}
+                />
+                Rest day
+              </label>
+
+              {!draft.isRest && (
+                <>
+                  <div className="routine-list">
+                    {draft.exercises.length === 0 && <p className="empty-note">No exercises yet.</p>}
+                    {draft.exercises.map((row, i) => {
+                      const name = nameOf(row.exerciseId);
+                      return (
+                        <div key={row.exerciseId} className="routine-row">
+                          <div className="routine-row-head">
+                            <strong>
+                              {i + 1}. {name}
+                            </strong>
+                            <div className="row-actions">
+                              <button
+                                type="button"
+                                className="delete-icon-btn edit"
+                                disabled={i === 0}
+                                onClick={() => moveRow(i, -1)}
+                                aria-label={`Move ${name} up`}
+                                title="Move up"
+                              >
+                                <span aria-hidden="true">↑</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-icon-btn edit"
+                                disabled={i === draft.exercises.length - 1}
+                                onClick={() => moveRow(i, 1)}
+                                aria-label={`Move ${name} down`}
+                                title="Move down"
+                              >
+                                <span aria-hidden="true">↓</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-icon-btn"
+                                onClick={() =>
+                                  setDraft({ ...draft, exercises: draft.exercises.filter((_, j) => j !== i) })
+                                }
+                                aria-label={`Remove ${name}`}
+                                title="Remove"
+                              >
+                                <TrashIcon size={17} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="routine-fields">
+                            <label>
+                              Sets
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={10}
+                                required
+                                className="number-tabular"
+                                value={row.targetSets}
+                                onChange={(e) => patchRow(i, { targetSets: e.target.value })}
+                              />
+                            </label>
+                            <label>
+                              Min reps
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={100}
+                                required
+                                className="number-tabular"
+                                value={row.minReps}
+                                onChange={(e) => patchRow(i, { minReps: e.target.value })}
+                              />
+                            </label>
+                            <label>
+                              Max reps
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={100}
+                                required
+                                className="number-tabular"
+                                value={row.maxReps}
+                                onChange={(e) => patchRow(i, { maxReps: e.target.value })}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {addable.length > 0 && draft.exercises.length < 20 && (
+                    <div className="routine-add">
+                      <label>
+                        Add exercise
+                        <select value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
+                          {groups.map((g) => (
+                            <optgroup key={g} label={g[0].toUpperCase() + g.slice(1)}>
+                              {addable
+                                .filter((e) => e.muscleGroup === g)
+                                .map((e) => (
+                                  <option key={e.id} value={e.id}>
+                                    {e.name}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="button" className="secondary" onClick={addRow}>
+                        <PlusIcon size={14} />
+                        Add
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="form-actions">
+              <button type="button" className="secondary" onClick={() => setDraft(null)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={busy || !draft.name.trim()}>
+                Save
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Modal: Custom Exercise with Heavy Blurred Background */}
       <Modal
         isOpen={showCustomModal}
         onClose={() => setShowCustomModal(false)}
-        title="Create Custom Exercise"
+        title="New custom exercise"
       >
-        <div style={{ display: "grid", gap: "0.85rem" }}>
+        <div className="form-stack">
           <label>
-            Exercise Name
+            Name
             <input
               type="text"
-              placeholder="e.g. Incline Smith Machine Press"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
             />
           </label>
 
           <label>
-            Muscle Group
+            Muscle group
             <select
-              style={{
-                minHeight: "2.75rem",
-                borderRadius: "0.65rem",
-                border: "1px solid var(--separator)",
-                background: "var(--surface)",
-                color: "var(--text)",
-                padding: "0.5rem",
-              }}
               value={customMuscle}
               onChange={(e) =>
                 setCustomMuscle(
@@ -837,14 +1000,6 @@ export function GymClient({
           <label>
             Equipment
             <select
-              style={{
-                minHeight: "2.75rem",
-                borderRadius: "0.65rem",
-                border: "1px solid var(--separator)",
-                background: "var(--surface)",
-                color: "var(--text)",
-                padding: "0.5rem",
-              }}
               value={customEquipment}
               onChange={(e) =>
                 setCustomEquipment(
@@ -859,25 +1014,14 @@ export function GymClient({
               <option value="bodyweight">Bodyweight</option>
             </select>
           </label>
-
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowCustomModal(false)}
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              style={{ flex: 2 }}
-              disabled={busy || !customName.trim()}
-              onClick={handleCreateCustomExercise}
-            >
-              Save Exercise
-            </button>
-          </div>
+        </div>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => setShowCustomModal(false)}>
+            Cancel
+          </button>
+          <button type="button" disabled={busy || !customName.trim()} onClick={handleCreateCustomExercise}>
+            Save
+          </button>
         </div>
       </Modal>
     </main>

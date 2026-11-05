@@ -7,6 +7,7 @@ import {
   createSessionSchema,
   finishSessionSchema,
   logSetSchema,
+  saveSplitDaySchema,
 } from "@/lib/validations/gym";
 import {
   createCustomExercise,
@@ -15,6 +16,7 @@ import {
   finishWorkoutSession,
   getExerciseContext,
   logWorkoutSet,
+  saveSplitDay,
 } from "@/lib/gym";
 
 function safeRevalidate(path: string) {
@@ -57,6 +59,14 @@ export async function deleteSetAction(setId: string) {
   const deleted = await deleteWorkoutSet(userId, setId);
   safeRevalidate("/gym");
   return { success: true, deleted };
+}
+
+export async function saveSplitDayAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = saveSplitDaySchema.parse(rawInput);
+  const saved = await saveSplitDay(userId, parsed);
+  if (saved) safeRevalidate("/gym");
+  return { success: saved };
 }
 
 export async function createCustomExerciseAction(rawInput: unknown) {

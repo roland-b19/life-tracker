@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -13,6 +13,7 @@ import {
   CreateSessionInput,
   FinishSessionInput,
   LogSetInput,
+  SaveSplitDayInput,
 } from "./validations/gym";
 import { ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
 
@@ -127,6 +128,46 @@ export async function getUserSplitWithDays(userId: string) {
     ...split,
     days: daysWithExercises,
   };
+}
+
+/**
+ * Replace one day of the user's routine (name, rest flag, ordered exercises).
+ * Returns false when the day is not the user's or an exercise is not visible to the user.
+ */
+export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Promise<boolean> {
+  const list = input.isRest ? [] : input.exercises;
+  return db.transaction(async (tx) => {
+    const [day] = await tx
+      .select({ id: workoutSplitDays.id })
+      .from(workoutSplitDays)
+      .where(and(eq(workoutSplitDays.id, input.id), eq(workoutSplitDays.userId, userId)));
+    if (!day) return false;
+
+    if (list.length) {
+      const visible = await tx
+        .select({ id: exercises.id })
+        .from(exercises)
+        .where(
+          and(
+            inArray(exercises.id, list.map((e) => e.exerciseId)),
+            or(isNull(exercises.userId), eq(exercises.userId, userId)),
+          ),
+        );
+      if (visible.length !== list.length) return false;
+    }
+
+    await tx
+      .update(workoutSplitDays)
+      .set({ name: input.name, isRest: input.isRest })
+      .where(eq(workoutSplitDays.id, day.id));
+    await tx.delete(workoutSplitDayExercises).where(eq(workoutSplitDayExercises.splitDayId, day.id));
+    if (list.length) {
+      await tx.insert(workoutSplitDayExercises).values(
+        list.map((e, i) => ({ splitDayId: day.id, orderIndex: i, ...e })),
+      );
+    }
+    return true;
+  });
 }
 
 /**
@@ -434,27 +475,4 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
     isDeloadDue,
     lastDeloadDate,
   };
-}
-
-/**
- * List recent user workout sessions
- */
-export async function getRecentWorkoutSessions(userId: string, limit = 15) {
-  return db
-    .select({
-      id: workoutSessions.id,
-      date: workoutSessions.date,
-      durationMinutes: workoutSessions.durationMinutes,
-      isDeload: workoutSessions.isDeload,
-      notes: workoutSessions.notes,
-      splitDayName: workoutSplitDays.name,
-      setCount: sql<number>`count(${workoutSets.id})::int`,
-    })
-    .from(workoutSessions)
-    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
-    .leftJoin(workoutSets, eq(workoutSessions.id, workoutSets.sessionId))
-    .where(eq(workoutSessions.userId, userId))
-    .groupBy(workoutSessions.id, workoutSplitDays.name)
-    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt))
-    .limit(limit);
 }

@@ -7,7 +7,10 @@ import { ToastProvider } from "./components/toast";
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // In dev, chunk URLs are not content-hashed, so the worker must not cache them (stale-module errors).
+      navigator.serviceWorker
+        .register(process.env.NODE_ENV === "development" ? "/sw.js?dev" : "/sw.js")
+        .catch(() => {});
     }
     // iOS Safari ignores user-scalable=no, so block the pinch gesture directly.
     const blockPinch = (e: Event) => e.preventDefault();

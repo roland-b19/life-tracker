@@ -38,6 +38,7 @@ import {
   finishSessionAction,
   getExerciseContextAction,
   logSetAction,
+  saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
 
@@ -101,6 +102,94 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     const userBExercises = await getExercises(userB);
     expect(userBExercises.some((e) => e.name === "B-Stance Hip Thrust")).toBe(false);
+  });
+
+  describe("saveSplitDayAction (edit routine)", () => {
+    async function firstTrainingDay(userId: string) {
+      const split = await getUserSplitWithDays(userId);
+      return split!.days.find((d) => d.exercises.length > 1)!;
+    }
+
+    it("lets the owner rename, reorder and retarget a day", async () => {
+      const day = await firstTrainingDay(userA);
+      const [first, second] = day.exercises;
+      const res = await saveSplitDayAction({
+        id: day.id,
+        name: "Push",
+        isRest: false,
+        exercises: [
+          { exerciseId: second.exerciseId, targetSets: 3, minReps: 6, maxReps: 10 },
+          { exerciseId: first.exerciseId, targetSets: 2, minReps: 5, maxReps: 8 },
+        ],
+      });
+      expect(res.success).toBe(true);
+
+      const after = (await getUserSplitWithDays(userA))!.days.find((d) => d.id === day.id)!;
+      expect(after.name).toBe("Push");
+      expect(after.exercises.map((e) => e.exerciseId)).toEqual([second.exerciseId, first.exerciseId]);
+      expect(after.exercises[0]).toMatchObject({ targetSets: 3, minReps: 6, maxReps: 10 });
+    });
+
+    it("denies another user and leaves the day unchanged", async () => {
+      const day = await firstTrainingDay(userA);
+      authState.id = userB;
+      const res = await saveSplitDayAction({ id: day.id, name: "Hacked", isRest: true, exercises: [] });
+      expect(res.success).toBe(false);
+
+      const after = (await getUserSplitWithDays(userA))!.days.find((d) => d.id === day.id)!;
+      expect(after.name).toBe(day.name);
+      expect(after.exercises).toHaveLength(day.exercises.length);
+    });
+
+    it("rejects anonymous requests", async () => {
+      const day = await firstTrainingDay(userA);
+      authState.id = "";
+      await expect(
+        saveSplitDayAction({ id: day.id, name: "X", isRest: true, exercises: [] }),
+      ).rejects.toThrow("Authentication required.");
+    });
+
+    it("rejects another user's custom exercise", async () => {
+      const foreign = await createCustomExercise(userB, {
+        name: "B only",
+        muscleGroup: "arms",
+        equipmentType: "cable",
+      });
+      const day = await firstTrainingDay(userA);
+      const res = await saveSplitDayAction({
+        id: day.id,
+        name: day.name,
+        isRest: false,
+        exercises: [{ exerciseId: foreign.id, targetSets: 2, minReps: 5, maxReps: 8 }],
+      });
+      expect(res.success).toBe(false);
+      const after = (await getUserSplitWithDays(userA))!.days.find((d) => d.id === day.id)!;
+      expect(after.exercises).toHaveLength(day.exercises.length);
+    });
+
+    it("rejects min reps above max reps and duplicates", async () => {
+      const day = await firstTrainingDay(userA);
+      const ex = day.exercises[0].exerciseId;
+      await expect(
+        saveSplitDayAction({
+          id: day.id,
+          name: day.name,
+          isRest: false,
+          exercises: [{ exerciseId: ex, targetSets: 2, minReps: 9, maxReps: 8 }],
+        }),
+      ).rejects.toThrow();
+      await expect(
+        saveSplitDayAction({
+          id: day.id,
+          name: day.name,
+          isRest: false,
+          exercises: [
+            { exerciseId: ex, targetSets: 2, minReps: 5, maxReps: 8 },
+            { exerciseId: ex, targetSets: 2, minReps: 5, maxReps: 8 },
+          ],
+        }),
+      ).rejects.toThrow();
+    });
   });
 
   it("automatically flags '!!' anomaly when reps < minTargetReps", async () => {

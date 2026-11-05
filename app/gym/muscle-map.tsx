@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
+import { InfoIcon } from "../components/icons";
 import {
   GROUP_COLOR,
   GROUP_LABEL,
@@ -230,12 +231,25 @@ function MuscleMap({
           </button>
         </div>
       )}
+      {/* CC BY-SA requires attribution; kept as a small info disclosure */}
+      <details className="muscle-credit">
+        <summary aria-label="Model credits">
+          <InfoIcon size={16} />
+        </summary>
+        <p>
+          BodyParts3D, © The Database Center for Life Science, CC BY-SA 2.1 JP, via{" "}
+          <a href="https://github.com/organui/muscles-3d" target="_blank" rel="noopener noreferrer">
+            organui/muscles-3d
+          </a>
+        </p>
+      </details>
     </div>
   );
 }
 
 export interface PlannedExercise {
   id: string;
+  exerciseId: string;
   exerciseName: string;
   muscleGroup: string;
   equipmentType: string;
@@ -252,9 +266,14 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
     planned
       .filter((e) => e.muscleGroup === g)
       .reduce((n, e) => n + e.targetSets, 0);
-  const list = selected
-    ? planned.filter((e) => e.muscleGroup === selected)
-    : [];
+  // One row per exercise even when it is on several days of the split.
+  const list: (PlannedExercise & { days: string[] })[] = [];
+  for (const e of planned) {
+    if (e.muscleGroup !== selected) continue;
+    const row = list.find((r) => r.exerciseId === e.exerciseId);
+    if (row) row.days.push(e.dayName);
+    else list.push({ ...e, days: [e.dayName] });
+  }
 
   return (
     <section className="surface muscle-card" aria-labelledby="muscle-title">
@@ -262,15 +281,17 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
         <h2 id="muscle-title" className="section-title">
           Muscle map
         </h2>
-        {selected && (
-          <button
-            type="button"
-            className="secondary btn-sm"
-            onClick={() => setSelected(null)}
-          >
-            Show all
-          </button>
-        )}
+        {/* Always rendered so the card never shifts when it appears */}
+        <button
+          type="button"
+          className="secondary btn-sm"
+          onClick={() => setSelected(null)}
+          style={{ visibility: selected ? "visible" : "hidden" }}
+          aria-hidden={!selected}
+          tabIndex={selected ? 0 : -1}
+        >
+          Show all
+        </button>
       </div>
 
       <div className="muscle-layout">
@@ -307,10 +328,10 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
                 </p>
               )}
               {list.map((e) => (
-                <div key={e.id} className="entry-row">
+                <div key={e.exerciseId} className="entry-row">
                   <div>
                     <strong>{e.exerciseName}</strong>
-                    <span className="muted muscle-day">{e.dayName}</span>
+                    <span className="muted muscle-day">{e.days.join(", ")}</span>
                   </div>
                   <span className="muted number-tabular">
                     {e.targetSets} × {e.minReps}–{e.maxReps}
@@ -333,18 +354,6 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
         </div>
       </div>
 
-      <p className="muscle-credit">
-        3D model: BodyParts3D, © The Database Center for Life Science, CC BY-SA
-        2.1 JP, via{" "}
-        <a
-          href="https://github.com/organui/muscles-3d"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          organui/muscles-3d
-        </a>
-        . Left and right sides are shown together.
-      </p>
     </section>
   );
 }

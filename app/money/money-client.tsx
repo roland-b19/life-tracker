@@ -2,9 +2,11 @@
 
 import { useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
-import { BarChart } from "../components/charts";
+import { BarChart, DonutChart } from "../components/charts";
+import { AnimatedNumber } from "../components/animated-number";
+import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
   createCategoryAction,
@@ -44,6 +46,11 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+type View = "expenses" | "categories";
+type Metric = "amount" | "count";
+// Seven slices stay legible; the rest fold into "Other".
+const MAX_SLICES = 7;
+
 function getTodayString() {
   const d = new Date();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -69,6 +76,9 @@ export function MoneyClient({
   const [summary, setSummary] = useState(initialSummary);
   const [expenses, setExpenses] = useState(initialExpenses);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [view, setView] = useState<View>("expenses");
+  const [metric, setMetric] = useState<Metric>("amount");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const requestId = useRef(0);
 
@@ -108,6 +118,7 @@ export function MoneyClient({
     const d = new Date(year, month - 1 + delta, 1);
     setYear(d.getFullYear());
     setMonth(d.getMonth() + 1);
+    setSelectedDay(null);
     void refreshMonthData(d.getFullYear(), d.getMonth() + 1);
   };
 
@@ -310,21 +321,76 @@ export function MoneyClient({
     }
   };
 
+  const fmt = (n: number) =>
+    n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   // Spending per day of the shown month; the list the page loaded is already limited to this month.
+  const todayIso = getTodayString();
+  const isCurrentMonth = todayIso.startsWith(`${year}-${String(month).padStart(2, "0")}`);
   const daysInMonth = new Date(year, month, 0).getDate();
   const perDay = Array.from({ length: daysInMonth }, (_, i) => {
     const iso = `${year}-${String(month).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
-    return { day: i + 1, iso, total: expenses.filter((e) => e.date === iso).reduce((n, e) => n + Number(e.amount), 0) };
+    const items = expenses.filter((e) => e.date.slice(0, 10) === iso);
+    return { day: i + 1, iso, count: items.length, total: items.reduce((n, e) => n + Number(e.amount), 0) };
   });
-  const maxDay = Math.max(...perDay.map((d) => d.total), 1);
+  const value = (d: (typeof perDay)[number]) => (metric === "amount" ? d.total : d.count);
+  const maxValue = Math.max(...perDay.map(value), 1);
+  const biggest = Math.max(...perDay.map((d) => d.total), 0);
   const activeDays = perDay.filter((d) => d.total > 0).length;
+  // The current month is averaged over the days so far, not the whole month.
+  const elapsed = isCurrentMonth ? Number(todayIso.slice(8, 10)) : daysInMonth;
+  const dailyAvg = summary.totalSpent / elapsed;
 
-  const fmt = (n: number) =>
-    n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const shownExpenses = selectedDay ? expenses.filter((e) => e.date.slice(0, 10) === selectedDay) : expenses;
+  const slices = summary.categories
+    .slice(0, MAX_SLICES)
+    .map((c) => ({ label: c.category, value: c.total, display: fmt(c.total) }));
+  const rest = summary.categories.slice(MAX_SLICES).reduce((n, c) => n + c.total, 0);
+  if (rest > 0) slices.push({ label: "Other", value: rest, display: fmt(rest) });
 
   return (
     <main>
       <Navigation userName={userName} />
+
+      <div className="toolbar dash">
+        <div className="toolbar-group">
+          <Segmented
+            label="Show"
+            value={view}
+            options={[
+              { value: "expenses", label: "Expenses" },
+              { value: "categories", label: "Categories" },
+            ]}
+            onChange={setView}
+          />
+        </div>
+        <div className="month-selector" role="group" aria-label="Month">
+          <button type="button" className="month-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month">
+            ‹
+          </button>
+          <button
+            type="button"
+            className="month-label-btn"
+            onClick={() => {
+              const now = new Date();
+              shiftMonth((now.getFullYear() - year) * 12 + now.getMonth() + 1 - month);
+            }}
+            disabled={isCurrentMonth}
+            title={isCurrentMonth ? undefined : "Back to this month"}
+          >
+            {MONTH_NAMES[month - 1]} {year}
+          </button>
+          <button
+            type="button"
+            className="month-nav-btn"
+            onClick={() => shiftMonth(1)}
+            disabled={isCurrentMonth}
+            aria-label="Next month"
+          >
+            ›
+          </button>
+        </div>
+      </div>
 
       {errorMsg && (
         <div className="error" role="alert">
@@ -334,160 +400,185 @@ export function MoneyClient({
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="money-hero-card" aria-label="Monthly Overview">
-            <div className="month-selector">
-              <button type="button" className="month-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous Month">
-                ‹
-              </button>
-              <span className="month-label">
-                {MONTH_NAMES[month - 1]} {year}
-              </span>
-              <button type="button" className="month-nav-btn" onClick={() => shiftMonth(1)} aria-label="Next Month">
-                ›
-              </button>
-            </div>
-
-            <div className="total-row">
-              <div className="total-spent-display">
-                <span className="total-spent-amount number-tabular">{fmt(summary.totalSpent)}</span>
-                <span className="total-spent-currency">RON</span>
+          {view === "expenses" ? (
+            <section className="surface" aria-labelledby="expenses-title">
+              <div className="section-head">
+                <h2 id="expenses-title" className="section-title">
+                  Expenses
+                </h2>
+                <button type="button" className="btn-sm tint" onClick={() => openExpenseForm()}>
+                  <PlusIcon size={14} />
+                  Add expense
+                </button>
               </div>
+
+              {selectedDay && (
+                <button type="button" className="filter-chip" onClick={() => setSelectedDay(null)}>
+                  {formatDMY(selectedDay)}
+                  <CloseIcon size={12} />
+                  <span className="visually-hidden">Show the whole month</span>
+                </button>
+              )}
+
+              {shownExpenses.length > 0 ? (
+                <div>
+                  {shownExpenses.map((exp) => (
+                    <div key={exp.id} className="expense-row">
+                      <div className="expense-info">
+                        <span className="expense-cat-title">{exp.category}</span>
+                        <span className="expense-value-text number-tabular">{fmt(exp.amount)} RON</span>
+                        <span className="expense-meta">{formatDMY(exp.date)}</span>
+                      </div>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="delete-icon-btn edit"
+                          onClick={() => openExpenseForm(exp)}
+                          aria-label={`Edit ${exp.category} expense of ${exp.amount} RON`}
+                          title="Edit"
+                        >
+                          <PencilIcon size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="delete-icon-btn"
+                          onClick={() => handleDeleteExpense(exp)}
+                          aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
+                          title="Delete"
+                        >
+                          <TrashIcon size={17} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-note">{selectedDay ? "No expenses on this day." : "No expenses this month."}</p>
+              )}
+            </section>
+          ) : (
+            <section className="surface" aria-labelledby="categories-title">
+              <div className="section-head">
+                <h2 id="categories-title" className="section-title">
+                  Categories
+                </h2>
+                <button type="button" className="btn-sm tint" onClick={() => openCatForm()}>
+                  <PlusIcon size={14} />
+                  Add category
+                </button>
+              </div>
+              <div>
+                {categories.map((c) => (
+                  <div key={c.id} className="expense-row">
+                    <span className="expense-cat-title">{c.name}</span>
+                    {c.userId && (
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="delete-icon-btn edit"
+                          onClick={() => openCatForm(c)}
+                          aria-label={`Edit category ${c.name}`}
+                          title="Edit"
+                        >
+                          <PencilIcon size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="delete-icon-btn"
+                          onClick={() => handleDeleteCategory(c)}
+                          aria-label={`Delete category ${c.name}`}
+                          title="Delete"
+                        >
+                          <TrashIcon size={17} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="dashboard-aside">
+          <section className="surface" aria-labelledby="overview-title">
+            <div className="section-head">
+              <h2 id="overview-title" className="section-title">
+                Spending by category
+              </h2>
               <span className="muted number-tabular">
                 {summary.expenseCount} {summary.expenseCount === 1 ? "transaction" : "transactions"}
               </span>
             </div>
-
-            {summary.categories.length > 0 ? (
-              <div className="category-breakdown-list">
-                {summary.categories.map((cat) => (
-                  <div key={cat.category} className="breakdown-row">
-                    <div className="breakdown-header">
-                      <span className="breakdown-cat-name">
-                        {cat.category}{" "}
-                        <span style={{ color: "var(--secondary)", fontSize: "0.8rem" }}>({cat.percentage}%)</span>
-                      </span>
-                      <span className="breakdown-cat-val number-tabular">{fmt(cat.total)} RON</span>
-                    </div>
-                    <div className="progress-track" aria-hidden="true">
-                      <div className="progress-fill" style={{ width: `${Math.min(100, cat.percentage)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {slices.length > 0 ? (
+              <DonutChart
+                key={`${year}-${month}`}
+                slices={slices}
+                center={<AnimatedNumber value={summary.totalSpent} format={fmt} />}
+                centerLabel="RON spent"
+                summary={`${fmt(summary.totalSpent)} RON spent in ${MONTH_NAMES[month - 1]}: ${slices
+                  .map((x) => `${x.label} ${x.display}`)
+                  .join(", ")}`}
+              />
             ) : (
               <p className="empty-note">No expenses this month.</p>
             )}
           </section>
 
-          <section className="quick-expense-card" aria-labelledby="expenses-title">
-            <div className="section-head">
-              <h2 id="expenses-title" className="section-title">
-                Expenses
-              </h2>
-              <button type="button" className="btn-sm tint" onClick={() => openExpenseForm()}>
-                <PlusIcon size={14} />
-                Add expense
-              </button>
-            </div>
-
-            {expenses.length > 0 ? (
-              <div>
-                {expenses.map((exp) => (
-                  <div key={exp.id} className="expense-row">
-                    <div className="expense-info">
-                      <span className="expense-cat-title">{exp.category}</span>
-                      <span className="expense-value-text number-tabular">{fmt(exp.amount)} RON</span>
-                      <span className="expense-meta">{formatDMY(exp.date)}</span>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="delete-icon-btn edit"
-                        onClick={() => openExpenseForm(exp)}
-                        aria-label={`Edit ${exp.category} expense of ${exp.amount} RON`}
-                        title="Edit"
-                      >
-                        <PencilIcon size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleDeleteExpense(exp)}
-                        aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-note">No expenses this month.</p>
-            )}
-          </section>
-        </div>
-
-        <div className="dashboard-aside">
           <section className="surface" aria-labelledby="perday-title">
             <div className="section-head">
               <h2 id="perday-title" className="section-title">
                 Spending by day
               </h2>
-              <span className="muted number-tabular">{activeDays} active {activeDays === 1 ? "day" : "days"}</span>
+            </div>
+            <div className="chart-controls">
+              <Segmented
+                label="Bar height"
+                value={metric}
+                options={[
+                  { value: "amount", label: "Amount" },
+                  { value: "count", label: "Count" },
+                ]}
+                onChange={setMetric}
+              />
+            </div>
+            <div className="stat-row">
+              <div className="stat-tile">
+                <strong className="number-tabular">
+                  <AnimatedNumber value={dailyAvg} format={fmt} />
+                </strong>
+                <span>Daily average</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">
+                  <AnimatedNumber value={biggest} format={fmt} />
+                </strong>
+                <span>Biggest day</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">
+                  <AnimatedNumber value={activeDays} />
+                </strong>
+                <span>Active days</span>
+              </div>
             </div>
             <BarChart
-              max={maxDay}
+              key={`${year}-${month}-${metric}`}
+              max={maxValue}
               data={perDay.map((d) => ({
                 label: d.day % 5 === 1 ? String(d.day) : "",
-                value: d.total,
+                value: value(d),
                 empty: d.total === 0,
-                highlight: d.total === maxDay && d.total > 0,
-                title: `${formatDMY(d.iso)}: ${fmt(d.total)} RON`,
+                highlight: d.iso === selectedDay,
+                title: `${formatDMY(d.iso)}: ${fmt(d.total)} RON, ${d.count} ${d.count === 1 ? "expense" : "expenses"}`,
               }))}
-              summary={`Daily spending in ${MONTH_NAMES[month - 1]}, highest day ${fmt(maxDay)} RON`}
+              summary={`Daily spending in ${MONTH_NAMES[month - 1]}, biggest day ${fmt(biggest)} RON. Choose a day to list its expenses.`}
+              onSelect={(i) => {
+                const iso = perDay[i].iso;
+                setView("expenses");
+                setSelectedDay((cur) => (cur === iso ? null : iso));
+              }}
             />
-          </section>
-
-          <section className="surface" aria-labelledby="categories-title">
-            <div className="section-head">
-              <h2 id="categories-title" className="section-title">
-                Categories
-              </h2>
-              <button type="button" className="btn-sm tint" onClick={() => openCatForm()}>
-                <PlusIcon size={14} />
-                Add category
-              </button>
-            </div>
-            <div>
-              {categories.map((c) => (
-                <div key={c.id} className="expense-row">
-                  <span className="expense-cat-title">{c.name}</span>
-                  {c.userId && (
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="delete-icon-btn edit"
-                        onClick={() => openCatForm(c)}
-                        aria-label={`Edit category ${c.name}`}
-                        title="Edit"
-                      >
-                        <PencilIcon size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleDeleteCategory(c)}
-                        aria-label={`Delete category ${c.name}`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
           </section>
         </div>
       </div>
@@ -507,7 +598,6 @@ export function MoneyClient({
                 step="0.01"
                 min="0.01"
                 required
-                placeholder="0.00"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
                 className="number-tabular"
@@ -553,7 +643,6 @@ export function MoneyClient({
                 type="text"
                 required
                 maxLength={50}
-                placeholder="e.g. Subscriptions"
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
               />

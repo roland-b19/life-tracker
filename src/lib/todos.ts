@@ -50,9 +50,11 @@ export async function getDailyTodos(
   userId: string,
   space: TodoSpace,
   targetDate: string,
+  today = toISODate(),
 ): Promise<DailyTodosResult> {
-  // 1. Rollover: Carry over any unfinished one-off tasks from past dates to targetDate
-  await db
+  // 1. Rollover: carry unfinished one-off tasks from past dates to targetDate.
+  // Never when reading a past day: that view is read-only and must not move tasks back in time.
+  if (targetDate >= today) await db
     .update(todos)
     .set({
       dueDate: targetDate,
@@ -113,7 +115,7 @@ export async function getDailyTodos(
 
   const total = items.length;
   const completed = items.filter((t) => t.isCompleted).length;
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 100; // nothing due = all done
 
   return {
     todos: items,
@@ -159,7 +161,7 @@ async function recordDayStats(userId: string, space: TodoSpace, date: string): P
   }
 }
 
-export async function getTodoHistory(userId: string, space: TodoSpace, days = 30): Promise<TodoDayStat[]> {
+export async function getTodoHistory(userId: string, space: TodoSpace, days = 90): Promise<TodoDayStat[]> {
   const since = new Date();
   since.setDate(since.getDate() - days + 1);
   return db

@@ -8,8 +8,6 @@ import {
   DropIcon,
   FootstepsIcon,
   ScaleIcon,
-  LockIcon,
-  CheckIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
@@ -17,6 +15,7 @@ import {
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
+import { AnimatedNumber } from "../components/animated-number";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -28,10 +27,6 @@ import {
   toggleShoppingItemAction,
   updateStepsAction,
 } from "@/app/actions/food";
-import {
-  generateFoodTokenAction,
-  revokeFoodTokenAction,
-} from "@/app/actions/api-tokens";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { WeightAnalytics } from "@/lib/food";
 
@@ -45,14 +40,6 @@ interface MealData {
   carbs: string;
   fat: string;
   isEstimated?: boolean;
-}
-
-interface ApiTokenData {
-  id: string;
-  name: string;
-  scope: string;
-  lastUsedAt: Date | null;
-  createdAt: Date;
 }
 
 interface ShoppingItemData {
@@ -92,7 +79,6 @@ interface FoodClientProps {
   };
   weightAnalytics: WeightAnalytics;
   initialShoppingList: ShoppingItemData[];
-  initialTokens?: ApiTokenData[];
 }
 
 export function FoodClient({
@@ -102,16 +88,11 @@ export function FoodClient({
   initialSummary,
   weightAnalytics,
   initialShoppingList,
-  initialTokens = [],
 }: FoodClientProps) {
   const [selectedDate] = useState(todayDate);
   const [summary, setSummary] = useState(initialSummary);
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
-  const [tokens, setTokens] = useState<ApiTokenData[]>(initialTokens);
-  const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat" | "api">("daily");
-  const [tokenNameInput, setTokenNameInput] = useState("");
-  const [generatedPlaintextToken, setGeneratedPlaintextToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
@@ -156,7 +137,9 @@ export function FoodClient({
   >("other");
 
   const [busy, setBusy] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const setStatusMessage = (message: string) => {
+    if (message) showToast({ message, type: "warning" });
+  };
 
   const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -441,59 +424,6 @@ export function FoodClient({
     }
   }
 
-  async function handleGenerateToken(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setStatusMessage("");
-    try {
-      const res = await generateFoodTokenAction(tokenNameInput.trim() || undefined);
-      if (res.success && res.token) {
-        setGeneratedPlaintextToken(res.token.plaintextToken);
-        setTokens((prev) => [
-          {
-            id: res.token.id,
-            name: res.token.name,
-            scope: res.token.scope,
-            lastUsedAt: null,
-            createdAt: res.token.createdAt,
-          },
-          ...prev,
-        ]);
-        setTokenNameInput("");
-        setStatusMessage("API token generated successfully. Copy it now, it won't be shown again!");
-      }
-    } catch {
-      setStatusMessage("Failed to generate API token.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRevokeToken(tokenId: string) {
-    if (!confirm("Are you sure you want to revoke this API token? Any client using it will be disconnected.")) {
-      return;
-    }
-    setBusy(true);
-    setStatusMessage("");
-    try {
-      const res = await revokeFoodTokenAction(tokenId);
-      if (res.success) {
-        setTokens((prev) => prev.filter((t) => t.id !== tokenId));
-        setStatusMessage("API token revoked.");
-      }
-    } catch {
-      setStatusMessage("Failed to revoke API token.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleCopy(text: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   async function handleSendChatMessage(textToSend?: string) {
     const text = (textToSend || chatInput).trim();
     if (!text || chatLoading) return;
@@ -536,11 +466,16 @@ export function FoodClient({
     }
   }
 
-  const caloriePct = Math.min(100, Math.round((summary.totals.calories / targets.calories) * 100));
-  const proteinPct = Math.min(100, Math.round((summary.totals.protein / targets.proteinGrams) * 100));
-  const carbsPct = Math.min(100, Math.round((summary.totals.carbs / targets.carbsGrams) * 100));
-  const fatPct = Math.min(100, Math.round((summary.totals.fat / targets.fatGrams) * 100));
-  const waterPct = Math.min(100, Math.round((summary.metrics.waterMl / targets.waterMl) * 100));
+  const macros = [
+    { label: "Calories", value: summary.totals.calories, target: targets.calories, unit: " kcal" },
+    { label: "Protein", value: summary.totals.protein, target: targets.proteinGrams, unit: "g" },
+    { label: "Carbs", value: summary.totals.carbs, target: targets.carbsGrams, unit: "g" },
+    { label: "Fat", value: summary.totals.fat, target: targets.fatGrams, unit: "g" },
+  ];
+  const pct = (value: number, target: number) => Math.min(100, Math.round((value / target) * 100));
+  const waterPct = pct(summary.metrics.waterMl, targets.waterMl);
+  const stepsPct = pct(summary.metrics.steps, targets.steps);
+  const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
 
   return (
     <main>
@@ -555,7 +490,6 @@ export function FoodClient({
             { value: "weight", label: "Weight" },
             { value: "shopping", label: "Shopping" },
             { value: "chat", label: "Assistant" },
-            { value: "api", label: "API" },
           ]}
           onChange={setActiveTab}
         />
@@ -564,97 +498,89 @@ export function FoodClient({
       {activeTab === "weight" && <WeightPanel />}
 
       {activeTab === "daily" && (
-        <>
-          {/* Daily Macros Target & Progress */}
-          <section className="surface" aria-labelledby="macros-title">
-            <div className="section-head">
-              <h2 id="macros-title" className="section-title">
-                Nutrition Summary
-              </h2>
-              <span className="muted number-tabular">{formatDMY(selectedDate)}</span>
-            </div>
-
-            <div className="macro-grid">
-              <div className="macro-card">
-                <span className="macro-title">Calories</span>
-                <span className="macro-numbers">
-                  {summary.totals.calories}{" "}
-                  <span className="macro-target">/ {targets.calories} kcal</span>
-                </span>
-                <div className="progress-track">
-                  <div
-                    className={`progress-fill ${summary.totals.calories > targets.calories ? "over" : ""}`}
-                    style={{ width: `${caloriePct}%` }}
-                  />
+        <div className="dashboard-grid">
+          <div className="dashboard-main">
+            <section className="surface" aria-labelledby="meals-title">
+              <div className="section-head">
+                <div>
+                  <h2 id="meals-title" className="section-title">
+                    Meals
+                  </h2>
+                  <p className="card-sub muted number-tabular">{formatDMY(selectedDate)}</p>
                 </div>
-              </div>
-
-              <div className="macro-card">
-                <span className="macro-title">Protein</span>
-                <span className="macro-numbers">
-                  {summary.totals.protein}g{" "}
-                  <span className="macro-target">/ {targets.proteinGrams}g</span>
-                </span>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${proteinPct}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="macro-card">
-                <span className="macro-title">Carbs</span>
-                <span className="macro-numbers">
-                  {summary.totals.carbs}g{" "}
-                  <span className="macro-target">/ {targets.carbsGrams}g</span>
-                </span>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${carbsPct}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="macro-card">
-                <span className="macro-title">Fat</span>
-                <span className="macro-numbers">
-                  {summary.totals.fat}g{" "}
-                  <span className="macro-target">/ {targets.fatGrams}g</span>
-                </span>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${fatPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Water Tap Counter */}
-            <div className="water-card">
-              <div>
-                <span style={{ fontSize: "1.05rem", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                  <DropIcon size={16} /> Water Tracker
-                </span>
-                <p style={{ margin: "0.15rem 0 0" }} className="muted">
-                  {summary.metrics.waterMl} ml / {targets.waterMl} ml ({waterPct}%)
-                </p>
-                <div className="progress-track" style={{ width: "12rem", maxWidth: "100%", marginTop: "0.4rem" }}>
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${waterPct}%`, background: "var(--tint)" }}
-                  />
-                </div>
-              </div>
-              <div className="tap-buttons">
-                <button type="button" className="secondary tap-btn" onClick={() => changeWater(250, "Added 250 ml")}>
-                  +250 ml
+                <button type="button" className="btn-sm tint" onClick={() => setIsMealModalOpen(true)}>
+                  <PlusIcon size={14} />
+                  Add meal
                 </button>
-                <button type="button" className="secondary tap-btn" onClick={() => changeWater(500, "Added 500 ml")}>
-                  +500 ml
-                </button>
+              </div>
+
+              {summary.meals.length === 0 ? (
+                <p className="empty-note">No meals logged today.</p>
+              ) : (
+                <div className="entries">
+                  {summary.meals.map((meal) => (
+                    <div key={meal.id} className="entry-row">
+                      <div>
+                        <div className="entry-main">
+                          <span className="badge badge-info">{meal.mealType}</span>
+                          <strong>{meal.name}</strong>
+                          {meal.isEstimated && <span className="badge badge-carried">AI estimate</span>}
+                        </div>
+                        <p className="card-sub muted number-tabular">
+                          {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="delete-icon-btn"
+                        onClick={() => handleDeleteMeal(meal.id)}
+                        aria-label={`Delete meal ${meal.name}`}
+                        title="Delete"
+                      >
+                        <TrashIcon size={17} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div className="dashboard-aside">
+            <section className="surface" aria-labelledby="macros-title">
+              <div className="section-head">
+                <h2 id="macros-title" className="section-title">
+                  Nutrition
+                </h2>
+              </div>
+              <div className="macro-grid">
+                {macros.map((m) => (
+                  <div key={m.label} className="macro-card">
+                    <span className="macro-title">{m.label}</span>
+                    <span className="macro-numbers">
+                      <AnimatedNumber value={m.value} format={oneDecimal} />
+                      <span className="macro-target">
+                        {" "}
+                        / {m.target}
+                        {m.unit}
+                      </span>
+                    </span>
+                    <div className="progress-track">
+                      <div
+                        className={`progress-fill ${m.value > m.target ? "over" : ""}`}
+                        style={{ width: `${pct(m.value, m.target)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="surface" aria-labelledby="water-title">
+              <div className="section-head">
+                <h2 id="water-title" className="section-title icon-title">
+                  <DropIcon size={18} /> Water
+                </h2>
                 <button
                   type="button"
                   className="delete-icon-btn edit"
@@ -665,155 +591,86 @@ export function FoodClient({
                   <PencilIcon size={17} />
                 </button>
               </div>
-            </div>
-
-            {/* Steps & Weight Trend Cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-                gap: "0.75rem",
-                marginTop: "1rem",
-              }}
-            >
-              {/* Daily Steps */}
-              <div className="surface" style={{ padding: "0.85rem", background: "var(--background)" }}>
-                <span className="macro-title" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                  <FootstepsIcon size={14} /> Daily Steps
-                </span>
-                <div className="section-head" style={{ margin: "0.4rem 0 0" }}>
-                  <strong className="number-tabular" style={{ fontSize: "1.1rem" }}>
-                    {summary.metrics.steps} steps
-                  </strong>
-                  <button
-                    type="button"
-                    className="delete-icon-btn edit"
-                    onClick={() => openMetricEdit("steps")}
-                    aria-label="Edit steps"
-                    title="Edit"
-                  >
-                    <PencilIcon size={17} />
-                  </button>
-                </div>
-                <span className="muted" style={{ fontSize: "0.8rem", marginTop: "0.3rem", display: "block" }}>
-                  Target: {targets.steps} steps / day
-                </span>
+              <p className="metric-big number-tabular">
+                <AnimatedNumber value={summary.metrics.waterMl} />
+                <span className="macro-target"> / {targets.waterMl} ml</span>
+              </p>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${waterPct}%` }} />
               </div>
-
-              {/* 7-Day Weight Analytics */}
-              <div className="surface" style={{ padding: "0.85rem", background: "var(--background)" }}>
-                <span className="macro-title" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                  <ScaleIcon size={14} /> Weight Trend
-                </span>
-                <div style={{ marginTop: "0.4rem" }}>
-                  <strong style={{ fontSize: "1.1rem" }}>
-                    {weightAnalytics.sevenDayAverage
-                      ? `${weightAnalytics.sevenDayAverage} kg (7-day avg)`
-                      : weightAnalytics.latestWeight
-                      ? `${weightAnalytics.latestWeight} kg`
-                      : "No weigh-ins yet"}
-                  </strong>
-                  {weightAnalytics.weeklyRateOfChange !== null && (
-                    <span
-                      className="badge"
-                      style={{
-                        marginLeft: "0.5rem",
-                        background:
-                          weightAnalytics.trend === "gaining"
-                            ? "rgba(143, 212, 163, 0.15)"
-                            : "rgba(235, 198, 115, 0.15)",
-                        color:
-                          weightAnalytics.trend === "gaining" ? "var(--success)" : "var(--warning)",
-                      }}
-                    >
-                      {weightAnalytics.weeklyRateOfChange > 0 ? "+" : ""}
-                      {weightAnalytics.weeklyRateOfChange} kg/week
-                    </span>
-                  )}
-                </div>
-                <span className="muted" style={{ fontSize: "0.8rem", marginTop: "0.25rem", display: "block" }}>
-                  {weightAnalytics.previousWeekAverage
-                    ? `Previous week avg: ${weightAnalytics.previousWeekAverage} kg`
-                    : "Log weigh-ins in the Weight tab for rolling trends"}
-                </span>
+              <div className="tap-buttons">
+                <button type="button" className="secondary tap-btn" onClick={() => changeWater(250, "Added 250 ml")}>
+                  +250 ml
+                </button>
+                <button type="button" className="secondary tap-btn" onClick={() => changeWater(500, "Added 500 ml")}>
+                  +500 ml
+                </button>
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/* Daily Dashboard Grid: Meals & Fast Entry */}
-          <div className="dashboard-main" style={{ marginTop: "1.25rem" }}>
-            {/* Today's Meals Log */}
-            <div className="dashboard-main">
-              <section className="surface" aria-labelledby="meals-history-title">
-                <div className="section-head">
-                  <h2 id="meals-history-title" className="section-title">
-                    Today&apos;s Meals
-                  </h2>
-                  <button type="button" className="btn-sm tint" onClick={() => setIsMealModalOpen(true)}>
-                    <PlusIcon size={14} />
-                    Add meal
-                  </button>
-                </div>
+            <section className="surface" aria-labelledby="steps-title">
+              <div className="section-head">
+                <h2 id="steps-title" className="section-title icon-title">
+                  <FootstepsIcon size={18} /> Steps
+                </h2>
+                <button
+                  type="button"
+                  className="delete-icon-btn edit"
+                  onClick={() => openMetricEdit("steps")}
+                  aria-label="Edit steps"
+                  title="Edit"
+                >
+                  <PencilIcon size={17} />
+                </button>
+              </div>
+              <p className="metric-big number-tabular">
+                <AnimatedNumber value={summary.metrics.steps} />
+                <span className="macro-target"> / {targets.steps}</span>
+              </p>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${stepsPct}%` }} />
+              </div>
+            </section>
 
-                <div className="entries" style={{ marginTop: "1rem" }}>
-                  {summary.meals.length === 0 && (
-                    <p className="empty-note">No meals logged today.</p>
-                  )}
-                  {summary.meals.map((meal) => (
-                    <div key={meal.id} className="entry-row">
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                          <span className="badge badge-info">
-                            {meal.mealType}
-                          </span>
-                          <strong>{meal.name}</strong>
-                          {meal.isEstimated && (
-                            <span
-                              className="badge"
-                              style={{
-                                background: "rgba(134, 180, 234, 0.15)",
-                                color: "var(--tint)",
-                                fontSize: "0.75rem",
-                              }}
-                            >
-                              AI Estimated
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }} className="muted">
-                          {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleDeleteMeal(meal.id)}
-                        aria-label={`Delete meal ${meal.name}`}
-                        title="Delete meal"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
+            <section className="surface" aria-labelledby="weight-trend-title">
+              <div className="section-head">
+                <h2 id="weight-trend-title" className="section-title icon-title">
+                  <ScaleIcon size={18} /> Weight
+                </h2>
+                {weightAnalytics.weeklyRateOfChange !== null && (
+                  <span className={`badge ${weightAnalytics.trend === "gaining" ? "badge-success" : "badge-warning"}`}>
+                    {weightAnalytics.weeklyRateOfChange > 0 ? "+" : ""}
+                    {weightAnalytics.weeklyRateOfChange} kg/week
+                  </span>
+                )}
+              </div>
+              <p className="metric-big number-tabular">
+                {weightAnalytics.sevenDayAverage ?? weightAnalytics.latestWeight ?? "—"}
+                <span className="macro-target"> kg{weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}</span>
+              </p>
+              <p className="card-sub muted">
+                {weightAnalytics.previousWeekAverage
+                  ? `Previous week: ${weightAnalytics.previousWeekAverage} kg`
+                  : "Log weigh-ins in the Weight tab to see a trend."}
+              </p>
+            </section>
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === "shopping" && (
-        /* Shopping List View */
         <section className="surface" aria-labelledby="shopping-title">
           <div className="section-head">
-            <h2 id="shopping-title" className="section-title">Shopping List</h2>
+            <h2 id="shopping-title" className="section-title">
+              Shopping List
+            </h2>
             <button type="button" className="btn-sm tint" onClick={() => setIsShopModalOpen(true)}>
               <PlusIcon size={14} />
               Add item
             </button>
           </div>
 
-          <div className="head-actions" style={{ marginBottom: "0.75rem" }}>
+          <div className="head-actions">
             <button type="button" className="secondary btn-sm" onClick={handleGenerateShoppingList}>
               From recipes
             </button>
@@ -827,49 +684,39 @@ export function FoodClient({
             </button>
           </div>
 
-          {/* Items by Category */}
-          <div style={{ marginTop: "1.25rem" }}>
-            {shoppingList.length === 0 && (
-              <p className="empty-note">Your shopping list is empty.</p>
-            )}
-            {["meat", "produce", "dairy", "bakery", "pantry", "other"].map((cat) => {
-              const catItems = shoppingList.filter((item) => item.category === cat);
-              if (catItems.length === 0) return null;
-
-              return (
-                <div key={cat} style={{ marginBottom: "1rem" }}>
-                  <span className="badge badge-info" style={{ textTransform: "capitalize" }}>
-                    {cat}
-                  </span>
-                  <div className="entries" style={{ marginTop: "0.4rem" }}>
-                    {catItems.map((item) => (
-                      <div key={item.id} className="shopping-row">
-                        <label className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
-                          <input
-                            type="checkbox"
-                            checked={item.isBought}
-                            onChange={() => handleToggleShopping(item.id, item.isBought)}
-                          />
-                          <span>
-                            {item.name} — {Number(item.amount)} {item.unit}
-                          </span>
-                        </label>
-                        <button
-                          type="button"
-                          className="delete-icon-btn"
-                          onClick={() => handleDeleteShoppingItem(item)}
-                          aria-label={`Delete ${item.name}`}
-                          title="Delete"
-                        >
-                          <TrashIcon size={17} />
-                        </button>
-                      </div>
-                    ))}
+          {shoppingList.length === 0 && <p className="empty-note">Your shopping list is empty.</p>}
+          {["meat", "produce", "dairy", "bakery", "pantry", "other"].map((cat) => {
+            const catItems = shoppingList.filter((item) => item.category === cat);
+            if (catItems.length === 0) return null;
+            return (
+              <div key={cat} className="shopping-group">
+                <h3 className="group-label">{cat}</h3>
+                {catItems.map((item) => (
+                  <div key={item.id} className="shopping-row">
+                    <label className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={item.isBought}
+                        onChange={() => handleToggleShopping(item.id, item.isBought)}
+                      />
+                      <span>
+                        {item.name} · {Number(item.amount)} {item.unit}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="delete-icon-btn"
+                      onClick={() => handleDeleteShoppingItem(item)}
+                      aria-label={`Delete ${item.name}`}
+                      title="Delete"
+                    >
+                      <TrashIcon size={17} />
+                    </button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            );
+          })}
         </section>
       )}
 
@@ -877,12 +724,11 @@ export function FoodClient({
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-head">
             <h2 id="chat-title" className="section-title">
-              Food AI Assistant
+              Food Assistant
             </h2>
           </div>
 
-          {/* Prompt suggestions pills */}
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+          <div className="chat-suggestions">
             {[
               "2 felii de pizza la prânz",
               "Omletă din 3 ouă cu telemea",
@@ -893,8 +739,7 @@ export function FoodClient({
               <button
                 key={prompt}
                 type="button"
-                className="secondary"
-                style={{ fontSize: "0.8rem", padding: "0.25rem 0.65rem", borderRadius: "1rem" }}
+                className="secondary chat-chip"
                 disabled={chatLoading}
                 onClick={() => handleSendChatMessage(prompt)}
               >
@@ -903,378 +748,57 @@ export function FoodClient({
             ))}
           </div>
 
-          {/* Chat messages container */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.75rem",
-              maxHeight: "26rem",
-              overflowY: "auto",
-              padding: "0.85rem",
-              background: "var(--background)",
-              borderRadius: "0.75rem",
-              border: "1px solid var(--separator)",
-            }}
-          >
-            {chatMessages.map((msg, index) => {
-              const isUser = msg.role === "user";
-              return (
-                <div
-                  key={index}
-                  style={{
-                    alignSelf: isUser ? "flex-end" : "flex-start",
-                    maxWidth: "85%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: isUser ? "flex-end" : "flex-start",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "0.65rem 0.9rem",
-                      borderRadius: isUser
-                        ? "1rem 1rem 0.2rem 1rem"
-                        : "1rem 1rem 1rem 0.2rem",
-                      background: isUser ? "var(--tint)" : "var(--surface)",
-                      color: isUser ? "var(--on-tint)" : "var(--text)",
-                      border: isUser ? "none" : "1px solid var(--separator)",
-                      fontSize: "0.9rem",
-                      lineHeight: "1.4",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {msg.text}
+          <div className="chat-log" aria-live="polite">
+            {chatMessages.map((msg, index) => (
+              <div key={index} className={`chat-msg ${msg.role === "user" ? "user" : "model"}`}>
+                <div className="chat-bubble">{msg.text}</div>
+                {msg.toolExecuted && (
+                  <div className="chat-tool">
+                    {msg.toolExecuted.name === "log_meal" && (
+                      <span>
+                        <strong>Masă adăugată:</strong> {String(msg.toolExecuted.args.name || "")} ·{" "}
+                        {String(msg.toolExecuted.args.calories || 0)} kcal ·{" "}
+                        {String(msg.toolExecuted.args.protein || 0)}g P ·{" "}
+                        {String(msg.toolExecuted.args.carbs || 0)}g C · {String(msg.toolExecuted.args.fat || 0)}g F
+                      </span>
+                    )}
+                    {msg.toolExecuted.name === "add_shopping_item" && (
+                      <span>
+                        <strong>Adăugat pe listă:</strong> {String(msg.toolExecuted.args.name || "")}
+                      </span>
+                    )}
+                    {msg.toolExecuted.name === "get_daily_food_summary" && <strong>Sumar zilnic actualizat</strong>}
+                    {msg.toolExecuted.name === "get_recipes" && <strong>Rețete preluate</strong>}
                   </div>
-
-                  {msg.toolExecuted && (
-                    <div
-                      style={{
-                        marginTop: "0.35rem",
-                        fontSize: "0.78rem",
-                        padding: "0.3rem 0.6rem",
-                        borderRadius: "0.4rem",
-                        background: "rgba(134, 180, 234, 0.12)",
-                        color: "var(--tint)",
-                        border: "1px solid rgba(134, 180, 234, 0.25)",
-                      }}
-                    >
-                      {msg.toolExecuted.name === "log_meal" && (
-                        <span>
-                          <strong>Masă adăugată:</strong>{" "}
-                          {String(msg.toolExecuted.args.name || "")} —{" "}
-                          {String(msg.toolExecuted.args.calories || 0)} kcal ·{" "}
-                          {String(msg.toolExecuted.args.protein || 0)}g P ·{" "}
-                          {String(msg.toolExecuted.args.carbs || 0)}g C ·{" "}
-                          {String(msg.toolExecuted.args.fat || 0)}g F (AI Estimated)
-                        </span>
-                      )}
-                      {msg.toolExecuted.name === "add_shopping_item" && (
-                        <span>
-                          <strong>Adăugat pe listă:</strong>{" "}
-                          {String(msg.toolExecuted.args.name || "")}
-                        </span>
-                      )}
-                      {msg.toolExecuted.name === "get_daily_food_summary" && (
-                        <span><strong>Sumar zilnic actualizat</strong></span>
-                      )}
-                      {msg.toolExecuted.name === "get_recipes" && (
-                        <span><strong>Rețete preluate</strong></span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
+                )}
+              </div>
+            ))}
             {chatLoading && (
-              <div
-                style={{
-                  alignSelf: "flex-start",
-                  padding: "0.5rem 0.8rem",
-                  borderRadius: "1rem 1rem 1rem 0.2rem",
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  border: "1px solid var(--separator)",
-                  fontSize: "0.85rem",
-                  fontStyle: "italic",
-                }}
-              >
-                Asistentul analizează și calculează macro-urile...
+              <div className="chat-msg model">
+                <div className="chat-bubble typing">Asistentul calculează macro-urile…</div>
               </div>
             )}
           </div>
 
-          {/* Chat input form */}
           <form
+            className="chat-form"
             onSubmit={(e) => {
               e.preventDefault();
               handleSendChatMessage();
             }}
-            style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}
           >
             <input
               type="text"
-              placeholder="Ex: Am mâncat 200g friptură de vită cu piure de cartofi..."
+              aria-label="Message"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               disabled={chatLoading}
-              style={{ flex: 1 }}
             />
             <button type="submit" disabled={chatLoading || !chatInput.trim()}>
-              {chatLoading ? "Se trimite..." : "Trimite"}
+              {chatLoading ? "Se trimite…" : "Trimite"}
             </button>
           </form>
         </section>
-      )}
-
-      {activeTab === "api" && (
-        <section className="surface" aria-labelledby="ai-connector-title">
-          <div className="section-head">
-            <h2 id="ai-connector-title" className="section-title">
-              AI Connector
-            </h2>
-          </div>
-
-          <div
-            style={{
-              marginTop: "0.75rem",
-              padding: "0.75rem",
-              borderRadius: "0.5rem",
-              background: "rgba(134, 180, 234, 0.08)",
-              border: "1px solid rgba(134, 180, 234, 0.2)",
-              fontSize: "0.85rem",
-              lineHeight: "1.4",
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-              <LockIcon size={14} />
-              <strong>Strict AI Data Line Quarantine:</strong>
-            </span>{" "}
-            Connected AI assistants can
-            log meals, read recipes, and check today&apos;s food totals. By security design,
-            they have <em>zero access</em> to your body weight, steps, money, habits, or tasks.
-          </div>
-
-          {/* Newly generated plaintext token alert */}
-          {generatedPlaintextToken && (
-            <div
-              style={{
-                marginTop: "1rem",
-                padding: "1rem",
-                borderRadius: "0.65rem",
-                background: "rgba(143, 212, 163, 0.1)",
-                border: "1px solid rgba(143, 212, 163, 0.3)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "0.5rem",
-                }}
-              >
-                <strong style={{ color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                  <CheckIcon size={14} /> New Food API Token Generated
-                </strong>
-                <button
-                  type="button"
-                  style={{ minHeight: "2rem", padding: "0.2rem 0.75rem", fontSize: "0.85rem" }}
-                  onClick={() => handleCopy(generatedPlaintextToken)}
-                >
-                  {copied ? "Copied!" : "Copy Token"}
-                </button>
-              </div>
-              <p style={{ fontSize: "0.85rem", margin: "0.5rem 0", color: "var(--text)" }}>
-                Make sure to copy your token now. It will not be shown again!
-              </p>
-              <code
-                style={{
-                  display: "block",
-                  padding: "0.5rem",
-                  background: "var(--background)",
-                  borderRadius: "0.4rem",
-                  wordBreak: "break-all",
-                  fontSize: "0.85rem",
-                }}
-              >
-                {generatedPlaintextToken}
-              </code>
-            </div>
-          )}
-
-          {/* Generate token form */}
-          <form
-            onSubmit={handleGenerateToken}
-            style={{ marginTop: "1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-          >
-            <input
-              type="text"
-              placeholder="Token label (e.g. Claude Desktop MacBook, Gemini CLI)"
-              value={tokenNameInput}
-              onChange={(e) => setTokenNameInput(e.target.value)}
-              style={{ flex: 1, minWidth: "14rem" }}
-            />
-            <button type="submit" disabled={busy}>
-              + Generate Token
-            </button>
-          </form>
-
-          {/* Active tokens list */}
-          <div style={{ marginTop: "1.5rem" }}>
-            <h3 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Active Tokens</h3>
-            {tokens.length === 0 ? (
-              <p className="muted" style={{ fontSize: "0.9rem" }}>
-                No active API tokens yet. Generate one above to connect Claude or Gemini.
-              </p>
-            ) : (
-              <div className="entries">
-                {tokens.map((token) => (
-                  <div key={token.id} className="entry-row" style={{ alignItems: "center" }}>
-                    <div>
-                      <strong>{token.name}</strong>
-                      <span
-                        className="badge badge-info"
-                        style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}
-                      >
-                        {token.scope}
-                      </span>
-                      <p className="muted" style={{ margin: "0.2rem 0 0", fontSize: "0.8rem" }}>
-                        Created {formatDMY(new Date(token.createdAt).toISOString())}
-                        {token.lastUsedAt &&
-                          ` · Last used ${formatDMY(new Date(token.lastUsedAt).toISOString())}`}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="danger"
-                      style={{ minHeight: "2rem", padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                      onClick={() => handleRevokeToken(token.id)}
-                      disabled={busy}
-                    >
-                      Revoke
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Integration Guide: Claude Desktop */}
-          <div style={{ marginTop: "1.75rem" }}>
-            <h3 style={{ fontSize: "1rem", marginBottom: "0.35rem" }}>
-              1. Claude Desktop Setup (MCP Protocol)
-            </h3>
-            <p className="muted" style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-              Add this block to your <code>claude_desktop_config.json</code>:
-            </p>
-            <div style={{ position: "relative" }}>
-              <pre
-                style={{
-                  padding: "0.75rem",
-                  borderRadius: "0.5rem",
-                  background: "var(--background)",
-                  fontSize: "0.8rem",
-                  overflowX: "auto",
-                  lineHeight: "1.4",
-                }}
-              >
-{`{
-  "mcpServers": {
-    "life-tracker-food": {
-      "url": "http://localhost:3000/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${generatedPlaintextToken || "<YOUR_FOOD_TOKEN>"}"
-      }
-    }
-  }
-}`}
-              </pre>
-              <button
-                type="button"
-                className="secondary"
-                style={{
-                  position: "absolute",
-                  top: "0.5rem",
-                  right: "0.5rem",
-                  padding: "0.2rem 0.5rem",
-                  fontSize: "0.75rem",
-                }}
-                onClick={() =>
-                  handleCopy(
-                    `{\n  "mcpServers": {\n    "life-tracker-food": {\n      "url": "http://localhost:3000/api/mcp",\n      "headers": {\n        "Authorization": "Bearer ${generatedPlaintextToken || "<YOUR_FOOD_TOKEN>"}"\n      }\n    }\n  }\n}`,
-                  )
-                }
-              >
-                Copy JSON
-              </button>
-            </div>
-          </div>
-
-          {/* Integration Guide: Gemini */}
-          <div style={{ marginTop: "1.75rem" }}>
-            <h3 style={{ fontSize: "1rem", marginBottom: "0.35rem" }}>
-              2. Google Gemini Setup (Function Calling / OpenAPI)
-            </h3>
-            <p className="muted" style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-              Gemini fetches tool declarations via <code>GET /api/ai/food</code> and invokes tools
-              via <code>POST /api/ai/food</code>. Example cURL invocation:
-            </p>
-            <div style={{ position: "relative" }}>
-              <pre
-                style={{
-                  padding: "0.75rem",
-                  borderRadius: "0.5rem",
-                  background: "var(--background)",
-                  fontSize: "0.8rem",
-                  overflowX: "auto",
-                  lineHeight: "1.4",
-                }}
-              >
-{`curl -X POST http://localhost:3000/api/ai/food \\
-  -H "Authorization: Bearer ${generatedPlaintextToken || "<YOUR_FOOD_TOKEN>"}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "log_meal",
-    "args": {
-      "mealType": "lunch",
-      "name": "Grilled Chicken & Rice",
-      "calories": 650,
-      "protein": 45,
-      "carbs": 65,
-      "fat": 15
-    }
-  }'`}
-              </pre>
-              <button
-                type="button"
-                className="secondary"
-                style={{
-                  position: "absolute",
-                  top: "0.5rem",
-                  right: "0.5rem",
-                  padding: "0.2rem 0.5rem",
-                  fontSize: "0.75rem",
-                }}
-                onClick={() =>
-                  handleCopy(
-                    `curl -X POST http://localhost:3000/api/ai/food \\\n  -H "Authorization: Bearer ${generatedPlaintextToken || "<YOUR_FOOD_TOKEN>"}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "name": "log_meal",\n    "args": {\n      "mealType": "lunch",\n      "name": "Grilled Chicken & Rice",\n      "calories": 650,\n      "protein": 45,\n      "carbs": 65,\n      "fat": 15\n    }\n  }'`,
-                  )
-                }
-              >
-                Copy cURL
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {statusMessage && (
-        <p className="error" style={{ color: "var(--tint)", marginTop: "1rem" }}>
-          {statusMessage}
-        </p>
       )}
 
       {/* Pop-up Modal with Heavy Blurred Background */}
@@ -1304,19 +828,17 @@ export function FoodClient({
             Meal Name / Description
             <input
               type="text"
-              placeholder="e.g. 200g Chicken breast & 150g Rice"
               value={mealName}
               onChange={(e) => setMealName(e.target.value)}
               required
             />
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <div className="form-pair">
             <label>
               Calories (kcal)
               <input
                 type="number"
-                placeholder="0"
                 value={mealCalories}
                 onChange={(e) => setMealCalories(e.target.value)}
                 className="number-tabular"
@@ -1327,7 +849,6 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.1"
-                placeholder="0.0"
                 value={mealProtein}
                 onChange={(e) => setMealProtein(e.target.value)}
                 className="number-tabular"
@@ -1335,13 +856,12 @@ export function FoodClient({
             </label>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <div className="form-pair">
             <label>
               Carbs (g)
               <input
                 type="number"
                 step="0.1"
-                placeholder="0.0"
                 value={mealCarbs}
                 onChange={(e) => setMealCarbs(e.target.value)}
                 className="number-tabular"
@@ -1352,7 +872,6 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.1"
-                placeholder="0.0"
                 value={mealFat}
                 onChange={(e) => setMealFat(e.target.value)}
                 className="number-tabular"
@@ -1380,13 +899,12 @@ export function FoodClient({
               Item name
               <input
                 type="text"
-                placeholder="e.g. Eggs"
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
                 required
               />
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="form-pair">
               <label>
                 Amount
                 <input
@@ -1401,7 +919,6 @@ export function FoodClient({
                 Unit
                 <input
                   type="text"
-                  placeholder="g, ml, pcs"
                   value={shopUnit}
                   onChange={(e) => setShopUnit(e.target.value)}
                 />

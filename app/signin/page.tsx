@@ -61,7 +61,6 @@ export default function SignInPage() {
               autoComplete="username"
               required
               autoFocus
-              placeholder="e.g. owner"
               style={{ fontSize: "1.05rem" }}
             />
           </label>

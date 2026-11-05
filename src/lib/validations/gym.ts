@@ -45,7 +45,27 @@ export const createCustomExerciseSchema = z.object({
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
 
+export const saveSplitDaySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+  isRest: z.boolean(),
+  exercises: z
+    .array(
+      z
+        .object({
+          exerciseId: z.string().uuid(),
+          targetSets: z.number().int().min(1).max(10),
+          minReps: z.number().int().min(1).max(100),
+          maxReps: z.number().int().min(1).max(100),
+        })
+        .refine((e) => e.minReps <= e.maxReps, "Min reps must not exceed max reps"),
+    )
+    .max(20)
+    .refine((list) => new Set(list.map((e) => e.exerciseId)).size === list.length, "Duplicate exercise"),
+});
+
 export type LogSetInput = z.infer<typeof logSetSchema>;
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type FinishSessionInput = z.infer<typeof finishSessionSchema>;
 export type CreateCustomExerciseInput = z.infer<typeof createCustomExerciseSchema>;
+export type SaveSplitDayInput = z.infer<typeof saveSplitDaySchema>;

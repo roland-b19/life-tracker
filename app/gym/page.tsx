@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import {
   getDeloadStatus,
-  getRecentWorkoutSessions,
+  getExercises,
   getUserSplitWithDays,
 } from "@/lib/gym";
 import { GymClient } from "./gym-client";
@@ -17,14 +17,14 @@ export default async function GymPage() {
   const userId = session.user.id;
   const split = await getUserSplitWithDays(userId);
   const deload = await getDeloadStatus(userId);
-  const recentSessions = await getRecentWorkoutSessions(userId);
+  const exercises = await getExercises(userId);
 
   return (
     <GymClient
       userName={session.user.name ?? "User"}
       split={split}
       deload={deload}
-      recentSessions={recentSessions}
+      exercises={exercises.map(({ id, name, muscleGroup, equipmentType }) => ({ id, name, muscleGroup, equipmentType }))}
     />
   );
 }
