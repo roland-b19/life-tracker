@@ -4,7 +4,7 @@ BodyParts3D, © The Database Center for Life Science licensed under CC Attributi
 
 - Original dataset: [BodyParts3D](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html), release 3.0 (20110915), polygon reduction 95%.
 - Copy used: binary STL conversions of that release in [Kevin-Mattheus-Moerman/BodyParts3D](https://github.com/Kevin-Mattheus-Moerman/BodyParts3D) (`assets/BodyParts3D_data/stl/`, commit `f0eeb6e`), which distributes the data under CC BY-SA 2.1 Japan.
-- Retrieved: 2026-10-16. Every input file is pinned by SHA-256 in [manifest.json](manifest.json) and `scripts/model-inputs.json`.
+- Retrieved: 2026-10-16. Every input file is pinned by SHA-256 in the upstream [organui/muscles-3d](https://github.com/organui/muscles-3d) repository.
 - Model/data license: [CC BY-SA 2.1 Japan](https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en). `muscles.glb` is an adaptation and is shared under the same license.
 - Original work: Mitsuhashi et al., “BodyParts3D: 3D structure database for anatomical concepts”, Nucleic Acids Research 37 (2009), D782–D785. [DOI](https://doi.org/10.1093/nar/gkn613).
 

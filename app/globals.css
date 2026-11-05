@@ -276,23 +276,8 @@ h3 {
   font-weight: 600;
 }
 
-.signout-btn {
-  min-height: 2.75rem;
-  padding: 0.3rem 0.9rem;
-  font-size: 0.875rem;
-  border-radius: 0.85rem;
-  background: transparent;
-  color: var(--secondary);
-  border: 1px solid var(--separator);
-}
-
-@media (hover: hover) {
-  .signout-btn:hover {
-    color: var(--danger);
-    border-color: var(--danger-subtle);
-    background: var(--danger-subtle);
-    transform: none;
-  }
+.side-user .signout-btn {
+  align-self: flex-start;
 }
 
 .nav-link {
@@ -439,23 +424,7 @@ h3 {
   color: var(--secondary);
 }
 
-.credits-link {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  min-height: 2.75rem;
-  padding: 0 0.75rem;
-  font-size: 0.75rem;
-  color: var(--secondary);
-  text-decoration: none;
-}
-@media (hover: hover) {
-  .credits-link:hover { color: var(--text); }
-}
-
 .more-user .signout-btn {
-  min-height: 2.25rem;
-  border-radius: 0.7rem;
   flex: none;
 }
 
@@ -809,7 +778,8 @@ main {
 
 /* Glassmorphism Surface: Unslop Apple HIG */
 .surface {
-  padding: 1.35rem;
+  --card-pad: 1.35rem;
+  padding: var(--card-pad);
   background: var(--surface);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -832,6 +802,7 @@ main {
 @media (min-width: 768px) {
   .surface,
   .todo-hero-card {
+    --card-pad: 1.6rem;
     padding: 1.6rem;
   }
 }
@@ -850,11 +821,6 @@ main {
   .month-nav-btn:hover {
     transform: scale(1.035);
     box-shadow: var(--hover-shadow-sm);
-  }
-
-  /* Icon-only buttons have no fill, so a shadow would float on nothing */
-  .delete-icon-btn:hover:not(:disabled) {
-    box-shadow: none;
   }
 }
 
@@ -974,10 +940,21 @@ textarea:focus-visible {
   font-size: 0.875rem;
 }
 
+/* Rows carry 0.5rem padding; the list's outer margins subtract it so the first and last row sit exactly one card padding from the edges. */
 .entries {
   display: grid;
   gap: 0.25rem;
-  margin-top: 1rem;
+  margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
+}
+.surface > .entries:last-child:not(:has(> .empty-note)),
+.surface > .auto-height:last-child > .entries:not(:has(> .empty-note)) {
+  margin-bottom: -0.5rem;
+}
+
+/* Container that animates its height when its content changes (list-motion.tsx) */
+.auto-height {
+  display: flow-root;
+  transition: height var(--dur) var(--ease);
 }
 
 .entry-row {
@@ -1053,25 +1030,21 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
 .delete-icon-btn {
-  background: transparent;
+  background: var(--tint-subtle);
   border: none;
-  color: var(--secondary);
+  color: var(--tint);
   cursor: pointer;
-  padding: 0.35rem;
+  padding: 0;
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur) var(--pop);
-  min-width: 44px;
-  min-height: 44px;
-}
-
-@media (hover: hover) {
-  .delete-icon-btn:hover {
-    color: var(--danger);
-  }
+  flex: none;
+  transition: transform 480ms var(--pop), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  width: 44px;
+  height: 44px;
 }
 
 .delete-icon-btn:active {
@@ -1992,23 +1965,22 @@ main > .error {
 .item-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   flex-shrink: 0;
+}
+
+.section-head:has(+ .item-total) {
+  justify-content: center;
+  margin-bottom: var(--card-pad);
 }
 
 .item-total {
   margin: 0;
-  padding: 0.5rem 0;
+  line-height: 1;
   text-align: center;
   font-size: 2rem;
   font-weight: 700;
   color: var(--tint);
-}
-
-@media (hover: hover) {
-  .delete-icon-btn.edit:hover {
-    color: var(--tint);
-  }
 }
 
 .item-actions .btn-sm {
@@ -2077,6 +2049,7 @@ main > .error {
 .row-actions {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -2508,7 +2481,9 @@ button.bars-col:focus-visible {
 }
 
 /* A header directly followed by a list: the header already supplies the gap */
-.section-head + .entries { margin-top: 0; }
+.section-head:has(+ .entries, + .auto-height > .entries) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
+.section-head + .entries,
+.section-head + .auto-height > .entries { margin-top: 0; }
 
 /* Second line under a card title */
 .card-sub {
@@ -2516,7 +2491,6 @@ button.bars-col:focus-visible {
   font-size: 0.875rem;
 }
 
-.row-actions.gap { gap: 0.5rem; }
 
 .entry-main {
   display: flex;

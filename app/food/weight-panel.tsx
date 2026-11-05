@@ -7,6 +7,7 @@ import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { formatDMY } from "@/lib/format-date";
 import { AnimatedNumber } from "../components/animated-number";
+import { useListMotion } from "../components/list-motion";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -39,6 +40,7 @@ export function WeightPanel() {
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const { rowRef, leave } = useListMotion();
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -123,7 +125,7 @@ export function WeightPanel() {
       showToast({ message: "Could not delete weigh-in." });
       return;
     }
-    setEntries((current) => current.filter((e) => e.id !== target.id));
+    leave(target.id, () => setEntries((current) => current.filter((e) => e.id !== target.id)));
     showToast({
       message: `Deleted weigh-in (${target.kilograms} kg)`,
       actionLabel: "Undo",
@@ -192,9 +194,9 @@ export function WeightPanel() {
             ) : (
               <div className="entries">
                 {sorted.map((entry) => (
-                  <div className="entry-row" key={entry.id}>
+                  <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
                     <strong>{formatDMY(entry.date)}</strong>
-                    <div className="row-actions gap">
+                    <div className="row-actions">
                       <span className="entry-value number-tabular">
                         {entry.kilograms} <span className="macro-target">kg</span>
                       </span>
