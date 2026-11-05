@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NextLink from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
 interface NavigationProps {
@@ -120,7 +120,13 @@ export function Navigation({ userName }: NavigationProps) {
   const overflow = navLinks.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
   const initial = userName.charAt(0).toUpperCase();
-  const signOutNow = () => signOut({ callbackUrl: "/signin" });
+  // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
+  const router = useRouter();
+  const signOutNow = async () => {
+    await signOut({ redirect: false });
+    router.push("/signin");
+    router.refresh();
+  };
 
   return (
     <>
