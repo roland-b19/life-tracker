@@ -38,8 +38,8 @@ function request(method: string, url: string, body?: unknown) {
   return new Request(url, {
     method,
     headers: body
-      ? { "Content-Type": "application/json", Origin: appOrigin }
-      : { Origin: appOrigin },
+      ? { "Content-Type": "application/json", Origin: appOrigin, Host: new URL(appOrigin).host }
+      : { Origin: appOrigin, Host: new URL(appOrigin).host },
     body: body ? JSON.stringify(body) : undefined,
   });
 }

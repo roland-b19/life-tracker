@@ -491,7 +491,7 @@ export function FoodClient({
       <Navigation userName={userName} />
 
       {/* Sub tabs: Daily Log vs Shopping List vs Food AI Chat vs AI Connector API */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+      <div className="subtabs">
         <button
           type="button"
           className={activeTab === "daily" ? "" : "secondary"}
@@ -603,7 +603,7 @@ export function FoodClient({
                 <p style={{ margin: "0.15rem 0 0" }} className="muted">
                   {summary.metrics.waterMl} ml / {targets.waterMl} ml ({waterPct}%)
                 </p>
-                <div className="progress-track" style={{ width: "12rem", marginTop: "0.4rem" }}>
+                <div className="progress-track" style={{ width: "12rem", maxWidth: "100%", marginTop: "0.4rem" }}>
                   <div
                     className="progress-fill"
                     style={{ width: `${waterPct}%`, background: "var(--tint)" }}
@@ -872,7 +872,7 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.5"
-                min="0.1"
+                min="0.5"
                 value={shopAmount}
                 onChange={(e) => setShopAmount(e.target.value)}
               />
