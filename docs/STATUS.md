@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (desktop dashboards and muscle map)_
+_Last updated: 2026-11-05 by Claude (dashboards 2: Tasks history, Money dashboard, routine editor, motion)_
 
 ## Phase
 
@@ -13,8 +13,9 @@ Mobile-First Elevation (Native iOS Frosted Bottom Tab Bar, 54px Compact Header, 
 Ember Design System & Navigation (dark warm graphite palette, SF Pro font, spring physics, desktop sidebar & mobile floating tab bar) is 100% complete and merged in `main` (PR #28).
 Storm palette (cool graphite, steel blue accent; replaces Ember's terracotta, see `docs/decisions.md` 2026-11-05) is merged in `main` (PR #32).
 UI cleanup (minimal, consistent pages; business finances removed; Tasks tabs; editable wishlist; d.m.y dates; modal fixes) is merged in `main` (PR #34).
-UI polish 2 (Health page with Weight inside, editable tasks/categories/expenses/water/steps/weigh-ins, Undo on every action, no sticky hover, no zoom) is on `fix/ui-polish-2`, awaiting CI and the user's manual test. It adds migration `0010_allow_weight_update` (GRANT UPDATE on `weight_entries`); it must be applied wherever `db:migrate` runs.
-Desktop dashboards (auto wishlist price ranges, Tasks Space/Today/Daily filters with a progress dashboard, spending and weight charts, 3D Gym muscle map) are on `fix/ui-polish-2`, awaiting CI and the user's manual test. They add migration `0011_todo_day_stats` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `three` dependency. Mobile redesign comes after all desktop functions are done.
+UI polish 2 (Health page with Weight inside, editable tasks/categories/expenses/water/steps/weigh-ins, Undo on every action, no sticky hover, no zoom) is merged in `main` (PR #35). It adds migration `0010_allow_weight_update` (GRANT UPDATE on `weight_entries`); it must be applied wherever `db:migrate` runs.
+Desktop dashboards (auto wishlist price ranges, Tasks Space/Today/Daily filters with a progress dashboard, spending and weight charts, 3D Gym muscle map) are merged in `main` (PR #35). They add migration `0011_todo_day_stats` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `three` dependency. Mobile redesign comes after all desktop functions are done.
+Dashboards 2 (Tasks: read-only past days, bar chart periods with tap-to-open day, centred ring; Money: Tasks-style dashboard plus a category donut; Gym: routine editor, no Recent workouts, deduplicated muscle map, credit behind an info disclosure; Health: one layout system, API tab removed; animated numbers, modal and row motion, hover border; stale-module error fix in the service worker) is on `feat/dashboards-2`, awaiting CI and the user's manual test. No migration, no new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -40,7 +41,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
     - Strict AI Data Line Quarantine: weight, steps, gym, money, tasks, and business data are physically unreachable from the AI endpoints.
     - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
     - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
-    - UI in `/food` under "AI Connector (Claude & Gemini)" tab with single-click token generation, secure one-time copy, active token revocation, and copyable config snippets for Claude Desktop and Gemini cURL.
+    - Token management UI removed on 2026-11-05 (see `docs/decisions.md`); the token backend and endpoints still work for existing tokens.
     - In-App Food AI Chat: interactive conversational assistant inside the Food UI powered by Gemini 2.5 Flash via native fetch; automatically estimates calories/macros from freeform text, executes the quarantined `log_meal` or `add_shopping_item` tools, and updates the UI real-time.
     - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, `tests/food-chat.test.ts`, 60 total passing across repo).
 

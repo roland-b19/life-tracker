@@ -137,8 +137,13 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
 
     expect(pastTask.isCarriedOver).toBe(false);
 
+    // Reading a past day (Nov 3, today = Nov 4) is read-only: nothing moves.
+    const pastRead = await getDailyTodos(userA, "personal", "2026-11-03", "2026-11-04");
+    expect(pastRead.todos).toHaveLength(0);
+    expect(pastRead.stats.percentage).toBe(100);
+
     // Query on Nov 4
-    const todayResult = await getDailyTodos(userA, "personal", "2026-11-04");
+    const todayResult = await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04");
     expect(todayResult.todos).toHaveLength(1);
     expect(todayResult.todos[0].title).toBe("Pay electricity bill");
     expect(todayResult.todos[0].dueDate).toBe("2026-11-04");
@@ -160,7 +165,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       currentDate: "2026-11-01",
     });
 
-    const todayResult = await getDailyTodos(userA, "personal", "2026-11-04");
+    const todayResult = await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04");
     expect(todayResult.todos).toHaveLength(0);
   });
 

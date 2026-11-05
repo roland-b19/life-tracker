@@ -22,6 +22,8 @@
   --separator: #353c45;
   --card-border: #434b56;
   --card-shadow: none;
+  --card-border-hover: #5b6573;
+  --card-shadow-hover: 0 10px 28px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --glass-blur: blur(28px) saturate(160%);
   /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
   --dur: 420ms;
@@ -44,6 +46,7 @@
   :root {
     --separator: var(--text);
     --card-border: var(--text);
+    --card-border-hover: var(--text);
   }
 }
 
@@ -212,13 +215,6 @@ h3 {
   flex-direction: column;
   gap: 1.25rem;
   min-width: 0;
-}
-
-@media (min-width: 992px) {
-  .dashboard-aside.sticky {
-    position: sticky;
-    top: 1.5rem;
-  }
 }
 
 .topbar,
@@ -412,7 +408,6 @@ h3 {
   transform-origin: bottom right;
   animation: modalScaleUp var(--dur) var(--ease) both;
 }
-
 
 .more-user {
   display: flex;
@@ -611,6 +606,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   border-left: 4px solid var(--tint);
   margin-bottom: 1.25rem;
 }
@@ -655,7 +651,7 @@ main {
   background: var(--surface-solid);
   border: 1px solid var(--separator);
   border-radius: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   box-shadow: none;
 }
 
@@ -700,9 +696,11 @@ main {
 
 .toggle-label {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.85rem;
+  gap: 0.55rem;
+  min-height: 44px;
+  font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
 }
@@ -712,14 +710,6 @@ main {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-@media (min-width: 640px) {
-  .macro-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-  }
 }
 
 .macro-card {
@@ -779,23 +769,11 @@ main {
   background: var(--danger);
 }
 
-.water-card {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding: 1.1rem 1.35rem;
-  background: var(--tint-subtle);
-  border: 1px solid rgba(134, 180, 234, 0.2);
-  border-radius: 1rem;
-}
-
 .tap-buttons {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .tap-btn {
@@ -847,7 +825,7 @@ main {
   border: 1px solid var(--card-border);
   border-radius: 1.15rem;
   box-shadow: var(--card-shadow);
-  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   animation: rise calc(var(--dur) + 160ms) var(--ease) both;
 }
 
@@ -862,16 +840,16 @@ main {
 
 @media (min-width: 768px) {
   .surface,
-  .money-hero-card,
-  .quick-expense-card,
   .todo-hero-card {
     padding: 1.6rem;
   }
 }
 
+/* Hover: the card lifts a little and its edge catches the light, like a raised sheet; no colour jump */
 @media (hover: hover) {
   .surface:hover {
-    border-color: var(--tint);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--card-shadow-hover);
   }
 }
 
@@ -1029,30 +1007,11 @@ textarea:focus-visible {
   margin: 4rem auto;
 }
 
-/* Money Module Styles (Apple HIG) */
-.money-hero-card {
-  background: var(--surface);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
-  border-radius: 1.15rem;
-  padding: 1.35rem;
-  box-shadow: var(--card-shadow);
-}
-
 .month-selector {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
-}
-
-.month-label {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--secondary);
-  text-transform: capitalize;
-  white-space: nowrap;
 }
 
 .month-nav-btn {
@@ -1076,144 +1035,6 @@ textarea:focus-visible {
     border-color: var(--tint);
     color: var(--tint);
   }
-}
-
-.total-spent-display {
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin-bottom: 0.25rem;
-}
-
-.total-spent-amount {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
-.total-spent-currency {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--secondary);
-}
-
-.quick-expense-card {
-  background: var(--surface);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
-  border-radius: 1.15rem;
-  padding: 1.35rem;
-  box-shadow: var(--card-shadow);
-}
-
-.amount-input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.amount-input-hero {
-  width: 100%;
-  font-size: 1.85rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  padding: 0.75rem 4.5rem 0.75rem 1rem;
-  border: 1.5px solid var(--separator);
-  border-radius: 0.85rem;
-  background: var(--surface-solid);
-  color: var(--text);
-}
-
-.amount-input-hero:focus {
-  border-color: var(--tint);
-  box-shadow: 0 0 0 3px var(--tint-subtle);
-  outline: none;
-}
-
-.amount-currency-tag {
-  position: absolute;
-  right: 1.25rem;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--secondary);
-  pointer-events: none;
-}
-
-.category-chips-scroll {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
-  scrollbar-width: none;
-}
-
-.category-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.95rem;
-  border-radius: 2rem;
-  border: 1px solid var(--separator);
-  background: var(--surface-secondary);
-  color: var(--text);
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  min-height: 2.25rem;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-
-@media (hover: hover) {
-  .category-chip:hover:not(:disabled) {
-    background: var(--surface-secondary);
-    border-color: var(--tint);
-  }
-}
-
-.category-chip.add {
-  justify-content: center;
-  border-style: dashed;
-  color: var(--secondary);
-}
-
-.category-chip.active {
-  background: var(--tint-subtle);
-  color: var(--tint);
-  border-color: var(--tint);
-  box-shadow: none;
-}
-
-.breakdown-row {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--separator);
-}
-
-.breakdown-row:last-child {
-  border-bottom: none;
-}
-
-.breakdown-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.95rem;
-}
-
-.breakdown-cat-name {
-  font-weight: 600;
-}
-
-.breakdown-cat-val {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
 }
 
 .expense-row {
@@ -1387,7 +1208,28 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
+.todo-checkbox-btn.static {
+  cursor: default;
+}
+
+.todo-checkbox-btn.static::after {
+  content: none;
+}
+
+.push-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-note {
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+  color: var(--secondary);
+}
+
 .push-toggle-card {
+  margin-bottom: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1484,13 +1326,14 @@ textarea:focus-visible {
   max-height: 100%;
   margin: auto;
   touch-action: auto;
-  animation: modalScaleUp var(--dur) var(--ease) both;
+  animation: modalScaleUp calc(var(--dur) + 80ms) var(--pop) both;
 }
 
+/* Sheet springs up from slightly below and smaller, settling with a small overshoot */
 @keyframes modalScaleUp {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: scale(0.92) translateY(24px);
   }
   to {
     opacity: 1;
@@ -1921,6 +1764,88 @@ main > .error {
   flex: 1;
 }
 
+/* Dashboard toolbar: same columns as .dashboard-grid, so its edges line up with the cards below */
+.toolbar.dash {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.toolbar-group .segmented {
+  flex: 1;
+}
+
+/* The stepper in a toolbar wears the segmented control's container, so both sit at the same height */
+.toolbar.dash .month-selector {
+  margin: 0;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--surface-secondary);
+  border: 1px solid var(--separator);
+  border-radius: 0.95rem;
+}
+
+.toolbar.dash .month-nav-btn {
+  border-color: transparent;
+  background: transparent;
+  border-radius: 0.7rem;
+}
+
+/* Chart options (period, metric) side by side above a chart */
+.chart-controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.chart-controls .segmented {
+  flex: 1;
+}
+
+@media (min-width: 992px) {
+  .toolbar.dash {
+    grid-template-columns: 1.6fr 1fr;
+    gap: 1.5rem;
+  }
+}
+
+/* Date or month stepper: arrows at the ends, the label in the middle (tappable to jump back) */
+.month-label-btn {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.month-label-btn:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.month-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.readonly-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
 /* ==========================================================================
    View Transitions API Support
    ========================================================================== */
@@ -2043,8 +1968,16 @@ main > .error {
 
 .item-link {
   font-size: 0.875rem;
-  color: var(--secondary);
-  text-decoration: underline;
+  font-weight: 600;
+  color: var(--tint);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+  .item-link:hover {
+    text-decoration: underline;
+  }
 }
 
 .item-link-text {
@@ -2077,6 +2010,7 @@ main > .error {
 }
 
 .item-actions .btn-sm {
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -2102,9 +2036,13 @@ main > .error {
   margin-left: 0.25rem;
 }
 
+/* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
 .streak {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   gap: 0.2rem;
   flex-shrink: 0;
   color: var(--success);
@@ -2139,13 +2077,6 @@ main > .error {
   flex-shrink: 0;
 }
 
-.total-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
 /* Expense rows: category, price right below, date last; edit and delete on the right */
 .expense-info {
   min-width: 0;
@@ -2170,7 +2101,6 @@ main > .error {
   fill: none;
   stroke: var(--tint);
   stroke-linecap: round;
-  transition: stroke-dashoffset var(--dur) var(--ease);
 }
 
 .ring-text {
@@ -2187,7 +2117,7 @@ main > .error {
 .bars-plot {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--gap, 4px);
   border-bottom: 1px solid var(--separator);
   background: repeating-linear-gradient(
     to top,
@@ -2206,12 +2136,44 @@ main > .error {
   align-items: flex-end;
 }
 
+button.bars-col {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .bars-bar {
   width: 100%;
   border-radius: 4px 4px 0 0;
   background: var(--tint);
   opacity: 0.55;
-  transition: height var(--dur) var(--ease);
+  transform-origin: bottom;
+  animation: bar-grow 700ms var(--ease) both;
+  transition: height var(--dur) var(--ease), opacity var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (hover: hover) {
+  button.bars-col:hover .bars-bar {
+    opacity: 0.9;
+  }
+}
+
+button.bars-col:active:not(:disabled) {
+  transform: none;
+}
+
+button.bars-col:focus-visible {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
 }
 
 .bars-bar.hl {
@@ -2225,7 +2187,7 @@ main > .error {
 
 .bars-labels {
   display: flex;
-  gap: 4px;
+  gap: var(--gap, 4px);
   margin-top: 0.35rem;
   font-size: 0.6875rem;
   color: var(--secondary);
@@ -2336,17 +2298,98 @@ main > .error {
   color: var(--secondary);
 }
 
+/* Ring (or donut) centred in its card, caption centred below */
 .dash-hero {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem;
+  padding-block: 0.25rem;
+  text-align: center;
 }
 
 .dash-hero-text {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.2rem;
   min-width: 0;
+}
+
+/* Donut chart (Money): chart left, legend right; stacks when narrow */
+.donut {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.donut-chart {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.donut-chart svg circle {
+  transition: stroke-dasharray var(--dur) var(--ease), stroke-dashoffset var(--dur) var(--ease);
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.donut-center strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.donut-center span {
+  font-size: 0.75rem;
+  color: var(--secondary);
+}
+
+.donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+
+.donut-legend li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.donut-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+}
+
+.donut-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-legend .number-tabular {
+  color: var(--secondary);
+  font-weight: 600;
 }
 
 /* Gym muscle map */
@@ -2431,9 +2474,40 @@ main > .error {
   font-size: 0.8rem;
 }
 .muscle-credit {
-  margin: 1rem 0 0;
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  max-width: calc(100% - 1.2rem);
   font-size: 0.75rem;
   color: var(--secondary);
+  text-align: right;
+}
+.muscle-credit summary {
+  list-style: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.muscle-credit summary::-webkit-details-marker { display: none; }
+.muscle-credit[open] summary,
+.muscle-credit summary:focus-visible { color: var(--tint); }
+.muscle-credit p {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  width: max-content;
+  max-width: min(18rem, 70vw);
+  margin: 0 0 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  background: var(--surface-solid);
+  border: 1px solid var(--separator);
+  animation: rise var(--dur) var(--ease);
 }
 @media (max-width: 760px) {
   .muscle-layout {
@@ -2442,3 +2516,260 @@ main > .error {
 }
 .muscle-side .entry-row .number-tabular { white-space: nowrap; }
 .muscle-card { margin-bottom: 1.25rem; }
+
+/* Read by screen readers, not shown */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Active day filter above a list; tap to clear */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--tint-subtle);
+  color: var(--tint);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  animation: rise var(--dur) var(--ease);
+}
+
+@media (hover: hover) {
+  .filter-chip:hover {
+    border-color: var(--tint);
+  }
+}
+
+/* A header directly followed by a list: the header already supplies the gap */
+.section-head + .entries { margin-top: 0; }
+
+/* Second line under a card title */
+.card-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+}
+
+.row-actions.gap { gap: 0.5rem; }
+
+.entry-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.entry-side { white-space: nowrap; }
+
+/* Gym: active session */
+.exercise-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.exercise-meta { font-size: 0.875rem; }
+.set-list { margin: 0.25rem 0 0.5rem; }
+.set-flag { margin-left: 0.5rem; }
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin-top: 0.5rem;
+}
+.session-footer {
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--separator);
+}
+.session-footer .form-row { flex-wrap: wrap; align-items: end; }
+.grow-2 { flex: 2 1 15rem; }
+
+/* Gym: training days */
+.split-day-list {
+  display: grid;
+  gap: 0.6rem;
+}
+.split-day-card { padding: 0.5rem 0.75rem 0.5rem 1rem; gap: 0.75rem; }
+.split-day-card.selected {
+  border-color: var(--tint);
+  box-shadow: 0 0 0 1px var(--tint);
+}
+.split-day-select {
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.25rem 0;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.split-day-select:focus-visible { outline: 2px solid var(--tint); outline-offset: 4px; border-radius: 0.5rem; }
+.split-day-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+}
+.split-day-sub { font-size: 0.875rem; }
+
+/* Gym: routine editor */
+.routine-list {
+  display: grid;
+  gap: 0.75rem;
+}
+.routine-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem 0.85rem 1rem;
+  border: 1px solid var(--separator);
+  border-radius: 0.85rem;
+  background: var(--surface-solid);
+  animation: rise var(--dur) var(--ease);
+}
+.routine-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.routine-row-head strong { min-width: 0; overflow-wrap: anywhere; }
+.routine-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.routine-add {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+}
+.routine-add > button { flex: none; }
+.delete-icon-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* Health */
+.icon-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.metric-big {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.form-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.stat-row.two { grid-template-columns: repeat(2, 1fr); }
+.head-actions + .empty-note,
+.head-actions + .shopping-group { margin-top: 1rem; }
+.shopping-group + .shopping-group { margin-top: 1.25rem; }
+.group-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+/* Health: assistant chat */
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.chat-chip {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 2rem;
+  font-size: 0.8125rem;
+}
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--separator);
+  border-radius: 0.9rem;
+  background: var(--surface-secondary);
+}
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 85%;
+  animation: rise var(--dur) var(--ease) both;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.chat-bubble {
+  padding: 0.65rem 0.9rem;
+  border-radius: 1.1rem 1.1rem 1.1rem 0.3rem;
+  border: 1px solid var(--separator);
+  background: var(--surface);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.chat-msg.user .chat-bubble {
+  border-color: transparent;
+  border-radius: 1.1rem 1.1rem 0.3rem 1.1rem;
+  background: var(--tint);
+  color: var(--on-tint);
+}
+.chat-bubble.typing {
+  color: var(--secondary);
+  font-style: italic;
+}
+.chat-tool {
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--tint-subtle);
+  color: var(--tint);
+  font-size: 0.8125rem;
+}
+.chat-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.chat-form input { flex: 1; min-width: 0; }
+
+/* New rows slide into place instead of popping in */
+.entry-row,
+.expense-row,
+.item-row,
+.shopping-row,
+.todo-row,
+.split-day-card,
+.routine-row {
+  animation: row-in calc(var(--dur) - 60ms) var(--ease) both;
+}
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}

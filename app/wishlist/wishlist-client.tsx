@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
+import { AnimatedNumber } from "../components/animated-number";
 import { CheckIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -274,7 +275,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               </h2>
             </div>
             <p className="item-total number-tabular">
-              {formatRon(totalCost)} <span className="muted">RON</span>
+              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
             </p>
           </section>
         </div>
@@ -291,7 +292,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               Name
               <input
                 type="text"
-                placeholder="e.g. Headphones"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={busy}
@@ -307,7 +307,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                 inputMode="decimal"
                 step="0.01"
                 min="0.01"
-                placeholder="0.00"
                 value={estimatedPrice}
                 onChange={(e) => setEstimatedPrice(e.target.value)}
                 disabled={busy}

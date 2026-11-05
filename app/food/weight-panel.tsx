@@ -6,6 +6,7 @@ import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { formatDMY } from "@/lib/format-date";
+import { AnimatedNumber } from "../components/animated-number";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -15,6 +16,8 @@ function today() {
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
 }
+
+const twoDecimals = (n: number) => String(Math.round(n * 100) / 100);
 
 const sortNewestFirst = (list: WeightEntry[]) => [...list].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -164,125 +167,99 @@ export function WeightPanel() {
 
   return (
     <>
-      <div className="dashboard-main">
-        <section className="surface" aria-labelledby="trend-title">
-          <div className="section-head">
-            <h2 id="trend-title" className="section-title">
-              7-Day Average
-            </h2>
-            {weeklyDelta !== null && (
-              <span
-                className="badge"
-                style={{
-                  background: weeklyDelta > 0 ? "rgba(143, 209, 158, 0.15)" : "rgba(239, 197, 111, 0.15)",
-                  color: weeklyDelta > 0 ? "var(--success)" : "var(--warning)",
-                  fontSize: "0.85rem",
-                }}
-              >
-                {weeklyDelta > 0 ? "+" : ""}
-                {weeklyDelta} kg/week
-              </span>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-              gap: "0.85rem",
-            }}
-          >
-            <div className="macro-card">
-              <span className="macro-title">Current 7-Day Average</span>
-              <span className="macro-numbers number-tabular" style={{ fontSize: "1.85rem", color: "var(--tint)" }}>
-                {sevenDayAvg !== null ? `${sevenDayAvg} ` : "— "}
-                <span className="macro-target" style={{ fontSize: "1rem" }}>kg</span>
-              </span>
-            </div>
-
-            <div className="macro-card">
-              <span className="macro-title">Latest Recorded</span>
-              <span className="macro-numbers number-tabular" style={{ fontSize: "1.85rem" }}>
-                {sorted.length > 0 ? `${sorted[0].kilograms} ` : "— "}
-                <span className="macro-target" style={{ fontSize: "1rem" }}>kg</span>
-              </span>
-            </div>
-          </div>
-        </section>
-
-        {sorted.length >= 2 && (
-          <section className="surface" aria-labelledby="chart-title">
+      <div className="dashboard-grid">
+        <div className="dashboard-main">
+          <section className="surface" aria-labelledby="history-title">
             <div className="section-head">
-              <h2 id="chart-title" className="section-title">
-                Weight over time
+              <h2 id="history-title" className="section-title">
+                History
               </h2>
-              <span className="muted">kg</span>
+              <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                <PlusIcon size={14} />
+                Add weigh-in
+              </button>
             </div>
-            <LineChart
-              points={sorted
-                .slice(0, 30)
-                .reverse()
-                .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
-              summary="Weight over the last recorded entries"
-            />
-          </section>
-        )}
 
-        <section className="surface" aria-labelledby="history-title">
-          <div className="section-head">
-            <h2 id="history-title" className="section-title">
-              History
-            </h2>
-            <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-              <PlusIcon size={14} />
-              Add weigh-in
-            </button>
-          </div>
+            {error && !isModalOpen && <p className="error">{error}</p>}
 
-          {error && !isModalOpen && <p className="error">{error}</p>}
-
-          <div className="entries">
-            {loading && (
-              <div style={{ display: "grid", gap: "0.6rem", padding: "0.5rem 0" }}>
+            {loading ? (
+              <div className="entries">
                 <div className="skeleton skeleton-row" />
                 <div className="skeleton skeleton-row" />
               </div>
-            )}
-
-            {!loading && entries.length === 0 && <p className="empty-note">No weigh-ins yet.</p>}
-
-            {!loading &&
-              sorted.map((entry) => (
-                <div className="entry-row" key={entry.id}>
-                  <span style={{ fontWeight: 600 }}>{formatDMY(entry.date)}</span>
-                  <div className="row-actions" style={{ marginLeft: "auto" }}>
-                    <span className="entry-value number-tabular" style={{ fontSize: "1.1rem", marginRight: "0.5rem" }}>
-                      {entry.kilograms}{" "}
-                      <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>kg</span>
-                    </span>
-                    <button
-                      className="delete-icon-btn edit"
-                      type="button"
-                      onClick={() => openForm(entry)}
-                      aria-label={`Edit weigh-in for ${formatDMY(entry.date)}`}
-                      title="Edit"
-                    >
-                      <PencilIcon size={17} />
-                    </button>
-                    <button
-                      className="delete-icon-btn"
-                      type="button"
-                      onClick={() => void removeEntry(entry)}
-                      aria-label={`Delete weigh-in for ${formatDMY(entry.date)}`}
-                      title="Delete"
-                    >
-                      <TrashIcon size={17} />
-                    </button>
+            ) : entries.length === 0 ? (
+              <p className="empty-note">No weigh-ins yet.</p>
+            ) : (
+              <div className="entries">
+                {sorted.map((entry) => (
+                  <div className="entry-row" key={entry.id}>
+                    <strong>{formatDMY(entry.date)}</strong>
+                    <div className="row-actions gap">
+                      <span className="entry-value number-tabular">
+                        {entry.kilograms} <span className="macro-target">kg</span>
+                      </span>
+                      <button
+                        className="delete-icon-btn edit"
+                        type="button"
+                        onClick={() => openForm(entry)}
+                        aria-label={`Edit weigh-in for ${formatDMY(entry.date)}`}
+                        title="Edit"
+                      >
+                        <PencilIcon size={17} />
+                      </button>
+                      <button
+                        className="delete-icon-btn"
+                        type="button"
+                        onClick={() => void removeEntry(entry)}
+                        aria-label={`Delete weigh-in for ${formatDMY(entry.date)}`}
+                        title="Delete"
+                      >
+                        <TrashIcon size={17} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-          </div>
-        </section>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="dashboard-aside">
+          <section className="surface" aria-labelledby="trend-title">
+            <div className="section-head">
+              <h2 id="trend-title" className="section-title">
+                Trend
+              </h2>
+              {weeklyDelta !== null && (
+                <span className={`badge ${weeklyDelta > 0 ? "badge-success" : "badge-warning"}`}>
+                  {weeklyDelta > 0 ? "+" : ""}
+                  {weeklyDelta} kg/week
+                </span>
+              )}
+            </div>
+            <div className="stat-row two">
+              <div className="stat-tile">
+                <strong className="number-tabular">
+                  {sevenDayAvg !== null ? <AnimatedNumber value={sevenDayAvg} format={twoDecimals} /> : "—"}
+                </strong>
+                <span>7-day average, kg</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">{sorted.length > 0 ? sorted[0].kilograms : "—"}</strong>
+                <span>Latest, kg</span>
+              </div>
+            </div>
+            {sorted.length >= 2 && (
+              <LineChart
+                points={sorted
+                  .slice(0, 30)
+                  .reverse()
+                  .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
+                summary="Weight over the last recorded entries"
+              />
+            )}
+          </section>
+        </div>
       </div>
 
       <Modal isOpen={isModalOpen} onClose={closeForm} title={editing ? "Edit weigh-in" : "New weigh-in"}>
@@ -300,7 +277,6 @@ export function WeightPanel() {
                 min="20"
                 max="500"
                 step="0.01"
-                placeholder="e.g. 84.5"
                 value={kilograms}
                 onChange={(e) => setKilograms(e.target.value)}
                 required

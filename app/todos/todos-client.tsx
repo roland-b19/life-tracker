@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { CheckIcon, TrashIcon, FlameIcon, BellIcon, PencilIcon, PlusIcon } from "../components/icons";
+import { CheckIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, PencilIcon, PlusIcon } from "../components/icons";
+import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
@@ -21,6 +22,23 @@ import { TodoSpace } from "@/lib/validations/todos";
 import { formatDMY, toISODate } from "@/lib/format-date";
 
 type TaskTab = "daily" | "one-day";
+type Period = "7" | "30" | "90";
+type Metric = "rate" | "done";
+
+const PERIODS: { value: Period; label: string }[] = [
+  { value: "7", label: "7D" },
+  { value: "30", label: "30D" },
+  { value: "90", label: "90D" },
+];
+const METRICS: { value: Metric; label: string }[] = [
+  { value: "rate", label: "Rate" },
+  { value: "done", label: "Done" },
+];
+// Sparse day labels so 30 and 90 bars stay readable.
+const LABEL_EVERY: Record<Period, number> = { "7": 1, "30": 5, "90": 15 };
+
+const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
+  `${new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday })} ${formatDMY(iso)}`;
 
 interface TodosClientProps {
   userName: string;
@@ -30,8 +48,6 @@ interface TodosClientProps {
   initialHistory: Record<TodoSpace, TodoDayStat[]>;
 }
 
-const HISTORY_DAYS = 14;
-
 export function TodosClient({
   userName,
   todayDate,
@@ -40,8 +56,10 @@ export function TodosClient({
   initialHistory,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
-  const [currentDate, setCurrentDate] = useState(todayDate);
+  const [date, setDate] = useState(todayDate);
   const [tab, setTab] = useState<TaskTab>("daily");
+  const [period, setPeriod] = useState<Period>("30");
+  const [metric, setMetric] = useState<Metric>("rate");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
 
@@ -66,24 +84,30 @@ export function TodosClient({
 
   const requestId = useRef(0);
 
-  const currentTodos = todosMap[space];
   const isDaily = tab === "daily";
-  // Daily tasks always belong to today; only the Today filter can browse other days.
-  const activeDate = isDaily ? todayDate : currentDate;
-  const visibleTodos = currentTodos.filter((t) => t.isRecurring === isDaily);
-  const doneCount = visibleTodos.filter((t) => t.isCompleted).length;
-  const percentage = visibleTodos.length ? Math.round((doneCount / visibleTodos.length) * 100) : 0;
-
-  // Last N days for the active filter; days without a snapshot are shown as empty.
-  const byDate = new Map(
-    history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]),
+  // Past days are read-only: they show what was done, never edit, delete or tick.
+  const isPast = date < todayDate;
+  const visibleTodos = todosMap[space].filter(
+    (t) => t.isRecurring === isDaily && (!isPast || !t.isRecurring || toISODate(new Date(t.createdAt)) <= date),
   );
+
+  const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
+  // Past days use the snapshot taken that day; today and later use the live list.
+  const snapshot = isPast ? byDate.get(date) : undefined;
+  const doneCount = isPast ? (snapshot?.done ?? 0) : visibleTodos.filter((t) => t.isCompleted).length;
+  const totalCount = isPast ? (snapshot?.total ?? 0) : visibleTodos.length;
+  const noRecord = isPast && !snapshot;
+  // Nothing due counts as everything done.
+  const percentage = totalCount ? Math.round((doneCount / totalCount) * 100) : 100;
+
+  // History for the chosen period; days without a snapshot are shown as empty.
+  const span = Number(period);
   const today = new Date(`${todayDate}T00:00:00`);
-  const days = Array.from({ length: HISTORY_DAYS }, (_, i) => {
+  const days = Array.from({ length: span }, (_, i) => {
     const d = new Date(today);
-    d.setDate(today.getDate() - (HISTORY_DAYS - 1 - i));
+    d.setDate(today.getDate() - (span - 1 - i));
     const iso = toISODate(d);
-    return { iso, label: String(d.getDate()), stat: byDate.get(iso) };
+    return { iso, day: d.getDate(), stat: byDate.get(iso) };
   });
   const tracked = days.filter((d) => d.stat);
   const avg = tracked.length
@@ -91,19 +115,20 @@ export function TodosClient({
     : 0;
   const perfectDays = tracked.filter((d) => d.stat!.done === d.stat!.total).length;
   const doneTotal = tracked.reduce((n, d) => n + d.stat!.done, 0);
-  const bars = days.map((d) => ({
-    label: d.label,
-    value: d.stat ? (d.stat.done / d.stat.total) * 100 : 0,
+  const maxDone = Math.max(1, ...tracked.map((d) => d.stat!.done));
+  const every = LABEL_EVERY[period];
+  const bars = days.map((d, i) => ({
+    label: (span - 1 - i) % every === 0 ? String(d.day) : "",
+    value: d.stat ? (metric === "rate" ? (d.stat.done / d.stat.total) * 100 : d.stat.done) : 0,
     empty: !d.stat,
-    highlight: d.iso === activeDate,
-    title: d.stat ? `${formatDMY(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${formatDMY(d.iso)}: no tasks`,
+    highlight: d.iso === date,
+    title: d.stat ? `${dayLabel(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${dayLabel(d.iso)}: no record`,
   }));
 
   // Check push notification availability on mount
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker
-        .register("/sw.js")
+      navigator.serviceWorker.ready
         .then(() => {
           setPushSupported(true);
           if (Notification.permission === "granted") {
@@ -133,19 +158,21 @@ export function TodosClient({
     }
   };
 
-  const handleDateChange = (daysDelta: number) => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + daysDelta);
-    const newDateStr = toISODate(d);
-    setCurrentDate(newDateStr);
-    void loadDay(newDateStr);
+  const goTo = (next: string) => {
+    setDate(next);
+    void loadDay(next);
+  };
+
+  const stepDay = (delta: number) => {
+    const d = new Date(`${date}T00:00:00`);
+    d.setDate(d.getDate() + delta);
+    goTo(toISODate(d));
   };
 
   const changeTab = (next: TaskTab) => {
     setTab(next);
-    // Switching to Today shows the chosen day, so make sure its tasks are loaded.
-    if (next === "one-day" && currentDate !== todayDate) void loadDay(currentDate);
-    else if (next === "daily" && currentDate !== todayDate) void loadDay(todayDate);
+    // Daily tasks have no future: coming back from a future one-off day lands on today.
+    if (next === "daily" && date > todayDate) goTo(todayDate);
   };
 
   const openForm = (todo?: TodoItem) => {
@@ -179,7 +206,7 @@ export function TodosClient({
             actionLabel: "Undo",
             onAction: async () => {
               await updateTodoAction({ id: before.id, title: before.title, reminderTime: before.reminderTime });
-              await loadDay(activeDate);
+              await loadDay(date);
             },
           });
         }
@@ -188,7 +215,7 @@ export function TodosClient({
           space,
           title,
           isRecurring: isDaily,
-          dueDate: activeDate,
+          dueDate: date,
           reminderTime,
         });
         if (res.success && res.todo) {
@@ -199,13 +226,13 @@ export function TodosClient({
             actionLabel: "Undo",
             onAction: async () => {
               await deleteTodoAction(createdId);
-              await loadDay(activeDate);
+              await loadDay(date);
             },
           });
         }
       }
       closeForm();
-      await loadDay(activeDate);
+      await loadDay(date);
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     } finally {
@@ -222,7 +249,6 @@ export function TodosClient({
 
   const handleToggleTodo = async (todo: TodoItem) => {
     const next = !todo.isCompleted;
-    const date = activeDate;
     setCompleted(todo.id, next);
     try {
       await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
@@ -261,14 +287,14 @@ export function TodosClient({
               dueDate: target.dueDate,
               reminderTime: target.reminderTime,
             });
-            await loadDay(activeDate);
+            await loadDay(date);
           },
         });
       }
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     }
-    await loadDay(activeDate);
+    await loadDay(date);
   };
 
   const handleEnablePush = async () => {
@@ -309,31 +335,55 @@ export function TodosClient({
     <main>
       <Navigation userName={userName} />
 
-      <div className="toolbar">
-        <Segmented
-          label="Space"
-          value={space}
-          options={[
-            { value: "personal", label: "Personal" },
-            { value: "business", label: "Business" },
-          ]}
-          onChange={setSpace}
-        />
-        <Segmented
-          label="Task type"
-          value={tab}
-          options={[
-            { value: "daily", label: "Daily" },
-            { value: "one-day", label: "Today" },
-          ]}
-          onChange={changeTab}
-        />
+      <div className="toolbar dash">
+        <div className="toolbar-group">
+          <Segmented
+            label="Space"
+            value={space}
+            options={[
+              { value: "personal", label: "Personal" },
+              { value: "business", label: "Business" },
+            ]}
+            onChange={setSpace}
+          />
+          <Segmented
+            label="Task type"
+            value={tab}
+            options={[
+              { value: "daily", label: "Daily" },
+              { value: "one-day", label: "Today" },
+            ]}
+            onChange={changeTab}
+          />
+        </div>
+        <div className="month-selector" role="group" aria-label="Day">
+          <button type="button" className="month-nav-btn" onClick={() => stepDay(-1)} aria-label="Previous day">
+            ‹
+          </button>
+          <button
+            type="button"
+            className="month-label-btn number-tabular"
+            onClick={() => goTo(todayDate)}
+            disabled={date === todayDate}
+            title={date === todayDate ? undefined : "Back to today"}
+          >
+            {dayLabel(date)}
+          </button>
+          <button
+            type="button"
+            className="month-nav-btn"
+            onClick={() => stepDay(1)}
+            disabled={isDaily && date >= todayDate}
+            aria-label="Next day"
+          >
+            ›
+          </button>
+        </div>
       </div>
 
-      {/* Web Push Notification Banner */}
       {pushSupported && !pushSubscribed && (
         <div className="push-toggle-card">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+          <span className="push-toggle-label">
             <BellIcon size={16} /> Task reminders
           </span>
           <button type="button" className="secondary btn-sm" onClick={handleEnablePush}>
@@ -342,11 +392,7 @@ export function TodosClient({
         </div>
       )}
 
-      {pushStatusMsg && (
-        <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 1.25rem" }}>
-          {pushStatusMsg}
-        </p>
-      )}
+      {pushStatusMsg && <p className="status-note">{pushStatusMsg}</p>}
 
       {errorMsg && (
         <div className="error" role="alert">
@@ -359,63 +405,54 @@ export function TodosClient({
           <section className="surface" aria-labelledby="tasks-title">
             <div className="section-head">
               <h2 id="tasks-title" className="section-title">
-                {isDaily ? "Daily tasks" : "Today"}
+                {isDaily ? "Daily tasks" : "Tasks"}
               </h2>
-              <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                <PlusIcon size={14} />
-                Add task
-              </button>
+              {!isPast && (
+                <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                  <PlusIcon size={14} />
+                  Add task
+                </button>
+              )}
             </div>
 
-            {!isDaily && (
-              <div className="month-selector">
-                <button
-                  type="button"
-                  className="month-nav-btn"
-                  onClick={() => handleDateChange(-1)}
-                  aria-label="Previous day"
-                >
-                  ‹
-                </button>
-                <span className="month-label">
-                  {currentDate === todayDate ? "Today" : formatDMY(currentDate)}
-                </span>
-                <button
-                  type="button"
-                  className="month-nav-btn"
-                  onClick={() => handleDateChange(1)}
-                  aria-label="Next day"
-                >
-                  ›
-                </button>
-              </div>
+            {isPast && (
+              <p className="readonly-note">
+                <LockIcon size={13} /> Past days are read-only
+              </p>
             )}
 
             {visibleTodos.length > 0 ? (
               <div className="todo-list">
                 {visibleTodos.map((task) => (
                   <div key={task.id} className="todo-row">
-                    <button
-                      type="button"
-                      className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                      onClick={() => handleToggleTodo(task)}
-                      aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                    >
-                      {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                    </button>
+                    {isPast ? (
+                      !isDaily && (
+                        <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
+                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                        </span>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
+                        onClick={() => handleToggleTodo(task)}
+                        aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                      >
+                        {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                      </button>
+                    )}
 
                     <div className="todo-main">
-                      <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>
+                      <span className={`todo-title ${!isPast && task.isCompleted ? "completed" : ""}`}>
                         {task.title}
+                        {isPast && !isDaily && (
+                          <span className="visually-hidden">{task.isCompleted ? ", done" : ", not done"}</span>
+                        )}
                       </span>
                       {((!isDaily && task.isCarriedOver) || task.reminderTime) && (
                         <div className="badge-row">
-                          {!isDaily && task.isCarriedOver && (
-                            <span className="badge badge-carried">Carried over</span>
-                          )}
-                          {task.reminderTime && (
-                            <span className="badge badge-reminder">{task.reminderTime}</span>
-                          )}
+                          {!isDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
+                          {task.reminderTime && <span className="badge badge-reminder">{task.reminderTime}</span>}
                         </div>
                       )}
                     </div>
@@ -427,29 +464,35 @@ export function TodosClient({
                       </span>
                     )}
 
-                    <button
-                      type="button"
-                      className="delete-icon-btn edit"
-                      onClick={() => openForm(task)}
-                      aria-label={`Edit ${task.title}`}
-                      title="Edit"
-                    >
-                      <PencilIcon size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="delete-icon-btn"
-                      onClick={() => handleDeleteTodo(task)}
-                      aria-label={`Delete ${task.title}`}
-                      title="Delete"
-                    >
-                      <TrashIcon size={17} />
-                    </button>
+                    {!isPast && (
+                      <>
+                        <button
+                          type="button"
+                          className="delete-icon-btn edit"
+                          onClick={() => openForm(task)}
+                          aria-label={`Edit ${task.title}`}
+                          title="Edit"
+                        >
+                          <PencilIcon size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="delete-icon-btn"
+                          onClick={() => handleDeleteTodo(task)}
+                          aria-label={`Delete ${task.title}`}
+                          title="Delete"
+                        >
+                          <TrashIcon size={17} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="empty-note">{isDaily ? "No daily tasks yet." : "Nothing planned for this day."}</p>
+              <p className="empty-note">
+                {isDaily ? "No daily tasks yet." : isPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
+              </p>
             )}
           </section>
         </div>
@@ -461,42 +504,57 @@ export function TodosClient({
                 Progress
               </h2>
             </div>
-            <div className="dash-hero">
-              <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "day's"} tasks done`} />
-              <div className="dash-hero-text">
-                <span className="todo-stats-fraction number-tabular">
-                  {doneCount} of {visibleTodos.length} done
-                </span>
-                <span className="muted">
-                  {isDaily || currentDate === todayDate ? "Today" : formatDMY(currentDate)}
-                </span>
+            {noRecord ? (
+              <p className="empty-note">No record for {dayLabel(date, "long")}.</p>
+            ) : (
+              <div className="dash-hero">
+                <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "the day's"} tasks done`} />
+                <div className="dash-hero-text">
+                  <span className="todo-stats-fraction number-tabular">
+                    <AnimatedNumber value={doneCount} /> of <AnimatedNumber value={totalCount} /> done
+                  </span>
+                  <span className="muted">{date === todayDate ? "Today" : dayLabel(date, "long")}</span>
+                </div>
               </div>
-            </div>
+            )}
           </section>
 
           <section className="surface" aria-labelledby="history-title">
             <div className="section-head">
               <h2 id="history-title" className="section-title">
-                Last {HISTORY_DAYS} days
+                Last {span} days
               </h2>
+            </div>
+            <div className="chart-controls">
+              <Segmented label="Period" value={period} options={PERIODS} onChange={setPeriod} />
+              <Segmented label="Show" value={metric} options={METRICS} onChange={setMetric} />
             </div>
             <div className="stat-row">
               <div className="stat-tile">
-                <strong className="number-tabular">{tracked.length ? `${avg}%` : "–"}</strong>
+                <strong className="number-tabular">
+                  {tracked.length ? <AnimatedNumber value={avg} format={(n) => `${Math.round(n)}%`} /> : "–"}
+                </strong>
                 <span>Average</span>
               </div>
               <div className="stat-tile">
-                <strong className="number-tabular">{perfectDays}</strong>
+                <strong className="number-tabular">
+                  <AnimatedNumber value={perfectDays} />
+                </strong>
                 <span>Perfect days</span>
               </div>
               <div className="stat-tile">
-                <strong className="number-tabular">{doneTotal}</strong>
+                <strong className="number-tabular">
+                  <AnimatedNumber value={doneTotal} />
+                </strong>
                 <span>Tasks done</span>
               </div>
             </div>
             <BarChart
+              key={`${period}-${metric}-${space}-${tab}`}
               data={bars}
-              summary={`Completion per day over the last ${HISTORY_DAYS} days, average ${avg}%`}
+              max={metric === "rate" ? 100 : maxDone}
+              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%. Choose a day to open it.`}
+              onSelect={(i) => goTo(days[i].iso)}
             />
           </section>
         </div>
@@ -515,7 +573,6 @@ export function TodosClient({
                 type="text"
                 required
                 maxLength={150}
-                placeholder="e.g. Morning workout"
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
               />
