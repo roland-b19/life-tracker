@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Life Tracker",
   description: "Private daily tracking for your life.",
   manifest: "/manifest.json",
+  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -18,6 +19,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   colorScheme: "dark",
+  themeColor: "#1f1c1b",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

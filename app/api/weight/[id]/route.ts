@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser, UnauthorizedError } from "@/server/auth";
 import { removeWeightEntry } from "@/server/weight";
 import { logRequest } from "@/server/logger";
+import { isSameOrigin } from "@/server/same-origin";
 
 export const runtime = "nodejs";
 
@@ -16,8 +17,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") {
     return genericError(request, 415);
   }
-  const origin = request.headers.get("origin");
-  if (origin === null || origin !== new URL(request.url).origin) return genericError(request, 403);
+  if (!isSameOrigin(request)) return genericError(request, 403);
 
   try {
     const userId = await requireUser();

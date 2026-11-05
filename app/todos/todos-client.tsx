@@ -161,6 +161,7 @@ export function TodosClient({
         const res = await toggleTodoAction({
           id: todo.id,
           isCompleted: nextCompleted,
+          currentDate,
         });
 
         if (res.success) {

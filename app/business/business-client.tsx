@@ -357,6 +357,7 @@ export function BusinessClient({
       await toggleTodoAction({
         id: task.id,
         isCompleted: nextCompleted,
+        currentDate: new Date().toLocaleDateString("en-CA"), // local YYYY-MM-DD
       });
     } catch {
       // Revert
@@ -511,7 +512,7 @@ export function BusinessClient({
           <div className="macro-card">
             <span className="macro-title">Total Business Expenses</span>
             <span className="macro-numbers number-tabular" style={{ fontSize: "1.6rem", color: "var(--danger)" }}>
-              -{dashboard.totalExpenses.toLocaleString("ro-RO", {
+              {dashboard.totalExpenses > 0 ? "-" : ""}{dashboard.totalExpenses.toLocaleString("ro-RO", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
@@ -591,7 +592,7 @@ export function BusinessClient({
               <h2 id="expenses-list-title" style={{ fontSize: "1.2rem" }}>
                 Recent Business Expenses
               </h2>
-              <span className="badge badge-danger number-tabular">-{dashboard.totalExpenses.toFixed(2)} RON</span>
+              <span className="badge badge-danger number-tabular">{dashboard.totalExpenses > 0 ? "-" : ""}{dashboard.totalExpenses.toFixed(2)} RON</span>
             </div>
 
             <div className="entries" style={{ marginTop: "1rem" }}>
@@ -658,11 +659,11 @@ export function BusinessClient({
             <form onSubmit={handleAddTask} style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
               <input
                 type="text"
-                placeholder="New business task..."
+                placeholder="New task"
                 value={taskTitle}
                 onChange={(e) => setTaskTitle(e.target.value)}
                 disabled={busy}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0 }}
               />
               <button type="submit" disabled={busy || !taskTitle.trim()} style={{ padding: "0.4rem 0.85rem" }}>
                 + Add
@@ -828,7 +829,7 @@ export function BusinessClient({
                 type="button"
                 className="secondary"
                 onClick={() => setIsTransactionModalOpen(false)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0 }}
               >
                 Cancel
               </button>
@@ -901,7 +902,7 @@ export function BusinessClient({
                 type="button"
                 className="secondary"
                 onClick={() => setIsTransactionModalOpen(false)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0 }}
               >
                 Cancel
               </button>

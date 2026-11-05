@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser, UnauthorizedError } from "@/server/auth";
 import { createWeightEntry, listWeightEntries } from "@/server/weight";
 import { logRequest } from "@/server/logger";
+import { isSameOrigin } from "@/server/same-origin";
 
 export const runtime = "nodejs";
 
@@ -21,11 +22,6 @@ const weightInput = z
 function noStore(response: NextResponse) {
   response.headers.set("Cache-Control", "no-store");
   return response;
-}
-
-function originIsSame(request: Request) {
-  const origin = request.headers.get("origin");
-  return origin !== null && origin === new URL(request.url).origin;
 }
 
 function genericError(request: Request, status: number) {
@@ -56,7 +52,7 @@ export async function POST(request: Request) {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") {
     return genericError(request, 415);
   }
-  if (!originIsSame(request)) return genericError(request, 403);
+  if (!isSameOrigin(request)) return genericError(request, 403);
 
   try {
     const userId = await requireUser();
