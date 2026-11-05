@@ -1,7 +1,7 @@
 /**
  * Maps the muscles of the bundled 3D model (public/models/muscles.glb, node names) to the muscle groups
  * used by exercises. Muscles not listed (face, neck, hands, feet, deep core) are drawn in neutral grey.
- * Model: BodyParts3D via organui/muscles-3d, CC BY-SA 2.1 Japan, see public/models/ATTRIBUTION.md.
+ * Model: BodyParts3D via organui/muscles-3d, CC BY-SA 2.1 Japan, see docs/licenses/muscles-model.md.
  */
 export const MUSCLE_GROUPS = [
   "chest",

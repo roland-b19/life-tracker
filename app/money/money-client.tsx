@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { BarChart, DonutChart } from "../components/charts";
 import { AnimatedNumber } from "../components/animated-number";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
@@ -71,6 +72,7 @@ export function MoneyClient({
   const [month, setMonth] = useState(initialMonth);
 
   const { showToast } = useToast();
+  const { rowRef, enter, leave } = useListMotion();
 
   const [categories, setCategories] = useState(initialCategories);
   const [summary, setSummary] = useState(initialSummary);
@@ -278,6 +280,7 @@ export function MoneyClient({
         const res = await createCategoryAction({ name, space: SPACE });
         if (res.success && res.category) {
           const created = toCategoryData(res.category as CategoryData);
+          enter(created.id);
           setCategories((prev) => [...prev, created]);
           setSelectedCategory(created.name);
           showToast({
@@ -286,7 +289,7 @@ export function MoneyClient({
             actionLabel: "Undo",
             onAction: async () => {
               await deleteCategoryAction(created.id);
-              setCategories((prev) => prev.filter((c) => c.id !== created.id));
+              leave(created.id, () => setCategories((prev) => prev.filter((c) => c.id !== created.id)));
             },
           });
         }
@@ -310,7 +313,9 @@ export function MoneyClient({
           onAction: async () => {
             const back = await createCategoryAction({ name: target.name, space: SPACE });
             if (back.success && back.category) {
-              setCategories((prev) => [...prev, toCategoryData(back.category as CategoryData)]);
+              const restored = toCategoryData(back.category as CategoryData);
+              enter(restored.id);
+              setCategories((prev) => [...prev, restored]);
             }
           },
         });
@@ -420,10 +425,12 @@ export function MoneyClient({
                 </button>
               )}
 
-              {shownExpenses.length > 0 ? (
-                <div>
+              <AutoHeight>
+                {shownExpenses.length > 0 ? (
+                  // Keyed by the day filter so the rows replay their entrance when it changes.
+                  <Fragment key={selectedDay ?? "month"}>
                   {shownExpenses.map((exp) => (
-                    <div key={exp.id} className="expense-row">
+                    <div key={exp.id} ref={rowRef(exp.id)} className="expense-row">
                       <div className="expense-info">
                         <span className="expense-cat-title">{exp.category}</span>
                         <span className="expense-value-text number-tabular">{fmt(exp.amount)} RON</span>
@@ -442,7 +449,7 @@ export function MoneyClient({
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => handleDeleteExpense(exp)}
+                          onClick={() => leave(exp.id, () => handleDeleteExpense(exp))}
                           aria-label={`Delete ${exp.category} expense of ${exp.amount} RON`}
                           title="Delete"
                         >
@@ -451,10 +458,11 @@ export function MoneyClient({
                       </div>
                     </div>
                   ))}
-                </div>
-              ) : (
-                <p className="empty-note">{selectedDay ? "No expenses on this day." : "No expenses this month."}</p>
-              )}
+                  </Fragment>
+                ) : (
+                  <p className="empty-note">{selectedDay ? "No expenses on this day." : "No expenses this month."}</p>
+                )}
+              </AutoHeight>
             </section>
           ) : (
             <section className="surface" aria-labelledby="categories-title">
@@ -469,7 +477,7 @@ export function MoneyClient({
               </div>
               <div>
                 {categories.map((c) => (
-                  <div key={c.id} className="expense-row">
+                  <div key={c.id} ref={rowRef(c.id)} className="expense-row">
                     <span className="expense-cat-title">{c.name}</span>
                     {c.userId && (
                       <div className="row-actions">
@@ -485,7 +493,7 @@ export function MoneyClient({
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => handleDeleteCategory(c)}
+                          onClick={() => leave(c.id, () => handleDeleteCategory(c))}
                           aria-label={`Delete category ${c.name}`}
                           title="Delete"
                         >

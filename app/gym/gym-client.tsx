@@ -2,6 +2,7 @@
 
 import { formatDMY } from "@/lib/format-date";
 import { useState } from "react";
+import { useListMotion } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal } from "../components/modal";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -117,6 +118,7 @@ export function GymClient({
   exercises,
 }: GymClientProps) {
   const { showToast } = useToast();
+  const { rowRef, enter, leave } = useListMotion();
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message });
   };
@@ -305,6 +307,7 @@ export function GymClient({
       });
 
       if (res.success && res.set) {
+        enter(res.set.id);
         setActiveSession((prev) =>
           prev
             ? {
@@ -349,13 +352,8 @@ export function GymClient({
     if (!activeSession) return;
     try {
       await deleteSetAction(setId);
-      setActiveSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              sets: prev.sets.filter((s) => s.id !== setId),
-            }
-          : null,
+      leave(setId, () =>
+        setActiveSession((prev) => (prev ? { ...prev, sets: prev.sets.filter((s) => s.id !== setId) } : null)),
       );
       setStatusMessage("Set removed.");
     } catch {
@@ -499,7 +497,7 @@ export function GymClient({
                   {exerciseSets.length > 0 && (
                     <div className="set-list">
                       {exerciseSets.map((s) => (
-                        <div key={s.id} className="set-row">
+                        <div key={s.id} ref={rowRef(s.id)} className="set-row">
                           <span>
                             <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
                             {s.loadValue} {s.loadType}
@@ -701,7 +699,7 @@ export function GymClient({
                       </h2>
                       <p className="muted card-sub">{DAY_NAMES[currentDay.dayOfWeek]}</p>
                     </div>
-                    <div className="row-actions gap">
+                    <div className="row-actions">
                       <button type="button" className="secondary btn-sm" onClick={() => openEditor(currentDay)}>
                         <PencilIcon size={14} />
                         Edit

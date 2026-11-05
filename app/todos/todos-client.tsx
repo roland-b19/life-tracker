@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
@@ -65,6 +66,7 @@ export function TodosClient({
   const [history, setHistory] = useState(initialHistory);
 
   const { showToast } = useToast();
+  const { rowRef, leave } = useListMotion();
 
   const [todosMap, setTodosMap] = useState<Record<TodoSpace, TodoItem[]>>({
     personal: initialPersonalTodos,
@@ -422,10 +424,12 @@ export function TodosClient({
               </p>
             )}
 
-            {visibleTodos.length > 0 ? (
-              <div className="todo-list">
+            <AutoHeight className="todo-list">
+              {visibleTodos.length > 0 ? (
+                // Keyed by the view so the rows replay their entrance when the space, list or day changes.
+                <Fragment key={`${space}-${isDaily}-${date}`}>
                 {visibleTodos.map((task) => (
-                  <div key={task.id} className="todo-row">
+                  <div key={task.id} ref={rowRef(task.id)} className="todo-row">
                     {isPast ? (
                       !isDaily && (
                         <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
@@ -479,7 +483,7 @@ export function TodosClient({
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => handleDeleteTodo(task)}
+                          onClick={() => leave(task.id, () => handleDeleteTodo(task))}
                           aria-label={`Delete ${task.title}`}
                           title="Delete"
                         >
@@ -489,12 +493,13 @@ export function TodosClient({
                     )}
                   </div>
                 ))}
-              </div>
-            ) : (
-              <p className="empty-note">
-                {isDaily ? "No daily tasks yet." : isPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
-              </p>
-            )}
+                </Fragment>
+              ) : (
+                <p className="empty-note">
+                  {isDaily ? "No daily tasks yet." : isPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
+                </p>
+              )}
+            </AutoHeight>
           </section>
         </div>
 

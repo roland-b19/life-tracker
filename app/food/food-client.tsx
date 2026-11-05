@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
 import { Segmented } from "../components/segmented";
@@ -16,6 +16,7 @@ import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { AnimatedNumber } from "../components/animated-number";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -111,6 +112,7 @@ export function FoodClient({
   const [metricInput, setMetricInput] = useState("");
 
   const { showToast } = useToast();
+  const { rowRef, enter, leave } = useListMotion();
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -188,6 +190,7 @@ export function FoodClient({
 
       if (res.success && res.meal) {
         const meal = res.meal as MealData;
+        enter(meal.id);
         applyMeal(meal, 1);
         setMealName("");
         setMealCalories("");
@@ -201,7 +204,7 @@ export function FoodClient({
           actionLabel: "Undo",
           onAction: async () => {
             await deleteMealAction(meal.id);
-            applyMeal(meal, -1);
+            leave(meal.id, () => applyMeal(meal, -1));
           },
         });
       }
@@ -232,7 +235,10 @@ export function FoodClient({
             carbs: parseFloat(deleted.carbs),
             fat: parseFloat(deleted.fat),
           });
-          if (res.success && res.meal) applyMeal(res.meal as MealData, 1);
+          if (res.success && res.meal) {
+            enter(res.meal.id);
+            applyMeal(res.meal as MealData, 1);
+          }
         },
       });
     } catch {
@@ -314,6 +320,7 @@ export function FoodClient({
 
       if (res.success && res.item) {
         const item = res.item as ShoppingItemData;
+        enter(item.id);
         setShoppingList((prev) => [...prev, item]);
         setShopName("");
         setShopAmount("1");
@@ -324,7 +331,7 @@ export function FoodClient({
           actionLabel: "Undo",
           onAction: async () => {
             await deleteShoppingItemAction(item.id);
-            setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
+            leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
           },
         });
       }
@@ -357,7 +364,7 @@ export function FoodClient({
   async function handleDeleteShoppingItem(item: ShoppingItemData) {
     try {
       await deleteShoppingItemAction(item.id);
-      setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
+      leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
       showToast({
         message: `Deleted "${item.name}"`,
         actionLabel: "Undo",
@@ -371,6 +378,7 @@ export function FoodClient({
           if (res.success && res.item) {
             const restored = { ...(res.item as ShoppingItemData), isBought: item.isBought };
             if (item.isBought) await toggleShoppingItemAction(restored.id, true);
+            enter(restored.id);
             setShoppingList((prev) => [...prev, restored]);
           }
         },
@@ -392,13 +400,14 @@ export function FoodClient({
       setPickedKeys([]);
       if (res.success && res.items) {
         const added = res.items as ShoppingItemData[];
+        added.forEach((i) => enter(i.id));
         setShoppingList((prev) => [...prev, ...added]);
         showToast({
           message: `Added ${added.length} item${added.length === 1 ? "" : "s"} from recipes`,
           actionLabel: added.length ? "Undo" : undefined,
           onAction: async () => {
             await Promise.all(added.map((i) => deleteShoppingItemAction(i.id)));
-            setShoppingList((prev) => prev.filter((i) => !added.some((a) => a.id === i.id)));
+            added.forEach((a) => leave(a.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== a.id))));
           },
         });
       }
@@ -414,7 +423,7 @@ export function FoodClient({
     setBusy(true);
     try {
       await clearBoughtItemsAction();
-      setShoppingList((prev) => prev.filter((item) => !item.isBought));
+      cleared.forEach((c) => leave(c.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== c.id))));
       showToast({
         message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
         actionLabel: "Undo",
@@ -432,6 +441,7 @@ export function FoodClient({
               restored.push({ ...(res.item as ShoppingItemData), isBought: true });
             }
           }
+          restored.forEach((i) => enter(i.id));
           setShoppingList((prev) => [...prev, ...restored]);
         },
       });
@@ -532,12 +542,13 @@ export function FoodClient({
                 </button>
               </div>
 
-              {summary.meals.length === 0 ? (
-                <p className="empty-note">No meals logged today.</p>
-              ) : (
-                <div className="entries">
+              <AutoHeight className="entries">
+                {summary.meals.length === 0 ? (
+                  <p className="empty-note">No meals logged today.</p>
+                ) : (
+                  <Fragment key={selectedDate}>
                   {summary.meals.map((meal) => (
-                    <div key={meal.id} className="entry-row">
+                    <div key={meal.id} ref={rowRef(meal.id)} className="entry-row">
                       <div>
                         <div className="entry-main">
                           <span className="badge badge-info">{meal.mealType}</span>
@@ -551,7 +562,7 @@ export function FoodClient({
                       <button
                         type="button"
                         className="delete-icon-btn"
-                        onClick={() => handleDeleteMeal(meal.id)}
+                        onClick={() => leave(meal.id, () => handleDeleteMeal(meal.id))}
                         aria-label={`Delete meal ${meal.name}`}
                         title="Delete"
                       >
@@ -559,8 +570,9 @@ export function FoodClient({
                       </button>
                     </div>
                   ))}
-                </div>
-              )}
+                  </Fragment>
+                )}
+              </AutoHeight>
             </section>
           </div>
 
@@ -710,7 +722,7 @@ export function FoodClient({
               <div key={cat} className="shopping-group">
                 <h3 className="group-label">{cat}</h3>
                 {catItems.map((item) => (
-                  <div key={item.id} className="shopping-row">
+                  <div key={item.id} ref={rowRef(item.id)} className="shopping-row">
                     <label className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
                       <input
                         type="checkbox"

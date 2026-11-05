@@ -109,11 +109,11 @@ export function CommandMenu({
           />
           <button
             type="button"
-            className="delete-icon-btn"
+            className="modal-close-btn"
             onClick={onClose}
             aria-label="Close command menu"
           >
-            <CloseIcon size={16} />
+            <CloseIcon size={13} />
           </button>
         </div>
 

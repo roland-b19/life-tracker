@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { CheckIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -61,6 +62,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { showToast } = useToast();
+  const { rowRef, enter, leave } = useListMotion();
 
   // Form state
   const [name, setName] = useState("");
@@ -138,15 +140,16 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
       } else {
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
-        setItems((prev) => [res.item as WishlistItemData, ...prev]);
         const added = res.item as WishlistItemData;
+        enter(added.id);
+        setItems((prev) => [added, ...prev]);
         showToast({
           message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
           type: "success",
           actionLabel: "Undo",
           onAction: async () => {
             await deleteWishlistItemAction(added.id);
-            setItems((prev) => prev.filter((i) => i.id !== added.id));
+            leave(added.id, () => setItems((prev) => prev.filter((i) => i.id !== added.id)));
           },
         });
       }
@@ -175,12 +178,15 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           onAction: async () => {
             const reRes = await addWishlistItemAction(toInput(target));
             if (reRes.success && reRes.item) {
-              setItems((prev) => [reRes.item as WishlistItemData, ...prev]);
+              const back = reRes.item as WishlistItemData;
+              enter(back.id);
+              setItems((prev) => [back, ...prev]);
             }
           },
         });
       }
     } catch {
+      enter(target.id);
       setItems((prev) => [target, ...prev]);
       showToast({ message: "Failed to remove item", type: "warning" });
     } finally {
@@ -215,55 +221,58 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={setFilterRange}
             />
 
-            <div className="entries">
+            <AutoHeight className="entries">
               {filteredItems.length === 0 ? (
                 <p className="empty-note">
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
-                filteredItems.map((item) => (
-                  <div key={item.id} className="entry-row item-row">
-                    <strong className="item-name">{item.name}</strong>
-                    <div className="item-meta">
-                      <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
-                      {filterRange === "all" && (
-                        <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
-                      )}
-                      {item.url && <ItemLink value={item.url} />}
-                    </div>
+                // Keyed by the filter so every row replays its entrance when the tab changes.
+                <Fragment key={filterRange}>
+                  {filteredItems.map((item) => (
+                    <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
+                      <strong className="item-name">{item.name}</strong>
+                      <div className="item-meta">
+                        <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        {filterRange === "all" && (
+                          <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
+                        )}
+                        {item.url && <ItemLink value={item.url} />}
+                      </div>
 
-                    <div className="item-actions">
-                      <button
-                        type="button"
-                        className="btn-sm tint"
-                        onClick={() => handleRemove(item.id, "bought")}
-                        title="Mark as bought and remove from the list"
-                      >
-                        <CheckIcon size={12} strokeWidth={2.5} /> Buy
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-icon-btn edit"
-                        onClick={() => openForm(item)}
-                        aria-label={`Edit ${item.name}`}
-                        title="Edit"
-                      >
-                        <PencilIcon size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleRemove(item.id, "deleted")}
-                        aria-label={`Delete ${item.name}`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
+                      <div className="item-actions">
+                        <button
+                          type="button"
+                          className="btn-sm tint"
+                          onClick={() => leave(item.id, () => handleRemove(item.id, "bought"), "buy")}
+                          title="Mark as bought and remove from the list"
+                        >
+                          <CheckIcon size={12} strokeWidth={2.5} /> Buy
+                        </button>
+                        <button
+                          type="button"
+                          className="delete-icon-btn edit"
+                          onClick={() => openForm(item)}
+                          aria-label={`Edit ${item.name}`}
+                          title="Edit"
+                        >
+                          <PencilIcon size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="delete-icon-btn"
+                          onClick={() => leave(item.id, () => handleRemove(item.id, "deleted"))}
+                          aria-label={`Delete ${item.name}`}
+                          title="Delete"
+                        >
+                          <TrashIcon size={17} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </Fragment>
               )}
-            </div>
+            </AutoHeight>
           </section>
         </div>
 

@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (motion polish: page transitions, hover/radius rules, shopping picker)_
+_Last updated: 2026-11-05 by Claude (list motion: row enter/leave, auto-height lists, credits removed)_
 
 ## Phase
 
@@ -17,6 +17,7 @@ UI polish 2 (Health page with Weight inside, editable tasks/categories/expenses/
 Desktop dashboards (auto wishlist price ranges, Tasks Space/Today/Daily filters with a progress dashboard, spending and weight charts, 3D Gym muscle map) are merged in `main` (PR #35). They add migration `0011_todo_day_stats` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `three` dependency. Mobile redesign comes after all desktop functions are done.
 Dashboards 2 (Tasks: read-only past days, bar chart periods with tap-to-open day, centred ring; Money: Tasks-style dashboard plus a category donut; Gym: routine editor, no Recent workouts, deduplicated muscle map, credit behind an info disclosure; Health: one layout system, API tab removed; animated numbers, modal and row motion, hover border; stale-module error fix in the service worker) is merged in `main` (PR #36). No migration, no new dependency.
 Motion polish (page enter/exit transitions, numbers count up on every page entry, charts replay on every filter change, one subtle hover rule, proportional radii, no separators, Gym Front/Back segmented control and custom exercise inside the day editor, Health shopping list picks ingredients from recipes, muscle map credit moved to a Credits link) is merged in `main` (PR #37). No migration, no new dependency.
+List motion (rows open their space then fade in, fade out then close their space, a Buy animation on wishlist, lists resize smoothly on tab switches, rows replay their entrance on every tab, uniform list spacing, subtle Sign out, tinted row icon buttons, Credits link removed) is on branch `feat/list-motion`, PR open. No migration, no new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -133,6 +134,11 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-05 — List motion (Claude Code), from the user's wishlist feedback:
+  - New `app/components/list-motion.tsx`: `AutoHeight` (animates a list's height on any content change, follows rows that animate themselves) and `useListMotion` (`enter(id)` before adding a row, `leave(id, remove, "delete" | "buy")` instead of removing it; WAAPI, skipped under reduced motion). Used on Wishlist, Health meals, shopping and weigh-ins, Money expenses and categories, Tasks and Gym sets. Rows are wrapped in a `Fragment` keyed by the filter so the entrance replays on every tab.
+  - Spacing: `--card-pad` on `.surface`; the first and last rows of a list sit the same distance from the card edges; Estimated Investment title is centred with equal spacing around the total.
+  - Credits link removed from the sidebar and More menu (user's explicit choice); the attribution file moved to `docs/licenses/muscles-model.md`. Sign out is a `btn-sm`; edit/delete icon buttons use the tinted button background.
+  - Verified: tsc, eslint, 77 Vitest tests, production build; in the browser, wishlist spacing (25.6px top and bottom), tab-switch height animation, add/buy grow and collapse, Tasks height animation. Not checked: real iOS Safari, VoiceOver, each page's add/delete flow by hand (only Wishlist and Tasks were exercised). Weigh-in add has no enter animation (the list reloads); whole new shopping category groups appear without the grow step.
 - 2026-11-05 — UI cleanup (Claude Code), from the user's phone-test feedback:
   - Removed the Business finances page, actions, lib, validation and test (business **tasks** stay in Tasks). DB schema and migrations are untouched, so `business_incomes` and `space='business'` expenses stay as unused data.
   - Shared UI primitives in `app/globals.css` and `app/components/segmented.tsx` (sliding `Segmented` control, `.toolbar`, `.section-head`, `.btn-sm`, `.empty-note`, `.tag`) now used by every page; all `transition: all` replaced by named properties; pages lost their explanatory notes, badges and info cards (e.g. "72 hour rule").
