@@ -22,9 +22,11 @@
   --separator: #353c45;
   --card-border: #434b56;
   --card-shadow: none;
-  /* Hover: a soft spring "breath" plus a low shadow, the same on every card and button */
-  --hover-shadow: 0 12px 30px -16px rgba(0, 0, 0, 0.7);
-  --hover-shadow-sm: 0 6px 16px -8px rgba(0, 0, 0, 0.65);
+  /* Hover: one spring "breath" and one low shadow on every card, button, tab and field.
+     --grow and --press are rewritten per element by app/providers.tsx so all grow and shrink by the same pixels. */
+  --hover-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.65);
+  --grow: 1.01;
+  --lift: 500ms var(--pop);
   --glass-blur: blur(28px) saturate(160%);
   /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
   --dur: 420ms;
@@ -287,7 +289,7 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--pop);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease);
 }
 
 .nav-link svg {
@@ -484,7 +486,7 @@ main {
     border: 1px solid var(--card-border);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform 520ms var(--pop), box-shadow var(--dur) var(--ease);
+    transition: transform var(--lift), box-shadow var(--dur) var(--ease);
   }
 
   .side-user-row {
@@ -611,7 +613,7 @@ main {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform 520ms var(--pop);
+  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
 }
 
 .split-day-card.today {
@@ -687,7 +689,7 @@ main {
   border: 1px solid var(--separator);
   display: grid;
   gap: 0.3rem;
-  transition: transform 520ms var(--pop), box-shadow var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
 }
 
 .macro-title {
@@ -783,7 +785,7 @@ main {
   border: 1px solid var(--card-border);
   border-radius: 1.15rem;
   box-shadow: var(--card-shadow);
-  transition: transform 520ms var(--pop), box-shadow var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
   animation: rise calc(var(--dur) + 160ms) var(--ease) backwards;
 }
 
@@ -804,33 +806,27 @@ main {
   }
 }
 
-/* Hover, one rule for every card and button: a spring "breath" (overshoot, then settle) and a low shadow. No colour or border change. */
+/* Hover, one rule for every card, button, tab and field: a spring "breath" (overshoot, then settle) and one low shadow.
+   A focused field stays lifted, so moving the pointer away never drops its shadow. */
 @media (hover: hover) {
   .surface:hover,
   .split-day-card:hover,
   .macro-card:hover,
-  .routine-row:hover {
-    transform: scale(1.006);
-    box-shadow: var(--hover-shadow);
-  }
-
-  /* Small card, so a larger scale to read the same as the big cards. */
-  .side-user:hover {
-    transform: scale(1.02);
-    box-shadow: var(--hover-shadow);
-  }
-
-  input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not(:focus),
-  select:hover:not(:disabled):not(:focus),
-  textarea:hover:not(:disabled):not(:focus) {
-    transform: scale(1.012);
-    box-shadow: var(--hover-shadow-sm);
-  }
-
-  button:not(.segmented button):not(.bars-col):hover:not(:disabled),
+  .routine-row:hover,
+  .side-user:hover,
+  .nav-link:hover,
+  input:not([type="checkbox"]):not([type="radio"]):is(:hover, :focus):not(:disabled),
+  select:is(:hover, :focus):not(:disabled),
+  textarea:is(:hover, :focus):not(:disabled),
+  button:not(.bars-col, .segmented button.active):hover:not(:disabled),
   .month-nav-btn:hover {
-    transform: scale(1.035);
-    box-shadow: var(--hover-shadow-sm);
+    transform: scale(var(--grow));
+    box-shadow: var(--hover-shadow);
+  }
+
+  /* Same shadow plus the focus ring, so hover and focus blend instead of swapping. */
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus:not(:disabled) {
+    box-shadow: var(--hover-shadow), inset 0 0 0 1px rgba(134, 180, 234, 0.6);
   }
 }
 
@@ -866,7 +862,7 @@ textarea {
   background: rgba(37, 42, 48, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform 520ms var(--pop);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--lift);
 }
 
 /* Checkboxes and radios are not text fields: undo the field sizing above and use the system control in the tint. */
@@ -904,7 +900,7 @@ button {
   gap: 0.5rem;
   border-radius: 0.85rem;
   box-shadow: none;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform 480ms var(--pop), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -1002,7 +998,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
 }
 
 .expense-row {
@@ -1052,13 +1048,13 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform 480ms var(--pop), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
   width: 44px;
   height: 44px;
 }
 
 .delete-icon-btn:active {
-  transform: scale(0.92);
+  transform: scale(var(--press));
 }
 
 /* To-Do & Habits Module Styles (Apple HIG) */
@@ -1121,7 +1117,7 @@ textarea:focus-visible {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1480,7 +1476,7 @@ textarea:focus-visible {
   font-size: 0.8125rem;
   cursor: pointer;
   min-height: 44px;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1567,7 +1563,7 @@ textarea:focus-visible {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1656,17 +1652,18 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease);
 }
 
+/* An idle tab lifts like any button (it needs a fill to carry the shadow); the selected tab stays on its thumb. */
 @media (hover: hover) {
-  .segmented button:hover:not(:disabled) {
-    background: transparent;
+  .segmented button:not(.active):hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
     color: var(--text);
   }
 }
 
-.segmented button:active:not(:disabled) {
+.segmented button.active:active {
   transform: none;
 }
 
@@ -2580,7 +2577,7 @@ button.bars-col:focus-visible {
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
-  transition: transform 520ms var(--pop), box-shadow var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
 }
 .routine-row-head {
   display: flex;
@@ -2746,8 +2743,12 @@ button.bars-col:focus-visible {
 .todo-row,
 .split-day-card,
 .routine-row,
-.entries > .empty-note {
+:is(.entries, .todo-list) > .empty-note {
   animation: row-in calc(var(--dur) - 60ms) var(--ease) both;
+}
+/* While a list resizes (AutoHeight), new rows wait invisible and fade in once the size has settled. */
+.auto-height[data-resizing] :is(.entry-row, .expense-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, .empty-note) {
+  animation-play-state: paused;
 }
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); filter: blur(3px); }
