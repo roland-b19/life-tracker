@@ -123,6 +123,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-05 — Wishlist polish.** (1) Rows fade **in place** (opacity, scale 0.97, 3px blur) on every remove, Buy included (supersedes the green Buy flash of List motion point 1); new rows fade in with the reverse, and a tab switch fades the old rows out before the new ones appear. (2) An open form shrinks the page behind it to 0.96 under a blurred backdrop; `Modal` is portaled to `body` for this. (3) Form fields and the sidebar account card use the shared hover (scale plus soft shadow). (4) In CSS, `-webkit-backdrop-filter` always comes **before** `backdrop-filter`: lightningcss drops the unprefixed one otherwise, and Chrome does not support the prefixed one.
 
+- **2026-11-05 — Motion consistency.** (1) Every lifting element (cards, buttons, segmented tabs, nav links, fields) grows by the same pixels, not the same scale: `--grow`/`--press` are computed from the element's width in `app/providers.tsx` (CSS cannot read width), with one `--hover-shadow` and one `--lift` timing. (2) A focused field keeps the lift and shadow. (3) Lists resize first and new rows fade in after (`AutoHeight` `data-resizing`). (4) Signing out fades the page before the sign-in card appears.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

@@ -66,7 +66,10 @@ export function TodosClient({
   const [history, setHistory] = useState(initialHistory);
 
   const { showToast } = useToast();
-  const { rowRef, leave } = useListMotion();
+  const { rowRef, enter, leave, fadeAll } = useListMotion();
+  // The list shows this view, which follows the controls only after the old rows have faded out.
+  const [view, setView] = useState({ space: "personal" as TodoSpace, tab: "daily" as TaskTab, date: todayDate, n: 0 });
+  const viewId = useRef(0);
 
   const [todosMap, setTodosMap] = useState<Record<TodoSpace, TodoItem[]>>({
     personal: initialPersonalTodos,
@@ -90,9 +93,14 @@ export function TodosClient({
   const isDaily = tab === "daily";
   // Past days are read-only: they show what was done, never edit, delete or tick.
   const isPast = date < todayDate;
-  const visibleTodos = todosMap[space].filter(
-    (t) => t.isRecurring === isDaily && (!isPast || !t.isRecurring || toISODate(new Date(t.createdAt)) <= date),
-  );
+  const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
+    todosMap[s].filter(
+      (t) => t.isRecurring === daily && (day >= todayDate || !t.isRecurring || toISODate(new Date(t.createdAt)) <= day),
+    );
+  const visibleTodos = visibleFor(space, isDaily, date);
+  const listDaily = view.tab === "daily";
+  const listPast = view.date < todayDate;
+  const listTodos = visibleFor(view.space, listDaily, view.date);
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
   // Past days use the snapshot taken that day; today and later use the live list.
@@ -143,7 +151,8 @@ export function TodosClient({
   }, []);
 
   // Loads both spaces (and their history) and swaps them in with one state update, so the list never flashes empty.
-  const loadDay = async (date: string) => {
+  // `before` holds the swap back until the old rows have faded out.
+  const loadDay = async (date: string, before?: Promise<void>) => {
     const id = ++requestId.current;
     try {
       const [personal, business, hp, hb] = await Promise.all([
@@ -152,6 +161,7 @@ export function TodosClient({
         getTodoHistoryAction("personal"),
         getTodoHistoryAction("business"),
       ]);
+      await before;
       if (id === requestId.current) {
         setTodosMap({ personal: personal.todos, business: business.todos });
         setHistory({ personal: hp.history ?? [], business: hb.history ?? [] });
@@ -161,10 +171,21 @@ export function TodosClient({
     }
   };
 
-  const goTo = (next: string) => {
-    setDate(next);
-    void loadDay(next);
+  // The controls switch at once; the rows fade out, then the new view's rows (and day) come in.
+  const switchView = (next: { space?: TodoSpace; tab?: TaskTab; date?: string }) => {
+    const target = { space, tab, date, ...next };
+    if (target.space === space && target.tab === tab && target.date === date) return;
+    setSpace(target.space);
+    setTab(target.tab);
+    setDate(target.date);
+    const n = ++viewId.current;
+    const faded = new Promise<void>((done) => fadeAll(done));
+    void (target.date !== date ? loadDay(target.date, faded) : faded).then(() => {
+      if (n === viewId.current) setView({ ...target, n });
+    });
   };
+
+  const goTo = (next: string) => switchView({ date: next });
 
   const stepDay = (delta: number) => {
     const d = new Date(`${date}T00:00:00`);
@@ -172,11 +193,9 @@ export function TodosClient({
     goTo(toISODate(d));
   };
 
-  const changeTab = (next: TaskTab) => {
-    setTab(next);
-    // Daily tasks have no future: coming back from a future one-off day lands on today.
-    if (next === "daily" && date > todayDate) goTo(todayDate);
-  };
+  // Daily tasks have no future: coming back from a future one-off day lands on today.
+  const changeTab = (next: TaskTab) =>
+    switchView(next === "daily" && date > todayDate ? { tab: next, date: todayDate } : { tab: next });
 
   const openForm = (todo?: TodoItem) => {
     setErrorMsg(null);
@@ -223,13 +242,14 @@ export function TodosClient({
         });
         if (res.success && res.todo) {
           const createdId = res.todo.id;
+          enter(createdId);
           showToast({
             message: `Added "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
               await deleteTodoAction(createdId);
-              await loadDay(date);
+              leave(createdId, () => void loadDay(date));
             },
           });
         }
@@ -283,13 +303,14 @@ export function TodosClient({
           message: `Deleted "${target.title}"`,
           actionLabel: "Undo",
           onAction: async () => {
-            await createTodoAction({
+            const back = await createTodoAction({
               space: target.space,
               title: target.title,
               isRecurring: target.isRecurring,
               dueDate: target.dueDate,
               reminderTime: target.reminderTime,
             });
+            if (back.success && back.todo) enter(back.todo.id);
             await loadDay(date);
           },
         });
@@ -347,7 +368,7 @@ export function TodosClient({
               { value: "personal", label: "Personal" },
               { value: "business", label: "Business" },
             ]}
-            onChange={setSpace}
+            onChange={(next) => switchView({ space: next })}
           />
           <Segmented
             label="Task type"
@@ -425,13 +446,13 @@ export function TodosClient({
             )}
 
             <AutoHeight className="todo-list">
-              {visibleTodos.length > 0 ? (
+              {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
-                <Fragment key={`${space}-${isDaily}-${date}`}>
-                {visibleTodos.map((task) => (
+                <Fragment key={view.n}>
+                {listTodos.map((task) => (
                   <div key={task.id} ref={rowRef(task.id)} className="todo-row">
-                    {isPast ? (
-                      !isDaily && (
+                    {listPast ? (
+                      !listDaily && (
                         <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
                           {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
                         </span>
@@ -448,28 +469,28 @@ export function TodosClient({
                     )}
 
                     <div className="todo-main">
-                      <span className={`todo-title ${!isPast && task.isCompleted ? "completed" : ""}`}>
+                      <span className={`todo-title ${!listPast && task.isCompleted ? "completed" : ""}`}>
                         {task.title}
-                        {isPast && !isDaily && (
+                        {listPast && !listDaily && (
                           <span className="visually-hidden">{task.isCompleted ? ", done" : ", not done"}</span>
                         )}
                       </span>
-                      {((!isDaily && task.isCarriedOver) || task.reminderTime) && (
+                      {((!listDaily && task.isCarriedOver) || task.reminderTime) && (
                         <div className="badge-row">
-                          {!isDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
+                          {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
                           {task.reminderTime && <span className="badge badge-reminder">{task.reminderTime}</span>}
                         </div>
                       )}
                     </div>
 
-                    {isDaily && task.streak > 0 && (
+                    {listDaily && task.streak > 0 && (
                       <span className="streak number-tabular" title={`${task.streak}-day streak`}>
                         <FlameIcon size={15} />
                         {task.streak}
                       </span>
                     )}
 
-                    {!isPast && (
+                    {!listPast && (
                       <>
                         <button
                           type="button"
@@ -495,8 +516,8 @@ export function TodosClient({
                 ))}
                 </Fragment>
               ) : (
-                <p className="empty-note">
-                  {isDaily ? "No daily tasks yet." : isPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
+                <p ref={rowRef("empty")} className="empty-note">
+                  {listDaily ? "No daily tasks yet." : listPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
                 </p>
               )}
             </AutoHeight>

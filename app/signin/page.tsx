@@ -68,7 +68,8 @@ export default function SignInPage() {
           <button
             type="submit"
             disabled={busy}
-            style={{ width: "100%", marginTop: "0.25rem", padding: "0.75rem", fontSize: "1rem" }}
+            // Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look.
+            style={{ width: "100%", marginTop: "0.25rem", padding: "0.75rem", fontSize: "1rem", opacity: 1, cursor: busy ? "progress" : undefined }}
           >
             {busy ? "Signing in..." : "Continue"}
           </button>

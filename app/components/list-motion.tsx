@@ -27,6 +27,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
+      delete outer.dataset.resizing; // lets the new rows' row-in play (globals.css)
     };
     let last = contentHeight();
 
@@ -36,6 +37,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
       if (reducedMotion() || inner.querySelector("[data-row-motion]") || from === next) return settle();
+      outer.dataset.resizing = "";
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
@@ -115,8 +117,9 @@ export function useListMotion() {
 
   const enter = useCallback((id: string) => {
     entering.current.add(id);
-    // A row added outside the current filter never mounts now; forget it so it does not grow later.
-    setTimeout(() => entering.current.delete(id), 500);
+    // A row added outside the current filter never mounts; forget it so it does not grow later.
+    // Long enough for pages that refetch the list before the row mounts (Tasks).
+    setTimeout(() => entering.current.delete(id), 2000);
   }, []);
 
   const leave = useCallback((id: string, remove: () => void) => {

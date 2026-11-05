@@ -91,7 +91,24 @@ export function Navigation({ userName }: NavigationProps) {
   // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
   const router = useRouter();
   const signOutNow = async () => {
-    await signOut({ redirect: false });
+    // Fade the whole page out first, so the sign-in card arrives on an empty screen.
+    const fades = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? []
+      : [...document.querySelectorAll("main > *")].map((el) =>
+          el.animate(
+            [
+              { opacity: 1, transform: "none", filter: "none" },
+              { opacity: 0, transform: "scale(0.985)", filter: "blur(2px)" },
+            ],
+            { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)", fill: "forwards" },
+          ),
+        );
+    try {
+      await Promise.all([signOut({ redirect: false }), ...fades.map((a) => a.finished)]);
+    } catch {
+      fades.forEach((a) => a.cancel()); // never leave a blank page behind a failed sign-out
+      return;
+    }
     router.push("/signin");
     router.refresh();
   };
