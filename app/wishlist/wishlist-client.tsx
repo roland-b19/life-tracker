@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
-import { CheckIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
@@ -169,7 +169,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     }
   }
 
-  async function handleRemove(id: string, reason: "bought" | "deleted") {
+  async function handleRemove(id: string) {
     const target = items.find((i) => i.id === id);
     if (!target) return;
 
@@ -181,7 +181,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
       const res = await deleteWishlistItemAction(id);
       if (res.success) {
         showToast({
-          message: reason === "bought" ? `Bought "${target.name}"` : `Removed "${target.name}"`,
+          message: `Removed "${target.name}"`,
           actionLabel: "Undo",
           onAction: async () => {
             const reRes = await addWishlistItemAction(toInput(target));
@@ -251,14 +251,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                       <div className="item-actions">
                         <button
                           type="button"
-                          className="btn-sm tint"
-                          onClick={() => leave(item.id, () => handleRemove(item.id, "bought"))}
-                          title="Mark as bought and remove from the list"
-                        >
-                          <CheckIcon size={12} strokeWidth={2.5} /> Buy
-                        </button>
-                        <button
-                          type="button"
                           className="delete-icon-btn edit"
                           onClick={() => openForm(item)}
                           aria-label={`Edit ${item.name}`}
@@ -269,7 +261,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         <button
                           type="button"
                           className="delete-icon-btn"
-                          onClick={() => leave(item.id, () => handleRemove(item.id, "deleted"))}
+                          onClick={() => leave(item.id, () => handleRemove(item.id))}
                           aria-label={`Delete ${item.name}`}
                           title="Delete"
                         >
