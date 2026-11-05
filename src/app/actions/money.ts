@@ -29,7 +29,6 @@ export async function logExpenseAction(rawInput: unknown) {
   const parsed = logExpenseSchema.parse(rawInput);
   const expense = await logExpense(userId, parsed);
   safeRevalidate("/money");
-  safeRevalidate("/business");
   return { success: true, expense };
 }
 
@@ -38,7 +37,6 @@ export async function deleteExpenseAction(expenseId: string) {
   const parsed = deleteExpenseSchema.parse({ id: expenseId });
   const deleted = await deleteExpense(userId, parsed.id);
   safeRevalidate("/money");
-  safeRevalidate("/business");
   return { success: true, deleted };
 }
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
+import { Segmented } from "../components/segmented";
 import {
   DropIcon,
   FootstepsIcon,
   ScaleIcon,
-  ChatIcon,
   LockIcon,
   CheckIcon,
   PlusIcon,
@@ -490,50 +491,29 @@ export function FoodClient({
     <main>
       <Navigation userName={userName} />
 
-      {/* Sub tabs: Daily Log vs Shopping List vs Food AI Chat vs AI Connector API */}
-      <div className="subtabs">
-        <button
-          type="button"
-          className={activeTab === "daily" ? "" : "secondary"}
-          onClick={() => setActiveTab("daily")}
-        >
-          Daily Macros & Log
-        </button>
-        <button
-          type="button"
-          className={activeTab === "shopping" ? "" : "secondary"}
-          onClick={() => setActiveTab("shopping")}
-        >
-          Shopping List ({shoppingList.filter((i) => !i.isBought).length})
-        </button>
-        <button
-          type="button"
-          className={activeTab === "chat" ? "" : "secondary"}
-          onClick={() => setActiveTab("chat")}
-        >
-          Food Assistant
-        </button>
-        <button
-          type="button"
-          className={activeTab === "api" ? "" : "secondary"}
-          onClick={() => setActiveTab("api")}
-        >
-          AI Connector API (MCP)
-        </button>
+      <div className="toolbar">
+        <Segmented
+          label="Food sections"
+          value={activeTab}
+          options={[
+            { value: "daily", label: "Today" },
+            { value: "shopping", label: "Shopping" },
+            { value: "chat", label: "Assistant" },
+            { value: "api", label: "API" },
+          ]}
+          onChange={setActiveTab}
+        />
       </div>
 
       {activeTab === "daily" && (
         <>
           {/* Daily Macros Target & Progress */}
           <section className="surface" aria-labelledby="macros-title">
-            <div className="section-heading">
-              <div>
-                <span className="badge badge-info">Today&apos;s Targets</span>
-                <h2 id="macros-title" style={{ marginTop: "0.25rem" }}>
-                  Nutrition Summary
-                </h2>
-              </div>
-              <span className="muted">{selectedDate}</span>
+            <div className="section-head">
+              <h2 id="macros-title" className="section-title">
+                Nutrition Summary
+              </h2>
+              <span className="muted number-tabular">{formatDMY(selectedDate)}</span>
             </div>
 
             <div className="macro-grid">
@@ -707,38 +687,27 @@ export function FoodClient({
           </section>
 
           {/* Daily Dashboard Grid: Meals & Fast Entry */}
-          <div className="dashboard-grid" style={{ marginTop: "1.25rem" }}>
-            {/* Left Column: Today's Meals Log */}
+          <div className="dashboard-main" style={{ marginTop: "1.25rem" }}>
+            {/* Today's Meals Log */}
             <div className="dashboard-main">
               <section className="surface" aria-labelledby="meals-history-title">
-                <div className="section-heading">
-                  <div>
-                    <span className="badge badge-info">{summary.meals.length} Logged Meals</span>
-                    <h2 id="meals-history-title" style={{ marginTop: "0.25rem" }}>
-                      Today&apos;s Meals
-                    </h2>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span className="muted number-tabular" style={{ fontWeight: 600 }}>
-                      {summary.totals.calories} kcal total
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-open-modal"
-                      onClick={() => setIsMealModalOpen(true)}
-                      style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem", minHeight: "38px" }}
-                    >
-                      <PlusIcon size={14} />
-                      <span>Log Meal</span>
-                    </button>
-                  </div>
+                <div className="section-head">
+                  <h2 id="meals-history-title" className="section-title">
+                    Today&apos;s Meals
+                  </h2>
+                  <button
+                    type="button"
+                    className="btn-open-modal"
+                    onClick={() => setIsMealModalOpen(true)}
+                  >
+                    <PlusIcon size={14} />
+                    <span>Log Meal</span>
+                  </button>
                 </div>
 
                 <div className="entries" style={{ marginTop: "1rem" }}>
                   {summary.meals.length === 0 && (
-                    <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
-                      No meals logged for today yet. Use the quick logger on the right or ask the Food AI Chat.
-                    </p>
+                    <p className="empty-note">No meals logged today.</p>
                   )}
                   {summary.meals.map((meal) => (
                     <div key={meal.id} className="entry-row">
@@ -779,41 +748,6 @@ export function FoodClient({
                 </div>
               </section>
             </div>
-
-            {/* Right Column: AI Assistant Prompt & Nutrition Coaching */}
-            <div className="dashboard-aside">
-              {/* Fast AI Chat Shortcut */}
-              <section className="surface" style={{ padding: "1.35rem", textAlign: "center" }}>
-                <span className="badge badge-info" style={{ marginBottom: "0.4rem" }}>
-                  Conversational Food AI
-                </span>
-                <h3 style={{ fontSize: "1.05rem", margin: "0.3rem 0 0.5rem" }}>
-                  Natural Language Logging
-                </h3>
-                <p className="muted" style={{ fontSize: "0.85rem", margin: "0 0 1rem", lineHeight: 1.5 }}>
-                  Simply tell Food AI what you ate (e.g. &ldquo;am mâncat o ciorbă de pui cu smântână&rdquo;) and it computes macros and logs it automatically.
-                </p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setActiveTab("chat")}
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.45rem", minHeight: "44px" }}
-                >
-                  <ChatIcon size={16} />
-                  <span>Open Food Assistant</span>
-                </button>
-              </section>
-
-              {/* Nutrition Guidelines Card */}
-              <section className="surface" style={{ padding: "1.35rem" }}>
-                <h3 style={{ fontSize: "0.95rem", textTransform: "uppercase", color: "var(--secondary)", letterSpacing: "0.05em", margin: "0 0 0.5rem" }}>
-                  Macro Priorities
-                </h3>
-                <p className="muted" style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5 }}>
-                  Hit your daily protein target first to preserve lean muscle mass. Water and steps directly correlate with energetic deficit consistency.
-                </p>
-              </section>
-            </div>
           </div>
         </>
       )}
@@ -821,11 +755,8 @@ export function FoodClient({
       {activeTab === "shopping" && (
         /* Shopping List View */
         <section className="surface" aria-labelledby="shopping-title">
-          <div className="section-heading">
-            <div>
-              <h2 id="shopping-title">Smart Shopping List</h2>
-              <span className="muted">Grouped by category from meal plans</span>
-            </div>
+          <div className="section-head">
+            <h2 id="shopping-title" className="section-title">Shopping List</h2>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
                 type="button"
@@ -920,7 +851,7 @@ export function FoodClient({
           {/* Items by Category */}
           <div style={{ marginTop: "1.25rem" }}>
             {shoppingList.length === 0 && (
-              <p className="muted">Your shopping list is empty. Add items or generate from recipes!</p>
+              <p className="empty-note">Your shopping list is empty.</p>
             )}
             {["meat", "produce", "dairy", "bakery", "pantry", "other"].map((cat) => {
               const catItems = shoppingList.filter((item) => item.category === cat);
@@ -964,24 +895,11 @@ export function FoodClient({
 
       {activeTab === "chat" && (
         <section className="surface" aria-labelledby="chat-title">
-          <div className="section-heading">
-            <div>
-              <span className="badge badge-info">Gemini Flash</span>
-              <h2 id="chat-title" style={{ marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <ChatIcon size={20} /> Food AI Assistant
-              </h2>
-            </div>
-            <span
-              className="badge"
-              style={{ background: "rgba(143, 212, 163, 0.15)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-            >
-              <LockIcon size={12} /> Restricted: Food &amp; Macros Only
-            </span>
+          <div className="section-head">
+            <h2 id="chat-title" className="section-title">
+              Food AI Assistant
+            </h2>
           </div>
-
-          <p className="muted" style={{ fontSize: "0.9rem", margin: "0.5rem 0 1rem" }}>
-            Scrie în limbaj natural ce ai mâncat sau băut (ex: <em>„la prânz am mâncat o ciorbă de pui și 2 felii de pâine”</em>). AI-ul va estima automat caloriile și macronutrienții și îi va salva în jurnalul de astăzi!
-          </p>
 
           {/* Prompt suggestions pills */}
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
@@ -1132,19 +1050,10 @@ export function FoodClient({
 
       {activeTab === "api" && (
         <section className="surface" aria-labelledby="ai-connector-title">
-          <div className="section-heading">
-            <div>
-              <span className="badge badge-info">Integrations</span>
-              <h2 id="ai-connector-title" style={{ marginTop: "0.25rem" }}>
-                AI Connector (Claude Desktop &amp; Gemini)
-              </h2>
-            </div>
-            <span
-              className="badge"
-              style={{ background: "rgba(143, 212, 163, 0.15)", color: "var(--success)" }}
-            >
-              Quarantined Scope: Food Only
-            </span>
+          <div className="section-head">
+            <h2 id="ai-connector-title" className="section-title">
+              AI Connector
+            </h2>
           </div>
 
           <div
@@ -1253,9 +1162,9 @@ export function FoodClient({
                         {token.scope}
                       </span>
                       <p className="muted" style={{ margin: "0.2rem 0 0", fontSize: "0.8rem" }}>
-                        Created {new Date(token.createdAt).toLocaleDateString()}
+                        Created {formatDMY(new Date(token.createdAt).toISOString())}
                         {token.lastUsedAt &&
-                          ` · Last used ${new Date(token.lastUsedAt).toLocaleDateString()}`}
+                          ` · Last used ${formatDMY(new Date(token.lastUsedAt).toISOString())}`}
                       </p>
                     </div>
                     <button
@@ -1414,7 +1323,6 @@ export function FoodClient({
             Meal Name / Description
             <input
               type="text"
-              autoFocus
               placeholder="e.g. 200g Chicken breast & 150g Rice"
               value={mealName}
               onChange={(e) => setMealName(e.target.value)}

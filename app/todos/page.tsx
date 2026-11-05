@@ -30,9 +30,7 @@ export default async function TodosPage() {
       userName={session.user.name ?? "User"}
       todayDate={today}
       initialPersonalTodos={personalData.todos}
-      initialPersonalStats={personalData.stats}
       initialBusinessTodos={businessData.todos}
-      initialBusinessStats={businessData.stats}
     />
   );
 }

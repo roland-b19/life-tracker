@@ -24,20 +24,9 @@ export function Navigation({ userName }: NavigationProps) {
     if (pathname.startsWith("/gym")) return "Gym";
     if (pathname.startsWith("/food")) return "Food & Macros";
     if (pathname.startsWith("/money")) return "Expenses";
-    if (pathname.startsWith("/todos")) return "Daily Habits";
+    if (pathname.startsWith("/todos")) return "Tasks";
     if (pathname.startsWith("/wishlist")) return "Wishlist";
-    if (pathname.startsWith("/business")) return "Business";
     return "Weigh-ins";
-  };
-
-  const getPageSubtitle = () => {
-    if (pathname.startsWith("/gym")) return "5-Day Split · PRs · Overload";
-    if (pathname.startsWith("/food")) return "Targets · Macros · Food AI";
-    if (pathname.startsWith("/money")) return "Cash Flow · Strict Privacy";
-    if (pathname.startsWith("/todos")) return "Carry-Over · Streaks";
-    if (pathname.startsWith("/wishlist")) return "Cost Estimations";
-    if (pathname.startsWith("/business")) return "Monthly Net Profit";
-    return "7-Day Trend · Weekly Delta";
   };
 
   const navLinks = [
@@ -103,17 +92,6 @@ export function Navigation({ userName }: NavigationProps) {
         </svg>
       ),
     },
-    {
-      href: "/business",
-      label: "Business",
-      isActive: pathname.startsWith("/business"),
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-        </svg>
-      ),
-    },
   ];
 
   const primary = navLinks.slice(0, 4);
@@ -166,14 +144,7 @@ export function Navigation({ userName }: NavigationProps) {
 
       {/* Page title */}
       <header className="page-head">
-        <div>
-          <div className="eyebrow">
-            <span>Life Tracker</span>
-            <span className="cloud-pulse-dot" title="Cloud database online & secure" />
-          </div>
-          <h1 className="app-title">{getPageTitle()}</h1>
-          <p className="app-description">{getPageSubtitle()}</p>
-        </div>
+        <h1 className="app-title">{getPageTitle()}</h1>
       </header>
 
       {/* Phone and tablet: floating tab bar with a More menu */}
@@ -182,8 +153,15 @@ export function Navigation({ userName }: NavigationProps) {
           <div className="more-scrim" onClick={() => setMoreOpen(false)} />
           <div className="more-menu" id="more-menu" aria-label="More">
             <div className="more-user">
-            <span>{userName}</span>
-          </div>
+              <span className="user-avatar-circle">{initial}</span>
+              <div className="more-user-text">
+                <span className="more-user-name">{userName}</span>
+                <span className="more-user-brand">Life Tracker</span>
+              </div>
+              <button className="signout-btn" type="button" onClick={signOutNow}>
+                Sign out
+              </button>
+            </div>
             {overflow.map((link) => (
               <NextLink
                 key={link.href}
@@ -195,9 +173,6 @@ export function Navigation({ userName }: NavigationProps) {
                 <span>{link.label}</span>
               </NextLink>
             ))}
-            <button className="signout-btn" type="button" onClick={signOutNow}>
-              Sign out
-            </button>
           </div>
         </>
       )}

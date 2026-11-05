@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Dev only: lets a phone on the home Wi-Fi load HMR and hydrate pages; ignored by `next build`.
   allowedDevOrigins: ["192.168.*.*"],
+  // Hides the floating Next.js dev-tools "N" button.
+  devIndicators: false,
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

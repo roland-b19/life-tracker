@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
-import { addWishlistItem, deleteWishlistItem, getWishlist, getWishlistStats } from "@/lib/wishlist";
+import {
+  addWishlistItem,
+  deleteWishlistItem,
+  getWishlist,
+  getWishlistStats,
+  updateWishlistItem,
+} from "@/lib/wishlist";
 
 async function seedUser(subject: string) {
   const [user] = await db
@@ -71,6 +77,24 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     // User A can delete their own item
     const deletedByA = await deleteWishlistItem(userA, itemA.id);
     expect(deletedByA).toBe(true);
+  });
+
+  it("lets the owner edit an item but not another user", async () => {
+    const item = await addWishlistItem(userA, {
+      name: "Desk Lamp",
+      estimatedPrice: 80,
+      priority: "low",
+    });
+    const edit = { name: "Desk Lamp Pro", estimatedPrice: 99.9, priority: "high" as const };
+
+    expect(await updateWishlistItem(userB, item.id, edit)).toBeNull();
+    const unchanged = (await getWishlist(userA)).find((i) => i.id === item.id);
+    expect(unchanged?.name).toBe("Desk Lamp");
+
+    const updated = await updateWishlistItem(userA, item.id, edit);
+    expect(updated?.name).toBe("Desk Lamp Pro");
+    expect(Number(updated?.estimatedPrice)).toBe(99.9);
+    expect(updated?.priority).toBe("high");
   });
 
   it("rejects invalid input and negative prices", async () => {

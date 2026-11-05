@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
-import { getWishlist, getWishlistStats } from "@/lib/wishlist";
+import { getWishlist } from "@/lib/wishlist";
 import { WishlistClient } from "./wishlist-client";
 
 export default async function WishlistPage() {
@@ -11,16 +11,12 @@ export default async function WishlistPage() {
   }
 
   const userId = session.user.id;
-  const [items, stats] = await Promise.all([
-    getWishlist(userId),
-    getWishlistStats(userId),
-  ]);
+  const items = await getWishlist(userId);
 
   return (
     <WishlistClient
       userName={session.user.name ?? "User"}
       initialItems={items}
-      initialStats={stats}
     />
   );
 }

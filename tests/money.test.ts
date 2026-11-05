@@ -77,34 +77,29 @@ describe("Money module: Data Access, Analytics & Authorization", () => {
     expect(personalCats.some((c) => c.name === "Food & Groceries")).toBe(true);
     expect(personalCats.some((c) => c.name === "Gym & Supplements")).toBe(true);
 
-    const businessCats = await getExpenseCategories(userA, "business");
-    expect(businessCats.some((c) => c.name === "Inventory & Stock")).toBe(true);
-    expect(businessCats.some((c) => c.name === "Shipping & Logistics")).toBe(true);
-
     // Add custom category for user A
     await createCustomCategory(userA, {
       name: "Freelance Tools",
-      space: "business",
-      icon: "🛠️",
+      space: "personal",
     });
 
-    const userACats = await getExpenseCategories(userA, "business");
+    const userACats = await getExpenseCategories(userA, "personal");
     expect(userACats.some((c) => c.name === "Freelance Tools")).toBe(true);
 
     // User B should NOT see user A's custom category
-    const userBCats = await getExpenseCategories(userB, "business");
+    const userBCats = await getExpenseCategories(userB, "personal");
     expect(userBCats.some((c) => c.name === "Freelance Tools")).toBe(false);
   });
 
   it("prevents duplicate default categories during concurrent seeding", async () => {
     await Promise.all([
-      getExpenseCategories(userA, "business"),
-      getExpenseCategories(userA, "business"),
-      getExpenseCategories(userB, "business"),
+      getExpenseCategories(userA, "personal"),
+      getExpenseCategories(userA, "personal"),
+      getExpenseCategories(userB, "personal"),
     ]);
 
-    const businessCats = await getExpenseCategories(userA, "business");
-    const names = businessCats.map((c) => c.name);
+    const personalCats = await getExpenseCategories(userA, "personal");
+    const names = personalCats.map((c) => c.name);
     const uniqueNames = Array.from(new Set(names));
     expect(names.length).toBe(uniqueNames.length);
   });

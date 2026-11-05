@@ -56,6 +56,34 @@ export async function addWishlistItem(
   return item as WishlistItemData;
 }
 
+export async function updateWishlistItem(
+  userId: string,
+  itemId: string,
+  rawInput: CreateWishlistItemInput,
+): Promise<WishlistItemData | null> {
+  const validated = createWishlistItemSchema.parse(rawInput);
+
+  const [item] = await db
+    .update(wishlistItems)
+    .set({
+      name: validated.name,
+      url: validated.url || null,
+      estimatedPrice: String(validated.estimatedPrice),
+      priority: validated.priority,
+    })
+    .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)))
+    .returning({
+      id: wishlistItems.id,
+      name: wishlistItems.name,
+      url: wishlistItems.url,
+      estimatedPrice: wishlistItems.estimatedPrice,
+      priority: wishlistItems.priority,
+      createdAt: wishlistItems.createdAt,
+    });
+
+  return (item as WishlistItemData | undefined) ?? null;
+}
+
 export async function deleteWishlistItem(
   userId: string,
   itemId: string,

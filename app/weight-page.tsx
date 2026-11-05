@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useState, useCallback } from "react";
 import { Navigation } from "./components/navigation";
-import { InfoIcon, PlusIcon, TrashIcon } from "./components/icons";
+import { PlusIcon, TrashIcon } from "./components/icons";
 import { Modal } from "./components/modal";
 import { useToast } from "./components/toast";
+import { formatDMY } from "@/lib/format-date";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -160,12 +161,7 @@ export function WeightPage({ userName }: { userName: string }) {
     <main>
       <Navigation userName={userName} />
 
-      {/* Top Action Bar with Prominent Modal Trigger */}
-      <div className="action-bar-header">
-        <div>
-          <span className="badge badge-info">Weight Analytics</span>
-          <h2 style={{ marginTop: "0.25rem" }}>Body Composition</h2>
-        </div>
+      <div className="toolbar toolbar-end">
         <button
           type="button"
           className="btn-open-modal"
@@ -176,192 +172,139 @@ export function WeightPage({ userName }: { userName: string }) {
           aria-label="Open record weigh-in dialog"
         >
           <PlusIcon size={16} />
-          <span>Record Weigh-in</span>
+          <span>Add</span>
         </button>
       </div>
 
-      <div className="dashboard-grid">
-        {/* Left / Main Column: Analytics & Weigh-In History */}
-        <div className="dashboard-main">
-          {/* Hero Moving Average Card */}
-          <section className="surface" aria-labelledby="trend-title">
-            <div className="section-heading">
-              <div>
-                <span className="badge badge-info">Smooth Rolling Trend</span>
-                <h2 id="trend-title" style={{ marginTop: "0.25rem" }}>
-                  7-Day Average
-                </h2>
-              </div>
-              {weeklyDelta !== null && (
-                <span
-                  className="badge"
-                  style={{
-                    background:
-                      weeklyDelta > 0
-                        ? "rgba(143, 209, 158, 0.15)"
-                        : "rgba(239, 197, 111, 0.15)",
-                    color: weeklyDelta > 0 ? "var(--success)" : "var(--warning)",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  {weeklyDelta > 0 ? "+" : ""}
-                  {weeklyDelta} kg/week
-                </span>
-              )}
-            </div>
+      <div className="dashboard-main">
+        {/* Hero Moving Average Card */}
+        <section className="surface" aria-labelledby="trend-title">
+          <div className="section-head">
+            <h2 id="trend-title" className="section-title">
+              7-Day Average
+            </h2>
+            {weeklyDelta !== null && (
+              <span
+                className="badge"
+                style={{
+                  background:
+                    weeklyDelta > 0
+                      ? "rgba(143, 209, 158, 0.15)"
+                      : "rgba(239, 197, 111, 0.15)",
+                  color: weeklyDelta > 0 ? "var(--success)" : "var(--warning)",
+                  fontSize: "0.85rem",
+                }}
+              >
+                {weeklyDelta > 0 ? "+" : ""}
+                {weeklyDelta} kg/week
+              </span>
+            )}
+          </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                gap: "0.85rem",
-                marginTop: "1.25rem",
-              }}
-            >
-              <div className="macro-card">
-                <span className="macro-title">Current 7-Day Average</span>
-                <span
-                  className="macro-numbers number-tabular"
-                  style={{ fontSize: "1.85rem", color: "var(--tint)" }}
-                >
-                  {sevenDayAvg !== null ? `${sevenDayAvg} ` : "— "}
-                  <span className="macro-target" style={{ fontSize: "1rem" }}>
-                    kg
-                  </span>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+              gap: "0.85rem",
+              marginTop: "1.25rem",
+            }}
+          >
+            <div className="macro-card">
+              <span className="macro-title">Current 7-Day Average</span>
+              <span
+                className="macro-numbers number-tabular"
+                style={{ fontSize: "1.85rem", color: "var(--tint)" }}
+              >
+                {sevenDayAvg !== null ? `${sevenDayAvg} ` : "— "}
+                <span className="macro-target" style={{ fontSize: "1rem" }}>
+                  kg
                 </span>
-              </div>
-
-              <div className="macro-card">
-                <span className="macro-title">Latest Recorded</span>
-                <span
-                  className="macro-numbers number-tabular"
-                  style={{ fontSize: "1.85rem" }}
-                >
-                  {sorted.length > 0 ? `${sorted[0].kilograms} ` : "— "}
-                  <span className="macro-target" style={{ fontSize: "1rem" }}>
-                    kg
-                  </span>
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* Weigh-in History Card */}
-          <section className="surface" aria-labelledby="history-title">
-            <div className="section-heading">
-              <h2 id="history-title">History & Records</h2>
-              <span className="muted">
-                {busy ? "Loading entries..." : `${entries.length} recorded entries`}
               </span>
             </div>
 
-            <div className="entries">
-              {busy && (
-                <div style={{ display: "grid", gap: "0.6rem", padding: "0.5rem 0" }}>
-                  <div className="skeleton skeleton-row" />
-                  <div className="skeleton skeleton-row" />
-                  <div className="skeleton skeleton-row" />
-                </div>
-              )}
+            <div className="macro-card">
+              <span className="macro-title">Latest Recorded</span>
+              <span
+                className="macro-numbers number-tabular"
+                style={{ fontSize: "1.85rem" }}
+              >
+                {sorted.length > 0 ? `${sorted[0].kilograms} ` : "— "}
+                <span className="macro-target" style={{ fontSize: "1rem" }}>
+                  kg
+                </span>
+              </span>
+            </div>
+          </div>
+        </section>
 
-              {!busy && entries.length === 0 && (
-                <p
-                  className="muted"
-                  style={{ padding: "2.5rem 0", textAlign: "center" }}
-                >
-                  No weigh-ins recorded yet. Tap <strong>Record Weigh-in</strong> to add your first.
-                </p>
-              )}
+        {/* Weigh-in History Card */}
+        <section className="surface" aria-labelledby="history-title">
+          <div className="section-head">
+            <h2 id="history-title" className="section-title">History</h2>
+            <span className="muted">
+              {busy ? "Loading..." : entries.length}
+            </span>
+          </div>
 
-              {!busy &&
-                entries.map((entry) => (
-                  <div className="entry-row" key={entry.id}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <span
-                        style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          background: "var(--tint)",
-                          opacity: 0.8,
-                        }}
-                      />
-                      <span style={{ fontWeight: 600 }}>{entry.date}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                      <span
-                        className="entry-value number-tabular"
-                        style={{ fontSize: "1.1rem" }}
-                      >
-                        {entry.kilograms}{" "}
-                        <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>
-                          kg
-                        </span>
-                      </span>
-                      <button
-                        className="delete-icon-btn"
-                        type="button"
-                        onClick={() => void removeEntry(entry.id)}
-                        aria-label={`Delete weigh-in for ${entry.date}`}
-                        title="Delete entry"
-                      >
-                        <TrashIcon size={15} />
-                      </button>
-                    </div>
+          <div className="entries">
+            {busy && (
+              <div style={{ display: "grid", gap: "0.6rem", padding: "0.5rem 0" }}>
+                <div className="skeleton skeleton-row" />
+                <div className="skeleton skeleton-row" />
+                <div className="skeleton skeleton-row" />
+              </div>
+            )}
+
+            {!busy && entries.length === 0 && (
+              <p className="empty-note">No weigh-ins yet.</p>
+            )}
+
+            {!busy &&
+              entries.map((entry) => (
+                <div className="entry-row" key={entry.id}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "var(--tint)",
+                        opacity: 0.8,
+                      }}
+                    />
+                    <span style={{ fontWeight: 600 }}>{formatDMY(entry.date)}</span>
                   </div>
-                ))}
-            </div>
-          </section>
-        </div>
-
-        {/* Right / Secondary Column: Info Guide */}
-        <div className="dashboard-aside">
-          <section className="surface" style={{ padding: "1.35rem" }}>
-            <h3
-              style={{
-                fontSize: "0.95rem",
-                textTransform: "uppercase",
-                color: "var(--secondary)",
-                letterSpacing: "0.05em",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.45rem",
-              }}
-            >
-              <InfoIcon size={16} /> Measurement Protocol
-            </h3>
-            <p
-              className="muted"
-              style={{
-                fontSize: "0.875rem",
-                margin: "0.65rem 0 0",
-                lineHeight: 1.6,
-              }}
-            >
-              For precise moving averages, weigh yourself every morning immediately upon waking,
-              after using the bathroom, and prior to drinking liquids or consuming calories.
-            </p>
-            <div
-              style={{
-                marginTop: "1.25rem",
-                padding: "0.85rem",
-                borderRadius: "0.75rem",
-                background: "var(--surface-secondary)",
-                border: "1px solid var(--separator)",
-                fontSize: "0.8125rem",
-              }}
-            >
-              <span style={{ color: "var(--tint)", fontWeight: 600 }}>Pro Tip:</span> Daily water weight fluctuates 1–2 kg. Focus on the 7-day average trend, not individual day spikes.
-            </div>
-          </section>
-        </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                    <span
+                      className="entry-value number-tabular"
+                      style={{ fontSize: "1.1rem" }}
+                    >
+                      {entry.kilograms}{" "}
+                      <span style={{ fontSize: "0.85rem", color: "var(--secondary)" }}>
+                        kg
+                      </span>
+                    </span>
+                    <button
+                      className="delete-icon-btn"
+                      type="button"
+                      onClick={() => void removeEntry(entry.id)}
+                      aria-label={`Delete weigh-in for ${formatDMY(entry.date)}`}
+                      title="Delete entry"
+                    >
+                      <TrashIcon size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </section>
       </div>
 
       {/* Pop-up Modal with Heavy Blurred Background */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Record Weigh-In"
+        title="New weigh-in"
       >
         <form onSubmit={addEntry} style={{ display: "grid", gap: "1rem" }}>
           <label>
@@ -387,7 +330,6 @@ export function WeightPage({ userName }: { userName: string }) {
                 value={kilograms}
                 onChange={(event) => setKilograms(event.target.value)}
                 required
-                autoFocus
                 style={{
                   paddingRight: "3.25rem",
                   fontSize: "1.35rem",
