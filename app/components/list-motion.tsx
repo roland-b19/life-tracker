@@ -70,17 +70,18 @@ function spaceFrames(el: HTMLElement): Keyframe[] {
   ];
 }
 
-const FADE_OUT: Keyframe[] = [{ opacity: 1 }, { opacity: 0, transform: "scale(0.97)" }];
-const BUY_OUT: Keyframe[] = [
-  { opacity: 1, offset: 0 },
-  { opacity: 1, transform: "scale(1.02)", backgroundColor: "var(--success-subtle)", offset: 0.35 },
-  { opacity: 0, transform: "translateX(2rem) scale(0.97)", backgroundColor: "var(--success-subtle)", offset: 1 },
+// Rows fade where they stand, with a slight blur so the fade reads softer; row-in in globals.css is the reverse.
+const FADE_OUT: Keyframe[] = [
+  { opacity: 1, transform: "none", filter: "none" },
+  { opacity: 0, transform: "scale(0.97)", filter: "blur(3px)" },
 ];
+const FADE = { duration: 240, easing: EASE, fill: "forwards" } as const;
 
 /**
  * Row motion for lists: `leave` fades a row out while it keeps its space, then closes the
  * space and calls `remove`; `enter` (called just before the row is added) opens the space
- * first, then fades the row in. Attach `rowRef(id)` to each row.
+ * first, then fades the row in; `fadeAll` fades every row out in place before a view switch.
+ * Attach `rowRef(id)` to each row.
  */
 export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
@@ -101,10 +102,7 @@ export function useListMotion() {
           .then(() => {
             el.style.overflow = "";
             delete el.dataset.rowMotion;
-            return el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], {
-              duration: DUR - 60,
-              easing: EASE,
-            }).finished;
+            return el.animate([...FADE_OUT].reverse(), { duration: DUR - 60, easing: EASE }).finished;
           })
           .catch(() => {});
       }
@@ -117,16 +115,17 @@ export function useListMotion() {
 
   const enter = useCallback((id: string) => {
     entering.current.add(id);
+    // A row added outside the current filter never mounts now; forget it so it does not grow later.
+    setTimeout(() => entering.current.delete(id), 500);
   }, []);
 
-  const leave = useCallback((id: string, remove: () => void, variant: "delete" | "buy" = "delete") => {
+  const leave = useCallback((id: string, remove: () => void) => {
     const el = nodes.current.get(id);
     if (!el || reducedMotion()) return remove();
     if (el.dataset.rowMotion !== undefined) return; // already leaving
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
-    const buy = variant === "buy";
-    el.animate(buy ? BUY_OUT : FADE_OUT, { duration: buy ? 520 : 240, easing: buy ? "ease-in-out" : EASE, fill: "forwards" })
+    el.animate(FADE_OUT, FADE)
       .finished.then(() => {
         el.style.overflow = "hidden";
         return el.animate(spaceFrames(el), { duration: DUR, easing: EASE, fill: "forwards" }).finished;
@@ -135,5 +134,13 @@ export function useListMotion() {
       .finally(remove);
   }, []);
 
-  return { rowRef, enter, leave };
+  const fadeAll = useCallback((then: () => void) => {
+    const rows = [...nodes.current.values()];
+    if (!rows.length || reducedMotion()) return then();
+    Promise.all(rows.map((el) => el.animate(FADE_OUT, FADE).finished))
+      .catch(() => {})
+      .finally(then);
+  }, []);
+
+  return { rowRef, enter, leave, fadeAll };
 }

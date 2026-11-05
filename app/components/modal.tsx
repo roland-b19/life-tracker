@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
 interface ModalProps {
@@ -69,7 +70,8 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  // Portaled to body so the page behind can shrink (a transformed parent would trap the fixed backdrop).
+  return createPortal(
     <div
       ref={backdropRef}
       className="modal-backdrop"
@@ -102,6 +104,7 @@ export function Modal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
