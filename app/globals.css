@@ -870,6 +870,17 @@ textarea {
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--lift);
 }
 
+/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
+select {
+  appearance: none;
+  padding-right: 2.6rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a1a9b2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.75rem;
+  cursor: pointer;
+}
+
 /* Checkboxes and radios are not text fields: undo the field sizing above and use the system control in the tint. */
 input[type="checkbox"],
 input[type="radio"] {
@@ -886,7 +897,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background: rgba(47, 53, 60, 0.95);
+  background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
   border-color: rgba(134, 180, 234, 0.6);
   box-shadow: inset 0 0 0 1px rgba(134, 180, 234, 0.6);
 }
@@ -1027,6 +1038,15 @@ textarea:focus-visible {
 .expense-meta {
   font-size: 0.8rem;
   color: var(--secondary);
+}
+
+/* Category and date share the first line; the price sits under them */
+.expense-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 0.5rem;
+  min-width: 0;
 }
 
 .expense-amount-actions {
@@ -2194,7 +2214,7 @@ main > .error {
   flex-shrink: 0;
 }
 
-/* Expense rows: category, price right below, date last; edit and delete on the right */
+/* Expense rows: category and date, price right below; edit and delete on the right */
 .expense-info {
   min-width: 0;
   gap: 0.1rem;
@@ -2503,6 +2523,42 @@ button.bars-col:focus-visible {
 .donut-legend .number-tabular {
   color: var(--secondary);
   font-weight: 600;
+}
+
+/* Hovering (or tapping) a slice or its legend row brings it forward: it thickens, the rest dim */
+.donut-slice,
+.donut-legend li {
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease), stroke-width var(--dur) var(--pop);
+}
+
+.donut[data-active] .donut-slice:not(.on),
+.donut[data-active] .donut-legend li:not(.on) {
+  opacity: 0.3;
+}
+
+.donut-slice.on {
+  stroke-width: 30px;
+}
+
+.donut-center {
+  pointer-events: none;
+  padding-inline: 1.6rem;
+  animation: donut-center-in 260ms var(--ease) both;
+}
+
+@keyframes donut-center-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.donut-center-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Gym muscle map */

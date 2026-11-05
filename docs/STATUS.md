@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-05 by Claude (wishlist tweaks: no shadow on fields and tabs, Buy removed, faster row fades)_
+_Last updated: 2026-11-06 by Claude (pages polish: smooth delete/undo, date pickers, plan 7 days ahead, streak fixes, donut highlight)_
 
 ## Phase
 
@@ -21,6 +21,7 @@ Wishlist polish (in-place fades with a soft blur on every list change, tab switc
 List motion (rows open their space then fade in, fade out then close their space, a Buy animation on wishlist, lists resize smoothly on tab switches, rows replay their entrance on every tab, uniform list spacing, subtle Sign out, tinted row icon buttons, Credits link removed) is merged in `main` (PR #38). No migration, no new dependency.
 Motion consistency (every card, button, tab and field grows by the same pixels with one shadow, a focused field keeps its lift, lists resize before new rows fade in, Tasks tabs and days fade the old rows out first, add/undo motion on Tasks, sign-out fades the page before the sign-in card, subtler Continue that keeps its colour while signing in) is merged in `main` (PR #40). No migration, no new dependency.
 Wishlist tweaks (no shadow on fields and segmented tabs, Buy button removed, faster row fades) are merged in `main` (PR #41).
+Pages polish (smooth delete and undo on Wishlist, Tasks and Money; calendar date pickers on Tasks and Money; plan one-off tasks up to 7 days ahead; streak fixes; donut hover highlight; select chevron) is on branch `feat/pages-polish`, PR open, not merged. No migration, no new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -137,6 +138,12 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Pages polish (Claude Code), from the user's Wishlist, Tasks and Money feedback:
+  - Delete lag: the server call used to start only after the fade and the list waited on it. Now the delete runs during the fade and the toast appears as the row closes (~640ms in dev). Undo on Wishlist and Tasks re-inserts the **same row** (same id and createdAt, new owner-scoped `restoreTodoAction`; wishlist already had one); Money undo re-logs the expense and animates it in.
+  - Tasks: the date label opens a calendar (`app/components/date-picker.tsx`, day and month modes, arrows/Escape/Today, values after `max` disabled). One-off tasks can be planned up to `PLAN_AHEAD_DAYS` = 7 days ahead (checked on the server in `assertPlannable`); Daily stays on today. Overdue tasks roll into today only, never into a future day being viewed.
+  - Streak (`src/lib/streak.ts`, pure, shared by server and optimistic UI): untick on the same day restores the previous streak, a double tick does not count twice, a stale streak reads 0, and the streak changes on screen at once. The Business "No daily tasks yet." note is keyed so `fadeAll` cannot leave it invisible.
+  - Money: category and date share the row's first line; the month label opens the month picker (no future months); hovering or tapping a donut slice or legend row dims the others, thickens the slice and shows its amount and share in the centre (all donuts); the select chevron is a drawn SVG aligned with the date icon; form date inputs on Money and Health weigh-ins stop at today.
+  - Verified: tsc, eslint, vitest 82/84 (the 2 food-AI date tests fail the same way without these changes: they compare the local date with UTC and fail between local midnight and UTC midnight); in the browser: Tasks picker and planning, delete/undo, Business empty note, instant streak, Money row layout, donut hover, month picker, chevron, expense delete/undo. Not checked: real iOS Safari, VoiceOver, the donut by keyboard (the legend lists every value).
 - 2026-11-05 — Wishlist tweaks (Claude Code): fields and segmented tabs no longer get the hover shadow (they still grow; a focused field shows only its ring), the wishlist Buy button is gone (Delete does the same), row fades are faster (out 180ms, in 260ms). Verified in the browser; tsc, eslint, 77/77 vitest.
 - 2026-11-05 — Motion consistency (Claude Code), from the user's sign-in, wishlist and tasks feedback:
   - One hover for everything: `--grow` and `--press` are set per element by a `pointerover`/`focusin` listener in `app/providers.tsx` (4px wider on hover, 8px narrower on press, capped at 1.06 / 0.92 for tiny controls), because a fixed scale grew wide buttons far more than small ones. One `--hover-shadow`, one `--lift` timing. Idle segmented tabs and nav links now lift too; the selected tab stays on its thumb.

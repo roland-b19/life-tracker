@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
@@ -135,10 +135,16 @@ export function DonutChart({
   const c = 2 * Math.PI * r;
   const total = slices.reduce((n, s) => n + s.value, 0);
   const grow = useAnimatedNumber(1, 0, 900);
+  // The slice under the pointer (or the legend row) comes forward; the centre shows its share.
+  const [active, setActive] = useState<number | null>(null);
+  const shown = active === null ? null : slices[active];
+  // A touch "leaves" right after the tap, so a tapped slice stays chosen until another tap.
+  const clear = (e: PointerEvent) => e.pointerType !== "touch" && setActive(null);
+  const pick = (i: number) => ({ onPointerEnter: () => setActive(i), onClick: () => setActive((a) => (a === i ? null : i)) });
   let offset = 0;
   return (
-    <div className="donut">
-      <div className="donut-chart" style={{ width: size, height: size }} role="img" aria-label={summary}>
+    <div className="donut" data-active={active === null ? undefined : ""}>
+      <div className="donut-chart" style={{ width: size, height: size }} role="img" aria-label={summary} onPointerLeave={clear}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
           <circle cx={size / 2} cy={size / 2} r={r} className="ring-track" strokeWidth={stroke} />
           {total > 0 &&
@@ -149,6 +155,8 @@ export function DonutChart({
               const el = (
                 <circle
                   key={s.label}
+                  className={`donut-slice${i === active ? " on" : ""}`}
+                  {...pick(i)}
                   cx={size / 2}
                   cy={size / 2}
                   r={r}
@@ -164,14 +172,16 @@ export function DonutChart({
               return el;
             })}
         </svg>
-        <div className="donut-center">
-          <strong className="number-tabular">{center}</strong>
-          <span>{centerLabel}</span>
+        {/* Keyed so the centre fades between the total and a slice */}
+        <div className="donut-center" key={shown?.label ?? "total"}>
+          <strong className="number-tabular">{shown ? shown.display : center}</strong>
+          <span className="donut-center-label">{shown ? shown.label : centerLabel}</span>
+          {shown && <span className="number-tabular">{Math.round((shown.value / total) * 100)}% of total</span>}
         </div>
       </div>
-      <ul className="donut-legend">
+      <ul className="donut-legend" onPointerLeave={clear}>
         {slices.map((s, i) => (
-          <li key={s.label}>
+          <li key={s.label} className={i === active ? "on" : undefined} {...pick(i)}>
             <span className="donut-dot" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
             <span className="donut-label">{s.label}</span>
             <span className="number-tabular">{s.display}</span>
