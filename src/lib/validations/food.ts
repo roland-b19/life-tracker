@@ -44,3 +44,7 @@ export type UpdateMetricsInput = z.infer<typeof updateMetricsSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
 export type ToggleShoppingItemInput = z.infer<typeof toggleShoppingItemSchema>;
+
+export const shoppingFromRecipesSchema = z.object({
+  keys: z.array(z.string().min(1).max(160)).min(1).max(200),
+});

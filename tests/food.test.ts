@@ -32,6 +32,7 @@ import {
   getWeightAnalytics,
   logMeal,
   populateShoppingListFromRecipes,
+  getRecipeIngredientOptions,
   toggleShoppingItem,
   updateDailySteps,
   updateNutritionTargets,
@@ -214,8 +215,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(toggled?.isBought).toBe(true);
 
     // 3. Auto-populate from sample recipes
-    const populated = await populateShoppingListFromRecipes(userA);
-    expect(populated.length).toBeGreaterThan(0);
+    const options = await getRecipeIngredientOptions(userA);
+    const chicken = options.find((o) => o.name === "Chicken breast");
+    expect(chicken).toBeDefined();
+    const populated = await populateShoppingListFromRecipes(userA, [chicken!.key]);
+    // Only the chosen ingredient is added, not every recipe ingredient.
+    expect(populated).toHaveLength(1);
 
     const list = await getShoppingList(userA);
     expect(list.some((item) => item.name === "Chicken breast")).toBe(true);
@@ -239,6 +244,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
           fat: 2,
         }),
       ).rejects.toThrow("Authentication required.");
+
+      await expect(generateShoppingListAction({ keys: ["eggs_pcs"] })).rejects.toThrow(
+        "Authentication required.",
+      );
 
       await expect(addWaterAction("2026-11-04", 250)).rejects.toThrow(
         "Authentication required.",
@@ -287,7 +296,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(targetRes.targets.calories).toBe(3400);
 
       // 5. Generate shopping list
-      const shopRes = await generateShoppingListAction();
+      await expect(generateShoppingListAction({ keys: [] })).rejects.toThrow();
+      const [firstOption] = await getRecipeIngredientOptions(authState.id);
+      const shopRes = await generateShoppingListAction({ keys: [firstOption.key] });
+      expect(shopRes.items).toHaveLength(1);
       expect(shopRes.success).toBe(true);
 
       // 6. Toggle and Clear bought items

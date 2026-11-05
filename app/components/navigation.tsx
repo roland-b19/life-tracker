@@ -129,6 +129,9 @@ export function Navigation({ userName }: NavigationProps) {
           <button className="signout-btn" type="button" onClick={signOutNow}>
             Sign out
           </button>
+          <a className="credits-link" href="/models/ATTRIBUTION.md" target="_blank" rel="noopener noreferrer">
+            Credits
+          </a>
         </div>
       </aside>
 
@@ -163,6 +166,10 @@ export function Navigation({ userName }: NavigationProps) {
                 <span>{link.label}</span>
               </NextLink>
             ))}
+            {/* The 3D muscle model is CC BY-SA and needs attribution somewhere in the app. */}
+            <a className="credits-link" href="/models/ATTRIBUTION.md" target="_blank" rel="noopener noreferrer">
+              Credits
+            </a>
           </div>
         </>
       )}

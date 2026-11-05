@@ -92,11 +92,11 @@ export function Modal({
             </h2>
             <button
               type="button"
-              className="delete-icon-btn modal-close-btn"
+              className="modal-close-btn"
               onClick={onClose}
               aria-label="Close modal"
             >
-              <CloseIcon size={16} />
+              <CloseIcon size={13} />
             </button>
           </div>
         </div>

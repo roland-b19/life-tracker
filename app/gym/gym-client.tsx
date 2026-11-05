@@ -149,7 +149,7 @@ export function GymClient({
   >({});
 
   // Custom exercise form state
-  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customMuscle, setCustomMuscle] = useState<
     "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other"
@@ -181,6 +181,7 @@ export function GymClient({
       })),
     });
     setAddId("");
+    setShowCustom(false);
   }
 
   function patchRow(i: number, patch: Partial<DraftExercise>) {
@@ -391,9 +392,11 @@ export function GymClient({
         equipmentType: customEquipment,
       });
       if (res.success) {
-        setShowCustomModal(false);
+        // A new exercise is made for this day, so it goes straight into the routine.
+        const exerciseId = res.exercise.id;
+        setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId, targetSets: "2", minReps: "5", maxReps: "8" }] });
+        setShowCustom(false);
         setCustomName("");
-        setStatusMessage(`Added custom exercise: ${res.exercise.name}`);
       }
     } catch {
       setStatusMessage("Could not create custom exercise.");
@@ -746,10 +749,6 @@ export function GymClient({
                   <h2 id="split-title" className="section-title">
                     Training days
                   </h2>
-                  <button type="button" className="secondary btn-sm" onClick={() => setShowCustomModal(true)}>
-                    <PlusIcon size={14} />
-                    Custom exercise
-                  </button>
                 </div>
 
                 <div className="split-day-list">
@@ -944,6 +943,85 @@ export function GymClient({
                       </button>
                     </div>
                   )}
+
+                  {draft.exercises.length < 20 &&
+                    (showCustom ? (
+                      <div className="custom-exercise">
+                        <label>
+                          New exercise
+                          <input
+                            type="text"
+                            maxLength={100}
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            onKeyDown={(e) => {
+                              // Enter creates the exercise instead of submitting the whole day.
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void handleCreateCustomExercise();
+                              }
+                            }}
+                          />
+                        </label>
+                        <div className="form-pair">
+                          <label>
+                            Muscle group
+                            <select
+                              value={customMuscle}
+                              onChange={(e) =>
+                                setCustomMuscle(
+                                  e.target.value as "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other",
+                                )
+                              }
+                            >
+                              <option value="chest">Chest</option>
+                              <option value="back">Back</option>
+                              <option value="legs">Legs</option>
+                              <option value="shoulders">Shoulders</option>
+                              <option value="arms">Arms</option>
+                              <option value="calves">Calves</option>
+                              <option value="abs">Abs</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </label>
+                          <label>
+                            Equipment
+                            <select
+                              value={customEquipment}
+                              onChange={(e) =>
+                                setCustomEquipment(
+                                  e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight",
+                                )
+                              }
+                            >
+                              <option value="barbell">Barbell</option>
+                              <option value="dumbbell">Dumbbell</option>
+                              <option value="cable">Cable</option>
+                              <option value="machine">Machine</option>
+                              <option value="bodyweight">Bodyweight</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="custom-exercise-actions">
+                          <button type="button" className="secondary btn-sm" onClick={() => setShowCustom(false)}>
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-sm tint"
+                            disabled={busy || !customName.trim()}
+                            onClick={handleCreateCustomExercise}
+                          >
+                            Create and add
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={() => setShowCustom(true)}>
+                        <PlusIcon size={14} />
+                        New exercise
+                      </button>
+                    ))}
                 </>
               )}
             </div>
@@ -960,70 +1038,6 @@ export function GymClient({
         )}
       </Modal>
 
-      {/* Modal: Custom Exercise with Heavy Blurred Background */}
-      <Modal
-        isOpen={showCustomModal}
-        onClose={() => setShowCustomModal(false)}
-        title="New custom exercise"
-      >
-        <div className="form-stack">
-          <label>
-            Name
-            <input
-              type="text"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-            />
-          </label>
-
-          <label>
-            Muscle group
-            <select
-              value={customMuscle}
-              onChange={(e) =>
-                setCustomMuscle(
-                  e.target.value as "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other",
-                )
-              }
-            >
-              <option value="chest">Chest</option>
-              <option value="back">Back</option>
-              <option value="legs">Legs</option>
-              <option value="shoulders">Shoulders</option>
-              <option value="arms">Arms</option>
-              <option value="calves">Calves</option>
-              <option value="abs">Abs</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-
-          <label>
-            Equipment
-            <select
-              value={customEquipment}
-              onChange={(e) =>
-                setCustomEquipment(
-                  e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight",
-                )
-              }
-            >
-              <option value="barbell">Barbell</option>
-              <option value="dumbbell">Dumbbell</option>
-              <option value="cable">Cable</option>
-              <option value="machine">Machine</option>
-              <option value="bodyweight">Bodyweight</option>
-            </select>
-          </label>
-        </div>
-        <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => setShowCustomModal(false)}>
-            Cancel
-          </button>
-          <button type="button" disabled={busy || !customName.trim()} onClick={handleCreateCustomExercise}>
-            Save
-          </button>
-        </div>
-      </Modal>
     </main>
   );
 }
