@@ -22,7 +22,7 @@ export const viewport: Viewport = {
   userScalable: false,
   viewportFit: "cover",
   colorScheme: "dark",
-  themeColor: "#1f2b3a",
+  themeColor: "#000000",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

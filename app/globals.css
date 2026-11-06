@@ -1,15 +1,14 @@
 :root {
-  /* Storm: cool graphite with a steel blue accent. Chosen in the palette review (docs/decisions.md, 2026-11-05). */
-  /* The page is a dark steel blue (the user's call, 2026-11-06), so the graphite cards stand out from it. */
-  --background: #1f2b3a;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(134, 180, 234, 0.07) 0%, rgba(31, 43, 58, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(134, 180, 234, 0.04) 0%, rgba(31, 43, 58, 0) 100%);
-  --surface: rgba(37, 42, 48, 0.78);
-  --surface-solid: #252a30;
-  --surface-secondary: rgba(47, 53, 60, 0.65);
-  --surface-modal: #282e34;
-  --text: #eaedf0;
-  --secondary: #a1a9b2;
+  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent (docs/decisions.md, 2026-11-06). */
+  --background: #000000;
+  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0) 100%),
+               radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
+  --surface: rgba(28, 28, 30, 0.78);
+  --surface-solid: #1c1c1e;
+  --surface-secondary: rgba(44, 44, 46, 0.65);
+  --surface-modal: #242426;
+  --text: #ebebf0;
+  --secondary: #a1a1a8;
   --tint: #86b4ea;
   --tint-hover: #8dbaec;
   --on-tint: #0b1b30;
@@ -20,8 +19,8 @@
   --warning-subtle: rgba(235, 198, 115, 0.15);
   --danger: #ef8f8f;
   --danger-subtle: rgba(239, 143, 143, 0.15);
-  --separator: #353c45;
-  --card-border: #434b56;
+  --separator: #38383a;
+  --card-border: #48484a;
   --card-shadow: none;
   /* Objects carry no outline: a very slight shadow on every side marks their edge instead.
      High contrast (below) brings the outline back. */
@@ -337,7 +336,7 @@ h3 {
   display: flex;
   align-items: stretch;
   padding: 0.25rem;
-  background: rgba(37, 42, 48, 0.72);
+  background: rgba(28, 28, 30, 0.72);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   backdrop-filter: blur(28px) saturate(160%);
   border: 1px solid var(--edge);
@@ -383,7 +382,7 @@ h3 {
   position: fixed;
   inset: 0;
   z-index: 840;
-  background: rgba(10, 12, 15, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   animation: modalFadeIn var(--dur) var(--ease) both;
@@ -579,7 +578,7 @@ main {
 }
 
 .badge-rest {
-  background: rgba(161, 169, 178, 0.12);
+  background: rgba(161, 161, 168, 0.12);
   color: var(--secondary);
   border: 1px solid var(--edge);
   box-shadow: var(--edge-shadow);
@@ -837,7 +836,7 @@ main {
   input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
   select:hover:not(:focus, :disabled),
   textarea:hover:not(:focus, :disabled) {
-    background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
+    background-color: rgba(44, 44, 46, 0.95); /* color only: keeps the select's chevron */
   }
   select.sort-select:hover:not(:disabled) {
     background-color: var(--highlight-fill);
@@ -884,7 +883,7 @@ textarea {
   width: 100%;
   padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: rgba(37, 42, 48, 0.85);
+  background: rgba(28, 28, 30, 0.85);
   border: 1px solid var(--edge);
   box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
@@ -918,7 +917,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(54, 60, 68, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
+  background-color: rgba(58, 58, 60, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
 button {
@@ -1251,7 +1250,7 @@ textarea:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(10, 12, 15, 0.4);
+  background: rgba(0, 0, 0, 0.4);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
   display: flex;
@@ -1276,7 +1275,7 @@ textarea:focus-visible {
 .modal-card {
   width: 100%;
   max-width: 34rem;
-  background: #282e34;
+  background: #242426;
   border: 1px solid var(--edge);
   border-radius: 1.25rem;
   box-shadow: var(--edge-shadow);
@@ -1546,7 +1545,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(37, 42, 48, 0.95);
+  background: rgba(28, 28, 30, 0.95);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border: 1px solid var(--edge);
@@ -2019,8 +2018,8 @@ main > .error {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #2f353c;
-    --surface-modal: #282e34;
+    --surface-secondary: #2c2c2e;
+    --surface-modal: #242426;
     --glass-blur: none;
   }
 
@@ -3087,7 +3086,7 @@ button.bars-col:focus-visible {
   justify-content: flex-start;
   font-weight: 400;
   color: var(--text);
-  background: rgba(37, 42, 48, 0.85);
+  background: rgba(28, 28, 30, 0.85);
   border: 1px solid var(--edge);
   box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
