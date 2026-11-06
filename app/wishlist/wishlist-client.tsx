@@ -84,7 +84,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave, fadeAll } = useListMotion();
+  const { rowRef, enter, leave, move, fadeAll } = useListMotion();
 
   // Form state
   const [name, setName] = useState("");
@@ -112,8 +112,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     url: item.url || undefined,
   });
 
-  // Writes an edited item into the list; if that moves it, it leaves its old place and enters the new one,
-  // like a delete and its Undo.
+  // Writes an edited item into the list; if that moves it, it enters its new place like a deleted item put back
+  // by Undo, and if the edit takes it out of the current filter, it leaves like a delete.
   function replace(to: WishlistItemData) {
     const { items: now, view: v } = latest.current;
     const order = (list: WishlistItemData[]) =>
@@ -121,10 +121,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     const after = order(now.map((i) => (i.id === to.id ? to : i)));
     const write = () => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
     if (order(now).indexOf(to.id) === after.indexOf(to.id)) return write();
-    leave(to.id, () => {
-      if (after.includes(to.id)) enter(to.id);
-      write();
-    });
+    if (after.includes(to.id)) move(to.id, write);
+    else leave(to.id, write);
   }
 
   function switchRange(next: "all" | Priority) {

@@ -236,6 +236,8 @@ export function useListMotion() {
   const leaving = useRef(new WeakSet<HTMLElement>());
   // A leaving row's neighbour holds the closed gap until the row is gone, then drops it in the same commit.
   const gaps = useRef(new Map<HTMLElement, Animation>());
+  // Where a moving row was: the neighbour that holds its space, on which side, and how much.
+  const moved = useRef(new Map<string, { near: HTMLElement; side: "marginTop" | "marginBottom"; space: number }>());
   useLayoutEffect(() => {
     for (const [el, a] of gaps.current) {
       if (el.isConnected) continue;
@@ -274,6 +276,13 @@ export function useListMotion() {
           });
         }
         // A row fades in only once its space is fully open, so it is never seen clipped.
+        // A moved row's old space closes while its new one opens.
+        const from = moved.current.get(id);
+        moved.current.delete(id);
+        if (from?.near.isConnected)
+          from.near.animate([{ [from.side]: `${from.space}px` }, { [from.side]: "0px" }], {
+            duration: SPACE, easing: SPACE_EASE, delay: wait, fill: "backwards", composite: "add",
+          });
         el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: wait + (alone(el) ? 120 : SPACE), easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(() => {
             delete el.dataset.entering;
@@ -294,7 +303,7 @@ export function useListMotion() {
         entering.current.set(id, done);
         // A row added outside the current filter never mounts; forget it so it does not grow later.
         // Long enough for pages that refetch the list before the row mounts (Tasks).
-        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), done()), 2000);
+        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), moved.current.delete(id), done()), 2000);
       }),
     [],
   );
@@ -322,6 +331,22 @@ export function useListMotion() {
     exit.finished.catch(() => {}).finally(remove);
   }, []);
 
+  // Runs `change` (a state update that moves a row): the row is gone from its old place at once, that space
+  // closes while the row enters at its new place, like a deleted row put back by Undo.
+  const move = useCallback(
+    (id: string, change: () => void) => {
+      const el = nodes.current.get(id);
+      if (el && !reducedMotion() && !alone(el)) {
+        const gap = parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
+        const near = (el.nextElementSibling ?? el.previousElementSibling) as HTMLElement;
+        moved.current.set(id, { near, side: el.nextElementSibling ? "marginTop" : "marginBottom", space: el.offsetHeight + gap });
+      }
+      void enter(id);
+      change();
+    },
+    [enter],
+  );
+
   const fadeAll = useCallback((then: () => void) => {
     const rows = [...nodes.current.values()];
     if (!rows.length || reducedMotion()) return then();
@@ -345,5 +370,5 @@ export function useListMotion() {
     });
   }, []);
 
-  return { rowRef, enter, leave, fadeAll, reorder };
+  return { rowRef, enter, leave, move, fadeAll, reorder };
 }
