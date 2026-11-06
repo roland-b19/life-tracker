@@ -33,8 +33,11 @@
   --quick: 180ms;
   /* Hover shadows and highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
-  /* The one hover and selection highlight: a neutral grey wash, never the accent */
-  --highlight: rgba(255, 255, 255, 0.09);
+  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a slightly stronger one on
+     grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
+  --highlight: rgba(255, 255, 255, 0.05);
+  --highlight-fill: rgba(255, 255, 255, 0.1);
+  --tint-highlight: rgba(134, 180, 234, 0.2);
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --press: 0.92;
   color-scheme: dark;
@@ -817,7 +820,7 @@ main {
     background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
   }
   select.sort-select:hover:not(:focus, :disabled) {
-    background-color: var(--highlight);
+    background-color: var(--highlight-fill);
   }
 
   .surface:hover,
@@ -826,7 +829,7 @@ main {
   .routine-row:hover,
   .side-user:hover,
   .nav-link:hover,
-  button:not(.bars-col, .segmented button, .split-day-select):hover:not(:disabled),
+  button:not(.bars-col, .segmented button, .split-day-select, .tint, .delete-icon-btn, .toast-action-btn):hover:not(:disabled),
   .month-nav-btn:hover {
     box-shadow: var(--hover-shadow);
   }
@@ -1483,7 +1486,7 @@ textarea:focus-visible {
   .command-trigger-btn:hover {
     border-color: rgba(255, 255, 255, 0.2);
     color: var(--text);
-    background: var(--highlight);
+    background: var(--highlight-fill);
   }
 }
 
@@ -1570,7 +1573,7 @@ textarea:focus-visible {
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: var(--highlight);
+    background: var(--tint-highlight);
   }
 }
 
@@ -1623,6 +1626,8 @@ button.btn-sm.tint {
   position: relative;
   display: grid;
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  --seg-gap: 0.25rem; /* the pills never touch */
+  column-gap: var(--seg-gap);
   padding: 0.25rem;
   background: var(--surface-secondary);
   border: 1px solid var(--separator);
@@ -1636,10 +1641,10 @@ button.btn-sm.tint {
   top: 0.25rem;
   bottom: 0.25rem;
   left: 0.25rem;
-  width: calc((100% - 0.5rem) / var(--n));
+  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));
   border-radius: 0.7rem;
   background: var(--tint);
-  transform: translateX(calc(var(--i) * 100%));
+  transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
   transition: transform var(--dur) var(--ease);
   z-index: -1;
 }
@@ -2052,18 +2057,38 @@ main > .error {
   margin-top: 0.25rem;
 }
 
-/* Wishlist rows: name over price/range/link, actions centred on the right so the
-   space above and below the text is equal */
+/* Wishlist rows share the list's columns (subgrid), so every price box, range box and link starts and ends at
+   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists put
+   the name and actions over the boxes (the actions sit on the name's line, which leaves them room). */
+.wishlist-entries { grid-template-columns: auto auto minmax(0, 1fr); column-gap: 0.75rem; }
+.wishlist-entries:not(:has(.item-range)) { grid-template-columns: auto minmax(0, 1fr); }
+.wishlist-entries > * { grid-column: 1 / -1; }
 .item-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas: "name actions" "meta actions";
+  grid-template-columns: subgrid;
+  grid-template-areas: "name name name" "price range link";
   align-items: center;
-  gap: 0.25rem 0.75rem;
+  row-gap: 0.4rem;
+}
+.wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name name" "price link"; }
+.item-row > .item-actions { grid-area: name; justify-self: end; }
+.item-row > .item-name { padding-inline-end: calc(88px + 1.5rem); } /* the two 44px actions, their gap and one more */
+.item-meta { display: contents; }
+.item-price { grid-area: price; justify-content: center; white-space: nowrap; }
+.item-range { grid-area: range; justify-content: center; }
+:is(.item-link, .item-link-text) { grid-area: link; }
+@container (min-width: 34rem) {
+  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; column-gap: 1rem; }
+  .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
+  .item-row { grid-template-areas: "name price range link actions"; }
+  .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
+  .item-row > .item-actions { grid-area: actions; }
+  .item-row > .item-name { padding-inline-end: 0; }
 }
 
-/* A wishlist row (name over the boxed price): the empty note takes the same space */
-.wishlist-entries { --row-h: 4.59375rem; }
+/* The empty note takes one wishlist row's space: two lines when narrow, one 60px line when wide */
+.wishlist-entries { --row-h: 5.9rem; }
+@container (min-width: 34rem) { .wishlist-entries { --row-h: 3.75rem; } }
 
 /* Compact sort menu in a card header. The text is centred between the left edge and the chevron
    (which ends 1.55rem from the right), with the same 0.85rem on either side. */
@@ -2079,25 +2104,23 @@ select.sort-select {
   background-color: rgba(255, 255, 255, 0.06);
   background-position: right 0.8rem center;
 }
+/* While its menu is open the sort menu shows only the highlight, no focus edge; the keyboard keeps a ring */
+select.sort-select:focus {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  background-color: var(--highlight-fill);
+}
+select.sort-select:focus-visible:not([data-pointer]) {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
+}
 
 .item-name {
   grid-area: name;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.item-meta { grid-area: meta; }
 .item-actions { grid-area: actions; }
-
-/* Narrow lists: price on its own line, then range and link, so the boxes line up from row to row */
-.item-meta {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  justify-items: start;
-  gap: 0.4rem 0.6rem;
-  min-width: 0;
-}
-.item-meta > .item-price { grid-column: 1 / -1; }
 
 /* Wishlist page: a monospaced face, so every letter and digit takes the same width */
 .mono {
@@ -2107,13 +2130,6 @@ select.sort-select {
 /* Monospace is wider, so its four filter tabs take the dense size on a phone */
 @media (max-width: 30rem) {
   .mono .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
-}
-
-/* The price box fits its text; range boxes share one width, so they line up */
-.item-price { justify-self: start; }
-.item-row .item-meta > .badge:not(.item-price) {
-  justify-content: center;
-  width: calc(9 * (1ch + 0.04em) + 1.3rem + 2px); /* "UNDER 250", the longest range */
 }
 
 .item-link,
@@ -2131,21 +2147,7 @@ select.sort-select {
   text-decoration: none;
 }
 
-/* Wide lists: name over price, then range and link in shared left-aligned columns (subgrid), centred on the whole item.
-   The name column takes at most 45%, the link column the rest, so the range and link start right after the names. */
 .auto-height:has(> .wishlist-entries) { container-type: inline-size; }
-@container (min-width: 34rem) {
-  .wishlist-entries { grid-template-columns: fit-content(45%) auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
-  .wishlist-entries > * { grid-column: 1 / -1; }
-  .item-row {
-    grid-template-columns: subgrid;
-    grid-template-areas: "name range link actions" "price range link actions";
-  }
-  .item-meta { display: contents; }
-  .item-meta > .item-price { grid-area: price; }
-  .item-row .item-meta > .badge:not(.item-price) { grid-area: range; }
-  :is(.item-link, .item-link-text) { grid-area: link; }
-}
 
 .item-link-text {
   color: var(--secondary);
@@ -2154,7 +2156,7 @@ select.sort-select {
 .item-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem; /* the header's spacing between Sort and Add item */
   flex-shrink: 0;
 }
 
@@ -3059,13 +3061,18 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
 
-/* An idle (unselected or secondary) button takes the grey highlight on hover, on top of the shared shadow */
+/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint */
 @media (hover: hover) {
   button.secondary:hover:not(:disabled),
-  button.btn-sm:hover:not(:disabled),
-  .delete-icon-btn:hover:not(:disabled),
+  button.btn-sm:not(.tint):hover:not(:disabled),
+  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled) {
+    background: var(--highlight-fill);
+  }
+  button.btn-sm.tint:hover:not(:disabled),
+  .delete-icon-btn:hover:not(:disabled) {
+    background: var(--tint-highlight);
+  }
   button.danger:hover:not(:disabled),
-  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled),
   .muscle-chip:not(.active):hover {
     background: var(--highlight);
   }
@@ -3075,7 +3082,7 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
   }
 }
 
-/* List rows are soft bands: every other row carries a faint grey wash and the hovered row a stronger one.
+/* List rows are soft bands: every other row carries a faint grey wash (no hover highlight).
    The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
 :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row) {
   margin-inline: -0.75rem;
@@ -3089,10 +3096,5 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
 }
 :is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
   background-color: rgba(255, 255, 255, 0.03);
-}
-@media (hover: hover) {
-  :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row):hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
 }
 

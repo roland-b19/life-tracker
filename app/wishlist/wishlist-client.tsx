@@ -276,7 +276,18 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                   className="sort-select"
                   aria-label="Sort items"
                   value={sort}
-                  onChange={(e) => switchSort(e.target.value as Sort)}
+                  // data-pointer marks a mouse or touch open: no focus ring, and a pick or Escape drops focus so
+                  // the highlight ends. Keyboard use keeps both.
+                  onPointerDown={(e) => (e.currentTarget.dataset.pointer = "")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && "pointer" in e.currentTarget.dataset) e.currentTarget.blur();
+                    else delete e.currentTarget.dataset.pointer;
+                  }}
+                  onBlur={(e) => delete e.currentTarget.dataset.pointer}
+                  onChange={(e) => {
+                    switchSort(e.target.value as Sort);
+                    if ("pointer" in e.target.dataset) e.target.blur();
+                  }}
                 >
                   {SORTS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -313,7 +324,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                       <div className="item-meta">
                         <span className="badge badge-info item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
                         {listRange === "all" && (
-                          <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
+                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}
                         {item.url && <ItemLink value={item.url} />}
                       </div>

@@ -146,6 +146,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-06 — Grey highlights, smooth hover.** Every hover and selection fill is one neutral grey (`--highlight`), never the accent; row stripes are grey too. Hover shadows and fills use `--fade` (240ms `ease`), since the iOS ease at 180ms read as instant. Rows no longer wait for `rows-go` after a navigation (supersedes that part of "Task motion and chart"). Wishlist price boxes fit their text.
 
+- **2026-11-06 — Subtle highlights by strength, one-line Wishlist rows.** Hover fills are subtle and match the control: 5% grey on clear controls, 10% grey on grey-filled ones, a deeper tint on tinted buttons, which carry no hover shadow (supersedes "one grey everywhere" in "Grey highlights, smooth hover" for tinted buttons). Rows have no hover highlight. The sort menu shows no focus edge after a mouse open and lets go of focus after a pick or Escape; keyboard focus keeps a ring. Wishlist rows are one line on wide lists with equal-width price and range boxes (supersedes "price boxes fit their text").
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

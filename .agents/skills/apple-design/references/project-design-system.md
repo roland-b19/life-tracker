@@ -8,7 +8,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 |---|---|
 | Palette | **Storm**: dark, cool graphite with a steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
-| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, buttons) and a grey highlight (`--highlight`), fading over `--fade` (240ms ease), never a scale. |
+| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, grey buttons) and a subtle highlight (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, which get no shadow), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
 | Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No resting shadows: depth comes from border, blur and translucency. The one shadow is `--hover-shadow`, very soft and on every side, under a hovered card or control. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
