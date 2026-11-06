@@ -8,12 +8,22 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// A growing list's bottom edge fades instead of cutting rows; the fade slides below the box as it settles.
+const EDGE = 56;
+const EDGE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${EDGE}px), transparent)`;
+// Held through the first half, where the eased height does most of its growing.
+const EDGE_FRAMES: Keyframe[] = [
+  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%" },
+  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%", offset: 0.5 },
+  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: `100% calc(100% + ${EDGE}px)` },
+];
+
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them.
+ * the container just follows them. `fadeEdge` softens the bottom edge while it grows.
  */
-export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
+export function AutoHeight({ className, fadeEdge, children }: { className?: string; fadeEdge?: boolean; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +50,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
+      if (fadeEdge && next > from) outer.animate(EDGE_FRAMES, { duration: 300 }); // .auto-height's transition
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
@@ -49,7 +60,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       observer.disconnect();
       outer.removeEventListener("transitionend", onEnd);
     };
-  }, []);
+  }, [fadeEdge]);
 
   return (
     <div ref={outerRef} className="auto-height">
