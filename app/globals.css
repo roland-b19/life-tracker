@@ -817,7 +817,7 @@ main {
   input:not([type="checkbox"]):not([type="radio"]):is(:hover, :focus):not(:disabled),
   select:is(:hover, :focus):not(:disabled),
   textarea:is(:hover, :focus):not(:disabled),
-  button:not(.bars-col, .segmented button.active):hover:not(:disabled),
+  button:not(.bars-col, .segmented button.active, .split-day-select):hover:not(:disabled),
   .month-nav-btn:hover {
     transform: scale(var(--grow));
   }
@@ -828,7 +828,7 @@ main {
   .routine-row:hover,
   .side-user:hover,
   .nav-link:hover,
-  button:not(.bars-col, .segmented button):hover:not(:disabled),
+  button:not(.bars-col, .segmented button, .split-day-select):hover:not(:disabled),
   .month-nav-btn:hover {
     box-shadow: var(--hover-shadow);
   }
@@ -1986,11 +1986,13 @@ main > .error {
 /* Shared section header, tags and empty text so every card reads the same */
 .section-head {
   display: flex;
+  flex-wrap: wrap; /* a narrow card drops the button under the title instead of breaking its label */
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
+.section-head > button { white-space: nowrap; }
 
 .section-title {
   font-size: 1.15rem;
@@ -2594,7 +2596,7 @@ button.bars-col:focus-visible {
   border-color: var(--tint);
   box-shadow: 0 0 0 1px var(--tint);
 }
-.split-day-select {
+.split-day-select { /* the card lifts, not this button inside it */
   flex: 1;
   display: grid;
   justify-content: start;
@@ -2729,6 +2731,8 @@ button.bars-col:focus-visible {
   border-radius: 0.9rem;
   background: var(--surface-secondary);
 }
+/* No greeting: an empty log collapses but stays in the page as the live region for the first answer. */
+.chat-log:empty { padding: 0; border: 0; }
 .chat-msg {
   display: flex;
   flex-direction: column;
@@ -2774,10 +2778,6 @@ button.bars-col:focus-visible {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
-/* A past food is one tappable row: plain text, tinted plus */
-button.past-food { width: 100%; justify-content: space-between; text-align: left; color: var(--text); background: transparent; font-weight: 400; border-radius: 0; }
-button.past-food svg { color: var(--tint); flex: none; }
-
 /* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx) */
 .entry-row,
 .item-row,
@@ -2786,7 +2786,8 @@ button.past-food svg { color: var(--tint); flex: none; }
 .split-day-card,
 .routine-row,
 :is(.entries, .todo-list) > .empty-note {
-  animation: row-in 260ms var(--ease) both; /* FADE_IN in list-motion.tsx */
+  /* backwards, not both: a held end state would pin transform and block the hover lift */
+  animation: row-in 260ms var(--ease) backwards; /* FADE_IN in list-motion.tsx */
 }
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); filter: blur(3px); }

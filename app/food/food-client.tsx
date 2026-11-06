@@ -145,12 +145,7 @@ export function FoodClient({
       text: string;
       meals?: MealData[];
     }>
-  >([
-    {
-      role: "model",
-      text: "Salut! Sunt asistentul tău de nutriție. Spune-mi ce ai mâncat sau băut (de exemplu: „la prânz am avut o ciorbă de pui și 2 felii de pâine”), iar eu voi calcula caloriile și macro-urile și le voi înregistra direct în aplicație. Mă poți întreba și cât mai ai din ținta zilei.",
-    },
-  ]);
+  >([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -586,8 +581,8 @@ export function FoodClient({
     }
   }
 
-  async function handleSendChatMessage(textToSend?: string) {
-    const text = (textToSend || chatInput).trim();
+  async function handleSendChatMessage() {
+    const text = chatInput.trim();
     if (!text || chatLoading) return;
 
     const userMsg = { role: "user" as const, text };
@@ -596,8 +591,8 @@ export function FoodClient({
     setChatLoading(true);
 
     try {
-      // The welcome message is UI text, not part of the conversation.
-      const history = chatMessages.slice(1).map((m) => ({ role: m.role, text: m.text }));
+      // The server reads only the last 10 turns and rejects more than 20.
+      const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
       const res = await sendFoodChatMessageAction({
         message: text,
         history,
@@ -823,6 +818,7 @@ export function FoodClient({
       )}
 
       {activeTab === "shopping" && (
+        <div className="dashboard-grid">
         <section className="surface" aria-labelledby="shopping-title">
           <div className="section-head">
             <h2 id="shopping-title" className="section-title">
@@ -910,9 +906,7 @@ export function FoodClient({
             </div>
           ))}
         </section>
-      )}
 
-      {activeTab === "shopping" && (
         <section className="surface" aria-labelledby="categories-title">
           <div className="section-head">
             <h2 id="categories-title" className="section-title">
@@ -941,6 +935,7 @@ export function FoodClient({
             </div>
           ))}
         </section>
+        </div>
       )}
 
       {activeTab === "chat" && (
@@ -956,25 +951,6 @@ export function FoodClient({
             >
               Past foods
             </button>
-          </div>
-
-          <div className="chat-suggestions">
-            {[
-              "2 felii de pizza la prânz",
-              "Omletă din 3 ouă cu telemea",
-              "200g piept de pui cu 150g orez",
-              "Ce calorii mai am pentru azi?",
-            ].map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                className="secondary chat-chip"
-                disabled={chatLoading}
-                onClick={() => handleSendChatMessage(prompt)}
-              >
-                {prompt}
-              </button>
-            ))}
           </div>
 
           <div className="chat-log" aria-live="polite">
@@ -1158,22 +1134,24 @@ export function FoodClient({
               <p className="empty-note">Everything you logged before is already in today.</p>
             ) : (
               notLoggedFoods.map((f) => (
-                <button
-                  key={f.name}
-                  type="button"
-                  className="entry-row past-food"
-                  disabled={busy}
-                  onClick={() => handleLogPastFood(f)}
-                  aria-label={`Log ${f.name}, ${f.calories} kcal`}
-                >
+                <div key={f.name} className="entry-row">
                   <div>
                     <strong>{f.name}</strong>
                     <p className="card-sub muted number-tabular">
                       {f.calories} kcal · {Number(f.protein)}g P · {Number(f.carbs)}g C · {Number(f.fat)}g F
                     </p>
                   </div>
-                  <PlusIcon size={16} />
-                </button>
+                  <button
+                    type="button"
+                    className="delete-icon-btn edit"
+                    disabled={busy}
+                    onClick={() => handleLogPastFood(f)}
+                    aria-label={`Log ${f.name}, ${f.calories} kcal`}
+                    title="Log"
+                  >
+                    <PlusIcon size={17} />
+                  </button>
+                </div>
               ))
             )}
           </AutoHeight>
