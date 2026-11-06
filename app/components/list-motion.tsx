@@ -9,18 +9,14 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // A growing list's bottom edge fades (transparent at the bottom) instead of cutting rows. The fade
-// holds while the box grows and the new rows fade in (row-in, 260ms), then slides below the box.
-const GROW = { duration: 460, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }; // .auto-height's transition
-const REVEAL = 260;
-const EDGE = 72;
-const EDGE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${EDGE}px), rgb(0 0 0 / 0.55) calc(100% - ${EDGE / 2}px), transparent)`;
+// holds while the box grows (460ms, .auto-height's transition) and the new rows fade in (row-in,
+// 260ms), then shrinks to nothing. .auto-height.edge-fade in globals.css draws it from --edge.
+const HOLD = 460 + 260;
+const SHRINK = 480;
 const EDGE_FRAMES: Keyframe[] = [
-  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%" },
-  {
-    maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%",
-    offset: GROW.duration / (GROW.duration + REVEAL), easing: "cubic-bezier(0.2, 0, 0, 1)",
-  },
-  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: `100% calc(100% + ${EDGE}px)` },
+  { "--edge": "72px" },
+  { "--edge": "72px", offset: HOLD / (HOLD + SHRINK), easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+  { "--edge": "0px" },
 ];
 
 /**
@@ -57,8 +53,10 @@ export function AutoHeight({ className, children }: { className?: string; childr
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
       if (next > from) {
-        fade?.cancel(); // a second growth restarts the fade instead of stacking two masks
-        fade = outer.animate(EDGE_FRAMES, GROW.duration + REVEAL);
+        fade?.cancel(); // a second growth restarts the fade
+        outer.classList.add("edge-fade");
+        const run = (fade = outer.animate(EDGE_FRAMES, HOLD + SHRINK));
+        run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
       }
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
