@@ -37,7 +37,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       if (next === last) return;
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
-      if (reducedMotion() || inner.querySelector("[data-row-motion]") || from === next) return settle();
+      if (reducedMotion() || inner.querySelector("[data-row-motion]") || Math.abs(from - next) < 1.5) return settle(); // offsetHeight rounds a subpixel gap (a row vs its empty note) up to 1px
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
@@ -82,6 +82,10 @@ const FADE_OUT: Keyframe[] = [
 const FADE = { duration: 160, easing: EASE, fill: "forwards" } as const;
 const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
 const SPACE = 260; // a row's space opening or closing
+// Ease in and out: EASE's long tail made a closing row look stuck at the end.
+const SPACE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+// A list's only row swaps with its empty note, which takes the same space, so it only fades.
+const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
 const FADE_IN = 220; // starts while the space opens, matches row-in in globals.css
 
 /**
@@ -93,6 +97,7 @@ const FADE_IN = 220; // starts while the space opens, matches row-in in globals.
 export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
   const entering = useRef(new Map<string, () => void>());
+  const leaving = useRef(new WeakSet<HTMLElement>());
 
   const rowRef = useCallback(
     (id: string) => (el: HTMLElement | null) => {
@@ -101,13 +106,20 @@ export function useListMotion() {
       const done = entering.current.get(id);
       if (done) {
         entering.current.delete(id);
-        el.dataset.rowMotion = "";
-        el.style.overflow = "hidden";
+        // A row that moved (an edit) is the same element: drop its held exit before it enters again.
+        el.getAnimations().forEach((a) => a.cancel());
+        leaving.current.delete(el);
+        el.style.pointerEvents = el.style.overflow = "";
+        delete el.dataset.rowMotion;
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
-        el.animate(spaceFrames(el).reverse(), { duration: SPACE, easing: EASE }).finished.catch(() => {}).finally(() => {
-          el.style.overflow = "";
-          delete el.dataset.rowMotion;
-        });
+        if (!alone(el)) {
+          el.dataset.rowMotion = "";
+          el.style.overflow = "hidden";
+          el.animate(spaceFrames(el).reverse(), { duration: SPACE, easing: SPACE_EASE }).finished.catch(() => {}).finally(() => {
+            el.style.overflow = "";
+            delete el.dataset.rowMotion;
+          });
+        }
         el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: 120, easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(done);
       }
@@ -133,15 +145,15 @@ export function useListMotion() {
   const leave = useCallback((id: string, remove: () => void) => {
     const el = nodes.current.get(id);
     if (!el || reducedMotion()) return remove();
-    if (el.dataset.rowMotion !== undefined) return; // already leaving
+    if (leaving.current.has(el)) return; // a row still entering may leave
+    leaving.current.add(el);
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
     el.style.overflow = "hidden";
     // The space starts closing while the row is still fading, so the whole exit takes about a third of a second.
-    el.animate(FADE_OUT, FADE);
-    el.animate(spaceFrames(el), { duration: SPACE, delay: 80, easing: EASE, fill: "forwards" })
-      .finished.catch(() => {})
-      .finally(remove);
+    const fade = el.animate(FADE_OUT, FADE);
+    const exit = alone(el) ? fade : el.animate(spaceFrames(el), { duration: SPACE, delay: 80, easing: SPACE_EASE, fill: "forwards" });
+    exit.finished.catch(() => {}).finally(remove);
   }, []);
 
   const fadeAll = useCallback((then: () => void) => {

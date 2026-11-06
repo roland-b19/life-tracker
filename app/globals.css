@@ -1268,6 +1268,24 @@ textarea:focus-visible {
   animation: modalScaleUp var(--dur) var(--ease) both;
 }
 
+/* Closing plays the opening backwards (Modal keeps the form mounted for --dur) */
+.modal-backdrop.closing {
+  pointer-events: none;
+  animation: modalFadeOut var(--dur) var(--ease) both;
+}
+.modal-backdrop.closing .modal-card {
+  animation: modalScaleDown var(--dur) var(--ease) both;
+}
+@keyframes modalFadeOut {
+  to { opacity: 0; }
+}
+@keyframes modalScaleDown {
+  to {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+  }
+}
+
 /* Sheet rises a few pixels and settles, no overshoot */
 @keyframes modalScaleUp {
   from {
@@ -2052,6 +2070,8 @@ main > .error {
 
 /* A filtered wishlist row (name over price): the empty note takes the same space */
 .wishlist-entries { --row-h: 4.15rem; }
+/* In All a row also has its range badge, so it is taller */
+.wishlist-entries.ranged { --row-h: 4.59375rem; }
 
 /* Compact sort menu in a card header */
 select.sort-select {
@@ -2896,7 +2916,7 @@ button.bars-col:focus-visible {
 main > :where(:not(.side, .tabbar, .more-menu, .more-scrim)) {
   transition: transform var(--dur) var(--ease);
 }
-body:has(> .modal-backdrop) main > :not(.side, .tabbar, .more-menu, .more-scrim) {
+body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu, .more-scrim) {
   transform: scale(0.99);
 }
 

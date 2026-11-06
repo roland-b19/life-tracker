@@ -142,6 +142,12 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Wishlist motion (Claude Code, branch `fix/remove-list-fade`, PR #52), from the user's request:
+  - Deleting or restoring a list's only row keeps the box size: the row only fades and swaps with its empty note (same height, `--row-h` per tab), and AutoHeight ignores a sub-1.5px gap.
+  - Every Modal now closes with the reverse of its opening (fade + scale down), and the page zoom lifts as it closes; `onExited` fires once the form has faded.
+  - Wishlist add and edit wait for the form to close, then animate; an edit that changes the row's place leaves and re-enters like delete/Undo.
+  - A row's space closes with an ease-in-out curve so a delete no longer looks stuck at the end.
+  - Toasts pause while hovered with a mouse or focused, and resume with at least 1.5s left.
 - 2026-11-06 — Snappier task motion, chart axis, no duplicate or lost daily tasks, week section (Claude Code, branch `fix/remove-list-fade`, PR #52), from the user's request:
   - Add, delete and Undo motion drops the blur and uses opacity and transform only (space 260ms, fade-in 220ms after 120ms, fade-out 160ms); after a page change rows start 100ms into the enter transition instead of after it.
   - Tasks bar chart: 30 and 90 days were slow because the bar stagger grew with the bar count; it is now spread over the same ~0.8s for every period. New y-axis (max, half, 0) and a value tooltip on hover or focus.

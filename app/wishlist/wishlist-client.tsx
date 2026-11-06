@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
@@ -87,6 +87,17 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  // A saved form's list change waits until the form has closed, so its whole animation is visible.
+  const afterClose = useRef<(() => void) | null>(null);
+  const runAfterClose = () => {
+    afterClose.current?.();
+    afterClose.current = null;
+  };
+  // Undo runs from a toast seconds later, so it reads the list and view as they are then.
+  const latest = useRef({ items, view });
+  useEffect(() => {
+    latest.current = { items, view };
+  });
 
   // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
@@ -101,6 +112,21 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     url: item.url || undefined,
   });
 
+  // Writes an edited item into the list; if that moves it, it leaves its old place and enters the new one,
+  // like a delete and its Undo.
+  function replace(to: WishlistItemData) {
+    const { items: now, view: v } = latest.current;
+    const order = (list: WishlistItemData[]) =>
+      list.filter((i) => v.range === "all" || rangeOf(i) === v.range).sort(SORT_BY[v.sort]).map((i) => i.id);
+    const after = order(now.map((i) => (i.id === to.id ? to : i)));
+    const write = () => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
+    if (order(now).indexOf(to.id) === after.indexOf(to.id)) return write();
+    leave(to.id, () => {
+      if (after.includes(to.id)) enter(to.id);
+      write();
+    });
+  }
+
   function switchRange(next: "all" | Priority) {
     if (next === filterRange) return;
     setFilterRange(next);
@@ -113,6 +139,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   }
 
   function openForm(item?: WishlistItemData) {
+    runAfterClose(); // reopened before the last close finished
     setErrorMsg("");
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
@@ -151,8 +178,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         }
         const updated = res.item as WishlistItemData;
         const before = items.find((i) => i.id === editingId);
-        const swap = (to: WishlistItemData) => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
-        swap(updated);
+        afterClose.current = () => replace(updated);
         showToast({
           message: `Saved "${updated.name}"`,
           type: "success",
@@ -160,10 +186,11 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
             actionLabel: "Undo",
             // Writes the old values back; if that fails the edit stays, so the screen matches the database.
             onAction: async () => {
-              swap(before);
+              runAfterClose(); // the edit first, if the form is still closing
+              replace(before);
               const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
               if (!back?.success) {
-                swap(updated);
+                replace(updated);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
               }
             },
@@ -173,8 +200,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         const added = res.item as WishlistItemData;
-        enter(added.id);
-        setItems((prev) => [added, ...prev]);
+        afterClose.current = () => {
+          enter(added.id);
+          setItems((prev) => [added, ...prev]);
+        };
         // No Undo: a new item is one tap from Delete.
         showToast({ message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
       }
@@ -270,7 +299,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className="entries wishlist-entries">
+            <AutoHeight className={`entries wishlist-entries${listRange === "all" ? " ranged" : ""}`}>
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
@@ -335,6 +364,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onExited={runAfterClose}
         title={editingId ? "Edit item" : "New item"}
       >
         <form onSubmit={handleSubmit}>
