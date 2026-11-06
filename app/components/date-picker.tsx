@@ -55,6 +55,7 @@ export function DatePicker({ mode, value, today, max, min, marked, className = "
     const onPointer = (e: PointerEvent) => !rootRef.current?.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      e.stopPropagation(); // close only the calendar, not the form sheet around it (Modal listens on window)
       setOpen(false);
       triggerRef.current?.focus();
     };

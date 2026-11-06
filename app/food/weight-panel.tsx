@@ -5,18 +5,21 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
-import { formatDMY } from "@/lib/format-date";
+import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { AnimatedNumber } from "../components/animated-number";
 import { useListMotion } from "../components/list-motion";
+import { DatePicker } from "../components/date-picker";
+import { Segmented } from "../components/segmented";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
-function today() {
-  const date = new Date();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
+const today = () => toISODate();
+
+type Range = "7" | "30" | "90" | "180" | "360";
+const RANGES: { value: Range; label: string }[] = ["7", "30", "90", "180", "360"].map((d) => ({
+  value: d as Range,
+  label: `${d}D`,
+}));
 
 const twoDecimals = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -39,6 +42,7 @@ export function WeightPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [range, setRange] = useState<Range>("30");
 
   const { rowRef, leave } = useListMotion();
   const { showToast } = useToast();
@@ -167,6 +171,10 @@ export function WeightPanel() {
     }
   }
 
+  // The chart's window ends today, so an old last weigh-in shows an empty range rather than old data.
+  const since = addDays(today(), 1 - Number(range));
+  const inRange = sorted.filter((e) => e.date >= since);
+
   return (
     <>
       <div className="dashboard-grid">
@@ -195,11 +203,13 @@ export function WeightPanel() {
               <div className="entries">
                 {sorted.map((entry) => (
                   <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
-                    <strong>{formatDMY(entry.date)}</strong>
-                    <div className="row-actions">
-                      <span className="entry-value number-tabular">
+                    <span className="weight-main">
+                      <strong className="entry-value number-tabular">
                         {entry.kilograms} <span className="macro-target">kg</span>
-                      </span>
+                      </strong>
+                      <span className="muted number-tabular">{formatDMY(entry.date)}</span>
+                    </span>
+                    <div className="row-actions">
                       <button
                         className="delete-icon-btn edit"
                         type="button"
@@ -252,13 +262,18 @@ export function WeightPanel() {
               </div>
             </div>
             {sorted.length >= 2 && (
-              <LineChart
-                points={sorted
-                  .slice(0, 30)
-                  .reverse()
-                  .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
-                summary="Weight over the last recorded entries"
-              />
+              <>
+                <div className="chart-controls">
+                  <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
+                </div>
+                <LineChart
+                  points={inRange
+                    .reverse()
+                    .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
+                  summary={`Weight over the last ${range} days`}
+                />
+                {inRange.length < 2 && <p className="muted chart-note">Not enough weigh-ins in the last {range} days.</p>}
+              </>
             )}
           </section>
         </div>
@@ -267,10 +282,19 @@ export function WeightPanel() {
       <Modal isOpen={isModalOpen} onClose={closeForm} title={editing ? "Edit weigh-in" : "New weigh-in"}>
         <form onSubmit={handleSubmit}>
           <div className="form-stack">
-            <label>
-              Date
-              <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} required />
-            </label>
+            {/* Not a <label>: a click inside the open calendar would re-trigger the button. */}
+            <div className="field">
+              <span id="weigh-date">Date</span>
+              <DatePicker
+                mode="day"
+                className="date-field"
+                value={date}
+                today={today()}
+                max={today()}
+                label={formatDMY(date)}
+                onChange={setDate}
+              />
+            </div>
             <label>
               Weight (kg)
               <input

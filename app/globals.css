@@ -2883,14 +2883,14 @@ body:has(> .modal-backdrop) main > :not(.side, .tabbar, .more-menu, .more-scrim)
   width: 100%;
 }
 
-/* Inside the sheet the calendar opens in place: the card clips anything floating out of it. */
-.move-options .picker {
+/* Inside a form sheet the calendar opens in place: the card clips anything floating out of it. */
+.modal-card .picker {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
 }
 
-.move-options .picker-pop {
+.modal-card .picker-pop {
   position: static;
   translate: none;
 }
@@ -2903,4 +2903,43 @@ body:has(> .modal-backdrop) main > :not(.side, .tabbar, .more-menu, .more-scrim)
 /* A daily task shown ahead of its day cannot be ticked yet. */
 .todo-checkbox-btn.static:not(.checked) {
   opacity: 0.5;
+}
+
+/* Weigh-ins: the weight leads, the date follows a little apart and quieter. */
+.weight-main {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.chart-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+/* A form field that is not a <label> (it holds a popover), laid out like one. */
+.field {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* A date trigger that looks like the text fields around it. */
+.field .picker {
+  align-items: stretch;
+}
+
+.date-field {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.95rem;
+  text-align: left;
+  justify-content: flex-start;
+  font-weight: 400;
+  color: var(--text);
+  background: rgba(37, 42, 48, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.85rem;
 }
