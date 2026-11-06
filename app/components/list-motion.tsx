@@ -12,6 +12,14 @@ const RESIZE_EASE = "cubic-bezier(0.2, 0, 0, 1)";
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// An element's x on the page, ignoring transforms. offsetLeft alone is not enough: an entering row
+// becomes the offsetParent for a moment, so it would measure from a different origin.
+function layoutX(el: HTMLElement) {
+  let x = 0;
+  for (let e: HTMLElement | null = el; e; e = e.offsetParent as HTMLElement | null) x += e.offsetLeft;
+  return x;
+}
+
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
@@ -49,31 +57,38 @@ export function AutoHeight({ className, children }: { className?: string; childr
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
-    // Layout box (offsetLeft/Width ignore the rows' entrance scale) of every data-slide element.
+    // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
     const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();
     let width = inner.offsetWidth;
+    const glides = (el: HTMLElement) => el.getAnimations().filter((a) => a.id === "slide");
     const slide = (animate: boolean) => {
       const els = [...inner.querySelectorAll<HTMLElement>("[data-slide]")];
-      const froms = els.map((el) => {
-        const from = boxes.get(el);
-        const glide = el.getAnimations().find((a) => a.id === "slide");
-        if (!glide || !from) return from;
-        // Restart a glide from where it is now, not from where it started.
-        const cs = getComputedStyle(el);
-        glide.cancel();
-        return { x: from.x + new DOMMatrixReadOnly(cs.transform).m41, w: parseFloat(cs.width) };
-      });
-      // Measure every box before any glide starts: a glide's width feeds back into the shared column.
-      const tos = els.map((el) => ({ x: el.offsetLeft, w: el.offsetWidth }));
+      // While a glide runs, every box (also one only carried by a gliding column) restarts from where it is
+      // on screen now. Read all before cancelling any.
+      const running = els.some((el) => glides(el).length);
+      const froms = els.map((el) =>
+        boxes.has(el) && running
+          ? { x: layoutX(el) + new DOMMatrixReadOnly(getComputedStyle(el).transform).m41, w: el.offsetWidth }
+          : boxes.get(el),
+      );
+      els.forEach((el) => glides(el).forEach((a) => a.cancel()));
+      const tos = els.map((el) => ({ x: layoutX(el), w: el.offsetWidth }));
+      const timing = { duration: RESIZE, easing: RESIZE_EASE, id: "slide" };
+      const moving: [HTMLElement, number][] = [];
       for (const [i, el] of els.entries()) {
         const from = froms[i];
         const to = tos[i];
         boxes.set(el, to);
-        if (!animate || !from || (Math.abs(from.x - to.x) < 1 && Math.abs(from.w - to.w) < 1)) continue;
-        el.animate(
-          [{ transform: `translateX(${from.x - to.x}px)`, width: `${from.w}px` }, { transform: "none", width: `${to.w}px` }],
-          { duration: RESIZE, easing: RESIZE_EASE, id: "slide" },
-        );
+        if (!animate || !from) continue;
+        if (Math.abs(from.w - to.w) >= 1) el.animate([{ width: `${from.w}px` }, { width: `${to.w}px` }], timing);
+        moving.push([el, from.x]);
+      }
+      // A gliding width also moves the shared columns after it, so translate only what layout does not cover.
+      // Same duration and easing, so layout plus translate add up to a straight glide.
+      const starts = moving.map(([el]) => layoutX(el));
+      for (const [i, [el, fromX]] of moving.entries()) {
+        const dx = fromX - starts[i];
+        if (Math.abs(dx) >= 1) el.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], timing);
       }
     };
     slide(false);
