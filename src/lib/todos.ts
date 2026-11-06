@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, like, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, like, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
@@ -52,11 +52,12 @@ type DueColumns = typeof todos | typeof other;
 
 /**
  * Repeating tasks due on `day`: every day, or on that day's weekday ("days:1,3,5" holds no other digits),
- * unless the task was deleted on or before `day`.
+ * from their first day (dueDate) on, unless the task was deleted on or before `day`.
  */
 const repeatsOn = (day: string, t: DueColumns = todos) =>
   and(
     eq(t.isRecurring, true),
+    lte(t.dueDate, day),
     or(eq(t.recurrencePattern, "daily"), like(t.recurrencePattern, `days:%${weekdayOf(day)}%`)),
     or(isNull(t.endedOn), gt(t.endedOn, day)),
   );
@@ -90,6 +91,7 @@ export async function getDailyTodos(
   // Never when reading a past day (it shows that day as it was), and never into a future day being planned:
   // an overdue task belongs to today, not to whatever day is on screen. One that today already has
   // (same title) stays on its own day, so the rollover never makes a duplicate.
+  // A task added to a day that was already over (dev builds) stays on that day.
   // shortcut: two overdue tasks with one title both roll over together, dedupe them here if that shows up.
   if (targetDate >= today) await db
     .update(todos)
@@ -104,6 +106,7 @@ export async function getDailyTodos(
         eq(todos.isRecurring, false),
         eq(todos.isCompleted, false),
         lt(todos.dueDate, today),
+        sql`${todos.createdAt} < (${todos.dueDate} + 1)`,
         notExists(
           db
             .select({ id: other.id })
@@ -181,8 +184,6 @@ async function recordDayStats(userId: string, space: TodoSpace, date: string): P
         eq(todos.userId, userId),
         eq(todos.space, space),
         dueOn(date),
-        // A repeating task counts from the day it was made, as the list shows it.
-        or(eq(todos.isRecurring, false), sql`${todos.createdAt} < (${date}::date + 1)`),
       ),
     );
   const ticked = await doneDatesOf(rows.filter((r) => r.isRecurring).map((r) => r.id));
@@ -383,14 +384,13 @@ export async function updateTodo(userId: string, input: UpdateTodoInput): Promis
   return updated.length > 0;
 }
 
-/** Whether a task is a repeating one that was already part of days before today. */
-const hasPast = (task: { isRecurring: boolean; createdAt: Date }, today: string) =>
-  task.isRecurring && toISODate(task.createdAt) < today;
+/** Whether a task is a repeating one that was already part of days before `day`. */
+const hasPast = (task: { isRecurring: boolean; dueDate: string }, day: string) => task.isRecurring && task.dueDate < day;
 
-/** Ends a repeating task today: it leaves today and the days ahead (their ticks go too), the days before keep it. */
-async function endTodo(userId: string, todoId: string, today: string): Promise<void> {
-  await db.update(todos).set({ endedOn: today }).where(and(eq(todos.id, todoId), eq(todos.userId, userId)));
-  await db.delete(todoCompletions).where(and(eq(todoCompletions.todoId, todoId), gte(todoCompletions.date, today)));
+/** Ends a repeating task on `day`: it leaves that day and the days ahead (their ticks go too), the days before keep it. */
+async function endTodo(userId: string, todoId: string, day: string): Promise<void> {
+  await db.update(todos).set({ endedOn: day }).where(and(eq(todos.id, todoId), eq(todos.userId, userId)));
+  await db.delete(todoCompletions).where(and(eq(todoCompletions.todoId, todoId), gte(todoCompletions.date, day)));
 }
 
 /**
@@ -453,19 +453,21 @@ export async function getPlannedDays(userId: string, space: TodoSpace, after: st
   return rows.map((r) => r.day);
 }
 
-/** Deletes a task. A repeating task with past days only ends today (endTodo), so those days keep it. */
-export async function deleteTodo(userId: string, todoId: string): Promise<boolean> {
+/**
+ * Deletes a task. A repeating task with days before `from` (default today) only ends on `from` (endTodo),
+ * so those days keep it.
+ */
+export async function deleteTodo(userId: string, todoId: string, from = toISODate()): Promise<boolean> {
   const task = await findTodo(userId, todoId);
   if (!task) return false;
-  const today = toISODate();
   const space = task.space as TodoSpace;
 
-  if (hasPast(task, today)) {
-    await endTodo(userId, task.id, today);
+  if (hasPast(task, from)) {
+    await endTodo(userId, task.id, from);
   } else {
     await db.delete(todos).where(and(eq(todos.id, task.id), eq(todos.userId, userId)));
   }
-  await recordDayStats(userId, space, task.isRecurring ? today : task.dueDate);
+  await recordDayStats(userId, space, task.isRecurring ? from : task.dueDate);
   return true;
 }
 

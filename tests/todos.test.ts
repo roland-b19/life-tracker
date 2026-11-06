@@ -142,6 +142,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     });
 
     expect(pastTask.isCarriedOver).toBe(false);
+    // It was made on its own day; a task added to a day already over is never carried over.
+    await admin.query("UPDATE todos SET created_at = '2026-11-01T12:00:00Z' WHERE id = $1", [pastTask.id]);
 
     // Reading a past day (Nov 3, today = Nov 4) is read-only: nothing moves.
     const pastRead = await getDailyTodos(userA, "personal", "2026-11-03", "2026-11-04");
@@ -288,7 +290,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   });
 
   it("never carries overdue tasks into a future day being planned", async () => {
-    await createTodo(userA, { space: "personal", title: "Overdue", dueDate: "2026-11-01", isRecurring: false, recurrencePattern: "none" });
+    const overdue = await createTodo(userA, { space: "personal", title: "Overdue", dueDate: "2026-11-01", isRecurring: false, recurrencePattern: "none" });
+    await admin.query("UPDATE todos SET created_at = '2026-11-01T12:00:00Z' WHERE id = $1", [overdue.id]);
     await createTodo(userA, { space: "personal", title: "Planned", dueDate: "2026-11-07", isRecurring: false, recurrencePattern: "none" });
 
     const future = await getDailyTodos(userA, "personal", "2026-11-07", "2026-11-04");
@@ -587,9 +590,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       // Made on a Wednesday for Mondays only: not on the Wednesday list.
       await createTodo(userA, { space: "personal", title: "Swim", dueDate: wed, isRecurring: true, recurrencePattern: "days:1" });
       const titles = async (day: string) => (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title).sort();
-      expect(await titles(mon)).toEqual(["Gym", "Read", "Swim"]);
+      // Its first day is that Wednesday: it is not on the Monday before, only on the Mondays after.
+      expect(await titles(mon)).toEqual(["Gym", "Read"]);
       expect(await titles(wed)).toEqual(["Read"]);
       expect(await titles(thu)).toEqual(["Gym", "Read"]);
+      expect(await titles(addDays(mon, 7))).toEqual(["Gym", "Read", "Swim"]);
     });
 
     it("rejects a malformed repeat pattern", async () => {
@@ -661,10 +666,36 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         createTodo(userA, { space: "personal", title, dueDate, isRecurring: false, recurrencePattern: "none" });
       const old = await make("Water plants", yesterday);
       const other = await make("Post letter", yesterday);
+      await admin.query("UPDATE todos SET created_at = now() - interval '1 day' WHERE id = ANY($1)", [[old.id, other.id]]);
       const fresh = await make("water plants", today);
       const ids = (await getDailyTodos(userA, "personal", today, today)).todos.map((t) => t.id).sort();
       expect(ids).toEqual([other.id, fresh.id].sort());
       expect((await getDailyTodos(userA, "personal", yesterday, today)).todos.map((t) => t.id)).toEqual([old.id]);
+    });
+
+    it("shows a daily task from its first day on, and keeps a task added to a past day there", async () => {
+      const today = toISODate();
+      const yesterday = addDays(today, -1);
+      const habit = await createTodo(userA, { space: "personal", title: "Floss", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
+      const late = await createTodo(userA, { space: "personal", title: "Late", dueDate: yesterday, isRecurring: false, recurrencePattern: "none" });
+      const titles = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.title).sort();
+      expect(await titles(yesterday)).toEqual(["Late"]);
+      expect(await titles(today)).toEqual(["Floss"]);
+      expect(await titles(addDays(today, 3))).toEqual(["Floss"]);
+      expect(await titles(yesterday)).toEqual(["Late"]); // reading today did not carry it over
+      expect(habit.id && late.id).toBeTruthy();
+    });
+
+    it("deletes a daily task from the day given on, keeping the days before it", async () => {
+      const today = toISODate();
+      const habit = await createTodo(userA, { space: "personal", title: "Walk", dueDate: addDays(today, -3), isRecurring: true, recurrencePattern: "daily" });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: addDays(today, -1) });
+      expect(await deleteTodo(userB, habit.id, addDays(today, -1))).toBe(false);
+      expect(await deleteTodo(userA, habit.id, addDays(today, -1))).toBe(true);
+      const ids = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.id);
+      expect(await ids(addDays(today, -2))).toEqual([habit.id]);
+      expect(await ids(addDays(today, -1))).toEqual([]);
+      expect(await ids(today)).toEqual([]);
     });
 
     it("changes a repeating task's weekdays, owner only", async () => {

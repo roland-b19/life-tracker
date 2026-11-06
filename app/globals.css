@@ -2190,7 +2190,7 @@ select.sort-select {
   margin-top: 0;
 }
 
-/* Week section on Tasks: today and the six days after it, one tap to that day's list */
+/* Week section on Tasks: the weekdays, Monday first, one tap to that day's list in the coming week */
 .week-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2199,22 +2199,8 @@ select.sort-select {
 }
 
 .week-strip .weekday-btn {
-  display: grid;
-  justify-items: center;
-  gap: 0.1rem;
-  padding: 0.35rem 0;
-}
-
-.week-day-name {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.week-day-num {
-  font-size: 0.9375rem;
+  padding: 0.5rem 0;
+  font-size: 0.8125rem;
 }
 
 /* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
