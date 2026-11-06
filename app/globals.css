@@ -2794,7 +2794,8 @@ button.bars-col:focus-visible {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
-/* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx) */
+/* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx), one after another
+   40ms apart, so a list builds on the spot on page load and after a switch */
 .entry-row,
 .item-row,
 .shopping-row,
@@ -2804,6 +2805,9 @@ button.bars-col:focus-visible {
 :is(.entries, .todo-list) > .empty-note {
   /* backwards, not both: a held end state would pin transform and block the hover lift */
   animation: row-in 260ms var(--ease) backwards; /* FADE_IN in list-motion.tsx */
+  /* Capped at the 11th row, so a long list never waits and a row added with useListMotion's enter (680ms)
+     is done before its delay ends; browsers without sibling-index() drop the line and show rows at once. */
+  animation-delay: calc(min(sibling-index() - 1, 10) * 40ms);
 }
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); filter: blur(3px); }
