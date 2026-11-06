@@ -22,7 +22,7 @@ List motion (rows open their space then fade in, fade out then close their space
 Motion consistency (every card, button, tab and field grows by the same pixels with one shadow, a focused field keeps its lift, lists resize before new rows fade in, Tasks tabs and days fade the old rows out first, add/undo motion on Tasks, sign-out fades the page before the sign-in card, subtler Continue that keeps its colour while signing in) is merged in `main` (PR #40). No migration, no new dependency.
 Wishlist tweaks (no shadow on fields and segmented tabs, Buy button removed, faster row fades) are merged in `main` (PR #41).
 Pages polish (smooth delete and undo on Wishlist, Tasks and Money; calendar date pickers on Tasks and Money; plan one-off tasks up to 7 days ahead; streak fixes; donut hover highlight; select chevron) is merged in `main` (PR #42). No migration, no new dependency.
-Pages polish 2 (branch `feat/pages-polish-2`, PR open, **not merged**): Tasks repeat on chosen weekdays (`days:1,3,5`), move between days and between daily and one-off, done tasks sink in completion order, dots on days with planned tasks, past days editable in dev builds only; Wishlist sorts by price and saves without Undo; the **Money page and its code are removed** (tables stay); Health weight rows lead with the weight and the chart has 7-360 day periods; the shopping list is filled by hand with quick add from past items, same-name items merge, items and categories are editable; the Food Assistant sends a short food-only context prompt and gets a JSON answer that the app validates and logs; a Past foods sheet logs earlier foods in one tap; subtler zoom behind open forms. Adds migration `0012_shopping_history` (column `cleared_at`, merges existing duplicates); it must be applied wherever `db:migrate` runs. No new dependency.
+Pages polish 2 is merged in `main` (PR #43): Tasks repeat on chosen weekdays (`days:1,3,5`), move between days and between daily and one-off, done tasks sink in completion order, dots on days with planned tasks, past days editable in dev builds only; Wishlist sorts by price and saves without Undo; the **Money page and its code are removed** (tables stay); Health weight rows lead with the weight and the chart has 7-360 day periods; the shopping list is filled by hand with quick add from past items, same-name items merge, items and categories are editable; the Food Assistant sends a short food-only context prompt and gets a JSON answer that the app validates and logs; a Past foods sheet logs earlier foods in one tap; subtler zoom behind open forms. Adds migration `0012_shopping_history` (column `cleared_at`, merges existing duplicates); it must be applied wherever `db:migrate` runs. No new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -123,9 +123,8 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. The user reviews and merges the Pages polish 2 PR (`feat/pages-polish-2`).
-2. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
-3. Maintain local-only verification until then (no Azure deployments).
+1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
+2. Maintain local-only verification until then (no Azure deployments).
 
 ## Open questions
 
