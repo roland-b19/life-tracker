@@ -1255,8 +1255,6 @@ textarea:focus-visible {
 .modal-backdrop.closing .modal-card {
   animation: modalScaleDown var(--dur) var(--ease) both;
 }
-/* Modal's `fast` (Wishlist): open and close in half the time; CLOSE_MS and FADED_MS follow in modal.tsx */
-.modal-backdrop.fast { --dur: 210ms; }
 @keyframes modalFadeOut {
   to { opacity: 0; }
 }
@@ -3117,16 +3115,7 @@ button.bars-col:focus-visible {
 .surface .auto-height[data-wash] > .entries > .entry-row {
   --band-out: calc((var(--card-pad) + 1px) / 2);
 }
-.auto-height[data-wash] > .entries > .entry-row {
-  background-color: transparent;
-  transition: background-color 80ms ease, transform var(--lift); /* WASH in list-motion.tsx */
-}
-/* A fast list (AutoHeight's `fast`, Wishlist): the resize and the rows' entrance take half the time (list-motion.tsx) */
-.auto-height[data-fast] { transition-duration: 90ms; }
-.auto-height[data-fast] > :is(.entries, .todo-list) > * {
-  animation-duration: 90ms;
-  animation-delay: calc(min(sibling-index() - 1, 10) * 15ms);
-}
+.auto-height[data-wash] > .entries > .entry-row { background-color: transparent; }
 .auto-height[data-wash] > .entries:not([data-settling]) > :nth-child(even of .entry-row:not([data-entering])) {
   background-color: rgba(255, 255, 255, 0.03);
 }
