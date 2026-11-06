@@ -283,6 +283,8 @@ export const shoppingItems = pgTable(
     category: varchar("category", { length: 50 }).default("other").notNull(),
     isBought: boolean("is_bought").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Set when a bought item is cleared: hidden from the list, kept for quick add.
+    clearedAt: timestamp("cleared_at", { withTimezone: true }),
   },
 );
 

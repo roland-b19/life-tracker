@@ -85,6 +85,13 @@
       "when": 1793897023230,
       "tag": "0011_todo_day_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793923483494,
+      "tag": "0012_shopping_history",
+      "breakpoints": true
     }
   ]
 }

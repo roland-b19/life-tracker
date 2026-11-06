@@ -23,9 +23,11 @@ import {
   clearBoughtItemsAction,
   deleteMealAction,
   deleteShoppingItemAction,
-  generateShoppingListAction,
   logMealAction,
+  renameShoppingCategoryAction,
+  restoreShoppingItemsAction,
   toggleShoppingItemAction,
+  updateShoppingItemAction,
   updateStepsAction,
 } from "@/app/actions/food";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
@@ -52,13 +54,21 @@ interface ShoppingItemData {
   isBought: boolean;
 }
 
-interface RecipeIngredientOption {
-  key: string;
+/** Something added to the list before; one tap adds it again. */
+interface ShoppingHistoryItem {
   name: string;
-  amount: number;
+  amount: string;
   unit: string;
-  recipes: string[];
+  category: string;
 }
+
+/** Store sections in walking order; categories the user adds go before "other". */
+const DEFAULT_CATEGORIES = ["meat", "produce", "dairy", "bakery", "pantry", "other"];
+const categoryRank = (c: string) => {
+  const i = DEFAULT_CATEGORIES.indexOf(c);
+  return i === -1 ? DEFAULT_CATEGORIES.length - 1.5 : i;
+};
+const byCategory = (a: string, b: string) => categoryRank(a) - categoryRank(b) || a.localeCompare(b);
 
 interface FoodClientProps {
   userName: string;
@@ -88,7 +98,7 @@ interface FoodClientProps {
   };
   weightAnalytics: WeightAnalytics;
   initialShoppingList: ShoppingItemData[];
-  recipeOptions: RecipeIngredientOption[];
+  shoppingHistory: ShoppingHistoryItem[];
 }
 
 export function FoodClient({
@@ -98,7 +108,7 @@ export function FoodClient({
   initialSummary,
   weightAnalytics,
   initialShoppingList,
-  recipeOptions,
+  shoppingHistory,
 }: FoodClientProps) {
   const [selectedDate] = useState(todayDate);
   const [summary, setSummary] = useState(initialSummary);
@@ -106,8 +116,10 @@ export function FoodClient({
   const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
-  const [isRecipePickOpen, setIsRecipePickOpen] = useState(false);
-  const [pickedKeys, setPickedKeys] = useState<string[]>([]);
+  const [history, setHistory] = useState(shoppingHistory);
+  const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
   const [metricInput, setMetricInput] = useState("");
 
@@ -146,9 +158,7 @@ export function FoodClient({
   const [shopName, setShopName] = useState("");
   const [shopAmount, setShopAmount] = useState("1");
   const [shopUnit, setShopUnit] = useState("pcs");
-  const [shopCategory, setShopCategory] = useState<
-    "meat" | "produce" | "dairy" | "bakery" | "pantry" | "other"
-  >("other");
+  const [shopCategory, setShopCategory] = useState("other");
 
   const [busy, setBusy] = useState(false);
   const setStatusMessage = (message: string) => {
@@ -305,38 +315,111 @@ export function FoodClient({
     }
   }
 
-  async function handleAddShoppingItem(e: React.FormEvent) {
-    e.preventDefault();
-    if (!shopName.trim()) return;
+  const sameItem = (a: { name: string; unit: string }, b: { name: string; unit: string }) =>
+    a.name.toLowerCase() === b.name.toLowerCase() && a.unit.toLowerCase() === b.unit.toLowerCase();
 
+  const toShopInput = (i: ShoppingItemData | ShoppingHistoryItem) => ({
+    name: i.name,
+    amount: Number(i.amount),
+    unit: i.unit,
+    category: i.category,
+  });
+
+  function openShopForm(item: ShoppingItemData | null) {
+    setEditingShop(item);
+    setShopName(item?.name ?? "");
+    setShopAmount(item ? String(Number(item.amount)) : "1");
+    setShopUnit(item?.unit ?? "pcs");
+    setShopCategory(item?.category ?? "other");
+    setIsShopModalOpen(true);
+  }
+
+  /** Adds an item; the server adds the amount to the same item when it is already on the list. */
+  async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
     setBusy(true);
     try {
-      const res = await addShoppingItemAction({
-        name: shopName.trim(),
-        amount: parseFloat(shopAmount) || 1,
-        unit: shopUnit.trim() || "pcs",
-        category: shopCategory,
-      });
-
-      if (res.success && res.item) {
-        const item = res.item as ShoppingItemData;
+      const res = await addShoppingItemAction(input);
+      const item = res.item as ShoppingItemData;
+      const before = shoppingList.find((i) => i.id === item.id);
+      if (before) {
+        setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+      } else {
         enter(item.id);
         setShoppingList((prev) => [...prev, item]);
-        setShopName("");
-        setShopAmount("1");
-        setIsShopModalOpen(false);
-        showToast({
-          message: `Added "${item.name}"`,
-          type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+      }
+      setHistory((prev) => [
+        { name: item.name, amount: item.amount, unit: item.unit, category: item.category },
+        ...prev.filter((h) => h.name.toLowerCase() !== item.name.toLowerCase()),
+      ]);
+      showToast({
+        message: before ? `"${item.name}" is now ${Number(item.amount)} ${item.unit}` : `Added "${item.name}"`,
+        type: "success",
+        actionLabel: "Undo",
+        onAction: async () => {
+          if (!before) {
             await deleteShoppingItemAction(item.id);
             leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
-          },
-        });
-      }
+            return;
+          }
+          await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id });
+          if (before.isBought) await toggleShoppingItemAction(before.id, true);
+          setShoppingList((prev) => prev.map((i) => (i.id === before.id ? before : i)));
+        },
+      });
+      return true;
     } catch {
       setStatusMessage("Could not add shopping item.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleShopSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const input = {
+      name: shopName.trim(),
+      amount: parseFloat(shopAmount) || 1,
+      unit: shopUnit.trim() || "pcs",
+      category: shopCategory.trim().toLowerCase() || "other",
+    };
+    if (!input.name) return;
+
+    if (!editingShop) {
+      if (await addShopping(input)) setIsShopModalOpen(false);
+      return;
+    }
+    // Saving an edit has no Undo: the item can simply be edited again.
+    setBusy(true);
+    try {
+      const res = await updateShoppingItemAction({ ...input, itemId: editingShop.id });
+      const item = res.item as ShoppingItemData;
+      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+      setIsShopModalOpen(false);
+      showToast({ message: `Saved "${item.name}"`, type: "success" });
+    } catch {
+      setStatusMessage("Could not save item.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRenameCategory(e: React.FormEvent) {
+    e.preventDefault();
+    const from = renaming;
+    const to = renameInput.trim().toLowerCase();
+    if (!from || !to) return;
+    if (to === from) return setRenaming(null);
+    setBusy(true);
+    try {
+      await renameShoppingCategoryAction({ from, to });
+      const move = <T extends { category: string }>(i: T) => (i.category === from ? { ...i, category: to } : i);
+      setShoppingList((prev) => prev.map(move));
+      setHistory((prev) => prev.map(move));
+      setRenaming(null);
+      showToast({ message: `Renamed "${from}" to "${to}"`, type: "success" });
+    } catch {
+      setStatusMessage("Could not rename category.");
     } finally {
       setBusy(false);
     }
@@ -361,61 +444,41 @@ export function FoodClient({
     }
   }
 
-  async function handleDeleteShoppingItem(item: ShoppingItemData) {
-    try {
-      await deleteShoppingItemAction(item.id);
-      leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
-      showToast({
-        message: `Deleted "${item.name}"`,
-        actionLabel: "Undo",
-        onAction: async () => {
-          const res = await addShoppingItemAction({
-            name: item.name,
-            amount: parseFloat(item.amount),
-            unit: item.unit,
-            category: item.category,
-          });
-          if (res.success && res.item) {
-            const restored = { ...(res.item as ShoppingItemData), isBought: item.isBought };
-            if (item.isBought) await toggleShoppingItemAction(restored.id, true);
-            enter(restored.id);
-            setShoppingList((prev) => [...prev, restored]);
-          }
-        },
-      });
-    } catch {
+  function handleDeleteShoppingItem(item: ShoppingItemData) {
+    // The row leaves at once; the server delete runs alongside, so the tap never waits on the network.
+    const deleted = deleteShoppingItemAction(item.id).then(
+      () => true,
+      () => false,
+    );
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(item.id, () => {
+        setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
+        done();
+      }),
+    );
+    const putBack = (back: ShoppingItemData) => {
+      enter(back.id);
+      setShoppingList((prev) => [...prev, back]);
+    };
+    showToast({
+      message: `Deleted "${item.name}"`,
+      actionLabel: "Undo",
+      onAction: async () => {
+        await gone;
+        if (!(await deleted)) return; // the failure path below puts it back
+        const res = await addShoppingItemAction(toShopInput(item)).catch(() => null);
+        if (!res?.item) return setStatusMessage("Could not restore item.");
+        const restored = { ...(res.item as ShoppingItemData), isBought: item.isBought };
+        if (item.isBought) await toggleShoppingItemAction(restored.id, true);
+        putBack(restored);
+      },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return;
+      putBack(item);
       setStatusMessage("Could not delete item.");
-    }
-  }
-
-  function togglePicked(key: string) {
-    setPickedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
-  }
-
-  async function handleGenerateShoppingList() {
-    setBusy(true);
-    try {
-      const res = await generateShoppingListAction({ keys: pickedKeys });
-      setIsRecipePickOpen(false);
-      setPickedKeys([]);
-      if (res.success && res.items) {
-        const added = res.items as ShoppingItemData[];
-        added.forEach((i) => enter(i.id));
-        setShoppingList((prev) => [...prev, ...added]);
-        showToast({
-          message: `Added ${added.length} item${added.length === 1 ? "" : "s"} from recipes`,
-          actionLabel: added.length ? "Undo" : undefined,
-          onAction: async () => {
-            await Promise.all(added.map((i) => deleteShoppingItemAction(i.id)));
-            added.forEach((a) => leave(a.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== a.id))));
-          },
-        });
-      }
-    } catch {
-      setStatusMessage("Failed to generate shopping list.");
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function handleClearBought() {
@@ -428,21 +491,9 @@ export function FoodClient({
         message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
         actionLabel: "Undo",
         onAction: async () => {
-          const restored: ShoppingItemData[] = [];
-          for (const item of cleared) {
-            const res = await addShoppingItemAction({
-              name: item.name,
-              amount: parseFloat(item.amount),
-              unit: item.unit,
-              category: item.category,
-            });
-            if (res.success && res.item) {
-              await toggleShoppingItemAction((res.item as ShoppingItemData).id, true);
-              restored.push({ ...(res.item as ShoppingItemData), isBought: true });
-            }
-          }
-          restored.forEach((i) => enter(i.id));
-          setShoppingList((prev) => [...prev, ...restored]);
+          await restoreShoppingItemsAction({ itemIds: cleared.map((c) => c.id) });
+          cleared.forEach((i) => enter(i.id));
+          setShoppingList((prev) => [...prev, ...cleared]);
         },
       });
     } catch {
@@ -504,6 +555,9 @@ export function FoodClient({
   const waterPct = pct(summary.metrics.waterMl, targets.waterMl);
   const stepsPct = pct(summary.metrics.steps, targets.steps);
   const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
+  const shopCategories = [...new Set(shoppingList.map((i) => i.category))].sort(byCategory);
+  const categoryOptions = [...new Set([...DEFAULT_CATEGORIES, ...shopCategories, ...history.map((h) => h.category)])].sort(byCategory);
+  const quickAdds = history.filter((h) => !shoppingList.some((i) => sameItem(i, h))).slice(0, 12);
 
   return (
     <main>
@@ -694,16 +748,13 @@ export function FoodClient({
             <h2 id="shopping-title" className="section-title">
               Shopping List
             </h2>
-            <button type="button" className="btn-sm tint" onClick={() => setIsShopModalOpen(true)}>
+            <button type="button" className="btn-sm tint" onClick={() => openShopForm(null)}>
               <PlusIcon size={14} />
               Add item
             </button>
           </div>
 
           <div className="head-actions">
-            <button type="button" className="secondary btn-sm" onClick={() => setIsRecipePickOpen(true)}>
-              From recipes
-            </button>
             <button
               type="button"
               className="secondary btn-sm"
@@ -714,14 +765,48 @@ export function FoodClient({
             </button>
           </div>
 
+          {quickAdds.length > 0 && (
+            <div className="quick-add" role="group" aria-labelledby="quick-add-label">
+              <h3 id="quick-add-label" className="group-label">
+                Add again
+              </h3>
+              <div className="chat-suggestions">
+                {quickAdds.map((h) => (
+                  <button
+                    key={h.name}
+                    type="button"
+                    className="secondary chat-chip"
+                    disabled={busy}
+                    onClick={() => addShopping(toShopInput(h))}
+                    aria-label={`Add ${h.name}, ${Number(h.amount)} ${h.unit}`}
+                  >
+                    {h.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {shoppingList.length === 0 && <p className="empty-note">Your shopping list is empty.</p>}
-          {["meat", "produce", "dairy", "bakery", "pantry", "other"].map((cat) => {
-            const catItems = shoppingList.filter((item) => item.category === cat);
-            if (catItems.length === 0) return null;
-            return (
-              <div key={cat} className="shopping-group">
+          {shopCategories.map((cat) => (
+            <div key={cat} className="shopping-group">
+              <div className="group-head">
                 <h3 className="group-label">{cat}</h3>
-                {catItems.map((item) => (
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={() => {
+                    setRenaming(cat);
+                    setRenameInput(cat);
+                  }}
+                  aria-label={`Rename category ${cat}`}
+                >
+                  Rename
+                </button>
+              </div>
+              {shoppingList
+                .filter((item) => item.category === cat)
+                .map((item) => (
                   <div key={item.id} ref={rowRef(item.id)} className="shopping-row">
                     <label className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
                       <input
@@ -733,20 +818,30 @@ export function FoodClient({
                         {item.name} · {Number(item.amount)} {item.unit}
                       </span>
                     </label>
-                    <button
-                      type="button"
-                      className="delete-icon-btn"
-                      onClick={() => handleDeleteShoppingItem(item)}
-                      aria-label={`Delete ${item.name}`}
-                      title="Delete"
-                    >
-                      <TrashIcon size={17} />
-                    </button>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="delete-icon-btn edit"
+                        onClick={() => openShopForm(item)}
+                        aria-label={`Edit ${item.name}`}
+                        title="Edit"
+                      >
+                        <PencilIcon size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="delete-icon-btn"
+                        onClick={() => handleDeleteShoppingItem(item)}
+                        aria-label={`Delete ${item.name}`}
+                        title="Delete"
+                      >
+                        <TrashIcon size={17} />
+                      </button>
+                    </div>
                   </div>
                 ))}
-              </div>
-            );
-          })}
+            </div>
+          ))}
         </section>
       )}
 
@@ -922,32 +1017,12 @@ export function FoodClient({
         </form>
       </Modal>
 
-      <Modal isOpen={isRecipePickOpen} onClose={() => setIsRecipePickOpen(false)} title="Add from recipes">
-        <div className="pick-list">
-          {recipeOptions.map((o) => (
-            <label key={o.key} className="pick-row">
-              <input type="checkbox" checked={pickedKeys.includes(o.key)} onChange={() => togglePicked(o.key)} />
-              <span className="pick-text">
-                <span>
-                  {o.name} · {Math.round(o.amount * 100) / 100} {o.unit}
-                </span>
-                <span className="card-sub muted">{o.recipes.join(", ")}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => setIsRecipePickOpen(false)}>
-            Cancel
-          </button>
-          <button type="button" disabled={busy || pickedKeys.length === 0} onClick={handleGenerateShoppingList}>
-            {pickedKeys.length ? `Add ${pickedKeys.length}` : "Add"}
-          </button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isShopModalOpen} onClose={() => setIsShopModalOpen(false)} title="New shopping item">
-        <form onSubmit={handleAddShoppingItem}>
+      <Modal
+        isOpen={isShopModalOpen}
+        onClose={() => setIsShopModalOpen(false)}
+        title={editingShop ? "Edit item" : "New shopping item"}
+      >
+        <form onSubmit={handleShopSubmit}>
           <div className="form-stack">
             <label>
               Item name
@@ -980,29 +1055,54 @@ export function FoodClient({
             </div>
             <label>
               Category
-              <select
+              <input
+                type="text"
+                list="shop-categories"
+                maxLength={50}
                 value={shopCategory}
-                onChange={(e) =>
-                  setShopCategory(
-                    e.target.value as "meat" | "produce" | "dairy" | "bakery" | "pantry" | "other",
-                  )
-                }
-              >
-                <option value="meat">Meat</option>
-                <option value="produce">Produce</option>
-                <option value="dairy">Dairy</option>
-                <option value="bakery">Bakery</option>
-                <option value="pantry">Pantry</option>
-                <option value="other">Other</option>
-              </select>
+                onChange={(e) => setShopCategory(e.target.value)}
+                required
+              />
+              <datalist id="shop-categories">
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </label>
           </div>
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => setIsShopModalOpen(false)}>
               Cancel
             </button>
-            <button type="submit" disabled={busy || !shopName.trim()}>
-              Add item
+            <button type="submit" disabled={busy || !shopName.trim() || !shopCategory.trim()}>
+              {editingShop ? "Save" : "Add item"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={renaming !== null} onClose={() => setRenaming(null)} title="Rename category">
+        <form onSubmit={handleRenameCategory}>
+          <div className="form-stack">
+            <label>
+              Name
+              <input
+                type="text"
+                maxLength={50}
+                autoFocus
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                required
+              />
+            </label>
+            <p className="muted move-hint">Every item in &ldquo;{renaming}&rdquo; moves along. An existing name merges the two.</p>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setRenaming(null)}>
+              Cancel
+            </button>
+            <button type="submit" disabled={busy || !renameInput.trim()}>
+              Save
             </button>
           </div>
         </form>

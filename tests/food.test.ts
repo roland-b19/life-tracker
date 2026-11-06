@@ -28,21 +28,27 @@ import {
   deleteMeal,
   getDailyFoodSummary,
   getNutritionTargets,
+  clearBoughtShoppingItems,
+  getShoppingHistory,
   getShoppingList,
   getWeightAnalytics,
   logMeal,
-  populateShoppingListFromRecipes,
-  getRecipeIngredientOptions,
+  renameShoppingCategory,
+  restoreShoppingItems,
   toggleShoppingItem,
   updateDailySteps,
   updateNutritionTargets,
+  updateShoppingItem,
 } from "@/lib/food";
 import {
   addWaterAction,
   clearBoughtItemsAction,
+  addShoppingItemAction,
   deleteMealAction,
-  generateShoppingListAction,
   logMealAction,
+  renameShoppingCategoryAction,
+  restoreShoppingItemsAction,
+  updateShoppingItemAction,
   toggleShoppingItemAction,
   updateStepsAction,
   updateTargetsAction,
@@ -200,34 +206,43 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(analyticsB.sevenDayAverage).toBeNull();
   });
 
-  it("manages shopping list and generates items from recipes", async () => {
-    // 1. Manual item
-    const manualItem = await addShoppingItem(userA, {
-      name: "Extra Virgin Olive Oil",
-      amount: 1,
-      unit: "bottle",
-      category: "pantry",
-    });
-    expect(manualItem.name).toBe("Extra Virgin Olive Oil");
+  it("merges the same item, keeps cleared items as history, edits and renames categories", async () => {
+    const oil = await addShoppingItem(userA, { name: "Olive Oil", amount: 1, unit: "bottle", category: "pantry" });
+    // Same name (any case) and unit: one row, amounts added.
+    const merged = await addShoppingItem(userA, { name: "olive oil", amount: 2, unit: "bottle", category: "other" });
+    expect(merged.id).toBe(oil.id);
+    expect(Number(merged.amount)).toBe(3);
+    // Another unit stays its own row.
+    await addShoppingItem(userA, { name: "Olive Oil", amount: 500, unit: "ml", category: "pantry" });
+    expect(await getShoppingList(userA)).toHaveLength(2);
 
-    // 2. Toggle bought
-    const toggled = await toggleShoppingItem(userA, manualItem.id, true);
-    expect(toggled?.isBought).toBe(true);
+    // A bought item added again starts over, not bought.
+    await toggleShoppingItem(userA, oil.id, true);
+    const again = await addShoppingItem(userA, { name: "Olive Oil", amount: 1, unit: "bottle", category: "pantry" });
+    expect(again.id).toBe(oil.id);
+    expect(Number(again.amount)).toBe(1);
+    expect(again.isBought).toBe(false);
 
-    // 3. Auto-populate from sample recipes
-    const options = await getRecipeIngredientOptions(userA);
-    const chicken = options.find((o) => o.name === "Chicken breast");
-    expect(chicken).toBeDefined();
-    const populated = await populateShoppingListFromRecipes(userA, [chicken!.key]);
-    // Only the chosen ingredient is added, not every recipe ingredient.
-    expect(populated).toHaveLength(1);
+    // Clearing hides bought items but keeps them for quick add; undo brings them back.
+    await toggleShoppingItem(userA, oil.id, true);
+    const cleared = await clearBoughtShoppingItems(userA);
+    expect(cleared.map((i) => i.id)).toEqual([oil.id]);
+    expect((await getShoppingList(userA)).map((i) => i.unit)).toEqual(["ml"]);
+    expect((await getShoppingHistory(userA)).map((h) => h.name)).toEqual(["Olive Oil"]); // one entry per name
+    await restoreShoppingItems(userA, [oil.id]);
+    expect(await getShoppingList(userA)).toHaveLength(2);
 
-    const list = await getShoppingList(userA);
-    expect(list.some((item) => item.name === "Chicken breast")).toBe(true);
+    const edited = await updateShoppingItem(userA, { itemId: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
+    expect(edited).toMatchObject({ name: "Rapeseed Oil", unit: "l", category: "oils" });
+    expect((await renameShoppingCategory(userA, "pantry", "dry goods")).length).toBe(1);
+    expect((await getShoppingList(userA)).map((i) => i.category).sort()).toEqual(["dry goods", "oils"]);
 
-    // User B list is empty
-    const listB = await getShoppingList(userB);
-    expect(listB).toHaveLength(0);
+    // User B sees, changes and restores none of it.
+    expect(await getShoppingList(userB)).toHaveLength(0);
+    expect(await getShoppingHistory(userB)).toHaveLength(0);
+    expect(await updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).toBeUndefined();
+    expect(await renameShoppingCategory(userB, "oils", "x")).toHaveLength(0);
+    expect(await restoreShoppingItems(userB, [oil.id])).toHaveLength(0);
   });
 
   describe("Server Actions for Food", () => {
@@ -245,9 +260,15 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         }),
       ).rejects.toThrow("Authentication required.");
 
-      await expect(generateShoppingListAction({ keys: ["eggs_pcs"] })).rejects.toThrow(
+      const itemId = randomUUID();
+      await expect(addShoppingItemAction({ name: "Eggs" })).rejects.toThrow("Authentication required.");
+      await expect(
+        updateShoppingItemAction({ itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
+      ).rejects.toThrow("Authentication required.");
+      await expect(renameShoppingCategoryAction({ from: "dairy", to: "fridge" })).rejects.toThrow(
         "Authentication required.",
       );
+      await expect(restoreShoppingItemsAction({ itemIds: [itemId] })).rejects.toThrow("Authentication required.");
 
       await expect(addWaterAction("2026-11-04", 250)).rejects.toThrow(
         "Authentication required.",
@@ -295,20 +316,28 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(targetRes.success).toBe(true);
       expect(targetRes.targets.calories).toBe(3400);
 
-      // 5. Generate shopping list
-      await expect(generateShoppingListAction({ keys: [] })).rejects.toThrow();
-      const [firstOption] = await getRecipeIngredientOptions(authState.id);
-      const shopRes = await generateShoppingListAction({ keys: [firstOption.key] });
-      expect(shopRes.items).toHaveLength(1);
-      expect(shopRes.success).toBe(true);
+      // 5. Shopping: add, edit, rename, clear and undo
+      const { item } = await addShoppingItemAction({ name: "Eggs", amount: 6, category: "Dairy" });
+      expect(item.category).toBe("dairy");
+      const editRes = await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" });
+      expect(Number(editRes.item.amount)).toBe(10);
+      expect((await renameShoppingCategoryAction({ from: "dairy", to: "fridge" })).renamedCount).toBe(1);
+      await expect(updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).rejects.toThrow();
 
-      // 6. Toggle and Clear bought items
-      if (shopRes.items.length > 0) {
-        await toggleShoppingItemAction(shopRes.items[0].id, true);
-        const clearRes = await clearBoughtItemsAction();
-        expect(clearRes.success).toBe(true);
-        expect(clearRes.deletedCount).toBeGreaterThanOrEqual(1);
-      }
+      // 6. Toggle, clear bought items and undo
+      await toggleShoppingItemAction(item.id, true);
+      const clearRes = await clearBoughtItemsAction();
+      expect(clearRes.deletedCount).toBe(1);
+      expect((await restoreShoppingItemsAction({ itemIds: [item.id] })).items).toHaveLength(1);
+
+      // Another user cannot edit or restore it.
+      authState.id = userB;
+      await expect(
+        updateShoppingItemAction({ itemId: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
+      ).rejects.toThrow("Item not found");
+      expect((await restoreShoppingItemsAction({ itemIds: [item.id] })).items).toHaveLength(0);
+      expect((await renameShoppingCategoryAction({ from: "fridge", to: "x" })).renamedCount).toBe(0);
+      authState.id = userA;
 
       // 7. Delete meal
       const delMealRes = await deleteMealAction(mealRes.meal.id);

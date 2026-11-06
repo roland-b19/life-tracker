@@ -27,12 +27,21 @@ export const updateNutritionTargetsSchema = z.object({
   steps: z.number().int().min(1000).max(100000),
 });
 
+/** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
+export const shoppingCategorySchema = z.string().trim().toLowerCase().min(1).max(50);
+
 export const createShoppingItemSchema = z.object({
-  name: z.string().min(1).max(120).trim(),
+  name: z.string().trim().min(1).max(120),
   amount: z.number().min(0.01).max(1000).default(1),
-  unit: z.string().max(30).default("pcs"),
-  category: z.enum(["meat", "produce", "dairy", "bakery", "pantry", "other"]).default("other"),
+  unit: z.string().trim().max(30).default("pcs"),
+  category: shoppingCategorySchema.default("other"),
 });
+
+export const updateShoppingItemSchema = createShoppingItemSchema.extend({ itemId: z.string().uuid() });
+
+export const renameShoppingCategorySchema = z.object({ from: shoppingCategorySchema, to: shoppingCategorySchema });
+
+export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
 export const toggleShoppingItemSchema = z.object({
   itemId: z.string().uuid(),
@@ -44,7 +53,4 @@ export type UpdateMetricsInput = z.infer<typeof updateMetricsSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
 export type ToggleShoppingItemInput = z.infer<typeof toggleShoppingItemSchema>;
-
-export const shoppingFromRecipesSchema = z.object({
-  keys: z.array(z.string().min(1).max(160)).min(1).max(200),
-});
+export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

@@ -1,10 +1,9 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   dailyMetrics,
   meals,
   nutritionTargets,
-  recipeIngredients,
   recipes,
   shoppingItems,
   weightEntries,
@@ -12,6 +11,7 @@ import {
 import {
   CreateShoppingItemInput,
   LogMealInput,
+  UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
 import {
@@ -266,18 +266,61 @@ export async function getWeightAnalytics(userId: string): Promise<WeightAnalytic
 /**
  * Shopping List Operations
  */
+/** The user's items still on the list; cleared ones stay only as quick-add history. */
+const onList = (userId: string) => and(eq(shoppingItems.userId, userId), isNull(shoppingItems.clearedAt));
+
 export async function getShoppingList(userId: string) {
   return db
     .select()
     .from(shoppingItems)
-    .where(eq(shoppingItems.userId, userId))
+    .where(onList(userId))
     .orderBy(shoppingItems.category, shoppingItems.name);
 }
 
+/** Everything the user has put on the list before, newest first, one entry per name: the quick-add options. */
+export async function getShoppingHistory(userId: string, limit = 30) {
+  const rows = await db
+    .selectDistinctOn([sql`lower(${shoppingItems.name})`], {
+      name: shoppingItems.name,
+      amount: shoppingItems.amount,
+      unit: shoppingItems.unit,
+      category: shoppingItems.category,
+      createdAt: shoppingItems.createdAt,
+    })
+    .from(shoppingItems)
+    .where(eq(shoppingItems.userId, userId))
+    .orderBy(sql`lower(${shoppingItems.name})`, desc(shoppingItems.createdAt));
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+}
+
+/** Adds an item, or adds its amount to the same item (same name and unit) already on the list. */
 export async function addShoppingItem(
   userId: string,
   input: CreateShoppingItemInput,
 ) {
+  const [same] = await db
+    .select()
+    .from(shoppingItems)
+    .where(
+      and(
+        onList(userId),
+        sql`lower(${shoppingItems.name}) = lower(${input.name})`,
+        sql`lower(${shoppingItems.unit}) = lower(${input.unit})`,
+      ),
+    )
+    .limit(1);
+
+  if (same) {
+    // Already bought but needed again: it starts over at the new amount.
+    const amount = same.isBought ? input.amount : Math.min(9999.99, Number(same.amount) + input.amount);
+    const [merged] = await db
+      .update(shoppingItems)
+      .set({ amount: amount.toFixed(2), isBought: false })
+      .where(eq(shoppingItems.id, same.id))
+      .returning();
+    return merged;
+  }
+
   const [item] = await db
     .insert(shoppingItems)
     .values({
@@ -291,6 +334,24 @@ export async function addShoppingItem(
     .returning();
 
   return item;
+}
+
+export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
+  const [updated] = await db
+    .update(shoppingItems)
+    .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
+    .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
+    .returning();
+  return updated;
+}
+
+/** Renames a category on all the user's items, history included; renaming onto an existing one merges the two. */
+export async function renameShoppingCategory(userId: string, from: string, to: string) {
+  return db
+    .update(shoppingItems)
+    .set({ category: to })
+    .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)))
+    .returning({ id: shoppingItems.id });
 }
 
 export async function toggleShoppingItem(
@@ -316,16 +377,25 @@ export async function deleteShoppingItem(userId: string, itemId: string) {
   return deleted;
 }
 
+/** Takes bought items off the list; they stay as quick-add history. */
 export async function clearBoughtShoppingItems(userId: string) {
   return db
-    .delete(shoppingItems)
-    .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.isBought, true)))
+    .update(shoppingItems)
+    .set({ clearedAt: new Date() })
+    .where(and(onList(userId), eq(shoppingItems.isBought, true)))
     .returning();
 }
 
-/**
- * Generate Shopping List automatically from User Recipes
- */
+/** Undoes a clear: puts the user's cleared items back on the list. */
+export async function restoreShoppingItems(userId: string, itemIds: string[]) {
+  return db
+    .update(shoppingItems)
+    .set({ clearedAt: null })
+    .where(and(eq(shoppingItems.userId, userId), inArray(shoppingItems.id, itemIds)))
+    .returning();
+}
+
+/** The user's recipes, which the food assistant can read. */
 export async function getUserRecipes(userId: string) {
   await ensureUserSampleRecipes(userId);
   return db
@@ -340,72 +410,4 @@ export async function getUserRecipes(userId: string) {
     })
     .from(recipes)
     .where(eq(recipes.userId, userId));
-}
-
-/** Ingredients of the user's recipes, summed by name and unit; `key` identifies one for selection. */
-export async function getRecipeIngredientOptions(userId: string) {
-  await ensureUserSampleRecipes(userId);
-
-  const rows = await db
-    .select({
-      recipe: recipes.name,
-      name: recipeIngredients.name,
-      amount: recipeIngredients.amount,
-      unit: recipeIngredients.unit,
-      category: recipeIngredients.category,
-    })
-    .from(recipeIngredients)
-    .innerJoin(recipes, eq(recipeIngredients.recipeId, recipes.id))
-    .where(eq(recipes.userId, userId));
-
-  const aggregated = new Map<
-    string,
-    { key: string; name: string; amount: number; unit: string; category: string; recipes: string[] }
-  >();
-
-  for (const ing of rows) {
-    const key = `${ing.name.toLowerCase()}_${ing.unit}`;
-    const amountNum = parseFloat(ing.amount) || 1;
-    const prev = aggregated.get(key);
-    if (prev) {
-      prev.amount += amountNum;
-      if (!prev.recipes.includes(ing.recipe)) prev.recipes.push(ing.recipe);
-    } else {
-      aggregated.set(key, {
-        key,
-        name: ing.name,
-        amount: amountNum,
-        unit: ing.unit,
-        category: ing.category,
-        recipes: [ing.recipe],
-      });
-    }
-  }
-
-  return Array.from(aggregated.values());
-}
-
-/** Adds only the chosen recipe ingredients (by `key`) to the shopping list. */
-export async function populateShoppingListFromRecipes(userId: string, keys: string[]) {
-  const wanted = new Set(keys);
-  const options = await getRecipeIngredientOptions(userId);
-  const itemsToInsert = options.filter((o) => wanted.has(o.key));
-  const created: (typeof shoppingItems.$inferSelect)[] = [];
-
-  for (const item of itemsToInsert) {
-    const [inserted] = await db
-      .insert(shoppingItems)
-      .values({
-        userId,
-        name: item.name,
-        amount: item.amount.toFixed(2),
-        unit: item.unit,
-        category: item.category,
-        isBought: false,
-      })
-      .returning();
-    created.push(inserted);
-  }
-
-  return created;
 }
