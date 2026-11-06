@@ -19,8 +19,13 @@ const edgeFrames = (shrink: number, easing: string): Keyframe[] => [
 ];
 const EDGE = { frames: edgeFrames(480, "cubic-bezier(0.4, 0, 0.2, 1)"), duration: HOLD + 480 };
 // sequential: the rows stay hidden while the box resizes, so no fade is needed then; it is drawn only
-// once they start fading in (row-in, 180ms in .auto-height.sequential), large enough to read, and shrinks away.
-const EDGE_QUICK = { frames: [{ "--edge": "120px" }, { "--edge": "0px" }], duration: 360, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
+// once they start fading in (row-in, 180ms in .auto-height.sequential), large enough to read; it keeps its
+// height and loses its strength (--fade 1 → 0), so the bottom rows return to full opacity.
+const EDGE_QUICK = {
+  frames: [{ "--edge": "120px", "--fade": 1 }, { "--edge": "120px", "--fade": 0 }],
+  duration: 360,
+  easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+};
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
