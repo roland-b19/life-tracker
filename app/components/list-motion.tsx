@@ -18,8 +18,9 @@ const edgeFrames = (shrink: number, easing: string): Keyframe[] => [
   { "--edge": "0px" },
 ];
 const EDGE = { frames: edgeFrames(480, "cubic-bezier(0.4, 0, 0.2, 1)"), duration: HOLD + 480 };
-// sequential: the rows fade in only after the resize, so the fade can leave quickly once they are in.
-const EDGE_QUICK = { frames: edgeFrames(220, "cubic-bezier(0.2, 0, 0, 1)"), duration: HOLD + 220 };
+// sequential: the rows stay hidden while the box resizes, so no fade is needed then; it is drawn only
+// while they fade in (row-in, 180ms in .auto-height.sequential) and shrinks away with them.
+const EDGE_QUICK = { frames: [{ "--edge": "48px" }, { "--edge": "0px" }], duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" };
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
@@ -38,32 +39,37 @@ export function AutoHeight({ className, sequential, children }: { className?: st
       const cs = getComputedStyle(inner);
       return inner.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
     };
+    let last = contentHeight();
+    let fade: Animation | undefined;
+    let grew = false;
+    const edgeFade = (edge: { frames: Keyframe[]; duration: number; easing?: string }) => {
+      fade?.cancel(); // a second growth restarts the fade
+      outer.classList.add("edge-fade");
+      const run = (fade = outer.animate(edge.frames, edge));
+      run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
+    };
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
       outer.classList.remove("rows-wait");
+      if (grew && sequential) edgeFade(EDGE_QUICK);
+      grew = false;
     };
-    let last = contentHeight();
-    let fade: Animation | undefined;
 
     const observer = new ResizeObserver(() => {
       const next = contentHeight();
       if (next === last) return;
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
+      grew = false;
       if (reducedMotion() || inner.querySelector("[data-row-motion]") || from === next) return settle();
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
+      grew = next > from;
       if (sequential) outer.classList.add("rows-wait");
-      if (next > from) {
-        fade?.cancel(); // a second growth restarts the fade
-        outer.classList.add("edge-fade");
-        const edge = sequential ? EDGE_QUICK : EDGE;
-        const run = (fade = outer.animate(edge.frames, edge.duration));
-        run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
-      }
+      else if (grew) edgeFade(EDGE);
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
@@ -76,7 +82,7 @@ export function AutoHeight({ className, sequential, children }: { className?: st
   }, [sequential]);
 
   return (
-    <div ref={outerRef} className="auto-height">
+    <div ref={outerRef} className={sequential ? "auto-height sequential" : "auto-height"}>
       <div ref={innerRef} className={className}>
         {children}
       </div>
