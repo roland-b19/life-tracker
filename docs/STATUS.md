@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (pages polish 3: tick past days, no Undo on task toggles, shopping categories card, meal types removed)_
+_Last updated: 2026-11-06 by Claude (Tasks fixes and polish on every page)_
 
 ## Phase
 
@@ -142,6 +142,11 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Tasks fixes and polish on every page (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
+  - Tasks: a repeating task starts on its first day; add and delete work in the Today tab and on any day; a deleted task no longer pops back; the Week strip shows day names; "Nothing planned" shows on every empty day.
+  - Every page: hover fills on idle buttons and tabs, a very soft all-around hover shadow, list rows as alternating tinted bands with a hover band, row buttons centred on multi-line rows, uniform list spacing.
+  - Motion: new rows wait for the form to close on Tasks, Health (meals, weigh-ins, shopping) and Wishlist; weigh-ins and past foods animate; the Gym day editor's exercise rows enter, leave and slide on move.
+  - Checked: tsc, eslint, 94 tests, and in the browser: Tasks add and delete in Today, the Week strip, and the stripes on Tasks, Health, Gym and Wishlist. Hover states were not checked in the browser.
 - 2026-11-06 — Snappier app-wide motion (Claude Code, PR #52, merged), from "everything feels sluggish". Measured first: the server answers in 20–40ms and frames hold 60fps, so the lag was motion length. A page change stacked three entrances (view transition 90ms delay + 340ms with blur, a 580ms card rise staggered up to 210ms, rows 100ms late and 40ms apart) and took about 1s to settle; hover and selection colours faded over 420ms and the press spring took 500ms.
   - New `--quick: 180ms` for colour, background, border, shadow and opacity feedback; `--lift` 320ms; movement keeps `--dur`.
   - Page change: exit 120ms, enter 260ms after 40ms, root 300ms, no blur; cards rise in `--dur` staggered 40ms; rows start 80ms in, 30ms apart; chart bars grow in `--dur`.

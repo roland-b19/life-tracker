@@ -5,7 +5,7 @@ import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
@@ -87,12 +87,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  // A saved form's list change waits until the form has closed, so its whole animation is visible.
-  const afterClose = useRef<(() => void) | null>(null);
-  const runAfterClose = () => {
-    afterClose.current?.();
-    afterClose.current = null;
-  };
+  const { later, runAfterClose } = useAfterClose();
   // Undo runs from a toast seconds later, so it reads the list and view as they are then.
   const latest = useRef({ items, view });
   useEffect(() => {
@@ -178,7 +173,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         }
         const updated = res.item as WishlistItemData;
         const before = items.find((i) => i.id === editingId);
-        afterClose.current = () => replace(updated);
+        later(() => replace(updated));
         showToast({
           message: `Saved "${updated.name}"`,
           type: "success",
@@ -200,10 +195,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         const added = res.item as WishlistItemData;
-        afterClose.current = () => {
+        later(() => {
           enter(added.id);
           setItems((prev) => [added, ...prev]);
-        };
+        });
         // No Undo: a new item is one tap from Delete.
         showToast({ message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
       }

@@ -12,7 +12,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from "../components/icons";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { AnimatedNumber } from "../components/animated-number";
@@ -137,6 +137,7 @@ export function FoodClient({
 
   const { showToast } = useToast();
   const { rowRef, enter, leave } = useListMotion();
+  const { later, runAfterClose } = useAfterClose();
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -201,8 +202,10 @@ export function FoodClient({
 
       if (res.success && res.meal) {
         const meal = res.meal as MealData;
-        enter(meal.id);
-        applyMeal(meal, 1);
+        later(() => {
+          enter(meal.id);
+          applyMeal(meal, 1);
+        });
         rememberFoods([meal]);
         setMealName("");
         setMealCalories("");
@@ -215,6 +218,7 @@ export function FoodClient({
           type: "success",
           actionLabel: "Undo",
           onAction: async () => {
+            runAfterClose(); // the meal first, if the form is still closing
             await deleteMealAction(meal.id);
             leave(meal.id, () => applyMeal(meal, -1));
           },
@@ -251,8 +255,11 @@ export function FoodClient({
         isEstimated: food.isEstimated,
       });
       const meal = res.meal as MealData;
-      enter(meal.id);
-      applyMeal(meal, 1);
+      // The food leaves the sheet as the meal joins the day behind it.
+      leave(`past:${food.name}`, () => {
+        enter(meal.id);
+        applyMeal(meal, 1);
+      });
       showToast({
         message: `Logged "${meal.name}" (${meal.calories} kcal)`,
         type: "success",
@@ -369,6 +376,7 @@ export function FoodClient({
   });
 
   function openShopForm(item: ShoppingItemData | null) {
+    runAfterClose(); // reopened before the last close finished
     setEditingShop(item);
     setShopName(item?.name ?? "");
     setShopAmount(item ? String(Number(item.amount)) : "1");
@@ -387,8 +395,11 @@ export function FoodClient({
       if (before) {
         setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
       } else {
-        enter(item.id);
-        setShoppingList((prev) => [...prev, item]);
+        // From the form, the row waits until the form has closed; a quick-add chip adds it at once.
+        (isShopModalOpen ? later : (add: () => void) => add())(() => {
+          enter(item.id);
+          setShoppingList((prev) => [...prev, item]);
+        });
       }
       setHistory((prev) => [
         { name: item.name, amount: item.amount, unit: item.unit, category: item.category },
@@ -399,6 +410,7 @@ export function FoodClient({
         type: "success",
         actionLabel: "Undo",
         onAction: async () => {
+          runAfterClose();
           if (!before) {
             await deleteShoppingItemAction(item.id);
             leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
@@ -437,7 +449,9 @@ export function FoodClient({
     try {
       const res = await updateShoppingItemAction({ ...input, itemId: editingShop.id });
       const item = res.item as ShoppingItemData;
-      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+      const save = () => setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+      // A new category moves the row to another group: it leaves here and comes in there.
+      later(item.category === editingShop.category ? save : () => leave(item.id, () => (enter(item.id), save())));
       setIsShopModalOpen(false);
       showToast({ message: `Saved "${item.name}"`, type: "success" });
     } catch {
@@ -666,7 +680,7 @@ export function FoodClient({
                   </h2>
                   <p className="card-sub muted number-tabular">{formatDMY(selectedDate)}</p>
                 </div>
-                <button type="button" className="btn-sm tint" onClick={() => setIsMealModalOpen(true)}>
+                <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setIsMealModalOpen(true))}>
                   <PlusIcon size={14} />
                   Add meal
                 </button>
@@ -997,6 +1011,7 @@ export function FoodClient({
       <Modal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
+        onExited={runAfterClose}
         title="New meal"
       >
         <form onSubmit={handleLogMeal}>
@@ -1072,6 +1087,7 @@ export function FoodClient({
       <Modal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
+        onExited={runAfterClose}
         title={editingShop ? "Edit item" : "New shopping item"}
       >
         <form onSubmit={handleShopSubmit}>
@@ -1134,7 +1150,7 @@ export function FoodClient({
               <p className="empty-note">Everything you logged before is already in today.</p>
             ) : (
               notLoggedFoods.map((f) => (
-                <div key={f.name} className="entry-row">
+                <div key={f.name} ref={rowRef(`past:${f.name}`)} className="entry-row">
                   <div>
                     <strong>{f.name}</strong>
                     <p className="card-sub muted number-tabular">

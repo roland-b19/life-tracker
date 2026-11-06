@@ -11,7 +11,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 | Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, small overshoot on controls only. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
-| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No shadows anywhere: depth comes from border, blur and translucency. |
+| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No resting shadows: depth comes from border, blur and translucency. The one shadow is `--hover-shadow`, very soft and on every side, under a hovered card or control. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
 
 ## Tokens (CSS custom properties on `:root`)
 

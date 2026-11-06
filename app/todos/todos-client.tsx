@@ -7,7 +7,7 @@ import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { DatePicker } from "../components/date-picker";
 import { useToast } from "../components/toast";
 import {
@@ -83,6 +83,7 @@ export function TodosClient({
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
+  const { later, runAfterClose } = useAfterClose();
   // The list shows this view, which follows the controls only after the old rows have faded out.
   const [view, setView] = useState({ space: "personal" as TodoSpace, tab: "daily" as TaskTab, date: todayDate, n: 0 });
   const viewId = useRef(0);
@@ -224,6 +225,7 @@ export function TodosClient({
   const changeTab = (next: TaskTab) => switchView({ tab: next });
 
   const openForm = (todo?: TodoItem) => {
+    runAfterClose(); // reopened before the last close finished
     setErrorMsg(null);
     setTitleError(null);
     setEditing(todo ?? null);
@@ -283,13 +285,15 @@ export function TodosClient({
         if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
         if (res.todo) {
           const created = res.todo;
-          // The row comes in at once; the refresh (stats, chart) lands after its entrance, not in the middle of it.
-          if (!created.isRecurring || created.dueDate <= date) entered = putBack(created);
+          // The row comes in once the form has closed; the refresh (stats, chart) lands after its entrance, not in the middle of it.
+          if (!created.isRecurring || created.dueDate <= date)
+            entered = new Promise((done) => later(() => void putBack(created).then(done)));
           showToast({
             message: `Added "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
+              runAfterClose(); // the row first, if the form is still closing
               await deleteTodoAction(created.id);
               leave(created.id, () => {
                 drop(created);
@@ -736,6 +740,7 @@ export function TodosClient({
       <Modal
         isOpen={isTaskModalOpen}
         onClose={closeForm}
+        onExited={runAfterClose}
         title={editing ? "Edit task" : isDaily ? "New daily task" : "New task"}
       >
         <form onSubmit={handleSubmit}>

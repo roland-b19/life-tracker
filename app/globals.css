@@ -24,7 +24,7 @@
   --card-shadow: none;
   /* Hover: one spring "breath" and one low shadow on every card, button, tab and field.
      --grow and --press are rewritten per element by app/providers.tsx so all grow and shrink by the same pixels. */
-  --hover-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.65);
+  --hover-shadow: 0 0 18px -4px rgba(0, 0, 0, 0.55); /* very soft, on every side */
   --grow: 1.01;
   --lift: 320ms var(--pop);
   --glass-blur: blur(28px) saturate(160%);
@@ -970,7 +970,7 @@ textarea:focus-visible {
   margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
 }
 .surface > .entries:last-child,
-.surface > .auto-height:last-child > .entries {
+.surface > .auto-height:last-child > :is(.entries, .todo-list) {
   margin-bottom: -0.5rem;
 }
 /* An empty list keeps one row's space (--row-h is the page's row height), so the card does not jump. */
@@ -2163,7 +2163,7 @@ select.sort-select {
 /* Task rows: checkbox, title (wraps) with badges below, streak, edit, delete */
 .todo-list {
   margin-top: 0.75rem;
-  --row-h: 3.25rem; /* one row on its own: the last row has no bottom padding */
+  --row-h: 3.75rem; /* one row on its own: 44px of content and 0.5rem above and below */
 }
 
 .todo-row {
@@ -2171,9 +2171,6 @@ select.sort-select {
   padding: 0.5rem 0;
 }
 
-.todo-row:last-child {
-  padding-bottom: 0;
-}
 
 /* The title and its tags (weekdays, reminder) share a line, wrapping only when it is full */
 .todo-main {
@@ -3041,3 +3038,52 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
 }
+
+/* ==========================================================================
+   Shared polish, every page: hover fills on idle buttons, list rows as soft bands
+   ========================================================================== */
+
+/* An idle (unselected or secondary) button lightens on hover, on top of the shared lift */
+@media (hover: hover) {
+  button.secondary:hover:not(:disabled),
+  button.btn-sm:not(.tint):hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.11);
+  }
+  button.btn-sm.tint:hover:not(:disabled),
+  .delete-icon-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tint) 24%, transparent);
+  }
+  button.danger:hover:not(:disabled) {
+    background: var(--danger-subtle);
+  }
+  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled),
+  .muscle-chip:not(.active):hover {
+    background: color-mix(in srgb, var(--tint) 12%, var(--surface-secondary));
+  }
+  .tab-item:not(.active):hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* List rows are soft bands: every other row carries a faint accent tint and the hovered row a stronger one.
+   The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
+:is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row) {
+  margin-inline: -0.75rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.75rem;
+  transition: background-color var(--quick) var(--ease), transform var(--lift);
+}
+.auto-height:has(> :is(.entries, .todo-list)) {
+  margin-inline: -0.75rem;
+  padding-inline: 0.75rem;
+}
+:is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
+  background-color: color-mix(in srgb, var(--tint) 5%, transparent);
+}
+@media (hover: hover) {
+  :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row):hover {
+    background-color: color-mix(in srgb, var(--tint) 10%, transparent);
+  }
+}
+
