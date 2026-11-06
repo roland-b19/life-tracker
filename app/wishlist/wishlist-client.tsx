@@ -41,6 +41,18 @@ const FILTERS: { value: "all" | Priority; label: string }[] = [
   { value: "high", label: RANGE_LABEL.high },
 ];
 
+type Sort = "newest" | "price-asc" | "price-desc";
+const SORTS: { value: Sort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "price-asc", label: "Lowest price" },
+  { value: "price-desc", label: "Highest price" },
+];
+const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number> = {
+  newest: (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
+  "price-asc": (a, b) => Number(a.estimatedPrice) - Number(b.estimatedPrice),
+  "price-desc": (a, b) => Number(b.estimatedPrice) - Number(a.estimatedPrice),
+};
+
 const formatRon = (n: number) =>
   n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -59,8 +71,10 @@ function ItemLink({ value }: { value: string }) {
 export function WishlistClient({ userName, initialItems }: WishlistClientProps) {
   const [items, setItems] = useState<WishlistItemData[]>(initialItems);
   const [filterRange, setFilterRange] = useState<"all" | Priority>("all");
-  // The rows switch only after the old ones have faded out, while the tab moves at once.
-  const [listRange, setListRange] = useState<"all" | Priority>("all");
+  const [sort, setSort] = useState<Sort>("newest");
+  // The rows switch only after the old ones have faded out, while the tab and the sort menu change at once.
+  const [view, setView] = useState<{ range: "all" | Priority; sort: Sort }>({ range: "all", sort: "newest" });
+  const listRange = view.range;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -74,11 +88,11 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Newest first; the range comes from the price, never from the stored column.
+  // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
   const filteredItems = items
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
-    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
   const toInput = (item: WishlistItemData) => ({
@@ -90,7 +104,12 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   function switchRange(next: "all" | Priority) {
     if (next === filterRange) return;
     setFilterRange(next);
-    fadeAll(() => setListRange(next));
+    fadeAll(() => setView((v) => ({ ...v, range: next })));
+  }
+
+  function switchSort(next: Sort) {
+    setSort(next);
+    fadeAll(() => setView((v) => ({ ...v, sort: next })));
   }
 
   function openForm(item?: WishlistItemData) {
@@ -131,21 +150,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           return;
         }
         const updated = res.item as WishlistItemData;
-        const before = items.find((i) => i.id === editingId);
         setItems((prev) => prev.map((i) => (i.id === editingId ? updated : i)));
-        showToast({
-          message: `Saved "${updated.name}"`,
-          type: "success",
-          actionLabel: before ? "Undo" : undefined,
-          onAction: before
-            ? async () => {
-                const back = await updateWishlistItemAction(updated.id, toInput(before));
-                if (back.success && back.item) {
-                  setItems((prev) => prev.map((i) => (i.id === updated.id ? (back.item as WishlistItemData) : i)));
-                }
-              }
-            : undefined,
-        });
+        showToast({ message: `Saved "${updated.name}"`, type: "success" });
       } else {
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
@@ -176,38 +182,42 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   };
   const dropRow = (id: string) => leave(id, () => setItems((prev) => prev.filter((i) => i.id !== id)));
 
-  // The server call runs while the row fades, so nothing waits on the network; the toast comes as the row closes.
+  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
   function handleRemove(target: WishlistItemData) {
     const deleted = deleteWishlistItemAction(target.id).then(
-      () => true,
+      (res) => res.success !== false,
       () => false,
     );
-    leave(target.id, () => {
-      setItems((prev) => prev.filter((i) => i.id !== target.id));
-      void deleted.then((ok) => {
-        if (!ok) {
-          putBack(target);
-          showToast({ message: "Failed to remove item", type: "warning" });
-          return;
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(target.id, () => {
+        setItems((prev) => prev.filter((i) => i.id !== target.id));
+        done();
+      }),
+    );
+    showToast({
+      message: `Removed "${target.name}"`,
+      actionLabel: "Undo",
+      // Same id and date, so the row comes back where it was.
+      onAction: async () => {
+        await gone;
+        putBack(target);
+        if (!(await deleted)) return; // the delete never happened
+        const back = await restoreWishlistItemAction({
+          ...toInput(target),
+          id: target.id,
+          createdAt: target.createdAt,
+        }).catch(() => null);
+        if (!back?.success) {
+          dropRow(target.id);
+          showToast({ message: "Failed to restore item", type: "warning" });
         }
-        showToast({
-          message: `Removed "${target.name}"`,
-          actionLabel: "Undo",
-          // Same id and date, so the row comes back where it was.
-          onAction: async () => {
-            putBack(target);
-            const back = await restoreWishlistItemAction({
-              ...toInput(target),
-              id: target.id,
-              createdAt: target.createdAt,
-            }).catch(() => null);
-            if (!back?.success) {
-              dropRow(target.id);
-              showToast({ message: "Failed to restore item", type: "warning" });
-            }
-          },
-        });
-      });
+      },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return;
+      putBack(target);
+      showToast({ message: "Failed to remove item", type: "warning" });
     });
   }
 
@@ -224,6 +234,18 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               </h2>
               <span className="head-actions">
                 <span className="muted number-tabular">{filteredItems.length}</span>
+                <select
+                  className="sort-select"
+                  aria-label="Sort items"
+                  value={sort}
+                  onChange={(e) => switchSort(e.target.value as Sort)}
+                >
+                  {SORTS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
                 <button type="button" className="btn-sm tint" onClick={() => openForm()}>
                   <PlusIcon size={14} />
                   Add item
@@ -238,7 +260,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className="entries">
+            <AutoHeight className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
@@ -246,7 +268,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                 </p>
               ) : (
                 // Keyed by the filter so every row replays its entrance when the tab changes.
-                <Fragment key={listRange}>
+                <Fragment key={`${listRange}-${view.sort}`}>
                   {filteredItems.map((item) => (
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>

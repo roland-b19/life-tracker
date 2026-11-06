@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import {
   createShoppingItemSchema,
-  shoppingFromRecipesSchema,
   logMealSchema,
+  renameShoppingCategorySchema,
+  restoreShoppingItemsSchema,
+  updateShoppingItemSchema,
   updateNutritionTargetsSchema,
 } from "@/lib/validations/food";
 import {
@@ -15,10 +17,12 @@ import {
   deleteMeal,
   deleteShoppingItem,
   logMeal,
-  populateShoppingListFromRecipes,
+  renameShoppingCategory,
+  restoreShoppingItems,
   toggleShoppingItem,
   updateDailySteps,
   updateNutritionTargets,
+  updateShoppingItem,
 } from "@/lib/food";
 
 function safeRevalidate(path: string) {
@@ -110,10 +114,27 @@ export async function clearBoughtItemsAction() {
   return { success: true, deletedCount: deleted.length };
 }
 
-export async function generateShoppingListAction(rawInput: unknown) {
+export async function restoreShoppingItemsAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { keys } = shoppingFromRecipesSchema.parse(rawInput);
-  const items = await populateShoppingListFromRecipes(userId, keys);
+  const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
+  const items = await restoreShoppingItems(userId, itemIds);
   safeRevalidate("/food");
   return { success: true, items };
+}
+
+export async function updateShoppingItemAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = updateShoppingItemSchema.parse(rawInput);
+  const item = await updateShoppingItem(userId, parsed);
+  if (!item) throw new Error("Item not found");
+  safeRevalidate("/food");
+  return { success: true, item };
+}
+
+export async function renameShoppingCategoryAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { from, to } = renameShoppingCategorySchema.parse(rawInput);
+  const renamed = await renameShoppingCategory(userId, from, to);
+  safeRevalidate("/food");
+  return { success: true, renamedCount: renamed.length };
 }

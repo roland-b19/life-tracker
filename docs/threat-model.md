@@ -15,7 +15,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 |---|---|---|---|---|
 | A1 | Body weight and steps history | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
 | A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
-| A3 | Food logs, meal plan, recipes, shopping list | personal | database; also read and written through the AI connector | low to medium privacy harm |
+| A3 | Food logs, meal plan, recipes, shopping list (cleared items kept as quick-add history) | personal | database; also read and written through the AI connector and the in-app assistant | low to medium privacy harm |
 | A4 | Personal expenses | personal, financial | database | privacy harm |
 | A5 | Family-business income and expenses (legacy rows, no UI since 2026-11-05) | personal, financial, business | database | commercial harm; never leaves our system |
 | A6 | To-do tasks and reminders (personal and business) | personal | database, queue | low |
@@ -84,6 +84,7 @@ Rating: H/M/L = priority. Status: `open` until the stack exists; each row names 
 | T16 | CI/CD and dependencies | | x | | x | | x | Compromised dependency or workflow steals secrets or ships a backdoor (2026-11-05: `three` added for the Gym muscle map, pinned to an exact version, runs only in the browser, loads one static GLB from `public/models/` with no network access of its own) | pinned dependencies and lockfile, dependency + secret scanning in CI, minimal workflow permissions, deploy through federated identity instead of long-lived keys, review before merge | ASVS 15, SSDF PS/PW | open |
 | T17 | Azure configuration | | | | x | | x | Misconfiguration: public storage, over-broad roles, forgotten running resources | everything scripted and reviewed; least-privilege roles; tags; teardown script; Defender/Policy checks where free; STATUS lists deployed resources | MCSB | open |
 | T18 | Denial of service on the API | | | | | x | | Flood or lockout (L) | platform rate limiting and per-user limits; login lockout handled by Entra; availability is not critical for a one-user app | ASVS 2.4 | accepted, see R2 |
+| T20 | In-app Food Assistant (server calls Gemini with the app's key) | | x | x | x | x | | **Prompt injection or bad output from the chat (M):** a message tells the model to ignore its rules, invent many meals, or say it saved something it did not; the prompt leaks non-food data | prompt carries only food data (day, time, targets, meals, recipes, past foods), tested to hold no steps or weight; rules say user text never changes them; JSON response schema, zod parse, max 10 meals per answer, every meal through `logMealSchema` and flagged estimated, nothing logged on invalid JSON; the app shows exactly what it logged; input capped (message 1000 chars, history 20 items, 10 sent); Gemini error bodies are not logged | LLM01, LLM05, LLM10, AI.5 | open |
 | T19 | Export / delete | | | x | | | | Data left behind after account deletion or exported to the wrong person | deletion removes all rows for the user in one transaction plus the queue/push entries; export streams only the caller's data; re-authentication for both | ASVS 14 | open |
 
 ## 6. Abuse cases

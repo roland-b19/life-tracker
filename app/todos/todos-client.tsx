@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { CheckIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, PencilIcon, PlusIcon } from "../components/icons";
+import { CheckIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
@@ -14,16 +14,19 @@ import {
   createTodoAction,
   deleteTodoAction,
   getDailyTodosAction,
+  getPlannedDaysAction,
   getTodoHistoryAction,
+  moveTodoAction,
   restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
-import { PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
+import { DEV_EDIT_PAST, PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { applyToggle } from "@/lib/streak";
+import { compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
 type Period = "7" | "30" | "90";
@@ -42,6 +45,12 @@ const METRICS: { value: Metric; label: string }[] = [
 // Sparse day labels so 30 and 90 bars stay readable.
 const LABEL_EVERY: Record<Period, number> = { "7": 1, "30": 5, "90": 15 };
 
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
+// Repeat patterns: "daily", or "days:1,3,5" for chosen ISO weekdays (1 = Monday).
+const patternOf = (days: number[]) => (days.length === 7 ? "daily" : `days:${[...days].sort().join(",")}`);
+const daysOf = (pattern: string) => (pattern.startsWith("days:") ? pattern.slice(5).split(",").map(Number) : ALL_DAYS);
+
 const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
   `${new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday })} ${formatDMY(iso)}`;
 
@@ -51,6 +60,7 @@ interface TodosClientProps {
   initialPersonalTodos: TodoItem[];
   initialBusinessTodos: TodoItem[];
   initialHistory: Record<TodoSpace, TodoDayStat[]>;
+  initialPlanned: Record<TodoSpace, string[]>;
 }
 
 export function TodosClient({
@@ -59,6 +69,7 @@ export function TodosClient({
   initialPersonalTodos,
   initialBusinessTodos,
   initialHistory,
+  initialPlanned,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [date, setDate] = useState(todayDate);
@@ -67,9 +78,11 @@ export function TodosClient({
   const [metric, setMetric] = useState<Metric>("rate");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
+  const [planned, setPlanned] = useState(initialPlanned);
+  const [moving, setMoving] = useState<TodoItem | null>(null);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave, fadeAll } = useListMotion();
+  const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
   // The list shows this view, which follows the controls only after the old rows have faded out.
   const [view, setView] = useState({ space: "personal" as TodoSpace, tab: "daily" as TaskTab, date: todayDate, n: 0 });
   const viewId = useRef(0);
@@ -82,6 +95,7 @@ export function TodosClient({
   // Form state
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
+  const [daysInput, setDaysInput] = useState(ALL_DAYS);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -94,18 +108,26 @@ export function TodosClient({
   const requestId = useRef(0);
 
   const isDaily = tab === "daily";
-  // Daily tasks live in the present; one-off tasks can be planned a week ahead.
-  const maxDate = isDaily ? todayDate : addDays(todayDate, PLAN_AHEAD_DAYS);
-  // Past days are read-only: they show what was done, never edit, delete or tick.
+  // Both lists look a week ahead: one-off tasks to plan them, daily ones to see each weekday's list.
+  const maxDate = addDays(todayDate, PLAN_AHEAD_DAYS);
+  const tomorrow = addDays(todayDate, 1);
+  // Past days are read-only (they show what was done), except in dev builds, for testing.
   const isPast = date < todayDate;
+  const editable = !isPast || DEV_EDIT_PAST;
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
     todosMap[s].filter(
-      (t) => t.isRecurring === daily && (day >= todayDate || !t.isRecurring || toISODate(new Date(t.createdAt)) <= day),
+      (t) =>
+        t.isRecurring === daily &&
+        (day >= todayDate || !t.isRecurring || DEV_EDIT_PAST || toISODate(new Date(t.createdAt)) <= day),
     );
   const visibleTodos = visibleFor(space, isDaily, date);
   const listDaily = view.tab === "daily";
   const listPast = view.date < todayDate;
+  const listEditable = !listPast || DEV_EDIT_PAST;
+  // A daily task is ticked on its day, never ahead of time.
+  const listTickable = listEditable && !(listDaily && view.date > todayDate);
   const listTodos = visibleFor(view.space, listDaily, view.date);
+  const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
   // Past days use the snapshot taken that day; today and later use the live list.
@@ -160,16 +182,19 @@ export function TodosClient({
   const loadDay = async (date: string, before?: Promise<void>) => {
     const id = ++requestId.current;
     try {
-      const [personal, business, hp, hb] = await Promise.all([
+      const [personal, business, hp, hb, pp, pb] = await Promise.all([
         getDailyTodosAction("personal", date),
         getDailyTodosAction("business", date),
         getTodoHistoryAction("personal"),
         getTodoHistoryAction("business"),
+        getPlannedDaysAction("personal"),
+        getPlannedDaysAction("business"),
       ]);
       await before;
       if (id === requestId.current) {
         setTodosMap({ personal: personal.todos, business: business.todos });
         setHistory({ personal: hp.history ?? [], business: hb.history ?? [] });
+        setPlanned({ personal: pp.days, business: pb.days });
       }
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
@@ -194,15 +219,14 @@ export function TodosClient({
 
   const stepDay = (delta: number) => goTo(addDays(date, delta));
 
-  // Daily tasks have no future: coming back from a future one-off day lands on today.
-  const changeTab = (next: TaskTab) =>
-    switchView(next === "daily" && date > todayDate ? { tab: next, date: todayDate } : { tab: next });
+  const changeTab = (next: TaskTab) => switchView({ tab: next });
 
   const openForm = (todo?: TodoItem) => {
     setErrorMsg(null);
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
+    setDaysInput(daysOf(todo?.recurrencePattern ?? "daily"));
     setIsTaskModalOpen(true);
   };
 
@@ -217,18 +241,26 @@ export function TodosClient({
     const title = titleInput.trim();
     if (!title || saving) return;
     const reminderTime = reminderTimeInput.trim() || null;
+    const repeats = editing ? editing.isRecurring : isDaily;
+    if (repeats && !daysInput.length) return;
+    const recurrencePattern = repeats ? patternOf(daysInput) : "none";
     setSaving(true);
     try {
       if (editing) {
         const before = editing;
-        const res = await updateTodoAction({ id: before.id, title, reminderTime });
+        const res = await updateTodoAction({ id: before.id, title, reminderTime, recurrencePattern });
         if (res.success) {
           showToast({
             message: `Saved "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
-              await updateTodoAction({ id: before.id, title: before.title, reminderTime: before.reminderTime });
+              await updateTodoAction({
+                id: before.id,
+                title: before.title,
+                reminderTime: before.reminderTime,
+                recurrencePattern: before.recurrencePattern,
+              });
               await loadDay(date);
             },
           });
@@ -238,6 +270,7 @@ export function TodosClient({
           space,
           title,
           isRecurring: isDaily,
+          recurrencePattern,
           dueDate: date,
           reminderTime,
         });
@@ -264,15 +297,22 @@ export function TodosClient({
     }
   };
 
-  // The streak moves with the tick, using the same rule as the server.
-  const setCompleted = (id: string, isCompleted: boolean) => {
-    setTodosMap((prev) => ({
-      ...prev,
-      [space]: prev[space].map((t) =>
-        t.id !== id ? t : { ...t, isCompleted, ...(t.isRecurring ? applyToggle(t, isCompleted, date) : {}) },
-      ),
-    }));
-  };
+  // The streak moves with the tick, using the same rule as the server; the row slides to its new place.
+  const setCompleted = (id: string, isCompleted: boolean) =>
+    reorder(() =>
+      setTodosMap((prev) => ({
+        ...prev,
+        [space]: prev[space]
+          .map((t) => {
+            if (t.id !== id) return t;
+            const next = { ...t, isCompleted, completedAt: isCompleted ? new Date() : null };
+            if (!t.isRecurring) return next;
+            const { streak, lastCompletedDate } = applyToggle(t, isCompleted, date);
+            return { ...next, streak, lastCompletedDate };
+          })
+          .sort(compareTodos),
+      })),
+    );
 
   const handleToggleTodo = async (todo: TodoItem) => {
     const next = !todo.isCompleted;
@@ -294,20 +334,43 @@ export function TodosClient({
     await loadDay(date);
   };
 
-  // Back in the list where the server would sort it: open first, carried over first, then oldest first.
+  // Back in the list where the server would sort it.
   const putBack = (task: TodoItem) => {
     enter(task.id);
     setTodosMap((prev) => ({
       ...prev,
       [task.space]: prev[task.space].some((t) => t.id === task.id)
         ? prev[task.space]
-        : [...prev[task.space], task].sort(
-            (a, b) =>
-              +a.isCompleted - +b.isCompleted ||
-              +b.isCarriedOver - +a.isCarriedOver ||
-              +new Date(a.createdAt) - +new Date(b.createdAt),
-          ),
+        : [...prev[task.space], task].sort(compareTodos),
     }));
+  };
+
+  // Moving always takes the row out of this list; the server call runs while it leaves.
+  const handleMove = (task: TodoItem, recurrencePattern: string, day: string) => {
+    setMoving(null);
+    if (recurrencePattern === "none" && !task.isRecurring && day === task.dueDate) return;
+    const moved = moveTodoAction({ id: task.id, recurrencePattern, dueDate: day }).then(
+      (res) => res.success,
+      () => false,
+    );
+    const gone = new Promise<void>((done) =>
+      leave(task.id, () => {
+        setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
+        done();
+      }),
+    );
+    void Promise.all([moved, gone]).then(([ok]) => {
+      if (!ok) {
+        putBack(task);
+        showToast({ message: "Failed to move task", type: "warning" });
+        return;
+      }
+      void loadDay(date);
+      showToast({
+        message: `Moved "${task.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
+        type: "success",
+      });
+    });
   };
 
   // The server call runs while the row fades, so nothing waits on the network; undo restores the same task, streak included.
@@ -330,9 +393,9 @@ export function TodosClient({
           actionLabel: "Undo",
           onAction: async () => {
             putBack(target);
-            const { id, space, title, isRecurring, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt } = target;
+            const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt } = target;
             const back = await restoreTodoAction({
-              id, space, title, isRecurring, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt,
+              id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt,
             }).catch(() => null);
             if (!back?.success) {
               leave(target.id, () => setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) })));
@@ -408,7 +471,15 @@ export function TodosClient({
           <button type="button" className="month-nav-btn" onClick={() => stepDay(-1)} aria-label="Previous day">
             ‹
           </button>
-          <DatePicker mode="day" value={date} today={todayDate} max={maxDate} label={dayLabel(date)} onChange={goTo} />
+          <DatePicker
+            mode="day"
+            value={date}
+            today={todayDate}
+            max={maxDate}
+            marked={isDaily ? undefined : planned[space].filter((d) => d > todayDate)}
+            label={dayLabel(date)}
+            onChange={goTo}
+          />
           <button
             type="button"
             className="month-nav-btn"
@@ -447,7 +518,7 @@ export function TodosClient({
               <h2 id="tasks-title" className="section-title">
                 {isDaily ? "Daily tasks" : "Tasks"}
               </h2>
-              {!isPast && (
+              {editable && (
                 <button type="button" className="btn-sm tint" onClick={() => openForm()}>
                   <PlusIcon size={14} />
                   Add task
@@ -455,9 +526,14 @@ export function TodosClient({
               )}
             </div>
 
-            {isPast && (
+            {isPast && !DEV_EDIT_PAST && (
               <p className="readonly-note">
                 <LockIcon size={13} /> Past days are read-only
+              </p>
+            )}
+            {isDaily && date > todayDate && (
+              <p className="readonly-note">
+                <LockIcon size={13} /> Daily tasks are ticked on the day
               </p>
             )}
 
@@ -467,8 +543,8 @@ export function TodosClient({
                 <Fragment key={view.n}>
                 {listTodos.map((task) => (
                   <div key={task.id} ref={rowRef(task.id)} className="todo-row">
-                    {listPast ? (
-                      !listDaily && (
+                    {!listTickable ? (
+                      !(listPast && listDaily) && (
                         <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
                           {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
                         </span>
@@ -485,15 +561,20 @@ export function TodosClient({
                     )}
 
                     <div className="todo-main">
-                      <span className={`todo-title ${!listPast && task.isCompleted ? "completed" : ""}`}>
+                      <span className={`todo-title ${listEditable && task.isCompleted ? "completed" : ""}`}>
                         {task.title}
                         {listPast && !listDaily && (
                           <span className="visually-hidden">{task.isCompleted ? ", done" : ", not done"}</span>
                         )}
                       </span>
-                      {((!listDaily && task.isCarriedOver) || task.reminderTime) && (
+                      {((!listDaily && task.isCarriedOver) || task.reminderTime || task.recurrencePattern.startsWith("days:")) && (
                         <div className="badge-row">
                           {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
+                          {task.recurrencePattern.startsWith("days:") && (
+                            <span className="badge badge-repeat">
+                              {daysOf(task.recurrencePattern).map((d) => WEEKDAYS[d - 1].slice(0, 3)).join(", ")}
+                            </span>
+                          )}
                           {task.reminderTime && <span className="badge badge-reminder">{task.reminderTime}</span>}
                         </div>
                       )}
@@ -506,8 +587,17 @@ export function TodosClient({
                       </span>
                     )}
 
-                    {!listPast && (
+                    {listEditable && (
                       <>
+                        <button
+                          type="button"
+                          className="delete-icon-btn edit"
+                          onClick={() => setMoving(task)}
+                          aria-label={`Move ${task.title}`}
+                          title="Move"
+                        >
+                          <MoveIcon size={17} />
+                        </button>
                         <button
                           type="button"
                           className="delete-icon-btn edit"
@@ -534,7 +624,7 @@ export function TodosClient({
               ) : (
                 // Keyed by the view like the rows: a reused note keeps fadeAll's faded-out state and stays invisible.
                 <p key={`empty-${view.n}`} ref={rowRef("empty")} className="empty-note">
-                  {listDaily ? "No daily tasks yet." : listPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
+                  {listDaily ? "No daily tasks for this day." : listPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
                 </p>
               )}
             </AutoHeight>
@@ -621,6 +711,30 @@ export function TodosClient({
                 onChange={(e) => setTitleInput(e.target.value)}
               />
             </label>
+            {(editing ? editing.isRecurring : isDaily) && (
+              <fieldset className="weekday-picker">
+                <legend>Repeat on</legend>
+                <div className="weekday-options">
+                  {WEEKDAYS.map((name, i) => {
+                    const on = daysInput.includes(i + 1);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        className="weekday-btn"
+                        aria-pressed={on}
+                        aria-label={name}
+                        onClick={() =>
+                          setDaysInput((d) => (on ? d.filter((x) => x !== i + 1) : [...d, i + 1].sort()))
+                        }
+                      >
+                        {name.slice(0, 2)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
             <label>
               Reminder (optional)
               <input
@@ -635,11 +749,51 @@ export function TodosClient({
             <button type="button" className="secondary" onClick={closeForm}>
               Cancel
             </button>
-            <button type="submit" disabled={saving || !titleInput.trim()}>
+            <button
+              type="submit"
+              disabled={saving || !titleInput.trim() || ((editing ? editing.isRecurring : isDaily) && !daysInput.length)}
+            >
               {editing ? "Save" : "Add task"}
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={moving !== null} onClose={() => setMoving(null)} title="Move task">
+        {moving && (
+          <div className="move-options">
+            <p className="muted move-hint">
+              {moving.isRecurring
+                ? "It leaves the daily list and becomes a task for the day you pick. Its streak starts over."
+                : "Pick a day, or make it a daily task."}
+            </p>
+            {(moving.isRecurring || moving.dueDate !== todayDate) && (
+              <button type="button" className="secondary" onClick={() => handleMove(moving, "none", todayDate)}>
+                Today
+              </button>
+            )}
+            {(moving.isRecurring || moving.dueDate !== tomorrow) && (
+              <button type="button" className="secondary" onClick={() => handleMove(moving, "none", tomorrow)}>
+                Tomorrow
+              </button>
+            )}
+            <DatePicker
+              mode="day"
+              className="secondary move-pick"
+              value={moving.isRecurring ? todayDate : moving.dueDate}
+              today={todayDate}
+              min={DEV_EDIT_PAST ? undefined : todayDate}
+              max={maxDate}
+              label="Another day…"
+              onChange={(d) => handleMove(moving, "none", d)}
+            />
+            {!moving.isRecurring && (
+              <button type="button" className="secondary" onClick={() => handleMove(moving, "daily", todayDate)}>
+                Daily
+              </button>
+            )}
+          </div>
+        )}
       </Modal>
     </main>
   );

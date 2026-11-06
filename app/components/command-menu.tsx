@@ -28,9 +28,8 @@ export function CommandMenu({
     () => [
       { id: "nav-gym", title: "Gym & Workout Logger", category: "Navigation", url: "/gym", shortcut: "1" },
       { id: "nav-food", title: "Health: Food, Water & Weight", category: "Navigation", url: "/food", shortcut: "2" },
-      { id: "nav-money", title: "Expenses", category: "Navigation", url: "/money", shortcut: "3" },
-      { id: "nav-todos", title: "Tasks", category: "Navigation", url: "/todos", shortcut: "4" },
-      { id: "nav-wishlist", title: "Wishlist", category: "Navigation", url: "/wishlist", shortcut: "5" },
+      { id: "nav-todos", title: "Tasks", category: "Navigation", url: "/todos", shortcut: "3" },
+      { id: "nav-wishlist", title: "Wishlist", category: "Navigation", url: "/wishlist", shortcut: "4" },
       { id: "action-food-ai", title: "Open Food AI Assistant", category: "Quick Action", url: "/food" },
     ],
     [],

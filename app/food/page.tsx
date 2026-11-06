@@ -4,7 +4,8 @@ import { authOptions } from "@/auth";
 import {
   getDailyFoodSummary,
   getNutritionTargets,
-  getRecipeIngredientOptions,
+  getPastFoods,
+  getShoppingHistory,
   getShoppingList,
   getWeightAnalytics,
 } from "@/lib/food";
@@ -26,12 +27,13 @@ export default async function FoodPage() {
   const userId = session.user.id;
   const today = getTodayString();
 
-  const [targets, summary, weightAnalytics, shoppingList, recipeOptions] = await Promise.all([
+  const [targets, summary, weightAnalytics, shoppingList, shoppingHistory, pastFoods] = await Promise.all([
     getNutritionTargets(userId),
     getDailyFoodSummary(userId, today),
     getWeightAnalytics(userId),
     getShoppingList(userId),
-    getRecipeIngredientOptions(userId),
+    getShoppingHistory(userId),
+    getPastFoods(userId),
   ]);
 
   return (
@@ -42,7 +44,8 @@ export default async function FoodPage() {
       initialSummary={summary}
       weightAnalytics={weightAnalytics}
       initialShoppingList={shoppingList}
-      recipeOptions={recipeOptions}
+      pastFoods={pastFoods.map(({ name, calories, protein, carbs, fat, isEstimated }) => ({ name, calories, protein, carbs, fat, isEstimated }))}
+      shoppingHistory={shoppingHistory.map(({ name, amount, unit, category }) => ({ name, amount, unit, category }))}
     />
   );
 }
