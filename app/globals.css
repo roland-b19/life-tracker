@@ -949,8 +949,10 @@ textarea:focus-visible {
   gap: 0.25rem;
   margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
 }
+/* On the clip box (.auto-height), not the list inside it: a list sticking out of it would lose its last row's
+   bottom 0.5rem to the clip while the height animates, then pop it back at the end */
 .surface > .entries:last-child,
-.surface > .auto-height:last-child > :is(.entries, .todo-list) {
+.surface > .auto-height:last-child {
   margin-bottom: -0.5rem;
 }
 /* An empty list keeps one row's space (--row-h is the page's row height), so the card does not jump. */
@@ -2110,6 +2112,27 @@ select.sort-select:focus-visible:not([data-pointer]) {
 @media (max-width: 30rem) {
   .mono .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
 }
+
+/* Wishlist: field highlights as quiet as the filter's hover (a 5% white wash), focus and an open menu a step more */
+.mono :is(input, select, textarea):not(.sort-select):focus {
+  background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 8%);
+}
+.mono select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
+@media (hover: hover) {
+  .mono :is(input:not([type="checkbox"], [type="radio"]), select, textarea):not(.sort-select):hover:not(:focus, :disabled) {
+    background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%);
+  }
+  .mono select.sort-select:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--surface-secondary), white 5%);
+  }
+}
+
+/* Wishlist header: Sort and Add item share one width */
+.mono .head-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.mono .head-actions > * { width: 100%; justify-content: center; }
+
+/* Wishlist rows: the actions keep the same inset from the band as the name, so they line up under Add item */
+.mono .surface .entries > .item-row.entry-row:has(.item-actions) { padding-inline-end: var(--band-out); }
 
 .item-link,
 .item-link-text {

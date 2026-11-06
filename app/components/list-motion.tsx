@@ -10,6 +10,13 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const RESIZE = 180;
 const RESIZE_EASE = "cubic-bezier(0.2, 0, 0, 1)";
 
+// Share of RESIZE (0..1) after which RESIZE_EASE, cubic-bezier(0.2, 0, 0, 1), has covered share p of the way.
+function resizeTime(p: number) {
+  if (p <= 0) return 0;
+  for (let s = 0; s <= 1; s += 0.01) if (3 * (1 - s) * s * s + s ** 3 >= p) return 0.6 * s * (1 - s) ** 2 + s ** 3;
+  return 1;
+}
+
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // An element's x on the page, ignoring transforms. offsetLeft alone is not enough: an entering row
@@ -23,8 +30,8 @@ function layoutX(el: HTMLElement) {
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them. The new rows' entrance (row-in) starts with the resize, so a
- * switch feels instant. Boxes marked data-slide (Wishlist price, range, link) glide to a new
+ * the container just follows them. When it grows, each new row's entrance (row-in) waits until the
+ * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
 export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
@@ -54,6 +61,18 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
+      if (next < from) return;
+      const top = outer.getBoundingClientRect().top;
+      for (const row of inner.children) {
+        const entrance = row.getAnimations().find((a) => (a as CSSAnimation).animationName === "row-in");
+        const timing = entrance?.effect?.getTiming();
+        if (!entrance || !timing || Number(entrance.currentTime) >= Number(timing.delay)) continue; // already showing
+        // The row's layout bottom: its centre ignores the entrance scale. 1px early, as the ease's tail is slow.
+        const r = row.getBoundingClientRect();
+        const bottom = r.top + r.height / 2 + (row as HTMLElement).offsetHeight / 2 - top - 1;
+        const reach = resizeTime((bottom - from) / (next - from)) * RESIZE;
+        if (reach > Number(timing.delay)) entrance.effect!.updateTiming({ delay: reach });
+      }
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
@@ -155,7 +174,7 @@ const SPACE = 260; // a row's space opening or closing
 const SPACE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 // A list's only row swaps with its empty note, which takes the same space, so it only fades.
 const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
-const FADE_IN = 220; // starts while the space opens, matches row-in in globals.css
+const FADE_IN = 180; // starts once the space is open, like row-in in .auto-height
 
 /**
  * Row motion for lists: `leave` fades a row out while its space closes, then calls `remove`;
@@ -202,7 +221,8 @@ export function useListMotion() {
             delete el.dataset.rowMotion;
           });
         }
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: 120, easing: EASE, fill: "backwards" })
+        // A row fades in only once its space is fully open, so it is never seen clipped.
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: alone(el) ? 120 : SPACE, easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(done);
       }
       return () => {
