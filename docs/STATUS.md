@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (no pulsing, Wishlist columns)_
+_Last updated: 2026-11-06 by Claude (grey highlights, smooth hover, Wishlist columns)_
 
 ## Phase
 
@@ -142,6 +142,10 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Grey highlights, smooth hover, Wishlist columns 2 (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
+  - Every page: one grey highlight (`--highlight`) for every hover and selection fill, replacing the blue ones; list row stripes and hover bands are grey. Hover shadows and highlights fade over 240ms on a plain `ease` (`--fade`) instead of jumping. Rows of a new page start fading in as soon as the page arrives (the `rows-go` wait after a navigation is removed).
+  - Wishlist: range and link columns start right after the names (name column at most 45%) and are left-aligned; the price box fits its own text. On a phone the price takes its own line, with range and link below it.
+  - Checked: tsc, eslint, 94 tests, and in the browser: Wishlist at desktop and 375px, row hover, computed transitions, and rows fading in on arrival after a Tasks → Wishlist navigation. Other pages' hovers were not checked in the browser.
 - 2026-11-06 — No pulsing, Wishlist columns (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
   - Every page: hover no longer scales cards and buttons (that overshoot was the "pulse"); hover is the soft shadow, fields and tabs get a highlight. Modals, toasts and the date picker enter with the plain ease, no overshoot. The press shrink and the skeleton shimmer stay.
   - Wishlist: monospaced system font on the page; the item count sits next to the Items title; the sort menu text is centred between the left edge and the chevron and highlights on hover; price is a box like the range; range, price and link have fixed widths (from the longest value shown, link capped at 24 characters) and line up down the list; range and link are centred on the whole item. On a phone the meta line wraps as before, the filter tabs use the dense size.

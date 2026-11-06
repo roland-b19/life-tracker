@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
@@ -105,11 +105,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
-  // Price boxes and the link column are as wide as their longest value, so they line up as columns.
-  const columns = {
-    "--price-ch": Math.max(0, ...filteredItems.map((i) => formatRon(Number(i.estimatedPrice)).length + 4)),
-    "--link-ch": Math.min(24, Math.max(0, ...filteredItems.map((i) => (i.url ? linkOf(i.url).label.length : 0)))),
-  } as CSSProperties;
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
@@ -303,7 +298,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className="entries wishlist-entries" style={columns}>
+            <AutoHeight className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">

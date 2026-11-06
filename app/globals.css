@@ -31,6 +31,10 @@
   --dur: 420ms;
   /* Hover, press and selection feedback (color, shadow, opacity): quick, or every control feels late */
   --quick: 180ms;
+  /* Hover shadows and highlights fade in on a gentle curve: fast, but never a jump */
+  --fade: 240ms ease;
+  /* The one hover and selection highlight: a neutral grey wash, never the accent */
+  --highlight: rgba(255, 255, 255, 0.09);
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --press: 0.92;
   color-scheme: dark;
@@ -288,7 +292,7 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: background var(--fade), color var(--fade), transform var(--lift), box-shadow var(--fade);
 }
 
 .nav-link svg {
@@ -350,7 +354,7 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--quick) var(--ease), background var(--quick) var(--ease);
+  transition: color var(--fade), background var(--fade);
 }
 
 /* No transforms on tab items: scaling a glyph over a backdrop-filter bar leaves it blurry after the tap. */
@@ -485,7 +489,7 @@ main {
     border: 1px solid var(--card-border);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+    transition: transform var(--lift), box-shadow var(--fade);
   }
 
   .side-user-row {
@@ -612,7 +616,7 @@ main {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 .split-day-card.today {
@@ -688,7 +692,7 @@ main {
   border: 1px solid var(--separator);
   display: grid;
   gap: 0.3rem;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift), box-shadow var(--fade);
 }
 
 .macro-title {
@@ -784,7 +788,7 @@ main {
   border: 1px solid var(--card-border);
   border-radius: 1.15rem;
   box-shadow: var(--card-shadow);
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift), box-shadow var(--fade);
   animation: rise var(--dur) var(--ease) backwards;
 }
 
@@ -813,7 +817,7 @@ main {
     background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
   }
   select.sort-select:hover:not(:focus, :disabled) {
-    background-color: rgba(255, 255, 255, 0.11); /* the idle-button hover fill */
+    background-color: var(--highlight);
   }
 
   .surface:hover,
@@ -860,7 +864,7 @@ textarea {
   background: rgba(37, 42, 48, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), border-color var(--fade), box-shadow var(--fade), transform var(--lift);
 }
 
 /* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
@@ -909,7 +913,7 @@ button {
   gap: 0.5rem;
   border-radius: 0.85rem;
   box-shadow: none;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
+  transition: background var(--fade), color var(--fade), transform var(--lift), box-shadow var(--fade), opacity var(--quick) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -1017,7 +1021,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
@@ -1032,7 +1036,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
+  transition: transform var(--lift), background-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease);
   width: 44px;
   height: 44px;
 }
@@ -1101,7 +1105,7 @@ textarea:focus-visible {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1409,13 +1413,13 @@ textarea:focus-visible {
   padding: 0.75rem 0.9rem;
   border-radius: 0.75rem;
   cursor: pointer;
-  transition: background var(--quick) var(--ease);
+  transition: background var(--fade);
 }
 
 @media (hover: hover) {
   .command-item.selected,
   .command-item:hover {
-    background: var(--tint-subtle);
+    background: var(--highlight);
   }
 }
 
@@ -1426,12 +1430,6 @@ textarea:focus-visible {
   display: block;
 }
 
-@media (hover: hover) {
-  .command-item.selected .command-item-title,
-  .command-item:hover .command-item-title {
-    color: var(--tint);
-  }
-}
 
 .command-item-category {
   font-size: 0.75rem;
@@ -1478,14 +1476,14 @@ textarea:focus-visible {
   font-size: 0.8125rem;
   cursor: pointer;
   min-height: 44px;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
   .command-trigger-btn:hover {
     border-color: rgba(255, 255, 255, 0.2);
     color: var(--text);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--highlight);
   }
 }
 
@@ -1567,12 +1565,12 @@ textarea:focus-visible {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: rgba(134, 180, 234, 0.22);
+    background: var(--highlight);
   }
 }
 
@@ -1588,7 +1586,7 @@ textarea:focus-visible {
   min-width: 36px;
   min-height: 36px;
   border-radius: 50%;
-  transition: color var(--quick) var(--ease);
+  transition: color var(--fade);
 }
 
 @media (hover: hover) {
@@ -1656,13 +1654,13 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--quick) var(--ease), background var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
 /* An idle tab lifts and lightens on hover, without a shadow; the selected tab stays on its thumb. */
 @media (hover: hover) {
   .segmented button:not(.active):hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--highlight);
     color: var(--text);
   }
 }
@@ -1796,12 +1794,12 @@ main > .error {
 .picker > .month-label-btn {
   border-radius: 0.7rem;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease);
+  transition: background-color var(--fade);
 }
 
 .picker > .month-label-btn:hover,
 .picker > .month-label-btn[aria-expanded="true"] {
-  background: var(--tint-subtle);
+  background: var(--highlight);
 }
 
 .picker-pop {
@@ -1874,7 +1872,7 @@ main > .error {
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), color var(--fade), transform var(--lift);
 }
 
 .picker-grid.months .picker-cell {
@@ -1883,7 +1881,7 @@ main > .error {
 }
 
 .picker-cell:hover:not(:disabled) {
-  background: var(--tint-subtle);
+  background: var(--highlight);
 }
 
 .picker-cell:active:not(:disabled) {
@@ -2090,13 +2088,16 @@ select.sort-select {
 .item-meta { grid-area: meta; }
 .item-actions { grid-area: actions; }
 
+/* Narrow lists: price on its own line, then range and link, so the boxes line up from row to row */
 .item-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  justify-items: start;
+  gap: 0.4rem 0.6rem;
   min-width: 0;
 }
+.item-meta > .item-price { grid-column: 1 / -1; }
 
 /* Wishlist page: a monospaced face, so every letter and digit takes the same width */
 .mono {
@@ -2108,11 +2109,8 @@ select.sort-select {
   .mono .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
 }
 
-/* Price and range boxes are one width down the list (--price-ch from the longest price), so they line up */
-.item-price {
-  justify-content: flex-end;
-  width: calc(var(--price-ch, 10) * (1ch + 0.04em) + 1.3rem + 2px);
-}
+/* The price box fits its text; range boxes share one width, so they line up */
+.item-price { justify-self: start; }
 .item-row .item-meta > .badge:not(.item-price) {
   justify-content: center;
   width: calc(9 * (1ch + 0.04em) + 1.3rem + 2px); /* "UNDER 250", the longest range */
@@ -2120,7 +2118,7 @@ select.sort-select {
 
 .item-link,
 .item-link-text {
-  width: calc(var(--link-ch, 12) * 1ch);
+  justify-self: start;
   max-width: 100%;
   font-size: 0.875rem;
   overflow: hidden;
@@ -2133,17 +2131,18 @@ select.sort-select {
   text-decoration: none;
 }
 
-/* Wide lists: name over price on the left; range and link in shared columns (subgrid), centred on the whole item */
+/* Wide lists: name over price, then range and link in shared left-aligned columns (subgrid), centred on the whole item.
+   The name column takes at most 45%, the link column the rest, so the range and link start right after the names. */
 .auto-height:has(> .wishlist-entries) { container-type: inline-size; }
 @container (min-width: 34rem) {
-  .wishlist-entries { grid-template-columns: minmax(0, 1fr) auto auto auto; column-gap: 0.75rem; }
+  .wishlist-entries { grid-template-columns: fit-content(45%) auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
   .wishlist-entries > * { grid-column: 1 / -1; }
   .item-row {
     grid-template-columns: subgrid;
     grid-template-areas: "name range link actions" "price range link actions";
   }
   .item-meta { display: contents; }
-  .item-price { grid-area: price; }
+  .item-meta > .item-price { grid-area: price; }
   .item-row .item-meta > .badge:not(.item-price) { grid-area: range; }
   :is(.item-link, .item-link-text) { grid-area: link; }
 }
@@ -2752,7 +2751,7 @@ button.bars-col:focus-visible {
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift), box-shadow var(--fade);
 }
 .routine-row-head {
   display: flex;
@@ -2912,10 +2911,6 @@ button.bars-col:focus-visible {
      show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
   animation-delay: calc(min(sibling-index() - 1, 10) * 30ms);
 }
-/* As a page change starts (app/template.tsx), the new page is still faint, so its rows wait until it is mostly there */
-:root:active-view-transition:not(.rows-go) :is(.entry-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, :is(.entries, .todo-list) > .empty-note) {
-  animation-play-state: paused;
-}
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
 }
@@ -3064,47 +3059,40 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
 
-/* An idle (unselected or secondary) button lightens on hover, on top of the shared lift */
+/* An idle (unselected or secondary) button takes the grey highlight on hover, on top of the shared shadow */
 @media (hover: hover) {
   button.secondary:hover:not(:disabled),
-  button.btn-sm:not(.tint):hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.11);
-  }
-  button.btn-sm.tint:hover:not(:disabled),
-  .delete-icon-btn:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--tint) 24%, transparent);
-  }
-  button.danger:hover:not(:disabled) {
-    background: var(--danger-subtle);
-  }
+  button.btn-sm:hover:not(:disabled),
+  .delete-icon-btn:hover:not(:disabled),
+  button.danger:hover:not(:disabled),
   .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled),
   .muscle-chip:not(.active):hover {
-    background: color-mix(in srgb, var(--tint) 12%, var(--surface-secondary));
+    background: var(--highlight);
   }
   .tab-item:not(.active):hover {
     color: var(--text);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--highlight);
   }
 }
 
-/* List rows are soft bands: every other row carries a faint accent tint and the hovered row a stronger one.
+/* List rows are soft bands: every other row carries a faint grey wash and the hovered row a stronger one.
    The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
 :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row) {
   margin-inline: -0.75rem;
   padding-inline: 0.75rem;
   border-radius: 0.75rem;
-  transition: background-color var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), transform var(--lift);
 }
 .auto-height:has(> :is(.entries, .todo-list)) {
   margin-inline: -0.75rem;
   padding-inline: 0.75rem;
 }
 :is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
-  background-color: color-mix(in srgb, var(--tint) 5%, transparent);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 @media (hover: hover) {
   :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row):hover {
-    background-color: color-mix(in srgb, var(--tint) 10%, transparent);
+    background-color: rgba(255, 255, 255, 0.06);
   }
 }
 

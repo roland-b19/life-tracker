@@ -144,6 +144,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-06 — No pulsing anywhere.** Hover never scales: cards and buttons get the soft shadow, fields and tabs a highlight. No motion uses an overshoot curve (`--pop` and `--grow` removed). The press shrink stays. Wishlist uses a monospaced system font (`.mono`, no dependency) and a column layout (subgrid) so range, price and link line up.
 
+- **2026-11-06 — Grey highlights, smooth hover.** Every hover and selection fill is one neutral grey (`--highlight`), never the accent; row stripes are grey too. Hover shadows and fills use `--fade` (240ms `ease`), since the iOS ease at 180ms read as instant. Rows no longer wait for `rows-go` after a navigation (supersedes that part of "Task motion and chart"). Wishlist price boxes fit their text.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
