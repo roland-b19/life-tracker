@@ -24,6 +24,8 @@ import {
   deleteMealAction,
   deleteShoppingItemAction,
   logMealAction,
+  addShoppingCategoryAction,
+  deleteShoppingCategoryAction,
   renameShoppingCategoryAction,
   restoreShoppingItemsAction,
   toggleShoppingItemAction,
@@ -36,7 +38,6 @@ import { WeightAnalytics } from "@/lib/food";
 interface MealData {
   id: string;
   date: string;
-  mealType: string;
   name: string;
   calories: number;
   protein: string;
@@ -72,21 +73,6 @@ interface PastFood {
   isEstimated: boolean;
 }
 
-type MealType = "breakfast" | "lunch" | "dinner" | "snack";
-/** Same hours as the assistant's prompt rule. */
-function mealTypeNow(): MealType {
-  const h = new Date().getHours();
-  return h >= 5 && h < 11 ? "breakfast" : h >= 11 && h < 16 ? "lunch" : h >= 18 && h < 22 ? "dinner" : "snack";
-}
-
-/** Store sections in walking order; categories the user adds go before "other". */
-const DEFAULT_CATEGORIES = ["meat", "produce", "dairy", "bakery", "pantry", "other"];
-const categoryRank = (c: string) => {
-  const i = DEFAULT_CATEGORIES.indexOf(c);
-  return i === -1 ? DEFAULT_CATEGORIES.length - 1.5 : i;
-};
-const byCategory = (a: string, b: string) => categoryRank(a) - categoryRank(b) || a.localeCompare(b);
-
 interface FoodClientProps {
   userName: string;
   todayDate: string;
@@ -115,6 +101,8 @@ interface FoodClientProps {
   };
   weightAnalytics: WeightAnalytics;
   initialShoppingList: ShoppingItemData[];
+  /** The user's store sections in walking order, without the built-in "other". */
+  shoppingCategories: string[];
   shoppingHistory: ShoppingHistoryItem[];
   pastFoods: PastFood[];
 }
@@ -126,6 +114,7 @@ export function FoodClient({
   initialSummary,
   weightAnalytics,
   initialShoppingList,
+  shoppingCategories: initialCategories,
   shoppingHistory,
   pastFoods: initialPastFoods,
 }: FoodClientProps) {
@@ -137,13 +126,14 @@ export function FoodClient({
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [history, setHistory] = useState(shoppingHistory);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameInput, setRenameInput] = useState("");
+  const [categories, setCategories] = useState(initialCategories);
+  // from: null adds a new category, a name edits that one.
+  const [catEdit, setCatEdit] = useState<{ from: string | null } | null>(null);
+  const [catName, setCatName] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
   const [metricInput, setMetricInput] = useState("");
   const [pastFoods, setPastFoods] = useState(initialPastFoods);
   const [isPastOpen, setIsPastOpen] = useState(false);
-  const [pastMealType, setPastMealType] = useState<MealType>("lunch");
 
   const { showToast } = useToast();
   const { rowRef, enter, leave } = useListMotion();
@@ -165,7 +155,6 @@ export function FoodClient({
   const [chatLoading, setChatLoading] = useState(false);
 
   // Meal input state
-  const [mealType, setMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
   const [mealProtein, setMealProtein] = useState("");
@@ -208,7 +197,6 @@ export function FoodClient({
     try {
       const res = await logMealAction({
         date: selectedDate,
-        mealType,
         name: mealName.trim(),
         calories: parseInt(mealCalories, 10) || 0,
         protein: parseFloat(mealProtein) || 0,
@@ -260,7 +248,6 @@ export function FoodClient({
     try {
       const res = await logMealAction({
         date: selectedDate,
-        mealType: pastMealType,
         name: food.name,
         calories: food.calories,
         protein: parseFloat(food.protein) || 0,
@@ -300,7 +287,6 @@ export function FoodClient({
         onAction: async () => {
           const res = await logMealAction({
             date: deleted.date,
-            mealType: deleted.mealType as "breakfast" | "lunch" | "dinner" | "snack",
             name: deleted.name,
             calories: deleted.calories,
             protein: parseFloat(deleted.protein),
@@ -466,25 +452,60 @@ export function FoodClient({
     }
   }
 
-  async function handleRenameCategory(e: React.FormEvent) {
+  function openCategoryForm(from: string | null) {
+    setCatEdit({ from });
+    setCatName(from ?? "");
+  }
+
+  async function handleCategorySubmit(e: React.FormEvent) {
     e.preventDefault();
-    const from = renaming;
-    const to = renameInput.trim().toLowerCase();
-    if (!from || !to) return;
-    if (to === from) return setRenaming(null);
+    const from = catEdit?.from ?? null;
+    const to = catName.trim().toLowerCase();
+    if (!to) return;
+    if (to === from) return setCatEdit(null);
+    if (to === "other") return setStatusMessage("\u201cother\u201d is built in.");
     setBusy(true);
     try {
-      await renameShoppingCategoryAction({ from, to });
-      const move = <T extends { category: string }>(i: T) => (i.category === from ? { ...i, category: to } : i);
-      setShoppingList((prev) => prev.map(move));
-      setHistory((prev) => prev.map(move));
-      setRenaming(null);
-      showToast({ message: `Renamed "${from}" to "${to}"`, type: "success" });
+      if (from === null) {
+        if (!(await addShoppingCategoryAction({ name: to })).success) return setStatusMessage(`\u201c${to}\u201d already exists.`);
+        setCategories((prev) => [...prev, to]);
+        showToast({ message: `Added \u201c${to}\u201d`, type: "success" });
+      } else {
+        if (!(await renameShoppingCategoryAction({ from, to })).success) throw new Error("Category not found");
+        setCategories((prev) => (prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c))));
+        moveItems(from, to);
+        showToast({ message: `Renamed \u201c${from}\u201d to \u201c${to}\u201d`, type: "success" });
+      }
+      setCatEdit(null);
     } catch {
-      setStatusMessage("Could not rename category.");
+      setStatusMessage("Could not save category.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleDeleteCategory() {
+    const name = catEdit?.from;
+    if (!name) return;
+    setBusy(true);
+    try {
+      if (!(await deleteShoppingCategoryAction({ name })).success) throw new Error("Category not found");
+      setCategories((prev) => prev.filter((c) => c !== name));
+      moveItems(name, "other");
+      setCatEdit(null);
+      showToast({ message: `Deleted \u201c${name}\u201d; its items are in Other`, type: "success" });
+    } catch {
+      setStatusMessage("Could not delete category.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Moves the items of one category, history included, to another on screen. */
+  function moveItems(from: string, to: string) {
+    const move = <T extends { category: string }>(i: T) => (i.category === from ? { ...i, category: to } : i);
+    setShoppingList((prev) => prev.map(move));
+    setHistory((prev) => prev.map(move));
   }
 
   async function handleToggleShopping(itemId: string, currentState: boolean) {
@@ -610,8 +631,11 @@ export function FoodClient({
   const waterPct = pct(summary.metrics.waterMl, targets.waterMl);
   const stepsPct = pct(summary.metrics.steps, targets.steps);
   const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
-  const shopCategories = [...new Set(shoppingList.map((i) => i.category))].sort(byCategory);
-  const categoryOptions = [...new Set([...DEFAULT_CATEGORIES, ...shopCategories, ...history.map((h) => h.category)])].sort(byCategory);
+  // Walking order, unknown categories after the user's own, "other" last.
+  const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
+    (c) => shoppingList.some((i) => i.category === c),
+  );
+  const categoryOptions = [...new Set([...categories, shopCategory, "other"])];
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const quickAdds = history.filter((h) => !shoppingList.some((i) => sameItem(i, h))).slice(0, 12);
@@ -662,7 +686,6 @@ export function FoodClient({
                     <div key={meal.id} ref={rowRef(meal.id)} className="entry-row">
                       <div>
                         <div className="entry-main">
-                          <span className="badge badge-info">{meal.mealType}</span>
                           <strong>{meal.name}</strong>
                           {meal.isEstimated && <span className="badge badge-carried">AI estimate</span>}
                         </div>
@@ -847,20 +870,7 @@ export function FoodClient({
           {shoppingList.length === 0 && <p className="empty-note">Your shopping list is empty.</p>}
           {shopCategories.map((cat) => (
             <div key={cat} className="shopping-group">
-              <div className="group-head">
-                <h3 className="group-label">{cat}</h3>
-                <button
-                  type="button"
-                  className="text-btn"
-                  onClick={() => {
-                    setRenaming(cat);
-                    setRenameInput(cat);
-                  }}
-                  aria-label={`Rename category ${cat}`}
-                >
-                  Rename
-                </button>
-              </div>
+              <h3 className="group-label">{cat}</h3>
               {shoppingList
                 .filter((item) => item.category === cat)
                 .map((item) => (
@@ -902,6 +912,37 @@ export function FoodClient({
         </section>
       )}
 
+      {activeTab === "shopping" && (
+        <section className="surface" aria-labelledby="categories-title">
+          <div className="section-head">
+            <h2 id="categories-title" className="section-title">
+              Categories
+            </h2>
+            <button type="button" className="btn-sm tint" onClick={() => openCategoryForm(null)}>
+              <PlusIcon size={14} />
+              Add category
+            </button>
+          </div>
+          <p className="muted">Store sections in the order you walk them. Items without one go to Other.</p>
+          {categories.map((cat) => (
+            <div key={cat} className="shopping-row">
+              <span className="category-name">{cat}</span>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="delete-icon-btn edit"
+                  onClick={() => openCategoryForm(cat)}
+                  aria-label={`Edit category ${cat}`}
+                  title="Edit"
+                >
+                  <PencilIcon size={17} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
       {activeTab === "chat" && (
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-head">
@@ -911,10 +952,7 @@ export function FoodClient({
             <button
               type="button"
               className="btn-sm tint"
-              onClick={() => {
-                setPastMealType(mealTypeNow());
-                setIsPastOpen(true);
-              }}
+              onClick={() => setIsPastOpen(true)}
             >
               Past foods
             </button>
@@ -987,21 +1025,6 @@ export function FoodClient({
       >
         <form onSubmit={handleLogMeal}>
           <div className="form-stack">
-          <label>
-            Meal Type
-            <select
-              value={mealType}
-              onChange={(e) =>
-                setMealType(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")
-              }
-            >
-              <option value="breakfast">Breakfast</option>
-              <option value="lunch">Lunch</option>
-              <option value="dinner">Dinner</option>
-              <option value="snack">Snack</option>
-            </select>
-          </label>
-
           <label>
             Meal Name / Description
             <input
@@ -1108,26 +1131,20 @@ export function FoodClient({
             </div>
             <label>
               Category
-              <input
-                type="text"
-                list="shop-categories"
-                maxLength={50}
-                value={shopCategory}
-                onChange={(e) => setShopCategory(e.target.value)}
-                required
-              />
-              <datalist id="shop-categories">
+              <select value={shopCategory} onChange={(e) => setShopCategory(e.target.value)}>
                 {categoryOptions.map((c) => (
-                  <option key={c} value={c} />
+                  <option key={c} value={c}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </label>
           </div>
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => setIsShopModalOpen(false)}>
               Cancel
             </button>
-            <button type="submit" disabled={busy || !shopName.trim() || !shopCategory.trim()}>
+            <button type="submit" disabled={busy || !shopName.trim()}>
               {editingShop ? "Save" : "Add item"}
             </button>
           </div>
@@ -1136,17 +1153,6 @@ export function FoodClient({
 
       <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
         <div className="form-stack">
-          <Segmented
-            label="Meal type"
-            value={pastMealType}
-            options={[
-              { value: "breakfast", label: "Breakfast" },
-              { value: "lunch", label: "Lunch" },
-              { value: "dinner", label: "Dinner" },
-              { value: "snack", label: "Snack" },
-            ]}
-            onChange={setPastMealType}
-          />
           <AutoHeight className="entries">
             {notLoggedFoods.length === 0 ? (
               <p className="empty-note">Everything you logged before is already in today.</p>
@@ -1158,7 +1164,7 @@ export function FoodClient({
                   className="entry-row past-food"
                   disabled={busy}
                   onClick={() => handleLogPastFood(f)}
-                  aria-label={`Log ${f.name}, ${f.calories} kcal, as ${pastMealType}`}
+                  aria-label={`Log ${f.name}, ${f.calories} kcal`}
                 >
                   <div>
                     <strong>{f.name}</strong>
@@ -1174,8 +1180,12 @@ export function FoodClient({
         </div>
       </Modal>
 
-      <Modal isOpen={renaming !== null} onClose={() => setRenaming(null)} title="Rename category">
-        <form onSubmit={handleRenameCategory}>
+      <Modal
+        isOpen={catEdit !== null}
+        onClose={() => setCatEdit(null)}
+        title={catEdit?.from ? "Edit category" : "New category"}
+      >
+        <form onSubmit={handleCategorySubmit}>
           <div className="form-stack">
             <label>
               Name
@@ -1183,19 +1193,26 @@ export function FoodClient({
                 type="text"
                 maxLength={50}
                 autoFocus
-                value={renameInput}
-                onChange={(e) => setRenameInput(e.target.value)}
+                value={catName}
+                onChange={(e) => setCatName(e.target.value)}
                 required
               />
             </label>
-            <p className="muted move-hint">Every item in &ldquo;{renaming}&rdquo; moves along. An existing name merges the two.</p>
+            {catEdit?.from && (
+              <p className="muted move-hint">Its items move along. An existing name merges the two.</p>
+            )}
           </div>
           <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setRenaming(null)}>
+            {catEdit?.from && (
+              <button type="button" className="danger" disabled={busy} onClick={handleDeleteCategory}>
+                Delete
+              </button>
+            )}
+            <button type="button" className="secondary" onClick={() => setCatEdit(null)}>
               Cancel
             </button>
-            <button type="submit" disabled={busy || !renameInput.trim()}>
-              Save
+            <button type="submit" disabled={busy || !catName.trim()}>
+              {catEdit?.from ? "Save" : "Add"}
             </button>
           </div>
         </form>

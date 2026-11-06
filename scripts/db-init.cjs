@@ -188,12 +188,12 @@ async function main() {
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
       "date" date NOT NULL,
-      "meal_type" varchar(30) NOT NULL,
       "name" varchar(120) NOT NULL,
       "calories" integer DEFAULT 0 NOT NULL,
       "protein" numeric(5, 1) DEFAULT '0' NOT NULL,
       "carbs" numeric(5, 1) DEFAULT '0' NOT NULL,
       "fat" numeric(5, 1) DEFAULT '0' NOT NULL,
+      "is_estimated" boolean DEFAULT false NOT NULL,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
     CREATE TABLE IF NOT EXISTS "recipes" (
@@ -242,7 +242,14 @@ async function main() {
       "unit" varchar(30) DEFAULT 'pcs' NOT NULL,
       "category" varchar(50) DEFAULT 'other' NOT NULL,
       "is_bought" boolean DEFAULT false NOT NULL,
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      "cleared_at" timestamp with time zone
+    );
+    CREATE TABLE IF NOT EXISTS "shopping_categories" (
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "name" varchar(50) NOT NULL,
+      "sort_order" integer DEFAULT 0 NOT NULL,
+      CONSTRAINT "shopping_categories_user_id_name_pk" PRIMARY KEY("user_id","name")
     );
     CREATE TABLE IF NOT EXISTS "expense_categories" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -276,9 +283,12 @@ async function main() {
       "is_completed" boolean DEFAULT false NOT NULL,
       "completed_at" timestamp with time zone,
       "is_carried_over" boolean DEFAULT false NOT NULL,
-      "streak" integer DEFAULT 0 NOT NULL,
-      "last_completed_date" date,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "todo_completions" (
+      "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
+      "date" date NOT NULL,
+      CONSTRAINT "todo_completions_todo_id_date_pk" PRIMARY KEY("todo_id","date")
     );
     CREATE TABLE IF NOT EXISTS "todo_day_stats" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -350,10 +360,12 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plans" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plan_days" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expense_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
+    GRANT SELECT, INSERT, DELETE ON TABLE "todo_completions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;

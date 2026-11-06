@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const logMealSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
   name: z.string().min(1).max(120).trim(),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
@@ -39,7 +38,10 @@ export const createShoppingItemSchema = z.object({
 
 export const updateShoppingItemSchema = createShoppingItemSchema.extend({ itemId: z.string().uuid() });
 
-export const renameShoppingCategorySchema = z.object({ from: shoppingCategorySchema, to: shoppingCategorySchema });
+/** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
+const managedCategorySchema = shoppingCategorySchema.refine((c) => c !== "other", "\"other\" is built in.");
+export const shoppingCategoryNameSchema = z.object({ name: managedCategorySchema });
+export const renameShoppingCategorySchema = z.object({ from: managedCategorySchema, to: managedCategorySchema });
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
