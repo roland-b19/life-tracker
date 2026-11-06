@@ -142,6 +142,13 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Edge shadows, plain zero, quiet form (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
+  - Every page: objects lose their borders (`--edge: transparent`) and carry a very slight shadow on every side (`--edge-shadow`); separators, checkbox circles, the deload accent bar and selection outlines stay. High contrast (`prefers-contrast: more`) brings the outline back.
+  - Card lists: the row band stops 0.5rem from the card edge, row text keeps the card's own inset (Wishlist titles line up with the header), and a trailing icon button sits 0.5rem inside the band on every side.
+  - Wishlist: the digit 0 has no slash (only U+0030 comes from Andale Mono, same width; Chrome shows Menlo, Safari SF Mono for the rest). The form uses the same monospace font (`Modal` takes a `className`). Tags are 0.75rem apart at every width. The sort menu is highlighted only while open or hovered (`:open`), not while focus lingers; the blur-after-pick logic is gone.
+  - Form: the page no longer shrinks behind it (blur only; the form's own animation is unchanged). Field focus is a slightly lighter grey fill, no tint edge or ring. The form's close button gets a grey hover fill instead of a shadow.
+  - Toast: the action button has no edge; the close X is a 0.7rem rounded square like the other small buttons, with a grey hover fill and no shadow.
+  - Checked: tsc, eslint, 94 tests; in the browser Wishlist at desktop and 375px (band and button insets 8px, no horizontal scroll), Tasks insets, Health and Gym at a glance, the plain zero, the form font, Undo after a delete. Not checked: a real mouse open of the native sort menu, field focus with a real click (the pane was in the background), Safari.
 - 2026-11-06 — Subtle highlights, one-line Wishlist rows (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
   - Every page: highlights are subtler and come in three strengths: `--highlight` (5% grey) on clear controls, `--highlight-fill` (10% grey) on grey-filled ones, `--tint-highlight` (20% tint) on tinted buttons. Tinted buttons (Add item, the row edit/delete buttons, the toast action) lose the hover shadow. List rows keep their stripes but no longer highlight on hover. Segmented pills have a 0.25rem gap; the selection thumb follows it.
   - Wishlist sort menu (the request said Tasks, but the sort menu is on Wishlist; Tasks has none): no focus edge while open, only the highlight; after a mouse pick or Escape it drops focus, so the highlight ends unless hovered. Keyboard use keeps a focus ring.

@@ -12,6 +12,8 @@ interface ModalProps {
   maxWidth?: string;
   /** Called once the closing form has faded out (it stays mounted a little longer for the tail). */
   onExited?: () => void;
+  /** Extra class on the card, e.g. the page's font. */
+  className?: string;
 }
 
 const CLOSE_MS = 420; // --dur in globals.css
@@ -24,6 +26,7 @@ export function Modal({
   children,
   maxWidth = "36rem",
   onExited,
+  className,
 }: ModalProps) {
   // Stays mounted while it plays the open animation in reverse (.closing in globals.css).
   const [shown, setShown] = useState(isOpen);
@@ -109,7 +112,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal-card"
+        className={className ? `modal-card ${className}` : "modal-card"}
         style={{ maxWidth }}
         onClick={(e) => e.stopPropagation()}
       >

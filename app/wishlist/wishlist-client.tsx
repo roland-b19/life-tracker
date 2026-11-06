@@ -276,18 +276,14 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                   className="sort-select"
                   aria-label="Sort items"
                   value={sort}
-                  // data-pointer marks a mouse or touch open: no focus ring, and a pick or Escape drops focus so
-                  // the highlight ends. Keyboard use keeps both.
+                  // data-pointer marks a mouse or touch open, which gets no focus ring; a key press (not the
+                  // Escape that closes the menu) brings it back.
                   onPointerDown={(e) => (e.currentTarget.dataset.pointer = "")}
                   onKeyDown={(e) => {
-                    if (e.key === "Escape" && "pointer" in e.currentTarget.dataset) e.currentTarget.blur();
-                    else delete e.currentTarget.dataset.pointer;
+                    if (e.key !== "Escape") delete e.currentTarget.dataset.pointer;
                   }}
                   onBlur={(e) => delete e.currentTarget.dataset.pointer}
-                  onChange={(e) => {
-                    switchSort(e.target.value as Sort);
-                    if ("pointer" in e.target.dataset) e.target.blur();
-                  }}
+                  onChange={(e) => switchSort(e.target.value as Sort)}
                 >
                   {SORTS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -376,6 +372,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         onClose={() => setIsModalOpen(false)}
         onExited={runAfterClose}
         title={editingId ? "Edit item" : "New item"}
+        className="mono"
       >
         <form onSubmit={handleSubmit}>
           <div className="form-stack">

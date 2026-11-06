@@ -22,6 +22,10 @@
   --separator: #353c45;
   --card-border: #434b56;
   --card-shadow: none;
+  /* Objects carry no outline: a very slight shadow on every side marks their edge instead.
+     High contrast (below) brings the outline back. */
+  --edge: transparent;
+  --edge-shadow: 0 0 10px -2px rgba(0, 0, 0, 0.35);
   /* Hover: one soft shadow on every card and button, no scaling (nothing pulses).
      --press is rewritten per element by app/providers.tsx so all shrink by the same pixels. */
   --hover-shadow: 0 0 18px -4px rgba(0, 0, 0, 0.55); /* very soft, on every side */
@@ -56,6 +60,7 @@
   :root {
     --separator: var(--text);
     --card-border: var(--text);
+    --edge: var(--text);
   }
 }
 
@@ -277,7 +282,8 @@ h3 {
   flex: none;
   border-radius: 50%;
   background: var(--surface-secondary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   display: grid;
   place-items: center;
   font-size: 0.8125rem;
@@ -333,7 +339,8 @@ h3 {
   background: rgba(37, 42, 48, 0.72);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 1.5rem;
 }
 
@@ -392,7 +399,8 @@ h3 {
   gap: 0.25rem;
   padding: 0.5rem;
   background: var(--surface-modal);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 1.25rem;
   transform-origin: bottom right;
   animation: modalScaleUp var(--dur) var(--ease) both;
@@ -489,7 +497,8 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.625rem;
-    border: 1px solid var(--card-border);
+    border: 1px solid var(--edge);
+    box-shadow: var(--edge-shadow);
     border-radius: 1rem;
     background: var(--surface-secondary);
     transition: transform var(--lift), box-shadow var(--fade);
@@ -550,43 +559,50 @@ main {
 .badge-info {
   background: rgba(134, 180, 234, 0.15);
   color: #86b4ea;
-  border: 1px solid rgba(134, 180, 234, 0.28);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-warning {
   background: rgba(235, 198, 115, 0.15);
   color: #ebc673;
-  border: 1px solid rgba(235, 198, 115, 0.28);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-danger {
   background: rgba(239, 143, 143, 0.15);
   color: #ef8f8f;
-  border: 1px solid rgba(239, 143, 143, 0.28);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-rest {
   background: rgba(161, 169, 178, 0.12);
   color: var(--secondary);
-  border: 1px solid rgba(161, 169, 178, 0.2);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-success {
   background: rgba(143, 212, 163, 0.15);
   color: #8fd4a3;
-  border: 1px solid rgba(143, 212, 163, 0.28);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-carried {
   background: rgba(168, 191, 224, 0.15);
   color: #a8bfe0;
-  border: 1px solid rgba(168, 191, 224, 0.28);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .badge-reminder {
   background: rgba(134, 180, 234, 0.12);
   color: #86b4ea;
-  border: 1px solid rgba(134, 180, 234, 0.22);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   font-size: 0.75rem;
 }
 
@@ -613,7 +629,8 @@ main {
 .split-day-card {
   padding: 1rem 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
@@ -630,10 +647,10 @@ main {
 .workout-exercise-card {
   padding: 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 1rem;
   margin-bottom: 1rem;
-  box-shadow: none;
+  box-shadow: var(--edge-shadow);
 }
 
 .exercise-header {
@@ -651,7 +668,8 @@ main {
   margin-bottom: 0.9rem;
   display: grid;
   gap: 0.35rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 .set-row {
@@ -692,7 +710,8 @@ main {
   padding: 0.9rem 1rem;
   background: var(--surface-secondary);
   border-radius: 0.9rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   display: grid;
   gap: 0.3rem;
   transition: transform var(--lift), box-shadow var(--fade);
@@ -788,9 +807,9 @@ main {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--edge-shadow);
   transition: transform var(--lift), box-shadow var(--fade);
   animation: rise var(--dur) var(--ease) backwards;
 }
@@ -819,7 +838,7 @@ main {
   textarea:hover:not(:focus, :disabled) {
     background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
   }
-  select.sort-select:hover:not(:focus, :disabled) {
+  select.sort-select:hover:not(:disabled) {
     background-color: var(--highlight-fill);
   }
 
@@ -829,7 +848,7 @@ main {
   .routine-row:hover,
   .side-user:hover,
   .nav-link:hover,
-  button:not(.bars-col, .segmented button, .split-day-select, .tint, .delete-icon-btn, .toast-action-btn):hover:not(:disabled),
+  button:not(.bars-col, .segmented button, .split-day-select, .tint, .delete-icon-btn, .toast-action-btn, .toast-close-btn, .modal-close-btn):hover:not(:disabled),
   .month-nav-btn:hover {
     box-shadow: var(--hover-shadow);
   }
@@ -865,7 +884,8 @@ textarea {
   padding: 0.65rem 0.95rem;
   color: var(--text);
   background: rgba(37, 42, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   transition: background-color var(--fade), border-color var(--fade), box-shadow var(--fade), transform var(--lift);
 }
@@ -897,9 +917,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
-  border-color: rgba(134, 180, 234, 0.6);
-  box-shadow: inset 0 0 0 1px rgba(134, 180, 234, 0.6);
+  background-color: rgba(54, 60, 68, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
 button {
@@ -933,15 +951,15 @@ button:disabled {
 button.secondary {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: none;
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 button.danger {
   color: var(--danger);
   background: transparent;
-  border: 1px solid var(--danger);
-  box-shadow: none;
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 
 /* Fields show focus with their own edge (above); only buttons get the keyboard ring */
@@ -1013,7 +1031,8 @@ textarea:focus-visible {
 
 .month-nav-btn {
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   color: var(--text);
   border-radius: 0.7rem;
   width: 2.25rem;
@@ -1053,10 +1072,10 @@ textarea:focus-visible {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
   padding: 1.35rem;
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--edge-shadow);
 }
 
 .todo-stats-header {
@@ -1177,10 +1196,10 @@ textarea:focus-visible {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
   font-size: 0.875rem;
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--edge-shadow);
 }
 
 /* ==========================================================================
@@ -1257,9 +1276,9 @@ textarea:focus-visible {
   width: 100%;
   max-width: 34rem;
   background: #282e34;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: none;
+  box-shadow: var(--edge-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1329,6 +1348,10 @@ textarea:focus-visible {
   color: var(--secondary);
 }
 
+@media (hover: hover) {
+  .modal-close-btn:hover { background: var(--highlight-fill); color: var(--text); }
+}
+
 /* Keeps a 44pt touch target around the small visible circle */
 .modal-close-btn::before {
   content: "";
@@ -1375,9 +1398,9 @@ textarea:focus-visible {
   width: 100%;
   max-width: 36rem;
   background: var(--surface-modal);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: none;
+  box-shadow: var(--edge-shadow);
   overflow: hidden;
   animation: modalScaleUp var(--dur) var(--ease) forwards;
 }
@@ -1462,7 +1485,8 @@ textarea:focus-visible {
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.35rem;
   color: var(--secondary);
 }
@@ -1472,7 +1496,8 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.5rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   color: var(--secondary);
   border-radius: 0.85rem;
   padding: 0.4rem 0.75rem;
@@ -1484,7 +1509,6 @@ textarea:focus-visible {
 
 @media (hover: hover) {
   .command-trigger-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
     color: var(--text);
     background: var(--highlight-fill);
   }
@@ -1524,11 +1548,11 @@ textarea:focus-visible {
   background: rgba(37, 42, 48, 0.95);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--edge-shadow);
   animation: toastSlideIn var(--dur) var(--ease) forwards;
   max-width: 100%;
 }
@@ -1560,7 +1584,8 @@ textarea:focus-visible {
 .toast-action-btn {
   background: var(--tint-subtle);
   color: var(--tint);
-  border: 1px solid rgba(134, 180, 234, 0.3);
+  border: 0;
+  box-shadow: none;
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1588,13 +1613,15 @@ textarea:focus-visible {
   justify-content: center;
   min-width: 36px;
   min-height: 36px;
-  border-radius: 50%;
-  transition: color var(--fade);
+  border-radius: 0.7rem; /* the same rounded square as every small button */
+  box-shadow: none;
+  transition: color var(--fade), background-color var(--fade);
 }
 
 @media (hover: hover) {
   .toast-close-btn:hover {
     color: var(--text);
+    background: var(--highlight-fill);
   }
 }
 
@@ -1610,7 +1637,8 @@ button.btn-sm {
   font-weight: 600;
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
@@ -1619,6 +1647,7 @@ button.btn-sm.tint {
   color: var(--tint);
   background: var(--tint-subtle);
   border-color: transparent;
+  box-shadow: none;
 }
 
 /* Segmented control with a sliding thumb: --n segments, --i active index */
@@ -1630,7 +1659,8 @@ button.btn-sm.tint {
   column-gap: var(--seg-gap);
   padding: 0.25rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.95rem;
   isolation: isolate;
 }
@@ -1734,12 +1764,14 @@ main > .error {
   gap: 0.25rem;
   padding: 0.25rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.95rem;
 }
 
 .toolbar.dash .month-nav-btn {
   border-color: transparent;
+  box-shadow: none;
   background: transparent;
   border-radius: 0.7rem;
 }
@@ -1819,7 +1851,7 @@ main > .error {
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--surface-modal);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.1rem;
   box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
   transform-origin: top center;
@@ -1842,6 +1874,7 @@ main > .error {
 
 .picker-head .month-nav-btn {
   border-color: transparent;
+  box-shadow: none;
   background: transparent;
 }
 
@@ -2032,7 +2065,8 @@ main > .error {
   padding: 0.3rem 0.8rem;
   border-radius: 2rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   font-size: 0.875rem;
 }
 
@@ -2078,7 +2112,7 @@ main > .error {
 .item-range { grid-area: range; justify-content: center; }
 :is(.item-link, .item-link-text) { grid-area: link; }
 @container (min-width: 34rem) {
-  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; column-gap: 1rem; }
+  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; }
   .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
   .item-row { grid-template-areas: "name price range link actions"; }
   .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
@@ -2104,10 +2138,12 @@ select.sort-select {
   background-color: rgba(255, 255, 255, 0.06);
   background-position: right 0.8rem center;
 }
-/* While its menu is open the sort menu shows only the highlight, no focus edge; the keyboard keeps a ring */
+/* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
+   the keyboard keeps a ring */
 select.sort-select:focus {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: none;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+select.sort-select:open {
   background-color: var(--highlight-fill);
 }
 select.sort-select:focus-visible:not([data-pointer]) {
@@ -2122,9 +2158,16 @@ select.sort-select:focus-visible:not([data-pointer]) {
 }
 .item-actions { grid-area: actions; }
 
-/* Wishlist page: a monospaced face, so every letter and digit takes the same width */
+/* Wishlist page: a monospaced face, so every letter and digit takes the same width. Only the digit 0 comes from
+   Andale Mono (same 0.6em width), whose zero has no slash.
+   shortcut: Andale Mono ships with macOS only; elsewhere the zero keeps its slash. Self-host a face if that matters. */
+@font-face {
+  font-family: "Plain Zero";
+  src: local("Andale Mono"), local("AndaleMono");
+  unicode-range: U+0030;
+}
 .mono {
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: "Plain Zero", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* Monospace is wider, so its four filter tabs take the dense size on a phone */
@@ -2349,7 +2392,7 @@ select.sort-select:focus-visible:not([data-pointer]) {
   translate: calc(var(--at, 0.5) * -100%) 0; /* slides from left- to right-aligned across the chart, so it never leaves it */
   z-index: 2;
   padding: 0.4rem 0.6rem;
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 0.6rem;
   background: var(--surface-modal);
   box-shadow: var(--hover-shadow);
@@ -2604,7 +2647,8 @@ button.bars-col:focus-visible {
   font-size: 0.85rem;
   background: transparent;
   color: var(--foreground, inherit);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
 }
 .muscle-chip.active {
   border-color: var(--tint);
@@ -2749,7 +2793,8 @@ button.bars-col:focus-visible {
   display: grid;
   gap: 0.5rem;
   padding: 0.75rem 0.75rem 0.85rem 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
@@ -2778,7 +2823,8 @@ button.bars-col:focus-visible {
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
@@ -2847,7 +2893,8 @@ button.bars-col:focus-visible {
   max-height: 26rem;
   overflow-y: auto;
   padding: 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.9rem;
   background: var(--surface-secondary);
 }
@@ -2867,7 +2914,8 @@ button.bars-col:focus-visible {
 .chat-bubble {
   padding: 0.65rem 0.9rem;
   border-radius: 1.1rem 1.1rem 1.1rem 0.3rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   background: var(--surface);
   font-size: 0.9375rem;
   line-height: 1.4;
@@ -2875,6 +2923,7 @@ button.bars-col:focus-visible {
 }
 .chat-msg.user .chat-bubble {
   border-color: transparent;
+  box-shadow: none;
   border-radius: 1.1rem 1.1rem 0.3rem 1.1rem;
   background: var(--tint);
   color: var(--on-tint);
@@ -2915,14 +2964,6 @@ button.bars-col:focus-visible {
 }
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
-}
-
-/* An open form pulls the page back: it shrinks a little behind the blurred backdrop (Modal portals to body). */
-main > :where(:not(.side, .tabbar, .more-menu, .more-scrim)) {
-  transition: transform var(--dur) var(--ease);
-}
-body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu, .more-scrim) {
-  transform: scale(0.99);
 }
 
 /* A day with something planned: a small dot under the number. */
@@ -3053,7 +3094,8 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
   font-weight: 400;
   color: var(--text);
   background: rgba(37, 42, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
+  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
 }
 
@@ -3085,14 +3127,27 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
 /* List rows are soft bands: every other row carries a faint grey wash (no hover highlight).
    The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
 :is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row) {
-  margin-inline: -0.75rem;
-  padding-inline: 0.75rem;
+  --band-out: 0.75rem;
+  margin-inline: calc(-1 * var(--band-out));
+  padding-inline: var(--band-out);
   border-radius: 0.75rem;
   transition: background-color var(--fade), transform var(--lift);
 }
+/* In a card's own lists the band stops 0.5rem from the card edge, the text keeps the card's inset, and a
+   trailing icon button sits 0.5rem inside the band: the same 0.5rem the band keeps from the card. */
+.surface :is(.entries, .todo-list) > :is(.entry-row, .todo-row) {
+  --band-out: calc(var(--card-pad) + 1px - 0.5rem); /* 1px: the card's (clear) border */
+}
+.surface :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child) {
+  padding-inline-end: 0.5rem;
+}
 .auto-height:has(> :is(.entries, .todo-list)) {
-  margin-inline: -0.75rem;
-  padding-inline: 0.75rem;
+  --band-out: 0.75rem;
+  margin-inline: calc(-1 * var(--band-out));
+  padding-inline: var(--band-out);
+}
+.surface .auto-height:has(> :is(.entries, .todo-list)) {
+  --band-out: calc(var(--card-pad) + 1px - 0.5rem);
 }
 :is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
   background-color: rgba(255, 255, 255, 0.03);

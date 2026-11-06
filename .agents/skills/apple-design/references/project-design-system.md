@@ -11,7 +11,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 | Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, grey buttons) and a subtle highlight (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, which get no shadow), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
-| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No resting shadows: depth comes from border, blur and translucency. The one shadow is `--hover-shadow`, very soft and on every side, under a hovered card or control. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
+| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No borders on objects: a very slight all-around `--edge-shadow` marks their edge (high contrast restores an outline), with blur and translucency for depth. On hover `--hover-shadow`, very soft and on every side, replaces it. An open form blurs the page but does not shrink it. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
 
 ## Tokens (CSS custom properties on `:root`)
 
@@ -20,7 +20,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 | `--background` | `#1b1e22` | page |
 | `--surface-solid` | `#252a30` | cards (translucent `--surface` on top of blur) |
 | `--surface-secondary` | `#2f353c` at 65% | raised controls, inputs |
-| `--card-border` | `#434b56` | card and control borders |
+| `--card-border` | `#434b56` | sidebar divider; object borders use `--edge` (transparent, `--text` in high contrast) |
 | `--separator` | `#353c45` | hairlines |
 | `--text` | `#eaedf0` | primary text (contrast above 12:1 on `--background`) |
 | `--secondary` | `#a1a9b2` | secondary text (7:1 on `--background`, 6:1 on cards) |
@@ -32,7 +32,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 Rules:
 - Use tokens, never raw hex or `rgba` for UI colors in components. A tinted status background is `rgba(<token rgb>, 0.12 to 0.15)`.
 - One accent only. No extra hues (no purple, no blue); differentiate with weight, icon and position.
-- Cards entering the page use the `rise` animation (14 px up, 70 ms stagger). Buttons and nav items shrink to `scale(var(--press))` while pressed. Cards tint their border on hover. Animate `transform` and `opacity` only, never longer than 500 ms.
+- Cards entering the page use the `rise` animation (14 px up, 70 ms stagger). Buttons and nav items shrink to `scale(var(--press))` while pressed. Animate `transform` and `opacity` only, never longer than 500 ms.
 - `prefers-reduced-motion` turns every transition and animation into an instant change (already global in `globals.css`; keep it).
 
 ## Deliberate deviations from the generic HIG references
