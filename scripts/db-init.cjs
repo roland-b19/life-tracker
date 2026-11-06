@@ -283,8 +283,10 @@ async function main() {
       "is_completed" boolean DEFAULT false NOT NULL,
       "completed_at" timestamp with time zone,
       "is_carried_over" boolean DEFAULT false NOT NULL,
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+      "ended_on" date
     );
+    ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "ended_on" date;
     CREATE TABLE IF NOT EXISTS "todo_completions" (
       "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
       "date" date NOT NULL,

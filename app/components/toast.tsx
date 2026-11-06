@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { CheckIcon, CloseIcon } from "./icons";
 
 interface Toast {
@@ -25,11 +25,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const id = Math.random().toString(36).slice(2);
     const newToast: Toast = { ...toastData, id };
     setToasts((prev) => [...prev, newToast]);
-
-    const duration = toastData.duration ?? 5000;
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, duration);
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -41,7 +36,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div className="toast-container" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className="toast-item">
+          <ToastItem key={t.id} toast={t} onExpire={removeToast}>
             <span className="toast-message">
               {t.type === "success" && <CheckIcon size={14} style={{ marginRight: "0.4rem", color: "var(--success)" }} />}
               {t.message}
@@ -68,10 +63,58 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 <CloseIcon size={13} />
               </button>
             </div>
-          </div>
+          </ToastItem>
         ))}
       </div>
     </ToastContext.Provider>
+  );
+}
+
+const LINGER = 1500; // after the pointer or focus leaves, a nearly expired toast still stays this long
+
+/** Counts down its toast's time, paused while the mouse is over it or focus is inside it. */
+function ToastItem({ toast, onExpire, children }: { toast: Toast; onExpire: (id: string) => void; children: React.ReactNode }) {
+  const left = useRef(toast.duration ?? 5000);
+  const since = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const held = useRef({ hover: false, focus: false });
+
+  const sync = useCallback(() => {
+    const hold = held.current.hover || held.current.focus;
+    if (hold && timer.current !== undefined) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      left.current = Math.max(left.current - (Date.now() - since.current), LINGER);
+    } else if (!hold && timer.current === undefined) {
+      since.current = Date.now();
+      timer.current = setTimeout(() => onExpire(toast.id), left.current);
+    }
+  }, [onExpire, toast.id]);
+
+  useEffect(() => {
+    sync();
+    return () => {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+    };
+  }, [sync]);
+
+  const set = (key: "hover" | "focus", on: boolean) => {
+    held.current[key] = on;
+    sync();
+  };
+
+  return (
+    <div
+      className="toast-item"
+      // Mouse only: a tap on a touch screen fires pointerenter but no leave, which would pin the toast.
+      onPointerEnter={(e) => e.pointerType === "mouse" && set("hover", true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && set("hover", false)}
+      onFocus={() => set("focus", true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && set("focus", false)}
+    >
+      {children}
+    </div>
   );
 }
 

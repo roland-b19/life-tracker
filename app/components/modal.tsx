@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
@@ -10,7 +10,12 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  /** Called once the closing form has faded out (it stays mounted a little longer for the tail). */
+  onExited?: () => void;
 }
+
+const CLOSE_MS = 420; // --dur in globals.css
+const FADED_MS = 280; // the close's ease leaves under 10% opacity by here
 
 export function Modal({
   isOpen,
@@ -18,7 +23,27 @@ export function Modal({
   title,
   children,
   maxWidth = "36rem",
+  onExited,
 }: ModalProps) {
+  // Stays mounted while it plays the open animation in reverse (.closing in globals.css).
+  const [shown, setShown] = useState(isOpen);
+  if (isOpen && !shown) setShown(true);
+  const closing = shown && !isOpen;
+  const exited = useRef(onExited);
+  useEffect(() => {
+    exited.current = onExited;
+  });
+  useEffect(() => {
+    if (!closing) return;
+    const fast = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const faded = setTimeout(() => exited.current?.(), fast ? 0 : FADED_MS);
+    const gone = setTimeout(() => setShown(false), fast ? 0 : CLOSE_MS);
+    return () => {
+      clearTimeout(faded);
+      clearTimeout(gone);
+    };
+  }, [closing]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -68,13 +93,14 @@ export function Modal({
     };
   }, [isOpen, handleKeyDown]);
 
-  if (!isOpen) return null;
+  if (!shown) return null;
 
   // Portaled to body so the page behind can shrink (a transformed parent would trap the fixed backdrop).
   return createPortal(
     <div
       ref={backdropRef}
-      className="modal-backdrop"
+      className={closing ? "modal-backdrop closing" : "modal-backdrop"}
+      inert={closing}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"

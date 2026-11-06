@@ -19,6 +19,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import {
   createTodo,
   deleteTodo,
+  findTodo,
   getDailyTodos,
   getPlannedDays,
   getTodoHistory,
@@ -47,13 +48,13 @@ function assertPlannable(task: { isRecurring?: boolean; dueDate: string }) {
   }
 }
 
+const duplicate = (title: string) => ({ success: false as const, error: `"${title}" is already on this list.` });
+
 export async function createTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = createTodoSchema.parse(rawInput);
   assertPlannable(parsed);
-  if (await hasDuplicateTodo(userId, parsed)) {
-    return { success: false as const, error: `"${parsed.title}" is already on this list.` };
-  }
+  if (await hasDuplicateTodo(userId, parsed)) return duplicate(parsed.title);
   const todo = await createTodo(userId, parsed);
   safeRevalidate("/todos");
   return { success: true as const, todo };
@@ -63,6 +64,7 @@ export async function restoreTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
   assertPlannable(parsed);
+  if (await hasDuplicateTodo(userId, parsed, parsed.id)) return duplicate(parsed.title);
   const todo = await restoreTodo(userId, parsed);
   safeRevalidate("/todos");
   return { success: todo !== null, todo };
@@ -79,6 +81,8 @@ export async function toggleTodoAction(rawInput: unknown) {
 export async function updateTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = updateTodoSchema.parse(rawInput);
+  const task = await findTodo(userId, parsed.id);
+  if (task && (await hasDuplicateTodo(userId, { ...task, title: parsed.title }, task.id))) return duplicate(parsed.title);
   const updated = await updateTodo(userId, parsed);
   safeRevalidate("/todos");
   return { success: updated };
@@ -87,7 +91,12 @@ export async function updateTodoAction(rawInput: unknown) {
 export async function moveTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = moveTodoSchema.parse(rawInput);
-  assertPlannable({ isRecurring: parsed.recurrencePattern !== "none", dueDate: parsed.dueDate });
+  const isRecurring = parsed.recurrencePattern !== "none";
+  assertPlannable({ isRecurring, dueDate: parsed.dueDate });
+  const task = await findTodo(userId, parsed.id);
+  if (task && (await hasDuplicateTodo(userId, { ...task, isRecurring, dueDate: parsed.dueDate }, task.id))) {
+    return duplicate(task.title);
+  }
   const todo = await moveTodo(userId, parsed);
   safeRevalidate("/todos");
   return { success: todo !== null, todo };

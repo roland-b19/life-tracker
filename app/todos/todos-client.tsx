@@ -100,6 +100,7 @@ export function TodosClient({
   const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [weekOpen, setWeekOpen] = useState(false);
 
   // Push notifications state
   const [pushSupported, setPushSupported] = useState(false);
@@ -128,6 +129,8 @@ export function TodosClient({
   // A daily task is ticked on its day or later, never ahead of time.
   const listTickable = !(listDaily && view.date > todayDate);
   const listTodos = visibleFor(view.space, listDaily, view.date);
+  // The week ahead, each weekday once, to jump to any of them.
+  const week = Array.from({ length: 7 }, (_, i) => addDays(todayDate, i));
   const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
@@ -153,13 +156,15 @@ export function TodosClient({
     : 0;
   const perfectDays = tracked.filter((d) => d.stat!.done === d.stat!.total).length;
   const doneTotal = tracked.reduce((n, d) => n + d.stat!.done, 0);
-  const maxDone = Math.max(1, ...tracked.map((d) => d.stat!.done));
+  // An even top keeps the axis's middle number whole.
+  const maxDone = 2 * Math.ceil(Math.max(1, ...tracked.map((d) => d.stat!.done)) / 2);
   const every = LABEL_EVERY[period];
   const bars = days.map((d, i) => ({
     label: (span - 1 - i) % every === 0 ? String(d.day) : "",
     value: d.stat ? (metric === "rate" ? (d.stat.done / d.stat.total) * 100 : d.stat.done) : 0,
     empty: !d.stat,
     highlight: d.iso === date,
+    tip: d.stat && (metric === "rate" ? `${Math.round((d.stat.done / d.stat.total) * 100)}%` : `${d.stat.done} done`),
     title: d.stat ? `${dayLabel(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${dayLabel(d.iso)}: no record`,
   }));
 
@@ -246,10 +251,12 @@ export function TodosClient({
     if (repeats && !daysInput.length) return;
     const recurrencePattern = repeats ? patternOf(daysInput) : "none";
     setSaving(true);
+    let entered: Promise<void> | undefined;
     try {
       if (editing) {
         const before = editing;
         const res = await updateTodoAction({ id: before.id, title, reminderTime, recurrencePattern });
+        if ("error" in res) return setTitleError(res.error);
         if (res.success) {
           showToast({
             message: `Saved "${title}"`,
@@ -277,21 +284,25 @@ export function TodosClient({
         });
         if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
         if (res.todo) {
-          const createdId = res.todo.id;
-          enter(createdId);
+          const created = res.todo;
+          // The row comes in at once; the refresh (stats, chart) lands after its entrance, not in the middle of it.
+          entered = putBack(created);
           showToast({
             message: `Added "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
-              await deleteTodoAction(createdId);
-              leave(createdId, () => void loadDay(date));
+              await deleteTodoAction(created.id);
+              leave(created.id, () => {
+                drop(created);
+                void loadDay(date);
+              });
             },
           });
         }
       }
       closeForm();
-      await loadDay(date);
+      await loadDay(date, entered);
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     } finally {
@@ -330,34 +341,39 @@ export function TodosClient({
   };
 
   // Back in the list where the server would sort it.
+  // Resolves when its entrance is done.
   const putBack = (task: TodoItem) => {
-    enter(task.id);
+    const entered = enter(task.id);
     setTodosMap((prev) => ({
       ...prev,
       [task.space]: prev[task.space].some((t) => t.id === task.id)
         ? prev[task.space]
         : [...prev[task.space], task].sort(compareTodos),
     }));
+    return entered;
   };
+
+  const drop = (task: TodoItem) =>
+    setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
 
   // Moving always takes the row out of this list; the server call runs while it leaves.
   const handleMove = (task: TodoItem, recurrencePattern: string, day: string) => {
     setMoving(null);
     if (recurrencePattern === "none" && !task.isRecurring && day === task.dueDate) return;
     const moved = moveTodoAction({ id: task.id, recurrencePattern, dueDate: day }).then(
-      (res) => res.success,
-      () => false,
+      (res) => (res.success ? null : "error" in res ? res.error : "Failed to move task"),
+      () => "Failed to move task",
     );
     const gone = new Promise<void>((done) =>
       leave(task.id, () => {
-        setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
+        drop(task);
         done();
       }),
     );
-    void Promise.all([moved, gone]).then(([ok]) => {
-      if (!ok) {
+    void Promise.all([moved, gone]).then(([error]) => {
+      if (error) {
         putBack(task);
-        showToast({ message: "Failed to move task", type: "warning" });
+        showToast({ message: error, type: "warning" });
         return;
       }
       void loadDay(date);
@@ -375,7 +391,7 @@ export function TodosClient({
       () => false,
     );
     leave(target.id, () => {
-      setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) }));
+      drop(target);
       void deleted.then((ok) => {
         if (!ok) {
           putBack(target);
@@ -387,16 +403,16 @@ export function TodosClient({
           message: `Deleted "${target.title}"`,
           actionLabel: "Undo",
           onAction: async () => {
-            putBack(target);
+            const entered = putBack(target);
             const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
             const back = await restoreTodoAction({
               id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
             }).catch(() => null);
             if (!back?.success) {
-              leave(target.id, () => setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) })));
-              showToast({ message: "Failed to restore task", type: "warning" });
+              leave(target.id, () => drop(target));
+              showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
             }
-            await loadDay(date);
+            await loadDay(date, entered);
           },
         });
       });
@@ -513,13 +529,42 @@ export function TodosClient({
               <h2 id="tasks-title" className="section-title">
                 {isDaily ? "Daily tasks" : "Tasks"}
               </h2>
-              {editable && (
-                <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                  <PlusIcon size={14} />
-                  Add task
+              <span className="head-actions">
+                <button
+                  type="button"
+                  className="btn-sm secondary"
+                  aria-expanded={weekOpen}
+                  aria-controls="week-strip"
+                  onClick={() => setWeekOpen((open) => !open)}
+                >
+                  Week
                 </button>
-              )}
+                {editable && (
+                  <button type="button" className="btn-sm tint" onClick={() => openForm()}>
+                    <PlusIcon size={14} />
+                    Add task
+                  </button>
+                )}
+              </span>
             </div>
+
+            {weekOpen && (
+              <div id="week-strip" className="week-strip" role="group" aria-label="Day of the week">
+                {week.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className="weekday-btn"
+                    aria-pressed={day === date}
+                    aria-label={day === todayDate ? `Today, ${dayLabel(day, "long")}` : dayLabel(day, "long")}
+                    onClick={() => goTo(day)}
+                  >
+                    <span className="week-day-name">{day === todayDate ? "Today" : dayLabel(day).slice(0, 3)}</span>
+                    <span className="week-day-num number-tabular">{Number(day.slice(8))}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {isPast && !DEV_EDIT_PAST && (
               <p className="readonly-note">
@@ -675,6 +720,7 @@ export function TodosClient({
               key={`${period}-${metric}-${space}-${tab}-${date}`}
               data={bars}
               max={metric === "rate" ? 100 : maxDone}
+              format={metric === "rate" ? (v) => `${v}%` : String}
               summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%. Choose a day to open it.`}
               onSelect={(i) => goTo(days[i].iso)}
             />
