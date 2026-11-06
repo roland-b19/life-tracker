@@ -6,7 +6,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 
 | Area | Choice |
 |---|---|
-| Palette | **Storm**: dark, cool graphite with a steel blue accent. Dark only. |
+| Palette | **Storm**: dark, cool graphite cards on a dark steel blue page, with a steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
 | Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, grey buttons) and a subtle highlight (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, which get no shadow), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
@@ -17,7 +17,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 
 | Token | Value | Use |
 |---|---|---|
-| `--background` | `#1b1e22` | page |
+| `--background` | `#1f2b3a` | page (dark steel blue, so the graphite cards stand out) |
 | `--surface-solid` | `#252a30` | cards (translucent `--surface` on top of blur) |
 | `--surface-secondary` | `#2f353c` at 65% | raised controls, inputs |
 | `--card-border` | `#434b56` | sidebar divider; object borders use `--edge` (transparent, `--text` in high contrast) |

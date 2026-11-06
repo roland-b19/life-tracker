@@ -1,8 +1,9 @@
 :root {
   /* Storm: cool graphite with a steel blue accent. Chosen in the palette review (docs/decisions.md, 2026-11-05). */
-  --background: #1b1e22;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(134, 180, 234, 0.07) 0%, rgba(27, 30, 34, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(134, 180, 234, 0.04) 0%, rgba(27, 30, 34, 0) 100%);
+  /* The page is a dark steel blue (the user's call, 2026-11-06), so the graphite cards stand out from it. */
+  --background: #1f2b3a;
+  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(134, 180, 234, 0.07) 0%, rgba(31, 43, 58, 0) 100%),
+               radial-gradient(800px 400px at 100% 100%, rgba(134, 180, 234, 0.04) 0%, rgba(31, 43, 58, 0) 100%);
   --surface: rgba(37, 42, 48, 0.78);
   --surface-solid: #252a30;
   --surface-secondary: rgba(47, 53, 60, 0.65);
@@ -2158,16 +2159,9 @@ select.sort-select:focus-visible:not([data-pointer]) {
 }
 .item-actions { grid-area: actions; }
 
-/* Wishlist page: a monospaced face, so every letter and digit takes the same width. Only the digit 0 comes from
-   Andale Mono (same 0.6em width), whose zero has no slash.
-   shortcut: Andale Mono ships with macOS only; elsewhere the zero keeps its slash. Self-host a face if that matters. */
-@font-face {
-  font-family: "Plain Zero";
-  src: local("Andale Mono"), local("AndaleMono");
-  unicode-range: U+0030;
-}
+/* Wishlist page: a monospaced face, so every letter and digit takes the same width. */
 .mono {
-  font-family: "Plain Zero", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* Monospace is wider, so its four filter tabs take the dense size on a phone */
