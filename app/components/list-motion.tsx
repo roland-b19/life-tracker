@@ -8,13 +8,13 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// A growing list's bottom edge fades instead of cutting rows; the fade slides below the box as it settles.
-const EDGE = 56;
-const EDGE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${EDGE}px), transparent)`;
-// Held through the first half, where the eased height does most of its growing.
+// A growing list's bottom edge fades instead of cutting rows. The fade shrinks on the same
+// curve as the height, so it is gone exactly when the list arrives. Matches .auto-height.fade-edge.
+const GROW = { duration: 460, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
+const EDGE = 72;
+const EDGE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${EDGE}px), rgb(0 0 0 / 0.55) calc(100% - ${EDGE / 2}px), transparent)`;
 const EDGE_FRAMES: Keyframe[] = [
   { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%" },
-  { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%", offset: 0.5 },
   { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: `100% calc(100% + ${EDGE}px)` },
 ];
 
@@ -50,7 +50,7 @@ export function AutoHeight({ className, fadeEdge, children }: { className?: stri
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
-      if (fadeEdge && next > from) outer.animate(EDGE_FRAMES, { duration: 300 }); // .auto-height's transition
+      if (fadeEdge && next > from) outer.animate(EDGE_FRAMES, GROW);
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
@@ -63,7 +63,7 @@ export function AutoHeight({ className, fadeEdge, children }: { className?: stri
   }, [fadeEdge]);
 
   return (
-    <div ref={outerRef} className="auto-height">
+    <div ref={outerRef} className={fadeEdge ? "auto-height fade-edge" : "auto-height"}>
       <div ref={innerRef} className={className}>
         {children}
       </div>
