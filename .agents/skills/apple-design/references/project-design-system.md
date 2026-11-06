@@ -8,7 +8,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 |---|---|
 | Palette | **Graphite** (2026-11-06): Apple's dark system greys on a true black page, with the Storm steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
-| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a subtle fill, never a shadow (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, `--tint-hover` on the plain filled button), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
+| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a subtle fill, never a shadow (`--highlight` 5% grey on clear controls, `--highlight-fill` 20% on grey-filled ones, `--tint-highlight` on tinted buttons, `--tint-hover` on the plain filled button), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
 | Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No borders and no shadows on objects: they stand out by their grey fill (high contrast restores an outline), with blur and translucency for depth. An open form blurs the page but does not shrink it. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
@@ -19,7 +19,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 |---|---|---|
 | `--background` | `#000000` | page (true black, like iOS dark mode) |
 | `--surface-solid` | `#1c1c1e` | cards (translucent `--surface` on top of blur) |
-| `--surface-secondary` | `#2c2c2e` at 65% | raised controls, inputs |
+| `--surface-secondary` | `#3a3a3c` at 80% | raised controls, inputs |
 | `--card-border` | `#48484a` | sidebar divider; object borders use `--edge` (transparent, `--text` in high contrast) |
 | `--separator` | `#38383a` | hairlines |
 | `--text` | `#ebebf0` | primary text (17.7:1 on `--background`, 11.7:1 on raised controls) |

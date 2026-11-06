@@ -5,20 +5,20 @@
                radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
   --surface: rgba(28, 28, 30, 0.78);
   --surface-solid: #1c1c1e;
-  --surface-secondary: rgba(44, 44, 46, 0.65);
+  --surface-secondary: rgba(58, 58, 60, 0.8);
   --surface-modal: #242426;
   --text: #ebebf0;
   --secondary: #a1a1a8;
   --tint: #86b4ea;
   --tint-hover: #9bc2ef;
   --on-tint: #0b1b30;
-  --tint-subtle: rgba(134, 180, 234, 0.14);
+  --tint-subtle: rgba(134, 180, 234, 0.24);
   --success: #8fd4a3;
-  --success-subtle: rgba(143, 212, 163, 0.14);
+  --success-subtle: rgba(143, 212, 163, 0.22);
   --warning: #ebc673;
-  --warning-subtle: rgba(235, 198, 115, 0.15);
+  --warning-subtle: rgba(235, 198, 115, 0.22);
   --danger: #ef8f8f;
-  --danger-subtle: rgba(239, 143, 143, 0.15);
+  --danger-subtle: rgba(239, 143, 143, 0.22);
   --separator: #38383a;
   --card-border: #48484a;
   /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
@@ -32,11 +32,11 @@
   --quick: 180ms;
   /* Hover highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
-  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a slightly stronger one on
+  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: rgba(255, 255, 255, 0.05);
-  --highlight-fill: rgba(255, 255, 255, 0.1);
-  --tint-highlight: rgba(134, 180, 234, 0.2);
+  --highlight-fill: rgba(255, 255, 255, 0.2);
+  --tint-highlight: rgba(134, 180, 234, 0.34);
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --press: 0.92;
   color-scheme: dark;
@@ -548,44 +548,44 @@ main {
 }
 
 .badge-info {
-  background: rgba(134, 180, 234, 0.15);
-  color: #86b4ea;
+  background: var(--tint-subtle);
+  color: var(--tint);
   border: 1px solid var(--edge);
 }
 
 .badge-warning {
-  background: rgba(235, 198, 115, 0.15);
-  color: #ebc673;
+  background: var(--warning-subtle);
+  color: var(--warning);
   border: 1px solid var(--edge);
 }
 
 .badge-danger {
-  background: rgba(239, 143, 143, 0.15);
-  color: #ef8f8f;
+  background: var(--danger-subtle);
+  color: var(--danger);
   border: 1px solid var(--edge);
 }
 
 .badge-rest {
-  background: rgba(161, 161, 168, 0.12);
-  color: var(--secondary);
+  background: rgba(161, 161, 168, 0.2);
+  color: #c7c7cc;
   border: 1px solid var(--edge);
 }
 
 .badge-success {
-  background: rgba(143, 212, 163, 0.15);
-  color: #8fd4a3;
+  background: var(--success-subtle);
+  color: var(--success);
   border: 1px solid var(--edge);
 }
 
 .badge-carried {
-  background: rgba(168, 191, 224, 0.15);
+  background: rgba(168, 191, 224, 0.22);
   color: #a8bfe0;
   border: 1px solid var(--edge);
 }
 
 .badge-reminder {
-  background: rgba(134, 180, 234, 0.12);
-  color: #86b4ea;
+  background: var(--tint-subtle);
+  color: var(--tint);
   border: 1px solid var(--edge);
   font-size: 0.75rem;
 }
@@ -815,7 +815,7 @@ main {
   input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
   select:hover:not(:focus, :disabled),
   textarea:hover:not(:focus, :disabled) {
-    background-color: rgba(44, 44, 46, 0.95); /* color only: keeps the select's chevron */
+    background-color: rgba(72, 72, 74, 0.95); /* color only: keeps the select's chevron */
   }
   select.sort-select:hover:not(:disabled) {
     background-color: var(--highlight-fill);
@@ -884,7 +884,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(58, 58, 60, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
+  background-color: rgba(84, 84, 86, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
 button {
@@ -1300,7 +1300,7 @@ textarea:focus-visible {
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.12);
   border: 0;
   color: var(--secondary);
 }
@@ -1962,7 +1962,7 @@ main > .error {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #2c2c2e;
+    --surface-secondary: #3a3a3c;
     --surface-modal: #242426;
     --glass-blur: none;
   }
@@ -2078,13 +2078,13 @@ select.sort-select {
   font-size: 0.875rem;
   font-weight: 600;
   border-radius: 0.7rem;
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--surface-secondary);
   background-position: right 0.8rem center;
 }
 /* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
    the keyboard keeps a ring */
 select.sort-select:focus {
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--surface-secondary);
 }
 select.sort-select:open {
   background-color: var(--highlight-fill);
