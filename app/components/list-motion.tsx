@@ -42,6 +42,19 @@ function hold(list: HTMLElement, keep = false) {
 // How long a row change waits for the wash to fade out first: only in a wash list whose wash is showing.
 const washWait = (list: HTMLElement | null) => (list?.closest("[data-wash]") && !list.hasAttribute("data-settling") ? WASH : 0);
 
+// The row-in stagger in globals.css needs sibling-index(), which not every browser has (Safari): new rows get the
+// same delays here, so a list that shrinks still builds one row after another (a growing one also waits for its
+// height, in AutoHeight's ResizeObserver).
+const entranceOf = (row: Element) => row.getAnimations().find((a) => (a as CSSAnimation).animationName === "row-in");
+function stagger(list: HTMLElement) {
+  [...list.children].forEach((row, i) => {
+    const entrance = entranceOf(row);
+    const delay = Math.min(i, 10) * 30;
+    if (entrance && Number(entrance.currentTime) === 0 && Number(entrance.effect!.getTiming().delay) < delay)
+      entrance.effect!.updateTiming({ delay });
+  });
+}
+
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // An element's x on the page, ignoring transforms. offsetLeft alone is not enough: an entering row
@@ -89,7 +102,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
       if (next < from) return;
       const top = outer.getBoundingClientRect().top;
       for (const row of inner.children) {
-        const entrance = row.getAnimations().find((a) => (a as CSSAnimation).animationName === "row-in");
+        const entrance = entranceOf(row);
         const timing = entrance?.effect?.getTiming();
         if (!entrance || !timing || Number(entrance.currentTime) >= Number(timing.delay)) continue; // already showing
         // The row's layout bottom: its centre ignores the entrance scale. 1px early, as the ease's tail is slow.
@@ -144,6 +157,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
     // A row added, removed or edited can change the shared columns; a window resize just re-measures.
     const mutations = new MutationObserver(() => {
       if (washes) hold(inner); // first: slide's measuring styles the new rows
+      stagger(inner);
       slide(!reducedMotion());
     });
     const widths = new ResizeObserver(() => {
