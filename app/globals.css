@@ -984,6 +984,8 @@ textarea:focus-visible {
   display: flow-root;
   transition: height 300ms var(--ease);
 }
+/* Gentler start than --ease, so a growing list opens instead of snapping (GROW in list-motion.tsx) */
+.auto-height.fade-edge { transition: height 460ms cubic-bezier(0.4, 0, 0.2, 1); }
 
 .entry-row {
   justify-content: space-between;
