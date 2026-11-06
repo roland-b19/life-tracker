@@ -3,7 +3,7 @@
 import { ViewTransition } from "react";
 
 // The new page's rows wait (globals.css) only until the page is mostly faded in, then build while it settles.
-const ROWS_AFTER = 100;
+const ROWS_AFTER = 80;
 function onEnter() {
   const root = document.documentElement;
   const timer = setTimeout(() => root.classList.add("rows-go"), ROWS_AFTER);

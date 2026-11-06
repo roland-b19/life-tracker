@@ -142,6 +142,10 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Snappier app-wide motion (Claude Code, branch `fix/remove-list-fade`, PR #52), from "everything feels sluggish". Measured first: the server answers in 20–40ms and frames hold 60fps, so the lag was motion length. A page change stacked three entrances (view transition 90ms delay + 340ms with blur, a 580ms card rise staggered up to 210ms, rows 100ms late and 40ms apart) and took about 1s to settle; hover and selection colours faded over 420ms and the press spring took 500ms.
+  - New `--quick: 180ms` for colour, background, border, shadow and opacity feedback; `--lift` 320ms; movement keeps `--dur`.
+  - Page change: exit 120ms, enter 260ms after 40ms, root 300ms, no blur; cards rise in `--dur` staggered 40ms; rows start 80ms in, 30ms apart; chart bars grow in `--dur`.
+  - Result in dev: a page settles in 500–660ms instead of about 970ms; the transition (which blocks clicks) ends about 320ms after the page arrives.
 - 2026-11-06 — Wishlist motion (Claude Code, branch `fix/remove-list-fade`, PR #52), from the user's request:
   - Deleting or restoring a list's only row keeps the box size: the row only fades and swaps with its empty note (same height, `--row-h` per tab), and AutoHeight ignores a sub-1.5px gap.
   - Every Modal now closes with the reverse of its opening (fade + scale down), and the page zoom lifts as it closes; `onExited` fires once the form has faded.

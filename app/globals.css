@@ -26,10 +26,12 @@
      --grow and --press are rewritten per element by app/providers.tsx so all grow and shrink by the same pixels. */
   --hover-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.65);
   --grow: 1.01;
-  --lift: 500ms var(--pop);
+  --lift: 320ms var(--pop);
   --glass-blur: blur(28px) saturate(160%);
   /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
   --dur: 420ms;
+  /* Hover, press and selection feedback (color, shadow, opacity): quick, or every control feels late */
+  --quick: 180ms;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --pop: cubic-bezier(0.34, 1.45, 0.64, 1);
   --press: 0.92;
@@ -288,7 +290,7 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease);
 }
 
 .nav-link svg {
@@ -350,7 +352,7 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+  transition: color var(--quick) var(--ease), background var(--quick) var(--ease);
 }
 
 /* No transforms on tab items: scaling a glyph over a backdrop-filter bar leaves it blurry after the tap. */
@@ -485,7 +487,7 @@ main {
     border: 1px solid var(--card-border);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform var(--lift), box-shadow var(--dur) var(--ease);
+    transition: transform var(--lift), box-shadow var(--quick) var(--ease);
   }
 
   .side-user-row {
@@ -612,7 +614,7 @@ main {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
+  transition: background-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 .split-day-card.today {
@@ -688,7 +690,7 @@ main {
   border: 1px solid var(--separator);
   display: grid;
   gap: 0.3rem;
-  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
 }
 
 .macro-title {
@@ -784,13 +786,13 @@ main {
   border: 1px solid var(--card-border);
   border-radius: 1.15rem;
   box-shadow: var(--card-shadow);
-  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
-  animation: rise calc(var(--dur) + 160ms) var(--ease) backwards;
+  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  animation: rise var(--dur) var(--ease) backwards;
 }
 
-.surface:nth-child(2) { animation-delay: 70ms; }
-.surface:nth-child(3) { animation-delay: 140ms; }
-.surface:nth-child(n + 4) { animation-delay: 210ms; }
+.surface:nth-child(2) { animation-delay: 40ms; }
+.surface:nth-child(3) { animation-delay: 80ms; }
+.surface:nth-child(n + 4) { animation-delay: 120ms; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -866,7 +868,7 @@ textarea {
   background: rgba(37, 42, 48, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.85rem;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--lift);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), transform var(--lift);
 }
 
 /* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
@@ -915,7 +917,7 @@ button {
   gap: 0.5rem;
   border-radius: 0.85rem;
   box-shadow: none;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -1023,7 +1025,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
+  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
@@ -1038,7 +1040,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform var(--lift), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
   width: 44px;
   height: 44px;
 }
@@ -1107,7 +1109,7 @@ textarea:focus-visible {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
+  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1415,7 +1417,7 @@ textarea:focus-visible {
   padding: 0.75rem 0.9rem;
   border-radius: 0.75rem;
   cursor: pointer;
-  transition: background var(--dur) var(--ease);
+  transition: background var(--quick) var(--ease);
 }
 
 @media (hover: hover) {
@@ -1484,7 +1486,7 @@ textarea:focus-visible {
   font-size: 0.8125rem;
   cursor: pointer;
   min-height: 44px;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
+  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1573,7 +1575,7 @@ textarea:focus-visible {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
+  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1594,7 +1596,7 @@ textarea:focus-visible {
   min-width: 36px;
   min-height: 36px;
   border-radius: 50%;
-  transition: color var(--dur) var(--ease);
+  transition: color var(--quick) var(--ease);
 }
 
 @media (hover: hover) {
@@ -1662,7 +1664,7 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--lift);
+  transition: color var(--quick) var(--ease), background var(--quick) var(--ease), transform var(--lift);
 }
 
 /* An idle tab lifts and lightens on hover, without a shadow; the selected tab stays on its thumb. */
@@ -1802,7 +1804,7 @@ main > .error {
 .picker > .month-label-btn {
   border-radius: 0.7rem;
   cursor: pointer;
-  transition: background-color var(--dur) var(--ease);
+  transition: background-color var(--quick) var(--ease);
 }
 
 .picker > .month-label-btn:hover,
@@ -1880,7 +1882,7 @@ main > .error {
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--lift);
+  transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift);
 }
 
 .picker-grid.months .picker-cell {
@@ -1928,9 +1930,10 @@ main > .error {
 /* ==========================================================================
    View Transitions API Support
    ========================================================================== */
+/* As long as the page enter below: the transition (and its click block) lasts as long as its slowest part */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: var(--dur);
+  animation-duration: 300ms;
   animation-timing-function: var(--ease);
 }
 
@@ -1939,17 +1942,18 @@ main > .error {
 ::view-transition {
   pointer-events: none;
 }
+/* Short and blur-free: the page ignores clicks while it runs, and a blur repaints the whole snapshot every frame. */
 ::view-transition-old(.page-exit) {
-  animation: page-out 160ms ease-in both;
+  animation: page-out 120ms ease-in both;
 }
 ::view-transition-new(.page-enter) {
-  animation: page-in 340ms var(--ease) 90ms both;
+  animation: page-in 260ms var(--ease) 40ms both;
 }
 @keyframes page-out {
-  to { opacity: 0; transform: scale(0.985); filter: blur(2px); }
+  to { opacity: 0; transform: scale(0.985); }
 }
 @keyframes page-in {
-  from { opacity: 0; transform: translateY(10px); filter: blur(2px); }
+  from { opacity: 0; transform: translateY(8px); }
 }
 .side { view-transition-name: app-sidebar; }
 .tabbar { view-transition-name: app-tabbar; }
@@ -2373,7 +2377,7 @@ button.bars-col {
   background: var(--tint);
   opacity: 0.55;
   transform-origin: bottom;
-  animation: bar-grow 700ms var(--ease) both;
+  animation: bar-grow var(--dur) var(--ease) both;
   transition: height var(--dur) var(--ease), opacity var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 
@@ -2744,7 +2748,7 @@ button.bars-col:focus-visible {
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
-  transition: transform var(--lift), box-shadow var(--dur) var(--ease);
+  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
 }
 .routine-row-head {
   display: flex;
@@ -2890,7 +2894,7 @@ button.bars-col:focus-visible {
 .chat-form input { flex: 1; min-width: 0; }
 
 /* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx), one after another
-   40ms apart, so a list builds on the spot on page load and after a switch */
+   30ms apart, so a list builds on the spot on page load and after a switch */
 .entry-row,
 .item-row,
 .shopping-row,
@@ -2902,7 +2906,7 @@ button.bars-col:focus-visible {
   animation: row-in 260ms var(--ease) backwards;
   /* Capped at the 11th row, so a long list never waits; browsers without sibling-index() drop the line and
      show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
-  animation-delay: calc(min(sibling-index() - 1, 10) * 40ms);
+  animation-delay: calc(min(sibling-index() - 1, 10) * 30ms);
 }
 /* As a page change starts (app/template.tsx), the new page is still faint, so its rows wait until it is mostly there */
 :root:active-view-transition:not(.rows-go) :is(.entry-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, :is(.entries, .todo-list) > .empty-note) {
