@@ -97,6 +97,7 @@ export function TodosClient({
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [daysInput, setDaysInput] = useState(ALL_DAYS);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -222,6 +223,7 @@ export function TodosClient({
 
   const openForm = (todo?: TodoItem) => {
     setErrorMsg(null);
+    setTitleError(null);
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
@@ -273,7 +275,8 @@ export function TodosClient({
           dueDate: date,
           reminderTime,
         });
-        if (res.success && res.todo) {
+        if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
+        if (res.todo) {
           const createdId = res.todo.id;
           enter(createdId);
           showToast({
@@ -693,9 +696,19 @@ export function TodosClient({
                 required
                 maxLength={150}
                 value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
+                onChange={(e) => {
+                  setTitleInput(e.target.value);
+                  setTitleError(null);
+                }}
+                aria-invalid={titleError ? true : undefined}
+                aria-describedby={titleError ? "task-title-error" : undefined}
               />
             </label>
+            {titleError && (
+              <p id="task-title-error" className="error" role="alert">
+                {titleError}
+              </p>
+            )}
             {(editing ? editing.isRecurring : isDaily) && (
               <fieldset className="weekday-picker">
                 <legend>Repeat on</legend>

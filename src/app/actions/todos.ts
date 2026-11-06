@@ -22,6 +22,7 @@ import {
   getDailyTodos,
   getPlannedDays,
   getTodoHistory,
+  hasDuplicateTodo,
   moveTodo,
   restoreTodo,
   savePushSubscription,
@@ -50,9 +51,12 @@ export async function createTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = createTodoSchema.parse(rawInput);
   assertPlannable(parsed);
+  if (await hasDuplicateTodo(userId, parsed)) {
+    return { success: false as const, error: `"${parsed.title}" is already on this list.` };
+  }
   const todo = await createTodo(userId, parsed);
   safeRevalidate("/todos");
-  return { success: true, todo };
+  return { success: true as const, todo };
 }
 
 export async function restoreTodoAction(rawInput: unknown) {

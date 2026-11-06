@@ -199,6 +199,27 @@ export async function getTodoHistory(userId: string, space: TodoSpace, days = 90
     .orderBy(asc(todoDayStats.date));
 }
 
+/**
+ * Whether the list a new task would join already has one with the same title (any case):
+ * a one-off task meets what is due that day, a repeating task meets the other repeating tasks.
+ * shortcut: two adds racing can both pass, add a unique index if that ever matters.
+ */
+export async function hasDuplicateTodo(userId: string, input: CreateTodoInput): Promise<boolean> {
+  const [row] = await db
+    .select({ id: todos.id })
+    .from(todos)
+    .where(
+      and(
+        eq(todos.userId, userId),
+        eq(todos.space, input.space),
+        sql`lower(${todos.title}) = lower(${input.title})`,
+        input.isRecurring ? eq(todos.isRecurring, true) : dueOn(input.dueDate),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function createTodo(userId: string, input: CreateTodoInput): Promise<TodoItem> {
   const isRecurring = Boolean(input.isRecurring);
   const recurrencePattern = patternFor(isRecurring, input.recurrencePattern);

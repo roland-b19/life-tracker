@@ -134,6 +134,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-06 — Pages polish 4.** The Food Assistant opens with an empty chat: no greeting and no suggestion chips (the user does not need them). The client sends at most the last 10 turns, matching what the server reads.
 
+- **2026-11-06 — No duplicate tasks.** A new task is refused when its list already has the same title, ignoring case: one-off tasks are compared with everything due that day, repeating tasks with the other repeating tasks in the space. Only adding is checked, not rename or move.
 - **2026-11-06 — Wishlist motion.** Adding a wishlist item offers no Undo (the user can delete it); saving an edit offers Undo, which writes the previous values back through the same owner-scoped update action. Toasts size to their content. A list that grows on a tab switch fades its bottom edge (top-to-bottom gradient) instead of cutting rows; for now only on Wishlist (`AutoHeight fadeEdge`).
 
 ## Open

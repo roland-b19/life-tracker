@@ -409,7 +409,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         isRecurring: false,
       });
 
-      expect(createRes.success).toBe(true);
+      if (!createRes.success) throw new Error(createRes.error);
       expect(createRes.todo.title).toBe("Action Test Task");
       expect(createRes.todo.reminderTime).toBe("14:30");
 
@@ -444,6 +444,27 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await createTodoAction(task(addDays(today, 7)))).success).toBe(true);
       await expect(createTodoAction(task(addDays(today, 30)))).rejects.toThrow("up to 7 days ahead");
       await expect(createTodoAction(task(addDays(today, -5)))).rejects.toThrow("up to 7 days ahead");
+    });
+
+    it("rejects a duplicate task on the same list, not on another list or user", async () => {
+      const today = toISODate();
+      const task = { space: "personal", title: "Buy milk", dueDate: today, isRecurring: false };
+      expect((await createTodoAction(task)).success).toBe(true);
+      const dup = await createTodoAction({ ...task, title: "  buy MILK " });
+      expect(dup).toEqual({ success: false, error: '"buy MILK" is already on this list.' });
+      // Another day, the other space, or another user is a different list.
+      expect((await createTodoAction({ ...task, dueDate: addDays(today, 1) })).success).toBe(true);
+      expect((await createTodoAction({ ...task, space: "business" })).success).toBe(true);
+      authState.id = userB;
+      expect((await createTodoAction(task)).success).toBe(true);
+      authState.id = userA;
+      // A repeating task meets the repeating tasks, and the one-off lists of the days it is due.
+      const habit = { ...task, title: "Stretch", isRecurring: true, recurrencePattern: "daily" };
+      expect((await createTodoAction(habit)).success).toBe(true);
+      expect((await createTodoAction(habit)).success).toBe(false);
+      expect((await createTodoAction({ ...task, title: "stretch" })).success).toBe(false);
+      authState.id = "";
+      await expect(createTodoAction(task)).rejects.toThrow("Authentication required");
     });
 
     it("restores a deleted task with its streak, owner only", async () => {
