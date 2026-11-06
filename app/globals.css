@@ -988,7 +988,7 @@ textarea:focus-visible {
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; } /* EDGE_FADE in list-motion.tsx runs alongside */
 .auto-height.rows-wait > :is(.entries, .todo-list) > * { animation-play-state: paused; } /* both beat the later row-in shorthand */
 
-/* A grown list's bottom fade while its rows fade in; list-motion.tsx animates --fade (its strength) down to 0,
+/* A resized list's bottom fade while its rows fade in (growing or shrinking); list-motion.tsx animates --fade (its strength) down to 0,
    so the bottom rows return to full opacity at the same height */
 @property --fade {
   syntax: "<number>";
