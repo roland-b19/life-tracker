@@ -17,6 +17,31 @@ function resizeTime(p: number) {
   return 1;
 }
 
+// A wash list (AutoHeight's `wash`) fades its alternating row wash out before rows move and back in after;
+// WASH matches --fade in globals.css.
+const WASH = 240;
+const holds = new WeakMap<HTMLElement, number>();
+/**
+ * Marks a wash list data-settling (no wash) until every row animation running now has finished. `keep` holds it
+ * until the next hold instead: a leaving row's removal, which lands after its animations end.
+ */
+function hold(list: HTMLElement, keep = false) {
+  list.dataset.settling = ""; // before getAnimations styles new rows, so they never start washed
+  const id = (holds.get(list) ?? 0) + 1;
+  holds.set(list, id);
+  if (keep) return;
+  const running = [...list.children].flatMap((r) => r.getAnimations()).filter((a) => !(a instanceof CSSTransition));
+  const clear = () => {
+    if (holds.get(list) !== id) return;
+    for (const r of list.children) delete (r as HTMLElement).dataset.entering;
+    delete list.dataset.settling;
+  };
+  if (!running.length) return clear();
+  Promise.allSettled(running.map((a) => a.finished)).then(clear);
+}
+// How long a row change waits for the wash to fade out first: only in a wash list whose wash is showing.
+const washWait = (list: HTMLElement | null) => (list?.closest("[data-wash]") && !list.hasAttribute("data-settling") ? WASH : 0);
+
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // An element's x on the page, ignoring transforms. offsetLeft alone is not enough: an entering row
@@ -34,7 +59,7 @@ function layoutX(el: HTMLElement) {
  * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
-export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
+export function AutoHeight({ className, wash, children }: { className?: string; wash?: boolean; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -76,17 +101,10 @@ export function AutoHeight({ className, children }: { className?: string; childr
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
-    // While any row is still entering or leaving, the list carries data-settling, so the alternating row wash
-    // (globals.css) waits for the whole list. Transitions are left out: the wash's own fade is one.
-    let held = 0;
-    const hold = () => {
-      inner.dataset.settling = ""; // before getAnimations styles the new rows, so they never start washed
-      const running = [...inner.children].flatMap((r) => r.getAnimations()).filter((a) => !(a instanceof CSSTransition));
-      const id = ++held;
-      if (!running.length) return void delete inner.dataset.settling;
-      Promise.allSettled(running.map((a) => a.finished)).then(() => id === held && delete inner.dataset.settling);
-    };
-    hold();
+    // A wash list hides its row wash while any row is entering or leaving (transitions are left out: the
+    // wash's own fade is one), so the wash comes back once the whole list is in place.
+    const washes = outer.hasAttribute("data-wash");
+    if (washes) hold(inner);
 
     // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
     const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();
@@ -125,7 +143,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
     slide(false);
     // A row added, removed or edited can change the shared columns; a window resize just re-measures.
     const mutations = new MutationObserver(() => {
-      hold(); // first: slide's measuring styles the new rows
+      if (washes) hold(inner); // first: slide's measuring styles the new rows
       slide(!reducedMotion());
     });
     const widths = new ResizeObserver(() => {
@@ -147,9 +165,9 @@ export function AutoHeight({ className, children }: { className?: string; childr
   }, []);
 
   return (
-    <div ref={outerRef} className="auto-height">
-      {/* Starts settling, so the rows' entrance on page load is unwashed too; hold() clears it. */}
-      <div ref={innerRef} className={className} data-settling="">
+    <div ref={outerRef} className="auto-height" data-wash={wash ? "" : undefined}>
+      {/* A wash list starts settling, so the rows' entrance on page load is unwashed too; hold() clears it. */}
+      <div ref={innerRef} className={className} data-settling={wash ? "" : undefined}>
         {children}
       </div>
     </div>
@@ -227,10 +245,14 @@ export function useListMotion() {
         el.style.pointerEvents = el.style.overflow = "";
         delete el.dataset.rowMotion;
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
+        // In a wash list the other rows' wash fades out first; the row sits out the alternation until it is in,
+        // so no wash jumps to another row meanwhile.
+        const wait = washWait(el.parentElement);
+        if (wait) el.dataset.entering = "";
         if (!alone(el)) {
           el.dataset.rowMotion = "";
           el.style.overflow = "hidden";
-          const open = { duration: SPACE, easing: SPACE_EASE };
+          const open = { duration: SPACE, easing: SPACE_EASE, delay: wait, fill: "backwards" } as const;
           closeGap(el, true, open);
           el.animate(spaceFrames(el).reverse(), open).finished.catch(() => {}).finally(() => {
             el.style.overflow = "";
@@ -238,8 +260,11 @@ export function useListMotion() {
           });
         }
         // A row fades in only once its space is fully open, so it is never seen clipped.
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: alone(el) ? 120 : SPACE, easing: EASE, fill: "backwards" })
-          .finished.catch(() => {}).finally(done);
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: wait + (alone(el) ? 120 : SPACE), easing: EASE, fill: "backwards" })
+          .finished.catch(() => {}).finally(() => {
+            delete el.dataset.entering;
+            done();
+          });
       }
       return () => {
         if (nodes.current.get(id) === el) nodes.current.delete(id);
@@ -268,11 +293,14 @@ export function useListMotion() {
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
     el.style.overflow = "hidden";
+    // In a wash list the wash fades out first and comes back once the row is gone (the next hold).
+    const wait = washWait(el.parentElement);
+    if (wait) hold(el.parentElement!, true);
     // The space closes while the row fades, so the exit is one movement of about a quarter of a second.
-    const fade = el.animate(FADE_OUT, FADE);
+    const fade = el.animate(FADE_OUT, { ...FADE, delay: wait });
     let exit = fade;
     if (!alone(el)) {
-      const close = { duration: SPACE, easing: SPACE_EASE, fill: "forwards" } as const;
+      const close = { duration: SPACE, easing: SPACE_EASE, fill: "both", delay: wait } as const;
       const gap = closeGap(el, false, close);
       if (gap) gaps.current.set(el, gap);
       exit = el.animate(spaceFrames(el), close);

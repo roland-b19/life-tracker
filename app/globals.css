@@ -2127,9 +2127,6 @@ select.sort-select:focus-visible:not([data-pointer]) {
   }
 }
 
-/* Wishlist: the alternating row wash comes in (with its fade) only once every row has finished entering */
-.mono .auto-height > [data-settling] > .entry-row { background-color: transparent; }
-
 /* Wishlist header: Sort and Add item share one width */
 .mono .head-actions { display: grid; grid-template-columns: 1fr 1fr; }
 .mono .head-actions > * { width: 100%; justify-content: center; }
@@ -3107,6 +3104,17 @@ button.bars-col:focus-visible {
   --band-out: calc(var(--card-pad) + 1px - 0.5rem);
 }
 :is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+/* A wash list (AutoHeight's `wash`, Wishlist): the band sits halfway between the card edge and the text, and
+   the wash fades out before rows enter or leave and back in once they are in place (list-motion.tsx). A row
+   still entering sits out the alternation, so no other row's wash flips while it comes in. */
+.surface .auto-height[data-wash],
+.surface .auto-height[data-wash] > .entries > .entry-row {
+  --band-out: calc((var(--card-pad) + 1px) / 2);
+}
+.auto-height[data-wash] > .entries > .entry-row { background-color: transparent; }
+.auto-height[data-wash] > .entries:not([data-settling]) > :nth-child(even of .entry-row:not([data-entering])) {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
