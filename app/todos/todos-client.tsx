@@ -532,7 +532,7 @@ export function TodosClient({
               </p>
             )}
 
-            <AutoHeight className="todo-list" sequential>
+            <AutoHeight className="todo-list">
               {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
                 <Fragment key={view.n}>
