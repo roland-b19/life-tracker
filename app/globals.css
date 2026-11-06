@@ -965,7 +965,7 @@ textarea:focus-visible {
    new rows fading in as it starts */
 .auto-height {
   display: flow-root;
-  transition: height 240ms cubic-bezier(0.2, 0, 0, 1);
+  transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
 

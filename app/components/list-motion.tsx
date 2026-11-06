@@ -6,13 +6,18 @@ import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 const DUR = 420;
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
+// RESIZE and RESIZE_EASE match the .auto-height transition in globals.css.
+const RESIZE = 180;
+const RESIZE_EASE = "cubic-bezier(0.2, 0, 0, 1)";
+
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
  * the container just follows them. The new rows' entrance (row-in) starts with the resize, so a
- * switch feels instant.
+ * switch feels instant. Boxes marked data-slide (Wishlist price, range, link) glide to a new
+ * column width and position when a row added, removed or edited changes the shared columns.
  */
 export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -44,9 +49,49 @@ export function AutoHeight({ className, children }: { className?: string; childr
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
+    // Layout box (offsetLeft/Width ignore the rows' entrance scale) of every data-slide element.
+    const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();
+    let width = inner.offsetWidth;
+    const slide = (animate: boolean) => {
+      const els = [...inner.querySelectorAll<HTMLElement>("[data-slide]")];
+      const froms = els.map((el) => {
+        const from = boxes.get(el);
+        const glide = el.getAnimations().find((a) => a.id === "slide");
+        if (!glide || !from) return from;
+        // Restart a glide from where it is now, not from where it started.
+        const cs = getComputedStyle(el);
+        glide.cancel();
+        return { x: from.x + new DOMMatrixReadOnly(cs.transform).m41, w: parseFloat(cs.width) };
+      });
+      // Measure every box before any glide starts: a glide's width feeds back into the shared column.
+      const tos = els.map((el) => ({ x: el.offsetLeft, w: el.offsetWidth }));
+      for (const [i, el] of els.entries()) {
+        const from = froms[i];
+        const to = tos[i];
+        boxes.set(el, to);
+        if (!animate || !from || (Math.abs(from.x - to.x) < 1 && Math.abs(from.w - to.w) < 1)) continue;
+        el.animate(
+          [{ transform: `translateX(${from.x - to.x}px)`, width: `${from.w}px` }, { transform: "none", width: `${to.w}px` }],
+          { duration: RESIZE, easing: RESIZE_EASE, id: "slide" },
+        );
+      }
+    };
+    slide(false);
+    // A row added, removed or edited can change the shared columns; a window resize just re-measures.
+    const mutations = new MutationObserver(() => slide(!reducedMotion()));
+    const widths = new ResizeObserver(() => {
+      if (inner.offsetWidth === width) return;
+      width = inner.offsetWidth;
+      slide(false);
+    });
+
     observer.observe(inner);
+    mutations.observe(inner, { childList: true, subtree: true, characterData: true });
+    widths.observe(inner);
     outer.addEventListener("transitionend", onEnd);
     return () => {
+      mutations.disconnect();
+      widths.disconnect();
       observer.disconnect();
       outer.removeEventListener("transitionend", onEnd);
     };

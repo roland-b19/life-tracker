@@ -142,6 +142,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Faster list resize, gliding Wishlist boxes (Claude Code, branch `fix/tasks-and-polish`): resize 180ms; price, range and link boxes glide when the columns change. See `docs/decisions.md` "Faster list resize, gliding Wishlist boxes".
 - 2026-11-06 — Stronger control fills (Claude Code, branch `fix/tasks-and-polish`): buttons, tags, chips and fields have stronger grey and tint fills so they stand out from cards. See `docs/decisions.md` "Stronger control fills".
 - 2026-11-06 — No shadows, faster row entrance (Claude Code, branch `fix/tasks-and-polish`): every box-shadow removed, hover is a fill on every clickable; tab-switch rows fade in as the list starts resizing. Checked Gym, Health, Tasks, Wishlist and More in the browser at phone and desktop width. See `docs/decisions.md` "No shadows; rows enter with the resize".
 - 2026-11-06 — Graphite palette (Claude Code, branch `fix/tasks-and-polish`), from the user's request "base black, grey": true black page, Apple dark system greys for cards, controls, modal, separators and text (no blue cast); accent and status colors unchanged. See `docs/decisions.md` "Graphite palette".

@@ -65,11 +65,11 @@ function linkOf(value: string) {
 function ItemLink({ value }: { value: string }) {
   const { href, label } = linkOf(value);
   return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value}>
+    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value} data-slide>
       {label}
     </a>
   ) : (
-    <span className="item-link-text" title={value}>{label}</span>
+    <span className="item-link-text" title={value} data-slide>{label}</span>
   );
 }
 
@@ -318,9 +318,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
-                        <span className="badge badge-info item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        <span className="badge badge-info item-price number-tabular" data-slide>{formatRon(Number(item.estimatedPrice))} RON</span>
                         {listRange === "all" && (
-                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
+                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`} data-slide>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}
                         {item.url && <ItemLink value={item.url} />}
                       </div>
