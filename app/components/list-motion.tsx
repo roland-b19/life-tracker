@@ -12,19 +12,22 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 // holds while the box grows (460ms, .auto-height's transition) and the new rows fade in (row-in,
 // 260ms), then shrinks to nothing. .auto-height.edge-fade in globals.css draws it from --edge.
 const HOLD = 460 + 260;
-const SHRINK = 480;
-const EDGE_FRAMES: Keyframe[] = [
+const edgeFrames = (shrink: number, easing: string): Keyframe[] => [
   { "--edge": "72px" },
-  { "--edge": "72px", offset: HOLD / (HOLD + SHRINK), easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+  { "--edge": "72px", offset: HOLD / (HOLD + shrink), easing },
   { "--edge": "0px" },
 ];
+const EDGE = { frames: edgeFrames(480, "cubic-bezier(0.4, 0, 0.2, 1)"), duration: HOLD + 480 };
+// sequential: the rows fade in only after the resize, so the fade can leave quickly once they are in.
+const EDGE_QUICK = { frames: edgeFrames(220, "cubic-bezier(0.2, 0, 0, 1)"), duration: HOLD + 220 };
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them. The bottom edge fades while it grows.
+ * the container just follows them. The bottom edge fades while it grows. `sequential` holds the
+ * new rows' entrance (row-in) until the resize ends, so they appear in a box that has stopped moving.
  */
-export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
+export function AutoHeight({ className, sequential, children }: { className?: string; sequential?: boolean; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +41,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
+      outer.classList.remove("rows-wait");
     };
     let last = contentHeight();
     let fade: Animation | undefined;
@@ -52,10 +56,12 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
+      if (sequential) outer.classList.add("rows-wait");
       if (next > from) {
         fade?.cancel(); // a second growth restarts the fade
         outer.classList.add("edge-fade");
-        const run = (fade = outer.animate(EDGE_FRAMES, HOLD + SHRINK));
+        const edge = sequential ? EDGE_QUICK : EDGE;
+        const run = (fade = outer.animate(edge.frames, edge.duration));
         run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
       }
     });
@@ -67,7 +73,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       observer.disconnect();
       outer.removeEventListener("transitionend", onEnd);
     };
-  }, []);
+  }, [sequential]);
 
   return (
     <div ref={outerRef} className="auto-height">

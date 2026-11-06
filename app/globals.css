@@ -995,6 +995,8 @@ textarea:focus-visible {
 .auto-height.edge-fade {
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--edge)), rgb(0 0 0 / 0.55) calc(100% - var(--edge) / 2), transparent);
 }
+/* AutoHeight sequential: new rows hold their entrance until the box has finished resizing */
+.auto-height.rows-wait > :is(.entries, .todo-list) > * { animation-play-state: paused; } /* beats the later row-in shorthand */
 
 .entry-row {
   justify-content: space-between;

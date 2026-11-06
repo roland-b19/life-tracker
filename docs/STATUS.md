@@ -142,6 +142,9 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Tasks switch in sequence (Claude Code, branch `fix/tasks-switch-motion`), from the user's request to make the Tasks switch simple and smooth:
+  - Tasks only (`<AutoHeight sequential>`): the old rows fade out (unchanged), the box resizes with the new rows held invisible (`.rows-wait` pauses their `row-in`), then they fade in with the same `row-in`. When it grows, the 72px bottom fade holds through the resize and the rows' fade-in, then shrinks to nothing in 220ms (other lists keep 480ms). Food and Wishlist are unchanged.
+  - Verified: tsc, eslint; Tasks frame samples both ways (Business/Daily ↔ Personal/Daily, 64 ↔ 184px): rows at opacity 0 for the whole resize, fade in after it, fade shrinks 72 → 0 by ~1.1s; longest frame gap 30ms (the click's render). Not checked: Safari, Firefox, phone width, day and tab switches (same path).
 - 2026-11-06 — List fade shrinks out (Claude Code, merged in PR #50), from the user's request that the fade not stop abruptly once the list has resized, everywhere in the app:
   - The fade is now drawn by `.auto-height.edge-fade` from a registered `--edge` length (`@property`). `AutoHeight` holds it at 72px through the growth and the rows' fade-in (720ms), then animates `--edge` to 0 over 480ms on `cubic-bezier(0.4, 0, 0.2, 1)`, so the fade shrinks into the bottom edge instead of sliding away; the class is removed when it reaches 0. Applies to every `AutoHeight` list (Tasks, Food, Wishlist).
   - Verified: tsc, eslint; Tasks frame samples (Business/Daily → Personal/Daily, 64 → 184px): `--edge` 72px through the growth, then 70 → 57 → 32 → 15 → 6 → 2 → 0, class, mask and inline height cleared; no new console errors. Not checked: Safari, Firefox, phone width; Food and Wishlist not frame-sampled (same code path).
