@@ -2103,8 +2103,10 @@ select.sort-select:focus-visible:not([data-pointer]) {
 }
 .item-actions { grid-area: actions; }
 
-/* Wishlist page: a monospaced face, so every letter and digit takes the same width. */
-.mono {
+/* Wishlist page: a monospaced face, so every letter and digit takes the same width. The page title lives in the
+   shared navigation, outside .mono, so it opts in here. */
+.mono,
+main:has(> .mono) .app-title {
   font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
