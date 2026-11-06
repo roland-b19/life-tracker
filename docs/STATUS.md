@@ -142,6 +142,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Wishlist row wash waits for the list (Claude Code, branch `fix/tasks-and-polish`): the alternating wash fades in after every row has entered. Sampled per frame on a filter switch in the browser.
 - 2026-11-06 — Wishlist polish and no clipped rows (Claude Code, branch `fix/tasks-and-polish`): rows appear only once their space is open, the last row is no longer clipped during the resize, quieter field highlights, equal header buttons, actions aligned under Add item. Checked in the browser at 562px and 375px (filter switch sampled per frame, add). See `docs/decisions.md` "A row appears only once its space is there".
 - 2026-11-06 — Wishlist glide fixes (Claude Code, branch `fix/tasks-and-polish`): boxes no longer start 7px off or overshoot by the column's own movement, and an interrupted glide continues from where it is. Tested in the browser: add, edit both ways, delete, undo, filter switch, 375px, reduced motion.
 - 2026-11-06 — Faster list resize, gliding Wishlist boxes (Claude Code, branch `fix/tasks-and-polish`): resize 180ms; price, range and link boxes glide when the columns change. See `docs/decisions.md` "Faster list resize, gliding Wishlist boxes".

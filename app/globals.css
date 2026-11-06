@@ -2127,6 +2127,9 @@ select.sort-select:focus-visible:not([data-pointer]) {
   }
 }
 
+/* Wishlist: the alternating row wash comes in (with its fade) only once every row has finished entering */
+.mono .auto-height > [data-settling] > .entry-row { background-color: transparent; }
+
 /* Wishlist header: Sort and Add item share one width */
 .mono .head-actions { display: grid; grid-template-columns: 1fr 1fr; }
 .mono .head-actions > * { width: 100%; justify-content: center; }

@@ -76,6 +76,18 @@ export function AutoHeight({ className, children }: { className?: string; childr
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
+    // While any row is still entering or leaving, the list carries data-settling, so the alternating row wash
+    // (globals.css) waits for the whole list. Transitions are left out: the wash's own fade is one.
+    let held = 0;
+    const hold = () => {
+      inner.dataset.settling = ""; // before getAnimations styles the new rows, so they never start washed
+      const running = [...inner.children].flatMap((r) => r.getAnimations()).filter((a) => !(a instanceof CSSTransition));
+      const id = ++held;
+      if (!running.length) return void delete inner.dataset.settling;
+      Promise.allSettled(running.map((a) => a.finished)).then(() => id === held && delete inner.dataset.settling);
+    };
+    hold();
+
     // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
     const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();
     let width = inner.offsetWidth;
@@ -112,7 +124,10 @@ export function AutoHeight({ className, children }: { className?: string; childr
     };
     slide(false);
     // A row added, removed or edited can change the shared columns; a window resize just re-measures.
-    const mutations = new MutationObserver(() => slide(!reducedMotion()));
+    const mutations = new MutationObserver(() => {
+      hold(); // first: slide's measuring styles the new rows
+      slide(!reducedMotion());
+    });
     const widths = new ResizeObserver(() => {
       if (inner.offsetWidth === width) return;
       width = inner.offsetWidth;
@@ -133,7 +148,8 @@ export function AutoHeight({ className, children }: { className?: string; childr
 
   return (
     <div ref={outerRef} className="auto-height">
-      <div ref={innerRef} className={className}>
+      {/* Starts settling, so the rows' entrance on page load is unwashed too; hold() clears it. */}
+      <div ref={innerRef} className={className} data-settling="">
         {children}
       </div>
     </div>
