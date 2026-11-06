@@ -270,7 +270,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className="entries wishlist-entries" fadeEdge>
+            <AutoHeight className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
