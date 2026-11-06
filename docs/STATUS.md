@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (Tasks fixes and polish on every page)_
+_Last updated: 2026-11-06 by Claude (no pulsing, Wishlist columns)_
 
 ## Phase
 
@@ -142,6 +142,10 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — No pulsing, Wishlist columns (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
+  - Every page: hover no longer scales cards and buttons (that overshoot was the "pulse"); hover is the soft shadow, fields and tabs get a highlight. Modals, toasts and the date picker enter with the plain ease, no overshoot. The press shrink and the skeleton shimmer stay.
+  - Wishlist: monospaced system font on the page; the item count sits next to the Items title; the sort menu text is centred between the left edge and the chevron and highlights on hover; price is a box like the range; range, price and link have fixed widths (from the longest value shown, link capped at 24 characters) and line up down the list; range and link are centred on the whole item. On a phone the meta line wraps as before, the filter tabs use the dense size.
+  - Checked: tsc, eslint, 94 tests, and in the browser: Wishlist All and Under 250 at desktop width and All at 375px; row heights match the empty note. The sort menu hover was not checked in the browser.
 - 2026-11-06 — Tasks fixes and polish on every page (Claude Code, branch `fix/tasks-and-polish`), from the user's request:
   - Tasks: a repeating task starts on its first day; add and delete work in the Today tab and on any day; a deleted task no longer pops back; the Week strip shows day names; "Nothing planned" shows on every empty day.
   - Every page: hover fills on idle buttons and tabs, a very soft all-around hover shadow, list rows as alternating tinted bands with a hover band, row buttons centred on multi-line rows, uniform list spacing.

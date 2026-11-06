@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
@@ -56,15 +56,20 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
 const formatRon = (n: number) =>
   n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** A typed URL opens as a link; anything else (a store name) is shown as plain text. */
-function ItemLink({ value }: { value: string }) {
+/** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
+function linkOf(value: string) {
   const href = /^https?:\/\/\S+$/i.test(value) ? value : /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(value) ? `https://${value}` : null;
+  return { href, label: href ? `${value.replace(/^https?:\/\//i, "").split("/")[0]} ↗` : value };
+}
+
+function ItemLink({ value }: { value: string }) {
+  const { href, label } = linkOf(value);
   return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link">
-      {value.replace(/^https?:\/\//i, "").split("/")[0]} ↗
+    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value}>
+      {label}
     </a>
   ) : (
-    <span className="item-link-text">{value}</span>
+    <span className="item-link-text" title={value}>{label}</span>
   );
 }
 
@@ -100,6 +105,11 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
+  // Price boxes and the link column are as wide as their longest value, so they line up as columns.
+  const columns = {
+    "--price-ch": Math.max(0, ...filteredItems.map((i) => formatRon(Number(i.estimatedPrice)).length + 4)),
+    "--link-ch": Math.min(24, Math.max(0, ...filteredItems.map((i) => (i.url ? linkOf(i.url).label.length : 0)))),
+  } as CSSProperties;
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
@@ -259,15 +269,14 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     <main>
       <Navigation userName={userName} />
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid mono">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
               <h2 id="wishlist-items-title" className="section-title">
-                Items
+                Items <span className="muted number-tabular">{filteredItems.length}</span>
               </h2>
               <span className="head-actions">
-                <span className="muted number-tabular">{filteredItems.length}</span>
                 <select
                   className="sort-select"
                   aria-label="Sort items"
@@ -294,7 +303,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className={`entries wishlist-entries${listRange === "all" ? " ranged" : ""}`}>
+            <AutoHeight className="entries wishlist-entries" style={columns}>
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
@@ -307,7 +316,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
-                        <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        <span className="badge badge-info item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
                         {listRange === "all" && (
                           <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}

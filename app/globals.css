@@ -22,18 +22,16 @@
   --separator: #353c45;
   --card-border: #434b56;
   --card-shadow: none;
-  /* Hover: one spring "breath" and one low shadow on every card, button, tab and field.
-     --grow and --press are rewritten per element by app/providers.tsx so all grow and shrink by the same pixels. */
+  /* Hover: one soft shadow on every card and button, no scaling (nothing pulses).
+     --press is rewritten per element by app/providers.tsx so all shrink by the same pixels. */
   --hover-shadow: 0 0 18px -4px rgba(0, 0, 0, 0.55); /* very soft, on every side */
-  --grow: 1.01;
-  --lift: 320ms var(--pop);
+  --lift: 320ms var(--ease);
   --glass-blur: blur(28px) saturate(160%);
-  /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
+  /* Apple motion: iOS ease-out for movement, never an overshoot */
   --dur: 420ms;
   /* Hover, press and selection feedback (color, shadow, opacity): quick, or every control feels late */
   --quick: 180ms;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --pop: cubic-bezier(0.34, 1.45, 0.64, 1);
   --press: 0.92;
   color-scheme: dark;
 }
@@ -807,21 +805,15 @@ main {
   }
 }
 
-/* Hover, one rule for every card, button, tab and field: a spring "breath" (overshoot, then settle).
-   A focused field stays lifted. Fields and tabs get no shadow, everything else gets one low shadow. */
+/* Hover, one rule for every card and button: one soft shadow, no scaling. Fields and tabs get a highlight instead. */
 @media (hover: hover) {
-  .surface:hover,
-  .split-day-card:hover,
-  .macro-card:hover,
-  .routine-row:hover,
-  .side-user:hover,
-  .nav-link:hover,
-  input:not([type="checkbox"]):not([type="radio"]):is(:hover, :focus):not(:disabled),
-  select:is(:hover, :focus):not(:disabled),
-  textarea:is(:hover, :focus):not(:disabled),
-  button:not(.bars-col, .segmented button.active, .split-day-select):hover:not(:disabled),
-  .month-nav-btn:hover {
-    transform: scale(var(--grow));
+  input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
+  select:hover:not(:focus, :disabled),
+  textarea:hover:not(:focus, :disabled) {
+    background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
+  }
+  select.sort-select:hover:not(:focus, :disabled) {
+    background-color: rgba(255, 255, 255, 0.11); /* the idle-button hover fill */
   }
 
   .surface:hover,
@@ -1380,7 +1372,7 @@ textarea:focus-visible {
   border-radius: 1.25rem;
   box-shadow: none;
   overflow: hidden;
-  animation: modalScaleUp var(--dur) var(--pop) forwards;
+  animation: modalScaleUp var(--dur) var(--ease) forwards;
 }
 
 .command-search-row {
@@ -1536,7 +1528,7 @@ textarea:focus-visible {
   padding: 0.75rem 1.15rem;
   color: var(--text);
   box-shadow: none;
-  animation: toastSlideIn var(--dur) var(--pop) forwards;
+  animation: toastSlideIn var(--dur) var(--ease) forwards;
   max-width: 100%;
 }
 
@@ -1828,7 +1820,7 @@ main > .error {
   border-radius: 1.1rem;
   box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
   transform-origin: top center;
-  animation: picker-in calc(var(--dur) + 60ms) var(--pop) both;
+  animation: picker-in calc(var(--dur) + 60ms) var(--ease) both;
 }
 
 @keyframes picker-in {
@@ -2072,16 +2064,17 @@ main > .error {
   gap: 0.25rem 0.75rem;
 }
 
-/* A filtered wishlist row (name over price): the empty note takes the same space */
-.wishlist-entries { --row-h: 4.15rem; }
-/* In All a row also has its range badge, so it is taller */
-.wishlist-entries.ranged { --row-h: 4.59375rem; }
+/* A wishlist row (name over the boxed price): the empty note takes the same space */
+.wishlist-entries { --row-h: 4.59375rem; }
 
-/* Compact sort menu in a card header */
+/* Compact sort menu in a card header. The text is centred between the left edge and the chevron
+   (which ends 1.55rem from the right), with the same 0.85rem on either side. */
 select.sort-select {
   width: auto;
   min-height: 2.25rem;
-  padding: 0.35rem 2.1rem 0.35rem 0.85rem;
+  padding: 0.35rem 2.4rem 0.35rem 0.85rem;
+  text-align: center;
+  text-align-last: center;
   font-size: 0.875rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -2105,30 +2098,58 @@ select.sort-select {
   min-width: 0;
 }
 
-.item-price {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tint);
+/* Wishlist page: a monospaced face, so every letter and digit takes the same width */
+.mono {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.item-link {
+/* Monospace is wider, so its four filter tabs take the dense size on a phone */
+@media (max-width: 30rem) {
+  .mono .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
+}
+
+/* Price and range boxes are one width down the list (--price-ch from the longest price), so they line up */
+.item-price {
+  justify-content: flex-end;
+  width: calc(var(--price-ch, 10) * (1ch + 0.04em) + 1.3rem + 2px);
+}
+.item-row .item-meta > .badge:not(.item-price) {
+  justify-content: center;
+  width: calc(9 * (1ch + 0.04em) + 1.3rem + 2px); /* "UNDER 250", the longest range */
+}
+
+.item-link,
+.item-link-text {
+  width: calc(var(--link-ch, 12) * 1ch);
+  max-width: 100%;
   font-size: 0.875rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.item-link {
   font-weight: 600;
   color: var(--tint);
   text-decoration: none;
-  overflow-wrap: anywhere;
 }
 
-@media (hover: hover) {
-  .item-link:hover {
-    text-decoration: underline;
+/* Wide lists: name over price on the left; range and link in shared columns (subgrid), centred on the whole item */
+.auto-height:has(> .wishlist-entries) { container-type: inline-size; }
+@container (min-width: 34rem) {
+  .wishlist-entries { grid-template-columns: minmax(0, 1fr) auto auto auto; column-gap: 0.75rem; }
+  .wishlist-entries > * { grid-column: 1 / -1; }
+  .item-row {
+    grid-template-columns: subgrid;
+    grid-template-areas: "name range link actions" "price range link actions";
   }
+  .item-meta { display: contents; }
+  .item-price { grid-area: price; }
+  .item-row .item-meta > .badge:not(.item-price) { grid-area: range; }
+  :is(.item-link, .item-link-text) { grid-area: link; }
 }
 
 .item-link-text {
-  font-size: 0.875rem;
   color: var(--secondary);
-  overflow-wrap: anywhere;
 }
 
 .item-actions {

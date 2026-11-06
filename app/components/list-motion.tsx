@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 // DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
@@ -14,7 +14,7 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
  * the container just follows them. The new rows' entrance (row-in) waits until the resize ends, so
  * they appear in a box that has stopped moving.
  */
-export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
+export function AutoHeight({ className, style, children }: { className?: string; style?: CSSProperties; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +56,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
 
   return (
     <div ref={outerRef} className="auto-height">
-      <div ref={innerRef} className={className}>
+      <div ref={innerRef} className={className} style={style}>
         {children}
       </div>
     </div>

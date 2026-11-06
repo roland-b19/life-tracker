@@ -142,6 +142,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - **2026-11-06 — A repeating task starts on its first day.** A daily or weekday task shows from its `due_date` (the day it was added, or the day it was planned for) on, never on earlier days. Rollover never carries a task onto a day that had already ended when the task was created. In dev builds, deleting from a past day ends a repeating task from the day shown. The Week strip shows day names only, and "Nothing planned" shows on every empty day, not only a selected one.
 - **2026-11-06 — Hover shadow and row bands.** The hover shadow is now very soft and on every side (`0 0 18px -4px`), replacing the downward one. Idle buttons, tabs, weekday buttons and muscle chips get a hover fill. List rows on every page (entries, tasks, sets, shopping) are rounded bands that alternate a 5% tint wash and take a 10% wash on hover; headers and empty notes do not count in the alternation. A saved form's list change waits for the form to fade (`useAfterClose` in `modal.tsx`) on Tasks, Health (meals, weigh-ins, shopping) and Wishlist; the Gym day editor's exercise rows enter, leave and slide when moved.
 
+- **2026-11-06 — No pulsing anywhere.** Hover never scales: cards and buttons get the soft shadow, fields and tabs a highlight. No motion uses an overshoot curve (`--pop` and `--grow` removed). The press shrink stays. Wishlist uses a monospaced system font (`.mono`, no dependency) and a column layout (subgrid) so range, price and link line up.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

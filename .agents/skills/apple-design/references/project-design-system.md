@@ -8,7 +8,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 |---|---|
 | Palette | **Storm**: dark, cool graphite with a steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
-| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, small overshoot on controls only. |
+| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, buttons) or a highlight (fields, tabs), never a scale. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
 | Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No resting shadows: depth comes from border, blur and translucency. The one shadow is `--hover-shadow`, very soft and on every side, under a hovered card or control. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
@@ -27,7 +27,7 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 | `--tint` / `--tint-hover` | `#86b4ea` / `#9bc2ef` | the single accent: primary buttons, active tab, links |
 | `--on-tint` | `#0b1b30` | text and icons on the accent (never white) |
 | `--success` `--warning` `--danger` | `#8fd4a3` `#ebc673` `#ef8f8f` | status, always paired with an icon or text, never color alone |
-| `--dur` `--ease` `--pop` `--press` | 420 ms, spring ease, overshoot ease, 0.96 | all motion |
+| `--dur` `--ease` `--press` | 420 ms, spring ease, press shrink | all motion |
 
 Rules:
 - Use tokens, never raw hex or `rgba` for UI colors in components. A tinted status background is `rgba(<token rgb>, 0.12 to 0.15)`.
