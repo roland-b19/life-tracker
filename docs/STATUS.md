@@ -142,8 +142,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 ## Session log (newest first)
 
 - 2026-11-06 — List growth fade everywhere (Claude Code), from the user's request to apply the Wishlist motion to the other pages:
-  - The `fadeEdge` prop is gone: every `AutoHeight` (Todos list, both Food lists, Wishlist) now grows over 460ms on `cubic-bezier(0.4, 0, 0.2, 1)` with the 72px bottom fade shrinking in step. Gym does not use `AutoHeight` and is unchanged.
-  - Verified: tsc, eslint; Todos and Wishlist leave no inline height or mask after a switch, no new console errors. The browser pane was hidden, so Todos/Food were not frame-sampled (Wishlist was, in PR #47; the code path is now the same). Not checked: Safari, phone width.
+  - The `fadeEdge` prop is gone: every `AutoHeight` (Todos list, both Food lists, Wishlist) now grows over 460ms on `cubic-bezier(0.4, 0, 0.2, 1)` with the 72px bottom fade (transparent at the bottom). After user feedback that a hard line still crossed the new rows on Tasks, the fade holds at full strength for the whole growth (the new rows' 260ms fade-in ends inside it) and only then slides below the box over 260ms; a second growth cancels and restarts it. Gym does not use `AutoHeight` and is unchanged.
+  - Verified: tsc, eslint; Todos and Wishlist leave no inline height or mask after a switch, no new console errors. Tasks frame samples (Business/Daily → Personal/Daily, 64 → 184px): full fade through the growth and the rows' fade-in, then it slides out, mask and inline height cleared. Food not frame-sampled (same code path). Not checked: Safari, phone width.
 - 2026-11-06 — Wishlist growth smoothing (Claude Code, merged in PR #47), from the user's "still feels forced" feedback:
   - Wishlist's `AutoHeight` (`.fade-edge`) grows over 460ms on `cubic-bezier(0.4, 0, 0.2, 1)` instead of 300ms on the front-loaded `--ease`, so it opens instead of snapping. Other lists keep 300ms.
   - The edge fade is 72px with a softer middle stop and shrinks on the same curve and duration as the height (no hold-then-slide), so it is gone exactly when the list arrives.

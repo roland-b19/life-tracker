@@ -8,13 +8,18 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// A growing list's bottom edge fades instead of cutting rows. The fade shrinks on the same
-// curve as the height, so it is gone exactly when the list arrives. Matches .auto-height's transition.
-const GROW = { duration: 460, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
+// A growing list's bottom edge fades (transparent at the bottom) instead of cutting rows. The fade
+// holds while the box grows and the new rows fade in (row-in, 260ms), then slides below the box.
+const GROW = { duration: 460, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }; // .auto-height's transition
+const REVEAL = 260;
 const EDGE = 72;
 const EDGE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${EDGE}px), rgb(0 0 0 / 0.55) calc(100% - ${EDGE / 2}px), transparent)`;
 const EDGE_FRAMES: Keyframe[] = [
   { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%" },
+  {
+    maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: "100% 100%",
+    offset: GROW.duration / (GROW.duration + REVEAL), easing: "cubic-bezier(0.2, 0, 0, 1)",
+  },
   { maskImage: EDGE_MASK, maskRepeat: "no-repeat", maskSize: `100% calc(100% + ${EDGE}px)` },
 ];
 
@@ -39,6 +44,7 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.overflow = "";
     };
     let last = contentHeight();
+    let fade: Animation | undefined;
 
     const observer = new ResizeObserver(() => {
       const next = contentHeight();
@@ -50,7 +56,10 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
-      if (next > from) outer.animate(EDGE_FRAMES, GROW);
+      if (next > from) {
+        fade?.cancel(); // a second growth restarts the fade instead of stacking two masks
+        fade = outer.animate(EDGE_FRAMES, GROW.duration + REVEAL);
+      }
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
