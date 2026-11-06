@@ -150,23 +150,33 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
           return;
         }
         const updated = res.item as WishlistItemData;
-        setItems((prev) => prev.map((i) => (i.id === editingId ? updated : i)));
-        showToast({ message: `Saved "${updated.name}"`, type: "success" });
+        const before = items.find((i) => i.id === editingId);
+        const swap = (to: WishlistItemData) => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
+        swap(updated);
+        showToast({
+          message: `Saved "${updated.name}"`,
+          type: "success",
+          ...(before && {
+            actionLabel: "Undo",
+            // Writes the old values back; if that fails the edit stays, so the screen matches the database.
+            onAction: async () => {
+              swap(before);
+              const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
+              if (!back?.success) {
+                swap(updated);
+                showToast({ message: "Failed to undo the edit", type: "warning" });
+              }
+            },
+          }),
+        });
       } else {
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         const added = res.item as WishlistItemData;
         enter(added.id);
         setItems((prev) => [added, ...prev]);
-        showToast({
-          message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
-          type: "success",
-          actionLabel: "Undo",
-          onAction: () => {
-            dropRow(added.id);
-            void deleteWishlistItemAction(added.id);
-          },
-        });
+        // No Undo: a new item is one tap from Delete.
+        showToast({ message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -260,7 +270,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className="entries wishlist-entries">
+            <AutoHeight className="entries wishlist-entries" fadeEdge>
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">

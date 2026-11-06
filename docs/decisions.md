@@ -134,6 +134,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-06 — Pages polish 4.** The Food Assistant opens with an empty chat: no greeting and no suggestion chips (the user does not need them). The client sends at most the last 10 turns, matching what the server reads.
 
+- **2026-11-06 — Wishlist motion.** Adding a wishlist item offers no Undo (the user can delete it); saving an edit offers Undo, which writes the previous values back through the same owner-scoped update action. Toasts size to their content. A list that grows on a tab switch fades its bottom edge (top-to-bottom gradient) instead of cutting rows; for now only on Wishlist (`AutoHeight fadeEdge`).
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
