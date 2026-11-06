@@ -5,6 +5,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   timestamp,
   unique,
   uniqueIndex,
@@ -196,7 +197,6 @@ export const meals = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     date: date("date").notNull(),
-    mealType: varchar("meal_type", { length: 30 }).notNull(), // 'breakfast', 'lunch', 'dinner', 'snack'
     name: varchar("name", { length: 120 }).notNull(),
     calories: integer("calories").default(0).notNull(),
     protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
@@ -288,6 +288,19 @@ export const shoppingItems = pgTable(
   },
 );
 
+/** The user's store sections, in walking order; "other" is built in and never stored. */
+export const shoppingCategories = pgTable(
+  "shopping_categories",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 50 }).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.name] })],
+);
+
 // --- MONEY MODULE TABLES ---
 
 export const expenseCategories = pgTable(
@@ -345,10 +358,20 @@ export const todos = pgTable(
     isCompleted: boolean("is_completed").default(false).notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     isCarriedOver: boolean("is_carried_over").default(false).notNull(),
-    streak: integer("streak").default(0).notNull(),
-    lastCompletedDate: date("last_completed_date"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+);
+
+// One row per day a repeating task was ticked; its streak is counted from these.
+export const todoCompletions = pgTable(
+  "todo_completions",
+  {
+    todoId: uuid("todo_id")
+      .notNull()
+      .references(() => todos.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.todoId, table.date] })],
 );
 
 // One frozen row per user, space, kind and day: how many tasks existed and how many were done.

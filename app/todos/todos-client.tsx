@@ -25,7 +25,7 @@ import {
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
 import { DEV_EDIT_PAST, PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
-import { applyToggle } from "@/lib/streak";
+import { streakOn } from "@/lib/streak";
 import { compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
@@ -111,7 +111,7 @@ export function TodosClient({
   // Both lists look a week ahead: one-off tasks to plan them, daily ones to see each weekday's list.
   const maxDate = addDays(todayDate, PLAN_AHEAD_DAYS);
   const tomorrow = addDays(todayDate, 1);
-  // Past days are read-only (they show what was done), except in dev builds, for testing.
+  // Past days can be ticked but not edited, except in dev builds, for testing.
   const isPast = date < todayDate;
   const editable = !isPast || DEV_EDIT_PAST;
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
@@ -124,17 +124,16 @@ export function TodosClient({
   const listDaily = view.tab === "daily";
   const listPast = view.date < todayDate;
   const listEditable = !listPast || DEV_EDIT_PAST;
-  // A daily task is ticked on its day, never ahead of time.
-  const listTickable = listEditable && !(listDaily && view.date > todayDate);
+  // A daily task is ticked on its day or later, never ahead of time.
+  const listTickable = !(listDaily && view.date > todayDate);
   const listTodos = visibleFor(view.space, listDaily, view.date);
   const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
-  // Past days use the snapshot taken that day; today and later use the live list.
-  const snapshot = isPast ? byDate.get(date) : undefined;
-  const doneCount = isPast ? (snapshot?.done ?? 0) : visibleTodos.filter((t) => t.isCompleted).length;
-  const totalCount = isPast ? (snapshot?.total ?? 0) : visibleTodos.length;
-  const noRecord = isPast && !snapshot;
+  // A past day with no snapshot and nothing on its list has no record; otherwise the list is counted.
+  const doneCount = visibleTodos.filter((t) => t.isCompleted).length;
+  const totalCount = visibleTodos.length;
+  const noRecord = isPast && !byDate.has(date) && totalCount === 0;
   // Nothing due counts as everything done.
   const percentage = totalCount ? Math.round((doneCount / totalCount) * 100) : 100;
 
@@ -297,7 +296,7 @@ export function TodosClient({
     }
   };
 
-  // The streak moves with the tick, using the same rule as the server; the row slides to its new place.
+  // The streak moves with the tick, counted as the server counts it; the row slides to its new place.
   const setCompleted = (id: string, isCompleted: boolean) =>
     reorder(() =>
       setTodosMap((prev) => ({
@@ -307,8 +306,8 @@ export function TodosClient({
             if (t.id !== id) return t;
             const next = { ...t, isCompleted, completedAt: isCompleted ? new Date() : null };
             if (!t.isRecurring) return next;
-            const { streak, lastCompletedDate } = applyToggle(t, isCompleted, date);
-            return { ...next, streak, lastCompletedDate };
+            const doneDates = isCompleted ? [...new Set([...t.doneDates, date])].sort() : t.doneDates.filter((d) => d !== date);
+            return { ...next, doneDates, streak: streakOn(new Set(doneDates), t.recurrencePattern, date) };
           })
           .sort(compareTodos),
       })),
@@ -318,15 +317,8 @@ export function TodosClient({
     const next = !todo.isCompleted;
     setCompleted(todo.id, next);
     try {
+      // No toast: ticking again is its own undo.
       await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
-      showToast({
-        message: next ? `Done "${todo.title}"` : `Reopened "${todo.title}"`,
-        actionLabel: "Undo",
-        onAction: async () => {
-          await toggleTodoAction({ id: todo.id, isCompleted: !next, currentDate: date });
-          await loadDay(date);
-        },
-      });
     } catch (err: unknown) {
       if (err instanceof Error) setErrorMsg(err.message);
     }
@@ -393,9 +385,9 @@ export function TodosClient({
           actionLabel: "Undo",
           onAction: async () => {
             putBack(target);
-            const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt } = target;
+            const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
             const back = await restoreTodoAction({
-              id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, streak, lastCompletedDate, createdAt,
+              id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
             }).catch(() => null);
             if (!back?.success) {
               leave(target.id, () => setTodosMap((prev) => ({ ...prev, [target.space]: prev[target.space].filter((t) => t.id !== target.id) })));
@@ -528,7 +520,7 @@ export function TodosClient({
 
             {isPast && !DEV_EDIT_PAST && (
               <p className="readonly-note">
-                <LockIcon size={13} /> Past days are read-only
+                <LockIcon size={13} /> Past days can be ticked, not edited
               </p>
             )}
             {isDaily && date > todayDate && (
@@ -544,11 +536,9 @@ export function TodosClient({
                 {listTodos.map((task) => (
                   <div key={task.id} ref={rowRef(task.id)} className="todo-row">
                     {!listTickable ? (
-                      !(listPast && listDaily) && (
-                        <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
-                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                        </span>
-                      )
+                      <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
+                        {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                      </span>
                     ) : (
                       <button
                         type="button"
@@ -561,12 +551,7 @@ export function TodosClient({
                     )}
 
                     <div className="todo-main">
-                      <span className={`todo-title ${listEditable && task.isCompleted ? "completed" : ""}`}>
-                        {task.title}
-                        {listPast && !listDaily && (
-                          <span className="visually-hidden">{task.isCompleted ? ", done" : ", not done"}</span>
-                        )}
-                      </span>
+                      <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
                       {((!listDaily && task.isCarriedOver) || task.reminderTime || task.recurrencePattern.startsWith("days:")) && (
                         <div className="badge-row">
                           {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}

@@ -20,11 +20,6 @@ export const FOOD_MCP_TOOLS = [
       type: "object",
       properties: {
         date: { type: "string", description: "Date in YYYY-MM-DD format" },
-        mealType: {
-          type: "string",
-          enum: ["breakfast", "lunch", "dinner", "snack"],
-          description: "Type of meal",
-        },
         name: {
           type: "string",
           description:
@@ -49,7 +44,6 @@ export const FOOD_MCP_TOOLS = [
       },
       required: [
         "date",
-        "mealType",
         "name",
         "calories",
         "protein",
@@ -156,7 +150,6 @@ export async function executeFoodAiTool(
         meal: {
           id: meal.id,
           date: meal.date,
-          mealType: meal.mealType,
           name: meal.name,
           calories: meal.calories,
           protein: meal.protein,
@@ -203,7 +196,6 @@ export async function executeFoodAiTool(
         mealsCount: summary.meals.length,
         meals: summary.meals.map((m) => ({
           id: m.id,
-          mealType: m.mealType,
           name: m.name,
           calories: m.calories,
           protein: m.protein,

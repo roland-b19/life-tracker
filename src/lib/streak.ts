@@ -1,12 +1,5 @@
 import { addDays } from "./format-date";
 
-export interface StreakState {
-  streak: number;
-  lastCompletedDate: string | null;
-  /** "daily", or "days:1,3,5" for chosen ISO weekdays; missing means daily. */
-  recurrencePattern?: string;
-}
-
 /** ISO weekday of a YYYY-MM-DD day: 1 = Monday ... 7 = Sunday. */
 export const weekdayOf = (iso: string) => ((new Date(`${iso.slice(0, 10)}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
 
@@ -22,25 +15,16 @@ export function previousDue(pattern: string | undefined, day: string): string {
 }
 
 /**
- * A repeating task's streak after it is ticked (`done`) or unticked on `day`. Shared by the
- * server and the optimistic UI. Unticking gives back exactly what the tick added, so tick,
- * untick, tick again lands where it started. A streak counts due days, so a Monday and
- * Thursday task keeps it from Monday to Thursday.
+ * A repeating task's streak as seen on `day`: the run of ticked due days ending on `day`, or on
+ * the due day before it while `day` is not ticked yet. Shared by the server and the optimistic UI.
+ * A streak counts due days, so a Monday and Thursday task keeps it from Monday to Thursday.
  */
-export function applyToggle(s: StreakState, done: boolean, day: string): StreakState {
-  const before = previousDue(s.recurrencePattern, day);
-  if (done) {
-    // Already ticked on this day (a double click), or a later day: nothing to add.
-    if (s.lastCompletedDate && s.lastCompletedDate >= day) return s;
-    return { streak: s.lastCompletedDate === before ? s.streak + 1 : 1, lastCompletedDate: day };
+export function streakOn(done: ReadonlySet<string>, pattern: string | undefined, day: string): number {
+  let d = done.has(day) ? day : previousDue(pattern, day);
+  let n = 0;
+  while (done.has(d)) {
+    n++;
+    d = previousDue(pattern, d);
   }
-  if (s.lastCompletedDate !== day) return s; // not ticked on this day: nothing to take back
-  const streak = Math.max(0, s.streak - 1);
-  // A streak above 0 still ends on the previous due day; otherwise there was no run before this tick.
-  return { streak, lastCompletedDate: streak > 0 ? before : null };
-}
-
-/** The streak as seen on `day`: it is broken once a due day passes without a tick. */
-export function liveStreak(s: StreakState, day: string): number {
-  return s.lastCompletedDate === day || s.lastCompletedDate === previousDue(s.recurrencePattern, day) ? s.streak : 0;
+  return n;
 }

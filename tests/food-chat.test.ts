@@ -68,8 +68,8 @@ describe("Food assistant: context prompt and structured answer", () => {
     const fetchMock = mockGemini({
       reply: "Am adăugat prânzul.",
       meals: [
-        { mealType: "lunch", name: "200 g somon la grătar", calories: 412.6, protein: 40, carbs: 0, fat: 26 },
-        { mealType: "lunch", name: "", calories: 50, protein: 1, carbs: 10, fat: 0 }, // empty name: rejected
+        { name: "200 g somon la grătar", calories: 412.6, protein: 40, carbs: 0, fat: 26 },
+        { name: "", calories: 50, protein: 1, carbs: 10, fat: 0 }, // empty name: rejected
       ],
     });
 
@@ -100,14 +100,14 @@ describe("Food assistant: context prompt and structured answer", () => {
 
   it("puts food context in the prompt, never steps or weight", async () => {
     const other = await seedUser(`chat-prompt-${randomUUID()}`);
-    await logMeal(other, { date: ctx.date, mealType: "breakfast", name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
+    await logMeal(other, { date: ctx.date, name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
     await updateDailySteps(other, ctx.date, 98765);
 
     const prompt = await buildFoodChatPrompt(other, ctx);
 
     expect(prompt).toContain("2026-11-05 (Thursday)");
     expect(prompt).toContain("13:10");
-    expect(prompt).toContain("breakfast: Ovăz cu lapte, 350 kcal");
+    expect(prompt).toContain("Ovăz cu lapte, 350 kcal");
     expect(prompt).not.toContain("98765");
     expect(prompt).not.toMatch(/steps|weight/i);
   });
@@ -115,10 +115,10 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("lists past foods once per name, newest first, only the owner's", async () => {
     const owner = await seedUser(`past-foods-${randomUUID()}`);
     const stranger = await seedUser(`past-foods-${randomUUID()}`);
-    await logMeal(owner, { date: "2026-11-01", mealType: "snack", name: "Banana", calories: 90, protein: 1, carbs: 23, fat: 0 });
-    await logMeal(owner, { date: "2026-11-02", mealType: "lunch", name: "Ciorbă de pui", calories: 300, protein: 20, carbs: 25, fat: 10 });
-    await logMeal(owner, { date: "2026-11-03", mealType: "snack", name: "banana", calories: 100, protein: 1, carbs: 25, fat: 0 });
-    await logMeal(stranger, { date: "2026-11-03", mealType: "snack", name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 });
+    await logMeal(owner, { date: "2026-11-01", name: "Banana", calories: 90, protein: 1, carbs: 23, fat: 0 });
+    await logMeal(owner, { date: "2026-11-02", name: "Ciorbă de pui", calories: 300, protein: 20, carbs: 25, fat: 10 });
+    await logMeal(owner, { date: "2026-11-03", name: "banana", calories: 100, protein: 1, carbs: 25, fat: 0 });
+    await logMeal(stranger, { date: "2026-11-03", name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 });
 
     const foods = await getPastFoods(owner);
 
@@ -137,7 +137,7 @@ describe("Food assistant: context prompt and structured answer", () => {
       const owner = await seedUser(`chat-owner-${randomUUID()}`);
       const stranger = await seedUser(`chat-stranger-${randomUUID()}`);
       process.env.GEMINI_API_KEY = "mock-gemini-key";
-      mockGemini({ reply: "Gata.", meals: [{ mealType: "snack", name: "1 banană", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }] });
+      mockGemini({ reply: "Gata.", meals: [{ name: "1 banană", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }] });
       authState.id = owner;
 
       const res = await sendFoodChatMessageAction(input);

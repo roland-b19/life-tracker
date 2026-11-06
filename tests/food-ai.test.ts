@@ -154,7 +154,6 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
           name: "log_meal",
           arguments: {
             date: "2026-11-04",
-            mealType: "lunch",
             name: "AI Estimated Grilled Salmon with Rice",
             calories: 650,
             protein: 50,
@@ -200,7 +199,6 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
     const today = new Date().toISOString().slice(0, 10);
 
     const mealRes = (await executeFoodAiTool(userA, "log_meal", {
-      mealType: "snack",
       name: "Apple & Almonds",
       calories: 220,
       protein: 5,
@@ -272,7 +270,6 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
         name: "log_meal",
         args: {
           date: "2026-11-04",
-          mealType: "breakfast",
           name: "User A Oatmeal",
           calories: 400,
           protein: 25,
@@ -322,7 +319,6 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
     await expect(
       executeFoodAiTool(userA, "log_meal", {
         date: "2026-11-04",
-        mealType: "lunch",
         name: "Junk",
         calories: -50,
         protein: 10,
@@ -335,7 +331,6 @@ describe("Food AI Connector: MCP & Gemini Protocols, Authorization & Strict Quar
     await expect(
       executeFoodAiTool(userA, "log_meal", {
         date: "2026-11-04",
-        mealType: "lunch",
         name: "Huge Meal",
         calories: 15000,
         protein: 10,

@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (pages polish 2: tasks weekday repeats and moves, Money page removed, shopping by hand, food assistant with context and structured answers)_
+_Last updated: 2026-11-06 by Claude (pages polish 3: tick past days, no Undo on task toggles, shopping categories card, meal types removed)_
 
 ## Phase
 
@@ -23,6 +23,7 @@ Motion consistency (every card, button, tab and field grows by the same pixels w
 Wishlist tweaks (no shadow on fields and segmented tabs, Buy button removed, faster row fades) are merged in `main` (PR #41).
 Pages polish (smooth delete and undo on Wishlist, Tasks and Money; calendar date pickers on Tasks and Money; plan one-off tasks up to 7 days ahead; streak fixes; donut hover highlight; select chevron) is merged in `main` (PR #42). No migration, no new dependency.
 Pages polish 2 is merged in `main` (PR #43): Tasks repeat on chosen weekdays (`days:1,3,5`), move between days and between daily and one-off, done tasks sink in completion order, dots on days with planned tasks, past days editable in dev builds only; Wishlist sorts by price and saves without Undo; the **Money page and its code are removed** (tables stay); Health weight rows lead with the weight and the chart has 7-360 day periods; the shopping list is filled by hand with quick add from past items, same-name items merge, items and categories are editable; the Food Assistant sends a short food-only context prompt and gets a JSON answer that the app validates and logs; a Past foods sheet logs earlier foods in one tap; subtler zoom behind open forms. Adds migration `0012_shopping_history` (column `cleared_at`, merges existing duplicates); it must be applied wherever `db:migrate` runs. No new dependency.
+Pages polish 3 is on branch `feat/pages-polish-3` (PR open, not merged): ticking or reopening a task has no Undo; past days can be ticked in every build, with streaks computed from the ticked days (new table `todo_completions`, streak columns dropped, existing streaks backfilled); shopping categories are managed in their own Categories card (add, rename, delete, "other" built in; new table `shopping_categories`) and picked from a select in the item form; meal types are removed everywhere (column dropped). Adds migrations `0013_todo_completions`, `0014_shopping_categories`, `0015_drop_meal_type` (GRANTs inside); they must be applied wherever `db:migrate` runs. `scripts/db-init.cjs` mirrors them. No new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -138,6 +139,11 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Pages polish 3 (Claude Code), from the user's Tasks and Health feedback:
+  - Tasks: toggles no longer offer Undo; past days are tickable in production (edit, move and delete stay behind `DEV_EDIT_PAST`). Streak = consecutive ticked due days (`streakOn`), computed from `todo_completions`, so unticking an old day breaks the run from that day.
+  - Shopping: Categories card with add, edit (rename or merge) and delete (items go to Other); owner-scoped actions with zod; the item form uses a select. Meal types removed from UI, AI chat, MCP tool and DB.
+  - Migrations `0013`-`0015` applied to the local dev and test databases.
+  - Verified: 87/87 vitest, tsc, eslint; browser check of ticking a past day (streak 1 there, 2 today, no toast), category add/rename/delete, the item form select, and the Today tab without meal types. Not checked: the Food Assistant against real Gemini after the schema change (covered by unit tests only).
 - 2026-11-06 — Pages polish 2 (Claude Code), from the user's Wishlist, Tasks, Money and Health feedback:
   - Tasks, Wishlist and Money removal are in commit `fae57fa`; Health weight in `8a57fbe`; shopping in `b732961` (migration `0012`, applied to the local dev and test databases; existing duplicates merged, 54 rows to 15 in dev).
   - Food Assistant: `buildFoodChatPrompt` plus a JSON response schema replace function calling; `sendFoodChatMessageAction` validates its input with zod; the Past foods sheet (`getPastFoods`, one row per name, newest first) logs a food in one tap with Undo and hides foods already logged that day. Meal type from the hour: 05-11 breakfast, 11-16 lunch, 18-22 dinner, otherwise snack.

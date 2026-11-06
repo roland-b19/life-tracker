@@ -92,6 +92,27 @@
       "when": 1793923483494,
       "tag": "0012_shopping_history",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793925864110,
+      "tag": "0013_todo_completions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793926033015,
+      "tag": "0014_shopping_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793926186344,
+      "tag": "0015_drop_meal_type",
+      "breakpoints": true
     }
   ]
 }

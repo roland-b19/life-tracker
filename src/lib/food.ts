@@ -5,6 +5,7 @@ import {
   meals,
   nutritionTargets,
   recipes,
+  shoppingCategories,
   shoppingItems,
   weightEntries,
 } from "@/db/schema";
@@ -115,7 +116,6 @@ export async function logMeal(userId: string, input: LogMealInput) {
     .values({
       userId,
       date: input.date,
-      mealType: input.mealType,
       name: input.name,
       calories: input.calories,
       protein: input.protein.toFixed(1),
@@ -133,7 +133,6 @@ export async function getPastFoods(userId: string, limit = 40) {
   const rows = await db
     .selectDistinctOn([sql`lower(${meals.name})`], {
       name: meals.name,
-      mealType: meals.mealType,
       calories: meals.calories,
       protein: meals.protein,
       carbs: meals.carbs,
@@ -317,6 +316,7 @@ export async function addShoppingItem(
   userId: string,
   input: CreateShoppingItemInput,
 ) {
+  await ensureShoppingCategory(userId, input.category);
   const [same] = await db
     .select()
     .from(shoppingItems)
@@ -361,16 +361,86 @@ export async function updateShoppingItem(userId: string, input: UpdateShoppingIt
     .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
     .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
     .returning();
+  if (updated) await ensureShoppingCategory(userId, input.category);
   return updated;
+}
+
+/** Store sections a new user starts with, in walking order. */
+const DEFAULT_SHOPPING_CATEGORIES = ["meat", "produce", "dairy", "bakery", "pantry"];
+const ownCategory = (userId: string, name: string) =>
+  and(eq(shoppingCategories.userId, userId), eq(shoppingCategories.name, name));
+
+/** Adds a category at the end of the user's list unless it is there already or is the built-in "other". */
+async function ensureShoppingCategory(userId: string, name: string) {
+  if (name === "other") return;
+  await db
+    .insert(shoppingCategories)
+    .values({
+      userId,
+      name,
+      sortOrder: sql`(select coalesce(max(${shoppingCategories.sortOrder}), 0) + 1 from ${shoppingCategories} where ${shoppingCategories.userId} = ${userId})`,
+    })
+    .onConflictDoNothing();
+}
+
+/** The user's categories in order, without "other". */
+export async function getShoppingCategories(userId: string): Promise<string[]> {
+  const list = () =>
+    db
+      .select({ name: shoppingCategories.name })
+      .from(shoppingCategories)
+      .where(eq(shoppingCategories.userId, userId))
+      .orderBy(asc(shoppingCategories.sortOrder), asc(shoppingCategories.name));
+  let rows = await list();
+  if (rows.length === 0) {
+    // shortcut: seeds whenever the list is empty, so deleting every category brings the defaults back; store a "seeded" flag if that annoys.
+    const used = await db
+      .selectDistinct({ category: shoppingItems.category })
+      .from(shoppingItems)
+      .where(eq(shoppingItems.userId, userId));
+    const names = [...new Set([...DEFAULT_SHOPPING_CATEGORIES, ...used.map((u) => u.category)])].filter((n) => n !== "other");
+    await db
+      .insert(shoppingCategories)
+      .values(names.map((name, i) => ({ userId, name, sortOrder: i + 1 })))
+      .onConflictDoNothing();
+    rows = await list();
+  }
+  return rows.map((r) => r.name);
+}
+
+/** Returns false when the user already has a category with that name. */
+export async function addShoppingCategory(userId: string, name: string) {
+  const [existing] = await db.select().from(shoppingCategories).where(ownCategory(userId, name));
+  if (existing) return false;
+  await ensureShoppingCategory(userId, name);
+  return true;
 }
 
 /** Renames a category on all the user's items, history included; renaming onto an existing one merges the two. */
 export async function renameShoppingCategory(userId: string, from: string, to: string) {
-  return db
-    .update(shoppingItems)
-    .set({ category: to })
-    .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)))
-    .returning({ id: shoppingItems.id });
+  return db.transaction(async (tx) => {
+    const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, from)).returning();
+    if (!old) return false;
+    await tx.insert(shoppingCategories).values({ userId, name: to, sortOrder: old.sortOrder }).onConflictDoNothing();
+    await tx
+      .update(shoppingItems)
+      .set({ category: to })
+      .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)));
+    return true;
+  });
+}
+
+/** Deletes a category; its items, history included, move to "other". */
+export async function deleteShoppingCategory(userId: string, name: string) {
+  return db.transaction(async (tx) => {
+    const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, name)).returning();
+    if (!old) return false;
+    await tx
+      .update(shoppingItems)
+      .set({ category: "other" })
+      .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, name)));
+    return true;
+  });
 }
 
 export async function toggleShoppingItem(

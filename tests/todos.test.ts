@@ -40,7 +40,7 @@ import {
   savePushSubscriptionAction,
   toggleTodoAction,
 } from "@/app/actions/todos";
-import { applyToggle, isDueOn, liveStreak, previousDue } from "@/lib/streak";
+import { isDueOn, previousDue, streakOn } from "@/lib/streak";
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -251,7 +251,15 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect((await view("2026-11-04")).streak).toBe(4);
 
     // Unticking a day that was not ticked changes nothing.
+    await tick("2026-10-30", false);
+    expect((await view("2026-11-04")).streak).toBe(4);
+
+    // Past days can be unticked and ticked again after later days were ticked.
     await tick("2026-11-02", false);
+    expect(await view("2026-11-02")).toMatchObject({ isCompleted: false, streak: 1 });
+    expect((await view("2026-11-04")).streak).toBe(2);
+    await tick("2026-11-02");
+    expect(await view("2026-11-02")).toMatchObject({ isCompleted: true, streak: 2 });
     expect((await view("2026-11-04")).streak).toBe(4);
 
     // Tomorrow still shows the run; a whole missed day shows it broken.
@@ -264,18 +272,17 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   });
 
   it("computes streaks as pure functions, timezone-proof", () => {
-    const none = { streak: 0, lastCompletedDate: null };
-    expect(applyToggle(none, true, "2026-03-01")).toEqual({ streak: 1, lastCompletedDate: "2026-03-01" });
+    const done = (...days: string[]) => new Set(days);
+    expect(streakOn(done(), "daily", "2026-03-01")).toBe(0);
+    expect(streakOn(done("2026-03-01"), "daily", "2026-03-01")).toBe(1);
     // Month and leap-day boundaries.
-    expect(applyToggle({ streak: 4, lastCompletedDate: "2028-02-29" }, true, "2028-03-01").streak).toBe(5);
-    expect(applyToggle({ streak: 4, lastCompletedDate: "2026-12-31" }, true, "2027-01-01").streak).toBe(5);
-    // First tick untick goes back to nothing.
-    expect(applyToggle({ streak: 1, lastCompletedDate: "2026-03-01" }, false, "2026-03-01")).toEqual(none);
-    // A tick on an earlier day than the last one is ignored.
-    const later = { streak: 2, lastCompletedDate: "2026-03-05" };
-    expect(applyToggle(later, true, "2026-03-04")).toBe(later);
-    expect(liveStreak(later, "2026-03-06")).toBe(2);
-    expect(liveStreak(later, "2026-03-07")).toBe(0);
+    expect(streakOn(done("2028-02-28", "2028-02-29", "2028-03-01"), "daily", "2028-03-01")).toBe(3);
+    expect(streakOn(done("2026-12-31", "2027-01-01"), "daily", "2027-01-01")).toBe(2);
+    // An unticked today still shows yesterday's run; a missed day ends it.
+    expect(streakOn(done("2026-03-04", "2026-03-05"), "daily", "2026-03-06")).toBe(2);
+    expect(streakOn(done("2026-03-04", "2026-03-05"), "daily", "2026-03-07")).toBe(0);
+    // A gap in the past splits the run.
+    expect(streakOn(done("2026-03-01", "2026-03-03"), "daily", "2026-03-03")).toBe(1);
     expect(addDays("2026-03-29", 1)).toBe("2026-03-30"); // DST change in Europe
   });
 
@@ -465,7 +472,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await deleteTodoAction(habit.id);
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
-      expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, lastCompletedDate: today });
+      expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
     });
   });
   describe("Weekday repeats, list order, moves and planned days", () => {
@@ -482,14 +489,10 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(previousDue(p, thu)).toBe(mon);
       expect(previousDue(p, mon)).toBe("2026-10-29");
 
-      const monday = applyToggle({ streak: 0, lastCompletedDate: null, recurrencePattern: p }, true, mon);
-      const thursday = applyToggle({ ...monday, recurrencePattern: p }, true, thu);
-      expect(thursday).toEqual({ streak: 2, lastCompletedDate: thu });
-      expect(liveStreak({ ...monday, recurrencePattern: p }, thu)).toBe(1);
+      expect(streakOn(new Set([mon, thu]), p, thu)).toBe(2);
+      expect(streakOn(new Set([mon]), p, thu)).toBe(1);
       // Thursday missed: by the next Monday the run is over.
-      expect(liveStreak({ ...monday, recurrencePattern: p }, "2026-11-09")).toBe(0);
-      // Unticking Thursday goes back to Monday's run.
-      expect(applyToggle({ ...thursday, recurrencePattern: p }, false, thu)).toEqual({ streak: 1, lastCompletedDate: mon });
+      expect(streakOn(new Set([mon]), p, "2026-11-09")).toBe(0);
     });
 
     it("lists a weekday task only on its days", async () => {

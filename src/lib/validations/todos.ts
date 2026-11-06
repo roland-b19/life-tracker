@@ -19,20 +19,20 @@ export const createTodoSchema = z.object({
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
 
-/** Undo of a delete: the same row back, with its id, ticks and streak. */
+/** Undo of a delete: the same row back, with its id and ticked days. */
 export const restoreTodoSchema = createTodoSchema.extend({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
-  streak: z.number().int().min(0).max(100000),
-  lastCompletedDate: isoDate.nullable(),
+  // shortcut: a repeating task ticked on more than 20 years of days cannot be restored, raise the cap if that ever matters.
+  doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
 /** How far ahead one-off tasks can be planned. */
 export const PLAN_AHEAD_DAYS = 7;
 
-/** Dev builds may edit, tick and plan past days, for testing; never in production. */
+/** Dev builds may also edit and plan past days, for testing; never in production. Ticking past days is always allowed. */
 export const DEV_EDIT_PAST = process.env.NODE_ENV === "development";
 
 export const toggleTodoSchema = z.object({
