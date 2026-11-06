@@ -1,8 +1,8 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
-import { useState } from "react";
-import { useListMotion } from "../components/list-motion";
+import { Fragment, useState } from "react";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal } from "../components/modal";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -118,7 +118,7 @@ export function GymClient({
   exercises,
 }: GymClientProps) {
   const { showToast } = useToast();
-  const { rowRef, enter, leave } = useListMotion();
+  const { rowRef, enter, leave, fadeAll } = useListMotion();
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message });
   };
@@ -717,11 +717,13 @@ export function GymClient({
                     </div>
                   </div>
 
-                  {!currentDay.isRest &&
-                    (currentDay.exercises.length > 0 ? (
-                      <div className="entries">
+                  {!currentDay.isRest && (
+                    <AutoHeight className="entries">
+                      {currentDay.exercises.length > 0 ? (
+                        // Keyed by the day so every switch mounts fresh rows that play row-in.
+                        <Fragment key={currentDay.id}>
                         {currentDay.exercises.map((ex, idx) => (
-                          <div key={ex.id} className="entry-row">
+                          <div key={ex.id} ref={rowRef(ex.id)} className="entry-row">
                             <div className="entry-main">
                               <strong>
                                 {idx + 1}. {ex.exerciseName}
@@ -733,10 +735,12 @@ export function GymClient({
                             </span>
                           </div>
                         ))}
-                      </div>
-                    ) : (
-                      <p className="empty-note">No exercises yet. Use Edit to add some.</p>
-                    ))}
+                        </Fragment>
+                      ) : (
+                        <p key={`empty-${currentDay.id}`} ref={rowRef("empty")} className="empty-note">No exercises yet. Use Edit to add some.</p>
+                      )}
+                    </AutoHeight>
+                  )}
                 </section>
               )}
             </div>
@@ -762,7 +766,7 @@ export function GymClient({
                           type="button"
                           className="split-day-select"
                           aria-pressed={isSelected}
-                          onClick={() => setSelectedDayId(day.id)}
+                          onClick={() => day.id !== selectedDayId && fadeAll(() => setSelectedDayId(day.id))}
                         >
                           <span className="split-day-title">
                             <strong>{DAY_NAMES[day.dayOfWeek]}</strong>

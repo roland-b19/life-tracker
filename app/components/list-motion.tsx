@@ -8,21 +8,17 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// A growing list's bottom edge fades (transparent at the bottom) instead of cutting rows. The fade
-// holds while the box grows (460ms, .auto-height's transition) and the new rows fade in (row-in,
-// 260ms), then shrinks to nothing. .auto-height.edge-fade in globals.css draws it from --edge.
-const HOLD = 460 + 260;
-const SHRINK = 480;
-const EDGE_FRAMES: Keyframe[] = [
-  { "--edge": "72px" },
-  { "--edge": "72px", offset: HOLD / (HOLD + SHRINK), easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
-  { "--edge": "0px" },
-];
+// A resized list's bottom fade (.auto-height.edge-fade, 120px): drawn only once the resize has ended and the
+// new rows fade in (row-in, 180ms inside .auto-height), never while the box moves, since the rows are hidden
+// then and masking the glass card is costly. It keeps its height and loses its strength (--fade 1 → 0).
+const EDGE_FADE: KeyframeAnimationOptions = { duration: 360, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
+const EDGE_FRAMES: Keyframe[] = [{ "--fade": 1 }, { "--fade": 0 }];
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them. The bottom edge fades while it grows.
+ * the container just follows them. The new rows' entrance (row-in) waits until the resize ends, so
+ * they appear in a box that has stopped moving, with the bottom fade.
  */
 export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -35,29 +31,35 @@ export function AutoHeight({ className, children }: { className?: string; childr
       const cs = getComputedStyle(inner);
       return inner.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
     };
+    let last = contentHeight();
+    let fade: Animation | undefined;
+    let resized = false;
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
+      outer.classList.remove("rows-wait");
+      if (resized) {
+        fade?.cancel(); // a second resize restarts the fade
+        outer.classList.add("edge-fade");
+        const run = (fade = outer.animate(EDGE_FRAMES, EDGE_FADE));
+        run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
+      }
+      resized = false;
     };
-    let last = contentHeight();
-    let fade: Animation | undefined;
 
     const observer = new ResizeObserver(() => {
       const next = contentHeight();
       if (next === last) return;
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
+      resized = false;
       if (reducedMotion() || inner.querySelector("[data-row-motion]") || from === next) return settle();
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
-      if (next > from) {
-        fade?.cancel(); // a second growth restarts the fade
-        outer.classList.add("edge-fade");
-        const run = (fade = outer.animate(EDGE_FRAMES, HOLD + SHRINK));
-        run.onfinish = () => fade === run && outer.classList.remove("edge-fade");
-      }
+      resized = true;
+      outer.classList.add("rows-wait");
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
