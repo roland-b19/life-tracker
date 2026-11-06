@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireUser } from "@/server/auth";
-import { sendFoodChatMessage, ChatMessage } from "@/lib/food-ai-chat";
-import { getDailyFoodSummary, getShoppingList } from "@/lib/food";
+import { sendFoodChatMessage } from "@/lib/food-ai-chat";
+import { getDailyFoodSummary } from "@/lib/food";
 
 function safeRevalidate(path: string) {
   try {
@@ -13,36 +14,24 @@ function safeRevalidate(path: string) {
   }
 }
 
-export async function sendFoodChatMessageAction(
-  message: string,
-  history: ChatMessage[] = [],
-  currentDate?: string,
-) {
+const chatInputSchema = z.object({
+  message: z.string().trim().min(1).max(1000),
+  history: z.array(z.object({ role: z.enum(["user", "model"]), text: z.string().max(4000) })).max(20),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+
+export async function sendFoodChatMessageAction(input: z.input<typeof chatInputSchema>) {
   const userId = await requireUser();
-  if (!message || typeof message !== "string" || !message.trim()) {
-    throw new Error("Message cannot be empty");
-  }
+  const { message, history, date, time } = chatInputSchema.parse(input);
 
-  const result = await sendFoodChatMessage(userId, message.trim(), history);
-
-  let freshSummary = null;
-  let freshShoppingList = null;
-
-  if (result.toolExecuted?.name === "log_meal") {
-    const today = currentDate || new Date().toISOString().slice(0, 10);
-    freshSummary = await getDailyFoodSummary(userId, today);
-    safeRevalidate("/food");
-  } else if (result.toolExecuted?.name === "add_shopping_item") {
-    freshShoppingList = await getShoppingList(userId);
-    safeRevalidate("/food");
-  }
+  // Only the last 10 turns go to the model: enough for follow-ups, bounded in size.
+  const result = await sendFoodChatMessage(userId, message, history.slice(-10), { date, time });
+  if (result.meals.length) safeRevalidate("/food");
 
   return {
-    success: true,
     reply: result.reply,
-    toolExecuted: result.toolExecuted,
-    freshSummary,
-    freshShoppingList,
+    meals: result.meals,
+    freshSummary: result.meals.length ? await getDailyFoodSummary(userId, date) : null,
   };
 }
-

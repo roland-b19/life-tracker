@@ -62,6 +62,23 @@ interface ShoppingHistoryItem {
   category: string;
 }
 
+/** A food logged before, offered again in the "Past foods" sheet. */
+interface PastFood {
+  name: string;
+  calories: number;
+  protein: string;
+  carbs: string;
+  fat: string;
+  isEstimated: boolean;
+}
+
+type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+/** Same hours as the assistant's prompt rule. */
+function mealTypeNow(): MealType {
+  const h = new Date().getHours();
+  return h >= 5 && h < 11 ? "breakfast" : h >= 11 && h < 16 ? "lunch" : h >= 18 && h < 22 ? "dinner" : "snack";
+}
+
 /** Store sections in walking order; categories the user adds go before "other". */
 const DEFAULT_CATEGORIES = ["meat", "produce", "dairy", "bakery", "pantry", "other"];
 const categoryRank = (c: string) => {
@@ -99,6 +116,7 @@ interface FoodClientProps {
   weightAnalytics: WeightAnalytics;
   initialShoppingList: ShoppingItemData[];
   shoppingHistory: ShoppingHistoryItem[];
+  pastFoods: PastFood[];
 }
 
 export function FoodClient({
@@ -109,6 +127,7 @@ export function FoodClient({
   weightAnalytics,
   initialShoppingList,
   shoppingHistory,
+  pastFoods: initialPastFoods,
 }: FoodClientProps) {
   const [selectedDate] = useState(todayDate);
   const [summary, setSummary] = useState(initialSummary);
@@ -122,6 +141,9 @@ export function FoodClient({
   const [renameInput, setRenameInput] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
   const [metricInput, setMetricInput] = useState("");
+  const [pastFoods, setPastFoods] = useState(initialPastFoods);
+  const [isPastOpen, setIsPastOpen] = useState(false);
+  const [pastMealType, setPastMealType] = useState<MealType>("lunch");
 
   const { showToast } = useToast();
   const { rowRef, enter, leave } = useListMotion();
@@ -131,16 +153,12 @@ export function FoodClient({
     Array<{
       role: "user" | "model";
       text: string;
-      toolExecuted?: {
-        name: string;
-        args: Record<string, unknown>;
-        result: Record<string, unknown>;
-      };
+      meals?: MealData[];
     }>
   >([
     {
       role: "model",
-      text: "Salut! Sunt asistentul tău de nutriție. Spune-mi ce ai mâncat sau băut (de exemplu: „la prânz am avut o ciorbă de pui și 2 felii de pâine”), iar eu voi calcula caloriile și macro-urile și le voi înregistra direct în aplicație. Mă poți întreba și despre rețete sau poți adăuga alimente pe lista de cumpărături!",
+      text: "Salut! Sunt asistentul tău de nutriție. Spune-mi ce ai mâncat sau băut (de exemplu: „la prânz am avut o ciorbă de pui și 2 felii de pâine”), iar eu voi calcula caloriile și macro-urile și le voi înregistra direct în aplicație. Mă poți întreba și cât mai ai din ținta zilei.",
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -202,6 +220,7 @@ export function FoodClient({
         const meal = res.meal as MealData;
         enter(meal.id);
         applyMeal(meal, 1);
+        rememberFoods([meal]);
         setMealName("");
         setMealCalories("");
         setMealProtein("");
@@ -218,6 +237,49 @@ export function FoodClient({
           },
         });
       }
+    } catch {
+      setStatusMessage("Failed to log meal.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Remembers newly logged names so the "Past foods" sheet offers them next time. */
+  function rememberFoods(logged: MealData[]) {
+    setPastFoods((prev) => {
+      const names = new Set(logged.map((m) => m.name.toLowerCase()));
+      const fresh = logged.map(({ name, calories, protein, carbs, fat, isEstimated }) => ({
+        name, calories, protein, carbs, fat, isEstimated: Boolean(isEstimated),
+      }));
+      return [...fresh, ...prev.filter((f) => !names.has(f.name.toLowerCase()))];
+    });
+  }
+
+  async function handleLogPastFood(food: PastFood) {
+    setBusy(true);
+    try {
+      const res = await logMealAction({
+        date: selectedDate,
+        mealType: pastMealType,
+        name: food.name,
+        calories: food.calories,
+        protein: parseFloat(food.protein) || 0,
+        carbs: parseFloat(food.carbs) || 0,
+        fat: parseFloat(food.fat) || 0,
+        isEstimated: food.isEstimated,
+      });
+      const meal = res.meal as MealData;
+      enter(meal.id);
+      applyMeal(meal, 1);
+      showToast({
+        message: `Logged "${meal.name}" (${meal.calories} kcal)`,
+        type: "success",
+        actionLabel: "Undo",
+        onAction: async () => {
+          await deleteMealAction(meal.id);
+          leave(meal.id, () => applyMeal(meal, -1));
+        },
+      });
     } catch {
       setStatusMessage("Failed to log meal.");
     } finally {
@@ -513,25 +575,18 @@ export function FoodClient({
     setChatLoading(true);
 
     try {
-      const history = chatMessages.map((m) => ({ role: m.role, text: m.text }));
-      const res = await sendFoodChatMessageAction(text, history, selectedDate);
-      if (res.success) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            role: "model",
-            text: res.reply,
-            toolExecuted: res.toolExecuted,
-          },
-        ]);
-
-        if (res.freshSummary) {
-          setSummary(res.freshSummary);
-        }
-        if (res.freshShoppingList) {
-          setShoppingList(res.freshShoppingList);
-        }
-      }
+      // The welcome message is UI text, not part of the conversation.
+      const history = chatMessages.slice(1).map((m) => ({ role: m.role, text: m.text }));
+      const res = await sendFoodChatMessageAction({
+        message: text,
+        history,
+        date: selectedDate,
+        time: new Date().toTimeString().slice(0, 5),
+      });
+      const meals = res.meals as MealData[];
+      setChatMessages((prev) => [...prev, { role: "model", text: res.reply, meals }]);
+      if (res.freshSummary) setSummary(res.freshSummary);
+      if (meals.length) rememberFoods(meals);
     } catch {
       setChatMessages((prev) => [
         ...prev,
@@ -557,6 +612,8 @@ export function FoodClient({
   const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
   const shopCategories = [...new Set(shoppingList.map((i) => i.category))].sort(byCategory);
   const categoryOptions = [...new Set([...DEFAULT_CATEGORIES, ...shopCategories, ...history.map((h) => h.category)])].sort(byCategory);
+  const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
+  const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const quickAdds = history.filter((h) => !shoppingList.some((i) => sameItem(i, h))).slice(0, 12);
 
   return (
@@ -851,6 +908,16 @@ export function FoodClient({
             <h2 id="chat-title" className="section-title">
               Food Assistant
             </h2>
+            <button
+              type="button"
+              className="btn-sm tint"
+              onClick={() => {
+                setPastMealType(mealTypeNow());
+                setIsPastOpen(true);
+              }}
+            >
+              Past foods
+            </button>
           </div>
 
           <div className="chat-suggestions">
@@ -859,7 +926,6 @@ export function FoodClient({
               "Omletă din 3 ouă cu telemea",
               "200g piept de pui cu 150g orez",
               "Ce calorii mai am pentru azi?",
-              "Adaugă lapte de ovăz și 6 ouă pe listă",
             ].map((prompt) => (
               <button
                 key={prompt}
@@ -877,25 +943,12 @@ export function FoodClient({
             {chatMessages.map((msg, index) => (
               <div key={index} className={`chat-msg ${msg.role === "user" ? "user" : "model"}`}>
                 <div className="chat-bubble">{msg.text}</div>
-                {msg.toolExecuted && (
-                  <div className="chat-tool">
-                    {msg.toolExecuted.name === "log_meal" && (
-                      <span>
-                        <strong>Masă adăugată:</strong> {String(msg.toolExecuted.args.name || "")} ·{" "}
-                        {String(msg.toolExecuted.args.calories || 0)} kcal ·{" "}
-                        {String(msg.toolExecuted.args.protein || 0)}g P ·{" "}
-                        {String(msg.toolExecuted.args.carbs || 0)}g C · {String(msg.toolExecuted.args.fat || 0)}g F
-                      </span>
-                    )}
-                    {msg.toolExecuted.name === "add_shopping_item" && (
-                      <span>
-                        <strong>Adăugat pe listă:</strong> {String(msg.toolExecuted.args.name || "")}
-                      </span>
-                    )}
-                    {msg.toolExecuted.name === "get_daily_food_summary" && <strong>Sumar zilnic actualizat</strong>}
-                    {msg.toolExecuted.name === "get_recipes" && <strong>Rețete preluate</strong>}
+                {msg.meals?.map((m) => (
+                  <div key={m.id} className="chat-tool number-tabular">
+                    <strong>Masă adăugată:</strong> {m.name} · {m.calories} kcal · {Number(m.protein)}g P ·{" "}
+                    {Number(m.carbs)}g C · {Number(m.fat)}g F
                   </div>
-                )}
+                ))}
               </div>
             ))}
             {chatLoading && (
@@ -1079,6 +1132,46 @@ export function FoodClient({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
+        <div className="form-stack">
+          <Segmented
+            label="Meal type"
+            value={pastMealType}
+            options={[
+              { value: "breakfast", label: "Breakfast" },
+              { value: "lunch", label: "Lunch" },
+              { value: "dinner", label: "Dinner" },
+              { value: "snack", label: "Snack" },
+            ]}
+            onChange={setPastMealType}
+          />
+          <AutoHeight className="entries">
+            {notLoggedFoods.length === 0 ? (
+              <p className="empty-note">Everything you logged before is already in today.</p>
+            ) : (
+              notLoggedFoods.map((f) => (
+                <button
+                  key={f.name}
+                  type="button"
+                  className="entry-row past-food"
+                  disabled={busy}
+                  onClick={() => handleLogPastFood(f)}
+                  aria-label={`Log ${f.name}, ${f.calories} kcal, as ${pastMealType}`}
+                >
+                  <div>
+                    <strong>{f.name}</strong>
+                    <p className="card-sub muted number-tabular">
+                      {f.calories} kcal · {Number(f.protein)}g P · {Number(f.carbs)}g C · {Number(f.fat)}g F
+                    </p>
+                  </div>
+                  <PlusIcon size={16} />
+                </button>
+              ))
+            )}
+          </AutoHeight>
+        </div>
       </Modal>
 
       <Modal isOpen={renaming !== null} onClose={() => setRenaming(null)} title="Rename category">

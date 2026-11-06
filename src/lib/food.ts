@@ -128,6 +128,25 @@ export async function logMeal(userId: string, input: LogMealInput) {
   return created;
 }
 
+/** Foods logged before, newest first, one entry per name: the "Past foods" sheet and the assistant's context. */
+export async function getPastFoods(userId: string, limit = 40) {
+  const rows = await db
+    .selectDistinctOn([sql`lower(${meals.name})`], {
+      name: meals.name,
+      mealType: meals.mealType,
+      calories: meals.calories,
+      protein: meals.protein,
+      carbs: meals.carbs,
+      fat: meals.fat,
+      isEstimated: meals.isEstimated,
+      createdAt: meals.createdAt,
+    })
+    .from(meals)
+    .where(eq(meals.userId, userId))
+    .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt));
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+}
+
 export async function deleteMeal(userId: string, mealId: string) {
   const [deleted] = await db
     .delete(meals)

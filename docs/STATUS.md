@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (pages polish: smooth delete/undo, date pickers, plan 7 days ahead, streak fixes, donut highlight)_
+_Last updated: 2026-11-06 by Claude (pages polish 2: tasks weekday repeats and moves, Money page removed, shopping by hand, food assistant with context and structured answers)_
 
 ## Phase
 
@@ -22,6 +22,7 @@ List motion (rows open their space then fade in, fade out then close their space
 Motion consistency (every card, button, tab and field grows by the same pixels with one shadow, a focused field keeps its lift, lists resize before new rows fade in, Tasks tabs and days fade the old rows out first, add/undo motion on Tasks, sign-out fades the page before the sign-in card, subtler Continue that keeps its colour while signing in) is merged in `main` (PR #40). No migration, no new dependency.
 Wishlist tweaks (no shadow on fields and segmented tabs, Buy button removed, faster row fades) are merged in `main` (PR #41).
 Pages polish (smooth delete and undo on Wishlist, Tasks and Money; calendar date pickers on Tasks and Money; plan one-off tasks up to 7 days ahead; streak fixes; donut hover highlight; select chevron) is merged in `main` (PR #42). No migration, no new dependency.
+Pages polish 2 (branch `feat/pages-polish-2`, PR open, **not merged**): Tasks repeat on chosen weekdays (`days:1,3,5`), move between days and between daily and one-off, done tasks sink in completion order, dots on days with planned tasks, past days editable in dev builds only; Wishlist sorts by price and saves without Undo; the **Money page and its code are removed** (tables stay); Health weight rows lead with the weight and the chart has 7-360 day periods; the shopping list is filled by hand with quick add from past items, same-name items merge, items and categories are editable; the Food Assistant sends a short food-only context prompt and gets a JSON answer that the app validates and logs; a Past foods sheet logs earlier foods in one tap; subtler zoom behind open forms. Adds migration `0012_shopping_history` (column `cleared_at`, merges existing duplicates); it must be applied wherever `db:migrate` runs. No new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -37,8 +38,8 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - OIDC authentication with production guard (`AUTH_DEV=false`).
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
-  - Food & Nutrition module: daily targets, meal logger, water tap counter (+250ml, +500ml), steps, shopping list with recipe generation.
-  - Money module: personal & business expenses, RON currency, fast 2-3 tap entry, category breakdown, strict AI quarantine.
+  - Food & Nutrition module: daily targets, meal logger, Past foods sheet, water tap counter (+250ml, +500ml), steps, shopping list filled by hand with quick add from past items.
+  - Money module: removed from the UI on 2026-11-06; the `expenses` tables stay in the database, unused.
   - To-Do & Habits module: automatic carry-over rollover, streak tracking, space segregation (`personal` vs `business`), Web Push notifications.
   - Food AI Connector (Claude MCP & Gemini Function Calling):
     - Dual protocols: `/api/mcp` (JSON-RPC 2.0 / MCP) and `/api/ai/food` (Google Function Calling / OpenAPI).
@@ -48,7 +49,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
     - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
     - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
     - Token management UI removed on 2026-11-05 (see `docs/decisions.md`); the token backend and endpoints still work for existing tokens.
-    - In-App Food AI Chat: interactive conversational assistant inside the Food UI powered by Gemini 2.5 Flash via native fetch; automatically estimates calories/macros from freeform text, executes the quarantined `log_meal` or `add_shopping_item` tools, and updates the UI real-time.
+    - In-App Food AI Chat: Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash`) via native fetch. The system prompt (`buildFoodChatPrompt` in `src/lib/food-ai-chat.ts`) carries the day, local time, targets, meals already logged, recipes and past foods, never weight or steps; the model answers JSON `{reply, meals[]}`, each meal is validated like a hand-entered one and logged as an estimate. No shopping from the chat.
     - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, `tests/food-chat.test.ts`, 60 total passing across repo).
 
 ## Verification status breakdown
@@ -122,7 +123,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. The user tests the UI cleanup on a phone, then reviews and merges its PR (`feat/ui-cleanup`) after PR #33 (LAN dev origins, sign-out fix).
+1. The user reviews and merges the Pages polish 2 PR (`feat/pages-polish-2`).
 2. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
 3. Maintain local-only verification until then (no Azure deployments).
 
@@ -138,6 +139,10 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — Pages polish 2 (Claude Code), from the user's Wishlist, Tasks, Money and Health feedback:
+  - Tasks, Wishlist and Money removal are in commit `fae57fa`; Health weight in `8a57fbe`; shopping in `b732961` (migration `0012`, applied to the local dev and test databases; existing duplicates merged, 54 rows to 15 in dev).
+  - Food Assistant: `buildFoodChatPrompt` plus a JSON response schema replace function calling; `sendFoodChatMessageAction` validates its input with zod; the Past foods sheet (`getPastFoods`, one row per name, newest first) logs a food in one tap with Undo and hides foods already logged that day. Meal type from the hour: 05-11 breakfast, 11-16 lunch, 18-22 dinner, otherwise snack.
+  - Verified: 86/86 vitest, tsc, eslint; browser check of the Past foods sheet (log, hide, Undo) and one real Gemini message (two meals logged as snack, totals updated; the first try got a transient 503). Test meals removed from the dev DB afterwards.
 - 2026-11-06 — Pages polish (Claude Code), from the user's Wishlist, Tasks and Money feedback:
   - Delete lag: the server call used to start only after the fade and the list waited on it. Now the delete runs during the fade and the toast appears as the row closes (~640ms in dev). Undo on Wishlist and Tasks re-inserts the **same row** (same id and createdAt, new owner-scoped `restoreTodoAction`; wishlist already had one); Money undo re-logs the expense and animates it in.
   - Tasks: the date label opens a calendar (`app/components/date-picker.tsx`, day and month modes, arrows/Escape/Today, values after `max` disabled). One-off tasks can be planned up to `PLAN_AHEAD_DAYS` = 7 days ahead (checked on the server in `assertPlannable`); Daily stays on today. Overdue tasks roll into today only, never into a future day being viewed.

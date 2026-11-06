@@ -2789,6 +2789,10 @@ button.text-btn {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
+/* A past food is one tappable row: plain text, tinted plus */
+button.past-food { width: 100%; justify-content: space-between; text-align: left; color: var(--text); background: transparent; font-weight: 400; border-radius: 0; }
+button.past-food svg { color: var(--tint); flex: none; }
+
 /* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx) */
 .entry-row,
 .item-row,
