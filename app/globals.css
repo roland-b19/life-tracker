@@ -144,7 +144,6 @@ h3,
 .stat-value,
 .number-tabular,
 .food-macro-val,
-.money-table td,
 .calendar-day-header,
 .gym-set-row input,
 .todo-title,
@@ -968,15 +967,22 @@ textarea:focus-visible {
   gap: 0.25rem;
   margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
 }
-.surface > .entries:last-child:not(:has(> .empty-note)),
-.surface > .auto-height:last-child > .entries:not(:has(> .empty-note)) {
+.surface > .entries:last-child,
+.surface > .auto-height:last-child > .entries {
   margin-bottom: -0.5rem;
+}
+/* An empty list keeps one row's space (--row-h is the page's row height), so the card does not jump. */
+:is(.entries, .todo-list) > .empty-note {
+  display: grid;
+  place-items: center;
+  min-height: var(--row-h, 3.5rem);
+  padding: 0.5rem 0;
 }
 
 /* Container that animates its height when its content changes (list-motion.tsx) */
 .auto-height {
   display: flow-root;
-  transition: height var(--dur) var(--ease);
+  transition: height 300ms var(--ease);
 }
 
 .entry-row {
@@ -1015,50 +1021,6 @@ textarea:focus-visible {
   font-size: 1rem;
   font-weight: bold;
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), opacity var(--dur) var(--ease), transform var(--lift);
-}
-
-.expense-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 0;
-}
-
-.expense-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.expense-cat-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.expense-meta {
-  font-size: 0.8rem;
-  color: var(--secondary);
-}
-
-/* Category and date share the first line; the price sits under them */
-.expense-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 0.5rem;
-  min-width: 0;
-}
-
-.expense-amount-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.expense-value-text {
-  font-weight: 700;
-  font-size: 1.05rem;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
@@ -1300,14 +1262,14 @@ textarea:focus-visible {
   max-height: 100%;
   margin: auto;
   touch-action: auto;
-  animation: modalScaleUp calc(var(--dur) + 80ms) var(--pop) both;
+  animation: modalScaleUp var(--dur) var(--ease) both;
 }
 
-/* Sheet springs up from slightly below and smaller, settling with a small overshoot */
+/* Sheet rises a few pixels and settles, no overshoot */
 @keyframes modalScaleUp {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(24px);
+    transform: scale(0.98) translateY(8px);
   }
   to {
     opacity: 1;
@@ -2081,6 +2043,21 @@ main > .error {
   gap: 0.25rem 0.75rem;
 }
 
+/* A filtered wishlist row (name over price): the empty note takes the same space */
+.wishlist-entries { --row-h: 4.15rem; }
+
+/* Compact sort menu in a card header */
+select.sort-select {
+  width: auto;
+  min-height: 2.25rem;
+  padding: 0.35rem 2.1rem 0.35rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.7rem;
+  background-color: rgba(255, 255, 255, 0.06);
+  background-position: right 0.8rem center;
+}
+
 .item-name {
   grid-area: name;
   min-width: 0;
@@ -2155,6 +2132,7 @@ main > .error {
 /* Task rows: checkbox, title (wraps) with badges below, streak, edit, delete */
 .todo-list {
   margin-top: 0.75rem;
+  --row-h: 3.25rem; /* one row on its own: the last row has no bottom padding */
 }
 
 .todo-row {
@@ -2212,12 +2190,6 @@ main > .error {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
-}
-
-/* Expense rows: category and date, price right below; edit and delete on the right */
-.expense-info {
-  min-width: 0;
-  gap: 0.1rem;
 }
 
 /* ==========================================================================
@@ -2451,114 +2423,6 @@ button.bars-col:focus-visible {
   align-items: center;
   gap: 0.2rem;
   min-width: 0;
-}
-
-/* Donut chart (Money): chart left, legend right; stacks when narrow */
-.donut {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.donut-chart {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.donut-center {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
-  text-align: center;
-}
-
-.donut-center strong {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.donut-center span {
-  font-size: 0.75rem;
-  color: var(--secondary);
-}
-
-.donut-legend {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  flex: 1 1 12rem;
-  min-width: 0;
-  font-size: 0.875rem;
-}
-
-.donut-legend li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.donut-dot {
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 50%;
-}
-
-.donut-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.donut-legend .number-tabular {
-  color: var(--secondary);
-  font-weight: 600;
-}
-
-/* Hovering (or tapping) a slice or its legend row brings it forward: it thickens, the rest dim */
-.donut-slice,
-.donut-legend li {
-  cursor: pointer;
-  transition: opacity var(--dur) var(--ease), stroke-width var(--dur) var(--pop);
-}
-
-.donut[data-active] .donut-slice:not(.on),
-.donut[data-active] .donut-legend li:not(.on) {
-  opacity: 0.3;
-}
-
-.donut-slice.on {
-  stroke-width: 30px;
-}
-
-.donut-center {
-  pointer-events: none;
-  padding-inline: 1.6rem;
-  animation: donut-center-in 260ms var(--ease) both;
-}
-
-@keyframes donut-center-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-}
-
-.donut-center-label {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Gym muscle map */
@@ -2927,7 +2791,6 @@ button.bars-col:focus-visible {
 
 /* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx) */
 .entry-row,
-.expense-row,
 .item-row,
 .shopping-row,
 .todo-row,
@@ -2936,10 +2799,6 @@ button.bars-col:focus-visible {
 :is(.entries, .todo-list) > .empty-note {
   animation: row-in 260ms var(--ease) both; /* FADE_IN in list-motion.tsx */
 }
-/* While a list resizes (AutoHeight), new rows wait invisible and fade in once the size has settled. */
-.auto-height[data-resizing] :is(.entry-row, .expense-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, .empty-note) {
-  animation-play-state: paused;
-}
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); filter: blur(3px); }
   to { opacity: 1; transform: none; filter: none; }
@@ -2947,8 +2806,101 @@ button.bars-col:focus-visible {
 
 /* An open form pulls the page back: it shrinks a little behind the blurred backdrop (Modal portals to body). */
 main > :where(:not(.side, .tabbar, .more-menu, .more-scrim)) {
-  transition: transform calc(var(--dur) + 80ms) var(--pop);
+  transition: transform var(--dur) var(--ease);
 }
 body:has(> .modal-backdrop) main > :not(.side, .tabbar, .more-menu, .more-scrim) {
-  transform: scale(0.96);
+  transform: scale(0.99);
+}
+
+/* A day with something planned: a small dot under the number. */
+.picker-cell.marked {
+  position: relative;
+}
+
+.picker-cell.marked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0.3rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+
+/* Weekday repeats: a badge on the row, and a row of day toggles in the form. */
+.badge-repeat {
+  background: var(--tint-subtle);
+  color: var(--tint);
+  font-size: 0.75rem;
+}
+
+.weekday-picker {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.weekday-picker legend {
+  padding: 0;
+  margin-bottom: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--secondary);
+}
+
+.weekday-options {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.weekday-btn {
+  min-height: 2.75rem; /* 44pt touch target */
+  padding: 0;
+  border-radius: 0.6rem;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.weekday-btn[aria-pressed="true"] {
+  background: var(--tint);
+  color: var(--on-tint);
+}
+
+/* Move sheet: one full-width choice per row. */
+.move-options {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.move-options > button,
+.move-options .move-pick {
+  width: 100%;
+}
+
+/* Inside the sheet the calendar opens in place: the card clips anything floating out of it. */
+.move-options .picker {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.move-options .picker-pop {
+  position: static;
+  translate: none;
+}
+
+.move-hint {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+}
+
+/* A daily task shown ahead of its day cannot be ticked yet. */
+.todo-checkbox-btn.static:not(.checked) {
+  opacity: 0.5;
 }

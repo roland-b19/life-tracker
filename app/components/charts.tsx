@@ -1,12 +1,9 @@
 "use client";
 
-import { useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { type CSSProperties } from "react";
 import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
-
-/** Categorical colors tuned to the Storm palette (steel blue first). */
-export const CHART_COLORS = ["#86b4ea", "#8fd4a3", "#ebc673", "#c5a3e8", "#ef8f8f", "#7fd1d9", "#e8a77c", "#a6b0bd"];
 
 export function ProgressRing({
   percent,
@@ -106,88 +103,6 @@ export function BarChart({
           <span key={i}>{d.label}</span>
         ))}
       </div>
-    </div>
-  );
-}
-
-export interface Slice {
-  label: string;
-  value: number;
-  display: string;
-}
-
-/** Donut chart with a legend; slice colors come from CHART_COLORS in order. */
-export function DonutChart({
-  slices,
-  center,
-  centerLabel,
-  summary,
-  size = 168,
-}: {
-  slices: Slice[];
-  center: ReactNode;
-  centerLabel: string;
-  summary: string;
-  size?: number;
-}) {
-  const stroke = 22;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const total = slices.reduce((n, s) => n + s.value, 0);
-  const grow = useAnimatedNumber(1, 0, 900);
-  // The slice under the pointer (or the legend row) comes forward; the centre shows its share.
-  const [active, setActive] = useState<number | null>(null);
-  const shown = active === null ? null : slices[active];
-  // A touch "leaves" right after the tap, so a tapped slice stays chosen until another tap.
-  const clear = (e: PointerEvent) => e.pointerType !== "touch" && setActive(null);
-  const pick = (i: number) => ({ onPointerEnter: () => setActive(i), onClick: () => setActive((a) => (a === i ? null : i)) });
-  let offset = 0;
-  return (
-    <div className="donut" data-active={active === null ? undefined : ""}>
-      <div className="donut-chart" style={{ width: size, height: size }} role="img" aria-label={summary} onPointerLeave={clear}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-          <circle cx={size / 2} cy={size / 2} r={r} className="ring-track" strokeWidth={stroke} />
-          {total > 0 &&
-            slices.map((s, i) => {
-              const len = (s.value / total) * c * grow;
-              // A hairline gap between slices, like Apple's charts.
-              const dash = Math.max(0, len - (slices.length > 1 ? 2 : 0));
-              const el = (
-                <circle
-                  key={s.label}
-                  className={`donut-slice${i === active ? " on" : ""}`}
-                  {...pick(i)}
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={r}
-                  fill="none"
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={stroke}
-                  strokeDasharray={`${dash} ${c - dash}`}
-                  strokeDashoffset={-offset}
-                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                />
-              );
-              offset += len;
-              return el;
-            })}
-        </svg>
-        {/* Keyed so the centre fades between the total and a slice */}
-        <div className="donut-center" key={shown?.label ?? "total"}>
-          <strong className="number-tabular">{shown ? shown.display : center}</strong>
-          <span className="donut-center-label">{shown ? shown.label : centerLabel}</span>
-          {shown && <span className="number-tabular">{Math.round((shown.value / total) * 100)}% of total</span>}
-        </div>
-      </div>
-      <ul className="donut-legend" onPointerLeave={clear}>
-        {slices.map((s, i) => (
-          <li key={s.label} className={i === active ? "on" : undefined} {...pick(i)}>
-            <span className="donut-dot" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-            <span className="donut-label">{s.label}</span>
-            <span className="number-tabular">{s.display}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

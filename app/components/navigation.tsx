@@ -23,7 +23,6 @@ export function Navigation({ userName }: NavigationProps) {
   const getPageTitle = () => {
     if (pathname.startsWith("/gym")) return "Gym";
     if (pathname.startsWith("/food")) return "Health";
-    if (pathname.startsWith("/money")) return "Expenses";
     if (pathname.startsWith("/todos")) return "Tasks";
     if (pathname.startsWith("/wishlist")) return "Wishlist";
     return "Life Tracker";
@@ -47,17 +46,6 @@ export function Navigation({ userName }: NavigationProps) {
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3" />
-        </svg>
-      ),
-    },
-    {
-      href: "/money",
-      label: "Money",
-      isActive: pathname.startsWith("/money"),
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="5" width="20" height="14" rx="2" />
-          <line x1="2" y1="10" x2="22" y2="10" />
         </svg>
       ),
     },

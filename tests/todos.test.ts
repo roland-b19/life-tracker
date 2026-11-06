@@ -34,11 +34,13 @@ import {
   createTodoAction,
   deleteTodoAction,
   getDailyTodosAction,
+  getPlannedDaysAction,
+  moveTodoAction,
   restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
 } from "@/app/actions/todos";
-import { applyToggle, liveStreak } from "@/lib/streak";
+import { applyToggle, isDueOn, liveStreak, previousDue } from "@/lib/streak";
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -464,6 +466,114 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, lastCompletedDate: today });
+    });
+  });
+  describe("Weekday repeats, list order, moves and planned days", () => {
+    // 2026-11-02 is a Monday.
+    const mon = "2026-11-02";
+    const wed = "2026-11-04";
+    const thu = "2026-11-05";
+
+    it("keeps a weekday streak across the days off and breaks it on a missed due day", () => {
+      const p = "days:1,4"; // Monday and Thursday
+      expect(isDueOn(p, mon)).toBe(true);
+      expect(isDueOn(p, wed)).toBe(false);
+      expect(isDueOn("daily", wed)).toBe(true);
+      expect(previousDue(p, thu)).toBe(mon);
+      expect(previousDue(p, mon)).toBe("2026-10-29");
+
+      const monday = applyToggle({ streak: 0, lastCompletedDate: null, recurrencePattern: p }, true, mon);
+      const thursday = applyToggle({ ...monday, recurrencePattern: p }, true, thu);
+      expect(thursday).toEqual({ streak: 2, lastCompletedDate: thu });
+      expect(liveStreak({ ...monday, recurrencePattern: p }, thu)).toBe(1);
+      // Thursday missed: by the next Monday the run is over.
+      expect(liveStreak({ ...monday, recurrencePattern: p }, "2026-11-09")).toBe(0);
+      // Unticking Thursday goes back to Monday's run.
+      expect(applyToggle({ ...thursday, recurrencePattern: p }, false, thu)).toEqual({ streak: 1, lastCompletedDate: mon });
+    });
+
+    it("lists a weekday task only on its days", async () => {
+      await createTodo(userA, { space: "personal", title: "Gym", dueDate: mon, isRecurring: true, recurrencePattern: "days:1,4" });
+      await createTodo(userA, { space: "personal", title: "Read", dueDate: mon, isRecurring: true, recurrencePattern: "daily" });
+      // Made on a Wednesday for Mondays only: not on the Wednesday list.
+      await createTodo(userA, { space: "personal", title: "Swim", dueDate: wed, isRecurring: true, recurrencePattern: "days:1" });
+      const titles = async (day: string) => (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title).sort();
+      expect(await titles(mon)).toEqual(["Gym", "Read", "Swim"]);
+      expect(await titles(wed)).toEqual(["Read"]);
+      expect(await titles(thu)).toEqual(["Gym", "Read"]);
+    });
+
+    it("rejects a malformed repeat pattern", async () => {
+      const task = { space: "personal", title: "Bad", dueDate: toISODate(), isRecurring: true };
+      await expect(createTodoAction({ ...task, recurrencePattern: "days:8" })).rejects.toThrow();
+      await expect(createTodoAction({ ...task, recurrencePattern: "weekly; drop" })).rejects.toThrow();
+    });
+
+    it("puts done tasks last, the most recently done first", async () => {
+      const day = toISODate();
+      const make = (title: string) => createTodo(userA, { space: "personal", title, dueDate: day, isRecurring: false, recurrencePattern: "none" });
+      const a = await make("A");
+      const b = await make("B");
+      await make("C");
+      await toggleTodo(userA, { id: a.id, isCompleted: true, currentDate: day });
+      await new Promise((r) => setTimeout(r, 5));
+      await toggleTodo(userA, { id: b.id, isCompleted: true, currentDate: day });
+      const order = (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title);
+      expect(order).toEqual(["C", "B", "A"]);
+    });
+
+    it("moves a task between days and kinds, owner only", async () => {
+      const today = toISODate();
+      const tomorrow = addDays(today, 1);
+      const task = await createTodo(userA, { space: "personal", title: "Call", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      const toTomorrow = { id: task.id, recurrencePattern: "none", dueDate: tomorrow };
+
+      authState.id = "";
+      await expect(moveTodoAction(toTomorrow)).rejects.toThrow("Authentication required.");
+
+      authState.id = userB;
+      expect((await moveTodoAction(toTomorrow)).success).toBe(false);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos.map((t) => t.id)).toEqual([task.id]);
+
+      authState.id = userA;
+      await expect(moveTodoAction({ ...toTomorrow, dueDate: addDays(today, 30) })).rejects.toThrow("up to 7 days ahead");
+      expect((await moveTodoAction(toTomorrow)).success).toBe(true);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos).toHaveLength(0);
+      expect((await getDailyTodos(userA, "personal", tomorrow, today)).todos[0]).toMatchObject({ id: task.id, isRecurring: false });
+
+      // One-off to repeating and back.
+      await moveTodoAction({ id: task.id, recurrencePattern: "daily", dueDate: today });
+      expect((await getDailyTodos(userA, "personal", today, today)).todos[0]).toMatchObject({ id: task.id, isRecurring: true, streak: 0 });
+      await moveTodoAction({ id: task.id, recurrencePattern: "none", dueDate: today });
+      expect((await getDailyTodos(userA, "personal", tomorrow, today)).todos).toHaveLength(0);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos[0]).toMatchObject({ id: task.id, isRecurring: false });
+    });
+
+    it("changes a repeating task's weekdays, owner only", async () => {
+      const habit = await createTodo(userA, { space: "personal", title: "Run", dueDate: mon, isRecurring: true, recurrencePattern: "daily" });
+      expect(await updateTodo(userB, { id: habit.id, title: "Run", recurrencePattern: "days:1" })).toBe(false);
+      expect((await getDailyTodos(userA, "personal", wed, wed)).todos).toHaveLength(1);
+      expect(await updateTodo(userA, { id: habit.id, title: "Run", recurrencePattern: "days:1" })).toBe(true);
+      expect((await getDailyTodos(userA, "personal", wed, wed)).todos).toHaveLength(0);
+      expect((await getDailyTodos(userA, "personal", mon, mon)).todos).toHaveLength(1);
+    });
+
+    it("lists future planned days for the owner only", async () => {
+      const today = toISODate();
+      const plan = (dueDate: string, isRecurring = false) =>
+        createTodo(userA, { space: "personal", title: "P", dueDate, isRecurring, recurrencePattern: isRecurring ? "daily" : "none" });
+      await plan(addDays(today, 2));
+      await plan(addDays(today, 2));
+      await plan(addDays(today, 5));
+      await plan(addDays(today, 3), true); // repeating tasks never mark a day
+
+      authState.id = "";
+      await expect(getPlannedDaysAction("personal")).rejects.toThrow("Authentication required.");
+      authState.id = userB;
+      expect((await getPlannedDaysAction("personal")).days).toEqual([]);
+      authState.id = userA;
+      expect((await getPlannedDaysAction("personal")).days).toEqual([addDays(today, 2), addDays(today, 5)]);
+      expect((await getPlannedDaysAction("business")).days).toEqual([]);
     });
   });
 });

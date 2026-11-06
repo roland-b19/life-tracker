@@ -10,6 +10,12 @@ interface DatePickerProps {
   today: string;
   /** Last choosable value, same format. */
   max: string;
+  /** First choosable value, same format; none by default. */
+  min?: string;
+  /** Days that get a dot (day mode), e.g. days with something planned. */
+  marked?: string[];
+  /** Classes for the trigger button. */
+  className?: string;
   label: string;
   onChange: (next: string) => void;
 }
@@ -28,7 +34,7 @@ const shiftMonth = (ym: string, n: number) => {
  * The label of a day or month stepper that opens a calendar popover: a month of days, or a
  * year of months. Values after `max` are shown but cannot be chosen.
  */
-export function DatePicker({ mode, value, today, max, label, onChange }: DatePickerProps) {
+export function DatePicker({ mode, value, today, max, min, marked, className = "month-label-btn", label, onChange }: DatePickerProps) {
   const isDay = mode === "day";
   // The page the popover shows: a month (YYYY-MM) of days, or a year (YYYY) of months.
   const pageOf = (v: string) => v.slice(0, isDay ? 7 : 4);
@@ -76,6 +82,7 @@ export function DatePicker({ mode, value, today, max, label, onChange }: DatePic
   const prevPage = isDay ? shiftMonth(page, -1) : String(+page - 1);
   const nextPage = isDay ? shiftMonth(page, 1) : String(+page + 1);
   const nextStart = `${nextPage}-01`; // first day, or first month, of the next page
+  const marks = new Set(marked);
   const title = isDay ? fmt(page, { month: "long", year: "numeric" }) : page;
 
   // Arrow keys move between the choosable cells: a day or a month sideways, a week or a row of months up and down.
@@ -92,7 +99,7 @@ export function DatePicker({ mode, value, today, max, label, onChange }: DatePic
       <button
         type="button"
         ref={triggerRef}
-        className="month-label-btn number-tabular"
+        className={`${className} number-tabular`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => {
@@ -106,7 +113,13 @@ export function DatePicker({ mode, value, today, max, label, onChange }: DatePic
       {open && (
         <div className="picker-pop" role="dialog" aria-label={isDay ? "Choose a day" : "Choose a month"}>
           <div className="picker-head">
-            <button type="button" className="month-nav-btn" onClick={() => setPage(prevPage)} aria-label={isDay ? "Previous month" : "Previous year"}>
+            <button
+              type="button"
+              className="month-nav-btn"
+              onClick={() => setPage(prevPage)}
+              disabled={!!min && `${page}-01` <= min}
+              aria-label={isDay ? "Previous month" : "Previous year"}
+            >
               ‹
             </button>
             <strong aria-live="polite">{title}</strong>
@@ -135,11 +148,11 @@ export function DatePicker({ mode, value, today, max, label, onChange }: DatePic
                 <button
                   key={cell}
                   type="button"
-                  className={`picker-cell number-tabular${cell === today ? " today" : ""}`}
+                  className={`picker-cell number-tabular${cell === today ? " today" : ""}${marks.has(cell) ? " marked" : ""}`}
                   aria-pressed={cell === value}
                   aria-current={cell === today ? "date" : undefined}
-                  aria-label={fmt(cell, isDay ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { month: "long", year: "numeric" })}
-                  disabled={cell > max}
+                  aria-label={`${fmt(cell, isDay ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { month: "long", year: "numeric" })}${marks.has(cell) ? ", has tasks" : ""}`}
+                  disabled={cell > max || (!!min && cell < min)}
                   onClick={() => pick(cell)}
                 >
                   {isDay ? +cell.slice(8) : fmt(cell, { month: "short" })}
@@ -150,7 +163,12 @@ export function DatePicker({ mode, value, today, max, label, onChange }: DatePic
             )}
           </div>
 
-          <button type="button" className="btn-sm secondary picker-today" onClick={() => pick(today)} disabled={value === today}>
+          <button
+            type="button"
+            className="btn-sm secondary picker-today"
+            onClick={() => pick(today)}
+            disabled={value === today || today > max || (!!min && today < min)}
+          >
             {isDay ? "Today" : "This month"}
           </button>
         </div>

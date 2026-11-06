@@ -27,7 +27,6 @@ export function AutoHeight({ className, children }: { className?: string; childr
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
-      delete outer.dataset.resizing; // lets the new rows' row-in play (globals.css)
     };
     let last = contentHeight();
 
@@ -37,7 +36,6 @@ export function AutoHeight({ className, children }: { className?: string; childr
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
       if (reducedMotion() || inner.querySelector("[data-row-motion]") || from === next) return settle();
-      outer.dataset.resizing = "";
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
@@ -78,6 +76,8 @@ const FADE_OUT: Keyframe[] = [
   { opacity: 0, transform: "scale(0.97)", filter: "blur(3px)" },
 ];
 const FADE = { duration: 180, easing: EASE, fill: "forwards" } as const;
+const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
+const CLOSE = 300; // a leaving row's space
 const FADE_IN = 260; // matches row-in in globals.css
 
 /**
@@ -129,22 +129,36 @@ export function useListMotion() {
     if (el.dataset.rowMotion !== undefined) return; // already leaving
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
-    el.animate(FADE_OUT, FADE)
-      .finished.then(() => {
-        el.style.overflow = "hidden";
-        return el.animate(spaceFrames(el), { duration: DUR, easing: EASE, fill: "forwards" }).finished;
-      })
-      .catch(() => {})
+    el.style.overflow = "hidden";
+    // The space starts closing while the row is still fading, so the whole exit takes well under half a second.
+    el.animate(FADE_OUT, FADE);
+    el.animate(spaceFrames(el), { duration: CLOSE, delay: 90, easing: EASE, fill: "forwards" })
+      .finished.catch(() => {})
       .finally(remove);
   }, []);
 
   const fadeAll = useCallback((then: () => void) => {
     const rows = [...nodes.current.values()];
     if (!rows.length || reducedMotion()) return then();
-    Promise.all(rows.map((el) => el.animate(FADE_OUT, FADE).finished))
+    Promise.all(rows.map((el) => el.animate(FADE_OUT, SWITCH).finished))
       .catch(() => {})
       .finally(then);
   }, []);
 
-  return { rowRef, enter, leave, fadeAll };
+  // Runs `change` (a state update that reorders rows) and slides each row from its old place to its new one.
+  const reorder = useCallback((change: () => void) => {
+    if (reducedMotion()) return change();
+    const before = new Map([...nodes.current].map(([id, el]) => [id, el.getBoundingClientRect().top]));
+    change();
+    // React has committed the click's update by the next frame, so this measures the new order before it paints.
+    requestAnimationFrame(() => {
+      for (const [id, el] of nodes.current) {
+        const top = before.get(id);
+        const dy = top === undefined ? 0 : top - el.getBoundingClientRect().top;
+        if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: DUR, easing: EASE });
+      }
+    });
+  }, []);
+
+  return { rowRef, enter, leave, fadeAll, reorder };
 }

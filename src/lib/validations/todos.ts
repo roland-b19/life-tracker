@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const todoSpaceSchema = z.enum(["personal", "business"]);
-export const recurrencePatternSchema = z.enum(["daily", "weekly", "none"]);
+// "none" for a one-off task; "daily", or "days:1,3,5" for chosen ISO weekdays (1 = Monday). Fits varchar(20).
+export const recurrencePatternSchema = z.string().regex(/^(none|daily|days:[1-7](,[1-7]){0,6})$/, "Invalid repeat pattern");
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
@@ -31,6 +32,9 @@ export const restoreTodoSchema = createTodoSchema.extend({
 /** How far ahead one-off tasks can be planned. */
 export const PLAN_AHEAD_DAYS = 7;
 
+/** Dev builds may edit, tick and plan past days, for testing; never in production. */
+export const DEV_EDIT_PAST = process.env.NODE_ENV === "development";
+
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
@@ -41,6 +45,15 @@ export const updateTodoSchema = z.object({
   id: z.string().uuid(),
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
+  /** Only applied to repeating tasks. */
+  recurrencePattern: recurrencePatternSchema.optional(),
+});
+
+/** Moves a task to `dueDate` as a one-off task ("none"), or makes it a repeating one. */
+export const moveTodoSchema = z.object({
+  id: z.string().uuid(),
+  recurrencePattern: recurrencePatternSchema,
+  dueDate: isoDate,
 });
 
 export const deleteTodoSchema = z.object({
@@ -59,6 +72,7 @@ export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
+export type MoveTodoInput = z.infer<typeof moveTodoSchema>;
 export type DeleteTodoInput = z.infer<typeof deleteTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
