@@ -18,8 +18,10 @@ function resizeTime(p: number) {
 }
 
 // A wash list (AutoHeight's `wash`) fades its alternating row wash out before rows move and back in after;
-// WASH matches --fade in globals.css.
-const WASH = 240;
+// WASH matches the wash list's background transition in globals.css.
+const WASH = 80;
+// A fast list (AutoHeight's `fast`, Wishlist) runs every row motion in half the time.
+const pace = (el: Element) => (el.closest("[data-fast]") ? 0.5 : 1);
 const holds = new WeakMap<HTMLElement, number>();
 /**
  * Marks a wash list data-settling (no wash) until every row animation running now has finished. `keep` holds it
@@ -59,7 +61,17 @@ function layoutX(el: HTMLElement) {
  * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
-export function AutoHeight({ className, wash, children }: { className?: string; wash?: boolean; children: ReactNode }) {
+export function AutoHeight({
+  className,
+  wash,
+  fast,
+  children,
+}: {
+  className?: string;
+  wash?: boolean;
+  fast?: boolean;
+  children: ReactNode;
+}) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +83,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
       return inner.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
     };
     let last = contentHeight();
+    const resize = RESIZE * pace(outer);
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
@@ -95,7 +108,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
         // The row's layout bottom: its centre ignores the entrance scale. 1px early, as the ease's tail is slow.
         const r = row.getBoundingClientRect();
         const bottom = r.top + r.height / 2 + (row as HTMLElement).offsetHeight / 2 - top - 1;
-        const reach = resizeTime((bottom - from) / (next - from)) * RESIZE;
+        const reach = resizeTime((bottom - from) / (next - from)) * resize;
         if (reach > Number(timing.delay)) entrance.effect!.updateTiming({ delay: reach });
       }
     });
@@ -122,7 +135,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
       );
       els.forEach((el) => glides(el).forEach((a) => a.cancel()));
       const tos = els.map((el) => ({ x: layoutX(el), w: el.offsetWidth }));
-      const timing = { duration: RESIZE, easing: RESIZE_EASE, id: "slide" };
+      const timing = { duration: resize, easing: RESIZE_EASE, id: "slide" };
       const moving: [HTMLElement, number][] = [];
       for (const [i, el] of els.entries()) {
         const from = froms[i];
@@ -165,7 +178,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
   }, []);
 
   return (
-    <div ref={outerRef} className="auto-height" data-wash={wash ? "" : undefined}>
+    <div ref={outerRef} className="auto-height" data-wash={wash ? "" : undefined} data-fast={fast ? "" : undefined}>
       {/* A wash list starts settling, so the rows' entrance on page load is unwashed too; hold() clears it. */}
       <div ref={innerRef} className={className} data-settling={wash ? "" : undefined}>
         {children}
@@ -249,10 +262,11 @@ export function useListMotion() {
         // so no wash jumps to another row meanwhile.
         const wait = washWait(el.parentElement);
         if (wait) el.dataset.entering = "";
+        const p = pace(el);
         if (!alone(el)) {
           el.dataset.rowMotion = "";
           el.style.overflow = "hidden";
-          const open = { duration: SPACE, easing: SPACE_EASE, delay: wait, fill: "backwards" } as const;
+          const open = { duration: SPACE * p, easing: SPACE_EASE, delay: wait, fill: "backwards" } as const;
           closeGap(el, true, open);
           el.animate(spaceFrames(el).reverse(), open).finished.catch(() => {}).finally(() => {
             el.style.overflow = "";
@@ -260,7 +274,7 @@ export function useListMotion() {
           });
         }
         // A row fades in only once its space is fully open, so it is never seen clipped.
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: wait + (alone(el) ? 120 : SPACE), easing: EASE, fill: "backwards" })
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN * p, delay: wait + (alone(el) ? 120 : SPACE) * p, easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(() => {
             delete el.dataset.entering;
             done();
@@ -297,10 +311,11 @@ export function useListMotion() {
     const wait = washWait(el.parentElement);
     if (wait) hold(el.parentElement!, true);
     // The space closes while the row fades, so the exit is one movement of about a quarter of a second.
-    const fade = el.animate(FADE_OUT, { ...FADE, delay: wait });
+    const p = pace(el);
+    const fade = el.animate(FADE_OUT, { ...FADE, duration: FADE.duration * p, delay: wait });
     let exit = fade;
     if (!alone(el)) {
-      const close = { duration: SPACE, easing: SPACE_EASE, fill: "both", delay: wait } as const;
+      const close = { duration: SPACE * p, easing: SPACE_EASE, fill: "both", delay: wait } as const;
       const gap = closeGap(el, false, close);
       if (gap) gaps.current.set(el, gap);
       exit = el.animate(spaceFrames(el), close);
@@ -311,7 +326,7 @@ export function useListMotion() {
   const fadeAll = useCallback((then: () => void) => {
     const rows = [...nodes.current.values()];
     if (!rows.length || reducedMotion()) return then();
-    Promise.all(rows.map((el) => el.animate(FADE_OUT, SWITCH).finished))
+    Promise.all(rows.map((el) => el.animate(FADE_OUT, { ...SWITCH, duration: SWITCH.duration * pace(el) }).finished))
       .catch(() => {})
       .finally(then);
   }, []);
@@ -326,7 +341,7 @@ export function useListMotion() {
       for (const [id, el] of nodes.current) {
         const top = before.get(id);
         const dy = top === undefined ? 0 : top - el.getBoundingClientRect().top;
-        if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: DUR, easing: EASE });
+        if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: DUR * pace(el), easing: EASE });
       }
     });
   }, []);

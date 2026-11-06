@@ -14,6 +14,8 @@ interface ModalProps {
   onExited?: () => void;
   /** Extra class on the card, e.g. the page's font. */
   className?: string;
+  /** Opens and closes in half the time (.modal-backdrop.fast in globals.css). */
+  fast?: boolean;
 }
 
 const CLOSE_MS = 420; // --dur in globals.css
@@ -27,6 +29,7 @@ export function Modal({
   maxWidth = "36rem",
   onExited,
   className,
+  fast,
 }: ModalProps) {
   // Stays mounted while it plays the open animation in reverse (.closing in globals.css).
   const [shown, setShown] = useState(isOpen);
@@ -38,14 +41,14 @@ export function Modal({
   });
   useEffect(() => {
     if (!closing) return;
-    const fast = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const faded = setTimeout(() => exited.current?.(), fast ? 0 : FADED_MS);
-    const gone = setTimeout(() => setShown(false), fast ? 0 : CLOSE_MS);
+    const pace = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : fast ? 0.5 : 1;
+    const faded = setTimeout(() => exited.current?.(), FADED_MS * pace);
+    const gone = setTimeout(() => setShown(false), CLOSE_MS * pace);
     return () => {
       clearTimeout(faded);
       clearTimeout(gone);
     };
-  }, [closing]);
+  }, [closing, fast]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -102,7 +105,7 @@ export function Modal({
   return createPortal(
     <div
       ref={backdropRef}
-      className={closing ? "modal-backdrop closing" : "modal-backdrop"}
+      className={["modal-backdrop", closing && "closing", fast && "fast"].filter(Boolean).join(" ")}
       inert={closing}
       role="dialog"
       aria-modal="true"
