@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import {
   GROUP_COLOR,
@@ -248,7 +249,10 @@ export interface PlannedExercise {
 
 /** 3D model + group chips; picking a group lists the exercises of the user's split that train it. */
 export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
-  const [selected, setSelected] = useState<MuscleGroup | null>(null);
+  const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
+  const { rowRef, fadeAll } = useListMotion();
+  // The current rows fade out before the list switches, like every other list switch.
+  const setSelected = (g: MuscleGroup | null) => g !== selected && fadeAll(() => setSelectedNow(g));
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)
@@ -305,17 +309,19 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           </div>
 
           {selected ? (
-            <div className="entries">
+            <AutoHeight className="entries">
               <h3 className="muscle-subtitle">
                 {GROUP_LABEL[selected]} workouts
               </h3>
               {list.length === 0 && (
-                <p className="empty-note">
+                <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
                   No exercise in your split trains this muscle.
                 </p>
               )}
+              {/* Keyed by the group so every switch mounts fresh rows that play row-in. */}
+              <Fragment key={selected}>
               {list.map((e) => (
-                <div key={e.exerciseId} className="entry-row">
+                <div key={e.exerciseId} ref={rowRef(e.exerciseId)} className="entry-row">
                   <div>
                     <strong>{e.exerciseName}</strong>
                     <span className="muted muscle-day">{e.days.join(", ")}</span>
@@ -325,7 +331,8 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
                   </span>
                 </div>
               ))}
-            </div>
+              </Fragment>
+            </AutoHeight>
           ) : (
             <div>
               <h3 className="muscle-subtitle">Planned sets per week</h3>
