@@ -141,7 +141,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
-- 2026-11-06 — Wishlist growth smoothing (Claude Code), from the user's "still feels forced" feedback:
+- 2026-11-06 — Wishlist growth smoothing (Claude Code, merged in PR #47), from the user's "still feels forced" feedback:
   - Wishlist's `AutoHeight` (`.fade-edge`) grows over 460ms on `cubic-bezier(0.4, 0, 0.2, 1)` instead of 300ms on the front-loaded `--ease`, so it opens instead of snapping. Other lists keep 300ms.
   - The edge fade is 72px with a softer middle stop and shrinks on the same curve and duration as the height (no hold-then-slide), so it is gone exactly when the list arrives.
   - Verified: tsc, eslint; browser frame samples (250–750 → All) show height and fade progress in step, mask and inline height cleared after settling. Not checked: Safari, phone width.
