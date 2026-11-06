@@ -63,14 +63,25 @@ export function AutoHeight({ className, children }: { className?: string; childr
   );
 }
 
-// Keyframes that take a row's space (height, padding, its share of the list gap) down to nothing.
+// Keyframes that take a row's height and padding down to nothing.
 function spaceFrames(el: HTMLElement): Keyframe[] {
   const cs = getComputedStyle(el);
-  const gap = parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
   return [
-    { height: `${el.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, marginTop: cs.marginTop },
-    { height: "0px", paddingTop: "0px", paddingBottom: "0px", marginTop: `${parseFloat(cs.marginTop) - gap}px` },
+    { height: `${el.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom },
+    { height: "0px", paddingTop: "0px", paddingBottom: "0px" },
   ];
+}
+
+// A grid track never shrinks below zero, so a collapsed row still has a gap on each side and the last one
+// would pop when the row is removed. A neighbour takes in one gap instead (added to its own margin).
+function closeGap(el: HTMLElement, opening: boolean, timing: KeyframeAnimationOptions) {
+  const gap = parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
+  const next = el.nextElementSibling;
+  const near = next ?? el.previousElementSibling;
+  if (!gap || !near) return;
+  const side = next ? "marginTop" : "marginBottom";
+  const frames: Keyframe[] = [{ [side]: "0px" }, { [side]: `${-gap}px` }];
+  return near.animate(opening ? frames.reverse() : frames, { ...timing, composite: "add" });
 }
 
 // Rows fade where they stand; row-in in globals.css is the reverse. Opacity and transform only: they stay
@@ -98,6 +109,15 @@ export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
   const entering = useRef(new Map<string, () => void>());
   const leaving = useRef(new WeakSet<HTMLElement>());
+  // A leaving row's neighbour holds the closed gap until the row is gone, then drops it in the same commit.
+  const gaps = useRef(new Map<HTMLElement, Animation>());
+  useLayoutEffect(() => {
+    for (const [el, a] of gaps.current) {
+      if (el.isConnected) continue;
+      a.cancel();
+      gaps.current.delete(el);
+    }
+  });
 
   const rowRef = useCallback(
     (id: string) => (el: HTMLElement | null) => {
@@ -109,13 +129,17 @@ export function useListMotion() {
         // A row that moved (an edit) is the same element: drop its held exit before it enters again.
         el.getAnimations().forEach((a) => a.cancel());
         leaving.current.delete(el);
+        gaps.current.get(el)?.cancel();
+        gaps.current.delete(el);
         el.style.pointerEvents = el.style.overflow = "";
         delete el.dataset.rowMotion;
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
         if (!alone(el)) {
           el.dataset.rowMotion = "";
           el.style.overflow = "hidden";
-          el.animate(spaceFrames(el).reverse(), { duration: SPACE, easing: SPACE_EASE }).finished.catch(() => {}).finally(() => {
+          const open = { duration: SPACE, easing: SPACE_EASE };
+          closeGap(el, true, open);
+          el.animate(spaceFrames(el).reverse(), open).finished.catch(() => {}).finally(() => {
             el.style.overflow = "";
             delete el.dataset.rowMotion;
           });
@@ -150,9 +174,15 @@ export function useListMotion() {
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
     el.style.overflow = "hidden";
-    // The space starts closing while the row is still fading, so the whole exit takes about a third of a second.
+    // The space closes while the row fades, so the exit is one movement of about a quarter of a second.
     const fade = el.animate(FADE_OUT, FADE);
-    const exit = alone(el) ? fade : el.animate(spaceFrames(el), { duration: SPACE, delay: 80, easing: SPACE_EASE, fill: "forwards" });
+    let exit = fade;
+    if (!alone(el)) {
+      const close = { duration: SPACE, easing: SPACE_EASE, fill: "forwards" } as const;
+      const gap = closeGap(el, false, close);
+      if (gap) gaps.current.set(el, gap);
+      exit = el.animate(spaceFrames(el), close);
+    }
     exit.finished.catch(() => {}).finally(remove);
   }, []);
 

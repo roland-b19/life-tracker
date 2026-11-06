@@ -148,6 +148,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
   - Wishlist add and edit wait for the form to close, then animate; an edit that changes the row's place leaves and re-enters like delete/Undo.
   - A row's space closes with an ease-in-out curve so a delete no longer looks stuck at the end.
   - Toasts pause while hovered with a mouse or focused, and resume with at least 1.5s left.
+  - Delete, Undo and move no longer stall: a grid track cannot shrink below zero, so a collapsed row kept both gaps and the last 4px popped (then AutoHeight eased it). A neighbour now takes in one gap during the motion (`closeGap` in list-motion.tsx), and the space closes together with the fade.
 - 2026-11-06 — Snappier task motion, chart axis, no duplicate or lost daily tasks, week section (Claude Code, branch `fix/remove-list-fade`, PR #52), from the user's request:
   - Add, delete and Undo motion drops the blur and uses opacity and transform only (space 260ms, fade-in 220ms after 120ms, fade-out 160ms); after a page change rows start 100ms into the enter transition instead of after it.
   - Tasks bar chart: 30 and 90 days were slow because the bar stagger grew with the bar count; it is now spread over the same ~0.8s for every period. New y-axis (max, half, 0) and a value tooltip on hover or focus.
