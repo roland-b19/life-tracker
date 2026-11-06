@@ -11,8 +11,8 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them. The new rows' entrance (row-in) waits until the resize ends, so
- * they appear in a box that has stopped moving.
+ * the container just follows them. The new rows' entrance (row-in) starts with the resize, so a
+ * switch feels instant.
  */
 export function AutoHeight({ className, children }: { className?: string; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -29,7 +29,6 @@ export function AutoHeight({ className, children }: { className?: string; childr
     const settle = () => {
       outer.style.height = "";
       outer.style.overflow = "";
-      outer.classList.remove("rows-wait");
     };
 
     const observer = new ResizeObserver(() => {
@@ -42,7 +41,6 @@ export function AutoHeight({ className, children }: { className?: string; childr
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
-      outer.classList.add("rows-wait");
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 

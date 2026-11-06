@@ -142,6 +142,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-06 — No shadows, faster row entrance (Claude Code, branch `fix/tasks-and-polish`): every box-shadow removed, hover is a fill on every clickable; tab-switch rows fade in as the list starts resizing. Checked Gym, Health, Tasks, Wishlist and More in the browser at phone and desktop width. See `docs/decisions.md` "No shadows; rows enter with the resize".
 - 2026-11-06 — Graphite palette (Claude Code, branch `fix/tasks-and-polish`), from the user's request "base black, grey": true black page, Apple dark system greys for cards, controls, modal, separators and text (no blue cast); accent and status colors unchanged. See `docs/decisions.md` "Graphite palette".
 
 - 2026-11-06 — Steel blue page (Claude Code, branch `fix/tasks-and-polish`), from the user's request: the page background is a dark steel blue `#1f2b3a` (was graphite `#1b1e22`), so the graphite cards stand out; `themeColor` and the manifest match. A light blue page and a self-drawn slashless zero were tried and dropped at the user's request: Wishlist keeps Menlo's own slashed 0 (the Andale Mono zero is removed too).

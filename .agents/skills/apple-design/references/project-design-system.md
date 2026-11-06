@@ -8,10 +8,10 @@ Project-specific layer on top of the HIG rules. Chosen by the user on 2026-11-04
 |---|---|
 | Palette | **Graphite** (2026-11-06): Apple's dark system greys on a true black page, with the Storm steel blue accent. Dark only. |
 | Font | **SF Pro** through the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui`). No web font files. Tabular figures for every number (weights, money, macros). |
-| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a soft shadow (cards, grey buttons) and a subtle highlight (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, which get no shadow), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
+| Motion | **Apple spring**: 420 ms, `cubic-bezier(0.32, 0.72, 0, 1)`, never an overshoot. Hover is a subtle fill, never a shadow (`--highlight` 5% grey on clear controls, `--highlight-fill` 10% on grey-filled ones, `--tint-highlight` on tinted buttons, `--tint-hover` on the plain filled button), fading over `--fade` (240ms ease), never a scale. Rows do not highlight on hover. |
 | Scrollbars | **Never visible**, on any element (`scrollbar-width: none` and `::-webkit-scrollbar { display: none }`). Content stays scrollable. |
 | Navigation | Desktop (1024 px and up): fixed translucent sidebar, 248 px. Below that: floating blurred tab bar with 4 primary modules plus **More** (popover with the rest, the user and Sign out). |
-| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No borders on objects: a very slight all-around `--edge-shadow` marks their edge (high contrast restores an outline), with blur and translucency for depth. On hover `--hover-shadow`, very soft and on every side, replaces it. An open form blurs the page but does not shrink it. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
+| Modals | Centered over a blurred, dimmed backdrop. Never bottom sheets. No borders and no shadows on objects: they stand out by their grey fill (high contrast restores an outline), with blur and translucency for depth. An open form blurs the page but does not shrink it. List rows are soft bands: every second row has a 5% tint wash, and a hovered row 10%. |
 
 ## Tokens (CSS custom properties on `:root`)
 

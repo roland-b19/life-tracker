@@ -10,7 +10,7 @@
   --text: #ebebf0;
   --secondary: #a1a1a8;
   --tint: #86b4ea;
-  --tint-hover: #8dbaec;
+  --tint-hover: #9bc2ef;
   --on-tint: #0b1b30;
   --tint-subtle: rgba(134, 180, 234, 0.14);
   --success: #8fd4a3;
@@ -21,21 +21,16 @@
   --danger-subtle: rgba(239, 143, 143, 0.15);
   --separator: #38383a;
   --card-border: #48484a;
-  --card-shadow: none;
-  /* Objects carry no outline: a very slight shadow on every side marks their edge instead.
-     High contrast (below) brings the outline back. */
+  /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
+     High contrast (below) brings the outline back. --press is rewritten per element by app/providers.tsx. */
   --edge: transparent;
-  --edge-shadow: 0 0 10px -2px rgba(0, 0, 0, 0.35);
-  /* Hover: one soft shadow on every card and button, no scaling (nothing pulses).
-     --press is rewritten per element by app/providers.tsx so all shrink by the same pixels. */
-  --hover-shadow: 0 0 18px -4px rgba(0, 0, 0, 0.55); /* very soft, on every side */
   --lift: 320ms var(--ease);
   --glass-blur: blur(28px) saturate(160%);
   /* Apple motion: iOS ease-out for movement, never an overshoot */
   --dur: 420ms;
-  /* Hover, press and selection feedback (color, shadow, opacity): quick, or every control feels late */
+  /* Hover, press and selection feedback (color, opacity): quick, or every control feels late */
   --quick: 180ms;
-  /* Hover shadows and highlights fade in on a gentle curve: fast, but never a jump */
+  /* Hover highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a slightly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
@@ -283,7 +278,6 @@ h3 {
   border-radius: 50%;
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   display: grid;
   place-items: center;
   font-size: 0.8125rem;
@@ -301,7 +295,7 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--fade), color var(--fade), transform var(--lift), box-shadow var(--fade);
+  transition: background var(--fade), color var(--fade), transform var(--lift);
 }
 
 .nav-link svg {
@@ -340,7 +334,6 @@ h3 {
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   backdrop-filter: blur(28px) saturate(160%);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 1.5rem;
 }
 
@@ -400,7 +393,6 @@ h3 {
   padding: 0.5rem;
   background: var(--surface-modal);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 1.25rem;
   transform-origin: bottom right;
   animation: modalScaleUp var(--dur) var(--ease) both;
@@ -498,10 +490,9 @@ main {
     gap: 0.5rem;
     padding: 0.625rem;
     border: 1px solid var(--edge);
-    box-shadow: var(--edge-shadow);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform var(--lift), box-shadow var(--fade);
+    transition: transform var(--lift);
   }
 
   .side-user-row {
@@ -560,49 +551,42 @@ main {
   background: rgba(134, 180, 234, 0.15);
   color: #86b4ea;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-warning {
   background: rgba(235, 198, 115, 0.15);
   color: #ebc673;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-danger {
   background: rgba(239, 143, 143, 0.15);
   color: #ef8f8f;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-rest {
   background: rgba(161, 161, 168, 0.12);
   color: var(--secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-success {
   background: rgba(143, 212, 163, 0.15);
   color: #8fd4a3;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-carried {
   background: rgba(168, 191, 224, 0.15);
   color: #a8bfe0;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .badge-reminder {
   background: rgba(134, 180, 234, 0.12);
   color: #86b4ea;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   font-size: 0.75rem;
 }
 
@@ -630,13 +614,12 @@ main {
   padding: 1rem 1.25rem;
   background: var(--surface-solid);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 .split-day-card.today {
@@ -650,7 +633,6 @@ main {
   border: 1px solid var(--edge);
   border-radius: 1rem;
   margin-bottom: 1rem;
-  box-shadow: var(--edge-shadow);
 }
 
 .exercise-header {
@@ -669,7 +651,6 @@ main {
   display: grid;
   gap: 0.35rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 .set-row {
@@ -711,10 +692,9 @@ main {
   background: var(--surface-secondary);
   border-radius: 0.9rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   display: grid;
   gap: 0.3rem;
-  transition: transform var(--lift), box-shadow var(--fade);
+  transition: transform var(--lift);
 }
 
 .macro-title {
@@ -809,8 +789,7 @@ main {
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
-  box-shadow: var(--edge-shadow);
-  transition: transform var(--lift), box-shadow var(--fade);
+  transition: transform var(--lift);
   animation: rise var(--dur) var(--ease) backwards;
 }
 
@@ -831,7 +810,7 @@ main {
   }
 }
 
-/* Hover, one rule for every card and button: one soft shadow, no scaling. Fields and tabs get a highlight instead. */
+/* Hover on fields: a lighter fill, no scaling. */
 @media (hover: hover) {
   input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
   select:hover:not(:focus, :disabled),
@@ -840,17 +819,6 @@ main {
   }
   select.sort-select:hover:not(:disabled) {
     background-color: var(--highlight-fill);
-  }
-
-  .surface:hover,
-  .split-day-card:hover,
-  .macro-card:hover,
-  .routine-row:hover,
-  .side-user:hover,
-  .nav-link:hover,
-  button:not(.bars-col, .segmented button, .split-day-select, .tint, .delete-icon-btn, .toast-action-btn, .toast-close-btn, .modal-close-btn):hover:not(:disabled),
-  .month-nav-btn:hover {
-    box-shadow: var(--hover-shadow);
   }
 }
 
@@ -885,9 +853,8 @@ textarea {
   color: var(--text);
   background: rgba(28, 28, 30, 0.85);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
-  transition: background-color var(--fade), border-color var(--fade), box-shadow var(--fade), transform var(--lift);
+  transition: background-color var(--fade), border-color var(--fade), transform var(--lift);
 }
 
 /* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
@@ -933,8 +900,7 @@ button {
   justify-content: center;
   gap: 0.5rem;
   border-radius: 0.85rem;
-  box-shadow: none;
-  transition: background var(--fade), color var(--fade), transform var(--lift), box-shadow var(--fade), opacity var(--quick) var(--ease);
+  transition: background var(--fade), color var(--fade), transform var(--lift), opacity var(--quick) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -945,21 +911,18 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
   transform: none;
-  box-shadow: none;
 }
 
 button.secondary {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 button.danger {
   color: var(--danger);
   background: transparent;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 
 /* Fields show focus with their own edge (above); only buttons get the keyboard ring */
@@ -998,14 +961,13 @@ textarea:focus-visible {
   padding: 0.5rem 0;
 }
 
-/* Container that animates its height when its content changes (list-motion.tsx): a quick resize, then the
-   new rows fade in; they hold their entrance (.rows-wait) until the box stops */
+/* Container that animates its height when its content changes (list-motion.tsx): a quick resize, with the
+   new rows fading in as it starts */
 .auto-height {
   display: flow-root;
   transition: height 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
-.auto-height.rows-wait > :is(.entries, .todo-list) > * { animation-play-state: paused; } /* both beat the later row-in shorthand */
 
 .entry-row {
   justify-content: space-between;
@@ -1032,7 +994,6 @@ textarea:focus-visible {
 .month-nav-btn {
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   color: var(--text);
   border-radius: 0.7rem;
   width: 2.25rem;
@@ -1043,7 +1004,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
@@ -1058,7 +1019,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform var(--lift), background-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease);
+  transition: transform var(--lift), background-color var(--fade), opacity var(--quick) var(--ease);
   width: 44px;
   height: 44px;
 }
@@ -1075,7 +1036,6 @@ textarea:focus-visible {
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
   padding: 1.35rem;
-  box-shadow: var(--edge-shadow);
 }
 
 .todo-stats-header {
@@ -1127,7 +1087,7 @@ textarea:focus-visible {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1141,7 +1101,6 @@ textarea:focus-visible {
   background: var(--tint);
   border-color: var(--tint);
   color: var(--on-tint);
-  box-shadow: none;
 }
 
 .todo-title {
@@ -1199,7 +1158,6 @@ textarea:focus-visible {
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
   font-size: 0.875rem;
-  box-shadow: var(--edge-shadow);
 }
 
 /* ==========================================================================
@@ -1278,7 +1236,6 @@ textarea:focus-visible {
   background: #242426;
   border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: var(--edge-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1400,7 +1357,6 @@ textarea:focus-visible {
   background: var(--surface-modal);
   border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: var(--edge-shadow);
   overflow: hidden;
   animation: modalScaleUp var(--dur) var(--ease) forwards;
 }
@@ -1486,7 +1442,6 @@ textarea:focus-visible {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.35rem;
   color: var(--secondary);
 }
@@ -1497,14 +1452,13 @@ textarea:focus-visible {
   gap: 0.5rem;
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   color: var(--secondary);
   border-radius: 0.85rem;
   padding: 0.4rem 0.75rem;
   font-size: 0.8125rem;
   cursor: pointer;
   min-height: 44px;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1552,7 +1506,6 @@ textarea:focus-visible {
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
-  box-shadow: var(--edge-shadow);
   animation: toastSlideIn var(--dur) var(--ease) forwards;
   max-width: 100%;
 }
@@ -1585,7 +1538,6 @@ textarea:focus-visible {
   background: var(--tint-subtle);
   color: var(--tint);
   border: 0;
-  box-shadow: none;
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1593,7 +1545,7 @@ textarea:focus-visible {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), box-shadow var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1614,7 +1566,6 @@ textarea:focus-visible {
   min-width: 36px;
   min-height: 36px;
   border-radius: 0.7rem; /* the same rounded square as every small button */
-  box-shadow: none;
   transition: color var(--fade), background-color var(--fade);
 }
 
@@ -1638,7 +1589,6 @@ button.btn-sm {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
@@ -1647,7 +1597,6 @@ button.btn-sm.tint {
   color: var(--tint);
   background: var(--tint-subtle);
   border-color: transparent;
-  box-shadow: none;
 }
 
 /* Segmented control with a sliding thumb: --n segments, --i active index */
@@ -1660,7 +1609,6 @@ button.btn-sm.tint {
   padding: 0.25rem;
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.95rem;
   isolation: isolate;
 }
@@ -1692,7 +1640,7 @@ button.btn-sm.tint {
   transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
-/* An idle tab lifts and lightens on hover, without a shadow; the selected tab stays on its thumb. */
+/* An idle tab lightens on hover; the selected tab stays on its thumb. */
 @media (hover: hover) {
   .segmented button:not(.active):hover:not(:disabled) {
     background: var(--highlight);
@@ -1765,13 +1713,11 @@ main > .error {
   padding: 0.25rem;
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.95rem;
 }
 
 .toolbar.dash .month-nav-btn {
   border-color: transparent;
-  box-shadow: none;
   background: transparent;
   border-radius: 0.7rem;
 }
@@ -1853,7 +1799,6 @@ main > .error {
   background: var(--surface-modal);
   border: 1px solid var(--edge);
   border-radius: 1.1rem;
-  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
   transform-origin: top center;
   animation: picker-in calc(var(--dur) + 60ms) var(--ease) both;
 }
@@ -1874,7 +1819,6 @@ main > .error {
 
 .picker-head .month-nav-btn {
   border-color: transparent;
-  box-shadow: none;
   background: transparent;
 }
 
@@ -2066,7 +2010,6 @@ main > .error {
   border-radius: 2rem;
   background: var(--surface-secondary);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   font-size: 0.875rem;
 }
 
@@ -2388,7 +2331,6 @@ select.sort-select:focus-visible:not([data-pointer]) {
   border: 1px solid var(--edge);
   border-radius: 0.6rem;
   background: var(--surface-modal);
-  box-shadow: var(--hover-shadow);
   color: var(--text);
   font-size: 0.75rem;
   line-height: 1.35;
@@ -2641,7 +2583,6 @@ button.bars-col:focus-visible {
   background: transparent;
   color: var(--foreground, inherit);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
 }
 .muscle-chip.active {
   border-color: var(--tint);
@@ -2751,7 +2692,6 @@ button.bars-col:focus-visible {
 .split-day-card { padding: 0.5rem 0.75rem 0.5rem 1rem; gap: 0.75rem; }
 .split-day-card.selected {
   border-color: var(--tint);
-  box-shadow: 0 0 0 1px var(--tint);
 }
 .split-day-select { /* the card lifts, not this button inside it */
   flex: 1;
@@ -2787,11 +2727,10 @@ button.bars-col:focus-visible {
   gap: 0.5rem;
   padding: 0.75rem 0.75rem 0.85rem 1rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
-  transition: transform var(--lift), box-shadow var(--fade);
+  transition: transform var(--lift);
 }
 .routine-row-head {
   display: flex;
@@ -2817,7 +2756,6 @@ button.bars-col:focus-visible {
   gap: 0.75rem;
   padding: 0.85rem 1rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
@@ -2887,7 +2825,6 @@ button.bars-col:focus-visible {
   overflow-y: auto;
   padding: 1rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.9rem;
   background: var(--surface-secondary);
 }
@@ -2908,7 +2845,6 @@ button.bars-col:focus-visible {
   padding: 0.65rem 0.9rem;
   border-radius: 1.1rem 1.1rem 1.1rem 0.3rem;
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   background: var(--surface);
   font-size: 0.9375rem;
   line-height: 1.4;
@@ -2916,7 +2852,6 @@ button.bars-col:focus-visible {
 }
 .chat-msg.user .chat-bubble {
   border-color: transparent;
-  box-shadow: none;
   border-radius: 1.1rem 1.1rem 0.3rem 1.1rem;
   background: var(--tint);
   color: var(--on-tint);
@@ -3088,7 +3023,6 @@ button.bars-col:focus-visible {
   color: var(--text);
   background: rgba(28, 28, 30, 0.85);
   border: 1px solid var(--edge);
-  box-shadow: var(--edge-shadow);
   border-radius: 0.85rem;
 }
 
@@ -3096,8 +3030,12 @@ button.bars-col:focus-visible {
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
 
-/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint */
+/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint.
+   With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
+  button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
+  .month-nav-btn:hover:not(:disabled) { background: var(--highlight-fill); }
+  .split-day-card:hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
   button.secondary:hover:not(:disabled),
   button.btn-sm:not(.tint):hover:not(:disabled),
   .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled) {
