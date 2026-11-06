@@ -2,7 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 
-// Durations match --dur and --ease in globals.css.
+// DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
@@ -73,44 +73,43 @@ function spaceFrames(el: HTMLElement): Keyframe[] {
   ];
 }
 
-// Rows fade where they stand, with a slight blur so the fade reads softer; row-in in globals.css is the reverse.
+// Rows fade where they stand; row-in in globals.css is the reverse. Opacity and transform only: they stay
+// on the compositor, while a filter would repaint the row over the glass card every frame.
 const FADE_OUT: Keyframe[] = [
-  { opacity: 1, transform: "none", filter: "none" },
-  { opacity: 0, transform: "scale(0.97)", filter: "blur(3px)" },
+  { opacity: 1, transform: "none" },
+  { opacity: 0, transform: "scale(0.97)" },
 ];
-const FADE = { duration: 180, easing: EASE, fill: "forwards" } as const;
+const FADE = { duration: 160, easing: EASE, fill: "forwards" } as const;
 const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
-const CLOSE = 300; // a leaving row's space
-const FADE_IN = 260; // matches row-in in globals.css
+const SPACE = 260; // a row's space opening or closing
+const FADE_IN = 220; // starts while the space opens, matches row-in in globals.css
 
 /**
- * Row motion for lists: `leave` fades a row out while it keeps its space, then closes the
- * space and calls `remove`; `enter` (called just before the row is added) opens the space
- * first, then fades the row in; `fadeAll` fades every row out in place before a view switch.
+ * Row motion for lists: `leave` fades a row out while its space closes, then calls `remove`;
+ * `enter` (called just before the row is added) opens the space and fades the row in, and resolves
+ * when it is done; `fadeAll` fades every row out in place before a view switch.
  * Attach `rowRef(id)` to each row.
  */
 export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
-  const entering = useRef(new Set<string>());
+  const entering = useRef(new Map<string, () => void>());
 
   const rowRef = useCallback(
     (id: string) => (el: HTMLElement | null) => {
       if (!el) return;
       nodes.current.set(id, el);
-      if (entering.current.delete(id) && !reducedMotion()) {
+      const done = entering.current.get(id);
+      if (done) {
+        entering.current.delete(id);
         el.dataset.rowMotion = "";
         el.style.overflow = "hidden";
-        const grow = el.animate(
-          spaceFrames(el).reverse().map((f) => ({ ...f, opacity: 0 })),
-          { duration: DUR, easing: EASE },
-        );
-        grow.finished
-          .then(() => {
-            el.style.overflow = "";
-            delete el.dataset.rowMotion;
-            return el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, easing: EASE }).finished;
-          })
-          .catch(() => {});
+        el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
+        el.animate(spaceFrames(el).reverse(), { duration: SPACE, easing: EASE }).finished.catch(() => {}).finally(() => {
+          el.style.overflow = "";
+          delete el.dataset.rowMotion;
+        });
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: 120, easing: EASE, fill: "backwards" })
+          .finished.catch(() => {}).finally(done);
       }
       return () => {
         if (nodes.current.get(id) === el) nodes.current.delete(id);
@@ -119,12 +118,17 @@ export function useListMotion() {
     [],
   );
 
-  const enter = useCallback((id: string) => {
-    entering.current.add(id);
-    // A row added outside the current filter never mounts; forget it so it does not grow later.
-    // Long enough for pages that refetch the list before the row mounts (Tasks).
-    setTimeout(() => entering.current.delete(id), 2000);
-  }, []);
+  const enter = useCallback(
+    (id: string) =>
+      new Promise<void>((done) => {
+        if (reducedMotion()) return done();
+        entering.current.set(id, done);
+        // A row added outside the current filter never mounts; forget it so it does not grow later.
+        // Long enough for pages that refetch the list before the row mounts (Tasks).
+        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), done()), 2000);
+      }),
+    [],
+  );
 
   const leave = useCallback((id: string, remove: () => void) => {
     const el = nodes.current.get(id);
@@ -133,9 +137,9 @@ export function useListMotion() {
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
     el.style.overflow = "hidden";
-    // The space starts closing while the row is still fading, so the whole exit takes well under half a second.
+    // The space starts closing while the row is still fading, so the whole exit takes about a third of a second.
     el.animate(FADE_OUT, FADE);
-    el.animate(spaceFrames(el), { duration: CLOSE, delay: 90, easing: EASE, fill: "forwards" })
+    el.animate(spaceFrames(el), { duration: SPACE, delay: 80, easing: EASE, fill: "forwards" })
       .finished.catch(() => {})
       .finally(remove);
   }, []);

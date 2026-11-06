@@ -2151,10 +2151,46 @@ select.sort-select {
   padding-bottom: 0;
 }
 
+/* The title and its tags (weekdays, reminder) share a line, wrapping only when it is full */
 .todo-main {
   flex: 1;
   min-width: 0;
   margin-left: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.todo-main > .badge-row {
+  margin-top: 0;
+}
+
+/* Week section on Tasks: today and the six days after it, one tap to that day's list */
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.week-strip .weekday-btn {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  padding: 0.35rem 0;
+}
+
+.week-day-name {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.week-day-num {
+  font-size: 0.9375rem;
 }
 
 /* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
@@ -2230,6 +2266,28 @@ select.sort-select {
   letter-spacing: -0.02em;
 }
 
+/* Value axis on the left, day labels under the plot */
+.bars {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.45rem;
+}
+
+.bars-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--secondary);
+}
+/* Each number sits on its gridline */
+.bars-axis span:first-child { translate: 0 -50%; }
+.bars-axis span:last-child { translate: 0 50%; }
+
+.bars-labels { grid-column: 2; }
+
 .bars-plot {
   display: flex;
   align-items: flex-end;
@@ -2250,6 +2308,34 @@ select.sort-select {
   height: 100%;
   display: flex;
   align-items: flex-end;
+}
+
+/* Hover (or keyboard focus) shows the bar's value above the chart */
+.bars-col[data-tip] { position: relative; }
+.bars-col[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  translate: calc(var(--at, 0.5) * -100%) 0; /* slides from left- to right-aligned across the chart, so it never leaves it */
+  z-index: 2;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.6rem;
+  background: var(--surface-modal);
+  box-shadow: var(--hover-shadow);
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+.bars-col[data-tip]:focus-visible::after { opacity: 1; }
+@media (hover: hover) {
+  .bars-col[data-tip]:hover::after { opacity: 1; }
 }
 
 button.bars-col {
@@ -2793,18 +2879,17 @@ button.bars-col:focus-visible {
 .routine-row,
 :is(.entries, .todo-list) > .empty-note {
   /* backwards, not both: a held end state would pin transform and block the hover lift */
-  animation: row-in 260ms var(--ease) backwards; /* FADE_IN in list-motion.tsx */
-  /* Capped at the 11th row, so a long list never waits and a row added with useListMotion's enter (680ms)
-     is done before its delay ends; browsers without sibling-index() drop the line and show rows at once. */
+  animation: row-in 260ms var(--ease) backwards;
+  /* Capped at the 11th row, so a long list never waits; browsers without sibling-index() drop the line and
+     show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
   animation-delay: calc(min(sibling-index() - 1, 10) * 40ms);
 }
-/* While a page change runs (app/template.tsx), the new page is still fading in, so its rows wait and build once it is there */
-:root:active-view-transition :is(.entry-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, :is(.entries, .todo-list) > .empty-note) {
+/* As a page change starts (app/template.tsx), the new page is still faint, so its rows wait until it is mostly there */
+:root:active-view-transition:not(.rows-go) :is(.entry-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, :is(.entries, .todo-list) > .empty-note) {
   animation-play-state: paused;
 }
 @keyframes row-in {
-  from { opacity: 0; transform: scale(0.97); filter: blur(3px); }
-  to { opacity: 1; transform: none; filter: none; }
+  from { opacity: 0; transform: scale(0.97); }
 }
 
 /* An open form pulls the page back: it shrinks a little behind the blurred backdrop (Modal portals to body). */

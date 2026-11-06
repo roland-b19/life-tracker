@@ -359,6 +359,8 @@ export const todos = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     isCarriedOver: boolean("is_carried_over").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // A deleted repeating task stops here (not due on or after this day) but stays on the days before it.
+    endedOn: date("ended_on"),
   },
 );
 
