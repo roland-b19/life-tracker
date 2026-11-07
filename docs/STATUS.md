@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-06 by Claude (Wishlist style on every page, ultimate-design-skill)_
+_Last updated: 2026-11-08 by Claude (Undo of an edit, Tasks Week strip, new tasks on top)_
 
 ## Phase
 
@@ -27,7 +27,7 @@ Pages polish 3 is merged in `main` (PR #44): ticking or reopening a task has no 
 Tasks reject duplicates, merged to `main` (PR #49): adding a task whose title (any case) is already on the list it would join shows an error in the form and keeps it open. No migration, no new dependency, no new endpoint. Since PR #52 (merged) rename, move and Undo are checked too, deleting a repeating task with past days only ends it (migration `0016_todo_ended_on`), and Tasks gets a Week section and a chart axis with tooltips.
 Wishlist motion is merged to `main` (PR #46): adding an item shows a toast without Undo; saving an edit offers Undo (writes the old values back); toasts are as wide as their content; when a tab switch grows the list, its bottom edge fades instead of cutting rows (`AutoHeight`; since PR #48 on every page that uses it; since PR #50 it shrinks out instead of sliding; removed again in PR #52 at the user's request). No migration, no new dependency, no new endpoint.
 Pages polish 4 is merged in `main` (PR #45): Past foods rows use the standard row with a boxed plus; the Food Assistant has no greeting and no suggestion chips; the Shopping tab shows the list and Categories side by side (list first); Gym training day cards lift as one card (the inner select button no longer lifts, and the row entrance animation no longer pins `transform`, which had blocked the hover scale on day cards and routine rows). Section headers wrap instead of breaking a button label. No migration, no new dependency.
-Wishlist style everywhere (PR #53, open, not merged): the Wishlist page is the signed-off reference and its buttons, spacing, fonts, motion and add/edit/delete pattern now apply to Tasks, Food, Gym, Health and the sign-in and sign-out screens; the full house style is the new `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/`). No migration, no new dependency, no new endpoint.
+Wishlist style everywhere (PR #53 and #54, merged): the Wishlist page is the signed-off reference and its buttons, spacing, fonts, motion and add/edit/delete pattern now apply to Tasks, Food, Gym, Health and the sign-in and sign-out screens; the full house style is the new `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/`). No migration, no new dependency, no new endpoint.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -142,6 +142,11 @@ synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscrip
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
 ## Session log (newest first)
+
+- 2026-11-08 — Undo and Tasks fixes (Claude Code, branch `fix/undo-and-tasks`), from the user's last Wishlist request and a Tasks list:
+  - Wishlist: Undo of an edit no longer replays the list's entrance on the other rows (`rowRef` stops `row-in` after a row's first entrance).
+  - Tasks (Personal and Business, one component): the Week strip opens without a jump; an edit that takes a task off the shown list leaves like a delete and its Undo returns like an Undo of a delete; new tasks go on top; picking a weekday keeps the date and shows that weekday's repeating tasks to edit (no ticking); Today has no Week button.
+  - Checks: tsc, eslint, browser runs of every item. vitest: 92 of 94 pass; the 2 failures (a todos "first day" test and a food "defaults to today's date" test) fail the same on `main` and depend on the time of day (run after midnight), not on this change.
 
 - 2026-11-06 — Wishlist style on every page and the `ultimate-design-skill` (Claude Code, branch `fix/tasks-and-polish`, PR #53 open), from the user's request to carry everything from the Wishlist page to all pages, redo sign-in and sign-out, and write the house style as a skill checked until a pass finds nothing:
   - Sign-in: plain card with "Welcome back" as a section title, the dev note removed; Sign out uses the tint button style; the sign-out fade blurs without scaling.

@@ -2061,7 +2061,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.35rem;
-  margin-bottom: 1rem;
+  /* Padding, not margin: a margin collapses out of AutoHeight's box, which then opens short and jumps at the end */
+  padding-bottom: 1rem;
 }
 
 .week-strip .weekday-btn {
