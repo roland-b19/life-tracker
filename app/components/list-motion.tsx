@@ -118,6 +118,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
     // wash's own fade is one), so the wash comes back once the whole list is in place.
     const washes = outer.hasAttribute("data-wash");
     if (washes) hold(inner);
+    stagger(inner); // a list that mounts with its rows gets no mutation: Safari's delays on page load
 
     // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
     const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();

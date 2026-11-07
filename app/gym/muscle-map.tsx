@@ -209,7 +209,7 @@ function MuscleMap({
         role="img"
         aria-label="3D muscle model. Use the muscle group buttons for a keyboard-friendly alternative."
       />
-      {status === "loading" && <p className="muscle-note">Loading model…</p>}
+      {status === "loading" && <p className="muscle-note">Loading model...</p>}
       {status === "error" && (
         <p className="muscle-note">
           3D view is not available here. Use the muscle buttons instead.
@@ -275,7 +275,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
         {/* Always rendered so the card never shifts when it appears */}
         <button
           type="button"
-          className="secondary btn-sm"
+          className="btn-sm tint"
           onClick={() => setSelected(null)}
           style={{ visibility: selected ? "visible" : "hidden" }}
           aria-hidden={!selected}
@@ -309,10 +309,10 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           </div>
 
           {selected ? (
-            <AutoHeight className="entries">
-              <h3 className="muscle-subtitle">
-                {GROUP_LABEL[selected]} workouts
-              </h3>
+            <div>
+            <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
+            {/* The title stays outside the list, so the first row starts the stagger. */}
+            <AutoHeight wash className="entries muscle-entries">
               {list.length === 0 && (
                 <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
                   No exercise in your split trains this muscle.
@@ -327,15 +327,16 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
                     <span className="muted muscle-day">{e.days.join(", ")}</span>
                   </div>
                   <span className="muted number-tabular">
-                    {e.targetSets} × {e.minReps}–{e.maxReps}
+                    {e.targetSets} × {e.minReps} – {e.maxReps}
                   </span>
                 </div>
               ))}
               </Fragment>
             </AutoHeight>
+            </div>
           ) : (
             <div>
-              <h3 className="muscle-subtitle">Planned sets per week</h3>
+              <h3 className="group-label">Planned sets per week</h3>
               <HBars
                 rows={MUSCLE_GROUPS.map((g) => ({
                   label: GROUP_LABEL[g],

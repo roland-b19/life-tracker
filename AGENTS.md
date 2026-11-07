@@ -57,6 +57,8 @@ When you start: read the files under "Read first", then `git log --oneline -15`,
 
 The app must feel like Apple software. Before designing or building any UI, UX copy, icon, chart, notification or widget, read the `apple-design` skill (`.agents/skills/apple-design/SKILL.md`) and the references it routes to. Use system components, system colors and text styles before custom ones. The skill's accessibility checklist is part of "done" for every screen.
 
+The house style on top of the HIG is the `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/SKILL.md`): every value, motion rule, add/edit/delete pattern and rejected idea from the Wishlist page, which the user signed off as the reference. Read it before any UI change and follow its checklist; every page must match the Wishlist.
+
 ## Security: secure-development skill
 
 Security is graded and the app will hold personal data. The plan is `docs/security-plan.md`; the standards (ASVS 5.0 target L2, OWASP Top 10:2025, NIST SSDF, MCSB for Azure) are distilled in `.agents/skills/secure-development/`.

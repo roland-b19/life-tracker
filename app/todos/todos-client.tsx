@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
-import { CheckIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
@@ -39,8 +39,8 @@ const PERIODS: { value: Period; label: string }[] = [
 ];
 const METRICS: { value: Metric; label: string }[] = [
   // Bar height: share of that day's tasks completed, or how many were completed.
-  { value: "rate", label: "% done" },
-  { value: "done", label: "Tasks done" },
+  { value: "rate", label: "Rate" },
+  { value: "done", label: "Count" },
 ];
 // Sparse day labels so 30 and 90 bars stay readable.
 const LABEL_EVERY: Record<Period, number> = { "7": 1, "30": 5, "90": 15 };
@@ -79,7 +79,8 @@ export function TodosClient({
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
   const [planned, setPlanned] = useState(initialPlanned);
-  const [moving, setMoving] = useState<TodoItem | null>(null);
+  const [moving, setMoving] = useState<TodoItem | null>(null); // outlives the close, so the dialog keeps its content while it fades
+  const [moveOpen, setMoveOpen] = useState(false);
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
@@ -97,7 +98,6 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [daysInput, setDaysInput] = useState(ALL_DAYS);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,7 +106,6 @@ export function TodosClient({
   // Push notifications state
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushStatusMsg, setPushStatusMsg] = useState<string | null>(null);
 
   const requestId = useRef(0);
 
@@ -199,8 +198,8 @@ export function TodosClient({
         setHistory({ personal: hp.history ?? [], business: hb.history ?? [] });
         setPlanned({ personal: pp.days, business: pb.days });
       }
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
+    } catch {
+      showToast({ message: "Failed to load tasks", type: "warning" });
     }
   };
 
@@ -226,7 +225,6 @@ export function TodosClient({
 
   const openForm = (todo?: TodoItem) => {
     runAfterClose(); // reopened before the last close finished
-    setErrorMsg(null);
     setTitleError(null);
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
@@ -249,6 +247,7 @@ export function TodosClient({
     const repeats = editing ? editing.isRecurring : isDaily;
     if (repeats && !daysInput.length) return;
     const recurrencePattern = repeats ? patternOf(daysInput) : "none";
+    setTitleError(null);
     setSaving(true);
     let entered: Promise<void> | undefined;
     try {
@@ -257,17 +256,22 @@ export function TodosClient({
         const res = await updateTodoAction({ id: before.id, title, reminderTime, recurrencePattern });
         if ("error" in res) return setTitleError(res.error);
         if (res.success) {
+          // The refresh lands once the form has closed.
+          entered = new Promise((done) => later(done));
           showToast({
             message: `Saved "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
-              await updateTodoAction({
+              runAfterClose(); // the edit first, if the form is still closing
+              const back = await updateTodoAction({
                 id: before.id,
                 title: before.title,
                 reminderTime: before.reminderTime,
                 recurrencePattern: before.recurrencePattern,
-              });
+              }).catch(() => null);
+              if (!back || !("success" in back) || !back.success)
+                showToast({ message: "Failed to undo the edit", type: "warning" });
               await loadDay(date);
             },
           });
@@ -288,25 +292,14 @@ export function TodosClient({
           // The row comes in once the form has closed; the refresh (stats, chart) lands after its entrance, not in the middle of it.
           if (!created.isRecurring || created.dueDate <= date)
             entered = new Promise((done) => later(() => void putBack(created).then(done)));
-          showToast({
-            message: `Added "${title}"`,
-            type: "success",
-            actionLabel: "Undo",
-            onAction: async () => {
-              runAfterClose(); // the row first, if the form is still closing
-              await deleteTodoAction(created.id);
-              leave(created.id, () => {
-                drop(created);
-                void loadDay(date);
-              });
-            },
-          });
+          // No Undo: a new task is one tap from Delete.
+          showToast({ message: `Added "${title}"`, type: "success" });
         }
       }
       closeForm();
       await loadDay(date, entered);
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
+    } catch {
+      setTitleError("Failed to save task"); // the form stays open
     } finally {
       setSaving(false);
     }
@@ -335,8 +328,8 @@ export function TodosClient({
     try {
       // No toast: ticking again is its own undo.
       await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
+    } catch {
+      showToast({ message: "Failed to update task", type: "warning" });
     }
     // Refresh to pick up the server-computed streak.
     await loadDay(date);
@@ -358,19 +351,21 @@ export function TodosClient({
   const drop = (task: TodoItem) =>
     setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
 
-  // Moving always takes the row out of this list; the server call runs while it leaves.
+  // Moving always takes the row out of this list; the server call starts now, the row leaves once the dialog has closed.
   const handleMove = (task: TodoItem, recurrencePattern: string, day: string) => {
-    setMoving(null);
+    setMoveOpen(false);
     if (recurrencePattern === "none" && !task.isRecurring && day === task.dueDate) return;
     const moved = moveTodoAction({ id: task.id, recurrencePattern, dueDate: day }).then(
       (res) => (res.success ? null : "error" in res ? res.error : "Failed to move task"),
       () => "Failed to move task",
     );
     const gone = new Promise<void>((done) =>
-      leave(task.id, () => {
-        drop(task);
-        done();
-      }),
+      later(() =>
+        leave(task.id, () => {
+          drop(task);
+          done();
+        }),
+      ),
     );
     void Promise.all([moved, gone]).then(([error]) => {
       if (error) {
@@ -386,38 +381,42 @@ export function TodosClient({
     });
   };
 
-  // The server call runs while the row fades, so nothing waits on the network; undo restores the same task, streak included.
+  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
+  // Undo restores the same task, streak included.
   const handleDeleteTodo = (target: TodoItem) => {
     const deleted = deleteTodoAction(target.id, date).then(
       (res) => res.success,
       () => false,
     );
-    leave(target.id, () => {
-      drop(target);
-      void deleted.then((ok) => {
-        if (!ok) {
-          putBack(target);
-          showToast({ message: "Failed to delete task", type: "warning" });
-          return;
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(target.id, () => {
+        drop(target);
+        done();
+      }),
+    );
+    showToast({
+      message: `Removed "${target.title}"`,
+      actionLabel: "Undo",
+      onAction: async () => {
+        await gone;
+        const entered = putBack(target);
+        if (!(await deleted)) return; // the delete never happened
+        const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
+        const back = await restoreTodoAction({
+          id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
+        }).catch(() => null);
+        if (!back?.success) {
+          leave(target.id, () => drop(target));
+          showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
         }
-        void loadDay(date);
-        showToast({
-          message: `Deleted "${target.title}"`,
-          actionLabel: "Undo",
-          onAction: async () => {
-            const entered = putBack(target);
-            const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
-            const back = await restoreTodoAction({
-              id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
-            }).catch(() => null);
-            if (!back?.success) {
-              leave(target.id, () => drop(target));
-              showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
-            }
-            await loadDay(date, entered);
-          },
-        });
-      });
+        await loadDay(date, entered);
+      },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return void loadDay(date);
+      putBack(target);
+      showToast({ message: "Failed to remove task", type: "warning" });
     });
   };
 
@@ -426,13 +425,13 @@ export function TodosClient({
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
-        setPushStatusMsg("Push notification permission denied.");
+        showToast({ message: "Failed to enable reminders (notifications are blocked)", type: "warning" });
         return;
       }
 
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
-        setPushStatusMsg("Web push notifications enabled locally.");
+        showToast({ message: "Reminders enabled", type: "success" });
         setPushSubscribed(true);
         return;
       }
@@ -446,12 +445,11 @@ export function TodosClient({
         subscription: sub.toJSON(),
       });
 
-      if (res.success) {
-        setPushSubscribed(true);
-        setPushStatusMsg("Push notifications registered successfully.");
-      }
+      if (!res.success) throw new Error("not saved");
+      setPushSubscribed(true);
+      showToast({ message: "Reminders enabled", type: "success" });
     } catch {
-      setPushStatusMsg("Failed to register push subscription.");
+      showToast({ message: "Failed to enable reminders", type: "warning" });
     }
   };
 
@@ -482,7 +480,7 @@ export function TodosClient({
         </div>
         <div className="month-selector" role="group" aria-label="Day">
           <button type="button" className="month-nav-btn" onClick={() => stepDay(-1)} aria-label="Previous day">
-            ‹
+            <ChevronLeftIcon size={17} />
           </button>
           <DatePicker
             mode="day"
@@ -500,41 +498,22 @@ export function TodosClient({
             disabled={date >= maxDate}
             aria-label="Next day"
           >
-            ›
+            <ChevronRightIcon size={17} />
           </button>
         </div>
       </div>
-
-      {pushSupported && !pushSubscribed && (
-        <div className="push-toggle-card">
-          <span className="push-toggle-label">
-            <BellIcon size={16} /> Task reminders
-          </span>
-          <button type="button" className="secondary btn-sm" onClick={handleEnablePush}>
-            Enable
-          </button>
-        </div>
-      )}
-
-      {pushStatusMsg && <p className="status-note">{pushStatusMsg}</p>}
-
-      {errorMsg && (
-        <div className="error" role="alert">
-          {errorMsg}
-        </div>
-      )}
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="tasks-title">
             <div className="section-head">
               <h2 id="tasks-title" className="section-title">
-                {isDaily ? "Daily tasks" : "Tasks"}
+                {isDaily ? "Daily tasks" : "Tasks"} <span className="muted number-tabular">{listTodos.length}</span>
               </h2>
               <span className="head-actions">
                 <button
                   type="button"
-                  className="btn-sm secondary"
+                  className="btn-sm tint"
                   aria-expanded={weekOpen}
                   aria-controls="week-strip"
                   onClick={() => setWeekOpen((open) => !open)}
@@ -550,22 +529,24 @@ export function TodosClient({
               </span>
             </div>
 
-            {weekOpen && (
-              <div id="week-strip" className="week-strip" role="group" aria-label="Day of the week">
-                {week.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    className="weekday-btn"
-                    aria-pressed={day === date}
-                    aria-label={WEEKDAYS[weekdayOf(day) - 1]}
-                    onClick={() => goTo(day)}
-                  >
-                    {WEEKDAYS[weekdayOf(day) - 1].slice(0, 3)}
-                  </button>
-                ))}
-              </div>
-            )}
+            <AutoHeight>
+              {weekOpen && (
+                <div id="week-strip" className="week-strip" role="group" aria-label="Day of the week">
+                  {week.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      className="weekday-btn"
+                      aria-pressed={day === date}
+                      aria-label={WEEKDAYS[weekdayOf(day) - 1]}
+                      onClick={() => goTo(day)}
+                    >
+                      {WEEKDAYS[weekdayOf(day) - 1].slice(0, 3)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </AutoHeight>
 
             {isPast && !DEV_EDIT_PAST && (
               <p className="readonly-note">
@@ -578,7 +559,7 @@ export function TodosClient({
               </p>
             )}
 
-            <AutoHeight className="todo-list">
+            <AutoHeight wash className="todo-list">
               {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
                 <Fragment key={view.n}>
@@ -626,7 +607,11 @@ export function TodosClient({
                         <button
                           type="button"
                           className="delete-icon-btn edit"
-                          onClick={() => setMoving(task)}
+                          onClick={() => {
+                            runAfterClose();
+                            setMoving(task);
+                            setMoveOpen(true);
+                          }}
                           aria-label={`Move ${task.title}`}
                           title="Move"
                         >
@@ -708,7 +693,7 @@ export function TodosClient({
             <div className="stat-row">
               <div className="stat-tile">
                 <strong className="number-tabular">
-                  {tracked.length ? <AnimatedNumber value={avg} format={(n) => `${Math.round(n)}%`} /> : "–"}
+                  {tracked.length ? <AnimatedNumber value={avg} format={(n) => `${Math.round(n)}%`} /> : "—"}
                 </strong>
                 <span>Average</span>
               </div>
@@ -734,6 +719,17 @@ export function TodosClient({
               onSelect={(i) => goTo(days[i].iso)}
             />
           </section>
+          {/* Last in the aside: it appears once the service worker is ready, so nothing sits below it to shift. */}
+          {pushSupported && !pushSubscribed && (
+            <section className="surface push-toggle-card" aria-label="Task reminders">
+              <span className="push-toggle-label">
+                <BellIcon size={16} /> Task reminders
+              </span>
+              <button type="button" className="btn-sm tint" onClick={handleEnablePush}>
+                Enable
+              </button>
+            </section>
+          )}
         </div>
       </div>
 
@@ -751,6 +747,7 @@ export function TodosClient({
                 type="text"
                 required
                 maxLength={150}
+                disabled={saving}
                 value={titleInput}
                 onChange={(e) => {
                   setTitleInput(e.target.value);
@@ -760,13 +757,8 @@ export function TodosClient({
                 aria-describedby={titleError ? "task-title-error" : undefined}
               />
             </label>
-            {titleError && (
-              <p id="task-title-error" className="error" role="alert">
-                {titleError}
-              </p>
-            )}
             {(editing ? editing.isRecurring : isDaily) && (
-              <fieldset className="weekday-picker">
+              <fieldset className="weekday-picker" disabled={saving}>
                 <legend>Repeat on</legend>
                 <div className="weekday-options">
                   {WEEKDAYS.map((name, i) => {
@@ -793,10 +785,16 @@ export function TodosClient({
               Reminder (optional)
               <input
                 type="time"
+                disabled={saving}
                 value={reminderTimeInput}
                 onChange={(e) => setReminderTimeInput(e.target.value)}
               />
             </label>
+            {titleError && (
+              <p id="task-title-error" className="error" role="alert">
+                {titleError}
+              </p>
+            )}
           </div>
 
           <div className="form-actions">
@@ -807,20 +805,20 @@ export function TodosClient({
               type="submit"
               disabled={saving || !titleInput.trim() || ((editing ? editing.isRecurring : isDaily) && !daysInput.length)}
             >
-              {editing ? "Save" : "Add task"}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
       </Modal>
 
-      <Modal isOpen={moving !== null} onClose={() => setMoving(null)} title="Move task">
+      <Modal isOpen={moveOpen} onClose={() => setMoveOpen(false)} onExited={runAfterClose} title="Move task">
         {moving && (
           <div className="move-options">
-            <p className="muted move-hint">
-              {moving.isRecurring
-                ? "It leaves the daily list and becomes a task for the day you pick. Its streak starts over."
-                : "Pick a day, or make it a daily task."}
-            </p>
+            {moving.isRecurring && (
+              <p className="muted move-hint">
+                It leaves the daily list and becomes a task for the day you pick. Its streak starts over.
+              </p>
+            )}
             {(moving.isRecurring || moving.dueDate !== todayDate) && (
               <button type="button" className="secondary" onClick={() => handleMove(moving, "none", todayDate)}>
                 Today

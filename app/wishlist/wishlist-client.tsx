@@ -196,7 +196,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         });
       } else {
         const res = await addWishlistItemAction(input);
-        if (!res.success || !res.item) return;
+        if (!res.success || !res.item) {
+          setErrorMsg("Failed to save item");
+          return;
+        }
         const added = res.item as WishlistItemData;
         later(() => {
           enter(added.id);
@@ -262,7 +265,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     <main>
       <Navigation userName={userName} />
 
-      <div className="dashboard-grid mono">
+      <div className="dashboard-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
@@ -370,7 +373,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         onClose={() => setIsModalOpen(false)}
         onExited={runAfterClose}
         title={editingId ? "Edit item" : "New item"}
-        className="mono"
       >
         <form onSubmit={handleSubmit}>
           <div className="form-stack">
@@ -412,7 +414,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               />
             </label>
 
-            {errorMsg && <p className="error">{errorMsg}</p>}
+            {errorMsg && <p className="error" role="alert">{errorMsg}</p>}
           </div>
 
           <div className="form-actions">

@@ -1,11 +1,11 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
-import { Modal } from "../components/modal";
-import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { Modal, useAfterClose } from "../components/modal";
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import {
@@ -113,15 +113,23 @@ function getTodayString() {
 
 export function GymClient({
   userName,
-  split,
+  split: serverSplit,
   deload,
   exercises,
 }: GymClientProps) {
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll } = useListMotion();
   const setStatusMessage = (message: string) => {
-    if (message) showToast({ message });
+    if (message) showToast({ message, type: "warning" });
   };
+  // A save refreshes the days from the server; the list takes them once the editor has faded, not under it.
+  const [split, setSplit] = useState(serverSplit);
+  const { later, runAfterClose } = useAfterClose();
+  const editing = useRef(false); // from opening the editor until it has faded out
+  useEffect(() => {
+    later(() => setSplit(serverSplit));
+    if (!editing.current) runAfterClose();
+  }, [serverSplit, later, runAfterClose]);
   const todayDayOfWeek = new Date().getDay(); // 0 = Sun, 1 = Mon, ...
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
     const todayMatch = split?.days.find((d) => d.dayOfWeek === todayDayOfWeek);
@@ -163,7 +171,10 @@ export function GymClient({
   const currentDay = split?.days.find((d) => d.id === selectedDayId);
 
   // Routine editor
+  // The draft outlives the open state, so the form keeps its content while it fades out.
   const [draft, setDraft] = useState<DayDraft | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [draftError, setDraftError] = useState("");
   const routineMotion = useListMotion(); // the day editor's exercise rows
   const [addId, setAddId] = useState("");
   const nameOf = (id: string) => exercises.find((e) => e.id === id)?.name ?? "Exercise";
@@ -171,6 +182,9 @@ export function GymClient({
   const groups = [...new Set(addable.map((e) => e.muscleGroup))];
 
   function openEditor(day: SplitDay) {
+    runAfterClose(); // reopened before the last close finished
+    editing.current = true;
+    setDraftError("");
     setDraft({
       id: day.id,
       dayOfWeek: day.dayOfWeek,
@@ -185,6 +199,12 @@ export function GymClient({
     });
     setAddId("");
     setShowCustom(false);
+    setEditorOpen(true);
+  }
+
+  function afterEditor() {
+    editing.current = false;
+    runAfterClose();
   }
 
   function patchRow(i: number, patch: Partial<DraftExercise>) {
@@ -225,20 +245,46 @@ export function GymClient({
     }));
     const bad = rows.find((r) => r.minReps > r.maxReps);
     if (bad) {
-      showToast({ message: `${nameOf(bad.exerciseId)}: min reps must not be above max reps.`, type: "warning" });
+      setDraftError(`Please keep min reps at or below max reps for ${nameOf(bad.exerciseId)}.`);
       return;
     }
+    setDraftError("");
     setBusy(true);
     try {
       const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
       if (res.success) {
-        setDraft(null);
-        showToast({ message: "Routine saved.", type: "success" });
+        const before = split?.days.find((d) => d.id === draft.id);
+        setEditorOpen(false);
+        showToast({
+          message: `Saved "${draft.name.trim()}"`,
+          type: "success",
+          ...(before && {
+            actionLabel: "Undo",
+            // Writes the old day back; the server refresh brings it to the list.
+            onAction: async () => {
+              runAfterClose(); // the edit first, if the form is still closing
+              const back = await saveSplitDayAction({
+                id: before.id,
+                name: before.name,
+                isRest: before.isRest,
+                exercises: before.isRest
+                  ? []
+                  : before.exercises.map((x) => ({
+                      exerciseId: x.exerciseId,
+                      targetSets: x.targetSets,
+                      minReps: x.minReps,
+                      maxReps: x.maxReps,
+                    })),
+              }).catch(() => null);
+              if (!back?.success) showToast({ message: "Failed to undo the edit", type: "warning" });
+            },
+          }),
+        });
       } else {
-        showToast({ message: "Could not save this day.", type: "warning" });
+        setDraftError("Failed to save day");
       }
     } catch {
-      showToast({ message: "Could not save this day.", type: "warning" });
+      setDraftError("Failed to save day");
     } finally {
       setBusy(false);
     }
@@ -262,10 +308,12 @@ export function GymClient({
           splitDayName: day.name,
           sets: [],
         });
-        setStatusMessage(`Started session: ${day.name}`);
+        showToast({ message: `Started "${day.name}"`, type: "success" });
+      } else {
+        setStatusMessage("Failed to start workout");
       }
     } catch {
-      setStatusMessage("Failed to start workout session.");
+      setStatusMessage("Failed to start workout");
     } finally {
       setBusy(false);
     }
@@ -287,10 +335,7 @@ export function GymClient({
     const loadNum = parseFloat(state.loadValue) || 0;
     const extraNum = parseFloat(state.extraKg) || 0;
 
-    if (isNaN(repsNum) || repsNum <= 0) {
-      setStatusMessage("Enter valid reps.");
-      return;
-    }
+    if (isNaN(repsNum) || repsNum <= 0) return; // the button stays disabled until reps are filled
 
     setBusy(true);
     try {
@@ -342,31 +387,75 @@ export function GymClient({
         );
 
         if (res.set.flagAnomaly) {
-          setStatusMessage(
-            `Set logged with '!!' anomaly (reps below target ${exercise.minReps}-${exercise.maxReps})`,
-          );
+          showToast({
+            message: `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`,
+            type: "warning",
+          });
         } else {
-          setStatusMessage(`Set ${setOrder} logged!`);
+          showToast({ message: `Added set ${setOrder}`, type: "success" });
         }
+      } else {
+        setStatusMessage("Failed to add set");
       }
     } catch {
-      setStatusMessage("Failed to log set.");
+      setStatusMessage("Failed to add set");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDeleteSet(setId: string) {
+  type LoggedSet = NonNullable<typeof activeSession>["sets"][number];
+  const putBackSet = (set: LoggedSet) => {
+    enter(set.id);
+    setActiveSession((prev) =>
+      prev && { ...prev, sets: [...prev.sets.filter((s) => s.id !== set.id), set].sort((a, b) => a.setOrder - b.setOrder) },
+    );
+  };
+
+  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
+  function handleDeleteSet(set: LoggedSet, exercise: ExerciseItem) {
     if (!activeSession) return;
-    try {
-      await deleteSetAction(setId);
-      leave(setId, () =>
-        setActiveSession((prev) => (prev ? { ...prev, sets: prev.sets.filter((s) => s.id !== setId) } : null)),
-      );
-      setStatusMessage("Set removed.");
-    } catch {
-      setStatusMessage("Failed to delete set.");
-    }
+    const sessionId = activeSession.id;
+    const deleted = deleteSetAction(set.id).then(
+      () => true,
+      () => false,
+    );
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(set.id, () => {
+        setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== set.id) });
+        done();
+      }),
+    );
+    showToast({
+      message: `Removed set ${set.setOrder}`,
+      actionLabel: "Undo",
+      onAction: async () => {
+        await gone;
+        if (!(await deleted)) return; // the failure path below puts it back
+        const res = await logSetAction({
+          sessionId,
+          exerciseId: set.exerciseId,
+          setOrder: set.setOrder,
+          reps: set.reps,
+          loadType: set.loadType,
+          loadValue: Number(set.loadValue),
+          extraKg: Number(set.extraKg),
+          isFailure: set.isFailure,
+          isPartial: set.isPartial,
+          notes: set.notes || undefined,
+          minTargetReps: exercise.minReps,
+          maxTargetReps: exercise.maxReps,
+        }).catch(() => null);
+        if (res?.success && res.set) putBackSet({ ...set, id: res.set.id });
+        else showToast({ message: "Failed to restore set", type: "warning" });
+      },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return;
+      putBackSet(set);
+      showToast({ message: "Failed to remove set", type: "warning" });
+    });
   }
 
   async function handleFinishSession() {
@@ -380,20 +469,26 @@ export function GymClient({
         notes: sessionNotes || undefined,
       });
       setActiveSession(null);
-      setStatusMessage("Workout session finished and recorded!");
+      showToast({ message: "Finished the workout", type: "success" });
     } catch {
-      setStatusMessage("Failed to finish session.");
+      setStatusMessage("Failed to finish workout");
     } finally {
       setBusy(false);
     }
   }
 
   async function handleCreateCustomExercise() {
-    if (!customName.trim()) return;
+    const name = customName.trim();
+    if (!name) return;
+    if (exercises.some((e) => e.name.trim().toLowerCase() === name.toLowerCase())) {
+      setDraftError(`"${name}" already exists.`);
+      return;
+    }
+    setDraftError("");
     setBusy(true);
     try {
       const res = await createCustomExerciseAction({
-        name: customName.trim(),
+        name,
         muscleGroup: customMuscle,
         equipmentType: customEquipment,
       });
@@ -406,7 +501,7 @@ export function GymClient({
         setCustomName("");
       }
     } catch {
-      setStatusMessage("Could not create custom exercise.");
+      setDraftError("Failed to create exercise");
     } finally {
       setBusy(false);
     }
@@ -418,7 +513,7 @@ export function GymClient({
 
       {/* Deload Status Card */}
       <section
-        className={`surface deload-card ${deload.isDeloadDue ? "due" : ""}`}
+        className="surface deload-card"
         aria-labelledby="deload-title"
       >
         <div>
@@ -437,6 +532,7 @@ export function GymClient({
           <input
             type="checkbox"
             checked={isDeloadMode}
+            disabled={busy}
             onChange={(e) => setIsDeloadMode(e.target.checked)}
           />
           Deload session
@@ -449,20 +545,12 @@ export function GymClient({
           <div className="section-head">
             <div>
               <h2 id="active-session-title" className="section-title">
-                {activeSession.splitDayName || "Workout Session"}
+                {activeSession.splitDayName || "Workout session"}
               </h2>
-              <span className="muted">
+              <p className="muted card-sub">
                 {formatDMY(activeSession.date)} {activeSession.isDeload ? "· Deload" : ""}
-              </span>
+              </p>
             </div>
-            <button
-              type="button"
-              className="danger"
-              disabled={busy}
-              onClick={handleFinishSession}
-            >
-              Finish workout
-            </button>
           </div>
 
           <div>
@@ -493,20 +581,19 @@ export function GymClient({
                         {exercise.exerciseName}
                       </h3>
                       <span className="muted exercise-meta">
-                        Target: {exercise.targetSets} sets · {exercise.minReps}–
-                        {exercise.maxReps} reps · 0 RIR failure
+                        Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps · 0 RIR
+                        failure
                       </span>
                     </div>
-                    <span className="badge badge-info">
+                    <span className="badge badge-rest">
                       {exercise.muscleGroup}
                     </span>
                   </div>
 
                   {/* Previous logged sets */}
-                  {exerciseSets.length > 0 && (
-                    <div className="set-list">
+                  <AutoHeight wash className="entries set-list">
                       {exerciseSets.map((s) => (
-                        <div key={s.id} ref={rowRef(s.id)} className="set-row">
+                        <div key={s.id} ref={rowRef(s.id)} className="entry-row">
                           <span>
                             <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
                             {s.loadValue} {s.loadType}
@@ -514,14 +601,14 @@ export function GymClient({
                             {s.isPartial ? " (partials)" : ""}
                             {s.flagAnomaly && (
                               <span className="badge badge-danger set-flag">
-                                !! {s.anomalyReason || "Anomaly"}
+                                {s.anomalyReason || "Anomaly"}
                               </span>
                             )}
                           </span>
                           <button
                             type="button"
                             className="delete-icon-btn"
-                            onClick={() => handleDeleteSet(s.id)}
+                            onClick={() => handleDeleteSet(s, exercise)}
                             aria-label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`}
                             title="Delete"
                           >
@@ -529,8 +616,7 @@ export function GymClient({
                           </button>
                         </div>
                       ))}
-                    </div>
-                  )}
+                  </AutoHeight>
 
                   {/* Set input row */}
                   <div className="set-input-grid">
@@ -540,6 +626,8 @@ export function GymClient({
                         type="number"
                         min="1"
                         max="100"
+                        inputMode="numeric"
+                        disabled={busy}
                         value={currentState.reps}
                         onChange={(e) =>
                           setInputStates((prev) => ({
@@ -554,8 +642,9 @@ export function GymClient({
                     </label>
 
                     <label>
-                      Load Type
+                      Load type
                       <select
+                        disabled={busy}
                         value={currentState.loadType}
                         onChange={(e) =>
                           setInputStates((prev) => ({
@@ -568,17 +657,19 @@ export function GymClient({
                         }
                       >
                         <option value="kg">kg</option>
-                        <option value="plates">plates</option>
-                        <option value="bodyweight">bodyweight</option>
+                        <option value="plates">Plates</option>
+                        <option value="bodyweight">Bodyweight</option>
                       </select>
                     </label>
 
                     <label>
-                      Load Value
+                      Load value
                       <input
                         type="number"
                         step="0.5"
                         min="0"
+                        inputMode="decimal"
+                        disabled={busy}
                         value={currentState.loadValue}
                         onChange={(e) =>
                           setInputStates((prev) => ({
@@ -593,11 +684,13 @@ export function GymClient({
                     </label>
 
                     <label>
-                      Extra kg
+                      Extra (kg)
                       <input
                         type="number"
                         step="0.25"
                         min="0"
+                        inputMode="decimal"
+                        disabled={busy}
                         value={currentState.extraKg}
                         onChange={(e) =>
                           setInputStates((prev) => ({
@@ -613,7 +706,7 @@ export function GymClient({
 
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !(parseInt(currentState.reps, 10) > 0)}
                       onClick={() => handleLogSet(exercise)}
                     >
                       <PlusIcon size={14} />
@@ -626,6 +719,7 @@ export function GymClient({
                       <input
                         type="checkbox"
                         checked={currentState.isFailure}
+                        disabled={busy}
                         onChange={(e) =>
                           setInputStates((prev) => ({
                             ...prev,
@@ -636,13 +730,14 @@ export function GymClient({
                           }))
                         }
                       />
-                      True Failure (0 RIR)
+                      True failure (0 RIR)
                     </label>
 
                     <label className="toggle-label">
                       <input
                         type="checkbox"
                         checked={currentState.isPartial}
+                        disabled={busy}
                         onChange={(e) =>
                           setInputStates((prev) => ({
                             ...prev,
@@ -669,14 +764,17 @@ export function GymClient({
                   type="number"
                   min="5"
                   max="300"
+                  inputMode="numeric"
+                  disabled={busy}
                   value={durationMinutes}
                   onChange={(e) => setDurationMinutes(e.target.value)}
                 />
               </label>
               <label className="grow-2">
-                Session notes
+                Session notes (optional)
                 <input
                   type="text"
+                  disabled={busy}
                   value={sessionNotes}
                   onChange={(e) => setSessionNotes(e.target.value)}
                 />
@@ -687,7 +785,7 @@ export function GymClient({
                 disabled={busy}
                 onClick={handleFinishSession}
               >
-                Save & Finish
+                Finish workout
               </button>
             </div>
           </div>
@@ -708,26 +806,26 @@ export function GymClient({
                       </h2>
                       <p className="muted card-sub">{DAY_NAMES[currentDay.dayOfWeek]}</p>
                     </div>
-                    <div className="row-actions">
-                      <button type="button" className="secondary btn-sm" onClick={() => openEditor(currentDay)}>
+                    <span className="head-actions">
+                      <button type="button" className="btn-sm tint" onClick={() => openEditor(currentDay)}>
                         <PencilIcon size={14} />
                         Edit
                       </button>
                       {!currentDay.isRest && (
                         <button
                           type="button"
-                          className="btn-sm"
+                          className="btn-sm tint"
                           disabled={busy || currentDay.exercises.length === 0}
                           onClick={() => void handleStartSession(currentDay)}
                         >
                           Start
                         </button>
                       )}
-                    </div>
+                    </span>
                   </div>
 
                   {!currentDay.isRest && (
-                    <AutoHeight className="entries">
+                    <AutoHeight wash className="entries">
                       {currentDay.exercises.length > 0 ? (
                         // Keyed by the day so every switch mounts fresh rows that play row-in.
                         <Fragment key={currentDay.id}>
@@ -740,13 +838,13 @@ export function GymClient({
                               <span className="badge badge-rest">{ex.muscleGroup}</span>
                             </div>
                             <span className="muted number-tabular entry-side">
-                              {ex.targetSets} × {ex.minReps}–{ex.maxReps}
+                              {ex.targetSets} × {ex.minReps} – {ex.maxReps}
                             </span>
                           </div>
                         ))}
                         </Fragment>
                       ) : (
-                        <p key={`empty-${currentDay.id}`} ref={rowRef("empty")} className="empty-note">No exercises yet. Use Edit to add some.</p>
+                        <p key={`empty-${currentDay.id}`} ref={rowRef("empty")} className="empty-note">No exercises yet.</p>
                       )}
                     </AutoHeight>
                   )}
@@ -762,7 +860,7 @@ export function GymClient({
                   </h2>
                 </div>
 
-                <div className="split-day-list">
+                <AutoHeight className="split-day-list">
                   {split?.days.map((day) => {
                     const isToday = day.dayOfWeek === todayDayOfWeek;
                     const isSelected = day.id === selectedDayId;
@@ -792,7 +890,7 @@ export function GymClient({
                           <button
                             type="button"
                             disabled={busy}
-                            className="btn-sm"
+                            className="btn-sm tint"
                             onClick={() => {
                               setSelectedDayId(day.id);
                               void handleStartSession(day);
@@ -804,7 +902,7 @@ export function GymClient({
                       </div>
                     );
                   })}
-                </div>
+                </AutoHeight>
               </section>
             </div>
           </div>
@@ -812,8 +910,9 @@ export function GymClient({
       )}
 
       <Modal
-        isOpen={draft !== null}
-        onClose={() => setDraft(null)}
+        isOpen={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onExited={afterEditor}
         title={draft ? `Edit ${DAY_NAMES[draft.dayOfWeek]}` : "Edit day"}
       >
         {draft && (
@@ -822,6 +921,7 @@ export function GymClient({
               <label>
                 Name
                 <input
+                  disabled={busy}
                   type="text"
                   required
                   maxLength={100}
@@ -831,6 +931,7 @@ export function GymClient({
               </label>
               <label className="toggle-label">
                 <input
+                  disabled={busy}
                   type="checkbox"
                   checked={draft.isRest}
                   onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })}
@@ -841,7 +942,11 @@ export function GymClient({
               {!draft.isRest && (
                 <>
                   <AutoHeight className="routine-list">
-                    {draft.exercises.length === 0 && <p className="empty-note">No exercises yet.</p>}
+                    {draft.exercises.length === 0 && (
+                      <p key="empty" ref={routineMotion.rowRef("empty")} className="empty-note">
+                        No exercises yet.
+                      </p>
+                    )}
                     {draft.exercises.map((row, i) => {
                       const name = nameOf(row.exerciseId);
                       return (
@@ -859,7 +964,7 @@ export function GymClient({
                                 aria-label={`Move ${name} up`}
                                 title="Move up"
                               >
-                                <span aria-hidden="true">↑</span>
+                                <ArrowUpIcon size={17} />
                               </button>
                               <button
                                 type="button"
@@ -869,7 +974,7 @@ export function GymClient({
                                 aria-label={`Move ${name} down`}
                                 title="Move down"
                               >
-                                <span aria-hidden="true">↓</span>
+                                <ArrowDownIcon size={17} />
                               </button>
                               <button
                                 type="button"
@@ -886,6 +991,7 @@ export function GymClient({
                             <label>
                               Sets
                               <input
+                                disabled={busy}
                                 type="number"
                                 inputMode="numeric"
                                 min={1}
@@ -899,6 +1005,7 @@ export function GymClient({
                             <label>
                               Min reps
                               <input
+                                disabled={busy}
                                 type="number"
                                 inputMode="numeric"
                                 min={1}
@@ -912,6 +1019,7 @@ export function GymClient({
                             <label>
                               Max reps
                               <input
+                                disabled={busy}
                                 type="number"
                                 inputMode="numeric"
                                 min={1}
@@ -931,8 +1039,8 @@ export function GymClient({
                   {addable.length > 0 && draft.exercises.length < 20 && (
                     <div className="routine-add">
                       <label>
-                        Add exercise
-                        <select value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
+                        Exercise
+                        <select disabled={busy} value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
                           {groups.map((g) => (
                             <optgroup key={g} label={g[0].toUpperCase() + g.slice(1)}>
                               {addable
@@ -948,7 +1056,7 @@ export function GymClient({
                       </label>
                       <button type="button" className="secondary" onClick={addRow}>
                         <PlusIcon size={14} />
-                        Add
+                        Add exercise
                       </button>
                     </div>
                   )}
@@ -959,6 +1067,7 @@ export function GymClient({
                         <label>
                           New exercise
                           <input
+                            disabled={busy}
                             type="text"
                             maxLength={100}
                             value={customName}
@@ -976,6 +1085,7 @@ export function GymClient({
                           <label>
                             Muscle group
                             <select
+                              disabled={busy}
                               value={customMuscle}
                               onChange={(e) =>
                                 setCustomMuscle(
@@ -996,6 +1106,7 @@ export function GymClient({
                           <label>
                             Equipment
                             <select
+                              disabled={busy}
                               value={customEquipment}
                               onChange={(e) =>
                                 setCustomEquipment(
@@ -1011,7 +1122,7 @@ export function GymClient({
                             </select>
                           </label>
                         </div>
-                        <div className="custom-exercise-actions">
+                        <div className="form-actions">
                           <button type="button" className="secondary btn-sm" onClick={() => setShowCustom(false)}>
                             Cancel
                           </button>
@@ -1033,14 +1144,15 @@ export function GymClient({
                     ))}
                 </>
               )}
+              {draftError && <p className="error" role="alert">{draftError}</p>}
             </div>
 
             <div className="form-actions">
-              <button type="button" className="secondary" onClick={() => setDraft(null)}>
+              <button type="button" className="secondary" onClick={() => setEditorOpen(false)}>
                 Cancel
               </button>
               <button type="submit" disabled={busy || !draft.name.trim()}>
-                Save
+                {busy ? "Saving..." : "Save"}
               </button>
             </div>
           </form>
