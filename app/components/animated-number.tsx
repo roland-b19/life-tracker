@@ -18,7 +18,8 @@ export function useAnimatedNumber(value: number, from = value, duration = 600): 
     const t0 = performance.now();
     let raf = 0;
     const tick = (t: number) => {
-      const k = d ? Math.min(1, (t - t0) / d) : 1;
+      // The first frame's timestamp can predate t0; a negative k would dip below the start.
+      const k = d ? Math.min(1, Math.max(0, (t - t0) / d)) : 1;
       const next = start + (value - start) * (1 - Math.pow(1 - k, 3));
       current.current = next;
       setShown(next);

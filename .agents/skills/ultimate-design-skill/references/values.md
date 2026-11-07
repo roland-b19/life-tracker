@@ -501,7 +501,7 @@ The CSS hides the outline on `[data-pointer]`.
 - A clickable bar (`onSelect`) hovers to opacity .9 (inside `@media (hover: hover)`); a plain bar has no hover change, only its `title`. A highlighted bar (`.hl`) is 1; an empty bar is `--separator`.
 - Bar height moves over `--dur`; opacity and colour (hover, highlight) fade over `--fade`.
 - Bar tips (`data-tip`) fade in over 120ms on hover or focus and slide from left- to right-aligned across the chart, so they never leave it.
-- `ProgressRing` fills from 0 over 900ms. It is 132px with a 12px stroke: `--separator` track, `--tint` fill with round caps, centre text 1.75rem weight 800, letter-spacing -.02em.
+- `ProgressRing` fills from 0 over 900ms when it first appears, then eases between shares (up or down) on ticks and view changes; do not key it by the view. It is 132px with a 12px stroke: `--separator` track, `--tint` fill with round caps, centre text 1.75rem weight 800, letter-spacing -.02em.
 - `.dash-hero`: a centred column, gap 1rem, padding-block .25rem: the ring with its caption below.
 - `.stat-row`: 3 equal columns (`.two`: 2), gap .75rem, margin-bottom 1.25rem. `.stat-tile`: padding .75rem .9rem, radius .85rem, `--surface-secondary`, gap .15rem; the number 1.35rem weight 700, the caption .75rem secondary.
 - `.chart-controls`: the chart's `Segmented` groups side by side (`flex: 1` each), gap .75rem, margin-bottom .75rem.
