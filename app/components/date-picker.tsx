@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
 
 interface DatePickerProps {
   /** "day" works on YYYY-MM-DD values, "month" on YYYY-MM. */
@@ -17,6 +18,9 @@ interface DatePickerProps {
   /** Classes for the trigger button. */
   className?: string;
   label: string;
+  /** Id of a visible field label; the trigger then reads as that label plus the date. */
+  labelledBy?: string;
+  disabled?: boolean;
   onChange: (next: string) => void;
 }
 
@@ -34,7 +38,8 @@ const shiftMonth = (ym: string, n: number) => {
  * The label of a day or month stepper that opens a calendar popover: a month of days, or a
  * year of months. Values after `max` are shown but cannot be chosen.
  */
-export function DatePicker({ mode, value, today, max, min, marked, className = "month-label-btn", label, onChange }: DatePickerProps) {
+export function DatePicker({ mode, value, today, max, min, marked, className = "month-label-btn", label, labelledBy, disabled, onChange }: DatePickerProps) {
+  const triggerId = useId();
   const isDay = mode === "day";
   // The page the popover shows: a month (YYYY-MM) of days, or a year (YYYY) of months.
   const pageOf = (v: string) => v.slice(0, isDay ? 7 : 4);
@@ -100,6 +105,9 @@ export function DatePicker({ mode, value, today, max, min, marked, className = "
       <button
         type="button"
         ref={triggerRef}
+        id={triggerId}
+        aria-labelledby={labelledBy && `${labelledBy} ${triggerId}`}
+        disabled={disabled}
         className={`${className} number-tabular`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -121,7 +129,7 @@ export function DatePicker({ mode, value, today, max, min, marked, className = "
               disabled={!!min && `${page}-01` <= min}
               aria-label={isDay ? "Previous month" : "Previous year"}
             >
-              ‹
+              <ChevronLeftIcon size={17} />
             </button>
             <strong aria-live="polite">{title}</strong>
             <button
@@ -131,7 +139,7 @@ export function DatePicker({ mode, value, today, max, min, marked, className = "
               disabled={nextStart > max}
               aria-label={isDay ? "Next month" : "Next year"}
             >
-              ›
+              <ChevronRightIcon size={17} />
             </button>
           </div>
 

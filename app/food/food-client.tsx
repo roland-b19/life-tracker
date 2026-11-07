@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
 import { Segmented } from "../components/segmented";
@@ -121,6 +121,11 @@ export function FoodClient({
   const [selectedDate] = useState(todayDate);
   const [summary, setSummary] = useState(initialSummary);
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
+  // Undo runs from a toast seconds later, so it reads the list as it is then.
+  const latestShop = useRef(shoppingList);
+  useEffect(() => {
+    latestShop.current = shoppingList;
+  });
   const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
@@ -128,15 +133,28 @@ export function FoodClient({
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
   const [categories, setCategories] = useState(initialCategories);
   // from: null adds a new category, a name edits that one.
-  const [catEdit, setCatEdit] = useState<{ from: string | null } | null>(null);
+  const [catEdit, setCatEdit] = useState<{ from: string | null }>({ from: null }); // outlives the close, so the dialog keeps its content while it fades
+  const [catOpen, setCatOpen] = useState(false);
+  // A renamed category keeps its row key, so its row re-enters like an edited Wishlist item.
+  const catKeys = useRef(new Map<string, string>());
+  const catKey = (cat: string) => {
+    if (!catKeys.current.has(cat)) catKeys.current.set(cat, `cat:${cat}`);
+    return catKeys.current.get(cat)!;
+  };
   const [catName, setCatName] = useState("");
-  const [metricEdit, setMetricEdit] = useState<"water" | "steps" | null>(null);
+  const [catError, setCatError] = useState("");
+  // The open meal or shopping form's error; only one form is open at a time.
+  const [formError, setFormError] = useState("");
+  // The kind outlives the open state, so the form keeps its title while it fades out.
+  const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
+  const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
   const [pastFoods, setPastFoods] = useState(initialPastFoods);
   const [isPastOpen, setIsPastOpen] = useState(false);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave } = useListMotion();
+  const { rowRef, enter, leave, move } = useListMotion();
+  const shownWeight = weightAnalytics.sevenDayAverage ?? weightAnalytics.latestWeight;
   const { later, runAfterClose } = useAfterClose();
 
   // In-app Food AI Chat state
@@ -189,7 +207,7 @@ export function FoodClient({
     if (!mealName.trim()) return;
 
     setBusy(true);
-    setStatusMessage("");
+    setFormError("");
     try {
       const res = await logMealAction({
         date: selectedDate,
@@ -213,19 +231,11 @@ export function FoodClient({
         setMealCarbs("");
         setMealFat("");
         setIsMealModalOpen(false);
-        showToast({
-          message: `Logged "${meal.name}" (${meal.calories} kcal)`,
-          type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
-            runAfterClose(); // the meal first, if the form is still closing
-            await deleteMealAction(meal.id);
-            leave(meal.id, () => applyMeal(meal, -1));
-          },
-        });
-      }
+        // No Undo: a new meal is one tap from Delete.
+        showToast({ message: `Added "${meal.name}" (${meal.calories} kcal)`, type: "success" });
+      } else setFormError("Failed to add meal");
     } catch {
-      setStatusMessage("Failed to log meal.");
+      setFormError("Failed to add meal");
     } finally {
       setBusy(false);
     }
@@ -260,109 +270,132 @@ export function FoodClient({
         enter(meal.id);
         applyMeal(meal, 1);
       });
-      showToast({
-        message: `Logged "${meal.name}" (${meal.calories} kcal)`,
-        type: "success",
-        actionLabel: "Undo",
-        onAction: async () => {
-          await deleteMealAction(meal.id);
-          leave(meal.id, () => applyMeal(meal, -1));
-        },
-      });
+      showToast({ message: `Added "${meal.name}" (${meal.calories} kcal)`, type: "success" });
     } catch {
-      setStatusMessage("Failed to log meal.");
+      setStatusMessage("Failed to add meal");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDeleteMeal(mealId: string) {
-    const deleted = summary.meals.find((m) => m.id === mealId);
-    if (!deleted) return;
-
-    applyMeal(deleted, -1);
-    try {
-      await deleteMealAction(mealId);
-      showToast({
-        message: `Deleted "${deleted.name}"`,
-        actionLabel: "Undo",
-        onAction: async () => {
-          const res = await logMealAction({
-            date: deleted.date,
-            name: deleted.name,
-            calories: deleted.calories,
-            protein: parseFloat(deleted.protein),
-            carbs: parseFloat(deleted.carbs),
-            fat: parseFloat(deleted.fat),
-          });
-          if (res.success && res.meal) {
-            enter(res.meal.id);
-            applyMeal(res.meal as MealData, 1);
-          }
-        },
-      });
-    } catch {
-      applyMeal(deleted, 1);
-      setStatusMessage("Failed to delete meal.");
-    }
+  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
+  function handleDeleteMeal(meal: MealData) {
+    const deleted = deleteMealAction(meal.id).then(
+      () => true,
+      () => false,
+    );
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(meal.id, () => {
+        applyMeal(meal, -1);
+        done();
+      }),
+    );
+    const putBack = (back: MealData) => {
+      enter(back.id);
+      applyMeal(back, 1);
+    };
+    showToast({
+      message: `Removed "${meal.name}"`,
+      actionLabel: "Undo",
+      onAction: async () => {
+        await gone;
+        if (!(await deleted)) return; // the failure path below puts it back
+        const res = await logMealAction({
+          date: meal.date,
+          name: meal.name,
+          calories: meal.calories,
+          protein: parseFloat(meal.protein),
+          carbs: parseFloat(meal.carbs),
+          fat: parseFloat(meal.fat),
+        }).catch(() => null);
+        if (res?.success && res.meal) putBack(res.meal as MealData);
+        else showToast({ message: "Failed to restore meal", type: "warning" });
+      },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return;
+      putBack(meal);
+      showToast({ message: "Failed to remove meal", type: "warning" });
+    });
   }
 
-  async function changeWater(delta: number, message: string) {
-    try {
-      const res = await addWaterAction(selectedDate, delta);
-      if (!res.success || !res.metrics) return;
-      const setWater = (waterMl: number) =>
-        setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl } }));
-      setWater(res.metrics.waterMl);
-      showToast({
-        message,
-        actionLabel: "Undo",
-        onAction: async () => {
-          const undone = await addWaterAction(selectedDate, -delta);
-          if (undone.success && undone.metrics) setWater(undone.metrics.waterMl);
-        },
-      });
-    } catch {
-      setStatusMessage("Could not update water.");
-    }
+  const setMetric = (key: "waterMl" | "steps", value: number) =>
+    setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, [key]: value } }));
+
+  // A tap adds at once and shows its toast; a refused save takes the amount back off.
+  function addWater(delta: number) {
+    const bump = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
+    bump(delta);
+    let undone = false;
+    const saved = addWaterAction(selectedDate, delta).then((res) => res.success === true, () => false);
+    showToast({
+      message: `Added ${delta} ml`,
+      type: "success",
+      actionLabel: "Undo",
+      onAction: async () => {
+        undone = true;
+        bump(-delta);
+        if (!(await saved)) return; // the add never happened
+        const back = await addWaterAction(selectedDate, -delta).then((res) => res.success === true, () => false);
+        if (!back) {
+          bump(delta);
+          showToast({ message: "Failed to undo the edit", type: "warning" });
+        }
+      },
+    });
+    void saved.then((ok) => {
+      if (ok || undone) return;
+      bump(-delta);
+      showToast({ message: "Failed to add water", type: "warning" });
+    });
   }
 
-  async function changeSteps(next: number) {
-    const previous = summary.metrics.steps;
-    try {
-      const res = await updateStepsAction(selectedDate, next);
-      if (!res.success || !res.metrics) return;
-      const setSteps = (steps: number) =>
-        setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, steps } }));
-      setSteps(res.metrics.steps);
-      showToast({
-        message: `Steps set to ${next}`,
-        actionLabel: "Undo",
-        onAction: async () => {
-          const undone = await updateStepsAction(selectedDate, previous);
-          if (undone.success && undone.metrics) setSteps(undone.metrics.steps);
-        },
-      });
-    } catch {
-      setStatusMessage("Could not update steps.");
-    }
+  // Saves the edited total; false keeps the form open with its error.
+  async function saveMetric(metric: "water" | "steps", value: number) {
+    const key = metric === "water" ? "waterMl" : "steps";
+    const previous = summary.metrics[key];
+    const write = (v: number) =>
+      metric === "water" ? addWaterAction(selectedDate, v - summary.metrics.waterMl) : updateStepsAction(selectedDate, v);
+    const res = await write(value).catch(() => null);
+    if (!res?.success || !res.metrics) return false;
+    setMetric(key, res.metrics[key]);
+    showToast({
+      message: metric === "water" ? `Water set to ${value} ml` : `Steps set to ${value}`,
+      type: "success",
+      actionLabel: "Undo",
+      onAction: async () => {
+        setMetric(key, previous);
+        const back =
+          metric === "water"
+            ? await addWaterAction(selectedDate, previous - value).catch(() => null)
+            : await updateStepsAction(selectedDate, previous).catch(() => null);
+        if (back?.success && back.metrics) return setMetric(key, back.metrics[key]);
+        setMetric(key, res.metrics[key]);
+        showToast({ message: "Failed to undo the edit", type: "warning" });
+      },
+    });
+    return true;
   }
 
   function openMetricEdit(metric: "water" | "steps") {
+    setFormError("");
     setMetricInput(String(metric === "water" ? summary.metrics.waterMl : summary.metrics.steps));
     setMetricEdit(metric);
+    setMetricOpen(true);
   }
 
   async function handleMetricSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = parseInt(metricInput, 10);
-    if (!metricEdit || !Number.isInteger(value) || value < 0) return;
-    setMetricEdit(null);
-    if (metricEdit === "water") {
-      await changeWater(value - summary.metrics.waterMl, `Water set to ${value} ml`);
-    } else {
-      await changeSteps(value);
-    }
+    if (busy) return;
+    if (!Number.isInteger(value) || value < 0) return setFormError("Please enter a whole number.");
+    setBusy(true);
+    setFormError("");
+    const ok = await saveMetric(metricEdit, value);
+    setBusy(false);
+    if (ok) setMetricOpen(false);
+    else setFormError(`Failed to save ${metricEdit}`);
   }
 
   const sameItem = (a: { name: string; unit: string }, b: { name: string; unit: string }) =>
@@ -377,6 +410,7 @@ export function FoodClient({
 
   function openShopForm(item: ShoppingItemData | null) {
     runAfterClose(); // reopened before the last close finished
+    setFormError("");
     setEditingShop(item);
     setShopName(item?.name ?? "");
     setShopAmount(item ? String(Number(item.amount)) : "1");
@@ -392,11 +426,12 @@ export function FoodClient({
       const res = await addShoppingItemAction(input);
       const item = res.item as ShoppingItemData;
       const before = shoppingList.find((i) => i.id === item.id);
+      // From the form, the list changes once the form has closed; a quick-add chip changes it when the server answers.
+      const run = isShopModalOpen ? later : (change: () => void) => change();
       if (before) {
-        setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+        run(() => setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i))));
       } else {
-        // From the form, the row waits until the form has closed; a quick-add chip adds it at once.
-        (isShopModalOpen ? later : (add: () => void) => add())(() => {
+        run(() => {
           enter(item.id);
           setShoppingList((prev) => [...prev, item]);
         });
@@ -405,29 +440,41 @@ export function FoodClient({
         { name: item.name, amount: item.amount, unit: item.unit, category: item.category },
         ...prev.filter((h) => h.name.toLowerCase() !== item.name.toLowerCase()),
       ]);
-      showToast({
-        message: before ? `"${item.name}" is now ${Number(item.amount)} ${item.unit}` : `Added "${item.name}"`,
-        type: "success",
-        actionLabel: "Undo",
-        onAction: async () => {
-          runAfterClose();
-          if (!before) {
-            await deleteShoppingItemAction(item.id);
-            leave(item.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== item.id)));
-            return;
-          }
-          await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id });
-          if (before.isBought) await toggleShoppingItemAction(before.id, true);
-          setShoppingList((prev) => prev.map((i) => (i.id === before.id ? before : i)));
-        },
-      });
+      // No Undo on a new item (it is one tap from Delete); adding to an item already listed is an edit, so it has one.
+      if (!before) showToast({ message: `Added "${item.name}"`, type: "success" });
+      else
+        showToast({
+          message: `"${item.name}" is now ${Number(item.amount)} ${item.unit}`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            runAfterClose();
+            setShoppingList((prev) => prev.map((i) => (i.id === before.id ? before : i)));
+            const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
+            if (!back?.item) {
+              setShoppingList((prev) => prev.map((i) => (i.id === before.id ? item : i)));
+              return showToast({ message: "Failed to undo the edit", type: "warning" });
+            }
+            if (before.isBought) await toggleShoppingItemAction(before.id, true).catch(() => null);
+          },
+        });
       return true;
     } catch {
-      setStatusMessage("Could not add shopping item.");
+      // A quick-add chip has no form to show the error in.
+      if (isShopModalOpen) setFormError("Failed to add item");
+      else setStatusMessage("Failed to add item");
       return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  // Writes an edited item into the list; a new category moves the row to another group, and it enters
+  // there like a deleted row put back by Undo.
+  function replaceShop(to: ShoppingItemData) {
+    const write = () => setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought } : i)));
+    if (latestShop.current.find((i) => i.id === to.id)?.category === to.category) write();
+    else move(to.id, write);
   }
 
   async function handleShopSubmit(e: React.FormEvent) {
@@ -439,72 +486,100 @@ export function FoodClient({
       category: shopCategory.trim().toLowerCase() || "other",
     };
     if (!input.name) return;
+    setFormError("");
 
     if (!editingShop) {
       if (await addShopping(input)) setIsShopModalOpen(false);
       return;
     }
-    // Saving an edit has no Undo: the item can simply be edited again.
+    const before = editingShop;
     setBusy(true);
     try {
-      const res = await updateShoppingItemAction({ ...input, itemId: editingShop.id });
+      const res = await updateShoppingItemAction({ ...input, itemId: before.id });
       const item = res.item as ShoppingItemData;
-      const save = () => setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i)));
-      // A new category moves the row to another group: it leaves here and comes in there.
-      later(item.category === editingShop.category ? save : () => leave(item.id, () => (enter(item.id), save())));
+      later(() => replaceShop(item));
       setIsShopModalOpen(false);
-      showToast({ message: `Saved "${item.name}"`, type: "success" });
+      showToast({
+        message: `Saved "${item.name}"`,
+        type: "success",
+        actionLabel: "Undo",
+        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
+        onAction: async () => {
+          runAfterClose(); // the edit first, if the form is still closing
+          replaceShop(before);
+          const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
+          if (!back?.item) {
+            replaceShop(item);
+            showToast({ message: "Failed to undo the edit", type: "warning" });
+          }
+        },
+      });
     } catch {
-      setStatusMessage("Could not save item.");
+      setFormError("Failed to save item");
     } finally {
       setBusy(false);
     }
   }
 
   function openCategoryForm(from: string | null) {
+    runAfterClose(); // reopened before the last close finished
+    setCatError("");
     setCatEdit({ from });
+    setCatOpen(true);
     setCatName(from ?? "");
   }
 
   async function handleCategorySubmit(e: React.FormEvent) {
     e.preventDefault();
-    const from = catEdit?.from ?? null;
+    const from = catEdit.from;
     const to = catName.trim().toLowerCase();
     if (!to) return;
-    if (to === from) return setCatEdit(null);
-    if (to === "other") return setStatusMessage("\u201cother\u201d is built in.");
+    if (to === from) return setCatOpen(false);
+    if (to === "other") return setCatError('Please pick a name other than "other".');
+    setCatError("");
     setBusy(true);
     try {
       if (from === null) {
-        if (!(await addShoppingCategoryAction({ name: to })).success) return setStatusMessage(`\u201c${to}\u201d already exists.`);
-        setCategories((prev) => [...prev, to]);
-        showToast({ message: `Added \u201c${to}\u201d`, type: "success" });
+        if (!(await addShoppingCategoryAction({ name: to })).success) return setCatError(`"${to}" already exists.`);
+        later(() => {
+          void enter(catKey(to));
+          setCategories((prev) => [...prev, to]);
+        });
+        showToast({ message: `Added "${to}"`, type: "success" });
       } else {
         if (!(await renameShoppingCategoryAction({ from, to })).success) throw new Error("Category not found");
-        setCategories((prev) => (prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c))));
-        moveItems(from, to);
-        showToast({ message: `Renamed \u201c${from}\u201d to \u201c${to}\u201d`, type: "success" });
+        later(() => {
+          moveItems(from, to);
+          if (categories.includes(to)) return leave(catKey(from), () => setCategories((prev) => prev.filter((c) => c !== from)));
+          catKeys.current.set(to, catKey(from));
+          catKeys.current.delete(from);
+          move(catKey(to), () => setCategories((prev) => prev.map((c) => (c === from ? to : c))));
+        });
+        showToast({ message: `Renamed "${from}" to "${to}"`, type: "success" });
       }
-      setCatEdit(null);
+      setCatOpen(false);
     } catch {
-      setStatusMessage("Could not save category.");
+      setCatError("Failed to save category");
     } finally {
       setBusy(false);
     }
   }
 
   async function handleDeleteCategory() {
-    const name = catEdit?.from;
+    const name = catEdit.from;
     if (!name) return;
     setBusy(true);
     try {
       if (!(await deleteShoppingCategoryAction({ name })).success) throw new Error("Category not found");
-      setCategories((prev) => prev.filter((c) => c !== name));
-      moveItems(name, "other");
-      setCatEdit(null);
-      showToast({ message: `Deleted \u201c${name}\u201d; its items are in Other`, type: "success" });
+      later(() => {
+        moveItems(name, "other");
+        leave(catKey(name), () => setCategories((prev) => prev.filter((c) => c !== name)));
+      });
+      setCatOpen(false);
+      // No Undo: the server merges its items into Other, so a restore could not tell them apart.
+      showToast({ message: `Removed "${name}"; its items are in Other` });
     } catch {
-      setStatusMessage("Could not delete category.");
+      setCatError("Failed to remove category");
     } finally {
       setBusy(false);
     }
@@ -517,23 +592,15 @@ export function FoodClient({
     setHistory((prev) => prev.map(move));
   }
 
-  async function handleToggleShopping(itemId: string, currentState: boolean) {
+  // No toast: ticking again is its own undo (as on Tasks); a refused save unticks it again.
+  function handleToggleShopping(itemId: string, currentState: boolean) {
     const setBought = (isBought: boolean) =>
       setShoppingList((prev) => prev.map((item) => (item.id === itemId ? { ...item, isBought } : item)));
-    try {
-      await toggleShoppingItemAction(itemId, !currentState);
-      setBought(!currentState);
-      showToast({
-        message: currentState ? "Marked as not bought" : "Marked as bought",
-        actionLabel: "Undo",
-        onAction: async () => {
-          await toggleShoppingItemAction(itemId, currentState);
-          setBought(currentState);
-        },
-      });
-    } catch {
-      setStatusMessage("Could not update item.");
-    }
+    setBought(!currentState);
+    toggleShoppingItemAction(itemId, !currentState).catch(() => {
+      setBought(currentState);
+      setStatusMessage("Failed to update item");
+    });
   }
 
   function handleDeleteShoppingItem(item: ShoppingItemData) {
@@ -554,45 +621,65 @@ export function FoodClient({
       setShoppingList((prev) => [...prev, back]);
     };
     showToast({
-      message: `Deleted "${item.name}"`,
+      message: `Removed "${item.name}"`,
       actionLabel: "Undo",
       onAction: async () => {
         await gone;
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await addShoppingItemAction(toShopInput(item)).catch(() => null);
-        if (!res?.item) return setStatusMessage("Could not restore item.");
-        const restored = { ...(res.item as ShoppingItemData), isBought: item.isBought };
-        if (item.isBought) await toggleShoppingItemAction(restored.id, true);
-        putBack(restored);
+        if (!res?.item) return setStatusMessage("Failed to restore item");
+        const restored = res.item as ShoppingItemData;
+        const bought = item.isBought && (await toggleShoppingItemAction(restored.id, true).then(() => true, () => false));
+        putBack({ ...restored, isBought: bought });
+        if (item.isBought && !bought) setStatusMessage("Failed to mark item as bought");
       },
     });
     void Promise.all([deleted, gone]).then(([ok]) => {
       if (ok) return;
       putBack(item);
-      setStatusMessage("Could not delete item.");
+      setStatusMessage("Failed to remove item");
     });
   }
 
-  async function handleClearBought() {
+  // Like a delete: the rows leave and the toast shows at once; a failed clear puts them back.
+  function handleClearBought() {
     const cleared = shoppingList.filter((i) => i.isBought);
-    setBusy(true);
-    try {
-      await clearBoughtItemsAction();
-      cleared.forEach((c) => leave(c.id, () => setShoppingList((prev) => prev.filter((i) => i.id !== c.id))));
-      showToast({
-        message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
-        actionLabel: "Undo",
-        onAction: async () => {
-          await restoreShoppingItemsAction({ itemIds: cleared.map((c) => c.id) });
-          cleared.forEach((i) => enter(i.id));
-          setShoppingList((prev) => [...prev, ...cleared]);
-        },
-      });
-    } catch {
-      setStatusMessage("Failed to clear bought items.");
-    } finally {
-      setBusy(false);
-    }
+    if (!cleared.length) return;
+    const ids = new Set(cleared.map((c) => c.id));
+    const done = clearBoughtItemsAction().then(() => true, () => false);
+    const drop = () =>
+      Promise.all(
+        cleared.map(
+          (c) => new Promise<void>((res) => leave(c.id, () => {
+            setShoppingList((prev) => prev.filter((i) => i.id !== c.id));
+            res();
+          })),
+        ),
+      );
+    const gone = drop();
+    const putBack = () => {
+      cleared.forEach((c) => enter(c.id));
+      setShoppingList((prev) => [...prev.filter((i) => !ids.has(i.id)), ...cleared]);
+    };
+    showToast({
+      message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
+      actionLabel: "Undo",
+      onAction: async () => {
+        await gone;
+        putBack();
+        if (!(await done)) return; // the clear never happened
+        const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
+        if (!back?.success) {
+          void drop();
+          setStatusMessage("Failed to restore items");
+        }
+      },
+    });
+    void Promise.all([done, gone]).then(([ok]) => {
+      if (ok) return;
+      putBack();
+      setStatusMessage("Failed to clear bought items");
+    });
   }
 
   async function handleSendChatMessage() {
@@ -618,13 +705,10 @@ export function FoodClient({
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) rememberFoods(meals);
     } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "model",
-          text: "A apărut o eroare la procesarea mesajului. Te rog să reîncerci.",
-        },
-      ]);
+      // Take the message back so it can be sent again.
+      setChatMessages((prev) => prev.filter((m) => m !== userMsg));
+      setChatInput(text);
+      setStatusMessage("Failed to send message");
     } finally {
       setChatLoading(false);
     }
@@ -676,19 +760,19 @@ export function FoodClient({
               <div className="section-head">
                 <div>
                   <h2 id="meals-title" className="section-title">
-                    Meals
+                    Meals <span className="muted number-tabular">{summary.meals.length}</span>
                   </h2>
                   <p className="card-sub muted number-tabular">{formatDMY(selectedDate)}</p>
                 </div>
-                <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setIsMealModalOpen(true))}>
+                <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setFormError(""), setIsMealModalOpen(true))}>
                   <PlusIcon size={14} />
                   Add meal
                 </button>
               </div>
 
-              <AutoHeight className="entries">
+              <AutoHeight wash className="entries">
                 {summary.meals.length === 0 ? (
-                  <p className="empty-note">No meals logged today.</p>
+                  <p key="empty" ref={rowRef("empty")} className="empty-note">No meals logged today.</p>
                 ) : (
                   <Fragment key={selectedDate}>
                   {summary.meals.map((meal) => (
@@ -705,7 +789,7 @@ export function FoodClient({
                       <button
                         type="button"
                         className="delete-icon-btn"
-                        onClick={() => leave(meal.id, () => handleDeleteMeal(meal.id))}
+                        onClick={() => handleDeleteMeal(meal)}
                         aria-label={`Delete meal ${meal.name}`}
                         title="Delete"
                       >
@@ -772,10 +856,10 @@ export function FoodClient({
                 <div className="progress-fill" style={{ width: `${waterPct}%` }} />
               </div>
               <div className="tap-buttons">
-                <button type="button" className="secondary tap-btn" onClick={() => changeWater(250, "Added 250 ml")}>
+                <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
                   +250 ml
                 </button>
-                <button type="button" className="secondary tap-btn" onClick={() => changeWater(500, "Added 500 ml")}>
+                <button type="button" className="secondary tap-btn" onClick={() => addWater(500)}>
                   +500 ml
                 </button>
               </div>
@@ -811,21 +895,21 @@ export function FoodClient({
                   <ScaleIcon size={18} /> Weight
                 </h2>
                 {weightAnalytics.weeklyRateOfChange !== null && (
-                  <span className={`badge ${weightAnalytics.trend === "gaining" ? "badge-success" : "badge-warning"}`}>
+                  <span className="badge badge-rest">
                     {weightAnalytics.weeklyRateOfChange > 0 ? "+" : ""}
                     {weightAnalytics.weeklyRateOfChange} kg/week
                   </span>
                 )}
               </div>
               <p className="metric-big number-tabular">
-                {weightAnalytics.sevenDayAverage ?? weightAnalytics.latestWeight ?? "—"}
+                {shownWeight === null ? "—" : (
+                  <AnimatedNumber value={shownWeight} format={(n) => String(Math.round(n * 100) / 100)} />
+                )}
                 <span className="macro-target"> kg{weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}</span>
               </p>
-              <p className="card-sub muted">
-                {weightAnalytics.previousWeekAverage
-                  ? `Previous week: ${weightAnalytics.previousWeekAverage} kg`
-                  : "Log weigh-ins in the Weight tab to see a trend."}
-              </p>
+              {weightAnalytics.previousWeekAverage ? (
+                <p className="card-sub muted">Previous week: {weightAnalytics.previousWeekAverage} kg</p>
+              ) : null}
             </section>
           </div>
         </div>
@@ -836,23 +920,22 @@ export function FoodClient({
         <section className="surface" aria-labelledby="shopping-title">
           <div className="section-head">
             <h2 id="shopping-title" className="section-title">
-              Shopping List
+              Shopping list <span className="muted number-tabular">{shoppingList.length}</span>
             </h2>
-            <button type="button" className="btn-sm tint" onClick={() => openShopForm(null)}>
-              <PlusIcon size={14} />
-              Add item
-            </button>
-          </div>
-
-          <div className="head-actions">
-            <button
-              type="button"
-              className="secondary btn-sm"
-              disabled={shoppingList.every((i) => !i.isBought)}
-              onClick={handleClearBought}
-            >
-              Clear bought
-            </button>
+            <span className="head-actions">
+              <button
+                type="button"
+                className="btn-sm tint"
+                disabled={shoppingList.every((i) => !i.isBought)}
+                onClick={handleClearBought}
+              >
+                Clear bought
+              </button>
+              <button type="button" className="btn-sm tint" onClick={() => openShopForm(null)}>
+                <PlusIcon size={14} />
+                Add item
+              </button>
+            </span>
           </div>
 
           {quickAdds.length > 0 && (
@@ -877,7 +960,11 @@ export function FoodClient({
             </div>
           )}
 
-          {shoppingList.length === 0 && <p className="empty-note">Your shopping list is empty.</p>}
+          {shoppingList.length === 0 && (
+            <p key="empty" ref={rowRef("empty")} className="empty-note">
+              Your shopping list is empty.
+            </p>
+          )}
           {shopCategories.map((cat) => (
             <div key={cat} className="shopping-group">
               <h3 className="group-label">{cat}</h3>
@@ -924,16 +1011,19 @@ export function FoodClient({
         <section className="surface" aria-labelledby="categories-title">
           <div className="section-head">
             <h2 id="categories-title" className="section-title">
-              Categories
+              Categories <span className="muted number-tabular">{categories.length}</span>
             </h2>
             <button type="button" className="btn-sm tint" onClick={() => openCategoryForm(null)}>
               <PlusIcon size={14} />
               Add category
             </button>
           </div>
-          <p className="muted">Store sections in the order you walk them. Items without one go to Other.</p>
+          <AutoHeight wash className="entries">
+          {categories.length === 0 && (
+            <p key="cat-empty" ref={rowRef("cat:empty")} className="empty-note">No categories yet.</p>
+          )}
           {categories.map((cat) => (
-            <div key={cat} className="shopping-row">
+            <div key={catKey(cat)} ref={rowRef(catKey(cat))} className="entry-row">
               <span className="category-name">{cat}</span>
               <div className="row-actions">
                 <button
@@ -948,6 +1038,7 @@ export function FoodClient({
               </div>
             </div>
           ))}
+          </AutoHeight>
         </section>
         </div>
       )}
@@ -956,7 +1047,7 @@ export function FoodClient({
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-head">
             <h2 id="chat-title" className="section-title">
-              Food Assistant
+              Food assistant
             </h2>
             <button
               type="button"
@@ -973,7 +1064,7 @@ export function FoodClient({
                 <div className="chat-bubble">{msg.text}</div>
                 {msg.meals?.map((m) => (
                   <div key={m.id} className="chat-tool number-tabular">
-                    <strong>Masă adăugată:</strong> {m.name} · {m.calories} kcal · {Number(m.protein)}g P ·{" "}
+                    <strong>Added:</strong> {m.name} · {m.calories} kcal · {Number(m.protein)}g P ·{" "}
                     {Number(m.carbs)}g C · {Number(m.fat)}g F
                   </div>
                 ))}
@@ -981,7 +1072,7 @@ export function FoodClient({
             ))}
             {chatLoading && (
               <div className="chat-msg model">
-                <div className="chat-bubble typing">Asistentul calculează macro-urile…</div>
+                <div className="chat-bubble typing">Calculating macros...</div>
               </div>
             )}
           </div>
@@ -1001,7 +1092,7 @@ export function FoodClient({
               disabled={chatLoading}
             />
             <button type="submit" disabled={chatLoading || !chatInput.trim()}>
-              {chatLoading ? "Se trimite…" : "Trimite"}
+              {chatLoading ? "Sending..." : "Send"}
             </button>
           </form>
         </section>
@@ -1017,10 +1108,11 @@ export function FoodClient({
         <form onSubmit={handleLogMeal}>
           <div className="form-stack">
           <label>
-            Meal Name / Description
+            Name
             <input
               type="text"
-              value={mealName}
+              disabled={busy}
+                value={mealName}
               onChange={(e) => setMealName(e.target.value)}
               required
             />
@@ -1031,6 +1123,8 @@ export function FoodClient({
               Calories (kcal)
               <input
                 type="number"
+                inputMode="numeric"
+                disabled={busy}
                 value={mealCalories}
                 onChange={(e) => setMealCalories(e.target.value)}
                 className="number-tabular"
@@ -1041,6 +1135,8 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.1"
+                inputMode="decimal"
+                disabled={busy}
                 value={mealProtein}
                 onChange={(e) => setMealProtein(e.target.value)}
                 className="number-tabular"
@@ -1054,6 +1150,8 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.1"
+                inputMode="decimal"
+                disabled={busy}
                 value={mealCarbs}
                 onChange={(e) => setMealCarbs(e.target.value)}
                 className="number-tabular"
@@ -1064,6 +1162,8 @@ export function FoodClient({
               <input
                 type="number"
                 step="0.1"
+                inputMode="decimal"
+                disabled={busy}
                 value={mealFat}
                 onChange={(e) => setMealFat(e.target.value)}
                 className="number-tabular"
@@ -1071,6 +1171,7 @@ export function FoodClient({
             </label>
           </div>
 
+          {formError && <p className="error" role="alert">{formError}</p>}
           </div>
 
           <div className="form-actions">
@@ -1078,7 +1179,7 @@ export function FoodClient({
               Cancel
             </button>
             <button type="submit" disabled={busy || !mealName.trim()}>
-              Add meal
+              {busy ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
@@ -1088,14 +1189,15 @@ export function FoodClient({
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
         onExited={runAfterClose}
-        title={editingShop ? "Edit item" : "New shopping item"}
+        title={editingShop ? "Edit shopping item" : "New shopping item"}
       >
         <form onSubmit={handleShopSubmit}>
           <div className="form-stack">
             <label>
-              Item name
+              Name
               <input
                 type="text"
+                disabled={busy}
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
                 required
@@ -1108,7 +1210,9 @@ export function FoodClient({
                   type="number"
                   step="0.5"
                   min="0.5"
-                  value={shopAmount}
+                  inputMode="decimal"
+                  disabled={busy}
+                value={shopAmount}
                   onChange={(e) => setShopAmount(e.target.value)}
                 />
               </label>
@@ -1116,14 +1220,15 @@ export function FoodClient({
                 Unit
                 <input
                   type="text"
-                  value={shopUnit}
+                  disabled={busy}
+                value={shopUnit}
                   onChange={(e) => setShopUnit(e.target.value)}
                 />
               </label>
             </div>
             <label>
               Category
-              <select value={shopCategory} onChange={(e) => setShopCategory(e.target.value)}>
+              <select disabled={busy} value={shopCategory} onChange={(e) => setShopCategory(e.target.value)}>
                 {categoryOptions.map((c) => (
                   <option key={c} value={c}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
@@ -1131,13 +1236,14 @@ export function FoodClient({
                 ))}
               </select>
             </label>
+            {formError && <p className="error" role="alert">{formError}</p>}
           </div>
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => setIsShopModalOpen(false)}>
               Cancel
             </button>
             <button type="submit" disabled={busy || !shopName.trim()}>
-              {editingShop ? "Save" : "Add item"}
+              {busy ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
@@ -1145,9 +1251,9 @@ export function FoodClient({
 
       <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
         <div className="form-stack">
-          <AutoHeight className="entries">
+          <AutoHeight wash className="entries">
             {notLoggedFoods.length === 0 ? (
-              <p className="empty-note">Everything you logged before is already in today.</p>
+              <p key="empty" ref={rowRef("past:empty")} className="empty-note">Everything you logged before is already in today.</p>
             ) : (
               notLoggedFoods.map((f) => (
                 <div key={f.name} ref={rowRef(`past:${f.name}`)} className="entry-row">
@@ -1175,9 +1281,10 @@ export function FoodClient({
       </Modal>
 
       <Modal
-        isOpen={catEdit !== null}
-        onClose={() => setCatEdit(null)}
-        title={catEdit?.from ? "Edit category" : "New category"}
+        isOpen={catOpen}
+        onClose={() => setCatOpen(false)}
+        onExited={runAfterClose}
+        title={catEdit.from ? "Edit category" : "New category"}
       >
         <form onSubmit={handleCategorySubmit}>
           <div className="form-stack">
@@ -1186,35 +1293,36 @@ export function FoodClient({
               <input
                 type="text"
                 maxLength={50}
-                autoFocus
+                disabled={busy}
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
                 required
               />
             </label>
-            {catEdit?.from && (
+            {catEdit.from && (
               <p className="muted move-hint">Its items move along. An existing name merges the two.</p>
             )}
+            {catError && <p className="error" role="alert">{catError}</p>}
           </div>
           <div className="form-actions">
-            {catEdit?.from && (
+            {catEdit.from && (
               <button type="button" className="danger" disabled={busy} onClick={handleDeleteCategory}>
                 Delete
               </button>
             )}
-            <button type="button" className="secondary" onClick={() => setCatEdit(null)}>
+            <button type="button" className="secondary" onClick={() => setCatOpen(false)}>
               Cancel
             </button>
             <button type="submit" disabled={busy || !catName.trim()}>
-              {catEdit?.from ? "Save" : "Add"}
+              {busy ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
       </Modal>
 
       <Modal
-        isOpen={metricEdit !== null}
-        onClose={() => setMetricEdit(null)}
+        isOpen={metricOpen}
+        onClose={() => setMetricOpen(false)}
         title={metricEdit === "water" ? "Edit water" : "Edit steps"}
       >
         <form onSubmit={handleMetricSubmit}>
@@ -1228,17 +1336,19 @@ export function FoodClient({
                 max={metricEdit === "water" ? 20000 : 200000}
                 step="1"
                 required
+                disabled={busy}
                 value={metricInput}
                 onChange={(e) => setMetricInput(e.target.value)}
               />
             </label>
+            {formError && <p className="error" role="alert">{formError}</p>}
           </div>
           <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setMetricEdit(null)}>
+            <button type="button" className="secondary" onClick={() => setMetricOpen(false)}>
               Cancel
             </button>
-            <button type="submit" disabled={metricInput === ""}>
-              Save
+            <button type="submit" disabled={busy || metricInput === ""}>
+              {busy ? "Saving..." : "Save"}
             </button>
           </div>
         </form>

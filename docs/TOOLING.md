@@ -65,6 +65,11 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 - `.agents/skills/code-review-guide/`: `SKILL.md` (router + procedure), `references/` (reviewer guide, author guide, security review, reviewing agent-written code), `templates/pull-request.md`. `.claude/skills/code-review-guide` is a symlink to it. Named `-guide` to avoid a clash with the built-in `code-review` skill of Claude Code.
 - Sources: Google Engineering Practices, Microsoft Code-With Engineering Playbook, OWASP Code Review Guide (fetched 2026-11-02). Refresh procedure: `SKILL.md`, last section.
 
+## House design skill
+
+- `.agents/skills/ultimate-design-skill/`: `SKILL.md` (principles, motion order, recipe, rejected ideas, checklist), `references/values.md` (every token and size), `references/motion-and-crud.md` (list motion and add/edit/delete/Undo code). `.claude/skills/ultimate-design-skill` is a symlink to it.
+- Source of truth: the Wishlist page (`app/wishlist/`). When the code changes, update the skill in the same PR.
+
 ## Starting other projects
 
 The generic setup for a new project (same structure and the same 5 skills) lives outside this repo: `~/Documents/projects/project-setup/` (`SKILL.md`, `setup.sh`).

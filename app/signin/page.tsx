@@ -14,72 +14,57 @@ export default function SignInPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const result = await signIn("credentials", { name, redirect: false, callbackUrl: "/" });
+    const result = await signIn("credentials", { name, redirect: false, callbackUrl: "/" }).catch(() => null);
     if (result?.ok) {
       router.push("/");
       router.refresh();
     } else {
-      setError("Enter a user name using letters, numbers, dots, dashes, or underscores.");
+      setError(
+        result?.error === "CredentialsSignin"
+          ? "Please enter a username using letters, numbers, dots, dashes or underscores."
+          : "Failed to sign in",
+      );
       setBusy(false);
     }
   }
 
   return (
-    <main style={{ minHeight: "85vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <section
-        className="surface"
-        style={{
-          width: "100%",
-          maxWidth: "26rem",
-          padding: "2rem",
-          borderRadius: "1.5rem",
-          border: "1px solid var(--card-border)",
-        }}
-        aria-labelledby="signin-title"
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-          <span style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--tint)" }}>
-            Life Tracker
-          </span>
-          <span className="cloud-pulse-dot" />
-        </div>
-
-        <h1 id="signin-title" style={{ fontSize: "1.75rem", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
-          Welcome Back
-        </h1>
-        <p className="muted" style={{ margin: "0.35rem 0 1.5rem", fontSize: "0.875rem", lineHeight: 1.5 }}>
-          Local development session. Enter your username to sign in.
+    <main className="signin-page">
+      <section className="surface signin" aria-labelledby="signin-title">
+        <p className="signin-brand">
+          Life Tracker
+          <span className="cloud-pulse-dot" aria-hidden="true" />
         </p>
+        <h1 id="signin-title" className="section-title">
+          Welcome back
+        </h1>
 
-        <form onSubmit={submit} style={{ display: "grid", gap: "1rem" }}>
-          <label style={{ display: "grid", gap: "0.4rem", fontWeight: 600, fontSize: "0.875rem" }}>
+        <form onSubmit={submit} className="form-stack signin-form">
+          <label>
             Username
             <input
               name="name"
+              disabled={busy}
               value={name}
               onChange={(event) => setName(event.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={64}
               required
               autoFocus
-              style={{ fontSize: "1.05rem" }}
             />
           </label>
-
-          <button
-            type="submit"
-            disabled={busy}
-            // Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look.
-            style={{ width: "100%", marginTop: "0.25rem", padding: "0.75rem", fontSize: "1rem", opacity: 1, cursor: busy ? "progress" : undefined }}
-          >
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          {/* Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look */}
+          <button type="submit" disabled={busy} className="signin-continue">
             {busy ? "Signing in..." : "Continue"}
           </button>
         </form>
-
-        {error && (
-          <p className="error" aria-live="polite" style={{ marginTop: "1rem", textAlign: "center" }}>
-            {error}
-          </p>
-        )}
       </section>
     </main>
   );

@@ -319,3 +319,87 @@ export function MoveIcon({ size = 16, className, ...props }: IconProps) {
     </svg>
   );
 }
+
+/** Arrow pointing up: move a row up. */
+export function ArrowUpIcon({ size = 16, className, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
+  );
+}
+
+/** Arrow pointing down: move a row down. */
+export function ArrowDownIcon({ size = 16, className, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d="M12 5v14M19 12l-7 7-7-7" />
+    </svg>
+  );
+}
+
+/** Chevron pointing left: step to the previous day, month or year. */
+export function ChevronLeftIcon({ size = 16, className, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+/** Chevron pointing right: step to the next day, month or year. */
+export function ChevronRightIcon({ size = 16, className, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useToast } from "./toast";
 
 interface NavigationProps {
   userName: string;
@@ -78,6 +79,7 @@ export function Navigation({ userName }: NavigationProps) {
   const initial = userName.charAt(0).toUpperCase();
   // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
   const router = useRouter();
+  const { showToast } = useToast();
   const signOutNow = async () => {
     // Fade the whole page out first, so the sign-in card arrives on an empty screen.
     const fades = window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -85,8 +87,8 @@ export function Navigation({ userName }: NavigationProps) {
       : [...document.querySelectorAll("main > *")].map((el) =>
           el.animate(
             [
-              { opacity: 1, transform: "none", filter: "none" },
-              { opacity: 0, transform: "scale(0.985)", filter: "blur(2px)" },
+              { opacity: 1, filter: "none" },
+              { opacity: 0, filter: "blur(2px)" }, // fades and blurs, never scales (like the form's backdrop)
             ],
             { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)", fill: "forwards" },
           ),
@@ -95,6 +97,7 @@ export function Navigation({ userName }: NavigationProps) {
       await Promise.all([signOut({ redirect: false }), ...fades.map((a) => a.finished)]);
     } catch {
       fades.forEach((a) => a.cancel()); // never leave a blank page behind a failed sign-out
+      showToast({ message: "Failed to sign out", type: "warning" });
       return;
     }
     router.push("/signin");
@@ -131,7 +134,7 @@ export function Navigation({ userName }: NavigationProps) {
             <span className="user-avatar-circle">{initial}</span>
             <span>{userName}</span>
           </div>
-          <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
+          <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
             Sign out
           </button>
         </div>
@@ -146,14 +149,14 @@ export function Navigation({ userName }: NavigationProps) {
       {moreOpen && (
         <>
           <div className="more-scrim" onClick={() => setMoreOpen(false)} />
-          <div className="more-menu" id="more-menu" aria-label="More">
+          <div className="more-menu" id="more-menu" role="dialog" aria-label="More">
             <div className="more-user">
               <span className="user-avatar-circle">{initial}</span>
               <div className="more-user-text">
                 <span className="more-user-name">{userName}</span>
                 <span className="more-user-brand">Life Tracker</span>
               </div>
-              <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
+              <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
                 Sign out
               </button>
             </div>
@@ -162,6 +165,7 @@ export function Navigation({ userName }: NavigationProps) {
                 key={link.href}
                 href={link.href}
                 className={`nav-link ${link.isActive ? "active" : ""}`}
+                aria-current={link.isActive ? "page" : undefined}
                 onClick={() => setMoreOpen(false)}
               >
                 {link.icon}

@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart } from "../components/charts";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
@@ -44,16 +44,25 @@ export function WeightPanel() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [range, setRange] = useState<Range>("30");
 
-  const { rowRef, enter, leave } = useListMotion();
+  const { rowRef, enter, leave, move } = useListMotion();
   const { later, runAfterClose } = useAfterClose();
   const { showToast } = useToast();
+  // Undo runs from a toast seconds later, so it reads the list as it is then.
+  const latest = useRef(entries);
+  useEffect(() => {
+    latest.current = entries;
+  });
 
-  const load = useCallback(async () => {
-    const response = await fetch("/api/weight", { cache: "no-store" });
-    if (!response.ok) throw new Error("load failed");
-    const data = (await response.json()) as { entries: WeightEntry[] };
-    setEntries(data.entries);
-  }, []);
+  // Writes an edited weigh-in into the list; if a new date moves it, it enters its new place like a deleted
+  // weigh-in put back by Undo.
+  function replace(to: WeightEntry) {
+    const now = latest.current;
+    const order = (list: WeightEntry[]) => sortNewestFirst(list).map((e) => e.id);
+    const after = now.map((e) => (e.id === to.id ? to : e));
+    const write = () => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
+    if (order(now).indexOf(to.id) === order(after).indexOf(to.id)) return write();
+    move(to.id, write);
+  }
 
   useEffect(() => {
     let active = true;
@@ -63,12 +72,12 @@ export function WeightPanel() {
         return (await response.json()) as { entries: WeightEntry[] };
       })
       .then((data) => active && setEntries(data.entries))
-      .catch(() => active && setError("Could not load weigh-ins."))
+      .catch(() => active && showToast({ message: "Failed to load weigh-ins", type: "warning" }))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, []);
+  }, [showToast]);
 
   function openForm(entry?: WeightEntry) {
     runAfterClose(); // reopened before the last close finished
@@ -93,61 +102,86 @@ export function WeightPanel() {
       if (!response.ok) {
         setError(
           response.status === 409
-            ? "There is already a weigh-in for this date."
-            : "Check the date and weight.",
+            ? "Please pick a date that has no weigh-in yet."
+            : response.status === 400
+              ? "Please enter a valid date and weight."
+              : "Failed to save weigh-in",
         );
         return;
       }
       const { entry } = (await response.json()) as { entry: WeightEntry };
       const previous = editing;
       closeForm();
-      const refresh = () => void load().catch(() => setError("Could not load weigh-ins."));
       // Once the form has closed: a new weigh-in comes in at its date, a new date moves the row there.
       later(() => {
-        if (!previous) return (enter(entry.id), refresh());
-        if (previous.date === entry.date) return refresh();
-        leave(entry.id, () => (enter(entry.id), refresh()));
+        if (previous) return replace(entry);
+        enter(entry.id);
+        setEntries((current) => [...current, entry]);
       });
+      if (!previous) {
+        // No Undo: a new weigh-in is one tap from Delete.
+        showToast({ message: `Added ${numericKg} kg (${formatDMY(date)})`, type: "success" });
+        return;
+      }
       showToast({
-        message: previous ? "Weigh-in updated" : `Recorded ${numericKg} kg for ${formatDMY(date)}`,
+        message: `Saved ${numericKg} kg (${formatDMY(date)})`,
         type: "success",
         actionLabel: "Undo",
+        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
         onAction: async () => {
-          runAfterClose(); // the change first, if the form is still closing
-          if (previous) {
-            await send("PATCH", `/api/weight/${entry.id}`, {
-              date: previous.date,
-              kilograms: Number(previous.kilograms),
-            });
-            await load();
-          } else {
-            await send("DELETE", `/api/weight/${entry.id}`);
-            leave(entry.id, () => setEntries((current) => current.filter((e) => e.id !== entry.id)));
+          runAfterClose(); // the edit first, if the form is still closing
+          replace(previous);
+          const back = await send("PATCH", `/api/weight/${entry.id}`, {
+            date: previous.date,
+            kilograms: Number(previous.kilograms),
+          }).catch(() => null);
+          if (!back?.ok) {
+            replace(entry);
+            showToast({ message: "Failed to undo the edit", type: "warning" });
           }
         },
       });
     } catch {
-      setError("Could not save the weigh-in.");
+      setError("Failed to save weigh-in");
     } finally {
       setSaving(false);
     }
   }
 
-  async function removeEntry(target: WeightEntry) {
-    const response = await send("DELETE", `/api/weight/${target.id}`);
-    if (!response.ok) {
-      showToast({ message: "Could not delete weigh-in." });
-      return;
-    }
-    leave(target.id, () => setEntries((current) => current.filter((e) => e.id !== target.id)));
+  const putBack = (entry: WeightEntry) => {
+    enter(entry.id);
+    setEntries((current) => (current.some((e) => e.id === entry.id) ? current : [...current, entry]));
+  };
+
+  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
+  function removeEntry(target: WeightEntry) {
+    const deleted = send("DELETE", `/api/weight/${target.id}`).then(
+      (res) => res.ok,
+      () => false,
+    );
+    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
+    const gone = new Promise<void>((done) =>
+      leave(target.id, () => {
+        setEntries((current) => current.filter((e) => e.id !== target.id));
+        done();
+      }),
+    );
     showToast({
-      message: `Deleted weigh-in (${target.kilograms} kg)`,
+      message: `Removed ${Number(target.kilograms)} kg (${formatDMY(target.date)})`,
       actionLabel: "Undo",
+      // A new id, so the row is put back as the server returns it.
       onAction: async () => {
-        const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) });
-        if (back.ok) enter(((await back.json()) as { entry: WeightEntry }).entry.id);
-        await load();
+        await gone;
+        if (!(await deleted)) return putBack(target); // the delete never happened
+        const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) }).catch(() => null);
+        if (!back?.ok) return showToast({ message: "Failed to restore weigh-in", type: "warning" });
+        putBack(((await back.json()) as { entry: WeightEntry }).entry);
       },
+    });
+    void Promise.all([deleted, gone]).then(([ok]) => {
+      if (ok) return;
+      putBack(target);
+      showToast({ message: "Failed to remove weigh-in", type: "warning" });
     });
   }
 
@@ -193,7 +227,7 @@ export function WeightPanel() {
           <section className="surface" aria-labelledby="history-title">
             <div className="section-head">
               <h2 id="history-title" className="section-title">
-                History
+                History {!loading && <span className="muted number-tabular">{entries.length}</span>}
               </h2>
               <button type="button" className="btn-sm tint" onClick={() => openForm()}>
                 <PlusIcon size={14} />
@@ -201,16 +235,18 @@ export function WeightPanel() {
               </button>
             </div>
 
-            {error && !isModalOpen && <p className="error">{error}</p>}
-
             {loading ? (
               <div className="entries">
                 <div className="skeleton skeleton-row" />
                 <div className="skeleton skeleton-row" />
               </div>
             ) : (
-              <AutoHeight className="entries">
-                {entries.length === 0 && <p className="empty-note">No weigh-ins yet.</p>}
+              <AutoHeight wash className="entries">
+                {entries.length === 0 && (
+                  <p key="empty" ref={rowRef("empty")} className="empty-note">
+                    No weigh-ins yet.
+                  </p>
+                )}
                 {sorted.map((entry) => (
                   <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
                     <span className="weight-main">
@@ -253,7 +289,7 @@ export function WeightPanel() {
                 Trend
               </h2>
               {weeklyDelta !== null && (
-                <span className={`badge ${weeklyDelta > 0 ? "badge-success" : "badge-warning"}`}>
+                <span className="badge badge-rest">
                   {weeklyDelta > 0 ? "+" : ""}
                   {weeklyDelta} kg/week
                 </span>
@@ -267,7 +303,9 @@ export function WeightPanel() {
                 <span>7-day average, kg</span>
               </div>
               <div className="stat-tile">
-                <strong className="number-tabular">{sorted.length > 0 ? sorted[0].kilograms : "—"}</strong>
+                <strong className="number-tabular">
+                  {sorted.length > 0 ? <AnimatedNumber value={Number(sorted[0].kilograms)} format={twoDecimals} /> : "—"}
+                </strong>
                 <span>Latest, kg</span>
               </div>
             </div>
@@ -307,6 +345,8 @@ export function WeightPanel() {
                 today={today()}
                 max={today()}
                 label={formatDMY(date)}
+                labelledBy="weigh-date"
+                disabled={saving}
                 onChange={setDate}
               />
             </div>
@@ -318,13 +358,14 @@ export function WeightPanel() {
                 min="20"
                 max="500"
                 step="0.01"
+                disabled={saving}
                 value={kilograms}
                 onChange={(e) => setKilograms(e.target.value)}
                 required
               />
             </label>
             {error && (
-              <p className="error" aria-live="polite">
+              <p className="error" role="alert">
                 {error}
               </p>
             )}
@@ -334,7 +375,7 @@ export function WeightPanel() {
               Cancel
             </button>
             <button type="submit" disabled={saving || !kilograms}>
-              {editing ? "Save" : "Add"}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
