@@ -603,17 +603,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(createTodoAction({ ...task, recurrencePattern: "weekly; drop" })).rejects.toThrow();
     });
 
-    it("puts done tasks last, the most recently done first", async () => {
+    it("puts new tasks first and done tasks last, the most recently done first", async () => {
       const day = toISODate();
       const make = (title: string) => createTodo(userA, { space: "personal", title, dueDate: day, isRecurring: false, recurrencePattern: "none" });
       const a = await make("A");
       const b = await make("B");
       await make("C");
+      await new Promise((r) => setTimeout(r, 5));
+      await make("D");
       await toggleTodo(userA, { id: a.id, isCompleted: true, currentDate: day });
       await new Promise((r) => setTimeout(r, 5));
       await toggleTodo(userA, { id: b.id, isCompleted: true, currentDate: day });
       const order = (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title);
-      expect(order).toEqual(["C", "B", "A"]);
+      expect(order).toEqual(["D", "C", "B", "A"]);
     });
 
     it("moves a task between days and kinds, owner only", async () => {

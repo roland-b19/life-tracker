@@ -234,6 +234,8 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 
 **Animation**
 - Never animate rows with `filter`, `box-shadow`, `height` in CSS transitions, or `animation-fill-mode: both`. Opacity and transform only; `useListMotion` does height and padding with WAAPI.
+- A row plays `row-in` once. `rowRef` sets `animation: none` on it after its entrance ends, because React re-inserts the other rows when one moves above them (an Undo of an edit) and that would replay the whole list's entrance. Only the moved row animates, like Delete and its Undo.
+- Inside `AutoHeight`, space below content is padding, never margin: a child's bottom margin collapses out of the measured box, so the height animation ends short and jumps (Tasks `.week-strip`).
 - Respect `prefers-reduced-motion`. The helpers already return immediately, so do not add your own animations around them.
 
 **Optimistic updates and Undo**
@@ -246,5 +248,7 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 - A dialog's content lives in its own state, separate from its open flag (`moving` + `moveOpen`, `catEdit` + `catOpen`): closing sets only the flag, so the content stays while the dialog fades instead of going blank. Call `runAfterClose()` before reopening.
 - An Undo started while a row is still leaving must `await gone` first.
 - An Undo of an edit calls `runAfterClose()` first, because the form may still be closing.
+- An edit that takes a row off the list on screen (Tasks: a weekday removed while that weekday is shown, a move to another day) makes the row leave like a delete after the form closes; its Undo awaits that exit, then puts the row back with `enter`.
+- New rows go on top of the list (Tasks: open tasks newest first; done tasks still sink below them).
 
 Sources: `app/wishlist/wishlist-client.tsx`, `app/components/list-motion.tsx`, `app/components/modal.tsx`, `app/components/toast.tsx`, `app/todos/todos-client.tsx`, `app/gym/muscle-map.tsx`.

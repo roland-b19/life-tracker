@@ -247,10 +247,18 @@ export function useListMotion() {
     }
   });
 
+  const seen = useRef(new WeakSet<HTMLElement>());
   const rowRef = useCallback(
     (id: string) => (el: HTMLElement | null) => {
       if (!el) return;
       nodes.current.set(id, el);
+      if (!seen.current.has(el)) {
+        seen.current.add(el);
+        // Once in, a row stays put: React re-inserting it (a row moved above it, an Undo of an edit) would replay row-in.
+        el.addEventListener("animationend", (e) => {
+          if (e.target === el && e.animationName === "row-in") el.style.animation = "none";
+        });
+      }
       const done = entering.current.get(id);
       if (done) {
         entering.current.delete(id);
