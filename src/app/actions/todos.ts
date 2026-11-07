@@ -76,13 +76,11 @@ export async function toggleTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = toggleTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
-  if (task) assertPlannable(task);
-  const today = toISODate();
-  // A repeating task is ticked only on a day it is due and not yet over or ahead (a day of slack covers the user's timezone).
+  // Past days can be ticked (as on screen); a repeating task only on a day it is due, never ahead of time
+  // (a day of slack covers the user's timezone).
   if (
     task?.isRecurring &&
-    (parsed.currentDate > addDays(today, 1) ||
-      (!DEV_EDIT_PAST && parsed.currentDate < addDays(today, -1)) ||
+    (parsed.currentDate > addDays(toISODate(), 1) ||
       parsed.currentDate < task.dueDate ||
       (task.endedOn && parsed.currentDate >= task.endedOn) ||
       !isDueOn(task.recurrencePattern, parsed.currentDate))

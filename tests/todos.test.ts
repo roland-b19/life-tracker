@@ -465,13 +465,13 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(tick(addDays(today, -1))).rejects.toThrow("not due"); // before it started
       expect((await tick(today)).success).toBe(true);
 
-      // A one-off on a past day is read-only.
+      // A one-off on a past day can be ticked, not edited.
       const old = await createTodo(userA, {
         space: "personal", title: "Old", dueDate: addDays(today, -5), isRecurring: false, recurrencePattern: "none",
       });
       await expect(updateTodoAction({ id: old.id, title: "New" })).rejects.toThrow("up to 7 days ahead");
-      await expect(toggleTodoAction({ id: old.id, isCompleted: true, currentDate: today })).rejects.toThrow();
       await expect(deleteTodoAction(old.id)).rejects.toThrow("up to 7 days ahead");
+      expect((await toggleTodoAction({ id: old.id, isCompleted: true, currentDate: addDays(today, -5) })).success).toBe(true);
     });
 
     it("rejects a duplicate task on the same list, not on another list or user", async () => {
