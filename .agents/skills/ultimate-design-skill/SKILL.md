@@ -161,10 +161,10 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day".
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
 - **Rows build at once.** Rows start building with the page enter. They never wait about a second after the page shows.
-- **Charts and numbers animate on entry and on every view change** (day, tab, filter, period). Bars grow from 0, `ProgressRing` fills from 0 and summary amounts count up from 0, because their wrapper is keyed by the view (Tasks key the dashboard by date, space and tab).
+- **Charts and numbers animate on entry and on every view change** (day, tab, filter, period). Bars grow from 0 because their wrapper is keyed by the view (Tasks key the dashboard by date, space and tab). `ProgressRing` and every number show the real value from the first frame, never a false 0 (the user's call); they ease only when the value changes.
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
-- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`.
+- **Stat tiles ease.** Every number in a `.stat-tile` is an `AnimatedNumber` (real value on entry, eased on change), never a plain value beside a counting one. A tile with no value yet shows an em dash `—`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
   - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
   - replay their grow animation on every view change (day, tab, filter, period);

@@ -488,7 +488,7 @@ The CSS hides the outline on `[data-pointer]`.
 
 **Sign-out and number**
 - Sign-out fade: 320ms `--ease`, fill `forwards`, opacity and `blur(2px)`.
-- AnimatedNumber: 600ms ease-out cubic, from 0 on entry.
+- AnimatedNumber: 600ms ease-out cubic between values; it shows the real value on entry, never counting up from 0.
 
 **Reduced motion**
 - Every duration becomes 0.01ms and the view transitions 0s.
@@ -501,7 +501,7 @@ The CSS hides the outline on `[data-pointer]`.
 - A clickable bar (`onSelect`) hovers to opacity .9 (inside `@media (hover: hover)`); a plain bar has no hover change, only its `title`. A highlighted bar (`.hl`) is 1; an empty bar is `--separator`.
 - Bar height moves over `--dur`; opacity and colour (hover, highlight) fade over `--fade`.
 - Bar tips (`data-tip`) fade in over 120ms on hover or focus and slide from left- to right-aligned across the chart, so they never leave it.
-- `ProgressRing` fills from 0 over 900ms. It is 132px with a 12px stroke: `--separator` track, `--tint` fill with round caps, centre text 1.75rem weight 800, letter-spacing -.02em.
+- `ProgressRing` shows its real share on entry and eases to a new one over 900ms. It is 132px with a 12px stroke: `--separator` track, `--tint` fill with round caps, centre text 1.75rem weight 800, letter-spacing -.02em.
 - `.dash-hero`: a centred column, gap 1rem, padding-block .25rem: the ring with its caption below.
 - `.stat-row`: 3 equal columns (`.two`: 2), gap .75rem, margin-bottom 1.25rem. `.stat-tile`: padding .75rem .9rem, radius .85rem, `--surface-secondary`, gap .15rem; the number 1.35rem weight 700, the caption .75rem secondary.
 - `.chart-controls`: the chart's `Segmented` groups side by side (`flex: 1` each), gap .75rem, margin-bottom .75rem.
@@ -513,7 +513,7 @@ The CSS hides the outline on `[data-pointer]`.
 - `BarChart` has `role="img"` (or `group` when bars are buttons) and an `aria-label` summary.
 - `LineChart`: `role="img"` with an `aria-label`; dots r 3.5 with an SVG `<title>` `label: value`; axis first label, `lo – hi`, last label. No entry animation. With fewer than 2 points it renders nothing and a `.chart-note` (muted .875rem, centred, `min-height: calc(140px + 1.375rem)`, the chart's height) takes its place: "Not enough weigh-ins in the last 30 days."
 - `HBars`: a `<ul>` of label (wraps, never cut off), track and text value. The track is `--separator` and fully rounded. No role and no animation.
-- `AnimatedNumber` counts from 0 on mount and eases to each new value.
+- `AnimatedNumber` shows the real value on mount and eases to each new value.
 
 ## Links
 

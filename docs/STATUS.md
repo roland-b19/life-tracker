@@ -143,6 +143,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-08 — Real values on entry (Claude Code, branch `fix/numbers-start-real`): `ProgressRing` and `AnimatedNumber` start at the real value instead of 0 on every page; they still ease on change. Checks: tsc, eslint, browser frame sampling on Tasks.
 - 2026-11-08 — Tasks Progress (Claude Code, branch `fix/tasks-progress-empty`): a list with no tasks shows only the note, no ring; Progress follows the list on screen, so it no longer flashes the last day's numbers. Checks: tsc, eslint, browser frame sampling across tab and day switches.
 - 2026-11-08 — Tasks review (Claude Code, branch `fix/tasks-week-button`):
   - The Week button fades out on Today and back in on Daily with the existing row motion.

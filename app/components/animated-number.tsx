@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Eases from the previously shown value to `value` (ease-out cubic), like the numeric
  * transitions in Apple's apps. With reduced motion it jumps straight to the value.
- * `from` sets the start on first render; <AnimatedNumber> defaults it to 0.
+ * It shows the real value from the first frame; `from` sets another start on first render.
  */
 export function useAnimatedNumber(value: number, from = value, duration = 600): number {
   const [shown, setShown] = useState(from);
@@ -40,6 +40,6 @@ export function AnimatedNumber({
   format?: (n: number) => string;
   from?: number;
 }) {
-  // Counts up from 0 when it appears (page entry), then eases between values.
-  return <>{format(useAnimatedNumber(value, from ?? 0))}</>;
+  // Shows the real value at once, then eases between values.
+  return <>{format(useAnimatedNumber(value, from))}</>;
 }
