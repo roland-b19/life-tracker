@@ -3,11 +3,11 @@
 import { LineChart } from "../components/charts";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { AnimatedNumber } from "../components/animated-number";
-import { useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 
@@ -44,7 +44,8 @@ export function WeightPanel() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [range, setRange] = useState<Range>("30");
 
-  const { rowRef, leave } = useListMotion();
+  const { rowRef, enter, leave } = useListMotion();
+  const { later, runAfterClose } = useAfterClose();
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -70,6 +71,7 @@ export function WeightPanel() {
   }, []);
 
   function openForm(entry?: WeightEntry) {
+    runAfterClose(); // reopened before the last close finished
     setError("");
     setEditing(entry ?? null);
     setDate(entry?.date ?? today());
@@ -99,21 +101,29 @@ export function WeightPanel() {
       const { entry } = (await response.json()) as { entry: WeightEntry };
       const previous = editing;
       closeForm();
-      await load();
+      const refresh = () => void load().catch(() => setError("Could not load weigh-ins."));
+      // Once the form has closed: a new weigh-in comes in at its date, a new date moves the row there.
+      later(() => {
+        if (!previous) return (enter(entry.id), refresh());
+        if (previous.date === entry.date) return refresh();
+        leave(entry.id, () => (enter(entry.id), refresh()));
+      });
       showToast({
         message: previous ? "Weigh-in updated" : `Recorded ${numericKg} kg for ${formatDMY(date)}`,
         type: "success",
         actionLabel: "Undo",
         onAction: async () => {
+          runAfterClose(); // the change first, if the form is still closing
           if (previous) {
             await send("PATCH", `/api/weight/${entry.id}`, {
               date: previous.date,
               kilograms: Number(previous.kilograms),
             });
+            await load();
           } else {
             await send("DELETE", `/api/weight/${entry.id}`);
+            leave(entry.id, () => setEntries((current) => current.filter((e) => e.id !== entry.id)));
           }
-          await load();
         },
       });
     } catch {
@@ -134,7 +144,8 @@ export function WeightPanel() {
       message: `Deleted weigh-in (${target.kilograms} kg)`,
       actionLabel: "Undo",
       onAction: async () => {
-        await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) });
+        const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) });
+        if (back.ok) enter(((await back.json()) as { entry: WeightEntry }).entry.id);
         await load();
       },
     });
@@ -197,10 +208,9 @@ export function WeightPanel() {
                 <div className="skeleton skeleton-row" />
                 <div className="skeleton skeleton-row" />
               </div>
-            ) : entries.length === 0 ? (
-              <p className="empty-note">No weigh-ins yet.</p>
             ) : (
-              <div className="entries">
+              <AutoHeight className="entries">
+                {entries.length === 0 && <p className="empty-note">No weigh-ins yet.</p>}
                 {sorted.map((entry) => (
                   <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
                     <span className="weight-main">
@@ -231,7 +241,7 @@ export function WeightPanel() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </AutoHeight>
             )}
           </section>
         </div>
@@ -279,7 +289,12 @@ export function WeightPanel() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={closeForm} title={editing ? "Edit weigh-in" : "New weigh-in"}>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeForm}
+        onExited={runAfterClose}
+        title={editing ? "Edit weigh-in" : "New weigh-in"}
+      >
         <form onSubmit={handleSubmit}>
           <div className="form-stack">
             {/* Not a <label>: a click inside the open calendar would re-trigger the button. */}

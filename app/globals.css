@@ -1,39 +1,43 @@
 :root {
-  /* Storm: cool graphite with a steel blue accent. Chosen in the palette review (docs/decisions.md, 2026-11-05). */
-  --background: #1b1e22;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(134, 180, 234, 0.07) 0%, rgba(27, 30, 34, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(134, 180, 234, 0.04) 0%, rgba(27, 30, 34, 0) 100%);
-  --surface: rgba(37, 42, 48, 0.78);
-  --surface-solid: #252a30;
-  --surface-secondary: rgba(47, 53, 60, 0.65);
-  --surface-modal: #282e34;
-  --text: #eaedf0;
-  --secondary: #a1a9b2;
+  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent (docs/decisions.md, 2026-11-06). */
+  --background: #000000;
+  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0) 100%),
+               radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
+  --surface: rgba(28, 28, 30, 0.78);
+  --surface-solid: #1c1c1e;
+  --surface-secondary: rgba(58, 58, 60, 0.8);
+  --surface-modal: #242426;
+  --text: #ebebf0;
+  --secondary: #a1a1a8;
   --tint: #86b4ea;
-  --tint-hover: #8dbaec;
+  --tint-hover: #9bc2ef;
   --on-tint: #0b1b30;
-  --tint-subtle: rgba(134, 180, 234, 0.14);
+  --tint-subtle: rgba(134, 180, 234, 0.24);
   --success: #8fd4a3;
-  --success-subtle: rgba(143, 212, 163, 0.14);
+  --success-subtle: rgba(143, 212, 163, 0.22);
   --warning: #ebc673;
-  --warning-subtle: rgba(235, 198, 115, 0.15);
+  --warning-subtle: rgba(235, 198, 115, 0.22);
   --danger: #ef8f8f;
-  --danger-subtle: rgba(239, 143, 143, 0.15);
-  --separator: #353c45;
-  --card-border: #434b56;
-  --card-shadow: none;
-  /* Hover: one spring "breath" and one low shadow on every card, button, tab and field.
-     --grow and --press are rewritten per element by app/providers.tsx so all grow and shrink by the same pixels. */
-  --hover-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.65);
-  --grow: 1.01;
-  --lift: 320ms var(--pop);
+  --danger-subtle: rgba(239, 143, 143, 0.22);
+  --separator: #38383a;
+  --card-border: #48484a;
+  /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
+     High contrast (below) brings the outline back. --press is rewritten per element by app/providers.tsx. */
+  --edge: transparent;
+  --lift: 320ms var(--ease);
   --glass-blur: blur(28px) saturate(160%);
-  /* Apple spring motion: iOS ease-out for movement, small overshoot only on controls */
+  /* Apple motion: iOS ease-out for movement, never an overshoot */
   --dur: 420ms;
-  /* Hover, press and selection feedback (color, shadow, opacity): quick, or every control feels late */
+  /* Hover, press and selection feedback (color, opacity): quick, or every control feels late */
   --quick: 180ms;
+  /* Hover highlights fade in on a gentle curve: fast, but never a jump */
+  --fade: 240ms ease;
+  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
+     grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
+  --highlight: rgba(255, 255, 255, 0.05);
+  --highlight-fill: rgba(255, 255, 255, 0.2);
+  --tint-highlight: rgba(134, 180, 234, 0.34);
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
-  --pop: cubic-bezier(0.34, 1.45, 0.64, 1);
   --press: 0.92;
   color-scheme: dark;
 }
@@ -51,6 +55,7 @@
   :root {
     --separator: var(--text);
     --card-border: var(--text);
+    --edge: var(--text);
   }
 }
 
@@ -272,7 +277,7 @@ h3 {
   flex: none;
   border-radius: 50%;
   background: var(--surface-secondary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   display: grid;
   place-items: center;
   font-size: 0.8125rem;
@@ -290,7 +295,7 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: background var(--fade), color var(--fade), transform var(--lift);
 }
 
 .nav-link svg {
@@ -325,10 +330,10 @@ h3 {
   display: flex;
   align-items: stretch;
   padding: 0.25rem;
-  background: rgba(37, 42, 48, 0.72);
+  background: rgba(28, 28, 30, 0.72);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.5rem;
 }
 
@@ -352,7 +357,7 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--quick) var(--ease), background var(--quick) var(--ease);
+  transition: color var(--fade), background var(--fade);
 }
 
 /* No transforms on tab items: scaling a glyph over a backdrop-filter bar leaves it blurry after the tap. */
@@ -370,7 +375,7 @@ h3 {
   position: fixed;
   inset: 0;
   z-index: 840;
-  background: rgba(10, 12, 15, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   animation: modalFadeIn var(--dur) var(--ease) both;
@@ -387,7 +392,7 @@ h3 {
   gap: 0.25rem;
   padding: 0.5rem;
   background: var(--surface-modal);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.25rem;
   transform-origin: bottom right;
   animation: modalScaleUp var(--dur) var(--ease) both;
@@ -484,10 +489,10 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.625rem;
-    border: 1px solid var(--card-border);
+    border: 1px solid var(--edge);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+    transition: transform var(--lift);
   }
 
   .side-user-row {
@@ -543,45 +548,45 @@ main {
 }
 
 .badge-info {
-  background: rgba(134, 180, 234, 0.15);
-  color: #86b4ea;
-  border: 1px solid rgba(134, 180, 234, 0.28);
+  background: var(--tint-subtle);
+  color: var(--tint);
+  border: 1px solid var(--edge);
 }
 
 .badge-warning {
-  background: rgba(235, 198, 115, 0.15);
-  color: #ebc673;
-  border: 1px solid rgba(235, 198, 115, 0.28);
+  background: var(--warning-subtle);
+  color: var(--warning);
+  border: 1px solid var(--edge);
 }
 
 .badge-danger {
-  background: rgba(239, 143, 143, 0.15);
-  color: #ef8f8f;
-  border: 1px solid rgba(239, 143, 143, 0.28);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  border: 1px solid var(--edge);
 }
 
 .badge-rest {
-  background: rgba(161, 169, 178, 0.12);
-  color: var(--secondary);
-  border: 1px solid rgba(161, 169, 178, 0.2);
+  background: rgba(161, 161, 168, 0.2);
+  color: #c7c7cc;
+  border: 1px solid var(--edge);
 }
 
 .badge-success {
-  background: rgba(143, 212, 163, 0.15);
-  color: #8fd4a3;
-  border: 1px solid rgba(143, 212, 163, 0.28);
+  background: var(--success-subtle);
+  color: var(--success);
+  border: 1px solid var(--edge);
 }
 
 .badge-carried {
-  background: rgba(168, 191, 224, 0.15);
+  background: rgba(168, 191, 224, 0.22);
   color: #a8bfe0;
-  border: 1px solid rgba(168, 191, 224, 0.28);
+  border: 1px solid var(--edge);
 }
 
 .badge-reminder {
-  background: rgba(134, 180, 234, 0.12);
-  color: #86b4ea;
-  border: 1px solid rgba(134, 180, 234, 0.22);
+  background: var(--tint-subtle);
+  color: var(--tint);
+  border: 1px solid var(--edge);
   font-size: 0.75rem;
 }
 
@@ -608,13 +613,13 @@ main {
 .split-day-card {
   padding: 1rem 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 .split-day-card.today {
@@ -625,10 +630,9 @@ main {
 .workout-exercise-card {
   padding: 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 1rem;
   margin-bottom: 1rem;
-  box-shadow: none;
 }
 
 .exercise-header {
@@ -646,7 +650,7 @@ main {
   margin-bottom: 0.9rem;
   display: grid;
   gap: 0.35rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
 }
 
 .set-row {
@@ -687,10 +691,10 @@ main {
   padding: 0.9rem 1rem;
   background: var(--surface-secondary);
   border-radius: 0.9rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   display: grid;
   gap: 0.3rem;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift);
 }
 
 .macro-title {
@@ -783,10 +787,9 @@ main {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
-  box-shadow: var(--card-shadow);
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift);
   animation: rise var(--dur) var(--ease) backwards;
 }
 
@@ -807,32 +810,15 @@ main {
   }
 }
 
-/* Hover, one rule for every card, button, tab and field: a spring "breath" (overshoot, then settle).
-   A focused field stays lifted. Fields and tabs get no shadow, everything else gets one low shadow. */
+/* Hover on fields: a lighter fill, no scaling. */
 @media (hover: hover) {
-  .surface:hover,
-  .split-day-card:hover,
-  .macro-card:hover,
-  .routine-row:hover,
-  .side-user:hover,
-  .nav-link:hover,
-  input:not([type="checkbox"]):not([type="radio"]):is(:hover, :focus):not(:disabled),
-  select:is(:hover, :focus):not(:disabled),
-  textarea:is(:hover, :focus):not(:disabled),
-  button:not(.bars-col, .segmented button.active, .split-day-select):hover:not(:disabled),
-  .month-nav-btn:hover {
-    transform: scale(var(--grow));
+  input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
+  select:hover:not(:focus, :disabled),
+  textarea:hover:not(:focus, :disabled) {
+    background-color: rgba(72, 72, 74, 0.95); /* color only: keeps the select's chevron */
   }
-
-  .surface:hover,
-  .split-day-card:hover,
-  .macro-card:hover,
-  .routine-row:hover,
-  .side-user:hover,
-  .nav-link:hover,
-  button:not(.bars-col, .segmented button, .split-day-select):hover:not(:disabled),
-  .month-nav-btn:hover {
-    box-shadow: var(--hover-shadow);
+  select.sort-select:hover:not(:disabled) {
+    background-color: var(--highlight-fill);
   }
 }
 
@@ -865,10 +851,10 @@ textarea {
   width: 100%;
   padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: rgba(37, 42, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 28, 30, 0.85);
+  border: 1px solid var(--edge);
   border-radius: 0.85rem;
-  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), border-color var(--fade), transform var(--lift);
 }
 
 /* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
@@ -898,9 +884,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(47, 53, 60, 0.95); /* color only: keeps the select's chevron */
-  border-color: rgba(134, 180, 234, 0.6);
-  box-shadow: inset 0 0 0 1px rgba(134, 180, 234, 0.6);
+  background-color: rgba(84, 84, 86, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
 button {
@@ -916,8 +900,7 @@ button {
   justify-content: center;
   gap: 0.5rem;
   border-radius: 0.85rem;
-  box-shadow: none;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
+  transition: background var(--fade), color var(--fade), transform var(--lift), opacity var(--quick) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -928,21 +911,18 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
   transform: none;
-  box-shadow: none;
 }
 
 button.secondary {
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: none;
+  border: 1px solid var(--edge);
 }
 
 button.danger {
   color: var(--danger);
   background: transparent;
-  border: 1px solid var(--danger);
-  box-shadow: none;
+  border: 1px solid var(--edge);
 }
 
 /* Fields show focus with their own edge (above); only buttons get the keyboard ring */
@@ -969,8 +949,10 @@ textarea:focus-visible {
   gap: 0.25rem;
   margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
 }
+/* On the clip box (.auto-height), not the list inside it: a list sticking out of it would lose its last row's
+   bottom 0.5rem to the clip while the height animates, then pop it back at the end */
 .surface > .entries:last-child,
-.surface > .auto-height:last-child > .entries {
+.surface > .auto-height:last-child {
   margin-bottom: -0.5rem;
 }
 /* An empty list keeps one row's space (--row-h is the page's row height), so the card does not jump. */
@@ -981,14 +963,13 @@ textarea:focus-visible {
   padding: 0.5rem 0;
 }
 
-/* Container that animates its height when its content changes (list-motion.tsx): a quick resize, then the
-   new rows fade in; they hold their entrance (.rows-wait) until the box stops */
+/* Container that animates its height when its content changes (list-motion.tsx): a quick resize, with the
+   new rows fading in as it starts */
 .auto-height {
   display: flow-root;
-  transition: height 240ms cubic-bezier(0.2, 0, 0, 1);
+  transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
-.auto-height.rows-wait > :is(.entries, .todo-list) > * { animation-play-state: paused; } /* both beat the later row-in shorthand */
 
 .entry-row {
   justify-content: space-between;
@@ -1014,7 +995,7 @@ textarea:focus-visible {
 
 .month-nav-btn {
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   color: var(--text);
   border-radius: 0.7rem;
   width: 2.25rem;
@@ -1025,7 +1006,7 @@ textarea:focus-visible {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
@@ -1040,7 +1021,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease);
+  transition: transform var(--lift), background-color var(--fade), opacity var(--quick) var(--ease);
   width: 44px;
   height: 44px;
 }
@@ -1054,10 +1035,9 @@ textarea:focus-visible {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
   padding: 1.35rem;
-  box-shadow: var(--card-shadow);
 }
 
 .todo-stats-header {
@@ -1109,7 +1089,7 @@ textarea:focus-visible {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1123,7 +1103,6 @@ textarea:focus-visible {
   background: var(--tint);
   border-color: var(--tint);
   color: var(--on-tint);
-  box-shadow: none;
 }
 
 .todo-title {
@@ -1178,10 +1157,9 @@ textarea:focus-visible {
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.15rem;
   font-size: 0.875rem;
-  box-shadow: var(--card-shadow);
 }
 
 /* ==========================================================================
@@ -1232,7 +1210,7 @@ textarea:focus-visible {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(10, 12, 15, 0.4);
+  background: rgba(0, 0, 0, 0.4);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
   display: flex;
@@ -1257,10 +1235,9 @@ textarea:focus-visible {
 .modal-card {
   width: 100%;
   max-width: 34rem;
-  background: #282e34;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #242426;
+  border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1325,9 +1302,13 @@ textarea:focus-visible {
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.12);
   border: 0;
   color: var(--secondary);
+}
+
+@media (hover: hover) {
+  .modal-close-btn:hover { background: var(--highlight-fill); color: var(--text); }
 }
 
 /* Keeps a 44pt touch target around the small visible circle */
@@ -1376,11 +1357,10 @@ textarea:focus-visible {
   width: 100%;
   max-width: 36rem;
   background: var(--surface-modal);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 1.25rem;
-  box-shadow: none;
   overflow: hidden;
-  animation: modalScaleUp var(--dur) var(--pop) forwards;
+  animation: modalScaleUp var(--dur) var(--ease) forwards;
 }
 
 .command-search-row {
@@ -1417,13 +1397,13 @@ textarea:focus-visible {
   padding: 0.75rem 0.9rem;
   border-radius: 0.75rem;
   cursor: pointer;
-  transition: background var(--quick) var(--ease);
+  transition: background var(--fade);
 }
 
 @media (hover: hover) {
   .command-item.selected,
   .command-item:hover {
-    background: var(--tint-subtle);
+    background: var(--highlight);
   }
 }
 
@@ -1434,12 +1414,6 @@ textarea:focus-visible {
   display: block;
 }
 
-@media (hover: hover) {
-  .command-item.selected .command-item-title,
-  .command-item:hover .command-item-title {
-    color: var(--tint);
-  }
-}
 
 .command-item-category {
   font-size: 0.75rem;
@@ -1469,7 +1443,7 @@ textarea:focus-visible {
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
   border-radius: 0.35rem;
   color: var(--secondary);
 }
@@ -1479,21 +1453,20 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.5rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   color: var(--secondary);
   border-radius: 0.85rem;
   padding: 0.4rem 0.75rem;
   font-size: 0.8125rem;
   cursor: pointer;
   min-height: 44px;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
   .command-trigger-btn:hover {
-    border-color: rgba(255, 255, 255, 0.2);
     color: var(--text);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--highlight-fill);
   }
 }
 
@@ -1528,15 +1501,14 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(37, 42, 48, 0.95);
+  background: rgba(28, 28, 30, 0.95);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
-  box-shadow: none;
-  animation: toastSlideIn var(--dur) var(--pop) forwards;
+  animation: toastSlideIn var(--dur) var(--ease) forwards;
   max-width: 100%;
 }
 
@@ -1567,7 +1539,7 @@ textarea:focus-visible {
 .toast-action-btn {
   background: var(--tint-subtle);
   color: var(--tint);
-  border: 1px solid rgba(134, 180, 234, 0.3);
+  border: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1575,12 +1547,12 @@ textarea:focus-visible {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--quick) var(--ease), background-color var(--quick) var(--ease), border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease), opacity var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: rgba(134, 180, 234, 0.22);
+    background: var(--tint-highlight);
   }
 }
 
@@ -1595,13 +1567,14 @@ textarea:focus-visible {
   justify-content: center;
   min-width: 36px;
   min-height: 36px;
-  border-radius: 50%;
-  transition: color var(--quick) var(--ease);
+  border-radius: 0.7rem; /* the same rounded square as every small button */
+  transition: color var(--fade), background-color var(--fade);
 }
 
 @media (hover: hover) {
   .toast-close-btn:hover {
     color: var(--text);
+    background: var(--highlight-fill);
   }
 }
 
@@ -1617,7 +1590,7 @@ button.btn-sm {
   font-weight: 600;
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--edge);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
@@ -1633,9 +1606,11 @@ button.btn-sm.tint {
   position: relative;
   display: grid;
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  --seg-gap: 0.25rem; /* the pills never touch */
+  column-gap: var(--seg-gap);
   padding: 0.25rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.95rem;
   isolation: isolate;
 }
@@ -1646,10 +1621,10 @@ button.btn-sm.tint {
   top: 0.25rem;
   bottom: 0.25rem;
   left: 0.25rem;
-  width: calc((100% - 0.5rem) / var(--n));
+  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));
   border-radius: 0.7rem;
   background: var(--tint);
-  transform: translateX(calc(var(--i) * 100%));
+  transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
   transition: transform var(--dur) var(--ease);
   z-index: -1;
 }
@@ -1664,13 +1639,13 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--quick) var(--ease), background var(--quick) var(--ease), transform var(--lift);
+  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
-/* An idle tab lifts and lightens on hover, without a shadow; the selected tab stays on its thumb. */
+/* An idle tab lightens on hover; the selected tab stays on its thumb. */
 @media (hover: hover) {
   .segmented button:not(.active):hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--highlight);
     color: var(--text);
   }
 }
@@ -1739,7 +1714,7 @@ main > .error {
   gap: 0.25rem;
   padding: 0.25rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.95rem;
 }
 
@@ -1804,12 +1779,12 @@ main > .error {
 .picker > .month-label-btn {
   border-radius: 0.7rem;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease);
+  transition: background-color var(--fade);
 }
 
 .picker > .month-label-btn:hover,
 .picker > .month-label-btn[aria-expanded="true"] {
-  background: var(--tint-subtle);
+  background: var(--highlight);
 }
 
 .picker-pop {
@@ -1824,11 +1799,10 @@ main > .error {
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--surface-modal);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 1.1rem;
-  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
   transform-origin: top center;
-  animation: picker-in calc(var(--dur) + 60ms) var(--pop) both;
+  animation: picker-in calc(var(--dur) + 60ms) var(--ease) both;
 }
 
 @keyframes picker-in {
@@ -1882,7 +1856,7 @@ main > .error {
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--quick) var(--ease), color var(--quick) var(--ease), transform var(--lift);
+  transition: background-color var(--fade), color var(--fade), transform var(--lift);
 }
 
 .picker-grid.months .picker-cell {
@@ -1891,7 +1865,7 @@ main > .error {
 }
 
 .picker-cell:hover:not(:disabled) {
-  background: var(--tint-subtle);
+  background: var(--highlight);
 }
 
 .picker-cell:active:not(:disabled) {
@@ -1990,8 +1964,8 @@ main > .error {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #2f353c;
-    --surface-modal: #282e34;
+    --surface-secondary: #3a3a3c;
+    --surface-modal: #242426;
     --glass-blur: none;
   }
 
@@ -2037,7 +2011,7 @@ main > .error {
   padding: 0.3rem 0.8rem;
   border-radius: 2rem;
   background: var(--surface-secondary);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   font-size: 0.875rem;
 }
 
@@ -2062,31 +2036,64 @@ main > .error {
   margin-top: 0.25rem;
 }
 
-/* Wishlist rows: name over price/range/link, actions centred on the right so the
-   space above and below the text is equal */
+/* Wishlist rows share the list's columns (subgrid), so every price box, range box and link starts and ends at
+   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists put
+   the name and actions over the boxes (the actions sit on the name's line, which leaves them room). */
+.wishlist-entries { grid-template-columns: auto auto minmax(0, 1fr); column-gap: 0.75rem; }
+.wishlist-entries:not(:has(.item-range)) { grid-template-columns: auto minmax(0, 1fr); }
+.wishlist-entries > * { grid-column: 1 / -1; }
 .item-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas: "name actions" "meta actions";
+  grid-template-columns: subgrid;
+  grid-template-areas: "name name name" "price range link";
   align-items: center;
-  gap: 0.25rem 0.75rem;
+  row-gap: 0.4rem;
+}
+.wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name name" "price link"; }
+.item-row > .item-actions { grid-area: name; justify-self: end; }
+.item-row > .item-name { padding-inline-end: calc(88px + 1.5rem); } /* the two 44px actions, their gap and one more */
+.item-meta { display: contents; }
+.item-price { grid-area: price; justify-content: center; white-space: nowrap; }
+.item-range { grid-area: range; justify-content: center; }
+:is(.item-link, .item-link-text) { grid-area: link; }
+@container (min-width: 34rem) {
+  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; }
+  .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
+  .item-row { grid-template-areas: "name price range link actions"; }
+  .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
+  .item-row > .item-actions { grid-area: actions; }
+  .item-row > .item-name { padding-inline-end: 0; }
 }
 
-/* A filtered wishlist row (name over price): the empty note takes the same space */
-.wishlist-entries { --row-h: 4.15rem; }
-/* In All a row also has its range badge, so it is taller */
-.wishlist-entries.ranged { --row-h: 4.59375rem; }
+/* The empty note takes one wishlist row's space: two lines when narrow, one 60px line when wide */
+.wishlist-entries { --row-h: 5.9rem; }
+@container (min-width: 34rem) { .wishlist-entries { --row-h: 3.75rem; } }
 
-/* Compact sort menu in a card header */
+/* Compact sort menu in a card header. The text is centred between the left edge and the chevron
+   (which ends 1.55rem from the right), with the same 0.85rem on either side. */
 select.sort-select {
   width: auto;
   min-height: 2.25rem;
-  padding: 0.35rem 2.1rem 0.35rem 0.85rem;
+  padding: 0.35rem 2.4rem 0.35rem 0.85rem;
+  text-align: center;
+  text-align-last: center;
   font-size: 0.875rem;
   font-weight: 600;
   border-radius: 0.7rem;
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--surface-secondary);
   background-position: right 0.8rem center;
+}
+/* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
+   the keyboard keeps a ring */
+select.sort-select:focus {
+  background-color: var(--surface-secondary);
+}
+select.sort-select:open {
+  background-color: var(--highlight-fill);
+}
+select.sort-select:focus-visible:not([data-pointer]) {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
 }
 
 .item-name {
@@ -2094,47 +2101,66 @@ select.sort-select {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.item-meta { grid-area: meta; }
 .item-actions { grid-area: actions; }
 
-.item-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  min-width: 0;
+/* Wishlist page: a monospaced face, so every letter and digit takes the same width. The page title lives in the
+   shared navigation, outside .mono, so it opts in here. */
+.mono,
+main:has(> .mono) .app-title {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.item-price {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tint);
+/* Monospace is wider, so its four filter tabs take the dense size on a phone */
+@media (max-width: 30rem) {
+  .mono .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
 }
 
-.item-link {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tint);
-  text-decoration: none;
-  overflow-wrap: anywhere;
+/* Wishlist: field highlights as quiet as the filter's hover (a 5% white wash), focus and an open menu a step more */
+.mono :is(input, select, textarea):not(.sort-select):focus {
+  background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 8%);
 }
-
+.mono select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
 @media (hover: hover) {
-  .item-link:hover {
-    text-decoration: underline;
+  .mono :is(input:not([type="checkbox"], [type="radio"]), select, textarea):not(.sort-select):hover:not(:focus, :disabled) {
+    background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%);
+  }
+  .mono select.sort-select:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--surface-secondary), white 5%);
   }
 }
 
+/* Wishlist header: Sort and Add item share one width */
+.mono .head-actions { display: grid; grid-template-columns: 1fr 1fr; }
+.mono .head-actions > * { width: 100%; justify-content: center; }
+
+/* Wishlist rows: the actions keep the same inset from the band as the name, so they line up under Add item */
+.mono .surface .entries > .item-row.entry-row:has(.item-actions) { padding-inline-end: var(--band-out); }
+
+.item-link,
 .item-link-text {
+  justify-self: start;
+  max-width: 100%;
   font-size: 0.875rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.item-link {
+  font-weight: 600;
+  color: var(--tint);
+  text-decoration: none;
+}
+
+.auto-height:has(> .wishlist-entries) { container-type: inline-size; }
+
+.item-link-text {
   color: var(--secondary);
-  overflow-wrap: anywhere;
 }
 
 .item-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem; /* the header's spacing between Sort and Add item */
   flex-shrink: 0;
 }
 
@@ -2163,7 +2189,7 @@ select.sort-select {
 /* Task rows: checkbox, title (wraps) with badges below, streak, edit, delete */
 .todo-list {
   margin-top: 0.75rem;
-  --row-h: 3.25rem; /* one row on its own: the last row has no bottom padding */
+  --row-h: 3.75rem; /* one row on its own: 44px of content and 0.5rem above and below */
 }
 
 .todo-row {
@@ -2171,9 +2197,6 @@ select.sort-select {
   padding: 0.5rem 0;
 }
 
-.todo-row:last-child {
-  padding-bottom: 0;
-}
 
 /* The title and its tags (weekdays, reminder) share a line, wrapping only when it is full */
 .todo-main {
@@ -2190,7 +2213,7 @@ select.sort-select {
   margin-top: 0;
 }
 
-/* Week section on Tasks: today and the six days after it, one tap to that day's list */
+/* Week section on Tasks: the weekdays, Monday first, one tap to that day's list in the coming week */
 .week-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2199,22 +2222,8 @@ select.sort-select {
 }
 
 .week-strip .weekday-btn {
-  display: grid;
-  justify-items: center;
-  gap: 0.1rem;
-  padding: 0.35rem 0;
-}
-
-.week-day-name {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.week-day-num {
-  font-size: 0.9375rem;
+  padding: 0.5rem 0;
+  font-size: 0.8125rem;
 }
 
 /* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
@@ -2344,10 +2353,9 @@ select.sort-select {
   translate: calc(var(--at, 0.5) * -100%) 0; /* slides from left- to right-aligned across the chart, so it never leaves it */
   z-index: 2;
   padding: 0.4rem 0.6rem;
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--edge);
   border-radius: 0.6rem;
   background: var(--surface-modal);
-  box-shadow: var(--hover-shadow);
   color: var(--text);
   font-size: 0.75rem;
   line-height: 1.35;
@@ -2599,7 +2607,7 @@ button.bars-col:focus-visible {
   font-size: 0.85rem;
   background: transparent;
   color: var(--foreground, inherit);
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
 }
 .muscle-chip.active {
   border-color: var(--tint);
@@ -2709,7 +2717,6 @@ button.bars-col:focus-visible {
 .split-day-card { padding: 0.5rem 0.75rem 0.5rem 1rem; gap: 0.75rem; }
 .split-day-card.selected {
   border-color: var(--tint);
-  box-shadow: 0 0 0 1px var(--tint);
 }
 .split-day-select { /* the card lifts, not this button inside it */
   flex: 1;
@@ -2744,11 +2751,11 @@ button.bars-col:focus-visible {
   display: grid;
   gap: 0.5rem;
   padding: 0.75rem 0.75rem 0.85rem 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
-  transition: transform var(--lift), box-shadow var(--quick) var(--ease);
+  transition: transform var(--lift);
 }
 .routine-row-head {
   display: flex;
@@ -2773,7 +2780,7 @@ button.bars-col:focus-visible {
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
@@ -2842,7 +2849,7 @@ button.bars-col:focus-visible {
   max-height: 26rem;
   overflow-y: auto;
   padding: 1rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   border-radius: 0.9rem;
   background: var(--surface-secondary);
 }
@@ -2862,7 +2869,7 @@ button.bars-col:focus-visible {
 .chat-bubble {
   padding: 0.65rem 0.9rem;
   border-radius: 1.1rem 1.1rem 1.1rem 0.3rem;
-  border: 1px solid var(--separator);
+  border: 1px solid var(--edge);
   background: var(--surface);
   font-size: 0.9375rem;
   line-height: 1.4;
@@ -2908,20 +2915,8 @@ button.bars-col:focus-visible {
      show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
   animation-delay: calc(min(sibling-index() - 1, 10) * 30ms);
 }
-/* As a page change starts (app/template.tsx), the new page is still faint, so its rows wait until it is mostly there */
-:root:active-view-transition:not(.rows-go) :is(.entry-row, .item-row, .shopping-row, .todo-row, .split-day-card, .routine-row, :is(.entries, .todo-list) > .empty-note) {
-  animation-play-state: paused;
-}
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
-}
-
-/* An open form pulls the page back: it shrinks a little behind the blurred backdrop (Modal portals to body). */
-main > :where(:not(.side, .tabbar, .more-menu, .more-scrim)) {
-  transition: transform var(--dur) var(--ease);
-}
-body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu, .more-scrim) {
-  transform: scale(0.99);
 }
 
 /* A day with something planned: a small dot under the number. */
@@ -3051,7 +3046,77 @@ body:has(> .modal-backdrop:not(.closing)) main > :not(.side, .tabbar, .more-menu
   justify-content: flex-start;
   font-weight: 400;
   color: var(--text);
-  background: rgba(37, 42, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 28, 30, 0.85);
+  border: 1px solid var(--edge);
   border-radius: 0.85rem;
 }
+
+/* ==========================================================================
+   Shared polish, every page: hover fills on idle buttons, list rows as soft bands
+   ========================================================================== */
+
+/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint.
+   With no hover shadows, every clickable object needs one of these fills. */
+@media (hover: hover) {
+  button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
+  .month-nav-btn:hover:not(:disabled) { background: var(--highlight-fill); }
+  .split-day-card:hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
+  button.secondary:hover:not(:disabled),
+  button.btn-sm:not(.tint):hover:not(:disabled),
+  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled) {
+    background: var(--highlight-fill);
+  }
+  button.btn-sm.tint:hover:not(:disabled),
+  .delete-icon-btn:hover:not(:disabled) {
+    background: var(--tint-highlight);
+  }
+  button.danger:hover:not(:disabled),
+  .muscle-chip:not(.active):hover {
+    background: var(--highlight);
+  }
+  .tab-item:not(.active):hover {
+    color: var(--text);
+    background: var(--highlight);
+  }
+}
+
+/* List rows are soft bands: every other row carries a faint grey wash (no hover highlight).
+   The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
+:is(.entries, .todo-list, .set-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row, .set-row) {
+  --band-out: 0.75rem;
+  margin-inline: calc(-1 * var(--band-out));
+  padding-inline: var(--band-out);
+  border-radius: 0.75rem;
+  transition: background-color var(--fade), transform var(--lift);
+}
+/* In a card's own lists the band stops 0.5rem from the card edge, the text keeps the card's inset, and a
+   trailing icon button sits 0.5rem inside the band: the same 0.5rem the band keeps from the card. */
+.surface :is(.entries, .todo-list) > :is(.entry-row, .todo-row) {
+  --band-out: calc(var(--card-pad) + 1px - 0.5rem); /* 1px: the card's (clear) border */
+}
+.surface :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child) {
+  padding-inline-end: 0.5rem;
+}
+.auto-height:has(> :is(.entries, .todo-list)) {
+  --band-out: 0.75rem;
+  margin-inline: calc(-1 * var(--band-out));
+  padding-inline: var(--band-out);
+}
+.surface .auto-height:has(> :is(.entries, .todo-list)) {
+  --band-out: calc(var(--card-pad) + 1px - 0.5rem);
+}
+:is(.entries, .todo-list, .set-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row, .set-row)) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+/* A wash list (AutoHeight's `wash`, Wishlist): the band sits halfway between the card edge and the text, and
+   the wash fades out before rows enter or leave and back in once they are in place (list-motion.tsx). A row
+   still entering sits out the alternation, so no other row's wash flips while it comes in. */
+.surface .auto-height[data-wash],
+.surface .auto-height[data-wash] > .entries > .entry-row {
+  --band-out: calc((var(--card-pad) + 1px) / 2);
+}
+.auto-height[data-wash] > .entries > .entry-row { background-color: transparent; }
+.auto-height[data-wash] > .entries:not([data-settling]) > :nth-child(even of .entry-row:not([data-entering])) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+

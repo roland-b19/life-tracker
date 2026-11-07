@@ -16,15 +16,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const blockPinch = (e: Event) => e.preventDefault();
     document.addEventListener("gesturestart", blockPinch);
 
-    // A scale grows wide things more pixels than narrow ones and CSS cannot read an element's width,
-    // so every lifting element gets its own --grow (2px a side) and --press (4px a side) before it moves.
+    // A scale shrinks wide things more pixels than narrow ones and CSS cannot read an element's width,
+    // so every pressable element gets its own --press (4px a side) before it moves.
     const LIFTS = ".surface, .split-day-card, .macro-card, .routine-row, .side-user, .nav-link, .month-nav-btn, button, input, select, textarea";
     const size = (e: Event) => {
       let el = e.target instanceof Element ? e.target.closest<HTMLElement>(LIFTS) : null;
       for (; el; el = el.parentElement?.closest<HTMLElement>(LIFTS) ?? null) {
         const w = el.offsetWidth;
         if (!w) continue;
-        el.style.setProperty("--grow", String(Math.min(1.06, 1 + 4 / w)));
         el.style.setProperty("--press", String(Math.max(0.92, 1 - 8 / w)));
       }
     };

@@ -7,7 +7,7 @@ import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { DatePicker } from "../components/date-picker";
 import { useToast } from "../components/toast";
 import {
@@ -25,7 +25,7 @@ import {
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
 import { DEV_EDIT_PAST, PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
-import { streakOn } from "@/lib/streak";
+import { streakOn, weekdayOf } from "@/lib/streak";
 import { compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
@@ -83,6 +83,7 @@ export function TodosClient({
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
+  const { later, runAfterClose } = useAfterClose();
   // The list shows this view, which follows the controls only after the old rows have faded out.
   const [view, setView] = useState({ space: "personal" as TodoSpace, tab: "daily" as TaskTab, date: todayDate, n: 0 });
   const viewId = useRef(0);
@@ -116,12 +117,9 @@ export function TodosClient({
   // Past days can be ticked but not edited, except in dev builds, for testing.
   const isPast = date < todayDate;
   const editable = !isPast || DEV_EDIT_PAST;
+  // A repeating task's dueDate is its first day: it is not on the days before it.
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
-    todosMap[s].filter(
-      (t) =>
-        t.isRecurring === daily &&
-        (day >= todayDate || !t.isRecurring || DEV_EDIT_PAST || toISODate(new Date(t.createdAt)) <= day),
-    );
+    todosMap[s].filter((t) => t.isRecurring === daily && (!t.isRecurring || t.dueDate <= day));
   const visibleTodos = visibleFor(space, isDaily, date);
   const listDaily = view.tab === "daily";
   const listPast = view.date < todayDate;
@@ -129,8 +127,8 @@ export function TodosClient({
   // A daily task is ticked on its day or later, never ahead of time.
   const listTickable = !(listDaily && view.date > todayDate);
   const listTodos = visibleFor(view.space, listDaily, view.date);
-  // The week ahead, each weekday once, to jump to any of them.
-  const week = Array.from({ length: 7 }, (_, i) => addDays(todayDate, i));
+  // The week ahead, each weekday once, Monday first, to jump to any of them.
+  const week = Array.from({ length: 7 }, (_, i) => addDays(todayDate, i)).sort((a, b) => weekdayOf(a) - weekdayOf(b));
   const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
@@ -227,6 +225,7 @@ export function TodosClient({
   const changeTab = (next: TaskTab) => switchView({ tab: next });
 
   const openForm = (todo?: TodoItem) => {
+    runAfterClose(); // reopened before the last close finished
     setErrorMsg(null);
     setTitleError(null);
     setEditing(todo ?? null);
@@ -279,19 +278,22 @@ export function TodosClient({
           title,
           isRecurring: isDaily,
           recurrencePattern,
-          dueDate: date,
+          // A daily task starts on the day it is added, whichever day is on screen.
+          dueDate: isDaily ? todayDate : date,
           reminderTime,
         });
         if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
         if (res.todo) {
           const created = res.todo;
-          // The row comes in at once; the refresh (stats, chart) lands after its entrance, not in the middle of it.
-          entered = putBack(created);
+          // The row comes in once the form has closed; the refresh (stats, chart) lands after its entrance, not in the middle of it.
+          if (!created.isRecurring || created.dueDate <= date)
+            entered = new Promise((done) => later(() => void putBack(created).then(done)));
           showToast({
             message: `Added "${title}"`,
             type: "success",
             actionLabel: "Undo",
             onAction: async () => {
+              runAfterClose(); // the row first, if the form is still closing
               await deleteTodoAction(created.id);
               leave(created.id, () => {
                 drop(created);
@@ -386,7 +388,7 @@ export function TodosClient({
 
   // The server call runs while the row fades, so nothing waits on the network; undo restores the same task, streak included.
   const handleDeleteTodo = (target: TodoItem) => {
-    const deleted = deleteTodoAction(target.id).then(
+    const deleted = deleteTodoAction(target.id, date).then(
       (res) => res.success,
       () => false,
     );
@@ -556,11 +558,10 @@ export function TodosClient({
                     type="button"
                     className="weekday-btn"
                     aria-pressed={day === date}
-                    aria-label={day === todayDate ? `Today, ${dayLabel(day, "long")}` : dayLabel(day, "long")}
+                    aria-label={WEEKDAYS[weekdayOf(day) - 1]}
                     onClick={() => goTo(day)}
                   >
-                    <span className="week-day-name">{day === todayDate ? "Today" : dayLabel(day).slice(0, 3)}</span>
-                    <span className="week-day-num number-tabular">{Number(day.slice(8))}</span>
+                    {WEEKDAYS[weekdayOf(day) - 1].slice(0, 3)}
                   </button>
                 ))}
               </div>
@@ -657,7 +658,15 @@ export function TodosClient({
               ) : (
                 // Keyed by the view like the rows: a reused note keeps fadeAll's faded-out state and stays invisible.
                 <p key={`empty-${view.n}`} ref={rowRef("empty")} className="empty-note">
-                  {listDaily ? "No daily tasks for this day." : listPast ? "Nothing was planned for this day." : "Nothing planned for this day."}
+                  {view.date === todayDate
+                    ? listDaily
+                      ? "No daily tasks yet."
+                      : "Nothing planned for today."
+                    : listDaily
+                      ? "No daily tasks for this day."
+                      : listPast
+                        ? "Nothing was planned for this day."
+                        : "Nothing planned for this day."}
                 </p>
               )}
             </AutoHeight>
@@ -731,6 +740,7 @@ export function TodosClient({
       <Modal
         isOpen={isTaskModalOpen}
         onClose={closeForm}
+        onExited={runAfterClose}
         title={editing ? "Edit task" : isDaily ? "New daily task" : "New task"}
       >
         <form onSubmit={handleSubmit}>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
@@ -12,6 +12,8 @@ interface ModalProps {
   maxWidth?: string;
   /** Called once the closing form has faded out (it stays mounted a little longer for the tail). */
   onExited?: () => void;
+  /** Extra class on the card, e.g. the page's font. */
+  className?: string;
 }
 
 const CLOSE_MS = 420; // --dur in globals.css
@@ -24,6 +26,7 @@ export function Modal({
   children,
   maxWidth = "36rem",
   onExited,
+  className,
 }: ModalProps) {
   // Stays mounted while it plays the open animation in reverse (.closing in globals.css).
   const [shown, setShown] = useState(isOpen);
@@ -109,7 +112,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal-card"
+        className={className ? `modal-card ${className}` : "modal-card"}
         style={{ maxWidth }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -134,3 +137,24 @@ export function Modal({
     document.body,
   );
 }
+
+/**
+ * A saved form's list change waits until the form has faded, so its whole animation is visible:
+ * `later(change)` holds it, `runAfterClose` (the Modal's onExited, and an Undo that may come first) runs it.
+ */
+export function useAfterClose() {
+  const pending = useRef<(() => void) | null>(null);
+  return useMemo(() => {
+    const runAfterClose = () => {
+      const run = pending.current;
+      pending.current = null;
+      run?.();
+    };
+    const later = (change: () => void) => {
+      const before = pending.current;
+      pending.current = before ? () => (before(), change()) : change;
+    };
+    return { later, runAfterClose };
+  }, []);
+}
+

@@ -164,6 +164,7 @@ export function GymClient({
 
   // Routine editor
   const [draft, setDraft] = useState<DayDraft | null>(null);
+  const routineMotion = useListMotion(); // the day editor's exercise rows
   const [addId, setAddId] = useState("");
   const nameOf = (id: string) => exercises.find((e) => e.id === id)?.name ?? "Exercise";
   const addable = exercises.filter((e) => !draft?.exercises.some((d) => d.exerciseId === e.id));
@@ -191,17 +192,24 @@ export function GymClient({
   }
 
   function moveRow(i: number, by: number) {
-    setDraft((d) => {
-      if (!d) return d;
-      const list = [...d.exercises];
-      [list[i], list[i + by]] = [list[i + by], list[i]];
-      return { ...d, exercises: list };
-    });
+    routineMotion.reorder(() =>
+      setDraft((d) => {
+        if (!d) return d;
+        const list = [...d.exercises];
+        [list[i], list[i + by]] = [list[i + by], list[i]];
+        return { ...d, exercises: list };
+      }),
+    );
+  }
+
+  function removeRow(id: string) {
+    routineMotion.leave(id, () => setDraft((d) => d && { ...d, exercises: d.exercises.filter((e) => e.exerciseId !== id) }));
   }
 
   function addRow() {
     const id = addId || addable[0]?.id;
     if (!id) return;
+    routineMotion.enter(id);
     setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId: id, targetSets: "2", minReps: "5", maxReps: "8" }] });
     setAddId("");
   }
@@ -392,6 +400,7 @@ export function GymClient({
       if (res.success) {
         // A new exercise is made for this day, so it goes straight into the routine.
         const exerciseId = res.exercise.id;
+        routineMotion.enter(exerciseId);
         setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId, targetSets: "2", minReps: "5", maxReps: "8" }] });
         setShowCustom(false);
         setCustomName("");
@@ -831,12 +840,12 @@ export function GymClient({
 
               {!draft.isRest && (
                 <>
-                  <div className="routine-list">
+                  <AutoHeight className="routine-list">
                     {draft.exercises.length === 0 && <p className="empty-note">No exercises yet.</p>}
                     {draft.exercises.map((row, i) => {
                       const name = nameOf(row.exerciseId);
                       return (
-                        <div key={row.exerciseId} className="routine-row">
+                        <div key={row.exerciseId} ref={routineMotion.rowRef(row.exerciseId)} className="routine-row">
                           <div className="routine-row-head">
                             <strong>
                               {i + 1}. {name}
@@ -865,9 +874,7 @@ export function GymClient({
                               <button
                                 type="button"
                                 className="delete-icon-btn"
-                                onClick={() =>
-                                  setDraft({ ...draft, exercises: draft.exercises.filter((_, j) => j !== i) })
-                                }
+                                onClick={() => removeRow(row.exerciseId)}
                                 aria-label={`Remove ${name}`}
                                 title="Remove"
                               >
@@ -919,7 +926,7 @@ export function GymClient({
                         </div>
                       );
                     })}
-                  </div>
+                  </AutoHeight>
 
                   {addable.length > 0 && draft.exercises.length < 20 && (
                     <div className="routine-add">

@@ -102,10 +102,13 @@ export async function moveTodoAction(rawInput: unknown) {
   return { success: todo !== null, todo };
 }
 
-export async function deleteTodoAction(todoId: string) {
+/** `day` is the day on screen: dev builds delete a repeating task from that past day on, others from today. */
+export async function deleteTodoAction(todoId: string, day?: string) {
   const userId = await requireUser();
-  const parsed = deleteTodoSchema.parse({ id: todoId });
-  const deleted = await deleteTodo(userId, parsed.id);
+  const parsed = deleteTodoSchema.parse({ id: todoId, day });
+  const today = toISODate();
+  const from = DEV_EDIT_PAST && parsed.day && parsed.day < today ? parsed.day : today;
+  const deleted = await deleteTodo(userId, parsed.id, from);
   safeRevalidate("/todos");
   return { success: true, deleted };
 }

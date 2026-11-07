@@ -58,6 +58,7 @@ export const moveTodoSchema = z.object({
 
 export const deleteTodoSchema = z.object({
   id: z.string().uuid(),
+  day: isoDate.optional(),
 });
 
 export const pushSubscriptionSchema = z.object({

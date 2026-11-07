@@ -5,7 +5,7 @@ import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
@@ -56,15 +56,20 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
 const formatRon = (n: number) =>
   n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** A typed URL opens as a link; anything else (a store name) is shown as plain text. */
-function ItemLink({ value }: { value: string }) {
+/** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
+function linkOf(value: string) {
   const href = /^https?:\/\/\S+$/i.test(value) ? value : /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(value) ? `https://${value}` : null;
+  return { href, label: href ? `${value.replace(/^https?:\/\//i, "").split("/")[0]} ↗` : value };
+}
+
+function ItemLink({ value }: { value: string }) {
+  const { href, label } = linkOf(value);
   return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link">
-      {value.replace(/^https?:\/\//i, "").split("/")[0]} ↗
+    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value} data-slide>
+      {label}
     </a>
   ) : (
-    <span className="item-link-text">{value}</span>
+    <span className="item-link-text" title={value} data-slide>{label}</span>
   );
 }
 
@@ -79,7 +84,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave, fadeAll } = useListMotion();
+  const { rowRef, enter, leave, move, fadeAll } = useListMotion();
 
   // Form state
   const [name, setName] = useState("");
@@ -87,12 +92,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  // A saved form's list change waits until the form has closed, so its whole animation is visible.
-  const afterClose = useRef<(() => void) | null>(null);
-  const runAfterClose = () => {
-    afterClose.current?.();
-    afterClose.current = null;
-  };
+  const { later, runAfterClose } = useAfterClose();
   // Undo runs from a toast seconds later, so it reads the list and view as they are then.
   const latest = useRef({ items, view });
   useEffect(() => {
@@ -112,8 +112,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     url: item.url || undefined,
   });
 
-  // Writes an edited item into the list; if that moves it, it leaves its old place and enters the new one,
-  // like a delete and its Undo.
+  // Writes an edited item into the list; if that moves it, it enters its new place like a deleted item put back
+  // by Undo, and if the edit takes it out of the current filter, it leaves like a delete.
   function replace(to: WishlistItemData) {
     const { items: now, view: v } = latest.current;
     const order = (list: WishlistItemData[]) =>
@@ -121,10 +121,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     const after = order(now.map((i) => (i.id === to.id ? to : i)));
     const write = () => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
     if (order(now).indexOf(to.id) === after.indexOf(to.id)) return write();
-    leave(to.id, () => {
-      if (after.includes(to.id)) enter(to.id);
-      write();
-    });
+    if (after.includes(to.id)) move(to.id, write);
+    else leave(to.id, write);
   }
 
   function switchRange(next: "all" | Priority) {
@@ -178,7 +176,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         }
         const updated = res.item as WishlistItemData;
         const before = items.find((i) => i.id === editingId);
-        afterClose.current = () => replace(updated);
+        later(() => replace(updated));
         showToast({
           message: `Saved "${updated.name}"`,
           type: "success",
@@ -200,10 +198,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         const res = await addWishlistItemAction(input);
         if (!res.success || !res.item) return;
         const added = res.item as WishlistItemData;
-        afterClose.current = () => {
+        later(() => {
           enter(added.id);
           setItems((prev) => [added, ...prev]);
-        };
+        });
         // No Undo: a new item is one tap from Delete.
         showToast({ message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
       }
@@ -264,19 +262,25 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     <main>
       <Navigation userName={userName} />
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid mono">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
               <h2 id="wishlist-items-title" className="section-title">
-                Items
+                Items <span className="muted number-tabular">{filteredItems.length}</span>
               </h2>
               <span className="head-actions">
-                <span className="muted number-tabular">{filteredItems.length}</span>
                 <select
                   className="sort-select"
                   aria-label="Sort items"
                   value={sort}
+                  // data-pointer marks a mouse or touch open, which gets no focus ring; a key press (not the
+                  // Escape that closes the menu) brings it back.
+                  onPointerDown={(e) => (e.currentTarget.dataset.pointer = "")}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Escape") delete e.currentTarget.dataset.pointer;
+                  }}
+                  onBlur={(e) => delete e.currentTarget.dataset.pointer}
                   onChange={(e) => switchSort(e.target.value as Sort)}
                 >
                   {SORTS.map((s) => (
@@ -299,7 +303,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight className={`entries wishlist-entries${listRange === "all" ? " ranged" : ""}`}>
+            <AutoHeight wash className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
@@ -312,9 +316,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
-                        <span className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        <span className="badge badge-info item-price number-tabular" data-slide>{formatRon(Number(item.estimatedPrice))} RON</span>
                         {listRange === "all" && (
-                          <span className={`badge ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
+                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`} data-slide>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}
                         {item.url && <ItemLink value={item.url} />}
                       </div>
@@ -366,6 +370,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
         onClose={() => setIsModalOpen(false)}
         onExited={runAfterClose}
         title={editingId ? "Edit item" : "New item"}
+        className="mono"
       >
         <form onSubmit={handleSubmit}>
           <div className="form-stack">
