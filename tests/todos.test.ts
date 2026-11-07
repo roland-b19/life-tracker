@@ -450,6 +450,30 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(createTodoAction(task(addDays(today, -5)))).rejects.toThrow("up to 7 days ahead");
     });
 
+    it("refuses bad input and changes on days a task cannot change", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      await expect(getDailyTodosAction("other" as never, today)).rejects.toThrow();
+      await expect(getDailyTodosAction("personal", "today")).rejects.toThrow();
+
+      const habit = await createTodoAction({
+        space: "personal", title: "Walk", dueDate: today, isRecurring: true, recurrencePattern: "daily",
+      });
+      if (!habit.success) throw new Error(habit.error);
+      const tick = (currentDate: string) => toggleTodoAction({ id: habit.todo.id, isCompleted: true, currentDate });
+      await expect(tick(addDays(today, 5))).rejects.toThrow("not due");
+      await expect(tick(addDays(today, -1))).rejects.toThrow("not due"); // before it started
+      expect((await tick(today)).success).toBe(true);
+
+      // A one-off on a past day can be ticked, not edited.
+      const old = await createTodo(userA, {
+        space: "personal", title: "Old", dueDate: addDays(today, -5), isRecurring: false, recurrencePattern: "none",
+      });
+      await expect(updateTodoAction({ id: old.id, title: "New" })).rejects.toThrow("up to 7 days ahead");
+      await expect(deleteTodoAction(old.id)).rejects.toThrow("up to 7 days ahead");
+      expect((await toggleTodoAction({ id: old.id, isCompleted: true, currentDate: addDays(today, -5) })).success).toBe(true);
+    });
+
     it("rejects a duplicate task on the same list, not on another list or user", async () => {
       const today = toISODate();
       const task = { space: "personal", title: "Buy milk", dueDate: today, isRecurring: false };

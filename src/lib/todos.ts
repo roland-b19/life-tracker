@@ -3,6 +3,8 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
 import { toISODate } from "./format-date";
+
+const APP_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 import { streakOn, weekdayOf } from "./streak";
 import { compareTodos } from "./todo-order";
 import {
@@ -106,7 +108,8 @@ export async function getDailyTodos(
         eq(todos.isRecurring, false),
         eq(todos.isCompleted, false),
         lt(todos.dueDate, today),
-        sql`${todos.createdAt} < (${todos.dueDate} + 1)`,
+        // Midnight in the app's timezone (Node's, like toISODate), not the database session's (UTC).
+        sql`${todos.createdAt} < ((${todos.dueDate} + 1)::timestamp at time zone ${APP_TZ})`,
         notExists(
           db
             .select({ id: other.id })

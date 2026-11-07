@@ -6,6 +6,7 @@ import {
   createTodoSchema,
   DEV_EDIT_PAST,
   deleteTodoSchema,
+  isoDate,
   moveTodoSchema,
   restoreTodoSchema,
   PLAN_AHEAD_DAYS,
@@ -16,6 +17,7 @@ import {
   updateTodoSchema,
 } from "@/lib/validations/todos";
 import { addDays, toISODate } from "@/lib/format-date";
+import { isDueOn } from "@/lib/streak";
 import {
   createTodo,
   deleteTodo,
@@ -73,6 +75,18 @@ export async function restoreTodoAction(rawInput: unknown) {
 export async function toggleTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = toggleTodoSchema.parse(rawInput);
+  const task = await findTodo(userId, parsed.id);
+  // Past days can be ticked (as on screen); a repeating task only on a day it is due, never ahead of time
+  // (a day of slack covers the user's timezone).
+  if (
+    task?.isRecurring &&
+    (parsed.currentDate > addDays(toISODate(), 1) ||
+      parsed.currentDate < task.dueDate ||
+      (task.endedOn && parsed.currentDate >= task.endedOn) ||
+      !isDueOn(task.recurrencePattern, parsed.currentDate))
+  ) {
+    throw new Error("This task is not due on that day.");
+  }
   const updated = await toggleTodo(userId, parsed);
   safeRevalidate("/todos");
   return { success: true, updated };
@@ -82,6 +96,7 @@ export async function updateTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = updateTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
+  if (task) assertPlannable(task); // a one-off on a past day is read-only, as on screen
   if (task && (await hasDuplicateTodo(userId, { ...task, title: parsed.title }, task.id))) return duplicate(parsed.title);
   const updated = await updateTodo(userId, parsed);
   safeRevalidate("/todos");
@@ -94,6 +109,7 @@ export async function moveTodoAction(rawInput: unknown) {
   const isRecurring = parsed.recurrencePattern !== "none";
   assertPlannable({ isRecurring, dueDate: parsed.dueDate });
   const task = await findTodo(userId, parsed.id);
+  if (task) assertPlannable(task);
   if (task && (await hasDuplicateTodo(userId, { ...task, isRecurring, dueDate: parsed.dueDate }, task.id))) {
     return duplicate(task.title);
   }
@@ -107,6 +123,8 @@ export async function deleteTodoAction(todoId: string, day?: string) {
   const userId = await requireUser();
   const parsed = deleteTodoSchema.parse({ id: todoId, day });
   const today = toISODate();
+  const task = await findTodo(userId, parsed.id);
+  if (task) assertPlannable(task);
   const from = DEV_EDIT_PAST && parsed.day && parsed.day < today ? parsed.day : today;
   const deleted = await deleteTodo(userId, parsed.id, from);
   safeRevalidate("/todos");
@@ -115,7 +133,7 @@ export async function deleteTodoAction(todoId: string, day?: string) {
 
 export async function getDailyTodosAction(space: TodoSpace, date: string) {
   const userId = await requireUser();
-  const result = await getDailyTodos(userId, space, date);
+  const result = await getDailyTodos(userId, todoSpaceSchema.parse(space), isoDate.parse(date));
   return { success: true, ...result };
 }
 
@@ -128,7 +146,7 @@ export async function getPlannedDaysAction(space: TodoSpace) {
 
 export async function getTodoHistoryAction(space: TodoSpace) {
   const userId = await requireUser();
-  return { success: true, history: await getTodoHistory(userId, space) };
+  return { success: true, history: await getTodoHistory(userId, todoSpaceSchema.parse(space)) };
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {

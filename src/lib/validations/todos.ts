@@ -17,7 +17,7 @@ export const createTodoSchema = z.object({
     .nullable(),
 });
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
+export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
 
 /** Undo of a delete: the same row back, with its id and ticked days. */
 export const restoreTodoSchema = createTodoSchema.extend({

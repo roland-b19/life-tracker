@@ -225,6 +225,13 @@ const SPACE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
 const FADE_IN = 180; // starts once the space is open, like row-in in .auto-height
 
+// A control that goes away with its view (Tasks' Week button) fades like a leaving row, then `remove` runs.
+// Cancelling the fade (the control is wanted again) skips `remove`. It comes back with row-in from globals.css.
+export function fadeOut(el: HTMLElement | null, remove: () => void) {
+  if (!el || reducedMotion()) return remove();
+  el.animate(FADE_OUT, FADE).finished.then(remove, () => {});
+}
+
 /**
  * Row motion for lists: `leave` fades a row out while its space closes, then calls `remove`;
  * `enter` (called just before the row is added) opens the space and fades the row in, and resolves
