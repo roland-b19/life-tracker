@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, fadeOut, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal, useAfterClose } from "../components/modal";
@@ -108,6 +108,9 @@ export function TodosClient({
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [weekOpen, setWeekOpen] = useState(false);
+  // The Week button stays mounted while it fades out after a switch to Today.
+  const [showWeek, setShowWeek] = useState(true);
+  const weekBtn = useRef<HTMLButtonElement>(null);
   // A weekday picked in the Week panel lists the daily tasks that repeat on it, to edit them; the date stays.
   const [weekday, setWeekday] = useState<number | null>(null);
   const [weekMap, setWeekMap] = useState<Record<TodoSpace, TodoItem[]> | null>(null);
@@ -121,7 +124,10 @@ export function TodosClient({
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
 
+  // Bumped by every load and by every change made on screen, so an older refresh never lands over a newer state.
   const requestId = useRef(0);
+  // The load a day switch started; a later switch that needs no load of its own waits for it.
+  const loading = useRef<Promise<void>>(Promise.resolve());
 
   const isDaily = tab === "daily";
   // Both lists look a week ahead: one-off tasks to plan them, daily ones to see each weekday's list.
@@ -242,7 +248,8 @@ export function TodosClient({
     const n = ++viewId.current;
     const faded = new Promise<void>((done) => fadeAll(done));
     const load = target.date !== date || (target.weekday && target.weekday !== weekday);
-    void (load ? loadDay(target, faded) : faded).then(() => {
+    const settled = load ? (loading.current = loadDay(target, faded)) : Promise.all([faded, loading.current]);
+    void settled.then(() => {
       if (n === viewId.current) setView({ ...target, n });
     });
   };
@@ -254,7 +261,13 @@ export function TodosClient({
 
   // Today lists one day's tasks, so it has no Week panel.
   const changeTab = (next: TaskTab) => {
-    if (next !== "daily") setWeekOpen(false);
+    if (next === "daily") {
+      weekBtn.current?.getAnimations().forEach((a) => a.cancel());
+      setShowWeek(true);
+    } else {
+      setWeekOpen(false);
+      fadeOut(weekBtn.current, () => setShowWeek(false));
+    }
     switchView({ tab: next, weekday: next === "daily" ? weekday : null });
   };
 
@@ -313,6 +326,7 @@ export function TodosClient({
             actionLabel: "Undo",
             // A task the edit took off the list comes back like a deleted one put back by Undo.
             onAction: async () => {
+              ++requestId.current;
               runAfterClose(); // the edit first, if the form is still closing
               await gone; // or the late removal would drop it again
               const back = shows(before) && !shows(after) ? putBack(before) : undefined;
@@ -378,6 +392,7 @@ export function TodosClient({
 
   const handleToggleTodo = async (todo: TodoItem) => {
     const next = !todo.isCompleted;
+    ++requestId.current;
     setCompleted(todo.id, next);
     try {
       // No toast: ticking again is its own undo.
@@ -417,6 +432,7 @@ export function TodosClient({
   const handleMove = (task: TodoItem, recurrencePattern: string, day: string) => {
     setMoveOpen(false);
     if (recurrencePattern === "none" && !task.isRecurring && day === task.dueDate) return;
+    ++requestId.current;
     const moved = moveTodoAction({ id: task.id, recurrencePattern, dueDate: day }).then(
       (res) => (res.success ? null : "error" in res ? res.error : "Failed to move task"),
       () => "Failed to move task",
@@ -431,7 +447,7 @@ export function TodosClient({
     );
     void Promise.all([moved, gone]).then(([error]) => {
       if (error) {
-        putBack(task);
+        if (shows(task)) putBack(task); // unless the list on screen changed meanwhile
         showToast({ message: error, type: "warning" });
         return;
       }
@@ -446,6 +462,7 @@ export function TodosClient({
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
   // Undo restores the same task, streak included.
   const handleDeleteTodo = (target: TodoItem) => {
+    ++requestId.current;
     const deleted = deleteTodoAction(target.id, date).then(
       (res) => res.success,
       () => false,
@@ -461,15 +478,17 @@ export function TodosClient({
       message: `Removed "${target.title}"`,
       actionLabel: "Undo",
       onAction: async () => {
+        ++requestId.current;
         await gone;
-        const entered = putBack(target);
+        // Only onto the list it was on, if that is still the one on screen.
+        const entered = shows(target) ? putBack(target) : undefined;
         if (!(await deleted)) return; // the delete never happened
         const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
         const back = await restoreTodoAction({
           id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
         }).catch(() => null);
         if (!back?.success) {
-          leave(target.id, () => drop(target));
+          if (entered) leave(target.id, () => drop(target));
           showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
         }
         await loadDay(undefined, entered);
@@ -477,7 +496,7 @@ export function TodosClient({
     });
     void Promise.all([deleted, gone]).then(([ok]) => {
       if (ok) return void loadDay();
-      putBack(target);
+      if (shows(target)) putBack(target);
       showToast({ message: "Failed to remove task", type: "warning" });
     });
   };
@@ -573,10 +592,12 @@ export function TodosClient({
                 {isDaily ? "Daily tasks" : "Tasks"} <span className="muted number-tabular">{listTodos.length}</span>
               </h2>
               <span className="head-actions">
-                {isDaily && (
+                {showWeek && (
                   <button
+                    ref={weekBtn}
                     type="button"
-                    className="btn-sm tint"
+                    className="btn-sm tint week-btn"
+                    inert={!isDaily}
                     aria-expanded={weekOpen}
                     aria-controls="week-strip"
                     onClick={toggleWeek}

@@ -143,6 +143,11 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-08 — Tasks review (Claude Code, branch `fix/tasks-week-button`):
+  - The Week button fades out on Today and back in on Daily with the existing row motion.
+  - Fixed: rollover timezone (tasks carried wrongly 00:00–02:00), server checks for past/not-due days and list read input, stale refreshes overwriting a newer tick, a view switch landing before its day's data, rows put back onto a list that is no longer on screen.
+  - Not fixed, for the user: push reminders are half-built (no sender, and the subscription the client sends does not match the server schema); the duplicate-title rule differs between one-off and repeating tasks; changing a repeating task's weekdays also changes its past days; a tab left open past midnight keeps the old "today".
+  - Checks: tsc, eslint, browser runs (fast ticks, day then tab switch, delete and Undo). vitest 94 of 95; the one failure is `tests/food-ai.test.ts` taking "today" as the UTC date, a test bug between 00:00 and 02:00.
 - 2026-11-08 — Undo and Tasks fixes (Claude Code, branch `fix/undo-and-tasks`), from the user's last Wishlist request and a Tasks list:
   - Wishlist: Undo of an edit no longer replays the list's entrance on the other rows (`rowRef` stops `row-in` after a row's first entrance).
   - Tasks (Personal and Business, one component): the Week strip opens without a jump; an edit that takes a task off the shown list leaves like a delete and its Undo returns like an Undo of a delete; new tasks go on top; picking a weekday keeps the date and shows that weekday's repeating tasks to edit (no ticking); Today has no Week button.

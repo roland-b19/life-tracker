@@ -202,6 +202,7 @@ function openForm(item?) {
 
 - A selection that switches a list does the same: the muscle map's group chips go through `fadeAll(() => setSelectedNow(g))`.
 - Every filter, sort or selection change fades out first; none swaps rows instantly.
+- A control that only exists in one view (Tasks' Week button, Daily only) leaves with the row fade, `fadeOut(el, remove)` from `list-motion.tsx`, and comes back with `row-in` (CSS `animation: row-in 260ms var(--ease) backwards`). Keep it mounted until the fade ends, and cancel the fade if the view comes back first. No new keyframes for it.
 
 ## Reordering in place (FLIP)
 

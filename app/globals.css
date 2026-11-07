@@ -2729,6 +2729,10 @@ button.bars-col:focus-visible {
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
 }
+/* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
+.week-btn {
+  animation: row-in 260ms var(--ease) backwards;
+}
 
 /* A day with something planned: a small dot under the number. */
 .picker-cell.marked {
