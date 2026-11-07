@@ -139,7 +139,6 @@ export function TodosClient({
   // A repeating task's dueDate is its first day: it is not on the days before it.
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
     todosMap[s].filter((t) => t.isRecurring === daily && (!t.isRecurring || t.dueDate <= day));
-  const visibleTodos = visibleFor(space, isDaily, date);
   const listDaily = view.tab === "daily";
   const listPast = view.date < todayDate;
   const listEditable = view.weekday !== null || !listPast || DEV_EDIT_PAST;
@@ -158,12 +157,12 @@ export function TodosClient({
   const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
-  // A past day with no snapshot and nothing on its list has no record; otherwise the list is counted.
-  const doneCount = visibleTodos.filter((t) => t.isCompleted).length;
-  const totalCount = visibleTodos.length;
-  const noRecord = isPast && !byDate.has(date) && totalCount === 0;
-  // Nothing due counts as everything done.
-  const percentage = totalCount ? Math.round((doneCount / totalCount) * 100) : 100;
+  // Progress counts the list on screen (`view`), so it never shows the last day's numbers while the next one loads.
+  // A day with no tasks shows only a note, no ring.
+  const progressTodos = visibleFor(view.space, listDaily, view.date);
+  const doneCount = progressTodos.filter((t) => t.isCompleted).length;
+  const totalCount = progressTodos.length;
+  const percentage = Math.round((doneCount / (totalCount || 1)) * 100);
 
   // History for the chosen period; days without a snapshot are shown as empty.
   const span = Number(period);
@@ -752,16 +751,18 @@ export function TodosClient({
                 Progress
               </h2>
             </div>
-            {noRecord ? (
-              <p className="empty-note">No record for {dayLabel(date, "long")}.</p>
+            {!totalCount ? (
+              <p className="empty-note">
+                {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
+              </p>
             ) : (
-              <div className="dash-hero" key={`${date}-${space}-${tab}`}>
-                <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "the day's"} tasks done`} />
+              <div className="dash-hero" key={`${view.date}-${view.space}-${view.tab}`}>
+                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   <span className="todo-stats-fraction number-tabular">
                     <AnimatedNumber value={doneCount} /> of <AnimatedNumber value={totalCount} /> done
                   </span>
-                  <span className="muted">{date === todayDate ? "Today" : dayLabel(date, "long")}</span>
+                  <span className="muted">{view.date === todayDate ? "Today" : dayLabel(view.date, "long")}</span>
                 </div>
               </div>
             )}

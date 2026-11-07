@@ -143,6 +143,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-08 — Tasks Progress (Claude Code, branch `fix/tasks-progress-empty`): a list with no tasks shows only the note, no ring; Progress follows the list on screen, so it no longer flashes the last day's numbers. Checks: tsc, eslint, browser frame sampling across tab and day switches.
 - 2026-11-08 — Tasks review (Claude Code, branch `fix/tasks-week-button`):
   - The Week button fades out on Today and back in on Daily with the existing row motion.
   - Fixed: rollover timezone (tasks carried wrongly 00:00–02:00), server checks (no edit, move or delete of past one-off tasks, no tick on a day a repeating task is not due, list read input), stale refreshes overwriting a newer tick, a view switch landing before its day's data, rows put back onto a list that is no longer on screen.

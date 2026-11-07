@@ -165,6 +165,8 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-08 — Week button fade, Tasks server checks, rollover timezone.** The Week button fades out like a leaving row when Today is picked and comes back with `row-in` on Daily (existing motion, no new animation). The server now enforces what the Tasks screen already shows: a one-off task on a day before yesterday cannot be edited, moved or deleted unless `DEV_EDIT_PAST` (ticking past days stays allowed, as on screen); a repeating task is ticked only on a day it is due, from its first day, before its end and not ahead of tomorrow (one day of slack for the user's timezone); list reads validate `space` and `date`. Rollover compares a task's creation time with midnight in the app's timezone (Node's, like `toISODate`) instead of the database session's UTC midnight, which carried tasks wrongly between 00:00 and 02:00. The client discards a refresh that started before a newer tick, delete, move or Undo, a view switch that needs no load waits for one still in flight, and a row is put back (failed delete or move, Undo of a delete) only if it belongs to the list now on screen.
 
+- **2026-11-08 — Progress with no tasks is a note only.** When the list on screen has no tasks, the Tasks Progress card shows only a note ("No tasks for <day>.", or "No record for <day>." on a past day), never a ring at 0 or 100%. Progress counts the list on screen (`view`) instead of the controls, so it switches together with the list and never shows the last day's numbers while the next one loads.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
