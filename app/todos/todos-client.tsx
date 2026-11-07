@@ -756,7 +756,8 @@ export function TodosClient({
                 {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
               </p>
             ) : (
-              <div className="dash-hero" key={`${view.date}-${view.space}-${view.tab}`}>
+              <div className="dash-hero">
+                {/* Not keyed by the view: the ring stays mounted and eases from the old share to the new one, up or down. */}
                 <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   <span className="todo-stats-fraction number-tabular">
