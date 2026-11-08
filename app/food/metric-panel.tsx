@@ -7,7 +7,7 @@ import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction } from "@/app/actions/food";
@@ -179,6 +179,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
   }
 
   const sorted = sortNewestFirst(entries);
+  const [shown, more] = useMore(sorted);
   const lastWeek = sorted.filter((e) => e.date >= addDays(today(), -6) && e.date <= today());
   const average = lastWeek.length ? Math.round(lastWeek.reduce((a, e) => a + e.value, 0) / lastWeek.length) : null;
   const todayValue = sorted.find((e) => e.date === today())?.value ?? 0;
@@ -213,7 +214,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                     No {k.noun} logged yet.
                   </p>
                 )}
-                {sorted.map((entry) => (
+                {shown.map((entry) => (
                   <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
                     <span className="weight-main">
                       <strong className="entry-value number-tabular">
@@ -243,6 +244,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                     </div>
                   </div>
                 ))}
+                {more}
               </AutoHeight>
             )}
           </section>

@@ -2962,3 +2962,6 @@ button.bars-col:focus-visible {
 
 /* Two badges side by side in a section head; they wrap under each other on a narrow card. */
 .badge-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* A long list's More button sits centred under its last row (useMore) */
+.more-btn { justify-self: center; align-self: center; }

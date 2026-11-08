@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 // DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
@@ -387,4 +387,20 @@ export function useListMotion() {
   }, []);
 
   return { rowRef, enter, leave, move, fadeAll, reorder };
+}
+
+const PAGE = 20;
+
+/**
+ * A long list shows 20 rows; `more` (put it last inside the list's AutoHeight) adds 20 at a time.
+ * The new rows enter with row-in while AutoHeight opens their space, like any added row.
+ */
+export function useMore<T>(list: T[]) {
+  const [shown, setShown] = useState(PAGE);
+  const more = list.length > shown && (
+    <button key="more" type="button" className="btn-sm tint more-btn" onClick={() => setShown((n) => n + PAGE)}>
+      More
+    </button>
+  );
+  return [list.slice(0, shown), more] as const;
 }

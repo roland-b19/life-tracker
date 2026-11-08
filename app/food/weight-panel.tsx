@@ -7,7 +7,7 @@ import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { signedKg, weightStats } from "@/lib/weight-stats";
@@ -187,6 +187,7 @@ export function WeightPanel() {
   }
 
   const sorted = sortNewestFirst(entries);
+  const [shown, more] = useMore(sorted);
   const stats = weightStats(
     entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
     today(),
@@ -225,7 +226,7 @@ export function WeightPanel() {
                     No weigh-ins yet.
                   </p>
                 )}
-                {sorted.map((entry) => (
+                {shown.map((entry) => (
                   <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
                     <span className="weight-main">
                       <strong className="entry-value number-tabular">
@@ -255,6 +256,7 @@ export function WeightPanel() {
                     </div>
                   </div>
                 ))}
+                {more}
               </AutoHeight>
             )}
           </section>

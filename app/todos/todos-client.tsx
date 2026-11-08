@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, fadeOut, useListMotion } from "../components/list-motion";
+import { AutoHeight, fadeOut, useListMotion, useMore } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal, useAfterClose } from "../components/modal";
@@ -142,6 +142,7 @@ export function TodosClient({
   // A daily task is ticked on its day or later, never ahead of time, and never from a weekday's list.
   const listTickable = !(listDaily && (view.weekday || view.date > todayDate));
   const listTodos = view.weekday && weekMap ? weekMap[view.space] : visibleFor(view.space, listDaily, view.date);
+  const [shownTodos, moreTodos] = useMore(listTodos);
   // A weekday's tasks are read from its next day in the week ahead.
   const weekDate = (w: number) => addDays(todayDate, (w - weekdayOf(todayDate) + 7) % 7);
   // Whether a task belongs on the list the controls show now.
@@ -652,7 +653,7 @@ export function TodosClient({
               {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
                 <Fragment key={view.n}>
-                {listTodos.map((task) => (
+                {shownTodos.map((task) => (
                   <div key={task.id} ref={rowRef(task.id)} className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
@@ -728,6 +729,7 @@ export function TodosClient({
                     )}
                   </div>
                 ))}
+                {moreTodos}
                 </Fragment>
               ) : (
                 // Keyed by the view like the rows: a reused note keeps fadeAll's faded-out state and stays invisible.
