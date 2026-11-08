@@ -364,6 +364,22 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(delMealRes.success).toBe(true);
     });
 
+    it("saves goals for the signed-in owner only and validates their ranges", async () => {
+      const goals = { calories: 3000, proteinGrams: 160, carbsGrams: 280, fatGrams: 70, waterMl: 3500, steps: 12000 };
+      authState.id = "";
+      await expect(updateTargetsAction(goals)).rejects.toThrow("Authentication required.");
+
+      authState.id = userA;
+      expect((await updateTargetsAction(goals)).targets.steps).toBe(12000);
+      await expect(updateTargetsAction({ ...goals, waterMl: 100 })).rejects.toThrow();
+
+      // Another user's save writes their own row: the owner's goals stay as they were.
+      authState.id = userB;
+      await updateTargetsAction({ ...goals, calories: 2000 });
+      expect((await getNutritionTargets(userA)).calories).toBe(3000);
+      expect((await getNutritionTargets(userB)).calories).toBe(2000);
+    });
+
     it("keeps water and steps history per owner: add, move, refuse a taken day, clear", async () => {
       authState.id = "";
       await expect(listDailyMetricsAction()).rejects.toThrow("Authentication required.");

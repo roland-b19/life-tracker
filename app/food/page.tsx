@@ -42,7 +42,7 @@ export default async function FoodPage() {
     <FoodClient
       userName={session.user.name ?? "User"}
       todayDate={today}
-      targets={targets}
+      targets={(({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }) => ({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }))(targets)}
       initialSummary={summary}
       weightAnalytics={weightAnalytics}
       initialShoppingList={shoppingList}

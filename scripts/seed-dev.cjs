@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Fills a local dev user with sample weigh-ins, water, steps and tasks, so the charts and lists have data.
+// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list and tasks, so every Health tab and Tasks have data.
 // Usage: npm run seed:dev [-- <dev user name>]   (default user: "demo"; sign in with that name)
 // Only runs against a local database with dev sign-in on, and only fills what that user has none of yet.
 const { Client } = require("pg");
@@ -67,6 +67,75 @@ async function seedWaterAndSteps(db, userId) {
     count++;
   }
   return `water and steps: ${count} days`;
+}
+
+// [name, kcal, protein, carbs, fat] per slot; the Past foods sheet is built from these.
+const MEALS = {
+  breakfast: [["Oatmeal with banana", 420, 14, 72, 8], ["Scrambled eggs and toast", 480, 28, 35, 24], ["Greek yogurt bowl", 380, 35, 45, 4]],
+  lunch: [["Chicken and rice", 620, 55, 75, 10], ["Beef and sweet potato", 680, 50, 65, 22], ["Tuna salad", 450, 40, 20, 22]],
+  snack: [["Protein shake", 240, 40, 8, 4], ["Apple and peanut butter", 290, 8, 30, 16], ["Rice cakes", 140, 3, 29, 1]],
+  dinner: [["Salmon with potatoes", 650, 42, 50, 28], ["Pasta bolognese", 720, 38, 85, 22], ["Turkey wrap", 520, 38, 48, 18]],
+};
+const MEAL_TIME = { breakfast: "08:00", lunch: "13:00", snack: "16:30", dinner: "19:30" };
+
+async function seedMeals(db, userId) {
+  if (!(await isEmpty(db, "meals", userId))) return "meals: skipped, the user has meals";
+  let count = 0;
+  for (let i = 30; i >= 0; i--) {
+    const day = addDays(today, -i);
+    // Today has breakfast and lunch only, so the Nutrition bars are part way.
+    const slots = i === 0 ? ["breakfast", "lunch"] : Object.keys(MEALS).filter((slot) => slot !== "snack" || random() < 0.6);
+    for (const slot of slots) {
+      const [mealName, kcal, protein, carbs, fat] = MEALS[slot][Math.floor(random() * MEALS[slot].length)];
+      await db.query(
+        `INSERT INTO meals (user_id, date, name, calories, protein, carbs, fat, is_estimated, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $2::date + $9::time)`,
+        [userId, day, mealName, kcal, protein, carbs, fat, random() < 0.15, MEAL_TIME[slot]],
+      );
+      count++;
+    }
+  }
+  return `meals: ${count}`;
+}
+
+// [name, amount, unit, category, state]: "list" to buy, "bought" ticked, "cleared" quick-add history only.
+const SHOPPING = [
+  ["Chicken breast", 1, "kg", "meat", "list"],
+  ["Bananas", 6, "pcs", "produce", "list"],
+  ["Spinach", 200, "g", "produce", "list"],
+  ["Milk", 2, "l", "dairy", "list"],
+  ["Greek yogurt", 3, "pcs", "dairy", "bought"],
+  ["Sourdough bread", 1, "pcs", "bakery", "bought"],
+  ["Rolled oats", 1, "kg", "pantry", "list"],
+  ["Basmati rice", 2, "kg", "pantry", "list"],
+  ["Frozen berries", 500, "g", "frozen", "list"],
+  ["Dish soap", 1, "pcs", "other", "list"],
+  ["Eggs", 10, "pcs", "dairy", "cleared"],
+  ["Salmon fillet", 400, "g", "meat", "cleared"],
+  ["Tomatoes", 6, "pcs", "produce", "cleared"],
+  ["Peanut butter", 1, "pcs", "pantry", "cleared"],
+  ["Tortillas", 1, "pcs", "bakery", "cleared"],
+];
+
+async function seedShopping(db, userId) {
+  if (!(await isEmpty(db, "shopping_items", userId))) return "shopping: skipped, the user has items";
+  // The app's default sections plus one of the user's own; existing ones keep their order.
+  const sections = ["meat", "produce", "dairy", "bakery", "pantry", "frozen"];
+  for (const [i, section] of sections.entries()) {
+    await db.query(
+      "INSERT INTO shopping_categories (user_id, name, sort_order) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+      [userId, section, i + 1],
+    );
+  }
+  for (const [i, [itemName, amount, unit, category, itemState]] of SHOPPING.entries()) {
+    const cleared = itemState === "cleared";
+    await db.query(
+      `INSERT INTO shopping_items (user_id, name, amount, unit, category, is_bought, created_at, cleared_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now() - make_interval(days => $7), CASE WHEN $8 THEN now() - interval '2 days' END)`,
+      [userId, itemName, amount, unit, category, itemState !== "list", cleared ? 9 + i : i % 3, cleared],
+    );
+  }
+  return `shopping: ${SHOPPING.length} items, ${sections.length} sections`;
 }
 
 const HABITS = {
@@ -162,7 +231,13 @@ async function main() {
       [name],
     );
     const userId = rows[0].id;
-    const done = [await seedWeight(db, userId), await seedWaterAndSteps(db, userId), await seedTasks(db, userId)];
+    const done = [
+      await seedWeight(db, userId),
+      await seedWaterAndSteps(db, userId),
+      await seedMeals(db, userId),
+      await seedShopping(db, userId),
+      await seedTasks(db, userId),
+    ];
     await db.query("COMMIT");
     console.log(`Seeded dev user "${name}" (today ${today}):\n  ${done.join("\n  ")}`);
   } catch (error) {
