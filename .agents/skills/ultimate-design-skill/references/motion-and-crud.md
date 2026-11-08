@@ -214,6 +214,8 @@ const setCompleted = (id, done) => reorder(() => setTodos((prev) => update(prev,
 
 Marking done has no Undo and no toast with Undo.
 
+A secret the browser never sees back (the Claude token on Settings) has no Undo either: Disconnect and a token change show a plain success toast, because there is nothing client-side to restore.
+
 ## Pages that refetch
 
 Some pages (Tasks) reload the list from the server after a write. `enter(id)` waits up to 2s for the row to mount, so call it with the new id before the refetch lands. A row added outside the current filter never mounts and is forgotten after 2s.

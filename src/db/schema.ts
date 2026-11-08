@@ -427,6 +427,15 @@ export const apiTokens = pgTable(
   },
 );
 
+// The owner's Claude subscription token for the in-app Assistant, AES-256-GCM encrypted (src/lib/claude-connection.ts).
+export const claudeConnections = pgTable("claude_connections", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenEncrypted: varchar("token_encrypted", { length: 1024 }).notNull(),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // --- TIER 3: WISHLIST ---
 
 export const wishlistItems = pgTable(

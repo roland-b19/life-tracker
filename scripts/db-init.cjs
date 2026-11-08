@@ -340,6 +340,11 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       CONSTRAINT "business_income_positive" CHECK ("business_incomes"."amount" > 0)
     );
+    CREATE TABLE IF NOT EXISTS "claude_connections" (
+      "user_id" uuid PRIMARY KEY NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "token_encrypted" varchar(1024) NOT NULL,
+      "connected_at" timestamp with time zone DEFAULT now() NOT NULL
+    );
   `);
   console.log("Verified Food, Money, Todo, AI, Wishlist & Business tables.");
 
@@ -372,6 +377,7 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "business_incomes" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "claude_connections" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");
   await appDbClient.end();

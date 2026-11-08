@@ -120,6 +120,13 @@
       "when": 1793957803018,
       "tag": "0016_todo_ended_on",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794150373204,
+      "tag": "0017_claude_connections",
+      "breakpoints": true
     }
   ]
 }
