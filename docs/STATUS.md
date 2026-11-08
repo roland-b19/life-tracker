@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (Health polish branch `feat/health-polish`: PR open, not merged)_
+_Last updated: 2026-11-08 by Claude (PR #64 merged: Health polish, Food AI connector removed)_
 
 ## Phase
 
@@ -35,7 +35,7 @@ Round Shopping check and gap-filling seed (branch `fix/round-shopping-check-and-
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
-Health polish (branch `feat/health-polish`, PR open): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals; the unused external Food connector (`/api/mcp`, `/api/ai/food`, API tokens) is deleted. No migration, no new dependency.
+Health polish (merged in `main`, PR #64): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals; the unused external Food connector (`/api/mcp`, `/api/ai/food`, API tokens) is deleted. No migration, no new dependency.
 
 ## Current focus
 
