@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (PR #64 merged: Health polish, Food AI connector removed)_
+_Last updated: 2026-11-08 by Claude (branch `feat/lists-more`: More button on long lists, shopping unit dropdown)_
 
 ## Phase
 
@@ -36,6 +36,7 @@ Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #2
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
 Health polish (merged in `main`, PR #64): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals; the unused external Food connector (`/api/mcp`, `/api/ai/food`, API tokens) is deleted. No migration, no new dependency.
+Long lists and units (branch `feat/lists-more`, PR open): a list longer than 20 rows shows 20 and a centred More button adds 20 at a time (`useMore` in `list-motion.tsx`), on Health meals, Shopping, Categories, Past foods, Water, Steps and Weight history, Tasks, Wishlist and a Gym day's exercises; counts and totals still use the whole list. The shopping Unit field is a select (pcs, g, kg, ml, l, pack, bottle, can, jar, box, bag, bunch; default pcs). Past foods moved from the Assistant to the Meals card. No migration, no new dependency, no new endpoint.
 
 ## Current focus
 
@@ -142,6 +143,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
+- 2026-11-08 — Long lists and units (Claude Code, branch `feat/lists-more`): `useMore` (20 rows, then 20 more) on every list that can grow past 20; shopping Unit select; Past foods button in the Meals card. Meals already list in add order (no change). Checks: tsc, eslint, 101/101 vitest; browser: Weight history 20 → 40 rows with More, Unit select options, Past foods in Meals. Not covered: a Gym session's sets and the routine editor (sets are drawn inside a per-exercise loop and the editor reorders rows, both stay far under 20).
 - 2026-11-08 — Claude Assistant (Claude Code, branch `feat/claude-cli-chat`): Gemini replaced by the Claude Code CLI; Settings page to connect, replace or disconnect a Claude token (AES-256-GCM in `claude_connections`); new tests `tests/claude-connection.test.ts` and an updated `tests/food-chat.test.ts`. Checked in the browser at phone and desktop width: connect (invalid and valid token), the chat with a fake token (real CLI, "refused token" reply), disconnect, and a real answer through the local login. Fixed on the way: the CLI needs `USER` to find a macOS Keychain login.
 - 2026-11-08 — Progress total (Claude Code, branch `fix/numbers-start-real`): "X of Y" is plain text with the real numbers; the ring fill and stat tiles keep their animation; the tween no longer dips below its start ("-5%"); the ring eases down as well as up on view changes. Checks: tsc, eslint, browser frame sampling on Tasks.
 - 2026-11-08 — Tasks Progress (Claude Code, branch `fix/tasks-progress-empty`): a list with no tasks shows only the note, no ring; Progress follows the list on screen, so it no longer flashes the last day's numbers. Checks: tsc, eslint, browser frame sampling across tab and day switches.

@@ -220,6 +220,10 @@ A secret the browser never sees back (the Claude token on Settings) has no Undo 
 
 Some pages (Tasks) reload the list from the server after a write. `enter(id)` waits up to 2s for the row to mount, so call it with the new id before the refetch lands. A row added outside the current filter never mounts and is forgotten after 2s.
 
+## Long lists (More)
+
+A list that can grow past 20 rows shows 20: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, and each press adds 20 rows that enter with row-in while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
+
 ## Rules that are easy to break
 
 **Ordering**

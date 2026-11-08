@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -105,6 +105,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
+  const [shownItems, moreItems] = useMore(filteredItems);
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
@@ -315,7 +316,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               ) : (
                 // Keyed by the filter so every row replays its entrance when the tab changes.
                 <Fragment key={`${listRange}-${view.sort}`}>
-                  {filteredItems.map((item) => (
+                  {shownItems.map((item) => (
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -348,6 +349,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                       </div>
                     </div>
                   ))}
+                  {moreItems}
                 </Fragment>
               )}
             </AutoHeight>

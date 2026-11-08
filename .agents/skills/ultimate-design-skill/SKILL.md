@@ -300,7 +300,7 @@ Each of these was tried or proposed and the user removed it.
 - Example or help notes, credits, and a "Life tracker" title on each page. The sign-in card has no "Local development session..." line either.
 - A floating action button, or a command menu (⌘K) with shortcut hints. The add button sits in the card's title row.
 - Hiding content on a phone. The aside cards stack under the main column, so phone and desktop have the same features.
-- A greeting or suggested prompts in the Food Assistant chat. It starts empty, and its only control besides the input is a "Past foods" `btn-sm tint` in the section head.
+- A greeting or suggested prompts in the Food Assistant chat. It starts empty, and its only control is the input. The "Past foods" `btn-sm tint` sits in the Meals card head, next to "Add meal".
 
 **Features**
 - A "buy" button and the green "bought" animation.

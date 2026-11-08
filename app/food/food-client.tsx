@@ -22,7 +22,7 @@ import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { MetricPanel } from "./metric-panel";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -62,6 +62,8 @@ interface ShoppingItemData {
   category: string;
   isBought: boolean;
 }
+
+const UNITS = ["pcs", "g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box", "bag", "bunch"];
 
 /** A food logged before, offered again in the "Past foods" sheet. */
 interface PastFood {
@@ -853,6 +855,10 @@ export function FoodClient({
   const categoryOptions = [...new Set([...categories, shopCategory, "other"])];
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
+  const [shownMeals, moreMeals] = useMore(day.meals);
+  const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c)));
+  const [shownCategories, moreCategories] = useMore(categories);
+  const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
 
   return (
     <main>
@@ -960,10 +966,15 @@ export function FoodClient({
                   <p className="card-sub muted number-tabular">{formatDMY(day.date)}</p>
                 </div>
                 {!isPast && (
-                  <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setFormError(""), setIsMealModalOpen(true))}>
-                    <PlusIcon size={14} />
-                    Add meal
-                  </button>
+                  <span className="head-actions">
+                    <button type="button" className="btn-sm tint" onClick={() => setIsPastOpen(true)}>
+                      Past foods
+                    </button>
+                    <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setFormError(""), setIsMealModalOpen(true))}>
+                      <PlusIcon size={14} />
+                      Add meal
+                    </button>
+                  </span>
                 )}
               </div>
 
@@ -981,7 +992,7 @@ export function FoodClient({
                 ) : (
                   // Keyed by the day so the rows replay their entrance when it changes.
                   <Fragment key={day.date}>
-                  {day.meals.map((meal) => (
+                  {shownMeals.map((meal) => (
                     <div key={meal.id} ref={rowRef(meal.id)} className="entry-row">
                       <div>
                         <div className="entry-main">
@@ -1005,6 +1016,7 @@ export function FoodClient({
                       )}
                     </div>
                   ))}
+                  {moreMeals}
                   </Fragment>
                 )}
               </AutoHeight>
@@ -1124,10 +1136,10 @@ export function FoodClient({
               Your shopping list is empty.
             </p>
           )}
-          {shopCategories.map((cat) => (
+          {shopCategories.filter((c) => shownShopping.some((i) => i.category === c)).map((cat) => (
             <div key={catKey(cat)} ref={rowRef(groupKey(cat))} className="shopping-group">
               <h3 className="group-label">{cat}</h3>
-              {shoppingList
+              {shownShopping
                 .filter((item) => item.category === cat)
                 .map((item) => (
                   <div key={item.id} ref={rowRef(item.id)} className="shopping-row">
@@ -1168,6 +1180,7 @@ export function FoodClient({
                 ))}
             </div>
           ))}
+          {moreShopping}
           </AutoHeight>
         </section>
 
@@ -1185,7 +1198,7 @@ export function FoodClient({
           {categories.length === 0 && (
             <p key="cat-empty" ref={rowRef("cat:empty")} className="empty-note">No categories yet.</p>
           )}
-          {categories.map((cat) => (
+          {shownCategories.map((cat) => (
             <div key={catKey(cat)} ref={rowRef(catKey(cat))} className="entry-row">
               <span className="category-name">{cat}</span>
               <div className="row-actions">
@@ -1210,6 +1223,7 @@ export function FoodClient({
               </div>
             </div>
           ))}
+          {moreCategories}
           </AutoHeight>
         </section>
         </div>
@@ -1221,13 +1235,6 @@ export function FoodClient({
             <h2 id="chat-title" className="section-title">
               Food assistant
             </h2>
-            <button
-              type="button"
-              className="btn-sm tint"
-              onClick={() => setIsPastOpen(true)}
-            >
-              Past foods
-            </button>
           </div>
 
           <div className="chat-log" aria-live="polite">
@@ -1390,12 +1397,14 @@ export function FoodClient({
               </label>
               <label>
                 Unit
-                <input
-                  type="text"
-                  disabled={busy}
-                value={shopUnit}
-                  onChange={(e) => setShopUnit(e.target.value)}
-                />
+                <select disabled={busy} value={shopUnit} onChange={(e) => setShopUnit(e.target.value)}>
+                  {/* An older item with a typed-in unit keeps it as an option. */}
+                  {(UNITS.includes(shopUnit) ? UNITS : [shopUnit, ...UNITS]).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <label>
@@ -1427,7 +1436,7 @@ export function FoodClient({
             {notLoggedFoods.length === 0 ? (
               <p key="empty" ref={rowRef("past:empty")} className="empty-note">Everything you logged before is already in today.</p>
             ) : (
-              notLoggedFoods.map((f) => (
+              shownPastFoods.map((f) => (
                 <div key={f.name} ref={rowRef(`past:${f.name}`)} className="entry-row">
                   <div>
                     <strong>{f.name}</strong>
@@ -1448,6 +1457,7 @@ export function FoodClient({
                 </div>
               ))
             )}
+            {morePastFoods}
           </AutoHeight>
         </div>
       </Modal>

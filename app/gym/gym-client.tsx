@@ -2,7 +2,7 @@
 
 import { formatDMY } from "@/lib/format-date";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -169,6 +169,7 @@ export function GymClient({
   >("barbell");
 
   const currentDay = split?.days.find((d) => d.id === selectedDayId);
+  const [shownExercises, moreExercises] = useMore(currentDay?.exercises ?? []);
 
   // Routine editor
   // The draft outlives the open state, so the form keeps its content while it fades out.
@@ -829,7 +830,7 @@ export function GymClient({
                       {currentDay.exercises.length > 0 ? (
                         // Keyed by the day so every switch mounts fresh rows that play row-in.
                         <Fragment key={currentDay.id}>
-                        {currentDay.exercises.map((ex, idx) => (
+                        {shownExercises.map((ex, idx) => (
                           <div key={ex.id} ref={rowRef(ex.id)} className="entry-row">
                             <div className="entry-main">
                               <strong>
@@ -842,6 +843,7 @@ export function GymClient({
                             </span>
                           </div>
                         ))}
+                        {moreExercises}
                         </Fragment>
                       ) : (
                         <p key={`empty-${currentDay.id}`} ref={rowRef("empty")} className="empty-note">No exercises yet.</p>
