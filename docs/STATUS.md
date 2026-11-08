@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (PR #63 merged: Assistant on Claude CLI, Settings page; email + password and Google sign-in dropped)_
+_Last updated: 2026-11-08 by Claude (Health polish branch `feat/health-polish`: PR open, not merged)_
 
 ## Phase
 
@@ -35,6 +35,8 @@ Round Shopping check and gap-filling seed (branch `fix/round-shopping-check-and-
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
+Health polish (branch `feat/health-polish`, PR open): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals. No migration, no new dependency.
+
 ## Current focus
 
 Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud Deployment.
@@ -47,7 +49,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - OIDC authentication with production guard (`AUTH_DEV=false`).
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
-  - Food & Nutrition module: daily targets, meal logger, Past foods sheet, water tap counter (+250ml, +500ml), steps, shopping list filled by hand with quick add from past items.
+  - Food & Nutrition module: daily targets, meal logger, Past foods sheet, water tap counter (+250ml, +500ml), steps, shopping list filled by hand (categories editable and deletable), Today tab steps back through past days read-only.
   - Money module: removed from the UI on 2026-11-06; the `expenses` tables stay in the database, unused.
   - To-Do & Habits module: automatic carry-over rollover, streak tracking, space segregation (`personal` vs `business`), Web Push notifications.
   - Food AI Connector (Claude MCP & Gemini Function Calling):

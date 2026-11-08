@@ -165,11 +165,6 @@ export function LineChart({
     <div className="line" role="img" aria-label={summary}>
       <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ height }}>
         <path d={path} className="line-path" vectorEffect="non-scaling-stroke" />
-        {points.map((p, i) => (
-          <circle key={i} cx={x(i)} cy={y(p.value)} r={3.5} className="line-dot">
-            <title>{`${p.label}: ${p.value}`}</title>
-          </circle>
-        ))}
       </svg>
       <div className="line-axis" aria-hidden="true">
         <span>{points[0].label}</span>

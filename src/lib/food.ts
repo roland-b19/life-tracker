@@ -252,7 +252,7 @@ export async function getWeightAnalytics(userId: string, today: string): Promise
 /**
  * Shopping List Operations
  */
-/** The user's items still on the list; cleared ones stay only as quick-add history. */
+/** The user's items still on the list; cleared ones stay so Undo can restore them. */
 const onList = (userId: string) => and(eq(shoppingItems.userId, userId), isNull(shoppingItems.clearedAt));
 
 export async function getShoppingList(userId: string) {
@@ -261,22 +261,6 @@ export async function getShoppingList(userId: string) {
     .from(shoppingItems)
     .where(onList(userId))
     .orderBy(shoppingItems.category, shoppingItems.name);
-}
-
-/** Everything the user has put on the list before, newest first, one entry per name: the quick-add options. */
-export async function getShoppingHistory(userId: string, limit = 30) {
-  const rows = await db
-    .selectDistinctOn([sql`lower(${shoppingItems.name})`], {
-      name: shoppingItems.name,
-      amount: shoppingItems.amount,
-      unit: shoppingItems.unit,
-      category: shoppingItems.category,
-      createdAt: shoppingItems.createdAt,
-    })
-    .from(shoppingItems)
-    .where(eq(shoppingItems.userId, userId))
-    .orderBy(sql`lower(${shoppingItems.name})`, desc(shoppingItems.createdAt));
-  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
 }
 
 /** Adds an item, or adds its amount to the same item (same name and unit) already on the list. */
@@ -434,7 +418,7 @@ export async function deleteShoppingItem(userId: string, itemId: string) {
   return deleted;
 }
 
-/** Takes bought items off the list; they stay as quick-add history. */
+/** Takes bought items off the list; they stay in the table so Undo can restore them. */
 export async function clearBoughtShoppingItems(userId: string) {
   return db
     .update(shoppingItems)

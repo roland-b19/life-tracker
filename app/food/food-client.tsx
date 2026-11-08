@@ -1,12 +1,16 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { formatDMY } from "@/lib/format-date";
+import { addDays, dayLabel, formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
+import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import {
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   DropIcon,
+  LockIcon,
   FootstepsIcon,
   ScaleIcon,
   PencilIcon,
@@ -25,6 +29,7 @@ import {
   clearBoughtItemsAction,
   deleteMealAction,
   deleteShoppingItemAction,
+  getDaySummaryAction,
   logMealAction,
   addShoppingCategoryAction,
   deleteShoppingCategoryAction,
@@ -56,14 +61,6 @@ interface ShoppingItemData {
   unit: string;
   category: string;
   isBought: boolean;
-}
-
-/** Something added to the list before; one tap adds it again. */
-interface ShoppingHistoryItem {
-  name: string;
-  amount: string;
-  unit: string;
-  category: string;
 }
 
 /** A food logged before, offered again in the "Past foods" sheet. */
@@ -106,7 +103,6 @@ interface FoodClientProps {
   initialShoppingList: ShoppingItemData[];
   /** The user's store sections in walking order, without the built-in "other". */
   shoppingCategories: string[];
-  shoppingHistory: ShoppingHistoryItem[];
   pastFoods: PastFood[];
 }
 
@@ -129,11 +125,15 @@ export function FoodClient({
   weightAnalytics,
   initialShoppingList,
   shoppingCategories: initialCategories,
-  shoppingHistory,
   pastFoods: initialPastFoods,
 }: FoodClientProps) {
-  const [selectedDate] = useState(todayDate);
+  // Writes always go to today; a past day is a read-only view loaded on demand.
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+  const [pastSummary, setPastSummary] = useState<FoodClientProps["initialSummary"] | null>(null);
   const [summary, setSummary] = useState(initialSummary);
+  const day = selectedDate < todayDate && pastSummary ? pastSummary : summary;
+  const isPast = day.date < todayDate;
+  const dayRequest = useRef(0);
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
   // Undo runs from a toast seconds later, so it reads the list as it is then.
   const latestShop = useRef(shoppingList);
@@ -143,7 +143,6 @@ export function FoodClient({
   const [activeTab, setActiveTab] = useState<"daily" | "water" | "weight" | "steps" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
-  const [history, setHistory] = useState(shoppingHistory);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
   const [categories, setCategories] = useState(initialCategories);
   // from: null adds a new category, a name edits that one.
@@ -176,6 +175,11 @@ export function FoodClient({
   const { rowRef, enter, leave, move } = useListMotion();
   const shownWeight = weightAnalytics.sevenDayAverage ?? weightAnalytics.latestWeight;
   const { later, runAfterClose } = useAfterClose();
+  // A Shopping group keeps its category's stable key, so a renamed category's group stays in place.
+  const groupKey = (cat: string) => `group:${catKey(cat)}`;
+  /** What to animate for item `id` in `category`: the row, or its whole group when no item outside `moving` is in it. */
+  const shopKey = (id: string, category: string, moving = new Set([id])) =>
+    latestShop.current.some((i) => !moving.has(i.id) && i.category === category) ? id : groupKey(category);
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -206,6 +210,22 @@ export function FoodClient({
     if (message) showToast({ message, type: "warning" });
   };
 
+  // Only past days load; the latest request wins, a failed one steps back to the day on screen.
+  async function goToDay(date: string) {
+    const shown = day.date;
+    setSelectedDate(date);
+    const request = ++dayRequest.current;
+    if (date >= todayDate) return;
+    try {
+      const loaded = await getDaySummaryAction(date);
+      if (request === dayRequest.current) setPastSummary(loaded);
+    } catch {
+      if (request !== dayRequest.current) return;
+      setSelectedDate(shown);
+      setStatusMessage("Failed to load that day");
+    }
+  }
+
   const round1 = (n: number) => Math.round(n * 10) / 10;
 
   // sign 1 adds the meal to the day, -1 removes it
@@ -230,7 +250,7 @@ export function FoodClient({
     setFormError("");
     try {
       const res = await logMealAction({
-        date: selectedDate,
+        date: todayDate,
         name: mealName.trim(),
         calories: parseInt(mealCalories, 10) || 0,
         protein: parseFloat(mealProtein) || 0,
@@ -276,7 +296,7 @@ export function FoodClient({
     setBusy(true);
     try {
       const res = await logMealAction({
-        date: selectedDate,
+        date: todayDate,
         name: food.name,
         calories: food.calories,
         protein: parseFloat(food.protein) || 0,
@@ -348,7 +368,7 @@ export function FoodClient({
     const bump = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
     bump(delta);
     let undone = false;
-    const saved = addWaterAction(selectedDate, delta).then((res) => res.success === true, () => false);
+    const saved = addWaterAction(todayDate, delta).then((res) => res.success === true, () => false);
     showToast({
       message: `Added ${delta} ml`,
       type: "success",
@@ -357,7 +377,7 @@ export function FoodClient({
         undone = true;
         bump(-delta);
         if (!(await saved)) return; // the add never happened
-        const back = await addWaterAction(selectedDate, -delta).then((res) => res.success === true, () => false);
+        const back = await addWaterAction(todayDate, -delta).then((res) => res.success === true, () => false);
         if (!back) {
           bump(delta);
           showToast({ message: "Failed to undo the edit", type: "warning" });
@@ -387,7 +407,7 @@ export function FoodClient({
     const goalChanged = goal !== previousGoal;
     if (!amountChanged && !goalChanged) return true;
     const write = (v: number) =>
-      metric === "water" ? addWaterAction(selectedDate, v - summary.metrics.waterMl) : updateStepsAction(selectedDate, v);
+      metric === "water" ? addWaterAction(todayDate, v - summary.metrics.waterMl) : updateStepsAction(todayDate, v);
     let saved = previous;
     if (amountChanged) {
       const res = await write(value).catch(() => null);
@@ -417,8 +437,8 @@ export function FoodClient({
         if (amountChanged) {
           const back =
             metric === "water"
-              ? await addWaterAction(selectedDate, previous - value).catch(() => null)
-              : await updateStepsAction(selectedDate, previous).catch(() => null);
+              ? await addWaterAction(todayDate, previous - value).catch(() => null)
+              : await updateStepsAction(todayDate, previous).catch(() => null);
           if (back?.success && back.metrics) setMetric(key, back.metrics[key]);
           else {
             setMetric(key, saved);
@@ -493,10 +513,7 @@ export function FoodClient({
     });
   }
 
-  const sameItem = (a: { name: string; unit: string }, b: { name: string; unit: string }) =>
-    a.name.toLowerCase() === b.name.toLowerCase() && a.unit.toLowerCase() === b.unit.toLowerCase();
-
-  const toShopInput = (i: ShoppingItemData | ShoppingHistoryItem) => ({
+  const toShopInput = (i: ShoppingItemData) => ({
     name: i.name,
     amount: Number(i.amount),
     unit: i.unit,
@@ -521,20 +538,14 @@ export function FoodClient({
       const res = await addShoppingItemAction(input);
       const item = res.item as ShoppingItemData;
       const before = shoppingList.find((i) => i.id === item.id);
-      // From the form, the list changes once the form has closed; a quick-add chip changes it when the server answers.
-      const run = isShopModalOpen ? later : (change: () => void) => change();
       if (before) {
-        run(() => setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i))));
+        later(() => setShoppingList((prev) => prev.map((i) => (i.id === item.id ? item : i))));
       } else {
-        run(() => {
-          enter(item.id);
+        later(() => {
+          enter(shopKey(item.id, item.category));
           setShoppingList((prev) => [...prev, item]);
         });
       }
-      setHistory((prev) => [
-        { name: item.name, amount: item.amount, unit: item.unit, category: item.category },
-        ...prev.filter((h) => h.name.toLowerCase() !== item.name.toLowerCase()),
-      ]);
       // No Undo on a new item (it is one tap from Delete); adding to an item already listed is an edit, so it has one.
       if (!before) showToast({ message: `Added "${item.name}"`, type: "success" });
       else
@@ -555,21 +566,19 @@ export function FoodClient({
         });
       return true;
     } catch {
-      // A quick-add chip has no form to show the error in.
-      if (isShopModalOpen) setFormError("Failed to add item");
-      else setStatusMessage("Failed to add item");
+      setFormError("Failed to add item");
       return false;
     } finally {
       setBusy(false);
     }
   }
 
-  // Writes an edited item into the list; a new category moves the row to another group, and it enters
-  // there like a deleted row put back by Undo.
+  // Writes an edited item into the list; a new category moves the row to another group.
   function replaceShop(to: ShoppingItemData) {
     const write = () => setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought } : i)));
-    if (latestShop.current.find((i) => i.id === to.id)?.category === to.category) write();
-    else move(to.id, write);
+    const from = latestShop.current.find((i) => i.id === to.id);
+    if (!from || from.category === to.category) write();
+    else void moveItems([from], to.category, write);
   }
 
   async function handleShopSubmit(e: React.FormEvent) {
@@ -644,7 +653,10 @@ export function FoodClient({
       } else {
         if (!(await renameShoppingCategoryAction({ from, to })).success) throw new Error("Category not found");
         later(() => {
-          moveItems(from, to);
+          const items = latestShop.current.filter((i) => i.category === from);
+          // A name already in the list merges the groups; a new one relabels the group in place (it keeps its key).
+          if (latestShop.current.some((i) => i.category === to)) void moveItems(items, to);
+          else setShoppingList((prev) => prev.map((i) => (i.category === from ? { ...i, category: to } : i)));
           if (categories.includes(to)) return leave(catKey(from), () => setCategories((prev) => prev.filter((c) => c !== from)));
           catKeys.current.set(to, catKey(from));
           catKeys.current.delete(from);
@@ -660,31 +672,42 @@ export function FoodClient({
     }
   }
 
-  async function handleDeleteCategory() {
-    const name = catEdit.from;
-    if (!name) return;
-    setBusy(true);
-    try {
-      if (!(await deleteShoppingCategoryAction({ name })).success) throw new Error("Category not found");
-      later(() => {
-        moveItems(name, "other");
-        leave(catKey(name), () => setCategories((prev) => prev.filter((c) => c !== name)));
-      });
-      setCatOpen(false);
-      // No Undo: the server merges its items into Other, so a restore could not tell them apart.
-      showToast({ message: `Removed "${name}"; its items are in Other` });
-    } catch {
-      setCatError("Failed to remove category");
-    } finally {
-      setBusy(false);
-    }
+  // Like a row delete: the row leaves and the toast shows at once, its items move to Other alongside, and a
+  // failed delete puts both back. No Undo: the server merges its items into Other, so a restore could not tell them apart.
+  function handleDeleteCategory(name: string) {
+    const at = categories.indexOf(name);
+    const items = latestShop.current.filter((i) => i.category === name);
+    const deleted = deleteShoppingCategoryAction({ name }).then((r) => r.success, () => false);
+    const gone = new Promise<void>((done) =>
+      leave(catKey(name), () => {
+        setCategories((prev) => prev.filter((c) => c !== name));
+        done();
+      }),
+    );
+    const moved = moveItems(items, "other");
+    showToast({ message: `Removed "${name}"; its items are in Other` });
+    void Promise.all([deleted, gone, moved]).then(([ok]) => {
+      if (ok) return;
+      void enter(catKey(name));
+      setCategories((prev) => (prev.includes(name) ? prev : [...prev.slice(0, at), name, ...prev.slice(at)]));
+      void moveItems(items.map((i) => ({ ...i, category: "other" })), name);
+      setStatusMessage("Failed to remove category");
+    });
   }
 
-  /** Moves the items of one category, history included, to another on screen. */
-  function moveItems(from: string, to: string) {
-    const move = <T extends { category: string }>(i: T) => (i.category === from ? { ...i, category: to } : i);
-    setShoppingList((prev) => prev.map(move));
-    setHistory((prev) => prev.map(move));
+  /**
+   * Moves items of one category to another on screen: they leave (with their group when it empties), then come in
+   * at the new place (as a new group when there is none). `write` makes the change; by default it sets the category.
+   */
+  function moveItems(items: ShoppingItemData[], to: string, write?: () => void) {
+    if (!items.length) return Promise.resolve();
+    const ids = new Set(items.map((i) => i.id));
+    const keys = (cat: string) => [...new Set(items.map((i) => shopKey(i.id, cat, ids)))];
+    return Promise.all(keys(items[0].category).map((key) => new Promise<void>((done) => leave(key, done)))).then(() => {
+      keys(to).forEach((key) => void enter(key));
+      if (write) write();
+      else setShoppingList((prev) => prev.map((i) => (ids.has(i.id) ? { ...i, category: to } : i)));
+    });
   }
 
   // No toast: ticking again is its own undo (as on Tasks); a refused save unticks it again.
@@ -706,13 +729,13 @@ export function FoodClient({
     );
     // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
     const gone = new Promise<void>((done) =>
-      leave(item.id, () => {
+      leave(shopKey(item.id, item.category), () => {
         setShoppingList((prev) => prev.filter((i) => i.id !== item.id));
         done();
       }),
     );
     const putBack = (back: ShoppingItemData) => {
-      enter(back.id);
+      enter(shopKey(back.id, back.category));
       setShoppingList((prev) => [...prev, back]);
     };
     showToast({
@@ -741,19 +764,22 @@ export function FoodClient({
     const cleared = shoppingList.filter((i) => i.isBought);
     if (!cleared.length) return;
     const ids = new Set(cleared.map((c) => c.id));
+    // A group left with no items leaves as a whole.
+    const keyOf = new Map(cleared.map((c) => [c.id, shopKey(c.id, c.category, ids)]));
+    const keys = [...new Set(keyOf.values())];
     const done = clearBoughtItemsAction().then(() => true, () => false);
     const drop = () =>
       Promise.all(
-        cleared.map(
-          (c) => new Promise<void>((res) => leave(c.id, () => {
-            setShoppingList((prev) => prev.filter((i) => i.id !== c.id));
+        keys.map(
+          (key) => new Promise<void>((res) => leave(key, () => {
+            setShoppingList((prev) => prev.filter((i) => keyOf.get(i.id) !== key));
             res();
           })),
         ),
       );
     const gone = drop();
     const putBack = () => {
-      cleared.forEach((c) => enter(c.id));
+      keys.forEach((key) => enter(key));
       setShoppingList((prev) => [...prev.filter((i) => !ids.has(i.id)), ...cleared]);
     };
     showToast({
@@ -792,7 +818,7 @@ export function FoodClient({
       const res = await sendFoodChatMessageAction({
         message: text,
         history,
-        date: selectedDate,
+        date: todayDate,
         time: new Date().toTimeString().slice(0, 5),
       });
       const meals = res.meals as MealData[];
@@ -810,15 +836,15 @@ export function FoodClient({
   }
 
   const macros = [
-    { label: "Calories", value: summary.totals.calories, target: goals.calories, unit: " kcal" },
-    { label: "Protein", value: summary.totals.protein, target: goals.proteinGrams, unit: "g" },
-    { label: "Carbs", value: summary.totals.carbs, target: goals.carbsGrams, unit: "g" },
-    { label: "Fat", value: summary.totals.fat, target: goals.fatGrams, unit: "g" },
+    { label: "Calories", value: day.totals.calories, target: goals.calories, unit: " kcal" },
+    { label: "Protein", value: day.totals.protein, target: goals.proteinGrams, unit: "g" },
+    { label: "Carbs", value: day.totals.carbs, target: goals.carbsGrams, unit: "g" },
+    { label: "Fat", value: day.totals.fat, target: goals.fatGrams, unit: "g" },
   ];
   // A zero goal (carbs and fat allow it) counts as met once anything is eaten.
   const pct = (value: number, target: number) => (target > 0 ? Math.min(100, Math.round((value / target) * 100)) : value > 0 ? 100 : 0);
-  const waterPct = pct(summary.metrics.waterMl, goals.waterMl);
-  const stepsPct = pct(summary.metrics.steps, goals.steps);
+  const waterPct = pct(day.metrics.waterMl, goals.waterMl);
+  const stepsPct = pct(day.metrics.steps, goals.steps);
   const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
   // Walking order, unknown categories after the user's own, "other" last.
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
@@ -827,7 +853,6 @@ export function FoodClient({
   const categoryOptions = [...new Set([...categories, shopCategory, "other"])];
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
-  const quickAdds = history.filter((h) => !shoppingList.some((i) => sameItem(i, h))).slice(0, 12);
 
   return (
     <main>
@@ -854,6 +879,36 @@ export function FoodClient({
       {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} />}
 
       {activeTab === "daily" && (
+        <>
+        <div className="toolbar dash day-toolbar">
+          <div className="month-selector" role="group" aria-label="Day">
+            <button
+              type="button"
+              className="month-nav-btn"
+              onClick={() => goToDay(addDays(selectedDate, -1))}
+              aria-label="Previous day"
+            >
+              <ChevronLeftIcon size={17} />
+            </button>
+            <DatePicker
+              mode="day"
+              value={selectedDate}
+              today={todayDate}
+              max={todayDate}
+              label={selectedDate === todayDate ? "Today" : dayLabel(selectedDate)}
+              onChange={goToDay}
+            />
+            <button
+              type="button"
+              className="month-nav-btn"
+              onClick={() => goToDay(addDays(selectedDate, 1))}
+              disabled={selectedDate >= todayDate}
+              aria-label="Next day"
+            >
+              <ChevronRightIcon size={17} />
+            </button>
+          </div>
+        </div>
         <div className="dashboard-grid">
           <div className="dashboard-main">
             <section className="surface" aria-labelledby="macros-title">
@@ -861,6 +916,7 @@ export function FoodClient({
                 <h2 id="macros-title" className="section-title">
                   Nutrition
                 </h2>
+                {!isPast && (
                 <button
                   type="button"
                   className="delete-icon-btn edit"
@@ -870,6 +926,7 @@ export function FoodClient({
                 >
                   <PencilIcon size={17} />
                 </button>
+                )}
               </div>
               <div className="macro-grid">
                 {macros.map((m) => (
@@ -898,22 +955,33 @@ export function FoodClient({
               <div className="section-head">
                 <div>
                   <h2 id="meals-title" className="section-title">
-                    Meals <span className="muted number-tabular">{summary.meals.length}</span>
+                    Meals <span className="muted number-tabular">{day.meals.length}</span>
                   </h2>
-                  <p className="card-sub muted number-tabular">{formatDMY(selectedDate)}</p>
+                  <p className="card-sub muted number-tabular">{formatDMY(day.date)}</p>
                 </div>
-                <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setFormError(""), setIsMealModalOpen(true))}>
-                  <PlusIcon size={14} />
-                  Add meal
-                </button>
+                {!isPast && (
+                  <button type="button" className="btn-sm tint" onClick={() => (runAfterClose(), setFormError(""), setIsMealModalOpen(true))}>
+                    <PlusIcon size={14} />
+                    Add meal
+                  </button>
+                )}
               </div>
 
+              {isPast && (
+                <p className="readonly-note">
+                  <LockIcon size={13} /> Past days are read-only
+                </p>
+              )}
+
               <AutoHeight wash className="entries">
-                {summary.meals.length === 0 ? (
-                  <p key="empty" ref={rowRef("empty")} className="empty-note">No meals logged today.</p>
+                {day.meals.length === 0 ? (
+                  <p key="empty" ref={rowRef("empty")} className="empty-note">
+                    {isPast ? "No meals were logged this day." : "No meals logged today."}
+                  </p>
                 ) : (
-                  <Fragment key={selectedDate}>
-                  {summary.meals.map((meal) => (
+                  // Keyed by the day so the rows replay their entrance when it changes.
+                  <Fragment key={day.date}>
+                  {day.meals.map((meal) => (
                     <div key={meal.id} ref={rowRef(meal.id)} className="entry-row">
                       <div>
                         <div className="entry-main">
@@ -924,15 +992,17 @@ export function FoodClient({
                           {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleDeleteMeal(meal)}
-                        aria-label={`Delete meal ${meal.name}`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
+                      {!isPast && (
+                        <button
+                          type="button"
+                          className="delete-icon-btn"
+                          onClick={() => handleDeleteMeal(meal)}
+                          aria-label={`Delete meal ${meal.name}`}
+                          title="Delete"
+                        >
+                          <TrashIcon size={17} />
+                        </button>
+                      )}
                     </div>
                   ))}
                   </Fragment>
@@ -947,6 +1017,7 @@ export function FoodClient({
                 <h2 id="water-title" className="section-title icon-title">
                   <DropIcon size={18} /> Water
                 </h2>
+                {!isPast && (
                 <button
                   type="button"
                   className="delete-icon-btn edit"
@@ -956,14 +1027,16 @@ export function FoodClient({
                 >
                   <PencilIcon size={17} />
                 </button>
+                )}
               </div>
               <p className="metric-big number-tabular">
-                <AnimatedNumber value={summary.metrics.waterMl} />
+                <AnimatedNumber value={day.metrics.waterMl} />
                 <span className="macro-target"> / {goals.waterMl} ml</span>
               </p>
               <div className="progress-track">
                 <div className="progress-fill" style={{ width: `${waterPct}%` }} />
               </div>
+              {!isPast && (
               <div className="tap-buttons">
                 <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
                   +250 ml
@@ -972,6 +1045,7 @@ export function FoodClient({
                   +500 ml
                 </button>
               </div>
+              )}
             </section>
 
             <section className="surface" aria-labelledby="weight-trend-title">
@@ -979,9 +1053,6 @@ export function FoodClient({
                 <h2 id="weight-trend-title" className="section-title icon-title">
                   <ScaleIcon size={18} /> Weight
                 </h2>
-                {weightAnalytics.weeklyRate !== null && (
-                  <span className="badge badge-rest number-tabular">{signedKg(weightAnalytics.weeklyRate)}/week</span>
-                )}
               </div>
               <p className="metric-big number-tabular">
                 {shownWeight === null ? "—" : (
@@ -999,6 +1070,7 @@ export function FoodClient({
                 <h2 id="steps-title" className="section-title icon-title">
                   <FootstepsIcon size={18} /> Steps
                 </h2>
+                {!isPast && (
                 <button
                   type="button"
                   className="delete-icon-btn edit"
@@ -1008,9 +1080,10 @@ export function FoodClient({
                 >
                   <PencilIcon size={17} />
                 </button>
+                )}
               </div>
               <p className="metric-big number-tabular">
-                <AnimatedNumber value={summary.metrics.steps} />
+                <AnimatedNumber value={day.metrics.steps} />
                 <span className="macro-target"> / {goals.steps}</span>
               </p>
               <div className="progress-track">
@@ -1019,6 +1092,7 @@ export function FoodClient({
             </section>
           </div>
         </div>
+        </>
       )}
 
       {activeTab === "shopping" && (
@@ -1044,35 +1118,14 @@ export function FoodClient({
             </span>
           </div>
 
-          {quickAdds.length > 0 && (
-            <div className="quick-add" role="group" aria-labelledby="quick-add-label">
-              <h3 id="quick-add-label" className="group-label">
-                Add again
-              </h3>
-              <div className="chat-suggestions">
-                {quickAdds.map((h) => (
-                  <button
-                    key={h.name}
-                    type="button"
-                    className="secondary chat-chip"
-                    disabled={busy}
-                    onClick={() => addShopping(toShopInput(h))}
-                    aria-label={`Add ${h.name}, ${Number(h.amount)} ${h.unit}`}
-                  >
-                    {h.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
+          <AutoHeight className="shopping-groups">
           {shoppingList.length === 0 && (
             <p key="empty" ref={rowRef("empty")} className="empty-note">
               Your shopping list is empty.
             </p>
           )}
           {shopCategories.map((cat) => (
-            <div key={cat} className="shopping-group">
+            <div key={catKey(cat)} ref={rowRef(groupKey(cat))} className="shopping-group">
               <h3 className="group-label">{cat}</h3>
               {shoppingList
                 .filter((item) => item.category === cat)
@@ -1115,6 +1168,7 @@ export function FoodClient({
                 ))}
             </div>
           ))}
+          </AutoHeight>
         </section>
 
         <section className="surface" aria-labelledby="categories-title">
@@ -1143,6 +1197,15 @@ export function FoodClient({
                   title="Edit"
                 >
                   <PencilIcon size={17} />
+                </button>
+                <button
+                  type="button"
+                  className="delete-icon-btn"
+                  onClick={() => handleDeleteCategory(cat)}
+                  aria-label={`Delete category ${cat}`}
+                  title="Delete"
+                >
+                  <TrashIcon size={17} />
                 </button>
               </div>
             </div>
@@ -1414,11 +1477,6 @@ export function FoodClient({
             {catError && <p className="error" role="alert">{catError}</p>}
           </div>
           <div className="form-actions">
-            {catEdit.from && (
-              <button type="button" className="danger" disabled={busy} onClick={handleDeleteCategory}>
-                Delete
-              </button>
-            )}
             <button type="button" className="secondary" onClick={() => setCatOpen(false)}>
               Cancel
             </button>

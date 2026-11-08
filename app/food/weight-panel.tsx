@@ -192,7 +192,7 @@ export function WeightPanel() {
     today(),
   );
   const tile = (value: number | null) =>
-    value === null ? "—" : <AnimatedNumber value={value} format={twoDecimals} />;
+    value === null ? "—" : <><AnimatedNumber value={value} format={twoDecimals} /> <span className="macro-target">kg</span></>;
 
   // The chart's window ends today, so an old last weigh-in shows an empty range rather than old data.
   const since = addDays(today(), 1 - Number(range));
@@ -266,29 +266,22 @@ export function WeightPanel() {
               <h2 id="trend-title" className="section-title">
                 Trend
               </h2>
-              {(stats.weeklyRate !== null || stats.sinceLastWeek !== null) && (
-                <span className="badge-group">
-                  {stats.weeklyRate !== null && (
-                    <span className="badge badge-rest number-tabular">{signedKg(stats.weeklyRate)}/week</span>
-                  )}
-                  {stats.sinceLastWeek !== null && (
-                    <span className="badge badge-rest number-tabular">{signedKg(stats.sinceLastWeek)} since last week</span>
-                  )}
-                </span>
+              {stats.sinceLastWeek !== null && (
+                <span className="badge badge-rest number-tabular">{signedKg(stats.sinceLastWeek)} since last week</span>
               )}
             </div>
             <div className="stat-row">
               <div className="stat-tile">
                 <strong className="number-tabular">{tile(stats.sevenDayAverage)}</strong>
-                <span>7-day average, kg</span>
+                <span>7-day average</span>
               </div>
               <div className="stat-tile">
                 <strong className="number-tabular">{tile(stats.weekStartWeight)}</strong>
-                <span>Week start, kg</span>
+                <span>Week start</span>
               </div>
               <div className="stat-tile">
                 <strong className="number-tabular">{tile(stats.latestWeight)}</strong>
-                <span>Latest, kg</span>
+                <span>Latest</span>
               </div>
             </div>
             {sorted.length >= 2 && (

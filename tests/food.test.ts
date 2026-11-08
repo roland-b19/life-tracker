@@ -31,7 +31,6 @@ import {
   getNutritionTargets,
   clearBoughtShoppingItems,
   getShoppingCategories,
-  getShoppingHistory,
   getShoppingList,
   getWeightAnalytics,
   logMeal,
@@ -52,6 +51,7 @@ import {
   addShoppingItemAction,
   deleteMealAction,
   deleteShoppingCategoryAction,
+  getDaySummaryAction,
   logMealAction,
   renameShoppingCategoryAction,
   restoreShoppingItemsAction,
@@ -185,7 +185,6 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(analytics.latestWeight).toBe(80.5);
     expect(analytics.sevenDayAverage).toBe(80.5);
     expect(analytics.weekStartWeight).toBe(80.5);
-    expect(analytics.weeklyRate).toBe(0.5);
     expect(analytics.sinceLastWeek).toBe(0.5);
 
     // User B has no entries
@@ -210,12 +209,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(Number(again.amount)).toBe(1);
     expect(again.isBought).toBe(false);
 
-    // Clearing hides bought items but keeps them for quick add; undo brings them back.
+    // Clearing hides bought items; undo brings them back.
     await toggleShoppingItem(userA, oil.id, true);
     const cleared = await clearBoughtShoppingItems(userA);
     expect(cleared.map((i) => i.id)).toEqual([oil.id]);
     expect((await getShoppingList(userA)).map((i) => i.unit)).toEqual(["ml"]);
-    expect((await getShoppingHistory(userA)).map((h) => h.name)).toEqual(["Olive Oil"]); // one entry per name
     await restoreShoppingItems(userA, [oil.id]);
     expect(await getShoppingList(userA)).toHaveLength(2);
 
@@ -226,7 +224,6 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
-    expect(await getShoppingHistory(userB)).toHaveLength(0);
     expect(await updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).toBeUndefined();
     expect(await renameShoppingCategory(userB, "oils", "x")).toBe(false);
     expect(await restoreShoppingItems(userB, [oil.id])).toHaveLength(0);
@@ -264,6 +261,24 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await expect(updateStepsAction("2026-11-04", 5000)).rejects.toThrow(
         "Authentication required.",
       );
+      await expect(getDaySummaryAction("2026-11-04")).rejects.toThrow("Authentication required.");
+    });
+
+    it("reads a past day for its owner only", async () => {
+      await logMeal(userA, { date: "2026-11-01", name: "Oats", calories: 400, protein: 15, carbs: 60, fat: 8 });
+      await addWater(userA, "2026-11-01", 750);
+
+      authState.id = userA;
+      const own = await getDaySummaryAction("2026-11-01");
+      expect(own.date).toBe("2026-11-01");
+      expect(own.meals.map((m) => m.name)).toEqual(["Oats"]);
+      expect(own.metrics.waterMl).toBe(750);
+      await expect(getDaySummaryAction("1 Nov")).rejects.toThrow();
+
+      authState.id = userB;
+      const other = await getDaySummaryAction("2026-11-01");
+      expect(other.meals).toHaveLength(0);
+      expect(other.metrics.waterMl).toBe(0);
     });
 
     it("manages shopping categories, owner only, with \"other\" as the fixed fallback", async () => {

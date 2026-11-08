@@ -15,7 +15,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 |---|---|---|---|---|
 | A1 | Body weight and steps history (since 2026-11-08 the Steps and Water tabs read and edit the per-day history through owner-scoped server actions, each with an owner/other user/anonymous test) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
 | A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
-| A3 | Food logs, meal plan, recipes, shopping list and its categories (cleared items kept as quick-add history) | personal | database; also read and written through the AI connector and the in-app assistant | low to medium privacy harm |
+| A3 | Food logs, meal plan, recipes, shopping list and its categories (cleared items kept so Undo can restore them) | personal | database; also read and written through the AI connector and the in-app assistant | low to medium privacy harm |
 | A4 | Personal expenses | personal, financial | database | privacy harm |
 | A5 | Family-business income and expenses (legacy rows, no UI since 2026-11-05) | personal, financial, business | database | commercial harm; never leaves our system |
 | A6 | To-do tasks, the days they were ticked, and reminders (personal and business) | personal | database, queue | low |

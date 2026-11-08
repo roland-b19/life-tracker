@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import {
   clearDailyMetricSchema,
+  day,
   saveDailyMetricSchema,
   createShoppingItemSchema,
   logMealSchema,
@@ -19,6 +20,7 @@ import {
   addWater,
   clearBoughtShoppingItems,
   clearDailyMetric,
+  getDailyFoodSummary,
   getDailyMetricsHistory,
   saveDailyMetric,
   deleteMeal,
@@ -77,6 +79,12 @@ export async function updateStepsAction(date: string, steps: number) {
   const metrics = await updateDailySteps(userId, date, steps);
   safeRevalidate("/food");
   return { success: true, metrics };
+}
+
+/** One day's meals and metrics, read-only (the Today tab's past days). */
+export async function getDaySummaryAction(date: unknown) {
+  const userId = await requireUser();
+  return getDailyFoodSummary(userId, day.parse(date));
 }
 
 export async function listDailyMetricsAction() {

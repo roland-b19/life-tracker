@@ -24,7 +24,7 @@ import {
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
 import { DEV_EDIT_PAST, PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
-import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { addDays, dayLabel, toISODate } from "@/lib/format-date";
 import { isDueOn, streakOn, weekdayOf } from "@/lib/streak";
 import { compareTodos } from "@/lib/todo-order";
 
@@ -50,9 +50,6 @@ const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
 // Repeat patterns: "daily", or "days:1,3,5" for chosen ISO weekdays (1 = Monday).
 const patternOf = (days: number[]) => (days.length === 7 ? "daily" : `days:${[...days].sort().join(",")}`);
 const daysOf = (pattern: string) => (pattern.startsWith("days:") ? pattern.slice(5).split(",").map(Number) : ALL_DAYS);
-
-const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
-  `${new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday })} ${formatDMY(iso)}`;
 
 interface TodosClientProps {
   userName: string;

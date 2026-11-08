@@ -128,7 +128,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Validate only what the data needs. An optional free-text field accepts any text: the Wishlist link may be just a store name, so it has no URL check.
   - A list of named things refuses a duplicate name (ignoring case) with an inline form error: `"X" is already on this list.` (Tasks; food categories and Gym exercises say `"X" already exists.`).
   - Errors inside an open form show inline (`.error` with `role="alert"`, last in `.form-stack`), using the server's message when there is one. Every form has one: validation, duplicates and save failures all go there, and the form stays open. Clear it when the form opens and on each submit.
-  - Warning toasts are only for actions without an open form: list actions, quick-add chips and quick taps (+250 ml). Water and steps keep their form open while saving, like every form.
+  - Warning toasts are only for actions without an open form: list actions and quick taps (+250 ml). Water and steps keep their form open while saving, like every form.
   - A one-off action outside a form (enabling task reminders) reports through a toast too: `Reminders enabled`, `Failed to enable reminders (notifications are blocked)`. Never a status line of text under a card.
   - A failed first load of a page's data is a warning toast too: `Failed to load tasks`, `Failed to load weigh-ins`. No inline error text on the page. The one exception is the muscle map's stage, which would otherwise be blank: `Loading model...` while the model loads, and `3D view is not available here. Use the muscle buttons instead.` if WebGL or the model fails.
 - **Date pickers have limits.** Future days only where the user can plan ahead (tasks: up to 7 days), never on logs such as weight. Pass `marked` so days with planned items show a dot: only future days with one-off items, and never in a view where every day has items (Daily).
@@ -141,11 +141,11 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Clearing bought items has Undo (`Cleared 3 bought items`).
   - Moving a task (to another day, into Daily or out of it) has no Undo (`Moved "X" to Tomorrow`, `Moved "X" to Daily`): it is one more Move away.
   - Marking a task done or reopening it has no Undo, and neither does ticking a shopping item: a tick is undone by another tick.
-  - Deleting a shopping category has no Undo: the server merges its items into Other, so a restore could not tell them apart. Its toast says where the items went: `Removed "X"; its items are in Other`.
+  - Deleting a shopping category (its row's Trash) has no Undo: the server merges its items into Other, so a restore could not tell them apart. Its toast says where the items went: `Removed "X"; its items are in Other`. The row leaves at once while its Shopping group leaves and its items enter Other; a failed delete puts both back.
   - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-creates with a new id (meals, gym sets, weigh-ins, shopping items): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh; on failure only the warning toast shows.
   - Every Undo has a failure path: if writing the old values back fails, the screen keeps the change and a warning says `Failed to undo the edit`.
 - **Optimistic and honest.**
-  - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too. A quick-add chip is the exception: it waits for the server, which returns the id and merges the amount into an item already on the list; the chips are disabled meanwhile and the row then enters with no `later()`.
+  - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
 - **Fast.**
   - Page and tab changes feel instant (exit 120ms).
@@ -157,15 +157,15 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Streaks** are green (success colour) with a fire icon, in the row. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
 - **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (under 250 low, 250 – 750 medium, 750+ high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
-- **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct. Food categories are the other exception: their row has only Edit, and Delete is a `.danger` button in the edit form, left of Cancel.
-- **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day".
+- **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
+- **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
 - **Rows build at once.** Rows start building with the page enter. They never wait about a second after the page shows.
 - **Charts and numbers animate on entry and on every view change** (day, tab, filter, period). Bars grow from 0 and summary amounts count up from 0, because their wrapper is keyed by the view. `ProgressRing` is the exception: it fills from 0 when it first appears, then eases from the old share to the new one on every view change, down as well as up (100% → 0% animates); it is never keyed by the view (the user's call).
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
 - **A fraction never counts.** "X of Y" is plain text with the real numbers from the first frame, on entry and on change; only the ring beside it fills, so the card never reads "0 of 0" (the user's call).
-- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
+- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
   - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
   - replay their grow animation on every view change (day, tab, filter, period);
@@ -173,7 +173,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - show the exact value on bar hover (`title`, or a `data-tip` bubble when bars are buttons);
   - pick their period with a `Segmented` (7D/30D/90D; weight also 180D/360D);
   - switch equally fast for every period.
-- **`LineChart`** (weight trend) has no grow animation. Its axis shows the first label, `lo – hi` and the last label; each dot carries its value as an SVG `<title>`.
+- **`LineChart`** (weight, water and steps trends) is a line only, with no dots (the user's call) and no grow animation. Its axis shows the first label, `lo – hi` and the last label.
 - **A pie or donut chart** (none today; the Money page that had one is gone) animates like `ProgressRing`, and the hovered or tapped slice comes forward with a subtle animation.
 - **`HBars`** is a plain list: label, track, value as text. No role and no animation, because the values are already readable.
 - **Selection is a fill, never a border.** A selected card or chip gets `--tint-subtle` (split day cards, muscle chips). A selected toggle (a picker day, a `.weekday-btn`, the `Segmented` thumb) is solid `--tint` with `--on-tint` text. No coloured outline or left stripe, and "today" gets no extra border.
@@ -300,7 +300,7 @@ Each of these was tried or proposed and the user removed it.
 - Example or help notes, credits, and a "Life tracker" title on each page. The sign-in card has no "Local development session..." line either.
 - A floating action button, or a command menu (⌘K) with shortcut hints. The add button sits in the card's title row.
 - Hiding content on a phone. The aside cards stack under the main column, so phone and desktop have the same features.
-- A greeting or suggested prompts in the Food Assistant chat. It starts empty, and its only control besides the input is a "Past foods" `btn-sm tint` in the section head. The "Add again" quick-add chips live on the Shopping tab.
+- A greeting or suggested prompts in the Food Assistant chat. It starts empty, and its only control besides the input is a "Past foods" `btn-sm tint` in the section head.
 
 **Features**
 - A "buy" button and the green "bought" animation.
