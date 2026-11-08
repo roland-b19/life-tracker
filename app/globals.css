@@ -739,7 +739,6 @@ main {
   align-items: center;
   gap: 0.75rem;
   font-size: 0.95rem;
-  cursor: pointer;
 }
 
 .shopping-item-name.bought {

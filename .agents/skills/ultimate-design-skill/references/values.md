@@ -234,7 +234,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
   - placed at `right 1rem center`, size .75rem;
   - padding-right 2.6rem.
 - `label`: grid, gap .35rem, weight 600, .9rem. `.field` has the same layout for the date picker; `.date-field` looks like an input: the same 5% hover and 8% fill when open or focused, and no focus ring. A `fieldset` legend (the Tasks weekday picker) uses the same type: weight 600, .9rem, primary colour, never a lighter secondary caption.
-- Checkbox: 1.25rem, `accent-color: var(--tint)`.
+- Checkbox (form options only, never a list row): 1.25rem, `accent-color: var(--tint)`.
 - No placeholders.
 
 **Date picker pop-up (`.picker-pop`)**
@@ -351,7 +351,7 @@ The CSS hides the outline on `[data-pointer]`.
 
 **Task row parts**
 - `.todo-row`: gap .75rem, padding .5rem 0.
-- Check circle (`.todo-checkbox-btn`): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
+- Check circle (`.todo-checkbox-btn`, every list row that ticks off: Tasks and Shopping): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
 - `.todo-title`: .95rem weight 500, wraps; done is line-through in secondary.
 - `.readonly-note`: .8125rem secondary with `LockIcon` 13, gap .4rem, margin-bottom .25rem.
 - `.week-strip`: 7 columns, gap .35rem, margin-bottom 1rem; its `.weekday-btn` padding .5rem 0, .8125rem.
