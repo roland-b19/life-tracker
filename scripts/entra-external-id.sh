@@ -52,7 +52,11 @@ if [[ "${ENTRA_CREATE_TENANT:-}" == "YES" ]]; then
   # https://learn.microsoft.com/en-us/entra/external-id/external-identities-pricing
   echo "Cost: External ID Basic tier, first 50,000 monthly active users free. SMS/phone OTP and M2M add-ons are paid and not used."
   echo "Creating tenant ${ENTRA_TENANT_SUBDOMAIN}.onmicrosoft.com in resource group $identity_rg (subscription $subscription_id)."
-  run az group create --name "$identity_rg" --location "${ENTRA_RG_LOCATION:-westeurope}" \
+  if [[ "$(az provider show -n Microsoft.AzureActiveDirectory --query registrationState -o tsv)" != "Registered" ]]; then
+    run az provider register --namespace Microsoft.AzureActiveDirectory --wait
+  fi
+  # Azure for Students blocks westeurope; italynorth is the region already approved in docs/decisions.md.
+  run az group create --name "$identity_rg" --location "${ENTRA_RG_LOCATION:-italynorth}" \
     --tags project=life-tracker env=identity --output none
   run az rest --method put \
     --url "https://management.azure.com/subscriptions/${subscription_id}/resourceGroups/${identity_rg}/providers/Microsoft.AzureActiveDirectory/ciamDirectories/${ENTRA_TENANT_SUBDOMAIN}?api-version=2023-05-17-preview" \
