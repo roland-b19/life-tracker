@@ -57,6 +57,9 @@ param authAzureClientId string
 @description('Entra External ID issuer URL.')
 param authIssuer string
 
+@description('OIDC metadata URL for an External ID (CIAM) tenant, https://<subdomain>.ciamlogin.com/<tenant-id>/v2.0/.well-known/openid-configuration. Empty keeps the workforce default.')
+param authAzureWellKnown string = ''
+
 @description('PostgreSQL compute SKU.')
 param postgresSku string = 'Standard_B1ms'
 
@@ -490,6 +493,12 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'AUTH_ISSUER'
               value: authIssuer
             }
+            ...(empty(authAzureWellKnown) ? [] : [
+              {
+                name: 'AUTH_AZURE_WELLKNOWN'
+                value: authAzureWellKnown
+              }
+            ])
           ]
           probes: [
             {

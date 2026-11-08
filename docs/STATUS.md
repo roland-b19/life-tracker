@@ -133,6 +133,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
 2. Maintain local-only verification until then (no Azure deployments).
+3. Entra External ID sign-in (email + password, Google) is scripted (`scripts/entra-external-id.sh`, runbook `docs/entra-external-id.md`) but has not run: it needs the user's OK, a Google OAuth client and an External ID tenant. Then set `AUTH_AZURE_WELLKNOWN`, `AUTH_ISSUER` and the client values. Production `/signin` already has the Continue button. Apple is deferred.
 
 ## Open questions
 
