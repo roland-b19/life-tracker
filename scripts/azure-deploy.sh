@@ -68,7 +68,6 @@ az deployment group what-if \
     authAzureTenantId="$AUTH_AZURE_TENANT_ID" \
     authAzureClientId="$AUTH_AZURE_CLIENT_ID" \
     authIssuer="$AUTH_ISSUER" \
-    authAzureWellKnown="${AUTH_AZURE_WELLKNOWN:-}" \
     postgresSku="$postgres_sku" \
     registryName="$acr_name" \
     keyVaultName="$kv_name"
@@ -146,7 +145,6 @@ if ! az deployment group create \
     authAzureTenantId="$AUTH_AZURE_TENANT_ID" \
     authAzureClientId="$AUTH_AZURE_CLIENT_ID" \
     authIssuer="$AUTH_ISSUER" \
-    authAzureWellKnown="${AUTH_AZURE_WELLKNOWN:-}" \
     postgresSku="$postgres_sku" \
     registryName="$acr_name" \
     keyVaultName="$kv_name" \
@@ -175,16 +173,11 @@ az containerapp update \
   --output none
 
 # ── Step: Update Entra redirect URIs ────────────────────────────────────────
-if [[ -n "${AUTH_AZURE_WELLKNOWN:-}" ]]; then
-  # The External ID app lives in another tenant than this subscription, so az ad cannot reach it from here.
-  echo "External ID app: after az login to that tenant, run NEXTAUTH_URL=$app_url ./scripts/entra-external-id.sh"
-else
-  echo "Updating Entra app redirect URIs for: $app_url"
-  az ad app update \
-    --id "$AUTH_AZURE_CLIENT_ID" \
-    --web-redirect-uris "${app_url}/api/auth/callback/azure-ad" "http://localhost:3000/api/auth/callback/azure-ad" \
-    --output none
-fi
+echo "Updating Entra app redirect URIs for: $app_url"
+az ad app update \
+  --id "$AUTH_AZURE_CLIENT_ID" \
+  --web-redirect-uris "${app_url}/api/auth/callback/azure-ad" "http://localhost:3000/api/auth/callback/azure-ad" \
+  --output none
 
 # ── Step: Run database migrations via az container job ──────────────────────
 echo "Running database migrations via containerapp job..."

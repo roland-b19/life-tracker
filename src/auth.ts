@@ -61,8 +61,6 @@ function getProductionProvider() {
     tenantId,
     authorization: { params: { scope: "openid profile email" } },
     issuer,
-    // External ID (CIAM) tenants publish metadata on <subdomain>.ciamlogin.com, not login.microsoftonline.com.
-    ...(process.env.AUTH_AZURE_WELLKNOWN ? { wellKnown: process.env.AUTH_AZURE_WELLKNOWN } : {}),
   });
 }
 

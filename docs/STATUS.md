@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (Assistant on Claude CLI, Settings page, Entra External ID sign-in script)_
+_Last updated: 2026-11-08 by Claude (Assistant on Claude CLI, Settings page; email + password and Google sign-in dropped)_
 
 ## Phase
 
@@ -133,7 +133,6 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
 2. Maintain local-only verification until then (no Azure deployments).
-3. Entra External ID sign-in (email + password, Google) is scripted (`scripts/entra-external-id.sh`, runbook `docs/entra-external-id.md`) but has not run: it needs the user's OK, a Google OAuth client and an External ID tenant. Then set `AUTH_AZURE_WELLKNOWN`, `AUTH_ISSUER` and the client values. Production `/signin` already has the Continue button. Apple is deferred.
 
 ## Open questions
 
@@ -144,6 +143,8 @@ See "Open" in `docs/decisions.md`.
 None for Life Tracker. All resources deployed for Iteration 2 testing were
 synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscription's
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
+
+Empty resource group `lt-identity` (`italynorth`, tags `project=life-tracker env=identity`), left by the abandoned External ID tenant attempt on 2026-11-08. It holds nothing and costs nothing; delete with `az group delete -n lt-identity` once the user agrees.
 
 ## Session log (newest first)
 
