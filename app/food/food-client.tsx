@@ -5,6 +5,7 @@ import { formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
 import { Segmented } from "../components/segmented";
 import {
+  CheckIcon,
   DropIcon,
   FootstepsIcon,
   ScaleIcon,
@@ -1077,16 +1078,19 @@ export function FoodClient({
                 .filter((item) => item.category === cat)
                 .map((item) => (
                   <div key={item.id} ref={rowRef(item.id)} className="shopping-row">
-                    <label className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={item.isBought}
-                        onChange={() => handleToggleShopping(item.id, item.isBought)}
-                      />
+                    <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
+                      <button
+                        type="button"
+                        className={`todo-checkbox-btn ${item.isBought ? "checked" : ""}`}
+                        onClick={() => handleToggleShopping(item.id, item.isBought)}
+                        aria-label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
+                      >
+                        {item.isBought && <CheckIcon size={12} strokeWidth={3} />}
+                      </button>
                       <span>
                         {item.name} · {Number(item.amount)} {item.unit}
                       </span>
-                    </label>
+                    </div>
                     <div className="row-actions">
                       <button
                         type="button"

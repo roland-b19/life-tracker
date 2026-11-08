@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list and tasks, so every Health tab and Tasks have data.
 // Usage: npm run seed:dev [-- <dev user name>]   (default user: "demo"; sign in with that name)
-// Only runs against a local database with dev sign-in on, and only fills what that user has none of yet.
+// Only runs against a local database with dev sign-in on. Weight, water and steps fill only the days
+// that have no entry; meals, shopping and tasks only fill when the user has none yet. Nothing is overwritten.
 const { Client } = require("pg");
 
 const name = process.argv[2] || "demo";
@@ -36,37 +37,32 @@ async function isEmpty(db, table, userId) {
 }
 
 async function seedWeight(db, userId) {
-  if (!(await isEmpty(db, "weight_entries", userId))) return "weight: skipped, the user has weigh-ins";
   let count = 0;
   for (let i = 90; i >= 0; i--) {
     if (i > 0 && random() < 0.2) continue; // some mornings without a weigh-in
     const kg = 88 - (90 - i) * 0.06 + between(-0.6, 0.6); // about -0.4 kg/week
-    await db.query("INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, $2, $3)", [
-      userId,
-      addDays(today, -i),
-      kg.toFixed(2),
-    ]);
-    count++;
+    const { rowCount } = await db.query(
+      "INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+      [userId, addDays(today, -i), kg.toFixed(2)],
+    );
+    count += rowCount;
   }
-  return `weight: ${count} weigh-ins`;
+  return `weight: ${count} weigh-ins added`;
 }
 
 async function seedWaterAndSteps(db, userId) {
-  if (!(await isEmpty(db, "daily_metrics", userId))) return "water and steps: skipped, the user has some";
   let count = 0;
   for (let i = 90; i >= 0; i--) {
     if (i > 0 && random() < 0.1) continue;
     const water = i === 0 ? 1250 : Math.round(between(1500, 3600) / 50) * 50;
     const steps = i === 0 ? 4321 : Math.round(between(3000, 15000));
-    await db.query("INSERT INTO daily_metrics (user_id, date, water_ml, steps) VALUES ($1, $2, $3, $4)", [
-      userId,
-      addDays(today, -i),
-      water,
-      steps,
-    ]);
-    count++;
+    const { rowCount } = await db.query(
+      "INSERT INTO daily_metrics (user_id, date, water_ml, steps) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+      [userId, addDays(today, -i), water, steps],
+    );
+    count += rowCount;
   }
-  return `water and steps: ${count} days`;
+  return `water and steps: ${count} days added`;
 }
 
 // [name, kcal, protein, carbs, fat] per slot; the Past foods sheet is built from these.
