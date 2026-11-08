@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import {
+  clearDailyMetricSchema,
+  saveDailyMetricSchema,
   createShoppingItemSchema,
   logMealSchema,
   renameShoppingCategorySchema,
@@ -16,6 +18,9 @@ import {
   addShoppingItem,
   addWater,
   clearBoughtShoppingItems,
+  clearDailyMetric,
+  getDailyMetricsHistory,
+  saveDailyMetric,
   deleteMeal,
   deleteShoppingCategory,
   deleteShoppingItem,
@@ -72,6 +77,27 @@ export async function updateStepsAction(date: string, steps: number) {
   const metrics = await updateDailySteps(userId, date, steps);
   safeRevalidate("/food");
   return { success: true, metrics };
+}
+
+export async function listDailyMetricsAction() {
+  const userId = await requireUser();
+  return getDailyMetricsHistory(userId);
+}
+
+/** `saved: false` when the day already has a value of its own. */
+export async function saveDailyMetricAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const saved = await saveDailyMetric(userId, saveDailyMetricSchema.parse(rawInput));
+  safeRevalidate("/food");
+  return { saved };
+}
+
+export async function clearDailyMetricAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { kind, date } = clearDailyMetricSchema.parse(rawInput);
+  await clearDailyMetric(userId, kind, date);
+  safeRevalidate("/food");
+  return { success: true };
 }
 
 export async function updateTargetsAction(rawInput: unknown) {

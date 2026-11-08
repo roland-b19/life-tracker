@@ -31,7 +31,7 @@ export default async function FoodPage() {
   const [targets, summary, weightAnalytics, shoppingList, shoppingCategories, shoppingHistory, pastFoods] = await Promise.all([
     getNutritionTargets(userId),
     getDailyFoodSummary(userId, today),
-    getWeightAnalytics(userId),
+    getWeightAnalytics(userId, today),
     getShoppingList(userId),
     getShoppingCategories(userId),
     getShoppingHistory(userId),

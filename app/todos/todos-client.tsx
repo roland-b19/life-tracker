@@ -267,7 +267,8 @@ export function TodosClient({
       setWeekOpen(false);
       fadeOut(weekBtn.current, () => setShowWeek(false));
     }
-    switchView({ tab: next, weekday: next === "daily" ? weekday : null });
+    // Undone tasks carry over to today, so the Today tab never shows a past day.
+    switchView({ tab: next, weekday: next === "daily" ? weekday : null, date: next === "daily" || date >= todayDate ? date : todayDate });
   };
 
   const toggleWeek = () => {
@@ -559,7 +560,13 @@ export function TodosClient({
           />
         </div>
         <div className="month-selector" role="group" aria-label="Day">
-          <button type="button" className="month-nav-btn" onClick={() => stepDay(-1)} aria-label="Previous day">
+          <button
+            type="button"
+            className="month-nav-btn"
+            onClick={() => stepDay(-1)}
+            disabled={!isDaily && date <= todayDate}
+            aria-label="Previous day"
+          >
             <ChevronLeftIcon size={17} />
           </button>
           <DatePicker
@@ -567,6 +574,7 @@ export function TodosClient({
             value={date}
             today={todayDate}
             max={maxDate}
+            min={isDaily ? undefined : todayDate}
             marked={isDaily ? undefined : planned[space].filter((d) => d > todayDate)}
             label={dayLabel(date)}
             onChange={goTo}
@@ -805,8 +813,8 @@ export function TodosClient({
               data={bars}
               max={metric === "rate" ? 100 : maxDone}
               format={metric === "rate" ? (v) => `${v}%` : String}
-              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%. Choose a day to open it.`}
-              onSelect={(i) => goTo(days[i].iso)}
+              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%.${isDaily ? " Choose a day to open it." : ""}`}
+              onSelect={isDaily ? (i) => goTo(days[i].iso) : undefined}
             />
           </section>
           {/* Last in the aside: it appears once the service worker is ready, so nothing sits below it to shift. */}

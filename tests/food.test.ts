@@ -21,6 +21,7 @@ vi.mock("@/server/auth", () => ({
 }));
 
 import { db } from "@/server/db";
+import { addDays } from "@/lib/format-date";
 import { users, weightEntries } from "@/db/schema";
 import {
   addShoppingItem,
@@ -44,6 +45,9 @@ import {
 import {
   addWaterAction,
   clearBoughtItemsAction,
+  clearDailyMetricAction,
+  listDailyMetricsAction,
+  saveDailyMetricAction,
   addShoppingCategoryAction,
   addShoppingItemAction,
   deleteMealAction,
@@ -167,43 +171,25 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(deletedByA?.id).toBe(meal.id);
   });
 
-  it("calculates 7-day rolling average and weekly rate of change for body weight", async () => {
-    // Seed 14 days of weight data
-    // Week 1 (7 days): steady at 80.0 kg
-    // Week 2 (7 days): steady at 80.5 kg (+0.5 kg gaining trend)
-    const baseDate = new Date("2026-11-01");
-
-    for (let i = 13; i >= 7; i--) {
-      const d = new Date(baseDate);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+  it("calculates the weight stats from the owner's weigh-ins only", async () => {
+    // Week of Sunday 18.10: 80.00 kg every day; week of Sunday 25.10: 80.50 kg every day.
+    for (let i = 0; i < 14; i++) {
       await db.insert(weightEntries).values({
         userId: userA,
-        date: dateStr,
-        kilograms: "80.00",
+        date: addDays("2026-10-18", i),
+        kilograms: i < 7 ? "80.00" : "80.50",
       });
     }
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(baseDate);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      await db.insert(weightEntries).values({
-        userId: userA,
-        date: dateStr,
-        kilograms: "80.50",
-      });
-    }
-
-    const analytics = await getWeightAnalytics(userA);
+    const analytics = await getWeightAnalytics(userA, "2026-10-31");
     expect(analytics.latestWeight).toBe(80.5);
     expect(analytics.sevenDayAverage).toBe(80.5);
-    expect(analytics.previousWeekAverage).toBe(80.0);
-    expect(analytics.weeklyRateOfChange).toBe(0.5);
-    expect(analytics.trend).toBe("gaining");
+    expect(analytics.weekStartWeight).toBe(80.5);
+    expect(analytics.weeklyRate).toBe(0.5);
+    expect(analytics.sinceLastWeek).toBe(0.5);
 
     // User B has no entries
-    const analyticsB = await getWeightAnalytics(userB);
+    const analyticsB = await getWeightAnalytics(userB, "2026-10-31");
     expect(analyticsB.sevenDayAverage).toBeNull();
   });
 
@@ -376,6 +362,44 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // 7. Delete meal
       const delMealRes = await deleteMealAction(mealRes.meal.id);
       expect(delMealRes.success).toBe(true);
+    });
+
+    it("keeps water and steps history per owner: add, move, refuse a taken day, clear", async () => {
+      authState.id = "";
+      await expect(listDailyMetricsAction()).rejects.toThrow("Authentication required.");
+      await expect(saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 500 })).rejects.toThrow(
+        "Authentication required.",
+      );
+      await expect(clearDailyMetricAction({ kind: "water", date: "2026-11-01" })).rejects.toThrow(
+        "Authentication required.",
+      );
+
+      authState.id = userA;
+      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 500 })).saved).toBe(true);
+      expect((await saveDailyMetricAction({ kind: "steps", date: "2026-11-01", value: 8000 })).saved).toBe(true);
+      // The day already has water: a second add is refused, steps there are untouched.
+      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 900 })).saved).toBe(false);
+      // An edit moves the water to 02.11 and leaves the steps on 01.11.
+      expect(
+        (await saveDailyMetricAction({ kind: "water", date: "2026-11-02", value: 700, previousDate: "2026-11-01" })).saved,
+      ).toBe(true);
+      expect(await listDailyMetricsAction()).toEqual([
+        { date: "2026-11-02", waterMl: 700, steps: 0 },
+        { date: "2026-11-01", waterMl: 0, steps: 8000 },
+      ]);
+      await expect(saveDailyMetricAction({ kind: "steps", date: "2026-11-03", value: 0 })).rejects.toThrow();
+      await expect(saveDailyMetricAction({ kind: "water", date: "2026-11-03", value: 20001 })).rejects.toThrow();
+      await expect(saveDailyMetricAction({ kind: "water", date: "11/03/2026", value: 1 })).rejects.toThrow();
+
+      // Another user sees none of it and their writes land in their own days only.
+      authState.id = userB;
+      expect(await listDailyMetricsAction()).toEqual([]);
+      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-02", value: 100 })).saved).toBe(true);
+      await clearDailyMetricAction({ kind: "steps", date: "2026-11-01" });
+
+      authState.id = userA;
+      await clearDailyMetricAction({ kind: "water", date: "2026-11-02" });
+      expect(await listDailyMetricsAction()).toEqual([{ date: "2026-11-01", waterMl: 0, steps: 8000 }]);
     });
   });
 });

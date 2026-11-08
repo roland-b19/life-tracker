@@ -10,6 +10,7 @@ import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
+import { signedKg, weightStats } from "@/lib/weight-stats";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -185,36 +186,13 @@ export function WeightPanel() {
     });
   }
 
-  // 7-day moving average and week-over-week delta, anchored on the latest entry
   const sorted = sortNewestFirst(entries);
-  let sevenDayAvg: number | null = null;
-  let weeklyDelta: number | null = null;
-
-  if (sorted.length > 0) {
-    const latestDate = new Date(sorted[0].date);
-    const weekAgo = new Date(latestDate);
-    weekAgo.setDate(weekAgo.getDate() - 6);
-    const twoWeeksAgo = new Date(latestDate);
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 13);
-
-    const currentWeek = sorted.filter((e) => {
-      const d = new Date(e.date);
-      return d >= weekAgo && d <= latestDate;
-    });
-    if (currentWeek.length > 0) {
-      const sum = currentWeek.reduce((acc, e) => acc + parseFloat(e.kilograms), 0);
-      sevenDayAvg = Math.round((sum / currentWeek.length) * 100) / 100;
-    }
-
-    const prevWeek = sorted.filter((e) => {
-      const d = new Date(e.date);
-      return d >= twoWeeksAgo && d < weekAgo;
-    });
-    if (sevenDayAvg !== null && prevWeek.length > 0) {
-      const prevAvg = prevWeek.reduce((acc, e) => acc + parseFloat(e.kilograms), 0) / prevWeek.length;
-      weeklyDelta = Math.round((sevenDayAvg - prevAvg) * 100) / 100;
-    }
-  }
+  const stats = weightStats(
+    entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
+    today(),
+  );
+  const tile = (value: number | null) =>
+    value === null ? "—" : <AnimatedNumber value={value} format={twoDecimals} />;
 
   // The chart's window ends today, so an old last weigh-in shows an empty range rather than old data.
   const since = addDays(today(), 1 - Number(range));
@@ -288,24 +266,28 @@ export function WeightPanel() {
               <h2 id="trend-title" className="section-title">
                 Trend
               </h2>
-              {weeklyDelta !== null && (
-                <span className="badge badge-rest">
-                  {weeklyDelta > 0 ? "+" : ""}
-                  {weeklyDelta} kg/week
+              {(stats.weeklyRate !== null || stats.sinceLastWeek !== null) && (
+                <span className="badge-group">
+                  {stats.weeklyRate !== null && (
+                    <span className="badge badge-rest number-tabular">{signedKg(stats.weeklyRate)}/week</span>
+                  )}
+                  {stats.sinceLastWeek !== null && (
+                    <span className="badge badge-rest number-tabular">{signedKg(stats.sinceLastWeek)} since last week</span>
+                  )}
                 </span>
               )}
             </div>
-            <div className="stat-row two">
+            <div className="stat-row">
               <div className="stat-tile">
-                <strong className="number-tabular">
-                  {sevenDayAvg !== null ? <AnimatedNumber value={sevenDayAvg} format={twoDecimals} /> : "—"}
-                </strong>
+                <strong className="number-tabular">{tile(stats.sevenDayAverage)}</strong>
                 <span>7-day average, kg</span>
               </div>
               <div className="stat-tile">
-                <strong className="number-tabular">
-                  {sorted.length > 0 ? <AnimatedNumber value={Number(sorted[0].kilograms)} format={twoDecimals} /> : "—"}
-                </strong>
+                <strong className="number-tabular">{tile(stats.weekStartWeight)}</strong>
+                <span>Week start, kg</span>
+              </div>
+              <div className="stat-tile">
+                <strong className="number-tabular">{tile(stats.latestWeight)}</strong>
                 <span>Latest, kg</span>
               </div>
             </div>
