@@ -145,7 +145,7 @@ None for Life Tracker. All resources deployed for Iteration 2 testing were
 synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscription's
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
-Empty resource group `lt-identity` (`italynorth`, tags `project=life-tracker env=identity`), left by the abandoned External ID tenant attempt on 2026-11-08. It holds nothing and costs nothing; delete with `az group delete -n lt-identity` once the user agrees.
+Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
 
