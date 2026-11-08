@@ -540,7 +540,8 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
+  /* Uppercase text has no descenders, so the line box puts the caps 0.5px high: shift them to the true middle. */
+  padding: calc(0.25rem + 0.5px) 0.65rem calc(0.25rem - 0.5px);
   border: 1px solid var(--edge);
   border-radius: 0.6rem;
   font-size: 0.75rem;
@@ -1531,6 +1532,14 @@ button.btn-sm.tint {
   font-size: 0.8125rem;
 }
 
+/* Tabs with a short label switch to it when the control is too narrow for the full ones */
+.segmented.has-short { container-type: inline-size; }
+.seg-short { display: none; }
+@container (max-width: 29rem) {
+  .seg-long { display: none; }
+  .seg-short { display: inline; }
+}
+
 .segmented button.active {
   color: var(--on-tint);
 }
@@ -2347,12 +2356,16 @@ button.bars-col:focus-visible {
   color: var(--secondary);
 }
 
-/* Stat tiles shown above charts */
+/* Stat tiles shown above charts: equal widths, and in a narrow card the last one wraps to a full-width row. */
 .stat-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
+}
+
+.stat-row > .stat-tile {
+  flex: 1 1 5.5rem;
 }
 
 .stat-tile {
@@ -2622,7 +2635,6 @@ button.bars-col:focus-visible {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
-.stat-row.two { grid-template-columns: repeat(2, 1fr); }
 .head-actions + .empty-note,
 .head-actions + .quick-add,
 .head-actions + .shopping-group { margin-top: 1rem; }
@@ -2953,3 +2965,6 @@ button.bars-col:focus-visible {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
+
+/* Two badges side by side in a section head; they wrap under each other on a narrow card. */
+.badge-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }

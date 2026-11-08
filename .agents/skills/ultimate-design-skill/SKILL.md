@@ -165,7 +165,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
 - **A fraction never counts.** "X of Y" is plain text with the real numbers from the first frame, on entry and on change; only the ring beside it fills, so the card never reads "0 of 0" (the user's call).
-- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`.
+- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
   - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
   - replay their grow animation on every view change (day, tab, filter, period);
@@ -214,7 +214,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 9. **Height changes** go through `AutoHeight`: 180ms, faster than the rows.
    - Each new row waits until the growing height has uncovered it.
    - Tags and links marked `data-slide` glide to their new column when the column widths change.
-10. **Page-level section switch** (Health: Today, Weight, Shopping, Assistant): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (420ms, 14px, staggered 0/40/80/120ms).
+10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (420ms, 14px, staggered 0/40/80/120ms).
 11. **Form close.** The modal reverses its open animation (fade plus scale .98 and 8px). The page blur clears. Only then does the list change (`later()`).
 12. **Sign-out.** Every `main > *` fades with opacity plus blur(2px), never scale, over 320ms `--ease` (fill `forwards`, so it stays faded). The sign-out call runs in parallel. The router goes to `/signin` and refreshes only when both are done. On failure the fade is cancelled and a warning toast says `Failed to sign out`.
 13. **Sign-in.** The card appears only after the previous page has faded. The Continue button keeps its colour while busy (opacity 1, progress cursor).
@@ -275,7 +275,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 - A busy label ends in three dots: "Saving...", "Signing in...".
 - All UI text is English, the Food Assistant included ("Send", "Sending...", "Calculating macros..."). Only the AI's replies follow the language the user writes in.
 - `BarChart` and `LineChart` carry a text summary for screen readers (`role="img"`, or `group` for button bars, with an `aria-label`). `HBars` needs none: its values are text.
-- Segmented labels must fit in monospace on a phone. Shorten them ("Rate"/"Count") rather than letting them overflow.
+- Segmented labels must fit in monospace on a phone. Shorten them ("Rate"/"Count") rather than letting them overflow. When the full label matters on a wide screen, give the option a `short` label: it replaces the long one below a 29rem control width, and the long one stays as the `aria-label`.
 - An add button names its object: "Add item", "Add task", never a bare "Add".
 - No two controls show the same label. If a tab already says "Today", the date selector shows the date. A select next to an "Add exercise" button is labelled "Exercise".
 - Show only what carries information. A week view shows day names, not dates.

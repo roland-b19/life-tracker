@@ -19,15 +19,8 @@ import {
   ensureUserNutritionTargets,
   ensureUserSampleRecipes,
 } from "./food-seed";
+import { weightStats, type WeightStats } from "./weight-stats";
 
-export interface WeightAnalytics {
-  latestWeight: number | null;
-  latestDate: string | null;
-  sevenDayAverage: number | null;
-  previousWeekAverage: number | null;
-  weeklyRateOfChange: number | null; // e.g. +0.25 kg/week
-  trend: "gaining" | "losing" | "maintaining";
-}
 
 export async function getNutritionTargets(userId: string) {
   return ensureUserNutritionTargets(userId);
@@ -195,90 +188,65 @@ export async function updateDailySteps(userId: string, date: string, steps: numb
   return updated;
 }
 
+export type MetricKind = "water" | "steps";
+const metricField = { water: "waterMl", steps: "steps" } as const;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Days with water or steps logged, newest first. */
+export async function getDailyMetricsHistory(userId: string) {
+  return db
+    .select({ date: dailyMetrics.date, waterMl: dailyMetrics.waterMl, steps: dailyMetrics.steps })
+    .from(dailyMetrics)
+    .where(and(eq(dailyMetrics.userId, userId), sql`(${dailyMetrics.waterMl} > 0 OR ${dailyMetrics.steps} > 0)`))
+    .orderBy(desc(dailyMetrics.date));
+}
+
+async function writeMetric(tx: Tx | typeof db, userId: string, date: string, kind: MetricKind, value: number) {
+  const field = metricField[kind];
+  await tx
+    .insert(dailyMetrics)
+    .values({ userId, date, [field]: value })
+    .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { [field]: value } });
+}
+
 /**
- * 7-Day Moving Average & Rate of Change for Body Weight
+ * Sets a day's water or steps. With `previousDate` the value moves there from that day (an edit).
+ * Returns false, writing nothing, when the target day already has a value of its own.
  */
-export async function getWeightAnalytics(userId: string): Promise<WeightAnalytics> {
+export async function saveDailyMetric(
+  userId: string,
+  input: { kind: MetricKind; date: string; value: number; previousDate?: string },
+) {
+  const { kind, date, value, previousDate } = input;
+  return db.transaction(async (tx) => {
+    if (previousDate !== date) {
+      // shortcut: a day with no row yet is not locked, so two tabs adding the same day at once both win; fine for one user.
+      const [row] = await tx
+        .select({ waterMl: dailyMetrics.waterMl, steps: dailyMetrics.steps })
+        .from(dailyMetrics)
+        .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, date)))
+        .for("update");
+      if (row && row[metricField[kind]] > 0) return false;
+      if (previousDate) await writeMetric(tx, userId, previousDate, kind, 0);
+    }
+    await writeMetric(tx, userId, date, kind, value);
+    return true;
+  });
+}
+
+export const clearDailyMetric = (userId: string, kind: MetricKind, date: string) =>
+  writeMetric(db, userId, date, kind, 0);
+
+/** Weight stats for the Health page; `today` is the user's calendar day. */
+export async function getWeightAnalytics(userId: string, today: string): Promise<WeightStats> {
   const entries = await db
-    .select({
-      date: weightEntries.date,
-      kilograms: weightEntries.kilograms,
-    })
+    .select({ date: weightEntries.date, kilograms: weightEntries.kilograms })
     .from(weightEntries)
-    .where(eq(weightEntries.userId, userId))
-    .orderBy(asc(weightEntries.date));
-
-  if (entries.length === 0) {
-    return {
-      latestWeight: null,
-      latestDate: null,
-      sevenDayAverage: null,
-      previousWeekAverage: null,
-      weeklyRateOfChange: null,
-      trend: "maintaining",
-    };
-  }
-
-  const latestEntry = entries[entries.length - 1];
-  const latestWeight = parseFloat(latestEntry.kilograms);
-  const latestDateObj = new Date(latestEntry.date);
-
-  // 7-day rolling window for current average: [latestDate - 6 days, latestDate]
-  const currentWeekStart = new Date(latestDateObj);
-  currentWeekStart.setDate(currentWeekStart.getDate() - 6);
-
-  // Previous week window: [latestDate - 13 days, latestDate - 7 days]
-  const previousWeekStart = new Date(latestDateObj);
-  previousWeekStart.setDate(previousWeekStart.getDate() - 13);
-  const previousWeekEnd = new Date(latestDateObj);
-  previousWeekEnd.setDate(previousWeekEnd.getDate() - 7);
-
-  const currentWeekWeights: number[] = [];
-  const previousWeekWeights: number[] = [];
-
-  for (const entry of entries) {
-    const entryDate = new Date(entry.date);
-    const kg = parseFloat(entry.kilograms);
-
-    if (entryDate >= currentWeekStart && entryDate <= latestDateObj) {
-      currentWeekWeights.push(kg);
-    } else if (entryDate >= previousWeekStart && entryDate <= previousWeekEnd) {
-      previousWeekWeights.push(kg);
-    }
-  }
-
-  const currentAvg =
-    currentWeekWeights.length > 0
-      ? currentWeekWeights.reduce((a, b) => a + b, 0) / currentWeekWeights.length
-      : latestWeight;
-
-  const prevAvg =
-    previousWeekWeights.length > 0
-      ? previousWeekWeights.reduce((a, b) => a + b, 0) / previousWeekWeights.length
-      : null;
-
-  let weeklyRateOfChange: number | null = null;
-  let trend: WeightAnalytics["trend"] = "maintaining";
-
-  if (prevAvg !== null) {
-    weeklyRateOfChange = Math.round((currentAvg - prevAvg) * 100) / 100;
-    if (weeklyRateOfChange > 0.1) {
-      trend = "gaining";
-    } else if (weeklyRateOfChange < -0.1) {
-      trend = "losing";
-    } else {
-      trend = "maintaining";
-    }
-  }
-
-  return {
-    latestWeight: Math.round(latestWeight * 100) / 100,
-    latestDate: latestEntry.date,
-    sevenDayAverage: Math.round(currentAvg * 100) / 100,
-    previousWeekAverage: prevAvg !== null ? Math.round(prevAvg * 100) / 100 : null,
-    weeklyRateOfChange,
-    trend,
-  };
+    .where(eq(weightEntries.userId, userId));
+  return weightStats(
+    entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
+    today,
+  );
 }
 
 /**

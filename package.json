@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "seed:dev": "node --env-file=.env scripts/seed-dev.cjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",

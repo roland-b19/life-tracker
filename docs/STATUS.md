@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (Undo of an edit, Tasks Week strip, new tasks on top)_
+_Last updated: 2026-11-08 by Claude (Health Water/Steps tabs, weight stats, Tasks Today forward-only, dev seed)_
 
 ## Phase
 
@@ -28,6 +28,7 @@ Tasks reject duplicates, merged to `main` (PR #49): adding a task whose title (a
 Wishlist motion is merged to `main` (PR #46): adding an item shows a toast without Undo; saving an edit offers Undo (writes the old values back); toasts are as wide as their content; when a tab switch grows the list, its bottom edge fades instead of cutting rows (`AutoHeight`; since PR #48 on every page that uses it; since PR #50 it shrinks out instead of sliding; removed again in PR #52 at the user's request). No migration, no new dependency, no new endpoint.
 Pages polish 4 is merged in `main` (PR #45): Past foods rows use the standard row with a boxed plus; the Food Assistant has no greeting and no suggestion chips; the Shopping tab shows the list and Categories side by side (list first); Gym training day cards lift as one card (the inner select button no longer lifts, and the row entrance animation no longer pins `transform`, which had blocked the hover scale on day cards and routine rows). Section headers wrap instead of breaking a button label. No migration, no new dependency.
 Wishlist style everywhere (PR #53 and #54, merged): the Wishlist page is the signed-off reference and its buttons, spacing, fonts, motion and add/edit/delete pattern now apply to Tasks, Food, Gym, Health and the sign-in and sign-out screens; the full house style is the new `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/`). No migration, no new dependency, no new endpoint.
+Health tabs and Tasks forward (branch `feat/health-tabs-and-tasks-forward`, PR pending): Health Today shows Nutrition first, then Water, Weight, Steps; Water and Steps get History and Trend tabs (new owner-scoped server actions `listDailyMetricsAction`, `saveDailyMetricAction`, `clearDailyMetricAction`, with authorization tests); weight shows the 7-day average, the week start (weeks start on Sunday), the latest weigh-in, the average weekly change and the change since last week; Tasks Today moves only forward; `npm run seed:dev [-- <name>]` fills a local dev user with sample data. No migration, no new dependency.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 

@@ -17,6 +17,16 @@ export const updateMetricsSchema = z.object({
   notes: z.string().max(255).optional().nullable(),
 });
 
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
+
+/** A day's water (ml) or steps; `previousDate` moves an existing value to `date`. */
+export const saveDailyMetricSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("water"), date: day, value: z.number().int().min(1).max(20000), previousDate: day.optional() }),
+  z.object({ kind: z.literal("steps"), date: day, value: z.number().int().min(1).max(200000), previousDate: day.optional() }),
+]);
+
+export const clearDailyMetricSchema = z.object({ kind: z.enum(["water", "steps"]), date: day });
+
 export const updateNutritionTargetsSchema = z.object({
   calories: z.number().int().min(500).max(10000),
   proteinGrams: z.number().int().min(20).max(500),

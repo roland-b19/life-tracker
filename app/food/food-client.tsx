@@ -15,6 +15,7 @@ import {
 import { Modal, useAfterClose } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
+import { MetricPanel } from "./metric-panel";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, useListMotion } from "../components/list-motion";
 import {
@@ -33,7 +34,7 @@ import {
   updateStepsAction,
 } from "@/app/actions/food";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
-import { WeightAnalytics } from "@/lib/food";
+import { signedKg, type WeightStats } from "@/lib/weight-stats";
 
 interface MealData {
   id: string;
@@ -99,7 +100,7 @@ interface FoodClientProps {
       notes: string | null;
     };
   };
-  weightAnalytics: WeightAnalytics;
+  weightAnalytics: WeightStats;
   initialShoppingList: ShoppingItemData[];
   /** The user's store sections in walking order, without the built-in "other". */
   shoppingCategories: string[];
@@ -126,7 +127,7 @@ export function FoodClient({
   useEffect(() => {
     latestShop.current = shoppingList;
   });
-  const [activeTab, setActiveTab] = useState<"daily" | "weight" | "shopping" | "chat">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "water" | "weight" | "steps" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [history, setHistory] = useState(shoppingHistory);
@@ -743,19 +744,52 @@ export function FoodClient({
           value={activeTab}
           options={[
             { value: "daily", label: "Today" },
+            { value: "water", label: "Water" },
             { value: "weight", label: "Weight" },
-            { value: "shopping", label: "Shopping" },
-            { value: "chat", label: "Assistant" },
+            { value: "steps", label: "Steps" },
+            { value: "shopping", label: "Shopping", short: "Shop" },
+            { value: "chat", label: "Assistant", short: "AI" },
           ]}
           onChange={setActiveTab}
         />
       </div>
 
+      {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} />}
       {activeTab === "weight" && <WeightPanel />}
+      {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} />}
 
       {activeTab === "daily" && (
         <div className="dashboard-grid">
           <div className="dashboard-main">
+            <section className="surface" aria-labelledby="macros-title">
+              <div className="section-head">
+                <h2 id="macros-title" className="section-title">
+                  Nutrition
+                </h2>
+              </div>
+              <div className="macro-grid">
+                {macros.map((m) => (
+                  <div key={m.label} className="macro-card">
+                    <span className="macro-title">{m.label}</span>
+                    <span className="macro-numbers">
+                      <AnimatedNumber value={m.value} format={oneDecimal} />
+                      <span className="macro-target">
+                        {" "}
+                        / {m.target}
+                        {m.unit}
+                      </span>
+                    </span>
+                    <div className="progress-track">
+                      <div
+                        className={`progress-fill ${m.value > m.target ? "over" : ""}`}
+                        style={{ width: `${pct(m.value, m.target)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="surface" aria-labelledby="meals-title">
               <div className="section-head">
                 <div>
@@ -804,35 +838,6 @@ export function FoodClient({
           </div>
 
           <div className="dashboard-aside">
-            <section className="surface" aria-labelledby="macros-title">
-              <div className="section-head">
-                <h2 id="macros-title" className="section-title">
-                  Nutrition
-                </h2>
-              </div>
-              <div className="macro-grid">
-                {macros.map((m) => (
-                  <div key={m.label} className="macro-card">
-                    <span className="macro-title">{m.label}</span>
-                    <span className="macro-numbers">
-                      <AnimatedNumber value={m.value} format={oneDecimal} />
-                      <span className="macro-target">
-                        {" "}
-                        / {m.target}
-                        {m.unit}
-                      </span>
-                    </span>
-                    <div className="progress-track">
-                      <div
-                        className={`progress-fill ${m.value > m.target ? "over" : ""}`}
-                        style={{ width: `${pct(m.value, m.target)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
             <section className="surface" aria-labelledby="water-title">
               <div className="section-head">
                 <h2 id="water-title" className="section-title icon-title">
@@ -865,6 +870,26 @@ export function FoodClient({
               </div>
             </section>
 
+            <section className="surface" aria-labelledby="weight-trend-title">
+              <div className="section-head">
+                <h2 id="weight-trend-title" className="section-title icon-title">
+                  <ScaleIcon size={18} /> Weight
+                </h2>
+                {weightAnalytics.weeklyRate !== null && (
+                  <span className="badge badge-rest number-tabular">{signedKg(weightAnalytics.weeklyRate)}/week</span>
+                )}
+              </div>
+              <p className="metric-big number-tabular">
+                {shownWeight === null ? "—" : (
+                  <AnimatedNumber value={shownWeight} format={(n) => String(Math.round(n * 100) / 100)} />
+                )}
+                <span className="macro-target"> kg{weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}</span>
+              </p>
+              {weightAnalytics.sinceLastWeek !== null && (
+                <p className="card-sub muted number-tabular">{signedKg(weightAnalytics.sinceLastWeek)} since last week</p>
+              )}
+            </section>
+
             <section className="surface" aria-labelledby="steps-title">
               <div className="section-head">
                 <h2 id="steps-title" className="section-title icon-title">
@@ -887,29 +912,6 @@ export function FoodClient({
               <div className="progress-track">
                 <div className="progress-fill" style={{ width: `${stepsPct}%` }} />
               </div>
-            </section>
-
-            <section className="surface" aria-labelledby="weight-trend-title">
-              <div className="section-head">
-                <h2 id="weight-trend-title" className="section-title icon-title">
-                  <ScaleIcon size={18} /> Weight
-                </h2>
-                {weightAnalytics.weeklyRateOfChange !== null && (
-                  <span className="badge badge-rest">
-                    {weightAnalytics.weeklyRateOfChange > 0 ? "+" : ""}
-                    {weightAnalytics.weeklyRateOfChange} kg/week
-                  </span>
-                )}
-              </div>
-              <p className="metric-big number-tabular">
-                {shownWeight === null ? "—" : (
-                  <AnimatedNumber value={shownWeight} format={(n) => String(Math.round(n * 100) / 100)} />
-                )}
-                <span className="macro-target"> kg{weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}</span>
-              </p>
-              {weightAnalytics.previousWeekAverage ? (
-                <p className="card-sub muted">Previous week: {weightAnalytics.previousWeekAverage} kg</p>
-              ) : null}
             </section>
           </div>
         </div>
