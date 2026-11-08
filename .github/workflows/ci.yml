@@ -54,12 +54,14 @@ jobs:
         run: npm test
       - name: Build production container
         run: docker build --tag life-tracker:ci .
+      # Syft runs from its Docker Hub image, pinned by digest: the sbom-action downloads it from
+      # GitHub Releases on every run, which failed the whole job during a Releases outage.
       - name: Generate production image SBOM
-        uses: anchore/sbom-action@9246b90769f852b3a8921f330c59e0b3f439d6e9
-        with:
-          image: life-tracker:ci
-          format: spdx-json
-          output-file: sbom.spdx.json
+        run: |
+          docker save life-tracker:ci -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP:/work:ro" \
+            anchore/syft:v1.27.1@sha256:844ed6a928ef9396fac26d1de374e71dcaf80df14f05841670ed41619c5a718f \
+            docker-archive:/work/image.tar -o spdx-json -q > sbom.spdx.json
       - name: Upload production image SBOM
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -75,9 +77,8 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
       - name: Validate Bicep
-        run: |
-          az bicep install
-          az bicep build --file infra/main.bicep --stdout >/dev/null
+        # Bicep comes with the runner image; `az bicep install` downloads it from GitHub Releases.
+        run: bicep build infra/main.bicep --stdout >/dev/null
       - name: Validate Azure scripts
         run: bash -n scripts/azure-preflight.sh scripts/azure-deploy.sh scripts/azure-teardown.sh
       - name: Dependency audit
