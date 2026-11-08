@@ -137,7 +137,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Undo exactly where it helps.**
   - Delete has Undo.
   - Edit has Undo.
-  - Add has no Undo: a new item is one tap from Delete. Adding onto something that already exists is an edit and has Undo: a water tap (`Added 250 ml`), a shopping item already on the list (`"X" is now 2 kg`), setting water or steps (`Water set to 2000 ml`).
+  - Add has no Undo: a new item is one tap from Delete. Adding onto something that already exists is an edit and has Undo: a water tap (`Added 250 ml`), a shopping item already on the list (`"X" is now 2 kg`), setting water or steps (`Water set to 2000 ml`), a goal (`Saved nutrition goals`, `Water goal set to 3500 ml`).
   - Clearing bought items has Undo (`Cleared 3 bought items`).
   - Moving a task (to another day, into Daily or out of it) has no Undo (`Moved "X" to Tomorrow`, `Moved "X" to Daily`): it is one more Move away.
   - Marking a task done or reopening it has no Undo, and neither does ticking a shopping item: a tick is undone by another tick.
@@ -242,7 +242,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
   - the name (`strong`);
   - meta badges (`data-slide`);
   - `.item-actions` with two `.delete-icon-btn` (`PencilIcon` 17, `TrashIcon` 17), with `aria-label` "Edit X"/"Delete X" and `title` "Edit"/"Delete". A task row puts a Move button first (`MoveIcon` 17, `aria-label` "Move X", `title` "Move"). Reorder buttons use `ArrowUpIcon` / `ArrowDownIcon` 17 ("Move X up" / "Move X down"), never text arrows.
-  - A card-level Edit in a section head is the icon-only `.delete-icon-btn.edit` (`PencilIcon` 17, `aria-label` naming the target: "Edit water amount") when it stands alone (Food Water and Steps). Beside another header button it is a `btn-sm tint` with `PencilIcon` 14 and "Edit", so the pair splits `1fr 1fr` like the Wishlist's sort and Add (Gym day card). The Gym day card keeps its `btn-sm tint` Edit on a rest day, where Start is hidden, so the header keeps one shape between days.
+  - A card-level Edit in a section head is the icon-only `.delete-icon-btn.edit` (`PencilIcon` 17, `aria-label` naming the target: "Edit nutrition goals", "Edit water and goal") when it stands alone (Health Nutrition, Water and Steps). Beside another header button it is a `btn-sm tint` with `PencilIcon` 14 and "Edit", so the pair splits `1fr 1fr` like the Wishlist's sort and Add (Gym day card). The Gym day card keeps its `btn-sm tint` Edit on a rest day, where Start is hidden, so the header keeps one shape between days.
 - **Header add button:** `button.btn-sm.tint` with `<PlusIcon size={14} />` and the label "Add item".
 - **Navigation entry:** a new page adds itself to `navLinks` and its title to `getPageTitle()` in `app/components/navigation.tsx`, with an inline 24×24 stroke icon (strokeWidth 2, round caps and joins). The first four links are tabs on a phone; the rest go to More. A route without a title shows "Life Tracker".
 - **State and handlers:** copy them from `references/motion-and-crud.md`:

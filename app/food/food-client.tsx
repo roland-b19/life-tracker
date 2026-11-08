@@ -32,6 +32,7 @@ import {
   toggleShoppingItemAction,
   updateShoppingItemAction,
   updateStepsAction,
+  updateTargetsAction,
 } from "@/app/actions/food";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { signedKg, type WeightStats } from "@/lib/weight-stats";
@@ -108,6 +109,17 @@ interface FoodClientProps {
   pastFoods: PastFood[];
 }
 
+type Goals = FoodClientProps["targets"];
+// Same ranges as updateNutritionTargetsSchema.
+const NUTRITION_GOALS = [
+  { key: "calories", label: "Calories (kcal)", min: 500, max: 10000 },
+  { key: "proteinGrams", label: "Protein (g)", min: 20, max: 500 },
+  { key: "carbsGrams", label: "Carbs (g)", min: 0, max: 1000 },
+  { key: "fatGrams", label: "Fat (g)", min: 0, max: 400 },
+] as const;
+type NutritionGoal = (typeof NUTRITION_GOALS)[number]["key"];
+const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: 100000 } };
+
 export function FoodClient({
   userName,
   todayDate,
@@ -150,6 +162,12 @@ export function FoodClient({
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
   const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
+  const [metricGoalInput, setMetricGoalInput] = useState("");
+  const [goals, setGoals] = useState(targets);
+  // The server takes all six goals at once, so every write starts from the latest ones.
+  const latestGoals = useRef(targets);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
   const [pastFoods, setPastFoods] = useState(initialPastFoods);
   const [isPastOpen, setIsPastOpen] = useState(false);
 
@@ -352,28 +370,65 @@ export function FoodClient({
     });
   }
 
-  // Saves the edited total; false keeps the form open with its error.
-  async function saveMetric(metric: "water" | "steps", value: number) {
+  const putGoals = (patch: Partial<Goals>) => {
+    latestGoals.current = { ...latestGoals.current, ...patch };
+    setGoals(latestGoals.current);
+  };
+  const writeGoals = (patch: Partial<Goals>) =>
+    updateTargetsAction({ ...latestGoals.current, ...patch }).then((res) => res.success === true, () => false);
+
+  // Saves the edited total and goal; false keeps the form open with its error.
+  async function saveMetric(metric: "water" | "steps", value: number, goal: number) {
     const key = metric === "water" ? "waterMl" : "steps";
     const previous = summary.metrics[key];
+    const previousGoal = latestGoals.current[key];
+    const amountChanged = value !== previous;
+    const goalChanged = goal !== previousGoal;
+    if (!amountChanged && !goalChanged) return true;
     const write = (v: number) =>
       metric === "water" ? addWaterAction(selectedDate, v - summary.metrics.waterMl) : updateStepsAction(selectedDate, v);
-    const res = await write(value).catch(() => null);
-    if (!res?.success || !res.metrics) return false;
-    setMetric(key, res.metrics[key]);
+    let saved = previous;
+    if (amountChanged) {
+      const res = await write(value).catch(() => null);
+      if (!res?.success || !res.metrics) return false;
+      saved = res.metrics[key];
+      setMetric(key, saved);
+    }
+    // A retry after a refused goal finds the amount already saved and writes only the goal.
+    if (goalChanged) {
+      if (!(await writeGoals({ [key]: goal }))) return false;
+      putGoals({ [key]: goal });
+    }
+    const name = metric === "water" ? "Water" : "Steps";
+    const unit = metric === "water" ? " ml" : "";
     showToast({
-      message: metric === "water" ? `Water set to ${value} ml` : `Steps set to ${value}`,
+      message: !goalChanged
+        ? `${name} set to ${value}${unit}`
+        : amountChanged
+          ? `${name} set to ${value}${unit}, goal ${goal}${unit}`
+          : `${name} goal set to ${goal}${unit}`,
       type: "success",
       actionLabel: "Undo",
       onAction: async () => {
-        setMetric(key, previous);
-        const back =
-          metric === "water"
-            ? await addWaterAction(selectedDate, previous - value).catch(() => null)
-            : await updateStepsAction(selectedDate, previous).catch(() => null);
-        if (back?.success && back.metrics) return setMetric(key, back.metrics[key]);
-        setMetric(key, res.metrics[key]);
-        showToast({ message: "Failed to undo the edit", type: "warning" });
+        if (amountChanged) setMetric(key, previous);
+        if (goalChanged) putGoals({ [key]: previousGoal });
+        let failed = false;
+        if (amountChanged) {
+          const back =
+            metric === "water"
+              ? await addWaterAction(selectedDate, previous - value).catch(() => null)
+              : await updateStepsAction(selectedDate, previous).catch(() => null);
+          if (back?.success && back.metrics) setMetric(key, back.metrics[key]);
+          else {
+            setMetric(key, saved);
+            failed = true;
+          }
+        }
+        if (goalChanged && !(await writeGoals({ [key]: previousGoal }))) {
+          putGoals({ [key]: goal });
+          failed = true;
+        }
+        if (failed) showToast({ message: "Failed to undo the edit", type: "warning" });
       },
     });
     return true;
@@ -382,6 +437,7 @@ export function FoodClient({
   function openMetricEdit(metric: "water" | "steps") {
     setFormError("");
     setMetricInput(String(metric === "water" ? summary.metrics.waterMl : summary.metrics.steps));
+    setMetricGoalInput(String(metric === "water" ? goals.waterMl : goals.steps));
     setMetricEdit(metric);
     setMetricOpen(true);
   }
@@ -389,14 +445,51 @@ export function FoodClient({
   async function handleMetricSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = parseInt(metricInput, 10);
+    const goal = parseInt(metricGoalInput, 10);
+    const range = METRIC_GOAL[metricEdit];
     if (busy) return;
     if (!Number.isInteger(value) || value < 0) return setFormError("Please enter a whole number.");
+    if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
+      return setFormError(`The goal must be between ${range.min} and ${range.max}.`);
     setBusy(true);
     setFormError("");
-    const ok = await saveMetric(metricEdit, value);
+    const ok = await saveMetric(metricEdit, value, goal);
     setBusy(false);
     if (ok) setMetricOpen(false);
     else setFormError(`Failed to save ${metricEdit}`);
+  }
+
+  function openGoals() {
+    setFormError("");
+    setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
+    setGoalsOpen(true);
+  }
+
+  async function handleGoalsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
+    const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
+    if (bad) return setFormError(`${bad.label.split(" ")[0]} must be between ${bad.min} and ${bad.max}.`);
+    const previous = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, goals[g.key]])) as Record<NutritionGoal, number>;
+    setBusy(true);
+    setFormError("");
+    const ok = await writeGoals(next);
+    setBusy(false);
+    if (!ok) return setFormError("Failed to save goals");
+    putGoals(next);
+    setGoalsOpen(false);
+    showToast({
+      message: "Saved nutrition goals",
+      type: "success",
+      actionLabel: "Undo",
+      onAction: async () => {
+        putGoals(previous);
+        if (await writeGoals(previous)) return;
+        putGoals(next);
+        showToast({ message: "Failed to undo the edit", type: "warning" });
+      },
+    });
   }
 
   const sameItem = (a: { name: string; unit: string }, b: { name: string; unit: string }) =>
@@ -716,14 +809,15 @@ export function FoodClient({
   }
 
   const macros = [
-    { label: "Calories", value: summary.totals.calories, target: targets.calories, unit: " kcal" },
-    { label: "Protein", value: summary.totals.protein, target: targets.proteinGrams, unit: "g" },
-    { label: "Carbs", value: summary.totals.carbs, target: targets.carbsGrams, unit: "g" },
-    { label: "Fat", value: summary.totals.fat, target: targets.fatGrams, unit: "g" },
+    { label: "Calories", value: summary.totals.calories, target: goals.calories, unit: " kcal" },
+    { label: "Protein", value: summary.totals.protein, target: goals.proteinGrams, unit: "g" },
+    { label: "Carbs", value: summary.totals.carbs, target: goals.carbsGrams, unit: "g" },
+    { label: "Fat", value: summary.totals.fat, target: goals.fatGrams, unit: "g" },
   ];
-  const pct = (value: number, target: number) => Math.min(100, Math.round((value / target) * 100));
-  const waterPct = pct(summary.metrics.waterMl, targets.waterMl);
-  const stepsPct = pct(summary.metrics.steps, targets.steps);
+  // A zero goal (carbs and fat allow it) counts as met once anything is eaten.
+  const pct = (value: number, target: number) => (target > 0 ? Math.min(100, Math.round((value / target) * 100)) : value > 0 ? 100 : 0);
+  const waterPct = pct(summary.metrics.waterMl, goals.waterMl);
+  const stepsPct = pct(summary.metrics.steps, goals.steps);
   const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
   // Walking order, unknown categories after the user's own, "other" last.
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
@@ -766,6 +860,15 @@ export function FoodClient({
                 <h2 id="macros-title" className="section-title">
                   Nutrition
                 </h2>
+                <button
+                  type="button"
+                  className="delete-icon-btn edit"
+                  onClick={openGoals}
+                  aria-label="Edit nutrition goals"
+                  title="Edit"
+                >
+                  <PencilIcon size={17} />
+                </button>
               </div>
               <div className="macro-grid">
                 {macros.map((m) => (
@@ -847,7 +950,7 @@ export function FoodClient({
                   type="button"
                   className="delete-icon-btn edit"
                   onClick={() => openMetricEdit("water")}
-                  aria-label="Edit water amount"
+                  aria-label="Edit water and goal"
                   title="Edit"
                 >
                   <PencilIcon size={17} />
@@ -855,7 +958,7 @@ export function FoodClient({
               </div>
               <p className="metric-big number-tabular">
                 <AnimatedNumber value={summary.metrics.waterMl} />
-                <span className="macro-target"> / {targets.waterMl} ml</span>
+                <span className="macro-target"> / {goals.waterMl} ml</span>
               </p>
               <div className="progress-track">
                 <div className="progress-fill" style={{ width: `${waterPct}%` }} />
@@ -899,7 +1002,7 @@ export function FoodClient({
                   type="button"
                   className="delete-icon-btn edit"
                   onClick={() => openMetricEdit("steps")}
-                  aria-label="Edit steps"
+                  aria-label="Edit steps and goal"
                   title="Edit"
                 >
                   <PencilIcon size={17} />
@@ -907,7 +1010,7 @@ export function FoodClient({
               </div>
               <p className="metric-big number-tabular">
                 <AnimatedNumber value={summary.metrics.steps} />
-                <span className="macro-target"> / {targets.steps}</span>
+                <span className="macro-target"> / {goals.steps}</span>
               </p>
               <div className="progress-track">
                 <div className="progress-fill" style={{ width: `${stepsPct}%` }} />
@@ -1343,13 +1446,61 @@ export function FoodClient({
                 onChange={(e) => setMetricInput(e.target.value)}
               />
             </label>
+            <label>
+              {metricEdit === "water" ? "Daily goal (ml)" : "Daily goal (steps)"}
+              <input
+                type="number"
+                inputMode="numeric"
+                min={METRIC_GOAL[metricEdit].min}
+                max={METRIC_GOAL[metricEdit].max}
+                step="1"
+                required
+                disabled={busy}
+                value={metricGoalInput}
+                onChange={(e) => setMetricGoalInput(e.target.value)}
+                className="number-tabular"
+              />
+            </label>
             {formError && <p className="error" role="alert">{formError}</p>}
           </div>
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => setMetricOpen(false)}>
               Cancel
             </button>
-            <button type="submit" disabled={busy || metricInput === ""}>
+            <button type="submit" disabled={busy || metricInput === "" || metricGoalInput === ""}>
+              {busy ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={goalsOpen} onClose={() => setGoalsOpen(false)} title="Edit goals">
+        <form onSubmit={handleGoalsSubmit}>
+          <div className="form-stack">
+            {NUTRITION_GOALS.map((g) => (
+              <label key={g.key}>
+                {g.label}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={g.min}
+                  max={g.max}
+                  step="1"
+                  required
+                  disabled={busy}
+                  value={goalInputs[g.key]}
+                  onChange={(e) => setGoalInputs((prev) => ({ ...prev, [g.key]: e.target.value }))}
+                  className="number-tabular"
+                />
+              </label>
+            ))}
+            {formError && <p className="error" role="alert">{formError}</p>}
+          </div>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setGoalsOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" disabled={busy || Object.values(goalInputs).some((v) => v === "")}>
               {busy ? "Saving..." : "Save"}
             </button>
           </div>
