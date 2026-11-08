@@ -111,4 +111,4 @@ For Azure, `scripts/azure-deploy.sh` passes `AUTH_AZURE_WELLKNOWN` to the contai
 
 ## 6. Sign-in page
 
-`app/signin/page.tsx` only drives the development credentials provider. In production it needs one **Continue** button that calls `signIn("azure-ad", { callbackUrl: "/" })`. Microsoft's hosted page then offers email + password and Google, so the app does not need separate per-provider buttons.
+With `AUTH_DEV=false`, `/signin` shows one **Continue** button that calls `signIn("azure-ad", { callbackUrl: "/" })`. Microsoft's hosted page offers email + password and Google, so the app has no per-provider buttons.
