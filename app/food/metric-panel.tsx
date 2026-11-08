@@ -257,14 +257,16 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
             </div>
             <div className="stat-row">
               <div className="stat-tile">
-                <strong className="number-tabular">{average === null ? "—" : <AnimatedNumber value={average} />}</strong>
-                <span>7-day average, {k.unit}</span>
+                <strong className="number-tabular">
+                  {average === null ? "—" : <><AnimatedNumber value={average} /> <span className="macro-target">{k.unit}</span></>}
+                </strong>
+                <span>7-day average</span>
               </div>
               <div className="stat-tile">
                 <strong className="number-tabular">
-                  <AnimatedNumber value={todayValue} />
+                  <AnimatedNumber value={todayValue} /> <span className="macro-target">{k.unit}</span>
                 </strong>
-                <span>Today, {k.unit}</span>
+                <span>Today</span>
               </div>
             </div>
             {sorted.length >= 2 && (

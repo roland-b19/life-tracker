@@ -17,12 +17,11 @@ describe("weightStats", () => {
       latestDate: null,
       sevenDayAverage: null,
       weekStartWeight: null,
-      weeklyRate: null,
       sinceLastWeek: null,
     });
   });
 
-  it("averages the week-to-week changes and compares this week so far with last week", () => {
+  it("compares this week so far with last week", () => {
     const stats = weightStats(
       [
         e("2026-10-25", 90), // week of 25.10: 90
@@ -32,7 +31,6 @@ describe("weightStats", () => {
       ],
       "2026-11-10", // Tuesday
     );
-    expect(stats.weeklyRate).toBe(-5);
     expect(stats.sinceLastWeek).toBe(-4);
     expect(stats.weekStartWeight).toBe(81);
     expect(stats.latestWeight).toBe(79);
@@ -40,9 +38,8 @@ describe("weightStats", () => {
     expect(stats.sevenDayAverage).toBe(80); // 04.11-10.11: 81, 79
   });
 
-  it("spreads a change over skipped weeks and starts the week at the first weigh-in after Sunday", () => {
+  it("skips a missing last week and starts the week at the first weigh-in after Sunday", () => {
     const stats = weightStats([e("2026-10-25", 90), e("2026-11-09", 88)], "2026-11-09");
-    expect(stats.weeklyRate).toBe(-1); // -2 over two weeks
     expect(stats.sinceLastWeek).toBeNull(); // nothing logged last week
     expect(stats.weekStartWeight).toBe(88);
   });

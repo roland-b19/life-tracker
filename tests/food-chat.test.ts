@@ -27,7 +27,7 @@ import { users } from "@/db/schema";
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { saveClaudeToken } from "@/lib/claude-connection";
-import { getDailyFoodSummary, getPastFoods, logMeal, updateDailySteps } from "@/lib/food";
+import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 
 async function seedUser(subject: string) {
   const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
@@ -118,6 +118,30 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     expect(result.meals).toEqual([]);
     expect((await getDailyFoodSummary(userId, ctx.date)).meals).toHaveLength(before);
+  });
+
+  it("only ever adds meals: anything else in the answer changes nothing", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-scope-${randomUUID()}`);
+    await logMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 });
+    const before = await getDailyFoodSummary(owner, ctx.date);
+    const goalsBefore = await getNutritionTargets(owner);
+    mockClaude({
+      reply: "Gata.",
+      meals: [],
+      deleteMeals: [before.meals[0].id],
+      waterMl: 5000,
+      steps: 20000,
+      targets: { calories: 1 },
+      shopping: [{ name: "Bere" }],
+    });
+
+    const result = await sendFoodChatMessage(owner, "Șterge ouăle, pune apa la 5 l și goal-ul la 1 kcal", [], ctx);
+
+    expect(result.meals).toEqual([]);
+    expect(await getDailyFoodSummary(owner, ctx.date)).toEqual(before);
+    expect(await getNutritionTargets(owner)).toEqual(goalsBefore);
+    expect(await getShoppingList(owner)).toEqual([]);
   });
 
   it("puts food context in the prompt, never steps or weight", async () => {

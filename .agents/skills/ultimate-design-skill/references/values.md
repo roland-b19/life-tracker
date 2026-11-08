@@ -190,7 +190,6 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 | `.secondary` | text colour on `rgba(255,255,255,.06)` | the neutral grey button: Cancel, and non-primary choices next to a primary one (picker Today, water amounts, Move options, chat chips); never a form's submit |
 | `.danger` | danger text on a transparent background | |
 | `.btn-sm` | min-height 2.25rem, padding .35rem .85rem, .875rem, weight 600, radius .7rem | |
-| `.chat-chip` | a `.secondary` chip: min-height 2.25rem, padding .3rem .85rem, .8125rem, radius .7rem | the "Add again" quick-add chips, in a `.chat-suggestions` row (flex-wrap, gap .5rem, margin-bottom 1rem) |
 | `.btn-sm.tint` | tint text on `--tint-subtle` | the default header action (Add, Show all, Sign out) |
 
 **Hover** (only inside `@media (hover: hover)`)
@@ -214,7 +213,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 - `.item-actions` and `.row-actions` gap .75rem, the same as the header gap.
 
 **Hit area (compact controls)**
-- `button.btn-sm`, `.toast-action-btn`, `.toast-close-btn`, `.month-nav-btn`, `.tap-btn` and `.chat-chip` are `position: relative` with `::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }`.
+- `button.btn-sm`, `.toast-action-btn`, `.toast-close-btn`, `.month-nav-btn`, and `.tap-btn` are `position: relative` with `::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }`.
 - The visual size stays; the target grows to 44pt. Picker cells are left out on purpose, and so is `.muscle-chip` (padding .35rem .75rem, .85rem, in a wrapping row with a .4rem gap), whose grown targets would overlap the next row.
 
 **`.streak`**
@@ -314,7 +313,7 @@ The CSS hides the outline on `[data-pointer]`.
 - Price badge: tabular, `white-space: nowrap`, `justify-content: center`. In the Wishlist grid, price and range badges stretch to their shared column, so every price badge has the same width (the widest price), with centred text.
 - `.badge-row` gap .4rem.
 - Other badges: `.badge-success` (success on `--success-subtle`), `.badge-reminder` and `.badge-repeat` (tint on `--tint-subtle`, .75rem), `.badge-carried` (warning on `--warning-subtle`: a carried-over task, an AI-estimated meal, both things to check).
-- A value with no goal behind it (the weight trend in kg/week) is `badge-rest`, never green or warning: colour would judge it.
+- A value with no goal behind it (the weight change since last week) is `badge-rest`, never green or warning: colour would judge it.
 - No coloured left stripe or outline marks a card's state (the deload card once had one); the title says it.
 - `.progress-fill`: tint, radius 1rem, width transition `calc(var(--dur) * 1.5)` `--ease`; `.over` turns it danger.
 

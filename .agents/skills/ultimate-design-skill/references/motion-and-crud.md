@@ -232,7 +232,7 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 - A renamed row keeps its key (Food categories map each name to a stable `cat:` key), so a rename is a `move`, not a leave plus an enter.
 - Every list is `<AutoHeight wash className="entries">` with `rowRef` rows, short lists such as Categories included. Two exceptions keep the row motion without the wash:
   - the Gym day editor's exercises are `--surface-solid` filled field cards (radius .85rem, no visible border) in a modal (`<AutoHeight className="routine-list">`), not rows;
-  - the Shopping list is grouped by category (`.shopping-group` sections), so its alternating band is plain CSS (`.surface > .shopping-group > .shopping-row`) and a group header can appear without its space animating. Its rows stagger per group through `sibling-index()` only, so in Safari they appear at once;
+  - the Shopping list is grouped by category: `<AutoHeight className="shopping-groups">` (a grid, row-gap 1.25rem) of `.shopping-group` sections, each a `rowRef` keyed by its category's stable key, so its alternating band is plain CSS (`.surface .shopping-group > .shopping-row`). A row that is its group's only one leaves or enters with its whole group (`shopKey`), so a header never pops; an item that changes group leaves, then enters at its new place. Its rows stagger per group through `sibling-index()` only, so in Safari they appear at once;
   - Gym Training days are a `<AutoHeight className="split-day-list">` of selectable `--surface-solid` cards (radius .85rem, padding .5rem .75rem .5rem 1rem, gap .6rem). The seven days never change, so there is no wash; a `--tint-subtle` fill marks the selected day.
 
 **Animation**
@@ -244,7 +244,7 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 **Optimistic updates and Undo**
 - Toasts and row exits never wait for the network.
 - Every failure path restores what the user sees and shows a `warning` toast naming what failed. Inside an open form, the failure goes to the form's `.error` instead and the form stays open.
-- A form whose result changes the list (add, rename, merge, delete) wraps that change in `later()` and passes `onExited={runAfterClose}` to its Modal, the delete button inside a form included (Food categories).
+- A form whose result changes the list (add, rename, merge, delete) wraps that change in `later()` and passes `onExited={runAfterClose}` to its Modal.
 - A dialog that is not a form but changes the list (Tasks Move) does the same: its change goes through `later()` and its Modal gets `onExited={runAfterClose}`.
 - A picker dialog that stays open while you use it (Food "Past foods") is the exception: each row has a `PlusIcon` 17 `.delete-icon-btn.edit` titled "Log" (aria-label "Log {name}, {kcal} kcal"), and a logged row leaves the picker at once with no `later()`, since the dialog does not close. When nothing is left it shows an `.empty-note`.
 - A chat message that fails to send is taken back: its bubble is removed, the text returns to the input, and a `warning` toast says `Failed to send message`. Never answer with a fake assistant message.

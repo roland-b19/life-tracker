@@ -51,9 +51,7 @@ describe("weight authorization", () => {
       .filter((file) => file.endsWith("route.ts"))
       .sort();
     expect(routeFiles).toEqual([
-      "ai/food/route.ts",
       "auth/[...nextauth]/route.ts",
-      "mcp/route.ts",
       "weight/[id]/route.ts",
       "weight/route.ts",
     ]);

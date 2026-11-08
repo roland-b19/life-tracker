@@ -94,7 +94,7 @@ async function seedMeals(db, userId) {
   return `meals: ${count}`;
 }
 
-// [name, amount, unit, category, state]: "list" to buy, "bought" ticked, "cleared" quick-add history only.
+// [name, amount, unit, category, state]: "list" to buy, "bought" ticked, "cleared" taken off the list.
 const SHOPPING = [
   ["Chicken breast", 1, "kg", "meat", "list"],
   ["Bananas", 6, "pcs", "produce", "list"],

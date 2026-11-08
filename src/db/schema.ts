@@ -283,7 +283,7 @@ export const shoppingItems = pgTable(
     category: varchar("category", { length: 50 }).default("other").notNull(),
     isBought: boolean("is_bought").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    // Set when a bought item is cleared: hidden from the list, kept for quick add.
+    // Set when a bought item is cleared: hidden from the list, kept so Undo can restore it.
     clearedAt: timestamp("cleared_at", { withTimezone: true }),
   },
 );
@@ -411,6 +411,7 @@ export const pushSubscriptions = pgTable(
 );
 
 // --- AI CONNECTOR / API TOKENS ---
+// shortcut: unused since the connector was removed (2026-11-08); the table stays to avoid a migration, drop it in one if never revived.
 
 export const apiTokens = pgTable(
   "api_tokens",

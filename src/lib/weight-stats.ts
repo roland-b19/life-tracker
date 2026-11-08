@@ -7,8 +7,6 @@ export type WeightStats = {
   sevenDayAverage: number | null;
   /** This week's Sunday weigh-in, else the first one since that Sunday. */
   weekStartWeight: number | null;
-  /** Mean of the week-to-week changes of the weekly averages (weeks start on Sunday). */
-  weeklyRate: number | null;
   /** This week's average so far minus last week's average. */
   sinceLastWeek: number | null;
 };
@@ -31,18 +29,8 @@ export function weightStats(entries: { date: string; kilograms: number }[], toda
     byWeek.set(week, [...(byWeek.get(week) ?? []), e.kilograms]);
   }
   const weekAvg = (week: string) => mean(byWeek.get(week) ?? []);
-  const weeks = [...byWeek.keys()]; // ascending, as sorted is
   const thisWeek = weekStartOf(today);
   const last = sorted.at(-1);
-
-  // The mean of consecutive week-to-week changes telescopes to (last - first) / weeks apart;
-  // a week with no weigh-in still counts as a week.
-  let weeklyRate: number | null = null;
-  if (weeks.length >= 2) {
-    const [first, final] = [weeks[0], weeks[weeks.length - 1]];
-    const apart = (day(final).getTime() - day(first).getTime()) / (7 * 86_400_000);
-    weeklyRate = round((weekAvg(final)! - weekAvg(first)!) / apart);
-  }
 
   const current = weekAvg(thisWeek);
   const previous = weekAvg(addDays(thisWeek, -7));
@@ -54,7 +42,6 @@ export function weightStats(entries: { date: string; kilograms: number }[], toda
     latestDate: last?.date ?? null,
     sevenDayAverage: recent === null ? null : round(recent),
     weekStartWeight: weekStart ? round(weekStart.kilograms) : null,
-    weeklyRate,
     sinceLastWeek: current === null || previous === null ? null : round(current - previous),
   };
 }

@@ -690,6 +690,7 @@ main {
   font-size: 0.78rem;
   font-weight: 500;
   color: var(--secondary);
+  white-space: nowrap; /* the unit never drops below its number */
 }
 
 .progress-track {
@@ -1444,10 +1445,10 @@ button.signin-continue:disabled {
 
 /* Small secondary action used inside lists and card headers */
 /* Compact controls keep their look but get a 44pt hit area (HIG); dense picker grids are left out so taps never land on a neighbour. */
-:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn, .chat-chip) {
+:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn) {
   position: relative;
 }
-:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn, .chat-chip)::before {
+:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn)::before {
   content: "";
   position: absolute;
   inset: min(0px, (100% - 44px) / 2);
@@ -1619,6 +1620,11 @@ main > .error {
     grid-template-columns: 1.6fr 1fr;
     gap: 1.5rem;
   }
+}
+
+/* Health's day stepper has the row to itself, as wide as the section tabs above it */
+.toolbar.dash.day-toolbar {
+  grid-template-columns: 1fr;
 }
 
 /* Date or month stepper: arrows at the ends, the label in the middle (tappable to jump back) */
@@ -2341,12 +2347,6 @@ button.bars-col:focus-visible {
   stroke-linecap: round;
 }
 
-.line-dot {
-  fill: var(--surface-solid);
-  stroke: var(--tint);
-  stroke-width: 2;
-}
-
 .line-axis {
   display: flex;
   justify-content: space-between;
@@ -2634,13 +2634,20 @@ button.bars-col:focus-visible {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
-.head-actions + .empty-note,
-.head-actions + .quick-add,
-.head-actions + .shopping-group { margin-top: 1rem; }
-.quick-add .chat-suggestions { margin-bottom: 1.25rem; }
+.head-actions + .empty-note { margin-top: 1rem; }
 
 .category-name { text-transform: capitalize; }
-.shopping-group + .shopping-group { margin-top: 1.25rem; }
+/* Groups sit in a grid, so a group that leaves or enters (list-motion.tsx) closes or opens its gap with it. Group and
+   clip box widen by the row band, so neither cuts the band off while its height animates. */
+.shopping-groups { display: grid; row-gap: 1.25rem; }
+.shopping-groups > .shopping-group > .group-label { margin-top: 0; }
+.surface > .auto-height:has(> .shopping-groups),
+.shopping-groups > .shopping-group {
+  --band-out: calc((var(--card-pad) + 1px) / 2);
+  margin-inline: calc(-1 * var(--band-out));
+  padding-inline: var(--band-out);
+}
+.surface > .auto-height:has(> .shopping-groups) { margin-bottom: 0; }
 
 .group-label {
   margin: 0 0 0.25rem;
@@ -2652,18 +2659,6 @@ button.bars-col:focus-visible {
 }
 
 /* Health: assistant chat */
-.chat-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-.chat-chip {
-  min-height: 2.25rem;
-  padding: 0.3rem 0.85rem;
-  border-radius: 0.7rem;
-  font-size: 0.8125rem;
-}
 .chat-log {
   display: flex;
   flex-direction: column;
@@ -2730,7 +2725,7 @@ button.bars-col:focus-visible {
 .todo-row,
 .split-day-card,
 .routine-row,
-:is(.entries, .todo-list) > .empty-note {
+:is(.entries, .todo-list, .shopping-groups) > .empty-note {
   /* backwards, not both: a held end state would pin transform and block the hover lift */
   animation: row-in 260ms var(--ease) backwards;
   /* Capped at the 11th row, so a long list never waits; browsers without sibling-index() drop the line and
@@ -2951,12 +2946,12 @@ button.bars-col:focus-visible {
    still entering sits out the alternation, so no other row's wash flips while it comes in. */
 .surface .auto-height[data-wash],
 .surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row),
-.surface > .shopping-group > .shopping-row {
+.surface .shopping-group > .shopping-row {
   --band-out: calc((var(--card-pad) + 1px) / 2);
 }
 /* Trailing actions keep the same inset from the band as the text, so they line up under the header's button */
 .surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child),
-.surface > .shopping-group > .shopping-row {
+.surface .shopping-group > .shopping-row {
   padding-inline-end: var(--band-out);
 }
 .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
