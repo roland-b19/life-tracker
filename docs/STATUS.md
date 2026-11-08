@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (branch `feat/lists-more`: More button on long lists, shopping unit dropdown)_
+_Last updated: 2026-11-08 by Claude (PR #65 merged: More button on long lists, shopping unit select)_
 
 ## Phase
 
@@ -36,7 +36,7 @@ Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #2
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
 Health polish (merged in `main`, PR #64): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals; the unused external Food connector (`/api/mcp`, `/api/ai/food`, API tokens) is deleted. No migration, no new dependency.
-Long lists and units (branch `feat/lists-more`, PR open): a list longer than 20 rows shows 20 and a centred More button adds 20 at a time (`useMore` in `list-motion.tsx`), on Health meals, Shopping, Categories, Past foods, Water, Steps and Weight history, Tasks, Wishlist and a Gym day's exercises; counts and totals still use the whole list. The shopping Unit field is a select (pcs, g, kg, ml, l, pack, bottle, can, jar, box, bag, bunch; default pcs). Past foods moved from the Assistant to the Meals card. No migration, no new dependency, no new endpoint.
+Long lists and units (merged in `main`, PR #65): a list longer than 20 rows shows 20 and a centred More button adds 20 at a time (`useMore` in `list-motion.tsx`), on Health meals, Shopping, Categories, Past foods, Water, Steps and Weight history, Tasks, Wishlist and a Gym day's exercises; counts and totals still use the whole list. The shopping Unit field is a select (pcs, g, kg, ml, l, pack, bottle, can, jar, box, bag, bunch; default pcs). Past foods moved from the Assistant to the Meals card. No migration, no new dependency, no new endpoint.
 
 ## Current focus
 
