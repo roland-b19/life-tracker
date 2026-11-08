@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getUserRecipes, logMeal } from "./food";
 import { logMealSchema } from "./validations/food";
+import { runClaude } from "./claude-cli";
+import { getClaudeToken } from "./claude-connection";
 
 export interface ChatMessage {
   role: "user" | "model";
@@ -16,21 +18,21 @@ export interface FoodChatContext {
 
 type LoggedMeal = Awaited<ReturnType<typeof logMeal>>;
 
-// What the model must answer with; Gemini enforces it, the app checks it again below.
+// What the model must answer with; the CLI enforces it, the app checks it again below.
 const RESPONSE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    reply: { type: "STRING" },
+    reply: { type: "string" },
     meals: {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          name: { type: "STRING" },
-          calories: { type: "NUMBER" },
-          protein: { type: "NUMBER" },
-          carbs: { type: "NUMBER" },
-          fat: { type: "NUMBER" },
+          name: { type: "string" },
+          calories: { type: "number" },
+          protein: { type: "number" },
+          carbs: { type: "number" },
+          fat: { type: "number" },
         },
         required: ["name", "calories", "protein", "carbs", "fat"],
       },
@@ -101,47 +103,32 @@ export async function sendFoodChatMessage(
   history: ChatMessage[],
   ctx: FoodChatContext,
 ): Promise<{ reply: string; meals: LoggedMeal[] }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return {
-      reply:
-        "Pentru a activa chat-ul inteligent cu Gemini direct în aplicație, te rog să adaugi variabila `GEMINI_API_KEY` în fișierul `.env` (poți genera o cheie gratuită la https://aistudio.google.com). Odată adăugată, voi putea estima automat caloriile și înregistra mesele direct din conversație!",
-      meals: [],
-    };
+  const token = await getClaudeToken(userId);
+  // Without a stored token only a dev build may use the machine's own `claude` login.
+  if (!token && process.env.AUTH_DEV !== "true") {
+    return { reply: "Conectează-ți contul Claude din Settings ca să folosești asistentul.", meals: [] };
   }
 
-  const contents = [...history, { role: "user", text: message }].map((m) => ({
-    role: m.role === "user" ? "user" : "model",
-    parts: [{ text: m.text }],
-  }));
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-  let text: string;
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: await buildFoodChatPrompt(userId, ctx) }] },
-        contents,
-        generationConfig: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
-      }),
-    });
-    if (!response.ok) {
-      console.error("Gemini API error:", response.status); // the body may echo the prompt, so it is not logged
-      return { reply: `Eroare de comunicare cu Gemini API (Status ${response.status}).`, meals: [] };
-    }
-    const data = await response.json();
-    text = ((data.candidates?.[0]?.content?.parts ?? []) as Array<{ text?: string }>).map((p) => p.text ?? "").join("");
-  } catch {
-    console.error("Gemini network error");
-    return { reply: "Nu m-am putut conecta la Gemini API. Te rog să verifici conexiunea la internet.", meals: [] };
+  // The CLI takes one message, so earlier turns travel inside it as a transcript.
+  const transcript = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`).join("\n\n");
+  const result = await runClaude({
+    system: await buildFoodChatPrompt(userId, ctx),
+    input: transcript ? `Conversation so far:\n\n${transcript}\n\nNew message:\n${message}` : message,
+    schema: RESPONSE_SCHEMA,
+    token,
+  });
+  if (!result.ok) {
+    const reply = {
+      auth: "Claude a refuzat tokenul. Conectează-ți din nou contul Claude din Settings.",
+      unavailable: "Claude CLI nu este instalat pe server.",
+      error: "Claude nu a răspuns. Te rog să reîncerci.",
+    }[result.reason];
+    return { reply, meals: [] };
   }
 
   let answer: z.infer<typeof modelAnswerSchema>;
   try {
-    answer = modelAnswerSchema.parse(JSON.parse(text));
+    answer = modelAnswerSchema.parse(result.output);
   } catch {
     return { reply: "Nu am înțeles răspunsul asistentului, așa că nu am înregistrat nimic. Te rog să reîncerci.", meals: [] };
   }

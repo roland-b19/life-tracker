@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-08 by Claude (editable Health goals, dev seed for every Health tab)_
+_Last updated: 2026-11-08 by Claude (Assistant on Claude CLI, Settings page, Entra External ID sign-in script)_
 
 ## Phase
 
@@ -30,6 +30,7 @@ Pages polish 4 is merged in `main` (PR #45): Past foods rows use the standard ro
 Wishlist style everywhere (PR #53 and #54, merged): the Wishlist page is the signed-off reference and its buttons, spacing, fonts, motion and add/edit/delete pattern now apply to Tasks, Food, Gym, Health and the sign-in and sign-out screens; the full house style is the new `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/`). No migration, no new dependency, no new endpoint.
 Health tabs and Tasks forward is merged in `main` (PR #59; CI tools fix PR #60): Health Today shows Nutrition first, then Water, Weight, Steps; Water and Steps get History and Trend tabs (new owner-scoped server actions `listDailyMetricsAction`, `saveDailyMetricAction`, `clearDailyMetricAction`, with authorization tests); weight shows the 7-day average, the week start (weeks start on Sunday), the latest weigh-in, the average weekly change and the change since last week; Tasks Today moves only forward; `npm run seed:dev [-- <name>]` fills a local dev user with sample data. No migration, no new dependency.
 Editable goals and fuller seed (PR #61, merged): Health Today's Nutrition card has an Edit button for the calorie, protein, carbs and fat goals, and the Water and Steps edit forms also set the daily goal; both have Undo. They use the existing owner-scoped `updateTargetsAction` (now with an authorization test). `npm run seed:dev` also fills 30 days of meals (so Past foods has entries) and a shopping list with sections, ticked items and quick-add history. No migration, no new dependency, no new endpoint.
+Claude Assistant (branch `feat/claude-cli-chat`, PR open): the Health Assistant calls Claude through the Claude Code CLI with each user's own token, connected on the new Settings page (encrypted at rest, owner-only). Adds migration `0017_claude_connections` (new table plus GRANT; must be applied wherever `db:migrate` runs) and the `CLAUDE_TOKEN_KEY` environment variable. No new npm dependency. **Not deployable yet:** the container image has no `claude` CLI and `infra/main.bicep` has no `CLAUDE_TOKEN_KEY` (Key Vault); `GEMINI_API_KEY` was never wired either.
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
@@ -56,7 +57,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
     - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
     - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
     - Token management UI removed on 2026-11-05 (see `docs/decisions.md`); the token backend and endpoints still work for existing tokens.
-    - In-App Food AI Chat: Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash`) via native fetch. The system prompt (`buildFoodChatPrompt` in `src/lib/food-ai-chat.ts`) carries the day, local time, targets, meals already logged, recipes and past foods, never weight or steps; the model answers JSON `{reply, meals[]}`, each meal is validated like a hand-entered one and logged as an estimate. No shopping from the chat.
+    - In-App Food AI Chat: Claude through the Claude Code CLI (`src/lib/claude-cli.ts`, `CLAUDE_MODEL`, default `sonnet`) with the user's own token from Settings (`src/lib/claude-connection.ts`); was Gemini until 2026-11-08. The system prompt (`buildFoodChatPrompt` in `src/lib/food-ai-chat.ts`) carries the day, local time, targets, meals already logged, recipes and past foods, never weight or steps; the model answers JSON `{reply, meals[]}`, each meal is validated like a hand-entered one and logged as an estimate. No shopping from the chat.
     - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, `tests/food-chat.test.ts`, 60 total passing across repo).
 
 ## Verification status breakdown
@@ -145,6 +146,7 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 
 ## Session log (newest first)
 
+- 2026-11-08 — Claude Assistant (Claude Code, branch `feat/claude-cli-chat`): Gemini replaced by the Claude Code CLI; Settings page to connect, replace or disconnect a Claude token (AES-256-GCM in `claude_connections`); new tests `tests/claude-connection.test.ts` and an updated `tests/food-chat.test.ts`. Checked in the browser at phone and desktop width: connect (invalid and valid token), the chat with a fake token (real CLI, "refused token" reply), disconnect, and a real answer through the local login. Fixed on the way: the CLI needs `USER` to find a macOS Keychain login.
 - 2026-11-08 — Progress total (Claude Code, branch `fix/numbers-start-real`): "X of Y" is plain text with the real numbers; the ring fill and stat tiles keep their animation; the tween no longer dips below its start ("-5%"); the ring eases down as well as up on view changes. Checks: tsc, eslint, browser frame sampling on Tasks.
 - 2026-11-08 — Tasks Progress (Claude Code, branch `fix/tasks-progress-empty`): a list with no tasks shows only the note, no ring; Progress follows the list on screen, so it no longer flashes the last day's numbers. Checks: tsc, eslint, browser frame sampling across tab and day switches.
 - 2026-11-08 — Tasks review (Claude Code, branch `fix/tasks-week-button`):

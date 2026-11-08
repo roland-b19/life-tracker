@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 const authState = vi.hoisted(() => ({
@@ -10,6 +10,9 @@ const authState = vi.hoisted(() => ({
     }
   },
 }));
+
+const runClaude = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/claude-cli", () => ({ runClaude }));
 
 vi.mock("@/server/auth", () => ({
   UnauthorizedError: authState.UnauthorizedError,
@@ -23,6 +26,7 @@ import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
+import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getPastFoods, logMeal, updateDailySteps } from "@/lib/food";
 
 async function seedUser(subject: string) {
@@ -30,42 +34,60 @@ async function seedUser(subject: string) {
   return user.id;
 }
 
-/** One Gemini response whose text part is `answer` (an object is sent as JSON). */
-function mockGemini(answer: unknown) {
-  const text = typeof answer === "string" ? answer : JSON.stringify(answer);
-  return vi.spyOn(global, "fetch").mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ candidates: [{ content: { role: "model", parts: [{ text }] } }] }),
-  } as unknown as Response);
+/** One successful Claude CLI answer whose structured output is `output`. */
+function mockClaude(output: unknown) {
+  return runClaude.mockResolvedValueOnce({ ok: true, output });
 }
 
 const ctx = { date: "2026-11-05", time: "13:10" };
 
 describe("Food assistant: context prompt and structured answer", () => {
   let userId: string;
-  const originalKey = process.env.GEMINI_API_KEY;
+  const originalAuthDev = process.env.AUTH_DEV;
 
   beforeAll(async () => {
+    process.env.CLAUDE_TOKEN_KEY = randomBytes(32).toString("base64");
     userId = await seedUser(`chat-user-${randomUUID()}`);
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    runClaude.mockReset();
     authState.id = "";
-    if (originalKey) process.env.GEMINI_API_KEY = originalKey;
-    else delete process.env.GEMINI_API_KEY;
+    if (originalAuthDev === undefined) delete process.env.AUTH_DEV;
+    else process.env.AUTH_DEV = originalAuthDev;
   });
 
-  it("returns setup instructions if GEMINI_API_KEY is not configured", async () => {
-    delete process.env.GEMINI_API_KEY;
+  it("asks the user to connect Claude when there is no token outside dev", async () => {
+    delete process.env.AUTH_DEV;
     const result = await sendFoodChatMessage(userId, "Am mancat o banana", [], ctx);
-    expect(result.reply).toContain("GEMINI_API_KEY");
+    expect(result.reply).toContain("Settings");
+    expect(result.meals).toEqual([]);
+    expect(runClaude).not.toHaveBeenCalled();
+  });
+
+  it("calls Claude with the owner's own token only", async () => {
+    const owner = await seedUser(`chat-token-${randomUUID()}`);
+    const stranger = await seedUser(`chat-token-${randomUUID()}`);
+    await saveClaudeToken(owner, "sk-ant-oat01-owner-token-aaaaaaaaaaaaaaaa");
+    await saveClaudeToken(stranger, "sk-ant-oat01-stranger-token-bbbbbbbbbbbb");
+    mockClaude({ reply: "Ok.", meals: [] });
+
+    await sendFoodChatMessage(owner, "salut", [], ctx);
+
+    expect(runClaude.mock.calls[0][0].token).toBe("sk-ant-oat01-owner-token-aaaaaaaaaaaaaaaa");
+  });
+
+  it("tells the user to reconnect when Claude refuses the token", async () => {
+    process.env.AUTH_DEV = "true";
+    runClaude.mockResolvedValueOnce({ ok: false, reason: "auth" });
+    const result = await sendFoodChatMessage(userId, "salut", [], ctx);
+    expect(result.reply).toContain("din nou");
     expect(result.meals).toEqual([]);
   });
 
   it("logs each valid meal from the JSON answer as an estimate, and drops invalid ones", async () => {
-    process.env.GEMINI_API_KEY = "mock-gemini-key";
-    const fetchMock = mockGemini({
+    process.env.AUTH_DEV = "true";
+    mockClaude({
       reply: "Am adăugat prânzul.",
       meals: [
         { name: "200 g somon la grătar", calories: 412.6, protein: 40, carbs: 0, fat: 26 },
@@ -77,9 +99,9 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     expect(result.reply).toBe("Am adăugat prânzul.");
     expect(result.meals).toHaveLength(1);
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.generationConfig.responseMimeType).toBe("application/json");
-    expect(body.contents.at(-1).parts[0].text).toBe("La prânz am mâncat 200 g somon");
+    const call = runClaude.mock.calls[0][0];
+    expect(call.token).toBeNull();
+    expect(call.input).toContain("La prânz am mâncat 200 g somon");
 
     const summary = await getDailyFoodSummary(userId, ctx.date);
     const meal = summary.meals.find((m) => m.name === "200 g somon la grătar");
@@ -87,9 +109,9 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect(meal?.isEstimated).toBe(true);
   });
 
-  it("logs nothing when the answer is not valid JSON", async () => {
-    process.env.GEMINI_API_KEY = "mock-gemini-key";
-    mockGemini("Sure! I logged your pizza.");
+  it("logs nothing when the answer does not match the schema", async () => {
+    process.env.AUTH_DEV = "true";
+    mockClaude("Sure! I logged your pizza.");
     const before = (await getDailyFoodSummary(userId, ctx.date)).meals.length;
 
     const result = await sendFoodChatMessage(userId, "2 felii de pizza", [], ctx);
@@ -136,8 +158,8 @@ describe("Food assistant: context prompt and structured answer", () => {
     it("logs meals only for the signed-in owner", async () => {
       const owner = await seedUser(`chat-owner-${randomUUID()}`);
       const stranger = await seedUser(`chat-stranger-${randomUUID()}`);
-      process.env.GEMINI_API_KEY = "mock-gemini-key";
-      mockGemini({ reply: "Gata.", meals: [{ name: "1 banană", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }] });
+      process.env.AUTH_DEV = "true";
+      mockClaude({ reply: "Gata.", meals: [{ name: "1 banană", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }] });
       authState.id = owner;
 
       const res = await sendFoodChatMessageAction(input);
@@ -149,11 +171,10 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     it("rejects invalid input before calling the model", async () => {
       authState.id = userId;
-      const fetchMock = vi.spyOn(global, "fetch");
       await expect(sendFoodChatMessageAction({ ...input, message: "   " })).rejects.toThrow();
       await expect(sendFoodChatMessageAction({ ...input, time: "25:00" })).rejects.toThrow();
       await expect(sendFoodChatMessageAction({ ...input, message: "x".repeat(1001) })).rejects.toThrow();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(runClaude).not.toHaveBeenCalled();
     });
   });
 });
