@@ -411,6 +411,7 @@ export const pushSubscriptions = pgTable(
 );
 
 // --- AI CONNECTOR / API TOKENS ---
+// shortcut: unused since the connector was removed (2026-11-08); the table stays to avoid a migration, drop it in one if never revived.
 
 export const apiTokens = pgTable(
   "api_tokens",

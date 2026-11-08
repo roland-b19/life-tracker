@@ -35,7 +35,7 @@ Round Shopping check and gap-filling seed (branch `fix/round-shopping-check-and-
 Clean Flat Polish & Centered Popups is 100% complete and merged in `main` (PR #27).
 Native iOS PWA Standalone & Gesture Polish (Web Manifest, fullscreen iOS Home Screen mode, rubber-band overscroll elimination, tap delay removal, avatar circle removal, and Service Worker Cache-First shell loading) is 100% complete and merged in `main` (PR #29, PR #30).
 
-Health polish (branch `feat/health-polish`, PR open): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals. No migration, no new dependency.
+Health polish (branch `feat/health-polish`, PR open): charts are a line only (no dots); units sit beside their numbers on Water, Steps and Weight; Weight's kg/week stat is removed; Shopping drops "Add again", emptied categories collapse with the list motion, and categories are deleted from their row (items move to Other; no Undo, since the server merges them); Health Today has a day stepper for past days, read-only (new owner-only read action `getDaySummaryAction` with its authorization test); a test proves the in-app Assistant only adds meals; the unused external Food connector (`/api/mcp`, `/api/ai/food`, API tokens) is deleted. No migration, no new dependency.
 
 ## Current focus
 
@@ -52,16 +52,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - Food & Nutrition module: daily targets, meal logger, Past foods sheet, water tap counter (+250ml, +500ml), steps, shopping list filled by hand (categories editable and deletable), Today tab steps back through past days read-only.
   - Money module: removed from the UI on 2026-11-06; the `expenses` tables stay in the database, unused.
   - To-Do & Habits module: automatic carry-over rollover, streak tracking, space segregation (`personal` vs `business`), Web Push notifications.
-  - Food AI Connector (Claude MCP & Gemini Function Calling):
-    - Dual protocols: `/api/mcp` (JSON-RPC 2.0 / MCP) and `/api/ai/food` (Google Function Calling / OpenAPI).
-    - Scoped personal bearer tokens (`api_tokens` table, SHA-256 hashed, narrow scope `food`).
-    - 4 isolated food tools: `log_meal`, `get_daily_food_summary`, `get_recipes`, `add_shopping_item`.
-    - Strict AI Data Line Quarantine: weight, steps, gym, money, tasks, and business data are physically unreachable from the AI endpoints.
-    - Automatic `isEstimated: true` flag and purple UI badge on all AI-logged meals.
-    - Global kill switch via `AI_CONNECTOR_ENABLED=false`.
-    - Token management UI removed on 2026-11-05 (see `docs/decisions.md`); the token backend and endpoints still work for existing tokens.
-    - In-App Food AI Chat: Claude through the Claude Code CLI (`src/lib/claude-cli.ts`, `CLAUDE_MODEL`, default `sonnet`) with the user's own token from Settings (`src/lib/claude-connection.ts`); was Gemini until 2026-11-08. The system prompt (`buildFoodChatPrompt` in `src/lib/food-ai-chat.ts`) carries the day, local time, targets, meals already logged, recipes and past foods, never weight or steps; the model answers JSON `{reply, meals[]}`, each meal is validated like a hand-entered one and logged as an estimate. No shopping from the chat.
-    - Comprehensive Vitest test suite (`tests/food-ai.test.ts`, `tests/food-chat.test.ts`, 60 total passing across repo).
+  - Food AI Connector (Claude MCP & Gemini): removed on 2026-11-08 (endpoints, tools, token code and tests); the `api_tokens` table stays, unused. The in-app Assistant only logs meals.
 
 ## Verification status breakdown
 
