@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 // DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
@@ -389,10 +389,10 @@ export function useListMotion() {
   return { rowRef, enter, leave, move, fadeAll, reorder };
 }
 
-const PAGE = 20;
+const PAGE = 10;
 
 /**
- * A long list shows 20 rows; `more` (put it last inside the list's AutoHeight) adds 20 at a time.
+ * A long list shows 10 rows; `more` (put it last inside the list's AutoHeight) adds 10 at a time.
  * The new rows enter with row-in while AutoHeight opens their space, like any added row.
  */
 export function useMore<T>(list: T[]) {
@@ -403,4 +403,79 @@ export function useMore<T>(list: T[]) {
     </button>
   );
   return [list.slice(0, shown), more] as const;
+}
+
+/**
+ * Drag a row by its handle to any place in its list. Rows are the list's children marked `data-sort`; the dragged
+ * row follows the pointer, the rows in between slide out of its way (the row's own transform transition), and on
+ * drop `move(from, to)` reorders through `reorder` (useListMotion's) so the rows settle into place.
+ * Spread the result on the handle; it needs `touch-action: none`.
+ */
+export function useDragSort(reorder: (change: () => void) => void, move: (from: number, to: number) => void) {
+  const drag = useRef<{ rows: HTMLElement[]; i: number; to: number; y: number; tops: number[]; mids: number[]; step: number } | null>(null);
+
+  const settle = (rows: HTMLElement[], i: number) => {
+    rows[i].classList.remove("dragging");
+    for (const r of rows) r.style.transform = "";
+  };
+
+  const onPointerDown = (e: PointerEvent<HTMLElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const row = e.currentTarget.closest<HTMLElement>("[data-sort]")!;
+    const rows = [...row.parentElement!.children].filter((c): c is HTMLElement => c instanceof HTMLElement && "sort" in c.dataset);
+    const rects = rows.map((r) => r.getBoundingClientRect());
+    const i = rows.indexOf(row);
+    const gap = parseFloat(getComputedStyle(row.parentElement!).rowGap) || 0;
+    drag.current = {
+      rows,
+      i,
+      to: i,
+      y: e.clientY,
+      tops: rects.map((r) => r.top),
+      mids: rects.map((r) => r.top + r.height / 2),
+      step: rects[i].height + gap,
+    };
+    e.preventDefault(); // no text selection while dragging
+    e.currentTarget.setPointerCapture(e.pointerId);
+    row.classList.add("dragging");
+  };
+
+  const onPointerMove = (e: PointerEvent<HTMLElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    const dy = e.clientY - d.y;
+    const mid = d.mids[d.i] + dy;
+    let to = d.i;
+    d.rows.forEach((r, j) => {
+      if (j === d.i) return;
+      // a row the dragged one has passed the middle of moves one place the other way
+      const shift = j > d.i && mid > d.mids[j] ? -d.step : j < d.i && mid < d.mids[j] ? d.step : 0;
+      if (shift) to += shift < 0 ? 1 : -1;
+      r.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+    d.to = to;
+    d.rows[d.i].style.transform = `translateY(${dy}px)`;
+  };
+
+  const onPointerUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (d.to === d.i) return settle(d.rows, d.i); // back to its place, sliding
+    // The rows jump to their new places under the animation reorder starts from where they are now.
+    reorder(() => {
+      for (const r of d.rows) r.style.transition = "none";
+      settle(d.rows, d.i);
+      move(d.i, d.to);
+    });
+    requestAnimationFrame(() => d.rows.forEach((r) => (r.style.transition = "")));
+  };
+
+  const onPointerCancel = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (d) settle(d.rows, d.i);
+  };
+
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
 }

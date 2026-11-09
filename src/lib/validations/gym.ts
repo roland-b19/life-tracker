@@ -30,6 +30,8 @@ export const finishSessionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
+
 export const createCustomExerciseSchema = z.object({
   name: z.string().min(2).max(120).trim(),
   muscleGroup: z.enum([

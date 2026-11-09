@@ -2,13 +2,16 @@
 
 import { formatDMY } from "@/lib/format-date";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, useDragSort, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { ArrowDownIcon, ArrowUpIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
+import { ProgressPanel } from "./progress-panel";
+import { Segmented } from "../components/segmented";
 import {
+  cancelSessionAction,
   createCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
@@ -89,6 +92,7 @@ interface ActiveSessionData {
   id: string;
   date: string;
   isDeload: boolean;
+  splitDayId?: string | null;
   splitDayName?: string;
   sets: WorkoutSetData[];
 }
@@ -102,6 +106,7 @@ interface GymClientProps {
   } | null;
   deload: DeloadInfo;
   exercises: LibraryExercise[];
+  openSession: ActiveSessionData | null;
 }
 
 function getTodayString() {
@@ -116,6 +121,7 @@ export function GymClient({
   split: serverSplit,
   deload,
   exercises,
+  openSession,
 }: GymClientProps) {
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll } = useListMotion();
@@ -137,6 +143,10 @@ export function GymClient({
   });
 
   const [activeSession, setActiveSession] = useState<ActiveSessionData | null>(null);
+  // A workout left without finishing (Exit, or a reload): its sets stay saved and Resume brings it back.
+  const [paused, setPaused] = useState<ActiveSessionData | null>(openSession);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [view, setView] = useState<"workout" | "progress">("workout");
   const [sessionNotes, setSessionNotes] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("60");
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue);
@@ -177,6 +187,14 @@ export function GymClient({
   const [editorOpen, setEditorOpen] = useState(false);
   const [draftError, setDraftError] = useState("");
   const routineMotion = useListMotion(); // the day editor's exercise rows
+  const dragRow = useDragSort(routineMotion.reorder, (from, to) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const list = [...d.exercises];
+      list.splice(to, 0, ...list.splice(from, 1));
+      return { ...d, exercises: list };
+    }),
+  );
   const [addId, setAddId] = useState("");
   const nameOf = (id: string) => exercises.find((e) => e.id === id)?.name ?? "Exercise";
   const addable = exercises.filter((e) => !draft?.exercises.some((d) => d.exerciseId === e.id));
@@ -306,6 +324,7 @@ export function GymClient({
           id: res.session.id,
           date: res.session.date,
           isDeload: res.session.isDeload,
+          splitDayId: day.id,
           splitDayName: day.name,
           sets: [],
         });
@@ -459,14 +478,43 @@ export function GymClient({
     });
   }
 
+  function handleExitSession() {
+    setPaused(activeSession);
+    setConfirmCancel(false);
+    setActiveSession(null);
+  }
+
+  function handleResumeSession() {
+    if (!paused) return;
+    const dayId = paused.splitDayId;
+    if (dayId && split?.days.some((d) => d.id === dayId)) setSelectedDayId(dayId);
+    setActiveSession(paused);
+    setPaused(null);
+  }
+
+  async function handleCancelSession() {
+    if (!activeSession) return;
+    setBusy(true);
+    try {
+      const res = await cancelSessionAction({ sessionId: activeSession.id });
+      if (!res.success) throw new Error("not cancelled");
+      setConfirmCancel(false);
+      setActiveSession(null);
+      showToast({ message: "Cancelled the workout", type: "success" });
+    } catch {
+      setStatusMessage("Failed to cancel workout");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleFinishSession() {
     if (!activeSession) return;
     setBusy(true);
     try {
-      const dur = parseInt(durationMinutes, 10);
       await finishSessionAction({
         sessionId: activeSession.id,
-        durationMinutes: isNaN(dur) ? undefined : dur,
+        durationMinutes: Number.parseInt(durationMinutes, 10),
         notes: sessionNotes || undefined,
       });
       setActiveSession(null);
@@ -783,16 +831,67 @@ export function GymClient({
               <button
                 type="button"
                 className="secondary"
-                disabled={busy}
+                disabled={busy || !(Number.parseInt(durationMinutes, 10) >= 1)}
                 onClick={handleFinishSession}
               >
                 Finish workout
               </button>
             </div>
+            <div className="session-exit">
+              {confirmCancel ? (
+                <>
+                  <span className="muted">Delete this workout and its sets?</span>
+                  <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmCancel(false)}>
+                    Keep
+                  </button>
+                  <button type="button" className="danger" disabled={busy} onClick={() => void handleCancelSession()}>
+                    Delete
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="secondary" disabled={busy} onClick={handleExitSession}>
+                    Exit, finish later
+                  </button>
+                  <button type="button" className="secondary" disabled={busy} onClick={() => setConfirmCancel(true)}>
+                    Cancel workout
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </section>
       ) : (
         <>
+          {paused && (
+            <section className="surface resume-bar" aria-label="Workout in progress">
+              <div>
+                <h2 className="section-title">Workout in progress</h2>
+                <p className="muted card-sub">
+                  {paused.splitDayName || "Workout"} · {formatDMY(paused.date)} · {paused.sets.length}{" "}
+                  {paused.sets.length === 1 ? "set" : "sets"} logged
+                </p>
+              </div>
+              <button type="button" className="btn-sm tint" onClick={handleResumeSession}>
+                Resume
+              </button>
+            </section>
+          )}
+          <div className="chart-controls">
+            <Segmented
+              label="Gym view"
+              value={view}
+              options={[
+                { value: "workout", label: "Workout" },
+                { value: "progress", label: "Progress" },
+              ]}
+              onChange={setView}
+            />
+          </div>
+          {view === "progress" ? (
+            <ProgressPanel days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
+          ) : (
+            <>
           <MuscleExplorer
             planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
           />
@@ -816,7 +915,7 @@ export function GymClient({
                         <button
                           type="button"
                           className="btn-sm tint"
-                          disabled={busy || currentDay.exercises.length === 0}
+                          disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
                           onClick={() => void handleStartSession(currentDay)}
                         >
                           Start
@@ -891,7 +990,7 @@ export function GymClient({
                         {!day.isRest && day.exercises.length > 0 && (
                           <button
                             type="button"
-                            disabled={busy}
+                            disabled={busy || Boolean(paused)}
                             className="btn-sm tint"
                             onClick={() => {
                               setSelectedDayId(day.id);
@@ -908,6 +1007,8 @@ export function GymClient({
               </section>
             </div>
           </div>
+            </>
+          )}
         </>
       )}
 
@@ -952,8 +1053,18 @@ export function GymClient({
                     {draft.exercises.map((row, i) => {
                       const name = nameOf(row.exerciseId);
                       return (
-                        <div key={row.exerciseId} ref={routineMotion.rowRef(row.exerciseId)} className="routine-row">
+                        <div key={row.exerciseId} ref={routineMotion.rowRef(row.exerciseId)} className="routine-row" data-sort>
                           <div className="routine-row-head">
+                            <button
+                              type="button"
+                              className="delete-icon-btn edit drag-handle"
+                              disabled={busy}
+                              aria-label={`Drag ${name} to reorder`}
+                              title="Drag to reorder"
+                              {...dragRow}
+                            >
+                              <GripIcon size={17} />
+                            </button>
                             <strong>
                               {i + 1}. {name}
                             </strong>

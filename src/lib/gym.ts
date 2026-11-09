@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -208,6 +208,35 @@ export async function finishWorkoutSession(
     .returning();
 
   return updated;
+}
+
+/**
+ * Delete a workout the user started but does not want (its sets go with it). Owner only.
+ */
+export async function cancelWorkoutSession(userId: string, sessionId: string) {
+  const [deleted] = await db
+    .delete(workoutSessions)
+    .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
+    .returning({ id: workoutSessions.id });
+  return deleted;
+}
+
+/**
+ * The workout the user left without finishing: the newest session with no duration since `since` (a date).
+ * shortcut: "unfinished" is a null duration, so the Finish button insists on one; older rows saved without
+ * one would read as open, which `since` hides after a couple of days. Upgrade: a finished_at column.
+ */
+export async function getOpenWorkoutSession(userId: string, since: string) {
+  const [open] = await db
+    .select({ id: workoutSessions.id, splitDayName: workoutSplitDays.name })
+    .from(workoutSessions)
+    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
+    .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), gte(workoutSessions.date, since)))
+    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt))
+    .limit(1);
+  if (!open) return null;
+  const details = await getWorkoutSessionDetails(userId, open.id);
+  return details && { ...details, splitDayName: open.splitDayName };
 }
 
 /**
@@ -475,4 +504,49 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
     isDeloadDue,
     lastDeloadDate,
   };
+}
+
+export interface HistorySet {
+  date: string;
+  sessionId: string;
+  isDeload: boolean;
+  dayId: string | null;
+  dayName: string | null;
+  exerciseId: string;
+  exerciseName: string;
+  setOrder: number;
+  reps: number;
+  loadType: string;
+  /** loadValue plus the extra kg, as one number. */
+  load: number;
+}
+
+/**
+ * Every set the user logged since `since` (a date), oldest first: what the progress charts and the logged-days
+ * calendar are drawn from. Capped, so a huge history cannot make the page slow.
+ */
+export async function getGymHistory(userId: string, since: string): Promise<HistorySet[]> {
+  const rows = await db
+    .select({
+      date: workoutSessions.date,
+      sessionId: workoutSessions.id,
+      isDeload: workoutSessions.isDeload,
+      dayId: workoutSessions.splitDayId,
+      dayName: workoutSplitDays.name,
+      exerciseId: workoutSets.exerciseId,
+      exerciseName: exercises.name,
+      setOrder: workoutSets.setOrder,
+      reps: workoutSets.reps,
+      loadType: workoutSets.loadType,
+      loadValue: workoutSets.loadValue,
+      extraKg: workoutSets.extraKg,
+    })
+    .from(workoutSets)
+    .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
+    .innerJoin(exercises, eq(workoutSets.exerciseId, exercises.id))
+    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
+    .where(and(eq(workoutSets.userId, userId), eq(workoutSessions.userId, userId), gte(workoutSessions.date, since)))
+    .orderBy(workoutSessions.date, workoutSessions.createdAt, workoutSets.setOrder)
+    .limit(8000);
+  return rows.map(({ loadValue, extraKg, ...r }) => ({ ...r, load: Number(loadValue) + Number(extraKg) }));
 }

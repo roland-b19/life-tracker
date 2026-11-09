@@ -850,6 +850,23 @@ input[type="radio"] {
   accent-color: var(--tint);
   cursor: pointer;
 }
+/* A checkbox is the same round check as the Tasks one: a ring, filled with the tint and ticked once checked. */
+input[type="checkbox"] {
+  appearance: none;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--secondary);
+  background: transparent center / 0.85rem no-repeat;
+  transition: background-color var(--fade), border-color var(--fade);
+}
+input[type="checkbox"]:checked {
+  background-color: var(--tint);
+  border-color: var(--tint);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%230b1b30' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
 
 input:focus,
 select:focus,
@@ -2592,7 +2609,16 @@ button.bars-col:focus-visible {
   justify-content: space-between;
   gap: 0.5rem;
 }
-.routine-row-head strong { min-width: 0; overflow-wrap: anywhere; }
+.routine-row-head strong { min-width: 0; overflow-wrap: anywhere; margin-right: auto; }
+.drag-handle { touch-action: none; cursor: grab; }
+/* The row being dragged follows the pointer (no transform transition) above the others, which slide aside. */
+.routine-row.dragging {
+  position: relative;
+  z-index: 2;
+  transition: none;
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35);
+}
+.routine-row.dragging .drag-handle { cursor: grabbing; }
 .routine-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2964,4 +2990,52 @@ button.bars-col:focus-visible {
 .badge-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 
 /* A long list's More button sits centred under its last row (useMore) */
-.more-btn { justify-self: center; align-self: center; }
+/* Measured from the last row's highlight band: one card padding above (the list gap is 0.25rem) and one below
+   (0.5rem cancels the clip box's -0.5rem), the same inset the text keeps from the card edge. */
+.more-btn {
+  justify-self: center;
+  align-self: center;
+  margin-top: calc(var(--card-pad, 1.5rem) - 0.25rem);
+  margin-bottom: 0.5rem;
+}
+
+/* Gym session: each exercise is a soft band like a Wishlist row (the band reaches halfway to the card edge), and
+   its logged sets are bands inside it, every one lit, so a single set is as easy to see as a list of them. */
+.surface .workout-exercise-card {
+  --band-out: calc((var(--card-pad) + 1px) / 2);
+  margin-inline: calc(-1 * var(--band-out));
+  padding: 1rem var(--band-out);
+  border-radius: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+.surface .workout-exercise-card .auto-height[data-wash],
+.surface .workout-exercise-card .auto-height[data-wash] > .entries > .entry-row {
+  --band-out: 0.75rem;
+}
+.surface .workout-exercise-card .auto-height[data-wash] > .entries.set-list > .entry-row {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Gym: leaving or cancelling a workout, and the bar that brings an unfinished one back */
+.session-exit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1rem;
+}
+.session-exit > span { margin-right: auto; }
+.resume-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+/* Training days stand out from the card behind them */
+.split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
+
+/* Gym progress: one logged day */
+.history-session { display: grid; gap: 0.5rem; margin-top: 1rem; }
+.history-exercise { display: grid; gap: 0.15rem; margin: 0; font-size: 0.9375rem; }

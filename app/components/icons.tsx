@@ -403,3 +403,12 @@ export function ChevronRightIcon({ size = 16, className, ...props }: IconProps) 
     </svg>
   );
 }
+
+/** Six dots: a handle to drag a row by. */
+export function GripIcon({ size = 16, className, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className} {...props}>
+      {[8, 12, 16].flatMap((y) => [9, 15].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.4" />))}
+    </svg>
+  );
+}

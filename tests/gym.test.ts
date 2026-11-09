@@ -20,23 +20,29 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
+import { dayProgress, exerciseSeries, weekStart } from "@/lib/gym-progress";
+import type { HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import {
+  cancelWorkoutSession,
   createCustomExercise,
   createWorkoutSession,
   deleteWorkoutSet,
   getDeloadStatus,
   getExerciseContext,
   getExercises,
+  getOpenWorkoutSession,
   getUserSplitWithDays,
   getWorkoutSessionDetails,
   logWorkoutSet,
 } from "@/lib/gym";
 import {
+  cancelSessionAction,
   deleteSetAction,
   finishSessionAction,
   getExerciseContextAction,
+  getGymHistoryAction,
   logSetAction,
   saveSplitDayAction,
   startSessionAction,
@@ -466,6 +472,98 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       // 5. Delete set
       const deleteRes = await deleteSetAction(logRes.set.id);
       expect(deleteRes.success).toBe(true);
+    });
+  });
+  describe("cancelSessionAction and the open workout", () => {
+    async function startWithSet(userId: string) {
+      authState.id = userId;
+      const [exercise] = await getExercises(userId);
+      const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
+      await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
+      return session.id;
+    }
+
+    it("lets the owner cancel a workout, sets included", async () => {
+      const id = await startWithSet(userA);
+      expect((await cancelSessionAction({ sessionId: id })).success).toBe(true);
+      expect(await getWorkoutSessionDetails(userA, id)).toBeNull();
+      const left = await admin.query("SELECT 1 FROM workout_sets WHERE session_id = $1", [id]);
+      expect(left.rowCount).toBe(0);
+    });
+
+    it("denies another user and anonymous", async () => {
+      const id = await startWithSet(userA);
+      authState.id = userB;
+      expect((await cancelSessionAction({ sessionId: id })).success).toBe(false);
+      expect(await cancelWorkoutSession(userB, id)).toBeUndefined();
+      authState.id = "";
+      await expect(cancelSessionAction({ sessionId: id })).rejects.toThrow("Authentication required.");
+      expect(await getWorkoutSessionDetails(userA, id)).not.toBeNull();
+    });
+
+    it("rejects a malformed id", async () => {
+      await expect(cancelSessionAction({ sessionId: "nope" })).rejects.toThrow();
+    });
+
+    it("finds only the owner's unfinished recent workout", async () => {
+      const id = await startWithSet(userA);
+      const open = await getOpenWorkoutSession(userA, "2026-11-01");
+      expect(open?.session.id).toBe(id);
+      expect(open?.sets).toHaveLength(1);
+      expect(await getOpenWorkoutSession(userB, "2026-11-01")).toBeNull();
+      expect(await getOpenWorkoutSession(userA, "2026-11-04")).toBeNull(); // too old
+      await finishSessionAction({ sessionId: id, durationMinutes: 50 });
+      expect(await getOpenWorkoutSession(userA, "2026-11-01")).toBeNull();
+    });
+  });
+  describe("getGymHistoryAction (Progress view)", () => {
+    it("returns the owner's sets only, and denies anonymous", async () => {
+      authState.id = userA;
+      const [exercise] = await getExercises(userA);
+      const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
+      await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
+
+      const own = await getGymHistoryAction();
+      expect(own.sets).toHaveLength(1);
+      expect(own.sets[0]).toMatchObject({ date: "2026-11-03", reps: 8, load: 40 });
+
+      authState.id = userB;
+      expect((await getGymHistoryAction()).sets).toHaveLength(0);
+      authState.id = "";
+      await expect(getGymHistoryAction()).rejects.toThrow("Authentication required.");
+    });
+  });
+
+  describe("progress calculations", () => {
+    const set = (date: string, load: number, reps: number, over: Partial<HistorySet> = {}): HistorySet => ({
+      date, sessionId: "s", isDeload: false, dayId: "d", dayName: "Push", exerciseId: "e1", exerciseName: "Bench",
+      setOrder: 1, reps, loadType: "kg", load, ...over,
+    });
+
+    it("finds the Monday of a week", () => {
+      expect(weekStart("2026-11-09")).toBe("2026-11-09"); // Monday
+      expect(weekStart("2026-11-15")).toBe("2026-11-09"); // Sunday
+      expect(weekStart("2026-11-08")).toBe("2026-11-02");
+    });
+
+    it("keeps the best of each day and skips deload", () => {
+      const sets = [set("2026-11-02", 40, 8), set("2026-11-02", 50, 5), set("2026-11-09", 100, 1, { isDeload: true })];
+      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-02", weight: 50, reps: 8 }]);
+    });
+
+    it("averages week-over-week change across exercises", () => {
+      const sets = [
+        set("2026-11-02", 100, 10, { exerciseId: "e1" }),
+        set("2026-11-09", 110, 10, { exerciseId: "e1" }), // +10% weight, 0% reps
+        set("2026-11-02", 50, 10, { exerciseId: "e2" }),
+        set("2026-11-09", 50, 12, { exerciseId: "e2" }), // 0% weight, +20% reps
+        set("2026-11-09", 30, 8, { exerciseId: "e3" }), // no previous week: not counted
+      ];
+      const [first, second] = dayProgress(sets, "d");
+      expect(first).toEqual({ week: "2026-11-02", weight: null, reps: null });
+      expect(second.weight).toBeCloseTo(5);
+      expect(second.reps).toBeCloseTo(10);
+      expect(dayProgress(sets, "other")).toEqual([]);
     });
   });
 });

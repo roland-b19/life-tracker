@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
+import { addDays, toISODate } from "@/lib/format-date";
 import {
+  cancelSessionSchema,
   createCustomExerciseSchema,
   createSessionSchema,
   finishSessionSchema,
@@ -10,11 +12,13 @@ import {
   saveSplitDaySchema,
 } from "@/lib/validations/gym";
 import {
+  cancelWorkoutSession,
   createCustomExercise,
   createWorkoutSession,
   deleteWorkoutSet,
   finishWorkoutSession,
   getExerciseContext,
+  getGymHistory,
   logWorkoutSet,
   saveSplitDay,
 } from "@/lib/gym";
@@ -41,6 +45,14 @@ export async function finishSessionAction(rawInput: unknown) {
   const session = await finishWorkoutSession(userId, parsed);
   safeRevalidate("/gym");
   return { success: true, session };
+}
+
+export async function cancelSessionAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { sessionId } = cancelSessionSchema.parse(rawInput);
+  const deleted = await cancelWorkoutSession(userId, sessionId);
+  safeRevalidate("/gym");
+  return { success: Boolean(deleted) };
 }
 
 export async function logSetAction(rawInput: unknown) {
@@ -93,4 +105,10 @@ export async function getExerciseContextAction(
     maxTargetReps,
   );
   return { success: true, context };
+}
+
+/** The user's sets from the last year, for the Progress view. */
+export async function getGymHistoryAction() {
+  const userId = await requireUser();
+  return { success: true, sets: await getGymHistory(userId, addDays(toISODate(), -370)) };
 }
