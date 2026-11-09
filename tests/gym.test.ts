@@ -20,8 +20,8 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
-import { dayProgress, exerciseSeries, weekStart } from "@/lib/gym-progress";
-import type { HistorySet } from "@/lib/gym";
+import { dayProgress, exerciseSeries, pct, weekStart, withProgress } from "@/lib/gym-progress";
+import type { HistorySession, HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import {
@@ -654,6 +654,27 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         set("2026-11-23", 120, 10),
       ];
       expect(dayProgress(sets, "d").at(-1)?.weight).toBeCloseTo(20);
+    });
+
+    it("gives each past workout its week's change against the week before, none for a deload or a first week", () => {
+      const sets = [
+        set("2026-11-02", 100, 10),
+        set("2026-11-09", 60, 10, { isDeload: true }),
+        set("2026-11-16", 110, 10),
+      ];
+      const session = (date: string, over: Partial<HistorySession> = {}): HistorySession => ({
+        id: date, date, dayId: "d", dayName: "Push", durationMinutes: 50, isDeload: false, exercises: [], ...over,
+      });
+      const [first, deload, third, noDay] = withProgress(
+        [session("2026-11-02"), session("2026-11-09", { isDeload: true }), session("2026-11-16"), session("2026-11-17", { dayId: null })],
+        sets,
+      );
+      expect(first.progress).toBeNull(); // nothing before it
+      expect(deload.progress).toBeNull();
+      expect(third.progress?.weight).toBeCloseTo(10);
+      expect(noDay.progress).toBeNull();
+      expect(pct(10)).toBe("+10%");
+      expect(pct(null)).toBe("—");
     });
 
     it("averages week-over-week change across exercises", () => {

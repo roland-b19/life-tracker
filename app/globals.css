@@ -3065,7 +3065,28 @@ button.bars-col:focus-visible {
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }
 .session-timer.paused { opacity: 0.5; }
-.history-entry { display: grid; justify-content: stretch; align-items: start; gap: 0.35rem; padding: 0.75rem 0; }
-.history-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+.gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
+@media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
+.history-entry { display: block; padding-block: 0.25rem; }
+.history-toggle {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.history-toggle > .history-progress { grid-column: 1; font-size: 0.875rem; }
+.history-chevron { grid-column: 2; grid-row: 1 / span 2; color: var(--secondary); transition: transform var(--lift); }
+.history-toggle[aria-expanded="true"] .history-chevron { transform: rotate(90deg); }
+.history-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
 .history-entry-side { margin-left: auto; }
+.history-details { display: grid; gap: 0.5rem; padding: 0.25rem 0 0.5rem; }
+.history-details > p { margin: 0; }
 .history-exercise { display: grid; gap: 0.15rem; margin: 0; font-size: 0.9375rem; }

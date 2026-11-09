@@ -6,7 +6,7 @@ import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import { getGymHistoryAction } from "@/app/actions/gym";
 import { addDays, toISODate } from "@/lib/format-date";
-import { dayProgress, exerciseSeries } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, pct } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 
 type Range = "30" | "90" | "180" | "360";
@@ -19,7 +19,6 @@ const METRICS: { value: Metric; label: string }[] = [
 
 const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
 const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
-const pct = (n: number | null) => (n === null ? "—" : `${n > 0 ? "+" : ""}${round(n)}%`);
 
 export function ProgressPanel({ days }: { days: { id: string; name: string }[] }) {
   const { showToast } = useToast();

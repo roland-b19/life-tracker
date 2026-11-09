@@ -565,6 +565,7 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
 export interface HistorySession {
   id: string;
   date: string;
+  dayId: string | null;
   dayName: string | null;
   durationMinutes: number | null;
   isDeload: boolean;
@@ -581,6 +582,7 @@ export async function getWorkoutHistory(userId: string, openSince: string): Prom
     .select({
       id: workoutSessions.id,
       date: workoutSessions.date,
+      dayId: workoutSessions.splitDayId,
       dayName: workoutSplitDays.name,
       durationMinutes: workoutSessions.durationMinutes,
       isDeload: workoutSessions.isDeload,
@@ -608,7 +610,7 @@ export async function getWorkoutHistory(userId: string, openSince: string): Prom
   for (const r of rows) {
     const s =
       sessions.get(r.id) ??
-      { id: r.id, date: r.date, dayName: r.dayName, durationMinutes: r.durationMinutes, isDeload: r.isDeload, exercises: [] };
+      { id: r.id, date: r.date, dayId: r.dayId, dayName: r.dayName, durationMinutes: r.durationMinutes, isDeload: r.isDeload, exercises: [] };
     sessions.set(r.id, s);
     let ex = s.exercises.find((e) => e.id === r.exerciseId);
     if (!ex) s.exercises.push((ex = { id: r.exerciseId, name: r.exerciseName, sets: [] }));

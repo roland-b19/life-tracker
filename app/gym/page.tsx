@@ -4,12 +4,14 @@ import { authOptions } from "@/auth";
 import {
   getDeloadStatus,
   getOpenWorkoutSession,
+  getGymHistory,
   getWorkoutHistory,
   getExercises,
   getUserSplitWithDays,
 } from "@/lib/gym";
 import { GymClient } from "./gym-client";
 import { addDays, toISODate } from "@/lib/format-date";
+import { withProgress } from "@/lib/gym-progress";
 
 export default async function GymPage() {
   const session = await getServerSession(authOptions);
@@ -23,7 +25,11 @@ export default async function GymPage() {
   const exercises = await getExercises(userId);
   const openSince = addDays(toISODate(), -2);
   const open = await getOpenWorkoutSession(userId, openSince);
-  const history = await getWorkoutHistory(userId, openSince);
+  // Same year of sets the Progress tab draws from, so a workout's figures match its Workout days chart.
+  const history = withProgress(
+    await getWorkoutHistory(userId, openSince),
+    await getGymHistory(userId, addDays(toISODate(), -370)),
+  );
 
   return (
     <GymClient

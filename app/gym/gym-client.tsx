@@ -1,14 +1,14 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
-import type { HistorySession } from "@/lib/gym";
+import { pct, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { AutoHeight, useDragSort, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
-import { GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
@@ -111,7 +111,7 @@ interface GymClientProps {
     days: SplitDay[];
   } | null;
   deload: DeloadInfo;
-  history: HistorySession[];
+  history: HistoryEntry[];
   exercises: LibraryExercise[];
   openSession: ActiveSessionData | null;
 }
@@ -165,6 +165,7 @@ export function GymClient({
     live.current = activeSession ?? paused;
   });
   const [shownHistory, moreHistory] = useMore(history);
+  const [openHistoryId, setOpenHistoryId] = useState<string | null>(null);
 
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<
@@ -1084,7 +1085,7 @@ export function GymClient({
               </section>
             </div>
           </div>
-          <section className="surface" aria-labelledby="history-title">
+          <section className="surface gym-history" aria-labelledby="history-title">
             <div className="section-head">
               <h2 id="history-title" className="section-title">
                 History
@@ -1096,26 +1097,47 @@ export function GymClient({
             <AutoHeight wash className="entries">
               {history.length > 0 ? (
                 <>
-                  {shownHistory.map((h) => (
-                    <div key={h.id} ref={rowRef(h.id)} className="entry-row history-entry">
-                      <div className="history-entry-head">
-                        <strong>{h.dayName ?? "Workout"}</strong>
-                        {h.isDeload && <span className="badge badge-rest">Deload</span>}
-                        <span className="muted number-tabular history-entry-side">
-                          {formatDMY(h.date)}
-                          {h.durationMinutes ? ` · ${h.durationMinutes} min` : ""}
-                        </span>
-                      </div>
-                      {h.exercises.map((ex) => (
-                        <p key={ex.id} className="history-exercise">
-                          <strong>{ex.name}</strong>
-                          <span className="muted number-tabular">
-                            {ex.sets.map((x) => `${x.reps}×${Math.round(x.load * 100) / 100}`).join("  ")}
+                  {shownHistory.map((h) => {
+                    const open = openHistoryId === h.id;
+                    return (
+                      <div key={h.id} ref={rowRef(h.id)} className="entry-row history-entry">
+                        <button
+                          type="button"
+                          className="history-toggle"
+                          aria-expanded={open}
+                          aria-controls={`history-${h.id}`}
+                          onClick={() => setOpenHistoryId(open ? null : h.id)}
+                        >
+                          <span className="history-entry-head">
+                            <strong>{h.dayName ?? "Workout"}</strong>
+                            {h.isDeload && <span className="badge badge-rest">Deload</span>}
+                            <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
                           </span>
-                        </p>
-                      ))}
-                    </div>
-                  ))}
+                          <span className="muted number-tabular history-progress">
+                            {h.isDeload
+                              ? "Deload week, not counted"
+                              : h.progress
+                                ? `Weight ${pct(h.progress.weight)} · Reps ${pct(h.progress.reps)} vs the week before`
+                                : "Nothing to compare with yet"}
+                          </span>
+                          <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
+                        </button>
+                        {open && (
+                          <div id={`history-${h.id}`} className="history-details">
+                            {h.durationMinutes ? <p className="muted number-tabular">{h.durationMinutes} min</p> : null}
+                            {h.exercises.map((ex) => (
+                              <p key={ex.id} className="history-exercise">
+                                <strong>{ex.name}</strong>
+                                <span className="muted number-tabular">
+                                  {ex.sets.map((x) => `${x.reps}×${Math.round(x.load * 100) / 100}`).join("  ")}
+                                </span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {moreHistory}
                 </>
               ) : (

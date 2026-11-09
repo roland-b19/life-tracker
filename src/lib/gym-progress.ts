@@ -1,5 +1,5 @@
 import { addDays } from "./format-date";
-import type { HistorySet } from "./gym";
+import type { HistorySession, HistorySet } from "./gym";
 
 /** Monday of the week a date falls in. */
 export function weekStart(date: string): string {
@@ -60,5 +60,24 @@ export function dayProgress(sets: HistorySet[], dayId: string) {
       if (prev.reps > 0) changes.reps.push(((now.reps - prev.reps) / prev.reps) * 100);
     }
     return { week, weight: mean(changes.weight), reps: mean(changes.reps) };
+  });
+}
+
+export const pct = (n: number | null) => (n === null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}%`);
+
+/**
+ * Each past workout with how its day did that week against the week before (the same figures as the Progress tab's
+ * Workout days), or null when there is nothing to compare: a deload week, no day, or no earlier week.
+ */
+export type HistoryEntry = HistorySession & { progress: { weight: number | null; reps: number | null } | null };
+
+export function withProgress(sessions: HistorySession[], sets: HistorySet[]): HistoryEntry[] {
+  const byDay = new Map<string, ReturnType<typeof dayProgress>>();
+  return sessions.map((s) => {
+    if (!s.dayId || s.isDeload) return { ...s, progress: null };
+    let weeks = byDay.get(s.dayId);
+    if (!weeks) byDay.set(s.dayId, (weeks = dayProgress(sets, s.dayId)));
+    const w = weeks.find((x) => x.week === weekStart(s.date));
+    return { ...s, progress: w && (w.weight !== null || w.reps !== null) ? { weight: w.weight, reps: w.reps } : null };
   });
 }
