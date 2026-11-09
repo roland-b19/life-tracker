@@ -1,11 +1,12 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
+import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { AutoHeight, useDragSort, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
-import { ArrowDownIcon, ArrowUpIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
@@ -172,7 +173,7 @@ export function GymClient({
   const [showCustom, setShowCustom] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customMuscle, setCustomMuscle] = useState<
-    "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other"
+    MuscleGroupKey | "other"
   >("chest");
   const [customEquipment, setCustomEquipment] = useState<
     "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight"
@@ -228,17 +229,6 @@ export function GymClient({
 
   function patchRow(i: number, patch: Partial<DraftExercise>) {
     setDraft((d) => d && { ...d, exercises: d.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
-  }
-
-  function moveRow(i: number, by: number) {
-    routineMotion.reorder(() =>
-      setDraft((d) => {
-        if (!d) return d;
-        const list = [...d.exercises];
-        [list[i], list[i + by]] = [list[i + by], list[i]];
-        return { ...d, exercises: list };
-      }),
-    );
   }
 
   function removeRow(id: string) {
@@ -635,7 +625,7 @@ export function GymClient({
                       </span>
                     </div>
                     <span className="badge badge-rest">
-                      {exercise.muscleGroup}
+                      {muscleLabel(exercise.muscleGroup)}
                     </span>
                   </div>
 
@@ -877,7 +867,7 @@ export function GymClient({
               </button>
             </section>
           )}
-          <div className="chart-controls">
+          <div className="toolbar">
             <Segmented
               label="Gym view"
               value={view}
@@ -935,7 +925,7 @@ export function GymClient({
                               <strong>
                                 {idx + 1}. {ex.exerciseName}
                               </strong>
-                              <span className="badge badge-rest">{ex.muscleGroup}</span>
+                              <span className="badge badge-rest">{muscleLabel(ex.muscleGroup)}</span>
                             </div>
                             <span className="muted number-tabular entry-side">
                               {ex.targetSets} × {ex.minReps} – {ex.maxReps}
@@ -1054,41 +1044,22 @@ export function GymClient({
                       const name = nameOf(row.exerciseId);
                       return (
                         <div key={row.exerciseId} ref={routineMotion.rowRef(row.exerciseId)} className="routine-row" data-sort>
+                          <button
+                            type="button"
+                            className="delete-icon-btn edit drag-handle"
+                            disabled={busy}
+                            aria-label={`Drag ${name} to reorder`}
+                            title="Drag to reorder"
+                            {...dragRow}
+                          >
+                            <GripIcon size={22} />
+                          </button>
+                          <div className="routine-row-body">
                           <div className="routine-row-head">
-                            <button
-                              type="button"
-                              className="delete-icon-btn edit drag-handle"
-                              disabled={busy}
-                              aria-label={`Drag ${name} to reorder`}
-                              title="Drag to reorder"
-                              {...dragRow}
-                            >
-                              <GripIcon size={17} />
-                            </button>
                             <strong>
                               {i + 1}. {name}
                             </strong>
                             <div className="row-actions">
-                              <button
-                                type="button"
-                                className="delete-icon-btn edit"
-                                disabled={i === 0}
-                                onClick={() => moveRow(i, -1)}
-                                aria-label={`Move ${name} up`}
-                                title="Move up"
-                              >
-                                <ArrowUpIcon size={17} />
-                              </button>
-                              <button
-                                type="button"
-                                className="delete-icon-btn edit"
-                                disabled={i === draft.exercises.length - 1}
-                                onClick={() => moveRow(i, 1)}
-                                aria-label={`Move ${name} down`}
-                                title="Move down"
-                              >
-                                <ArrowDownIcon size={17} />
-                              </button>
                               <button
                                 type="button"
                                 className="delete-icon-btn"
@@ -1144,6 +1115,7 @@ export function GymClient({
                               />
                             </label>
                           </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -1155,7 +1127,7 @@ export function GymClient({
                         Exercise
                         <select disabled={busy} value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
                           {groups.map((g) => (
-                            <optgroup key={g} label={g[0].toUpperCase() + g.slice(1)}>
+                            <optgroup key={g} label={muscleLabel(g)}>
                               {addable
                                 .filter((e) => e.muscleGroup === g)
                                 .map((e) => (
@@ -1202,17 +1174,15 @@ export function GymClient({
                               value={customMuscle}
                               onChange={(e) =>
                                 setCustomMuscle(
-                                  e.target.value as "chest" | "back" | "legs" | "shoulders" | "arms" | "calves" | "abs" | "other",
+                                  e.target.value as MuscleGroupKey | "other",
                                 )
                               }
                             >
-                              <option value="chest">Chest</option>
-                              <option value="back">Back</option>
-                              <option value="legs">Legs</option>
-                              <option value="shoulders">Shoulders</option>
-                              <option value="arms">Arms</option>
-                              <option value="calves">Calves</option>
-                              <option value="abs">Abs</option>
+                              {MUSCLE_GROUP_KEYS.map((g) => (
+                                <option key={g} value={g}>
+                                  {MUSCLE_GROUP_LABEL[g]}
+                                </option>
+                              ))}
                               <option value="other">Other</option>
                             </select>
                           </label>

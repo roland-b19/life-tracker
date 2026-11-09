@@ -1895,6 +1895,8 @@ main > .error {
   margin-bottom: 1rem;
 }
 .section-head > button { white-space: nowrap; }
+/* A card that is only a header (a rest day) keeps the same padding on every side */
+.section-head:last-child { margin-bottom: 0; }
 
 .section-title {
   font-size: 1.15rem;
@@ -2595,14 +2597,17 @@ button.bars-col:focus-visible {
 }
 .routine-row {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem 0.75rem 0.85rem 1rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; /* the drag handle sits on the row's own vertical centre */
+  gap: 0 0.75rem;
+  padding: 0.75rem 0.75rem 0.85rem 0.75rem;
   border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
   animation: rise var(--dur) var(--ease) backwards;
   transition: transform var(--lift);
 }
+.routine-row-body { display: grid; gap: 0.5rem; min-width: 0; }
 .routine-row-head {
   display: flex;
   align-items: center;
@@ -2629,7 +2634,8 @@ button.bars-col:focus-visible {
   align-items: end;
   gap: 0.75rem;
 }
-.routine-add > button { flex: none; }
+.routine-add > button { flex: none; height: 2.75rem; min-height: 0; padding-block: 0; } /* the select's height, so both share one centre line */
+.routine-add select { height: 2.75rem; min-height: 0; padding-block: 0; }
 /* New exercise, created inline in the day editor (same card style as a routine row) */
 .custom-exercise {
   display: grid;
@@ -2877,6 +2883,16 @@ button.bars-col:focus-visible {
   font-size: 0.875rem;
 }
 
+/* A one-line footnote under a chart (unlike .chart-note, which stands in for the chart) */
+.chart-caption {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+}
+
+/* Gym progress: a control after a select or date field gets the same gap as inside a form; titles share one head height */
+.gym-progress .surface > :is(label, .field) + * { margin-top: 1rem; }
+.gym-progress .section-head { min-height: 1.75rem; }
+
 /* A form field that is not a <label> (it holds a popover), laid out like one. */
 .field {
   display: grid;
@@ -3008,9 +3024,14 @@ button.bars-col:focus-visible {
   border-radius: 0.75rem;
   background-color: rgba(255, 255, 255, 0.03);
 }
+/* Logged sets: each band spans the column the exercise title and the inputs use, so nothing touches the
+   exercise band's edge; the set's text is inset inside its own band instead. */
 .surface .workout-exercise-card .auto-height[data-wash],
 .surface .workout-exercise-card .auto-height[data-wash] > .entries > .entry-row {
-  --band-out: 0.75rem;
+  --band-out: 0px;
+}
+.surface .workout-exercise-card .auto-height[data-wash] > .entries.set-list > .entry-row {
+  padding-inline: 0.75rem 0.5rem;
 }
 .surface .workout-exercise-card .auto-height[data-wash] > .entries.set-list > .entry-row {
   background-color: rgba(255, 255, 255, 0.05);

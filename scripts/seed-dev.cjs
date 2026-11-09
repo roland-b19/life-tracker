@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list and tasks, so every Health tab and Tasks have data.
+// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list, tasks and 8 weeks of workouts, so every Health tab, Tasks and Gym Progress have data.
 // Usage: npm run seed:dev [-- <dev user name>]   (default user: "demo"; sign in with that name)
 // Only runs against a local database with dev sign-in on. Weight, water and steps fill only the days
-// that have no entry; meals, shopping and tasks only fill when the user has none yet. Nothing is overwritten.
+// that have no entry; meals, shopping and tasks only fill when the user has none yet; workouts fill only the training days
+// without a session (the user must have opened Gym once, which creates the split). Nothing is overwritten.
 const { Client } = require("pg");
 
 const name = process.argv[2] || "demo";
@@ -215,6 +216,49 @@ async function seedTasks(db, userId) {
   return `tasks: ${count}`;
 }
 
+async function seedGym(db, userId) {
+  const { rows: days } = await db.query(
+    `SELECT d.id, d.day_of_week, array_agg(x.exercise_id ORDER BY x.order_index) AS exercises,
+            array_agg(x.min_reps ORDER BY x.order_index) AS mins, array_agg(x.max_reps ORDER BY x.order_index) AS maxs
+       FROM workout_split_days d JOIN workout_split_day_exercises x ON x.split_day_id = d.id
+      WHERE d.user_id = $1 AND NOT d.is_rest GROUP BY d.id`,
+    [userId],
+  );
+  if (!days.length) return "gym: skipped (open the Gym page once so the routine exists)";
+  const byWeekday = new Map(days.map((d) => [d.day_of_week, d]));
+  let sessions = 0;
+  for (let i = 56; i >= 1; i--) {
+    const date = addDays(today, -i);
+    const day = byWeekday.get(new Date(`${date}T00:00:00Z`).getUTCDay());
+    if (!day || random() < 0.1) continue; // a skipped workout now and then
+    const taken = await db.query("SELECT 1 FROM workout_sessions WHERE user_id = $1 AND date = $2 LIMIT 1", [userId, date]);
+    if (taken.rowCount) continue;
+    const week = Math.floor((56 - i) / 7); // 0..7
+    const deload = week === 4;
+    const { rows } = await db.query(
+      `INSERT INTO workout_sessions (user_id, split_day_id, date, duration_minutes, is_deload, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [userId, day.id, date, Math.round(between(45, 75)), deload, `${date}T18:00:00Z`],
+    );
+    for (let e = 0; e < day.exercises.length; e++) {
+      // A stable starting load per exercise, +2.5 kg every two weeks (a deload week lifts about 60%).
+      const hash = [...day.exercises[e]].reduce((a, c) => a + c.charCodeAt(0), 0);
+      const base = 20 + (hash % 13) * 5;
+      const load = (base + Math.floor(week / 2) * 2.5) * (deload ? 0.6 : 1);
+      for (let set = 1; set <= 2; set++) {
+        const reps = Math.round(between(day.mins[e], day.maxs[e]));
+        await db.query(
+          `INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value, extra_kg, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'kg', $6, 0, $7)`,
+          [rows[0].id, userId, day.exercises[e], set, reps, load.toFixed(2), `${date}T18:${pad(e * 2 + set)}:00Z`],
+        );
+      }
+    }
+    sessions++;
+  }
+  return `gym: ${sessions} workouts added (8 weeks, one deload week)`;
+}
+
 async function main() {
   const db = new Client({ connectionString: url });
   await db.connect();
@@ -233,6 +277,7 @@ async function main() {
       await seedMeals(db, userId),
       await seedShopping(db, userId),
       await seedTasks(db, userId),
+      await seedGym(db, userId),
     ];
     await db.query("COMMIT");
     console.log(`Seeded dev user "${name}" (today ${today}):\n  ${done.join("\n  ")}`);

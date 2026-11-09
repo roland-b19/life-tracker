@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
 
 export const logSetSchema = z.object({
   sessionId: z.string().uuid(),
@@ -34,16 +35,7 @@ export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
 
 export const createCustomExerciseSchema = z.object({
   name: z.string().min(2).max(120).trim(),
-  muscleGroup: z.enum([
-    "chest",
-    "back",
-    "legs",
-    "shoulders",
-    "arms",
-    "calves",
-    "abs",
-    "other",
-  ]),
+  muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
 

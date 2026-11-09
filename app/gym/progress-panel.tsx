@@ -82,7 +82,7 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
   const sessionsOnDay = [...new Set(sameDay.map((s) => s.sessionId))];
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid gym-progress">
       <div className="dashboard-main">
         <section className="surface" aria-labelledby="ex-progress-title">
           <div className="section-head">
@@ -110,7 +110,7 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
           />
           {series.length < 2 && <p className="muted chart-note">Not enough workouts in the last {range} days.</p>}
           {series.length > 0 && (
-            <p className="muted chart-note">
+            <p className="muted chart-caption">
               Best {unit} of each workout; deload sessions are left out.
             </p>
           )}
@@ -149,7 +149,7 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
             points={weeks.filter((w) => w.weight !== null).map((w) => ({ label: dm(w.week), value: round(w.weight!) }))}
             summary="Average weekly change in best weight across the day's exercises, in percent"
           />
-          <p className="muted chart-note">
+          <p className="muted chart-caption">
             Average change of each exercise&apos;s best weight from the week before (%), per week starting Monday.
           </p>
         </section>
@@ -178,7 +178,7 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
             />
           </div>
           {sameDay.length === 0 ? (
-            <p className="muted chart-note">No workout logged on this day.</p>
+            <p className="empty-note">No workout logged on this day.</p>
           ) : (
             sessionsOnDay.map((sid) => {
               const rows = sameDay.filter((s) => s.sessionId === sid);

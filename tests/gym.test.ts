@@ -98,7 +98,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   it("enforces multi-user isolation on custom exercises", async () => {
     const custom = await createCustomExercise(userA, {
       name: "B-Stance Hip Thrust",
-      muscleGroup: "legs",
+      muscleGroup: "quads",
       equipmentType: "barbell",
     });
     expect(custom.id).toBeDefined();
@@ -158,7 +158,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("rejects another user's custom exercise", async () => {
       const foreign = await createCustomExercise(userB, {
         name: "B only",
-        muscleGroup: "arms",
+        muscleGroup: "biceps",
         equipmentType: "cable",
       });
       const day = await firstTrainingDay(userA);
