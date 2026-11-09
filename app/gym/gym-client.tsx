@@ -1,6 +1,8 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
+import type { HistorySession } from "@/lib/gym";
+import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { AutoHeight, useDragSort, useListMotion, useMore } from "../components/list-motion";
@@ -11,12 +13,15 @@ import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
 import { Segmented } from "../components/segmented";
+import { clearWorkoutTime, formatClock, saveWorkoutTime, useWorkoutTimer, workoutMinutes } from "./workout-timer";
 import {
   cancelSessionAction,
   createCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   logSetAction,
+  reopenSessionAction,
+  restoreSessionAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
@@ -106,6 +111,7 @@ interface GymClientProps {
     days: SplitDay[];
   } | null;
   deload: DeloadInfo;
+  history: HistorySession[];
   exercises: LibraryExercise[];
   openSession: ActiveSessionData | null;
 }
@@ -121,6 +127,7 @@ export function GymClient({
   userName,
   split: serverSplit,
   deload,
+  history,
   exercises,
   openSession,
 }: GymClientProps) {
@@ -149,9 +156,15 @@ export function GymClient({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [view, setView] = useState<"workout" | "progress">("workout");
   const [sessionNotes, setSessionNotes] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("60");
+  const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue);
   const [busy, setBusy] = useState(false);
+  const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
+  const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
+  useEffect(() => {
+    live.current = activeSession ?? paused;
+  });
+  const [shownHistory, moreHistory] = useMore(history);
 
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<
@@ -310,6 +323,7 @@ export function GymClient({
         isDeload: isDeloadMode,
       });
       if (res.success && res.session) {
+        setTimerPaused(false);
         setActiveSession({
           id: res.session.id,
           date: res.session.date,
@@ -478,19 +492,83 @@ export function GymClient({
     if (!paused) return;
     const dayId = paused.splitDayId;
     if (dayId && split?.days.some((d) => d.id === dayId)) setSelectedDayId(dayId);
+    setTimerPaused(false);
     setActiveSession(paused);
     setPaused(null);
   }
 
+  type SessionSnapshot = { session: ActiveSessionData; seconds: number; notes: string };
+
+  // Undo hands a workout back as it was, unless another one was started in the meantime.
+  function takeBack(back: () => Promise<ActiveSessionData | null>, snap: SessionSnapshot, failed: string) {
+    return async () => {
+      if (live.current) {
+        showToast({ message: "Finish or leave the current workout first", type: "warning" });
+        return;
+      }
+      const restored = await back().catch(() => null);
+      if (!restored) {
+        showToast({ message: failed, type: "warning" });
+        return;
+      }
+      saveWorkoutTime(restored.id, snap.seconds); // before the workout shows, so the timer picks it up
+      setTimerPaused(false);
+      setSessionNotes(snap.notes);
+      setActiveSession(restored);
+    };
+  }
+
   async function handleCancelSession() {
     if (!activeSession) return;
+    const snap = { session: activeSession, seconds: timer.seconds(), notes: sessionNotes };
     setBusy(true);
     try {
       const res = await cancelSessionAction({ sessionId: activeSession.id });
       if (!res.success) throw new Error("not cancelled");
+      clearWorkoutTime(snap.session.id);
       setConfirmCancel(false);
       setActiveSession(null);
-      showToast({ message: "Cancelled the workout", type: "success" });
+      setSessionNotes("");
+      showToast({
+        message: "Cancelled the workout",
+        type: "success",
+        actionLabel: "Undo",
+        onAction: takeBack(
+          async () => {
+            const res = await restoreSessionAction({
+              date: snap.session.date,
+              splitDayId: snap.session.splitDayId,
+              isDeload: snap.session.isDeload,
+              notes: snap.notes || null,
+              sets: snap.session.sets.map((x) => ({
+                exerciseId: x.exerciseId,
+                setOrder: x.setOrder,
+                reps: x.reps,
+                loadType: x.loadType as "kg" | "plates" | "bodyweight",
+                loadValue: Number(x.loadValue),
+                extraKg: Number(x.extraKg),
+                isFailure: x.isFailure,
+                isPartial: x.isPartial,
+                flagAnomaly: x.flagAnomaly,
+                anomalyReason: x.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
+                notes: x.notes,
+              })),
+            });
+            if (!res.success || !res.details) return null;
+            const { session, sets } = res.details;
+            return {
+              id: session.id,
+              date: session.date,
+              isDeload: session.isDeload,
+              splitDayId: session.splitDayId,
+              splitDayName: snap.session.splitDayName,
+              sets,
+            };
+          },
+          snap,
+          "Failed to restore the workout",
+        ),
+      });
     } catch {
       setStatusMessage("Failed to cancel workout");
     } finally {
@@ -500,15 +578,28 @@ export function GymClient({
 
   async function handleFinishSession() {
     if (!activeSession) return;
+    const snap = { session: activeSession, seconds: timer.seconds(), notes: sessionNotes };
+    const minutes = workoutMinutes(snap.seconds);
     setBusy(true);
     try {
       await finishSessionAction({
         sessionId: activeSession.id,
-        durationMinutes: Number.parseInt(durationMinutes, 10),
+        durationMinutes: minutes,
         notes: sessionNotes || undefined,
       });
+      clearWorkoutTime(snap.session.id);
       setActiveSession(null);
-      showToast({ message: "Finished the workout", type: "success" });
+      setSessionNotes("");
+      showToast({
+        message: `Finished the workout · ${minutes} min`,
+        type: "success",
+        actionLabel: "Undo",
+        onAction: takeBack(
+          async () => ((await reopenSessionAction({ sessionId: snap.session.id })).success ? snap.session : null),
+          snap,
+          "Failed to reopen the workout",
+        ),
+      });
     } catch {
       setStatusMessage("Failed to finish workout");
     } finally {
@@ -590,6 +681,14 @@ export function GymClient({
                 {formatDMY(activeSession.date)} {activeSession.isDeload ? "· Deload" : ""}
               </p>
             </div>
+            <span className="head-actions">
+              <span className={`session-timer number-tabular${timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
+                {formatClock(timer.shown)}
+              </span>
+              <button type="button" className="btn-sm tint" onClick={() => setTimerPaused((p) => !p)}>
+                {timerPaused ? "Resume" : "Pause"}
+              </button>
+            </span>
           </div>
 
           <div>
@@ -797,18 +896,6 @@ export function GymClient({
 
           <div className="session-footer">
             <div className="form-row">
-              <label>
-                Duration (min)
-                <input
-                  type="number"
-                  min="5"
-                  max="300"
-                  inputMode="numeric"
-                  disabled={busy}
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(e.target.value)}
-                />
-              </label>
               <label className="grow-2">
                 Session notes (optional)
                 <input
@@ -821,7 +908,7 @@ export function GymClient({
               <button
                 type="button"
                 className="secondary"
-                disabled={busy || !(Number.parseInt(durationMinutes, 10) >= 1)}
+                disabled={busy}
                 onClick={handleFinishSession}
               >
                 Finish workout
@@ -997,6 +1084,47 @@ export function GymClient({
               </section>
             </div>
           </div>
+          <section className="surface" aria-labelledby="history-title">
+            <div className="section-head">
+              <h2 id="history-title" className="section-title">
+                History
+              </h2>
+              <span className="muted number-tabular">
+                {history.length} {history.length === 1 ? "workout" : "workouts"}
+              </span>
+            </div>
+            <AutoHeight wash className="entries">
+              {history.length > 0 ? (
+                <>
+                  {shownHistory.map((h) => (
+                    <div key={h.id} ref={rowRef(h.id)} className="entry-row history-entry">
+                      <div className="history-entry-head">
+                        <strong>{h.dayName ?? "Workout"}</strong>
+                        {h.isDeload && <span className="badge badge-rest">Deload</span>}
+                        <span className="muted number-tabular history-entry-side">
+                          {formatDMY(h.date)}
+                          {h.durationMinutes ? ` · ${h.durationMinutes} min` : ""}
+                        </span>
+                      </div>
+                      {h.exercises.map((ex) => (
+                        <p key={ex.id} className="history-exercise">
+                          <strong>{ex.name}</strong>
+                          <span className="muted number-tabular">
+                            {ex.sets.map((x) => `${x.reps}×${Math.round(x.load * 100) / 100}`).join("  ")}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                  {moreHistory}
+                </>
+              ) : (
+                <p key="empty-history" ref={rowRef("empty-history")} className="empty-note">
+                  No finished workouts yet.
+                </p>
+              )}
+            </AutoHeight>
+          </section>
             </>
           )}
         </>

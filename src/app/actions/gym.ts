@@ -9,6 +9,7 @@ import {
   createSessionSchema,
   finishSessionSchema,
   logSetSchema,
+  restoreSessionSchema,
   saveSplitDaySchema,
 } from "@/lib/validations/gym";
 import {
@@ -20,6 +21,8 @@ import {
   getExerciseContext,
   getGymHistory,
   logWorkoutSet,
+  reopenWorkoutSession,
+  restoreWorkoutSession,
   saveSplitDay,
 } from "@/lib/gym";
 
@@ -53,6 +56,24 @@ export async function cancelSessionAction(rawInput: unknown) {
   const deleted = await cancelWorkoutSession(userId, sessionId);
   safeRevalidate("/gym");
   return { success: Boolean(deleted) };
+}
+
+/** Undo of Finish: the workout is open again. */
+export async function reopenSessionAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { sessionId } = cancelSessionSchema.parse(rawInput);
+  const reopened = await reopenWorkoutSession(userId, sessionId);
+  safeRevalidate("/gym");
+  return { success: Boolean(reopened) };
+}
+
+/** Undo of Cancel: the workout and its sets come back (open, with new ids). */
+export async function restoreSessionAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = restoreSessionSchema.parse(rawInput);
+  const details = await restoreWorkoutSession(userId, parsed);
+  if (details) safeRevalidate("/gym");
+  return { success: Boolean(details), details };
 }
 
 export async function logSetAction(rawInput: unknown) {

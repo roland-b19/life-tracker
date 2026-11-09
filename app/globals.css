@@ -1215,7 +1215,7 @@ button.signin-continue:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 3rem 1rem; /* air above and below, so a tall form never touches the window edge */
   height: 100dvh;
   overscroll-behavior: contain;
   touch-action: none;
@@ -1331,7 +1331,7 @@ button.signin-continue:disabled {
   .modal-backdrop {
     align-items: center;
     justify-content: center;
-    padding: 1rem;
+    padding: 2rem 1rem;
   }
 
   .modal-card {
@@ -2629,6 +2629,11 @@ button.bars-col:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
+/* Each number sits centred under its own label (the spinner would push it off centre, so it goes) */
+.routine-fields label { text-align: center; }
+.routine-fields input { text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.routine-fields input::-webkit-inner-spin-button,
+.routine-fields input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .routine-add {
   display: flex;
   align-items: end;
@@ -3057,6 +3062,10 @@ button.bars-col:focus-visible {
 /* Training days stand out from the card behind them */
 .split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
 
-/* Gym progress: one logged day */
-.history-session { display: grid; gap: 0.5rem; margin-top: 1rem; }
+/* Gym: the workout timer, and one past workout in History */
+.session-timer { font-size: 1.25rem; font-weight: 600; }
+.session-timer.paused { opacity: 0.5; }
+.history-entry { display: grid; justify-content: stretch; align-items: start; gap: 0.35rem; padding: 0.75rem 0; }
+.history-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+.history-entry-side { margin-left: auto; }
 .history-exercise { display: grid; gap: 0.15rem; margin: 0; font-size: 0.9375rem; }

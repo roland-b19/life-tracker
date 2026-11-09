@@ -4,6 +4,7 @@ import { authOptions } from "@/auth";
 import {
   getDeloadStatus,
   getOpenWorkoutSession,
+  getWorkoutHistory,
   getExercises,
   getUserSplitWithDays,
 } from "@/lib/gym";
@@ -20,13 +21,16 @@ export default async function GymPage() {
   const split = await getUserSplitWithDays(userId);
   const deload = await getDeloadStatus(userId);
   const exercises = await getExercises(userId);
-  const open = await getOpenWorkoutSession(userId, addDays(toISODate(), -2));
+  const openSince = addDays(toISODate(), -2);
+  const open = await getOpenWorkoutSession(userId, openSince);
+  const history = await getWorkoutHistory(userId, openSince);
 
   return (
     <GymClient
       userName={session.user.name ?? "User"}
       split={split}
       deload={deload}
+      history={history}
       openSession={
         open && {
           id: open.session.id,

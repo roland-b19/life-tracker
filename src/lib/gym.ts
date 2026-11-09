@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -13,6 +13,7 @@ import {
   CreateSessionInput,
   FinishSessionInput,
   LogSetInput,
+  RestoreSessionInput,
   SaveSplitDayInput,
 } from "./validations/gym";
 import { ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
@@ -211,6 +212,60 @@ export async function finishWorkoutSession(
 }
 
 /**
+ * Open a finished workout again (Undo of Finish): the duration goes back to null. Owner only.
+ */
+export async function reopenWorkoutSession(userId: string, sessionId: string) {
+  const [reopened] = await db
+    .update(workoutSessions)
+    .set({ durationMinutes: null })
+    .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
+    .returning({ id: workoutSessions.id });
+  return reopened;
+}
+
+/**
+ * Put back a cancelled workout (Undo of Cancel) as an open one, with its sets under new ids. Returns null when an
+ * exercise is not visible to the user; a split day that is not theirs is dropped, not linked.
+ */
+export async function restoreWorkoutSession(userId: string, input: RestoreSessionInput) {
+  const ids = [...new Set(input.sets.map((s) => s.exerciseId))];
+  const sessionId = await db.transaction(async (tx) => {
+    if (ids.length) {
+      const visible = await tx
+        .select({ id: exercises.id })
+        .from(exercises)
+        .where(and(inArray(exercises.id, ids), or(isNull(exercises.userId), eq(exercises.userId, userId))));
+      if (visible.length !== ids.length) return null;
+    }
+    const [day] = input.splitDayId
+      ? await tx
+          .select({ id: workoutSplitDays.id })
+          .from(workoutSplitDays)
+          .where(and(eq(workoutSplitDays.id, input.splitDayId), eq(workoutSplitDays.userId, userId)))
+      : [];
+    const [session] = await tx
+      .insert(workoutSessions)
+      .values({ userId, date: input.date, splitDayId: day?.id ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .returning({ id: workoutSessions.id });
+    if (input.sets.length) {
+      await tx.insert(workoutSets).values(
+        input.sets.map((s) => ({
+          ...s,
+          sessionId: session.id,
+          userId,
+          loadValue: s.loadValue.toFixed(2),
+          extraKg: s.extraKg.toFixed(2),
+          anomalyReason: s.anomalyReason ?? null,
+          notes: s.notes ?? null,
+        })),
+      );
+    }
+    return session.id;
+  });
+  return sessionId ? getWorkoutSessionDetails(userId, sessionId) : null;
+}
+
+/**
  * Delete a workout the user started but does not want (its sets go with it). Owner only.
  */
 export async function cancelWorkoutSession(userId: string, sessionId: string) {
@@ -373,6 +428,7 @@ export async function getExerciseContext(
       and(
         eq(workoutSessions.userId, userId),
         eq(workoutSets.exerciseId, exerciseId),
+        eq(workoutSessions.isDeload, false), // an easy deload week is no baseline for the next load
         sessionDateLimit
           ? lt(workoutSessions.date, sessionDateLimit)
           : undefined,
@@ -504,6 +560,61 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
     isDeloadDue,
     lastDeloadDate,
   };
+}
+
+export interface HistorySession {
+  id: string;
+  date: string;
+  dayName: string | null;
+  durationMinutes: number | null;
+  isDeload: boolean;
+  exercises: { id: string; name: string; sets: { reps: number; loadType: string; load: number }[] }[];
+}
+
+/**
+ * Every past workout with sets, newest first, for the Workout tab's History. Rest days are never sessions, so they
+ * do not show. A workout still open (no duration, started since `openSince`) is not past yet. Capped like
+ * getGymHistory.
+ */
+export async function getWorkoutHistory(userId: string, openSince: string): Promise<HistorySession[]> {
+  const rows = await db
+    .select({
+      id: workoutSessions.id,
+      date: workoutSessions.date,
+      dayName: workoutSplitDays.name,
+      durationMinutes: workoutSessions.durationMinutes,
+      isDeload: workoutSessions.isDeload,
+      exerciseId: workoutSets.exerciseId,
+      exerciseName: exercises.name,
+      reps: workoutSets.reps,
+      loadType: workoutSets.loadType,
+      loadValue: workoutSets.loadValue,
+      extraKg: workoutSets.extraKg,
+    })
+    .from(workoutSets)
+    .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
+    .innerJoin(exercises, eq(workoutSets.exerciseId, exercises.id))
+    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
+    .where(
+      and(
+        eq(workoutSets.userId, userId),
+        eq(workoutSessions.userId, userId),
+        or(isNotNull(workoutSessions.durationMinutes), lt(workoutSessions.date, openSince)),
+      ),
+    )
+    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), workoutSessions.id, workoutSets.createdAt)
+    .limit(8000);
+  const sessions = new Map<string, HistorySession>();
+  for (const r of rows) {
+    const s =
+      sessions.get(r.id) ??
+      { id: r.id, date: r.date, dayName: r.dayName, durationMinutes: r.durationMinutes, isDeload: r.isDeload, exercises: [] };
+    sessions.set(r.id, s);
+    let ex = s.exercises.find((e) => e.id === r.exerciseId);
+    if (!ex) s.exercises.push((ex = { id: r.exerciseId, name: r.exerciseName, sets: [] }));
+    ex.sets.push({ reps: r.reps, loadType: r.loadType, load: Number(r.loadValue) + Number(r.extraKg) });
+  }
+  return [...sessions.values()];
 }
 
 export interface HistorySet {

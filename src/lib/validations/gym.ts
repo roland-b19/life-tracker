@@ -33,6 +33,15 @@ export const finishSessionSchema = z.object({
 
 export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
 
+/** Undo of cancelling a workout: the session as it was, with all its sets (they get new ids). */
+export const restoreSessionSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  splitDayId: z.string().uuid().optional().nullable(),
+  isDeload: z.boolean(),
+  notes: z.string().max(500).optional().nullable(),
+  sets: z.array(logSetSchema.omit({ sessionId: true, minTargetReps: true, maxTargetReps: true })).max(300),
+});
+
 export const createCustomExerciseSchema = z.object({
   name: z.string().min(2).max(120).trim(),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
@@ -60,6 +69,7 @@ export const saveSplitDaySchema = z.object({
 
 export type LogSetInput = z.infer<typeof logSetSchema>;
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
+export type RestoreSessionInput = z.infer<typeof restoreSessionSchema>;
 export type FinishSessionInput = z.infer<typeof finishSessionSchema>;
 export type CreateCustomExerciseInput = z.infer<typeof createCustomExerciseSchema>;
 export type SaveSplitDayInput = z.infer<typeof saveSplitDaySchema>;
