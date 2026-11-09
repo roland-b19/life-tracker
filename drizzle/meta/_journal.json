@@ -127,6 +127,13 @@
       "when": 1794150373204,
       "tag": "0017_claude_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794255572136,
+      "tag": "0018_detailed_muscle_groups",
+      "breakpoints": true
     }
   ]
 }

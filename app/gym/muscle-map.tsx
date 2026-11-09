@@ -71,6 +71,7 @@ function MuscleMap({
         back.position.set(-2, 2, -4);
         scene.add(back);
 
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
         const render = () => renderer.render(scene, camera);
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
@@ -123,14 +124,34 @@ function MuscleMap({
           render();
         };
 
-        const setView = (v: "front" | "back") => {
-          camera.position.set(
-            center.x,
-            center.y,
-            center.z + (v === "front" ? dist : -dist),
-          );
-          controls.update();
-          render();
+        // Front/Back turns the camera half a circle around the model (ease in-out), staying at the same
+        // height and distance; touching the model stops it, and reduced motion jumps instead.
+        let frame = 0;
+        const stopTurn = () => cancelAnimationFrame(frame);
+        const setView = (v: "front" | "back", animate = true) => {
+          stopTurn();
+          const offset = camera.position.clone().sub(controls.target);
+          const radius = Math.hypot(offset.x, offset.z);
+          const from = Math.atan2(offset.x, offset.z);
+          const to = v === "front" ? 0 : Math.PI;
+          // Shortest way round, so a model dragged near the target does not spin the long way.
+          const delta = ((((to - from) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+          const place = (angle: number) => {
+            camera.position.set(
+              controls.target.x + Math.sin(angle) * radius,
+              camera.position.y,
+              controls.target.z + Math.cos(angle) * radius,
+            );
+            controls.update();
+          };
+          if (!animate || reduceMotion.matches || Math.abs(delta) < 0.001) return place(to);
+          const start = performance.now();
+          const step = (now: number) => {
+            const t = Math.min((now - start) / 700, 1);
+            place(from + delta * (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2));
+            if (t < 1) frame = requestAnimationFrame(step);
+          };
+          frame = requestAnimationFrame(step);
         };
 
         const resize = () => {
@@ -149,7 +170,10 @@ function MuscleMap({
         const ray = new THREE.Raycaster();
         let down: [number, number] | null = null;
         const canvas = renderer.domElement;
-        const onDown = (e: PointerEvent) => (down = [e.clientX, e.clientY]);
+        const onDown = (e: PointerEvent) => {
+          stopTurn();
+          down = [e.clientX, e.clientY];
+        };
         const onUp = (e: PointerEvent) => {
           if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5)
             return;
@@ -172,12 +196,14 @@ function MuscleMap({
         canvas.addEventListener("pointerup", onUp);
 
         api.current = { setSelected: paint, setView };
-        setView("front");
+        camera.position.set(center.x, center.y, center.z + dist);
+        setView("front", false);
         resize();
         paint(selectedRef.current);
         setStatus("ready");
 
         cleanup = () => {
+          stopTurn();
           ro.disconnect();
           canvas.removeEventListener("pointerdown", onDown);
           canvas.removeEventListener("pointerup", onUp);

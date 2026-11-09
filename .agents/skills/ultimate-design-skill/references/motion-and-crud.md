@@ -222,7 +222,7 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 
 ## Long lists (More)
 
-A list that can grow past 20 rows shows 20: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, and each press adds 20 rows that enter with row-in while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
+A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band (not the row or the button) and the same gap below, and each press adds 10 rows that enter with row-in while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
 
 ## Rules that are easy to break
 
@@ -259,3 +259,10 @@ A list that can grow past 20 rows shows 20: `const [shown, more] = useMore(list)
 - New rows go on top of the list (Tasks: open tasks newest first; done tasks still sink below them).
 
 Sources: `app/wishlist/wishlist-client.tsx`, `app/components/list-motion.tsx`, `app/components/modal.tsx`, `app/components/toast.tsx`, `app/todos/todos-client.tsx`, `app/gym/muscle-map.tsx`.
+
+## Reorder by dragging, round checks, session bands (Gym)
+
+- Reorder: a grip handle (`GripIcon`, `.drag-handle`) starts `useDragSort`; rows carry `data-sort`. The dragged row follows the pointer; the other rows slide by the dragged row's height plus the gap with the normal transition; on drop the list reorders as a FLIP (`reorder`) with transitions off for one frame. Any position, not one step at a time. No autoscroll yet.
+- Every checkbox is the round `.todo-checkbox-btn` look, Gym included.
+- A screen of rows (the workout session) gets the same wash striping as lists, so rows are easy to tell apart.
+- Exit and Cancel live in the session footer (`.session-exit`); Cancel always asks first; an exited workout shows a Resume bar.
