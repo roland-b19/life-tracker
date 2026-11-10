@@ -69,6 +69,13 @@ export function Modal({
     const root = document.documentElement;
     root.style.overflow = "hidden";
 
+    // No autofill, autocorrect or spell-check bar above the keyboard in any form (it makes the keyboard taller).
+    backdropRef.current?.querySelectorAll("input, textarea").forEach((f) => {
+      f.setAttribute("autocomplete", "off");
+      f.setAttribute("autocorrect", "off");
+      f.setAttribute("spellcheck", "false");
+    });
+
     // Keep the backdrop the size of the visible area so the keyboard never pushes or zooms the card.
     const vv = window.visualViewport;
     const fit = () => {
@@ -89,9 +96,15 @@ export function Modal({
       if (!body || body.scrollHeight <= body.clientHeight) e.preventDefault();
     };
     document.addEventListener("touchmove", lock, { passive: false });
+    // iOS may still scroll the document to reveal a focused field; put the page back where it was.
+    const pin = () => {
+      if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+    };
+    window.addEventListener("scroll", pin);
 
     return () => {
       document.removeEventListener("touchmove", lock);
+      window.removeEventListener("scroll", pin);
       window.removeEventListener("keydown", handleKeyDown);
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);

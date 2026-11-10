@@ -1371,21 +1371,22 @@ button.signin-continue:disabled {
 /* Mobile popup adjustments (keeps centered floating modal, never bottom sheet) */
 @media (max-width: 640px) {
   .modal-backdrop {
-    align-items: center;
+    /* Anchored to the top, not centred: the fields then sit above where the keyboard will be, so iOS never has to
+       pan the page to reveal the focused one, and the form never moves when the keyboard opens or a field changes.
+       The same air above and below; the Dynamic Island (top inset) and the home bar (bottom inset) count on both. */
+    align-items: flex-start;
     justify-content: center;
-    /* The same air above and below; the Dynamic Island (top inset) and the home bar (bottom inset) count on both
-       sides so the card stays centred. */
     padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
   }
-  /* With the keyboard up the island still needs room, the bottom does not. */
+  /* The keyboard covers the home bar, so only the bottom air shrinks; the top stays put. */
   .modal-backdrop[data-keyboard] {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
     padding-bottom: 1rem;
   }
 
   .modal-card {
     border-radius: 1.25rem;
     max-width: 100%;
+    margin: 0 auto;
   }
 
   .modal-header {
@@ -3211,21 +3212,29 @@ button.bars-col:focus-visible {
 }
 
 /* Portrait only on a phone. A web page cannot lock the orientation in a browser tab (the installed app does, through
-   the manifest), so a phone turned sideways is covered until it is turned back. Tablets and desktops are taller than
-   500px in landscape, so they are not affected. */
+   the manifest), so a phone turned sideways keeps the portrait page and turns it back against the device, like a
+   portrait-locked app: no message, the page just does not rotate. html becomes a fixed portrait-sized scroller
+   (the short side wide, the long side tall) rotated 90deg; data-rot (providers.tsx) says which way. Tablets and
+   desktops are taller than 500px in landscape, so they are not affected. */
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  body::after {
-    content: "Rotate your phone back to portrait";
+  html {
     position: fixed;
-    inset: 0;
-    z-index: 2000;
-    display: grid;
-    place-items: center;
-    padding: 1.5rem;
+    top: 0;
+    left: 0;
+    width: 100dvh;
+    height: 100dvw;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform-origin: 0 0;
+    transform: translateY(100dvh) rotate(-90deg);
     background: #000;
-    color: var(--secondary);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    text-align: center;
+  }
+  html[data-rot="cw"] {
+    transform: translateX(100dvw) rotate(90deg);
+  }
+  /* The modal's visualViewport sizing is for an upright phone; here the backdrop is the rotated html. */
+  html .modal-backdrop {
+    height: 100% !important;
+    transform: none !important;
   }
 }

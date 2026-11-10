@@ -111,7 +111,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - It installs to the Home Screen as a standalone app, so it never shows browser chrome: `public/manifest.json` (`display: standalone`, `orientation: portrait`, black `#000000` theme and background) and `appleWebApp.capable: true` in `app/layout.tsx` stay.
 
 **Forms and overlays**
-- **Forms are centred modals, never bottom sheets.**
+- **Forms are modals, never bottom sheets.** Centred on a desktop, anchored to the top on a phone (so the keyboard never makes iOS pan the page).
   - The page behind blurs and is never scaled.
   - The keyboard never zooms or pushes the form.
   - The form closes exactly like it opens (the reverse animation).
