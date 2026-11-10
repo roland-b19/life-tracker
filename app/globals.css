@@ -32,7 +32,7 @@
   --quick: 180ms;
   /* Hover highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
-  --wash: 120ms ease; /* the Wishlist's row wash out and in around a list change; WASH in list-motion.tsx */
+  --wash: 100ms ease; /* the Wishlist's row wash out and in around a list change; WASH in list-motion.tsx */
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: rgba(255, 255, 255, 0.05);
@@ -3082,7 +3082,8 @@ button.bars-col:focus-visible {
 }
 /* A wash list (AutoHeight's `wash`, Wishlist): the band sits halfway between the card edge and the text, and
    the wash fades out before rows enter or leave and back in once they are in place (list-motion.tsx). A row
-   still entering sits out the alternation, so no other row's wash flips while it comes in. */
+   still entering or already leaving sits out the alternation, so no other row's wash flips while it comes in
+   or when the row is removed. */
 .surface .auto-height[data-wash],
 .surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row),
 .surface .shopping-group > .shopping-row {
@@ -3097,7 +3098,7 @@ button.bars-col:focus-visible {
 .surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: background-color var(--wash), transform var(--lift); }
 /* A view switch (range, sort, day, tab) hides the rows, so their bands change with the list, not after it. */
 .auto-height[data-swap] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: transform var(--lift); }
-.auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering])) {
+.auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering], [data-leaving])) {
   background-color: rgba(255, 255, 255, 0.03);
 }
 

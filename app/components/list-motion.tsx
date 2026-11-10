@@ -23,7 +23,7 @@ function resizeTime(p: number) {
 // end: wash out, then the movement, then wash in.
 // Only transform and opacity animate on the rows, so a phone keeps them on the compositor (no layout per frame).
 const MOVE = 240;
-const WASH = 120;
+const WASH = 100;
 const MOVE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 // A card (AutoHeight's outer box) that follows a row leaving: its height animates down while the row is still in place
@@ -332,6 +332,7 @@ export function useListMotion() {
         // A row that moved (an edit) is the same element: drop its held exit before it enters again.
         el.getAnimations().forEach((a) => a.cancel());
         leaving.current.delete(el);
+        delete el.dataset.leaving;
         const freed = release(el);
         el.style.pointerEvents = "";
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
@@ -381,16 +382,22 @@ export function useListMotion() {
     [],
   );
 
-  const leave = useCallback((id: string, remove: () => void) => {
+  const leave = useCallback((id: string, remove: () => void, moving = false) => {
     const el = nodes.current.get(id);
     if (!el || reducedMotion()) return remove();
     if (leaving.current.has(el)) return; // a row still entering may leave
     leaving.current.add(el);
     el.style.pointerEvents = "none";
-    // In a wash list the wash fades out (--fade, shorter than the exit) as the row leaves and comes back once it
-    // is gone (the next hold). The row starts at once: a wait here read as lag.
-    const wait = el.closest("[data-wash]") ? WASH : 0;
-    if (wait) hold(el.parentElement!, true);
+    // In a wash list the wash fades out first (WASH) and the row leaves after it. The row drops out of the
+    // alternation (data-leaving) so the rows keep the bands they will have once it is removed.
+    const list = el.closest("[data-wash]") ? el.parentElement! : null;
+    const wait = list ? WASH : 0;
+    let hold_ = 0;
+    if (list) {
+      el.dataset.leaving = "";
+      hold(list, true);
+      hold_ = holds.get(list)!;
+    }
     const motion: Animation[] = [];
     const glides: Animation[] = [];
     let box: HTMLElement | null = null;
@@ -408,7 +415,12 @@ export function useListMotion() {
     // The row fades where it stands while the space closes, so the exit is one movement of about a quarter of a second.
     motion.push(el.animate(FADE_OUT, { ...FADE, delay: wait }));
     held.current.set(el, { glides, box });
-    Promise.all(motion.map((a) => a.finished)).catch(() => {}).finally(remove);
+    Promise.all(motion.map((a) => a.finished)).catch(() => {}).finally(() => {
+      // The wash comes back as the movement ends, not after the commit that removes the row (a slow phone would
+      // show a dead pause there). A move keeps it away: the row enters again next. A later hold takes over.
+      if (list && !moving && holds.get(list) === hold_) delete list.dataset.settling;
+      remove();
+    });
   }, []);
 
   // Runs `change` (a state update that moves a row): the row leaves like a deleted one, then `change` puts it
@@ -422,7 +434,7 @@ export function useListMotion() {
       };
       // Out like a delete (the row fades while its space closes), then in like an add (space opens, the row fades in).
       if (!el || reducedMotion() || alone(el)) return go();
-      leave(id, go);
+      leave(id, go, true);
     },
     [enter, leave],
   );

@@ -54,7 +54,8 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
 };
 
 // Whole lei with the thousands separator, no decimals (the user's call): 1.234 RON.
-const formatRon = (n: number) => n.toLocaleString("ro-RO", { maximumFractionDigits: 0 });
+const ron = new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 });
+const formatRon = (n: number) => ron.format(n);
 
 /** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
 function linkOf(value: string) {

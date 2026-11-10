@@ -481,12 +481,12 @@ The CSS hides the outline on `[data-pointer]`.
 | FADE | 160ms `--ease`, forwards | a leaving row, to opacity 0 and scale .97 |
 | SWITCH | 120ms | `fadeAll` |
 | MOVE | 240ms with MOVE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing, and the card height |
-| WASH | 120ms (`--wash`) | wash fade-out before rows move; every row animation in a wash list starts after it |
+| WASH | 100ms (`--wash`) | wash fade-out before rows move; every row animation in a wash list starts after it |
 | FADE_IN | 180ms | starts after MOVE (and WASH); after 120ms when the row is the list's only row |
 | DUR | 420ms | FLIP `reorder` |
 
 **Wash and modal**
-- The wash fades out over `--wash` (120ms) before a row change and rows wait for it. It comes back after the last row animation ends, over `--fade` (240ms).
+- The wash fades out over `--wash` (100ms) before a row change and rows wait for it. It comes back as the last row animation ends, over the same `--wash` (100ms), in every animation.
 - Modal: opens over `--dur`, closes with `CLOSE_MS` 420 and `FADED_MS` 280.
 
 **Sign-out and number**
