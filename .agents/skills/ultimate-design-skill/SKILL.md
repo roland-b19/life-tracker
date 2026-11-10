@@ -32,7 +32,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle; the motion is evident but never showy.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **Feedback:** every change on screen is animated in order. Add, delete and an edit that moves a row share one animation: the rows below glide to their new places (260ms), and the row itself fades (out where it stands, or in after the glide). The wash fades out while rows move (nothing waits for it) and back in after.
+- **Feedback:** every change on screen is animated in order. Add, delete and an edit that moves a row share one animation: the wash fades out first (120ms, wash lists), the rows below glide to make or close space (240ms), the row itself fades (out where it stands, or in after the glide), and the wash comes back last.
 - **Stability:** nothing jumps, nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
 
@@ -194,15 +194,17 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
    - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.
    - A list that shrinks still builds in sequence.
-4. **Deleting a row.** The row fades in place (160ms, scale .97) while the rows below glide up (260ms, `transform` only) and the card height follows. Nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
+4. **Deleting a row.** The row fades in place (160ms, scale .97) while the rows below glide up (240ms, `transform` only); in a wash list the wash fades out (120ms) before all of it and the card height follows. Nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
 5. **Adding a row.**
-   - The rows below glide down first (260ms) and the card grows with them.
+   - In a wash list the wash fades out first (120ms).
+   - The rows below glide down (240ms) and the card grows with them.
    - Then the row fades in (180ms).
    - It is never seen clipped.
    - A list's only row swaps with the empty note, which has the same height, so it only fades.
-6. **An edit that moves a row** (sort or filter changes its place) uses the same animation as add and delete: the row fades out in place, the rows between glide, and the row fades in at its new place. An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
+6. **An edit that moves a row** (sort or filter changes its place) uses the same animation as add and delete: the wash fades out, the row fades out in place, the rows between glide to make space, the row fades in at its new place, the wash comes back. An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
 7. **Wash lists** (Wishlist):
-   - The alternating wash fades out (240ms) while rows move; a row never waits for it (a wait read as lag).
+   - The alternating wash fades out first (120ms) and the rows wait for it: remove / make space / place, in that order (the user's sequence, 2026-11-10).
+   - Every step is short and subtle, but long enough to read: the glide is 240ms, the fades 160–180ms.
    - It comes back only once every row animation has finished: wash out → item → wash in.
    - A row still entering sits out the alternation, so no other row's wash flips meanwhile.
    - The wash shows only after the list has loaded.

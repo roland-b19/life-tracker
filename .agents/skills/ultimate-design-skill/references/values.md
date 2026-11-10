@@ -471,7 +471,7 @@ The CSS hides the outline on `[data-pointer]`.
 
 **`AutoHeight`**
 - RESIZE is 180ms `cubic-bezier(.2,0,0,1)`.
-- Skipped when the change is under 1.5px, under reduced motion,. While a list change is in flight the card's height is driven by `useListMotion` (`data-hold`, `data-flip`: 260ms `cubic-bezier(.4,0,.2,1)`) so it ends together with the rows' glide.
+- Skipped when the change is under 1.5px, under reduced motion. While a list change is in flight the card's height is driven by `useListMotion` (`data-hold`, `data-flip`: 240ms `cubic-bezier(.4,0,.2,1)`, `transition-delay: var(--flip-delay)`) so it ends together with the rows' glide.
 - Each row's entrance is delayed until the height uncovers its bottom, 1px early.
 
 **`useListMotion`**
@@ -480,12 +480,13 @@ The CSS hides the outline on `[data-pointer]`.
 |---|---|---|
 | FADE | 160ms `--ease`, forwards | a leaving row, to opacity 0 and scale .97 |
 | SWITCH | 120ms | `fadeAll` |
-| SPACE | 260ms with SPACE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing |
-| FADE_IN | 180ms | starts after SPACE; after 120ms when the row is the list's only row |
+| MOVE | 240ms with MOVE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing, and the card height |
+| WASH | 120ms (`--wash`) | wash fade-out before rows move; every row animation in a wash list starts after it |
+| FADE_IN | 180ms | starts after MOVE (and WASH); after 120ms when the row is the list's only row |
 | DUR | 420ms | FLIP `reorder` |
 
 **Wash and modal**
-- The wash fades over `--fade` (240ms) in parallel with a row change; no row waits for it.
+- The wash fades out over `--wash` (120ms) before a row change and rows wait for it. It comes back after the last row animation ends, over `--fade` (240ms).
 - Modal: opens over `--dur`, closes with `CLOSE_MS` 420 and `FADED_MS` 280.
 
 **Sign-out and number**
