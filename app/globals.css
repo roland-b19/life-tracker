@@ -1286,6 +1286,7 @@ button.signin-continue:disabled {
   margin: auto;
   touch-action: auto;
   animation: modalScaleUp var(--dur) var(--ease) both;
+  transition: translate var(--dur) var(--ease); /* the move between centred and top-anchored (modal.tsx) */
 }
 
 /* Closing plays the opening backwards (Modal keeps the form mounted for --dur) */
@@ -1371,15 +1372,16 @@ button.signin-continue:disabled {
 /* Mobile popup adjustments (keeps centered floating modal, never bottom sheet) */
 @media (max-width: 640px) {
   .modal-backdrop {
-    /* Anchored to the top, not centred: the fields then sit above where the keyboard will be, so iOS never has to
-       pan the page to reveal the focused one, and the form never moves when the keyboard opens or a field changes.
-       The same air above and below; the Dynamic Island (top inset) and the home bar (bottom inset) count on both. */
-    align-items: flex-start;
+    /* Centred while no field is focused. The same air above and below; the Dynamic Island (top inset) and the home
+       bar (bottom inset) count on both. */
+    align-items: center;
     justify-content: center;
     padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
   }
-  /* The keyboard covers the home bar, so only the bottom air shrinks; the top stays put. */
+  /* With the keyboard up the form eases to the top, above where the keyboard is, and stays there while the field
+     changes. The keyboard covers the home bar, so only the bottom air shrinks. */
   .modal-backdrop[data-keyboard] {
+    align-items: flex-start;
     padding-bottom: 1rem;
   }
 

@@ -86,10 +86,25 @@ export function Modal({
       if (!el || !vv) return;
       const keyboard = window.innerHeight - vv.height > 120;
       low = keyboard ? Math.min(low, vv.height) : Infinity;
+      const card = el.firstElementChild as HTMLElement | null;
+      const was = el.hasAttribute("data-keyboard");
+      const before = card?.offsetTop ?? 0;
       el.style.height = `${keyboard ? low : vv.height}px`;
       el.style.transform = `translateY(${vv.offsetTop}px)`;
       // The keyboard covers the bottom, so the bottom padding for the home bar is not needed then.
       el.toggleAttribute("data-keyboard", keyboard);
+      // Centred without the keyboard, top-anchored with it (globals.css): the card eases between the two (FLIP on the
+      // `translate` property, which does not fight the entrance's `transform`).
+      if (card && was !== keyboard && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const dy = before - card.offsetTop;
+        if (dy) {
+          card.style.transition = "none";
+          card.style.translate = `0 ${dy}px`;
+          void card.offsetHeight;
+          card.style.transition = "";
+          card.style.translate = "0 0";
+        }
+      }
     };
     fit();
     vv?.addEventListener("resize", fit);
