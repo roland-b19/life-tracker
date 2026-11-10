@@ -26,16 +26,18 @@ Copy this pattern for every list page. It is what the user approved in `app/wish
 - Glides `data-slide` boxes to new columns.
 - `wash` turns on the alternating band wash that fades out and back in around every change. Use it on the main card list of a page (Wishlist).
 
-**`useListMotion()`** returns `{ rowRef, enter, leave, move, fadeAll, reorder }`.
+**`useListMotion()`** returns `{ rowRef, enter, leave, move, fadeAll, reorder }`; `move` returns a promise (resolved when the row has entered).
 
 | Method | What it does |
 |---|---|
 | `rowRef(id)` | put on every row (and `rowRef("empty")` on the empty note) |
-| `enter(id)` | call *before* adding the row to state: the space opens (260ms), then the row fades in (180ms) |
-| `leave(id, remove)` | the row fades in place and its space closes; `remove` runs at the end and must drop it from state |
-| `move(id, change)` | for an edit that changes the row's place: the old space closes while the row enters the new one; `change` writes the new state |
+| `enter(id)` | call *before* adding the row to state: in a wash list the wash fades out (100ms), the rows below glide down (240ms), then the row fades in (240ms), then the wash returns |
+| `leave(id, remove)` | in a wash list the wash fades out first (100ms); then the row fades out in place (240ms), then the rows below glide up (240ms); `remove` runs at the end and must drop it from state; the wash returns as the movement ends, not after the commit |
+| `move(id, change)` | for an edit that changes the row's place: `move` = `leave` then `enter`, in the same total time as a delete or add (120 + 240 + 120): the wash fades out, the row fades out in place (120ms), `change` runs, the rows between glide to make space, the row fades in at the new place, the wash returns |
+
+Add, delete and move share one animation: a FLIP glide of the siblings (`transform` only, 240ms `cubic-bezier(.4,0,.2,1)`) plus a row fade, and the card follows with one height animation. Never animate a row's height, margin or top. `data-hold` and `data-flip` on the card are set and cleared by the hook; in a wash list every animation starts after a 100ms wait (`--flip-delay` on the card), and a pure reorder still eases the held card back to its height (`growBox`).
 | `fadeAll(then)` | every row fades together (120ms), then `then` switches the view |
-| `reorder(change)` | FLIP: rows slide to new places (420ms), for in-place reorders such as a ticked task sinking |
+| `reorder(change)` | FLIP: rows slide to new places (420ms), for drag sorting |
 
 **`useAfterClose()`** (`app/components/modal.tsx`) returns `{ later, runAfterClose }`.
 - `later(change)` holds a list change until the form has faded.
@@ -55,7 +57,7 @@ showToast({ message, type?: "info" | "success" | "warning", actionLabel?, onActi
     // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
     <p key={`empty-${filter}`} ref={rowRef("empty")} className="empty-note">No items yet.</p>
   ) : (
-    // Keyed by the view so every row replays its entrance when it changes.
+    // Keyed by the view so every switch mounts fresh rows.
     <Fragment key={`${filter}-${sort}`}>
       {visible.map((item) => (
         <div key={item.id} ref={rowRef(item.id)} className="entry-row">
@@ -202,15 +204,18 @@ function openForm(item?) {
 
 - A selection that switches a list does the same: the muscle map's group chips go through `fadeAll(() => setSelectedNow(g))`.
 - Every filter, sort or selection change fades out first; none swaps rows instantly.
-- A control that only exists in one view (Tasks' Week button, Daily only) leaves with the row fade, `fadeOut(el, remove)` from `list-motion.tsx`, and comes back with `row-in` (CSS `animation: row-in 260ms var(--ease) backwards`). Keep it mounted until the fade ends, and cancel the fade if the view comes back first. No new keyframes for it.
 
-## Reordering in place (FLIP)
+## Reordering in place
 
-Use this when an action re-sorts rows without adding or removing any. For example, ticking a task moves it below the open ones, at the top of the done ones (most recently completed first):
+A tick that re-sorts a list is a `move`, like a Wishlist edit that changes position: wash out, the row fades while its space closes, space opens at the new place, the row fades in, wash in. Ticking a task moves it below the open ones, at the top of the done ones (most recently completed first). If the sort leaves the row where it is, the state is written at once. `move` returns a promise that resolves once the row has entered, so the refetch after the write waits for it (otherwise the server's answer replaces the list mid-fade):
 
 ```tsx
-const setCompleted = (id, done) => reorder(() => setTodos((prev) => update(prev, id, done).sort(compareTodos)));
+const write = () => setTodos((prev) => update(prev, id, done).sort(compareTodos));
+const placed = indexBefore === indexAfter ? write() : move(id, write);
+// ...server call..., then: await placed; await refetch();
 ```
+
+`reorder(change)` (FLIP slide, 420ms) is only for drag sorting (Gym routine rows).
 
 Marking done has no Undo and no toast with Undo.
 
@@ -222,7 +227,9 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 
 ## Long lists (More)
 
-A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band (not the row or the button) and the same gap below, and each press adds 10 rows that enter with row-in while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
+The Wishlist is the exception: it always shows every item and has no More button.
+
+A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band (not the row or the button) and the same gap below, and each press adds 10 rows while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
 
 ## Rules that are easy to break
 
@@ -241,8 +248,7 @@ A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)
 
 **Animation**
 - Never animate rows with `filter`, `box-shadow`, `height` in CSS transitions, or `animation-fill-mode: both`. Opacity and transform only; `useListMotion` does height and padding with WAAPI.
-- A row plays `row-in` once. `rowRef` sets `animation: none` on it after its entrance ends, because React re-inserts the other rows when one moves above them (an Undo of an edit) and that would replay the whole list's entrance. Only the moved row animates, like Delete and its Undo.
-- Inside `AutoHeight`, space below content is padding, never margin: a child's bottom margin collapses out of the measured box, so the height animation ends short and jumps (Tasks `.week-strip`).
+- Inside `AutoHeight`, space below content is padding, never margin: a child's bottom margin collapses out of the measured box, so the height animation ends short and jumps.
 - Respect `prefers-reduced-motion`. The helpers already return immediately, so do not add your own animations around them.
 
 **Optimistic updates and Undo**
@@ -255,7 +261,7 @@ A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)
 - A dialog's content lives in its own state, separate from its open flag (`moving` + `moveOpen`, `catEdit` + `catOpen`): closing sets only the flag, so the content stays while the dialog fades instead of going blank. Call `runAfterClose()` before reopening.
 - An Undo started while a row is still leaving must `await gone` first.
 - An Undo of an edit calls `runAfterClose()` first, because the form may still be closing.
-- An edit that takes a row off the list on screen (Tasks: a weekday removed while that weekday is shown, a move to another day) makes the row leave like a delete after the form closes; its Undo awaits that exit, then puts the row back with `enter`.
+- An edit that takes a row off the list on screen (Tasks: a move to another day) makes the row leave like a delete after the form closes; its Undo awaits that exit, then puts the row back with `enter`.
 - New rows go on top of the list (Tasks: open tasks newest first; done tasks still sink below them).
 
 Sources: `app/wishlist/wishlist-client.tsx`, `app/components/list-motion.tsx`, `app/components/modal.tsx`, `app/components/toast.tsx`, `app/todos/todos-client.tsx`, `app/gym/muscle-map.tsx`.

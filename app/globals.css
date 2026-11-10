@@ -32,6 +32,7 @@
   --quick: 180ms;
   /* Hover highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
+  --wash: 100ms ease; /* the Wishlist's row wash out and in around a list change; WASH in list-motion.tsx */
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: rgba(255, 255, 255, 0.05);
@@ -226,6 +227,11 @@ h3 {
   min-width: 0;
 }
 
+/* A summary that sits above its list on a phone, beside it on a wide screen (Wishlist) */
+@media (max-width: 991.98px) {
+  .summary-first { order: -1; }
+}
+
 .topbar,
 .form-row,
 .entry-row {
@@ -328,8 +334,14 @@ h3 {
   right: 0.75rem;
   bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 850;
-  display: flex;
+  /* Like the Segmented control: --n tabs, --i the active one, a thumb that slides to it, a gap that keeps the
+     pills apart */
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  --tab-gap: 0.25rem;
+  column-gap: var(--tab-gap);
   align-items: stretch;
+  isolation: isolate;
   padding: 0.25rem;
   background: rgba(28, 28, 30, 0.72);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
@@ -338,8 +350,22 @@ h3 {
   border-radius: 1.5rem;
 }
 
+.tabbar::before {
+  content: "";
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0.25rem;
+  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--tab-gap)) / var(--n));
+  border-radius: 1.25rem;
+  background: var(--tint-subtle);
+  transform: translateX(calc(var(--i) * (100% + var(--tab-gap))));
+  transition: transform var(--dur) var(--ease), opacity var(--fade);
+  z-index: -1;
+}
+.tabbar[data-idle]::before { opacity: 0; }
+
 .tab-item {
-  flex: 1;
   min-width: 0;
   min-height: 3.25rem;
   display: flex;
@@ -358,18 +384,21 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--fade), background var(--fade);
+  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
-/* No transforms on tab items: scaling a glyph over a backdrop-filter bar leaves it blurry after the tap. */
+/* The press pulse is the Segmented tab's: the item shrinks by 4px a side (--press) and springs back. */
+.tab-item:active {
+  transform: scale(var(--press));
+}
 .tab-item svg {
   width: 1.4rem;
   height: 1.4rem;
 }
 
+/* The highlight is the bar's sliding thumb, not the item's own fill */
 .tab-item.active {
   color: var(--tint);
-  background: var(--tint-subtle);
 }
 
 .more-scrim {
@@ -637,8 +666,8 @@ main {
 
 .set-input-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) repeat(2, minmax(0, 1fr)); /* Reps, Unit, Value, Extra on one row */
+  gap: 0.5rem;
   margin-top: 0.85rem;
   align-items: end;
 }
@@ -657,7 +686,7 @@ main {
 /* Food & Nutrition Module Styles */
 .macro-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* equal columns however long the numbers are */
   gap: 0.75rem;
 }
 
@@ -684,6 +713,10 @@ main {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+  /* The target sits under the number: counting changes the number's width, never the line breaks or the card. */
+  display: grid;
+  gap: 0.1rem;
+  white-space: nowrap;
 }
 
 .macro-target {
@@ -761,12 +794,7 @@ main {
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
   transition: transform var(--lift);
-  animation: rise var(--dur) var(--ease) backwards;
 }
-
-.surface:nth-child(2) { animation-delay: 40ms; }
-.surface:nth-child(3) { animation-delay: 80ms; }
-.surface:nth-child(n + 4) { animation-delay: 120ms; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -895,9 +923,6 @@ button:active:not(:disabled) {
   transform: scale(var(--press));
 }
 
-/* The More tab is a button: scaling a glyph over the bar's backdrop blur makes it tremble */
-button.tab-item:active:not(:disabled) { transform: none; }
-
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -960,6 +985,8 @@ textarea:focus-visible {
   display: flow-root;
   transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
+/* Rows added, deleted or moved (useListMotion): the card resizes in step with the rows' glide. MOVE in list-motion.tsx. */
+.auto-height[data-flip] { transition-duration: 240ms; transition-delay: var(--flip-delay, 0ms); transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
 
 .entry-row {
@@ -1205,13 +1232,28 @@ button.signin-continue:disabled {
    Precision Details: Blurred Modal Popups (Centered on Desktop & Mobile)
    ========================================================================== */
 
+/* The dim and blur are their own full-screen layer: the backdrop below shrinks to the area above the keyboard,
+   and the page under the keyboard must stay blurred while it does. */
+.modal-scrim {
+  position: fixed;
+  /* Reaches past the top and bottom of the screen, so no strip (toolbar, home bar) is left unblurred. */
+  inset: -4rem 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur that animates and pans janked on iPhone */
+  touch-action: none;
+  animation: modalFadeIn var(--dur) var(--ease) both;
+}
+.modal-scrim.closing {
+  pointer-events: none;
+  animation: modalFadeOut var(--dur) var(--ease) both;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.4);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1220,6 +1262,8 @@ button.signin-continue:disabled {
   overscroll-behavior: contain;
   touch-action: none;
   animation: modalFadeIn var(--dur) var(--ease) both;
+  /* No transition on the height or offset set in modal.tsx: iOS pans the page while the keyboard opens, and the
+     backdrop follows each step; a transition would chase the pan and lag behind it. */
 }
 
 @keyframes modalFadeIn {
@@ -1244,6 +1288,7 @@ button.signin-continue:disabled {
   margin: auto;
   touch-action: auto;
   animation: modalScaleUp var(--dur) var(--ease) both;
+  transition: translate var(--dur) var(--ease); /* the move between centred and top-anchored (modal.tsx) */
 }
 
 /* Closing plays the opening backwards (Modal keeps the form mounted for --dur) */
@@ -1329,14 +1374,28 @@ button.signin-continue:disabled {
 /* Mobile popup adjustments (keeps centered floating modal, never bottom sheet) */
 @media (max-width: 640px) {
   .modal-backdrop {
+    /* Centred while no field is focused. The same air above and below; the Dynamic Island (top inset) and the home
+       bar (bottom inset) count on both. */
     align-items: center;
     justify-content: center;
-    padding: 2rem 1rem;
+    padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
+  }
+  /* The caret is drawn by iOS and does not follow the form's move; it is hidden until the card lands (modal.tsx). */
+  .modal-backdrop[data-moving] input,
+  .modal-backdrop[data-moving] textarea {
+    caret-color: transparent;
+  }
+  /* With the keyboard up the form eases to the top, above where the keyboard is, and stays there while the field
+     changes. The keyboard covers the home bar, so only the bottom air shrinks. */
+  .modal-backdrop[data-keyboard] {
+    align-items: flex-start;
+    padding-bottom: 1rem;
   }
 
   .modal-card {
     border-radius: 1.25rem;
     max-width: 100%;
+    margin: 0 auto;
   }
 
   .modal-header {
@@ -1574,7 +1633,6 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-  animation: rise var(--dur) var(--ease) 120ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
 }
 
 main > .error {
@@ -1800,57 +1858,7 @@ main > .error {
   color: var(--secondary);
 }
 
-/* ==========================================================================
-   View Transitions API Support
-   ========================================================================== */
-/* As long as the page enter below: the transition (and its click block) lasts as long as its slowest part */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 300ms;
-  animation-timing-function: var(--ease);
-}
-
-/* Page change (app/template.tsx): the old page recedes quickly, the new one settles in.
-   The sidebar and tab bar keep their place as the spatial anchor. */
-::view-transition {
-  pointer-events: none;
-}
-/* Short and blur-free: the page ignores clicks while it runs, and a blur repaints the whole snapshot every frame. */
-::view-transition-old(.page-exit) {
-  animation: page-out 120ms ease-in both;
-}
-::view-transition-new(.page-enter) {
-  animation: page-in 260ms var(--ease) 40ms both;
-}
-@keyframes page-out {
-  to { opacity: 0; transform: scale(0.985); }
-}
-@keyframes page-in {
-  from { opacity: 0; transform: translateY(8px); }
-}
-.side { view-transition-name: app-sidebar; }
-.tabbar { view-transition-name: app-tabbar; }
-::view-transition-group(app-sidebar),
-::view-transition-group(app-tabbar) {
-  animation: none;
-  z-index: 100;
-}
-::view-transition-old(app-sidebar),
-::view-transition-old(app-tabbar) {
-  display: none;
-}
-::view-transition-new(app-sidebar),
-::view-transition-new(app-tabbar) {
-  animation: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
-  }
   *,
   *::before,
   *::after {
@@ -1880,7 +1888,7 @@ main > .error {
   }
 
   .more-scrim,
-  .modal-backdrop {
+  .modal-scrim {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -1927,36 +1935,39 @@ main > .error {
 }
 
 /* Wishlist rows share the list's columns (subgrid), so every price box, range box and link starts and ends at
-   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists put
-   the name and actions over the boxes (the actions sit on the name's line, which leaves them room). */
-.wishlist-entries { grid-template-columns: auto auto minmax(0, 1fr); column-gap: 0.75rem; }
-.wishlist-entries:not(:has(.item-range)) { grid-template-columns: auto minmax(0, 1fr); }
+   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists
+   stack the name, the price and range boxes and the link, with the actions in their own column, centred on the
+   whole item. A row without a link has no third line. */
+.wishlist-entries { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
 .wishlist-entries > * { grid-column: 1 / -1; }
 .item-row {
   display: grid;
   grid-template-columns: subgrid;
-  grid-template-areas: "name name name" "price range link";
+  grid-template-areas: "name name actions" "price range actions" "link link actions";
   align-items: center;
   row-gap: 0.4rem;
 }
-.wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name name" "price link"; }
-.item-row > .item-actions { grid-area: name; justify-self: end; }
-.item-row > .item-name { padding-inline-end: calc(88px + 1.5rem); } /* the two 44px actions, their gap and one more */
+.item-row > .item-actions { grid-area: actions; justify-self: end; }
 .item-meta { display: contents; }
 .item-price { grid-area: price; justify-content: center; white-space: nowrap; }
-.item-range { grid-area: range; justify-content: center; }
+.item-range { grid-area: range; justify-self: start; justify-content: center; white-space: nowrap; }
 :is(.item-link, .item-link-text) { grid-area: link; }
 @container (min-width: 34rem) {
-  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; }
+  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
   .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
   .item-row { grid-template-areas: "name price range link actions"; }
   .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
-  .item-row > .item-actions { grid-area: actions; }
-  .item-row > .item-name { padding-inline-end: 0; }
+  .item-range { justify-self: stretch; }
+}
+@container (max-width: 33.99rem) {
+  .item-row > .item-actions { flex-direction: column; gap: 0.5rem; } /* a phone has no room for the price, the range and two buttons side by side */
+  .item-row:not(:has(.item-link, .item-link-text)) { grid-template-areas: "name name actions" "price range actions"; }
 }
 
-/* The empty note takes one wishlist row's space: two lines when narrow, one 60px line when wide */
-.wishlist-entries { --row-h: 5.9rem; }
+@container (max-width: 18rem) { .item-range { white-space: normal; } } /* a 320px phone: let the range wrap instead of running under the buttons */
+
+/* The empty note takes one wishlist row's space: two stacked buttons when narrow, one 60px line when wide */
+.wishlist-entries { --row-h: 6.25rem; }
 @container (min-width: 34rem) { .wishlist-entries { --row-h: 3.75rem; } }
 
 /* Compact sort menu in a card header. The text is centred between the left edge and the chevron
@@ -2012,6 +2023,10 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 /* A card header's two buttons (Sort and Add item, Clear bought and Add item) share one width */
 .section-head .head-actions:has(> :nth-child(2)) { display: grid; grid-template-columns: 1fr 1fr; }
 .section-head .head-actions > * { width: 100%; justify-content: center; }
+/* On a phone the actions sit on a second row under the title (Wishlist), never beside it. */
+@media (max-width: 640px) {
+  .section-head .head-actions.below { flex: 1 1 100%; }
+}
 
 .item-link,
 .item-link-text {
@@ -2076,7 +2091,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 
 
-/* The title and its tags (weekdays, reminder) share a line, wrapping only when it is full */
+/* The title and its tags (carried over, reminder) share a line, wrapping only when it is full */
 .todo-main {
   flex: 1;
   min-width: 0;
@@ -2088,20 +2103,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .todo-main > .badge-row {
   margin-top: 0;
-}
-
-/* Week section on Tasks: the weekdays, Monday first, one tap to that day's list in the coming week */
-.week-strip {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.35rem;
-  /* Padding, not margin: a margin collapses out of AutoHeight's box, which then opens short and jumps at the end */
-  padding-bottom: 1rem;
-}
-
-.week-strip .weekday-btn {
-  padding: 0.5rem 0;
-  font-size: 0.8125rem;
 }
 
 /* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
@@ -2437,6 +2438,14 @@ button.bars-col:focus-visible {
   text-align: center;
 }
 
+/* An empty day's note keeps the ring's height (132px ring, gap, two text lines) so the cards below never move */
+.dash-hero-empty {
+  box-sizing: border-box;
+  min-height: 13rem;
+  display: grid;
+  place-items: center;
+}
+
 .dash-hero-text {
   display: flex;
   flex-direction: column;
@@ -2482,6 +2491,35 @@ button.bars-col:focus-visible {
   left: 0.6rem;
   bottom: 0.6rem;
   width: 10rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.muscle-views > :last-child { align-self: stretch; }
+/* Touch screens only: always grey. Hold it and slide the same finger to move the model; a drag on the model scrolls the page. */
+.muscle-move {
+  display: none;
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0; /* the global button min-height would stretch it taller than wide */
+  padding: 0;
+  place-items: center;
+  border-radius: 0.85rem;
+  background: var(--surface-secondary);
+  color: var(--secondary);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: background var(--fade);
+}
+.muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), white 8%); }
+@media (pointer: coarse) {
+  .muscle-move { display: grid; }
+  /* The wrapper's touch-action none would also block the canvas's pan-y: the page scrolls over the map. */
+  .muscle-canvas { touch-action: pan-y; }
 }
 .muscle-side {
   display: grid;
@@ -2777,29 +2815,6 @@ button.bars-col:focus-visible {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
-/* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx), one after another
-   30ms apart, so a list builds on the spot on page load and after a switch */
-.entry-row,
-.item-row,
-.shopping-row,
-.todo-row,
-.split-day-card,
-.routine-row,
-:is(.entries, .todo-list, .shopping-groups) > .empty-note {
-  /* backwards, not both: a held end state would pin transform and block the hover lift */
-  animation: row-in 260ms var(--ease) backwards;
-  /* Capped at the 11th row, so a long list never waits; browsers without sibling-index() drop the line and
-     show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
-  animation-delay: calc(min(sibling-index() - 1, 10) * 30ms);
-}
-@keyframes row-in {
-  from { opacity: 0; transform: scale(0.97); }
-}
-/* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
-.week-btn {
-  animation: row-in 260ms var(--ease) backwards;
-}
-
 /* A day with something planned: a small dot under the number. */
 .picker-cell.marked {
   position: relative;
@@ -2816,49 +2831,6 @@ button.bars-col:focus-visible {
   border-radius: 50%;
   background: currentColor;
   opacity: 0.8;
-}
-
-/* Weekday repeats: a badge on the row, and a row of day toggles in the form. */
-.badge-repeat {
-  background: var(--tint-subtle);
-  color: var(--tint);
-  font-size: 0.75rem;
-}
-
-.weekday-picker {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.4rem;
-}
-
-/* Reads like every other field label. */
-.weekday-picker legend {
-  padding: 0;
-  margin-bottom: 0.35rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.weekday-options {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.35rem;
-}
-
-.weekday-btn {
-  min-height: 2.75rem; /* 44pt touch target */
-  padding: 0;
-  border-radius: 0.85rem;
-  background: var(--surface-secondary);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.weekday-btn[aria-pressed="true"] {
-  background: var(--tint);
-  color: var(--on-tint);
 }
 
 /* Move sheet: one full-width choice per row. */
@@ -2965,8 +2937,7 @@ button.bars-col:focus-visible {
   .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
   .date-field:hover:not(:disabled, [aria-expanded="true"]) { background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%); }
   button.secondary:hover:not(:disabled),
-  button.btn-sm:not(.tint):hover:not(:disabled),
-  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled) {
+  button.btn-sm:not(.tint):hover:not(:disabled) {
     background: var(--highlight-fill);
   }
   button.btn-sm.tint:hover:not(:disabled),
@@ -3013,7 +2984,8 @@ button.bars-col:focus-visible {
 }
 /* A wash list (AutoHeight's `wash`, Wishlist): the band sits halfway between the card edge and the text, and
    the wash fades out before rows enter or leave and back in once they are in place (list-motion.tsx). A row
-   still entering sits out the alternation, so no other row's wash flips while it comes in. */
+   still entering or already leaving sits out the alternation, so no other row's wash flips while it comes in
+   or when the row is removed. */
 .surface .auto-height[data-wash],
 .surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row),
 .surface .shopping-group > .shopping-row {
@@ -3025,7 +2997,10 @@ button.bars-col:focus-visible {
   padding-inline-end: var(--band-out);
 }
 .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
-.auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering])) {
+.surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: background-color var(--wash), transform var(--lift); }
+/* A view switch (range, sort, day, tab) hides the rows, so their bands change with the list, not after it. */
+.auto-height[data-swap] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: transform var(--lift); }
+.auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering], [data-leaving])) {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
@@ -3090,7 +3065,10 @@ button.bars-col:focus-visible {
 .session-timer.paused { opacity: 0.5; }
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
 @media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
-.history-entry { display: block; padding-block: 0.25rem; }
+.history-entry { display: block; padding-block: 0.25rem; transition: background-color var(--fade); }
+/* The open workout is a tinted fill, so it stands out from the banded rows around it. */
+.history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
+.history-entry.open .history-chevron { color: var(--tint); }
 .history-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -3135,10 +3113,21 @@ button.bars-col:focus-visible {
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
 }
-/* The fields of the set being logged read from the left, like their labels */
-.set-input-grid label,
-.set-input-grid input,
-.set-input-grid select { text-align: left; }
+/* The set being logged: labels and values centred on their fields, Log set on a row of its own at full width.
+   The fields sit on a grey fill so they stand out from the card's band. */
+.set-input-grid > button { grid-column: 1 / -1; }
+.set-input-grid label { text-align: center; }
+.set-input-grid :is(input, select) {
+  padding-inline: 0.25rem;
+  text-align: center;
+  text-align-last: center;
+  background-color: var(--surface-secondary);
+}
+.set-input-grid select { background-image: none; }
+.set-input-grid :is(input, select):focus { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
+@media (hover: hover) {
+  .set-input-grid :is(input, select):hover:not(:focus, :disabled) { background-color: color-mix(in srgb, var(--surface-secondary), white 5%); }
+}
 
 /* iOS zooms into any field under 16px on focus; pinch zoom stays allowed, so keep touch fields at 16px. */
 @media (pointer: coarse) {
@@ -3147,5 +3136,33 @@ button.bars-col:focus-visible {
   select.sort-select,
   textarea {
     font-size: 1rem;
+  }
+}
+
+/* Portrait only on a phone. A web page cannot lock the orientation in a browser tab (the installed app does, through
+   the manifest), so a phone turned sideways keeps the portrait page and turns it back against the device, like a
+   portrait-locked app: no message, the page just does not rotate. html becomes a fixed portrait-sized scroller
+   (the short side wide, the long side tall) rotated 90deg; data-rot (providers.tsx) says which way. Tablets and
+   desktops are taller than 500px in landscape, so they are not affected. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  html {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100dvh;
+    height: 100dvw;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform-origin: 0 0;
+    transform: translateY(100dvh) rotate(-90deg);
+    background: #000;
+  }
+  html[data-rot="cw"] {
+    transform: translateX(100dvw) rotate(90deg);
+  }
+  /* The modal's visualViewport sizing is for an upright phone; here the backdrop is the rotated html. */
+  html .modal-backdrop {
+    height: 100% !important;
+    transform: none !important;
   }
 }

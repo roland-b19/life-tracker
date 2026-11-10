@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -29,8 +29,8 @@ const PRIORITY_BADGE: Record<Priority, string> = {
 };
 
 const RANGE_LABEL: Record<Priority, string> = {
-  low: "Under 250",
-  medium: "250 – 750",
+  low: "< 250",
+  medium: "250-750",
   high: "750+",
 };
 
@@ -44,8 +44,8 @@ const FILTERS: { value: "all" | Priority; label: string }[] = [
 type Sort = "newest" | "price-asc" | "price-desc";
 const SORTS: { value: Sort; label: string }[] = [
   { value: "newest", label: "Newest" },
-  { value: "price-asc", label: "Lowest price" },
-  { value: "price-desc", label: "Highest price" },
+  { value: "price-asc", label: "Price ↑" },
+  { value: "price-desc", label: "Price ↓" },
 ];
 const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number> = {
   newest: (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
@@ -53,8 +53,9 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
   "price-desc": (a, b) => Number(b.estimatedPrice) - Number(a.estimatedPrice),
 };
 
-const formatRon = (n: number) =>
-  n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Whole lei with the thousands separator, no decimals (the user's call): 1.234 RON.
+const ron = new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 });
+const formatRon = (n: number) => ron.format(n);
 
 /** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
 function linkOf(value: string) {
@@ -85,6 +86,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, move, fadeAll } = useListMotion();
+  const itemsCard = useRef<HTMLElement>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -105,7 +107,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
-  const [shownItems, moreItems] = useMore(filteredItems);
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
@@ -126,15 +127,24 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     else leave(to.id, write);
   }
 
+  // A tab or sort change is one simple movement: the old rows fade out, then the new list fades in as a whole
+  // (rows never build one after another here; only the page load does).
+  function swapList(change: () => void) {
+    fadeAll(() => {
+      swapIn(itemsCard.current);
+      change();
+    });
+  }
+
   function switchRange(next: "all" | Priority) {
     if (next === filterRange) return;
     setFilterRange(next);
-    fadeAll(() => setView((v) => ({ ...v, range: next })));
+    swapList(() => setView((v) => ({ ...v, range: next })));
   }
 
   function switchSort(next: Sort) {
     setSort(next);
-    fadeAll(() => setView((v) => ({ ...v, sort: next })));
+    swapList(() => setView((v) => ({ ...v, sort: next })));
   }
 
   function openForm(item?: WishlistItemData) {
@@ -142,7 +152,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     setErrorMsg("");
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
-    setEstimatedPrice(item ? String(Number(item.estimatedPrice)) : "");
+    setEstimatedPrice(item ? String(Math.round(Number(item.estimatedPrice))) : "");
     setUrl(item?.url ?? "");
     setIsModalOpen(true);
   }
@@ -151,13 +161,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     e.preventDefault();
     setErrorMsg("");
 
-    const parsedPrice = parseFloat(estimatedPrice);
+    const parsedPrice = Number(estimatedPrice.trim()); // unlike parseFloat, rejects trailing junk and "1,5"
     if (!name.trim()) {
       setErrorMsg("Please enter an item name.");
       return;
     }
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      setErrorMsg("Please enter a valid price greater than 0.");
+    if (!Number.isInteger(parsedPrice) || parsedPrice <= 0) {
+      setErrorMsg("Please enter a whole-number price greater than 0.");
       return;
     }
 
@@ -268,12 +278,12 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="surface" aria-labelledby="wishlist-items-title">
+          <section ref={itemsCard} className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
               <h2 id="wishlist-items-title" className="section-title">
                 Items <span className="muted number-tabular">{filteredItems.length}</span>
               </h2>
-              <span className="head-actions">
+              <span className="head-actions below">
                 <select
                   className="sort-select"
                   aria-label="Sort items"
@@ -314,9 +324,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
-                // Keyed by the filter so every row replays its entrance when the tab changes.
+                // Keyed by the filter, so a tab change replaces the rows.
                 <Fragment key={`${listRange}-${view.sort}`}>
-                  {shownItems.map((item) => (
+                  {filteredItems.map((item) => (
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -349,14 +359,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                       </div>
                     </div>
                   ))}
-                  {moreItems}
                 </Fragment>
               )}
             </AutoHeight>
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby="wishlist-summary-title">
             <div className="section-head">
               <h2 id="wishlist-summary-title" className="section-title">
@@ -393,10 +402,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
             <label>
               Price (RON)
               <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0.01"
+                type="text"
+                inputMode="numeric"
                 value={estimatedPrice}
                 onChange={(e) => setEstimatedPrice(e.target.value)}
                 disabled={busy}

@@ -942,7 +942,6 @@ export function FoodClient({
                     <span className="macro-numbers">
                       <AnimatedNumber value={m.value} format={oneDecimal} />
                       <span className="macro-target">
-                        {" "}
                         / {m.target}
                         {m.unit}
                       </span>
@@ -967,7 +966,7 @@ export function FoodClient({
                   <p className="card-sub muted number-tabular">{formatDMY(day.date)}</p>
                 </div>
                 {!isPast && (
-                  <span className="head-actions">
+                  <span className="head-actions below">
                     <button type="button" className="btn-sm tint" onClick={() => setIsPastOpen(true)}>
                       Past foods
                     </button>
@@ -1115,7 +1114,7 @@ export function FoodClient({
             <h2 id="shopping-title" className="section-title">
               Shopping list <span className="muted number-tabular">{shoppingList.length}</span>
             </h2>
-            <span className="head-actions">
+            <span className="head-actions below">
               <button
                 type="button"
                 className="btn-sm tint"

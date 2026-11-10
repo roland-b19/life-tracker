@@ -2,8 +2,8 @@ import { z } from "zod";
 import { isoDate } from "./common";
 
 export const todoSpaceSchema = z.enum(["personal", "business"]);
-// "none" for a one-off task; "daily", or "days:1,3,5" for chosen ISO weekdays (1 = Monday). Fits varchar(20).
-export const recurrencePatternSchema = z.string().regex(/^(none|daily|days:[1-7](,[1-7]){0,6})$/, "Invalid repeat pattern");
+// "none" for a one-off task, "daily" for a repeating one.
+export const recurrencePatternSchema = z.enum(["none", "daily"]);
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
@@ -46,8 +46,6 @@ export const updateTodoSchema = z.object({
   id: z.string().uuid(),
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
-  /** Only applied to repeating tasks. */
-  recurrencePattern: recurrencePatternSchema.optional(),
 });
 
 /** Moves a task to `dueDate` as a one-off task ("none"), or makes it a repeating one. */

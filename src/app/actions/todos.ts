@@ -17,7 +17,6 @@ import {
   updateTodoSchema,
 } from "@/lib/validations/todos";
 import { addDays, toISODate } from "@/lib/format-date";
-import { isDueOn } from "@/lib/streak";
 import {
   createTodo,
   deleteTodo,
@@ -66,14 +65,13 @@ export async function toggleTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = toggleTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
-  // Past days can be ticked (as on screen); a repeating task only on a day it is due, never ahead of time
+  // Past days can be ticked (as on screen); a repeating task only on or after its first day, never ahead of time
   // (a day of slack covers the user's timezone).
   if (
     task?.isRecurring &&
     (parsed.currentDate > addDays(toISODate(), 1) ||
       parsed.currentDate < task.dueDate ||
-      (task.endedOn && parsed.currentDate >= task.endedOn) ||
-      !isDueOn(task.recurrencePattern, parsed.currentDate))
+      (task.endedOn && parsed.currentDate >= task.endedOn))
   ) {
     throw new Error("This task is not due on that day.");
   }
@@ -126,21 +124,18 @@ export async function getDailyTodosAction(space: TodoSpace, date: string) {
 /**
  * Everything the Tasks page shows for one day, in one round trip: Next runs server actions one at a time,
  * so eight separate calls per day change cost eight sessions, eight network trips and eight waits in a row.
- * `weekDate` is the date a weekday's repeating tasks are read for (null when no weekday is open).
  */
-export async function loadTodosViewAction(date: string, weekDate: string | null) {
+export async function loadTodosViewAction(date: string) {
   const userId = await requireUser();
   const day = isoDate.parse(date);
-  const week = weekDate === null ? null : isoDate.parse(weekDate);
   const plannedSince = addDays(toISODate(), -1);
   const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-  const [daily, weekly, history, planned] = await Promise.all([
+  const [daily, history, planned] = await Promise.all([
     both((space) => getDailyTodos(userId, space, day)),
-    week ? both((space) => getDailyTodos(userId, space, week)) : null,
     both((space) => getTodoHistory(userId, space)),
     both((space) => getPlannedDays(userId, space, plannedSince)),
   ]);
-  return { success: true, daily, weekly, history, planned };
+  return { success: true, daily, history, planned };
 }
 
 export async function getPlannedDaysAction(space: TodoSpace) {

@@ -86,7 +86,7 @@ describe("a page view with two years of data stays cheap", () => {
   it("switching the todos day loads everything in one action, with few queries", async () => {
     const { loadTodosViewAction } = await import("@/app/actions/todos");
     const today = new Date().toISOString().slice(0, 10);
-    const { result, queries, bytes } = await measure(() => loadTodosViewAction(today, today));
+    const { result, queries, bytes } = await measure(() => loadTodosViewAction(today));
     expect(result.success).toBe(true);
     // 12 = the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history and planned days.
     expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(12);

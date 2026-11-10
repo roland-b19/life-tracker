@@ -42,7 +42,7 @@ import {
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
-import { isDueOn, previousDue, streakOn } from "@/lib/streak";
+import { streakOn } from "@/lib/streak";
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -277,16 +277,16 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
 
   it("computes streaks as pure functions, timezone-proof", () => {
     const done = (...days: string[]) => new Set(days);
-    expect(streakOn(done(), "daily", "2026-03-01")).toBe(0);
-    expect(streakOn(done("2026-03-01"), "daily", "2026-03-01")).toBe(1);
+    expect(streakOn(done(), "2026-03-01")).toBe(0);
+    expect(streakOn(done("2026-03-01"), "2026-03-01")).toBe(1);
     // Month and leap-day boundaries.
-    expect(streakOn(done("2028-02-28", "2028-02-29", "2028-03-01"), "daily", "2028-03-01")).toBe(3);
-    expect(streakOn(done("2026-12-31", "2027-01-01"), "daily", "2027-01-01")).toBe(2);
+    expect(streakOn(done("2028-02-28", "2028-02-29", "2028-03-01"), "2028-03-01")).toBe(3);
+    expect(streakOn(done("2026-12-31", "2027-01-01"), "2027-01-01")).toBe(2);
     // An unticked today still shows yesterday's run; a missed day ends it.
-    expect(streakOn(done("2026-03-04", "2026-03-05"), "daily", "2026-03-06")).toBe(2);
-    expect(streakOn(done("2026-03-04", "2026-03-05"), "daily", "2026-03-07")).toBe(0);
+    expect(streakOn(done("2026-03-04", "2026-03-05"), "2026-03-06")).toBe(2);
+    expect(streakOn(done("2026-03-04", "2026-03-05"), "2026-03-07")).toBe(0);
     // A gap in the past splits the run.
-    expect(streakOn(done("2026-03-01", "2026-03-03"), "daily", "2026-03-03")).toBe(1);
+    expect(streakOn(done("2026-03-01", "2026-03-03"), "2026-03-03")).toBe(1);
     expect(addDays("2026-03-29", 1)).toBe("2026-03-30"); // DST change in Europe
   });
 
@@ -596,42 +596,10 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await moveTodoAction({ id: later.id, recurrencePattern: "none", dueDate: addDays(today, 2) })).success).toBe(true);
     });
   });
-  describe("Weekday repeats, list order, moves and planned days", () => {
-    // 2026-11-02 is a Monday.
-    const mon = "2026-11-02";
-    const wed = "2026-11-04";
-    const thu = "2026-11-05";
-
-    it("keeps a weekday streak across the days off and breaks it on a missed due day", () => {
-      const p = "days:1,4"; // Monday and Thursday
-      expect(isDueOn(p, mon)).toBe(true);
-      expect(isDueOn(p, wed)).toBe(false);
-      expect(isDueOn("daily", wed)).toBe(true);
-      expect(previousDue(p, thu)).toBe(mon);
-      expect(previousDue(p, mon)).toBe("2026-10-29");
-
-      expect(streakOn(new Set([mon, thu]), p, thu)).toBe(2);
-      expect(streakOn(new Set([mon]), p, thu)).toBe(1);
-      // Thursday missed: by the next Monday the run is over.
-      expect(streakOn(new Set([mon]), p, "2026-11-09")).toBe(0);
-    });
-
-    it("lists a weekday task only on its days", async () => {
-      await createTodo(userA, { space: "personal", title: "Gym", dueDate: mon, isRecurring: true, recurrencePattern: "days:1,4" });
-      await createTodo(userA, { space: "personal", title: "Read", dueDate: mon, isRecurring: true, recurrencePattern: "daily" });
-      // Made on a Wednesday for Mondays only: not on the Wednesday list.
-      await createTodo(userA, { space: "personal", title: "Swim", dueDate: wed, isRecurring: true, recurrencePattern: "days:1" });
-      const titles = async (day: string) => (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title).sort();
-      // Its first day is that Wednesday: it is not on the Monday before, only on the Mondays after.
-      expect(await titles(mon)).toEqual(["Gym", "Read"]);
-      expect(await titles(wed)).toEqual(["Read"]);
-      expect(await titles(thu)).toEqual(["Gym", "Read"]);
-      expect(await titles(addDays(mon, 7))).toEqual(["Gym", "Read", "Swim"]);
-    });
-
+  describe("List order, moves and planned days", () => {
     it("rejects a malformed repeat pattern", async () => {
       const task = { space: "personal", title: "Bad", dueDate: toISODate(), isRecurring: true };
-      await expect(createTodoAction({ ...task, recurrencePattern: "days:8" })).rejects.toThrow();
+      await expect(createTodoAction({ ...task, recurrencePattern: "weekly" })).rejects.toThrow();
       await expect(createTodoAction({ ...task, recurrencePattern: "weekly; drop" })).rejects.toThrow();
     });
 
@@ -732,15 +700,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await ids(today)).toEqual([]);
     });
 
-    it("changes a repeating task's weekdays, owner only", async () => {
-      const habit = await createTodo(userA, { space: "personal", title: "Run", dueDate: mon, isRecurring: true, recurrencePattern: "daily" });
-      expect(await updateTodo(userB, { id: habit.id, title: "Run", recurrencePattern: "days:1" })).toBe(false);
-      expect((await getDailyTodos(userA, "personal", wed, wed)).todos).toHaveLength(1);
-      expect(await updateTodo(userA, { id: habit.id, title: "Run", recurrencePattern: "days:1" })).toBe(true);
-      expect((await getDailyTodos(userA, "personal", wed, wed)).todos).toHaveLength(0);
-      expect((await getDailyTodos(userA, "personal", mon, mon)).todos).toHaveLength(1);
-    });
-
     it("lists future planned days for the owner only", async () => {
       const today = toISODate();
       const plan = (dueDate: string, isRecurring = false) =>
@@ -768,23 +727,21 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await createTodo(userA, { space: "personal", title: "Habit", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
 
       authState.id = userA;
-      const view = await loadTodosViewAction(today, addDays(today, 1));
+      const view = await loadTodosViewAction(today);
       expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
       expect(view.daily[1].todos).toEqual([]);
-      expect(view.weekly?.[0].todos.map((t) => t.title)).toEqual(["Habit"]);
       expect(view.planned[1]).toEqual([addDays(today, 2)]);
       expect(Array.isArray(view.history[0])).toBe(true);
-      expect((await loadTodosViewAction(today, null)).weekly).toBeNull();
 
       authState.id = userB;
-      const other = await loadTodosViewAction(today, null);
+      const other = await loadTodosViewAction(today);
       expect(other.daily[0].todos).toEqual([]);
       expect(other.planned).toEqual([[], []]);
 
       authState.id = "";
-      await expect(loadTodosViewAction(today, null)).rejects.toThrow("Authentication required.");
+      await expect(loadTodosViewAction(today)).rejects.toThrow("Authentication required.");
       authState.id = userA;
-      await expect(loadTodosViewAction("2026-02-30", null)).rejects.toThrow();
+      await expect(loadTodosViewAction("2026-02-30")).rejects.toThrow();
     });
   });
 });

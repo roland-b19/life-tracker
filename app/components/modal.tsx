@@ -62,36 +62,104 @@ export function Modal({
     if (!isOpen) return;
     window.addEventListener("keydown", handleKeyDown);
 
-    // iOS ignores overflow:hidden on body, so pin it in place and restore the scroll position on close.
+    // The page behind must not scroll. Not pinned with position:fixed on the body: on iOS that reflowed the whole
+    // page as the form opened (jank) and left a bare black strip at the bottom. A touchmove lock (below) stops
+    // the drags; overflow:hidden stops the wheel and keys.
     const scrollY = window.scrollY;
-    const body = document.body;
-    body.style.position = "fixed";
-    body.style.top = `${-scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    const root = document.documentElement;
+    root.style.overflow = "hidden";
+
+    // No autofill, autocorrect or spell-check bar above the keyboard in any form (it makes the keyboard taller).
+    backdropRef.current?.querySelectorAll("input, textarea").forEach((f) => {
+      f.setAttribute("autocomplete", "off");
+      f.setAttribute("autocorrect", "off");
+      f.setAttribute("spellcheck", "false");
+    });
 
     // Keep the backdrop the size of the visible area so the keyboard never pushes or zooms the card.
     const vv = window.visualViewport;
+    // Moving to a field with another keyboard (text, number pad) changes the visible height. The form only ever
+    // shrinks while the keyboard is up, and grows back when it is dismissed, so a switch never makes it twitch.
+    let low = Infinity;
+    let landed: ReturnType<typeof setTimeout>;
     const fit = () => {
       const el = backdropRef.current;
       if (!el || !vv) return;
-      el.style.height = `${vv.height}px`;
+      const keyboard = window.innerHeight - vv.height > 120;
+      low = keyboard ? Math.min(low, vv.height) : Infinity;
+      const card = el.firstElementChild as HTMLElement | null;
+      const was = el.hasAttribute("data-keyboard");
+      const before = card?.offsetTop ?? 0;
+      el.style.height = `${keyboard ? low : vv.height}px`;
       el.style.transform = `translateY(${vv.offsetTop}px)`;
+      // The keyboard covers the bottom, so the bottom padding for the home bar is not needed then.
+      el.toggleAttribute("data-keyboard", keyboard);
+      // Centred without the keyboard, top-anchored with it (globals.css): the card eases between the two (FLIP on the
+      // `translate` property, which does not fight the entrance's `transform`).
+      if (card && was !== keyboard && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const dy = before - card.offsetTop;
+        if (dy) {
+          card.style.transition = "none";
+          card.style.translate = `0 ${dy}px`;
+          void card.offsetHeight;
+          card.style.transition = "";
+          card.style.translate = "0 0";
+          // The text caret is drawn by iOS itself and does not follow the move (it jitters), so it hides until the card lands.
+          el.setAttribute("data-moving", "");
+          clearTimeout(landed);
+          landed = setTimeout(() => el.removeAttribute("data-moving"), CLOSE_MS);
+        }
+      }
     };
     fit();
     vv?.addEventListener("resize", fit);
     vv?.addEventListener("scroll", fit);
 
+    // With the keyboard open iOS lets a drag pan the page behind the form. Only the form's own scroll may take one.
+    const lock = (e: TouchEvent) => {
+      const body = (e.target as Element).closest(".modal-body");
+      if (!body || body.scrollHeight <= body.clientHeight) e.preventDefault();
+    };
+    document.addEventListener("touchmove", lock, { passive: false });
+    // iOS may still scroll the document to reveal a focused field; put the page back where it was.
+    const pin = () => {
+      if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+    };
+    window.addEventListener("scroll", pin);
+
+    // The log from a phone showed iOS panning the visual viewport ~110px for a moment on every focus (the page behind
+    // flashes and the form with it), although every field was already visible. A tap focuses the field itself with
+    // preventScroll, so iOS has no scroll-into-view to do. A drag is left alone, so the form still scrolls.
+    let startX = 0;
+    let startY = 0;
+    const tapStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+    const tapEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) return;
+      const hit = (e.target as Element).closest("input, textarea, label");
+      const field = hit instanceof HTMLLabelElement ? hit.control : hit;
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+      const typing = field instanceof HTMLTextAreaElement || /^(text|number|search|email|tel|url|password)$/.test(field.type);
+      if (!typing || field.disabled || !field.closest(".modal-body")) return;
+      e.preventDefault();
+      field.focus({ preventScroll: true });
+    };
+    document.addEventListener("touchstart", tapStart, { passive: true });
+    document.addEventListener("touchend", tapEnd, { passive: false });
+
     return () => {
+      clearTimeout(landed);
+      document.removeEventListener("touchstart", tapStart);
+      document.removeEventListener("touchend", tapEnd);
+      document.removeEventListener("touchmove", lock);
+      window.removeEventListener("scroll", pin);
       window.removeEventListener("keydown", handleKeyDown);
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
+      root.style.overflow = "";
       window.scrollTo(0, scrollY);
     };
   }, [isOpen, handleKeyDown]);
@@ -100,6 +168,8 @@ export function Modal({
 
   // Portaled to body so the page behind can shrink (a transformed parent would trap the fixed backdrop).
   return createPortal(
+    <>
+    <div className={closing ? "modal-scrim closing" : "modal-scrim"} aria-hidden="true" />
     <div
       ref={backdropRef}
       className={closing ? "modal-backdrop closing" : "modal-backdrop"}
@@ -133,7 +203,8 @@ export function Modal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>,
+    </div>
+    </>,
     document.body,
   );
 }

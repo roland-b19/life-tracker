@@ -32,7 +32,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle; the motion is evident but never showy.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **Feedback:** every change on screen is animated in order. A row fades out where it stands while its space closes. The space opens before a row fades in. The wash fades out before rows move and back in after.
+- **Feedback:** every change on screen is animated in order. Add, delete and an edit that moves a row share one animation: the wash fades out first (100ms, wash lists), the rows below glide to make or close space (240ms), the row itself fades (out where it stands, or in after the glide), and the wash comes back last.
 - **Stability:** nothing jumps, nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
 
@@ -78,7 +78,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Gaps between tags equal gaps between row buttons, and those equal the header gap (.75rem). The .4rem `.badge-row` gap is only for small badges that belong to a name (Tasks weekdays, reminder), not for tags beside buttons. Those badges sit on the name's line and wrap only when the line is full, never on a line of their own.
 - **Everything is centred against its object.**
   - Text is vertically centred in its row.
-  - Row buttons are centred on the row, never on its first or last line. The one exception is a narrow Wishlist row: its actions sit on the name's line, right-aligned, so the tags below keep the full width.
+  - Row buttons are centred on the row, never on its first or last line. On a phone a Wishlist row has its own column for the actions: Edit above Delete, centred on the whole item (name, tags and link), at the card's right edge.
   - Sort text is centred against its chevron (`text-align-last: center`).
   - The add button is centred in its header slot.
   - Toast buttons are centred in the toast. The action is at least 44×36 and the close button 36px square; both reach 44pt through `::before`.
@@ -87,7 +87,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - A control that appears later is always rendered and hidden with `visibility: hidden` (muscle map "Show all").
   - An empty list keeps one row's height (`--row-h`). One exception: a Gym exercise's set list collapses to nothing until its first set, since the target line above already says what to log.
   - Cards never jump.
-- **One line where it fits.** On a wide card a Wishlist row is one line: name, price, range, link, actions. On a phone it wraps to name, then tags. Tags and link start on the left. Price badges share one column width on every row, on a phone too (see the next rules).
+- **One line where it fits.** On a wide card a Wishlist row is one line: name, price, range, link, actions. On a phone it wraps to name, then price and range, then the link on its own line, with the actions in their own column. Tags and link start on the left. Price badges share one column width on every row, on a phone too (see the next rules).
 - **A total sits next to its title**, muted and tabular: `Items 12`, `Tasks 4`, `Meals 3`, `Shopping list 7`, `Categories 5`, `History 20`. A list still loading shows no total yet.
 - **Counts and totals follow the filter.** The count next to the title and the summary amount always show the active filter, not the whole list.
 - **Never repeat what every row says.** A tag that would be identical on every visible row is hidden: the range badge appears only in the All tab.
@@ -97,7 +97,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Value first, details muted.** The main value comes first. Dates and other secondary data are muted (`--secondary`), with a clear gap: a muted detail after its value on the same line is 1.25rem away, baseline-aligned (`.weight-main`).
 - **Full-width selectors.** A `Segmented` control spans the full card width, with centred labels. The one exception is the muscle map's Front/Back switch: a 10rem control laid over the 3D model.
 - **One card level.** Never nest a card in a card. Only the outer box is a `.surface` and gets the entrance; inner groups are plain bands or rows. Gym Training days are the exception: seven selectable `--surface-solid` cards inside the split card.
-- **The list goes first.** The list the user works in is the main (first) column; a card that supports it (a summary, or the Categories that manage its groups) goes in the aside (second column). Categories are added, renamed and deleted in their own card, never inside the list they group.
+- **The list goes first.** The list the user works in is the main (first) column; a card that supports it (a summary, or the Categories that manage its groups) goes in the aside (second column); on a phone, where the columns stack, a summary card goes above the list (`summary-first`). Categories are added, renamed and deleted in their own card, never inside the list they group.
 - **No sticky panels.** Cards and panels scroll with the page. Only the sidebar and tab bar are fixed.
 - **Forms align.** All fields share one column and one width. A checkbox is centred on its label text.
 
@@ -111,7 +111,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - It installs to the Home Screen as a standalone app, so it never shows browser chrome: `public/manifest.json` (`display: standalone`, `orientation: portrait`, black `#000000` theme and background) and `appleWebApp.capable: true` in `app/layout.tsx` stay.
 
 **Forms and overlays**
-- **Forms are centred modals, never bottom sheets.**
+- **Forms are modals, never bottom sheets.** Centred on a desktop and on a phone; on a phone it eases up to the top while the keyboard is open (so the keyboard never makes iOS pan the page).
   - The page behind blurs and is never scaled.
   - The keyboard never zooms or pushes the form.
   - The form closes exactly like it opens (the reverse animation).
@@ -148,14 +148,14 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
 - **Fast.**
-  - Page and tab changes feel instant (exit 120ms).
+  - Page and tab changes feel instant (exit 80ms, whole transition 200ms).
   - View switches fade old rows in 120ms.
   - Nothing animates for its own sake.
   - The resize is always faster than the item's appearance.
 - **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
 - **Streaks** are green (success colour) with a fire icon, in the row. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
-- **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (under 250 low, 250 – 750 medium, 750+ high); there is no manual priority.
+- **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (`< 250` low, `250-750` medium, `750+` high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
 - **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
 - **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
@@ -165,6 +165,9 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
 - **A fraction never counts.** "X of Y" is plain text with the real numbers from the first frame, on entry and on change; only the ring beside it fills, so the card never reads "0 of 0" (the user's call).
+- **Macro cards count up, the layout stays fixed.** The Health macro numbers use `AnimatedNumber` like every stat; the target sits on its own row under the number (`/ 3350 kcal`), so counting never changes a line break or the card.
+- **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; "Log set" is the next row at full width; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row. History rows never use the page's `useListMotion` refs (a training-day `fadeAll` would fade them out for good).
+- **Muscle map move button (touch only).** Always grey, 2.75rem square (a faint lighter fill while held, never tinted; override the global button `min-height`). Press and hold it and slide the same finger to turn the model; a drag on the model itself scrolls the page (`touch-action: pan-y` on the canvas AND its wrapper, since the effective value is the intersection of the ancestors; OrbitControls off on a coarse pointer). The Tasks dashboard sits above its list on a phone (`summary-first`) and its empty Progress card keeps the ring's height, so changing day never moves the page.
 - **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
   - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
@@ -183,27 +186,22 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "Apple spring" motion the user chose, which settles without overshoot. Never an overshoot or a spring bounce. Full timings are in `references/values.md`.
 
-1. **Page enter/exit.** `template.tsx` wraps every page in `<ViewTransition enter="page-enter" exit="page-exit" default="none">`.
-   - Exit: 120ms fade with scale to .985.
-   - Enter: 260ms rise of 8px, after a 40ms delay.
-   - No blur.
-   - The sidebar and tab bar do not animate.
-2. **Cards rise in on load.** 14px up and fade, staggered 0/40/80/120ms.
-3. **Rows build one after another** on page load and after every switch.
-   - `row-in`: opacity 0 and scale .97, 260ms, 30ms apart, capped at the 11th row.
-   - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
-   - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.
-   - A list that shrinks still builds in sequence.
-4. **Deleting a row.** The row fades in place (160ms, scale .97) while its space closes (260ms). A neighbour takes in the gap, so nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
+1. **No page or load animation.** A page change or first load just shows the page: no view transition, no `template.tsx`, no card rise, no row stagger (the user's call, 2026-11-10: "simply just load the page"). The tab bar's own thumb still glides.
+2. **View switches** (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick) fade the old rows out (120ms) and the new list in at once, through `fadeAll` and `swapIn(card)` (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations.
+3. **Rows are plain on arrival.** There is no `row-in`, `useBuilt` or `stagger`; a row added without `enter` simply appears. `@keyframes rise` stays only for routine rows, custom exercises and chat bubbles.
+4. **Deleting a row.** The row fades in place (240ms, scale .97), then the rows below glide up (240ms, `transform` only) and the card height follows; in a wash list the wash fades out (100ms) before all of it. Nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
 5. **Adding a row.**
-   - The space opens first (260ms).
-   - Then the row fades in (180ms).
+   - In a wash list the wash fades out first (100ms).
+   - The rows below glide down (240ms) and the card grows with them.
+   - Then the row fades in (240ms).
    - It is never seen clipped.
    - A list's only row swaps with the empty note, which has the same height, so it only fades.
-6. **An edit that moves a row** (sort or filter changes its place) uses the Undo animation: the old space closes while the row enters its new place. An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
+6. **An edit that moves a row** (sort or filter changes its place) uses the same steps as add and delete, in the same total time: the row fades out in place (120ms), the rows between glide to make space (240ms), the row fades in at its new place (120ms). An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
 7. **Wash lists** (Wishlist):
-   - The alternating wash fades out (240ms) before any row moves.
-   - It comes back only once every row animation has finished: wash out → item → wash in.
+   - The alternating wash fades out first (100ms) and the rows wait for it: remove / make space / place, in that order (the user's sequence, 2026-11-10).
+   - **All four animations take the same time** between the wash going and coming back: 2 x 240ms. Delete: fade, then close. Add and undo: open, then fade in. Move: fade out, glide, fade in (120 + 240 + 120). The user asked for them to look the same (2026-11-10); never add a step to one without changing the others.
+   - It comes back as soon as the last row animation ends (it never waits for React's commit, which on a phone adds a dead pause), fading in over the same 100ms it faded out in, in all four animations (delete, undo, add, move).
+   - A leaving row sits out the alternation at once (`data-leaving`), so the bands do not flip when it is removed.
    - A row still entering sits out the alternation, so no other row's wash flips meanwhile.
    - The wash shows only after the list has loaded.
 8. **View switch** (filter tab, sort, selected group):
@@ -214,7 +212,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 9. **Height changes** go through `AutoHeight`: 180ms, faster than the rows.
    - Each new row waits until the growing height has uncovered it.
    - Tags and links marked `data-slide` glide to their new column when the column widths change.
-10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (420ms, 14px, staggered 0/40/80/120ms).
+10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (300ms, 14px, staggered 0/30/60/90ms).
 11. **Form close.** The modal reverses its open animation (fade plus scale .98 and 8px). The page blur clears. Only then does the list change (`later()`).
 12. **Sign-out.** Every `main > *` fades with opacity plus blur(2px), never scale, over 320ms `--ease` (fill `forwards`, so it stays faded). The sign-out call runs in parallel. The router goes to `/signin` and refreshes only when both are done. On failure the fade is cancelled and a warning toast says `Failed to sign out`.
 13. **Sign-in.** The card appears only after the previous page has faded. The Continue button keeps its colour while busy (opacity 1, progress cursor).
@@ -230,7 +228,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
       <section className="surface" aria-labelledby=...>   (card)
         <div className="section-head">
           <h2 className="section-title">Items <span className="muted number-tabular">N</span></h2>
-          <span className="head-actions">                 (sort select + Add button: equal halves)
+          <span className="head-actions below">           (sort select + Add button: equal halves; on a phone its own row under the title)
         <Segmented .../>                                  (filter)
         <AutoHeight wash className="entries ...">         (list)
           empty-note keyed `empty-${filter}`  |  <Fragment key={`${filter}-${sort}`}> rows
@@ -269,9 +267,9 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 - Every form's submit says "Save" ("Saving..." while busy), for a new entry too. The button that opens the form names the object ("Add meal"); the submit does not.
 - Field labels are short nouns in sentence case: "Name", not "Meal Name / Description".
 - Units go in the label ("Price (RON)"). Optional fields say "(optional)". Fields have no placeholders. The meal form is the one exception: all four numbers (calories, protein, carbs, fat) save 0 when blank, so their labels keep only the unit ("Protein (g)").
-- Sentence case for controls and titles ("Lowest price"). The Wishlist summary title "Estimated Investment" is the one signed-off exception; do not copy it.
-- Ranges use an en dash with spaces: "250 – 750", "Under 250", "750+".
-- Money uses `ro-RO` formatting with 2 decimals, then a muted "RON".
+- Sentence case for controls and titles ("Newest"). The Wishlist summary title "Estimated Investment" is the one signed-off exception; do not copy it.
+- Ranges are short and tight so the filter buttons fit a phone: "< 250", "250-750" (hyphen, no spaces), "750+". The Wishlist sort says "Price ↑" (lowest first) and "Price ↓" (highest first): text arrows, since a native select cannot hold an SVG.
+- Money uses `ro-RO` formatting (thousands dot) with no decimals on the Wishlist (whole lei, the user's call), then a muted "RON".
 - A busy label ends in three dots: "Saving...", "Signing in...".
 - All UI text is English, the Food Assistant included ("Send", "Sending...", "Calculating macros..."). Only the AI's replies follow the language the user writes in.
 - `BarChart` and `LineChart` carry a text summary for screen readers (`role="img"`, or `group` for button bars, with an `aria-label`). `HBars` needs none: its values are text.

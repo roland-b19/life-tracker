@@ -262,7 +262,7 @@ export function WeightPanel() {
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby="trend-title">
             <div className="section-head">
               <h2 id="trend-title" className="section-title">
@@ -280,10 +280,6 @@ export function WeightPanel() {
               <div className="stat-tile">
                 <strong className="number-tabular">{tile(stats.weekStartWeight)}</strong>
                 <span>Week start</span>
-              </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">{tile(stats.latestWeight)}</strong>
-                <span>Latest</span>
               </div>
             </div>
             {sorted.length >= 2 && (

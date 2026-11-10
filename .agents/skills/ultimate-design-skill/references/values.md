@@ -133,6 +133,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 - Before a list it uses margin-bottom `card-pad - .5rem`: `.section-head:has(+ .entries, + .auto-height > .entries)`.
 - `.head-actions`: flex, gap .75rem.
 - With two children, `.section-head .head-actions` becomes a grid `1fr 1fr`; each child is width 100% and centred. This gives equal-width header buttons.
+- `.head-actions.below` (every header with two buttons: Wishlist, Meals, Shopping list, Tasks, Gym day preview): on a phone (max-width 640px) it takes `flex: 1 1 100%`, so the two buttons sit on their own row under the title, equal halves of the card width. The Gym session header (a timer and Pause) stays beside its title.
 - `.section-head > button`: `white-space: nowrap`.
 
 **Shared page classes** (reuse these before writing new ones)
@@ -155,8 +156,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 
 - `--card-pad` 1.35rem (1.6rem at ≥768px).
 - Radius 1.15rem, background `--surface`, `backdrop-filter: var(--glass-blur)`, `1px solid var(--edge)`.
-- Entrance `rise`: from `translateY(14px)` and opacity 0, `var(--dur) var(--ease) backwards`.
-- Delays: child 2 = 40ms, 3 = 80ms, 4+ = 120ms.
+- No entrance animation: a card is there as soon as the page is.
 
 ## Press
 
@@ -171,7 +171,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 - `--press` is measured for `.surface`, `.split-day-card`, `.macro-card`, `.routine-row`, `.side-user`, `.nav-link`, `.month-nav-btn`, buttons and fields.
 - Only these press: `:active` scale applies to buttons, `.nav-link`, `.delete-icon-btn` and `.picker-cell`, transitioned with `--lift`.
 - Cards and fields never press. The active segment and chart bars opt out with `transform: none`.
-- Tab-bar items never transform: scaling a glyph over a backdrop-filter leaves it blurry. The More tab is a `button`, so `button.tab-item:active` sets `transform: none` against the global press.
+- Tab-bar items take the same press pulse as every button (`.tab-item` is in `LIFTS` in `providers.tsx`), which reverses the earlier "never transform" rule at the user's request (2026-11-10: "the same animation as the price-range tab, the pulse plus the highlight change"). Check on a real phone that the glyph is crisp again after release.
 
 ## Buttons
 
@@ -353,8 +353,6 @@ The CSS hides the outline on `[data-pointer]`.
 - Check circle (`.todo-checkbox-btn`, every list row that ticks off: Tasks and Shopping): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
 - `.todo-title`: .95rem weight 500, wraps; done is line-through in secondary.
 - `.readonly-note`: .8125rem secondary with `LockIcon` 13, gap .4rem, margin-bottom .25rem.
-- `.week-strip`: 7 columns, gap .35rem, margin-bottom 1rem; its `.weekday-btn` padding .5rem 0, .8125rem.
-- `.weekday-btn` idle: `--surface-secondary` with text colour, weight 600, min-height 2.75rem, radius .85rem. In the form, `.weekday-options` is 7 columns, gap .35rem.
 - Move task options: full-width `.secondary` buttons in a grid, gap .5rem.
 - Food Assistant chat: `.chat-log` is a `--surface-secondary` box (padding 1rem, radius .9rem, max-height 26rem, scrolls inside, collapses when empty). Bubbles: padding .65rem .9rem, .9375rem, line-height 1.4, radius 1.1rem with a .3rem tail corner; the assistant's on `--surface`, the user's on solid `--tint` with `--on-tint` text. Each message enters with the card `rise`, `backwards`. The typing bubble is italic secondary. A logged meal is a `.chat-tool` tag (tint on `--tint-subtle`, radius .5rem, .8125rem). `.chat-form`: the input and Send in a row, gap .75rem, margin-top 1rem.
 
@@ -404,8 +402,10 @@ The CSS hides the outline on `[data-pointer]`.
 
 **Page behind**
 - Blurred, never scaled.
-- The body is pinned (`position: fixed`, with the scroll restored after), for iOS.
-- The backdrop follows `visualViewport` (height, plus an `offsetTop` transform), so the keyboard never zooms or pushes it.
+- The page behind never scrolls: `overflow: hidden` on `html` while a form is open, the scroll position restored after. The body is not pinned with `position: fixed`: on iOS that reflowed the whole page as the form opened (jank) and left a bare black strip at the bottom.
+- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard. It reaches 4rem past the top and bottom (`inset: -4rem 0`), so no strip is left unblurred. Its blur is `blur(20px)` with no saturate, lighter than the tab bar's: a full-screen blur that animates and pans janked on iPhone.
+- While a form is open a `touchmove` listener on the document (non-passive) blocks every drag except one inside a `.modal-body` that really scrolls, so the page behind never pans when the keyboard is up.
+- On a phone the card is centred while no field is focused. When the keyboard opens (`data-keyboard`, set in `fit()`) it is anchored to the top of the backdrop, so every field sits above the keyboard and iOS never has to pan the page to reveal one; the page behind stays still, and the card stays at the top while the field changes. The move between the two is a FLIP in `fit()` on the `translate` property (not `transform`, which the entrance animation owns), with `transition: translate var(--dur) var(--ease)`; it is skipped for reduced motion. The text caret is drawn by iOS and does not follow the move (it jittered), so `fit()` sets `data-moving` on the backdrop for the length of the move and the CSS makes `caret-color` transparent on the form's inputs until the card lands. While the keyboard is up the backdrop only ever shrinks to the smallest visible height seen (it resets when the keyboard is dismissed), because moving to a field with another keyboard (text, number pad) changes the visible height and the card twitched with it. A phone log showed iOS panning the visual viewport ~110px for 30ms on every focus even when the field was visible (the page behind and the form flashed), so a tap on a text field is turned into `focus({ preventScroll: true })` in `Modal` (a drag is left alone). The iOS form bar above the keyboard (arrows and a check) cannot be hidden from a web page. A window `scroll` listener puts the page back if iOS scrolls it anyway. Every input in a form gets `autocomplete`, `autocorrect` off and `spellcheck` false (set in `Modal`), so no suggestion bar makes the keyboard taller. The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and the card is anchored to the top of it; the card's `max-height: 100%` shrinks it to fit and its body scrolls, so every field stays reachable. Height and transform have no transition: iOS pans the page while the keyboard opens and the backdrop follows each step, and a transition chased the pan and lagged. On a phone the backdrop padding is `max(safe-area top, safe-area bottom) + 1.5rem` on top and bottom, so the card has the same air above and below and clears the Dynamic Island and the home bar; while the keyboard is up it is `safe-area top + 1rem` above and `1rem` below.
 
 **Parts**
 - Header padding 1.25rem 1.5rem .85rem; title 1.25rem, weight 600; body padding 1.5rem.
@@ -453,36 +453,32 @@ The CSS hides the outline on `[data-pointer]`.
 
 | What | Value |
 |---|---|
-| Page exit (`page-out`) | 120ms ease-in, to opacity 0 and scale .985 |
-| Page enter (`page-in`) | 260ms `--ease`, 40ms delay, from `translateY(8px)` |
-| View-transition root | 300ms |
-| Card rise | 420ms `--ease`, 14px, delays 0/40/80/120ms |
+| Page change, first load, card entrance | none (removed 2026-11-10) |
 
 **Rows**
 
 | What | Value |
 |---|---|
-| Row `row-in` | 260ms `--ease` `backwards`, from opacity 0 and scale .97 |
-| Row stagger | `calc(min(sibling-index() - 1, 10) * 30ms)`, with the JS `stagger()` fallback |
-| `row-in` inside `.auto-height` | 180ms |
+| Row entrance on load | none; only `enter` (add, undo, move) animates a row in |
 
 **`AutoHeight`**
 - RESIZE is 180ms `cubic-bezier(.2,0,0,1)`.
-- Skipped when the change is under 1.5px, under reduced motion, or while `[data-row-motion]` is present.
-- Each row's entrance is delayed until the height uncovers its bottom, 1px early.
+- Skipped when the change is under 1.5px, under reduced motion. While a list change is in flight the card's height is driven by `useListMotion` (`data-hold`, `data-flip`: 240ms `cubic-bezier(.4,0,.2,1)`, `transition-delay: var(--flip-delay)`) so it ends together with the rows' glide.
 
 **`useListMotion`**
 
 | Name | Value | What it does |
 |---|---|---|
-| FADE | 160ms `--ease`, forwards | a leaving row, to opacity 0 and scale .97 |
+| FADE | 160ms `--ease`, forwards | the only row of a list, leaving (a row with neighbours fades in MOVE, or QUICK in a move), to opacity 0 and scale .97 |
+| QUICK | 120ms | a moved row's fade out and fade in (the move's glide sits between them, so it takes as long as a delete or add) |
 | SWITCH | 120ms | `fadeAll` |
-| SPACE | 260ms with SPACE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing |
-| FADE_IN | 180ms | starts after SPACE; after 120ms when the row is the list's only row |
+| MOVE | 240ms with MOVE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing, and the card height |
+| WASH | 100ms (`--wash`) | wash fade-out before rows move; every row animation in a wash list starts after it |
+| FADE_IN | 240ms (= MOVE) | starts after MOVE (and WASH); after 120ms when the row is the list's only row |
 | DUR | 420ms | FLIP `reorder` |
 
 **Wash and modal**
-- WASH is 240ms (`--fade`), the wait before rows move in a wash list.
+- The wash fades out over `--wash` (100ms) before a row change and rows wait for it. It comes back as the last row animation ends, over the same `--wash` (100ms), in every animation.
 - Modal: opens over `--dur`, closes with `CLOSE_MS` 420 and `FADED_MS` 280.
 
 **Sign-out and number**
@@ -531,7 +527,7 @@ The CSS hides the outline on `[data-pointer]`.
 **Tab bar (below 1024px)**
 - Fixed: left and right .75rem, bottom `.5rem + safe-area`, padding .25rem, radius 1.5rem.
 - Glass: `rgba(28,28,30,.72)`, `blur(28px) saturate(160%)`.
-- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; colour and background fade with `--fade`, never a transform.
+- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; colour fades with `--fade`, the press pulse is `scale(var(--press))` over `--lift`. The selected item's highlight is the bar's own thumb (`.tabbar::before`, `--tint-subtle`, radius 1.25rem): it slides to the new tab with `--dur` `--ease`, like the Segmented thumb, and keeps sliding across the page change (`lastTab` in `navigation.tsx`); on a page with no tab (Settings) it fades out. Tab items are a grid with a .25rem gap (`--tab-gap`).
 - More opens a menu (`--surface-modal`, radius 1.25rem, bottom `5.25rem + safe-area`) with `modalScaleUp` from the bottom right, over a scrim with an 8px blur. It closes on Escape and on a backdrop tap, at once, with no exit animation; so does the date picker pop-up. The menu is `role="dialog"` and its links set `aria-current="page"` like the sidebar and tab bar.
 
 **Sidebar (≥1024px)**
@@ -575,3 +571,6 @@ The CSS hides the outline on `[data-pointer]`.
 | `prefers-reduced-motion: reduce` | animation and transition durations become .01ms; view transitions 0s; the `.skeleton` shimmer stops (a static placeholder) |
 
 Sources: `app/globals.css`, `app/providers.tsx`, `app/components/{list-motion,modal,toast,segmented,animated-number,charts,navigation}.tsx`, `app/template.tsx`, `app/layout.tsx`, `app/signin/page.tsx`.
+
+**Portrait only (phone)**
+- `manifest.json` has `orientation: portrait`; `providers.tsx` also tries `screen.orientation.lock("portrait")` (ignored where unsupported). A browser tab on iOS cannot be locked from the web, so a phone in landscape (`orientation: landscape`, height up to 500px, coarse pointer) keeps the portrait page and turns it back against the device, with no message: `html` becomes a fixed, portrait-sized scroller rotated 90deg (`data-rot` on `html`, set in `providers.tsx`, picks the direction; the modal backdrop then ignores the `visualViewport` sizing). The keyboard of a rotated page is still a landscape keyboard; it cannot be rotated.

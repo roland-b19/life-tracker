@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { ArrowsIcon } from "../components/icons";
+import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import {
   GROUP_COLOR,
@@ -15,6 +16,7 @@ import {
 interface MapApi {
   setSelected(g: MuscleGroup | null): void;
   setView(v: "front" | "back"): void;
+  rotateBy(dx: number, dy: number): void;
 }
 
 /** Interactive 3D muscle model. Click a muscle to select its group; the chips next to it do the same without WebGL. */
@@ -30,6 +32,10 @@ function MuscleMap({
   const selectedRef = useRef(selected);
   const onSelectRef = useRef(onSelect);
   const [side, setSide] = useState<"front" | "back">("front");
+  // On a touch screen the model moves only while a finger holds the move button and slides; a drag on the model
+  // itself scrolls the page.
+  const [holding, setHolding] = useState(false);
+  const lastPoint = useRef<[number, number] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -76,6 +82,13 @@ function MuscleMap({
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
         controls.addEventListener("change", render);
+        const touch = window.matchMedia("(pointer: coarse)");
+        const applyPointer = () => {
+          controls.enabled = !touch.matches;
+          renderer.domElement.style.touchAction = touch.matches ? "pan-y" : "none";
+        };
+        applyPointer();
+        touch.addEventListener("change", applyPointer);
 
         const gltf = await new GLTFLoader().loadAsync("/models/muscles.glb");
         if (disposed) {
@@ -163,6 +176,20 @@ function MuscleMap({
           frame = requestAnimationFrame(step);
         };
 
+        // The move button turns the model like OrbitControls does: a full turn per canvas height of travel.
+        const rotateBy = (dx: number, dy: number) => {
+          stopTurn();
+          const off = camera.position.clone().sub(controls.target);
+          const sph = new THREE.Spherical().setFromVector3(off);
+          const k = (2 * Math.PI) / (renderer.domElement.clientHeight || 1);
+          sph.theta -= dx * k;
+          sph.phi = Math.min(Math.PI - 0.01, Math.max(0.01, sph.phi - dy * k));
+          camera.position.copy(controls.target).add(off.setFromSpherical(sph));
+          camera.lookAt(controls.target);
+          controls.update();
+          render();
+        };
+
         const resize = () => {
           const w = el.clientWidth;
           const h = el.clientHeight;
@@ -204,7 +231,7 @@ function MuscleMap({
         canvas.addEventListener("pointerdown", onDown);
         canvas.addEventListener("pointerup", onUp);
 
-        api.current = { setSelected: paint, setView };
+        api.current = { setSelected: paint, setView, rotateBy };
         camera.position.set(center.x, center.y, center.z + dist);
         setView("front", false);
         resize();
@@ -213,6 +240,7 @@ function MuscleMap({
 
         cleanup = () => {
           stopTurn();
+          touch.removeEventListener("change", applyPointer);
           ro.disconnect();
           canvas.removeEventListener("pointerdown", onDown);
           canvas.removeEventListener("pointerup", onUp);
@@ -252,6 +280,33 @@ function MuscleMap({
       )}
       {status === "ready" && (
         <div className="muscle-views">
+          <button
+            type="button"
+            className={`muscle-move${holding ? " active" : ""}`}
+            aria-label="Hold and slide to move the model"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId); // the finger keeps moving the model wherever it slides
+              lastPoint.current = [e.clientX, e.clientY];
+              setHolding(true);
+            }}
+            onPointerMove={(e) => {
+              const last = lastPoint.current;
+              if (!last) return;
+              api.current?.rotateBy(e.clientX - last[0], e.clientY - last[1]);
+              lastPoint.current = [e.clientX, e.clientY];
+            }}
+            onPointerUp={() => {
+              lastPoint.current = null;
+              setHolding(false);
+            }}
+            onPointerCancel={() => {
+              lastPoint.current = null;
+              setHolding(false);
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <ArrowsIcon size={18} />
+          </button>
           <Segmented
             label="Model side"
             value={side}
@@ -286,8 +341,13 @@ export interface PlannedExercise {
 export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
   const { rowRef, fadeAll } = useListMotion();
+  const card = useRef<HTMLElement>(null);
   // The current rows fade out before the list switches, like every other list switch.
-  const setSelected = (g: MuscleGroup | null) => g !== selected && fadeAll(() => setSelectedNow(g));
+  const setSelected = (g: MuscleGroup | null) => g !== selected &&
+    fadeAll(() => {
+      swapIn(card.current);
+      setSelectedNow(g);
+    });
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)
@@ -302,7 +362,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   }
 
   return (
-    <section className="surface muscle-card" aria-labelledby="muscle-title">
+    <section ref={card} className="surface muscle-card" aria-labelledby="muscle-title">
       <div className="section-head">
         <h2 id="muscle-title" className="section-title">
           Muscle map
@@ -346,14 +406,13 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           {selected ? (
             <div>
             <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
-            {/* The title stays outside the list, so the first row starts the stagger. */}
             <AutoHeight wash className="entries muscle-entries">
               {list.length === 0 && (
                 <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
                   No exercise in your split trains this muscle.
                 </p>
               )}
-              {/* Keyed by the group so every switch mounts fresh rows that play row-in. */}
+              {/* Keyed by the group so every switch mounts fresh rows. */}
               <Fragment key={selected}>
               {list.map((e) => (
                 <div key={e.exerciseId} ref={rowRef(e.exerciseId)} className="entry-row">
