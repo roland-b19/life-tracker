@@ -78,13 +78,18 @@ export function Modal({
 
     // Keep the backdrop the size of the visible area so the keyboard never pushes or zooms the card.
     const vv = window.visualViewport;
+    // Moving to a field with another keyboard (text, number pad) changes the visible height. The form only ever
+    // shrinks while the keyboard is up, and grows back when it is dismissed, so a switch never makes it twitch.
+    let low = Infinity;
     const fit = () => {
       const el = backdropRef.current;
       if (!el || !vv) return;
-      el.style.height = `${vv.height}px`;
+      const keyboard = window.innerHeight - vv.height > 120;
+      low = keyboard ? Math.min(low, vv.height) : Infinity;
+      el.style.height = `${keyboard ? low : vv.height}px`;
       el.style.transform = `translateY(${vv.offsetTop}px)`;
       // The keyboard covers the bottom, so the bottom padding for the home bar is not needed then.
-      el.toggleAttribute("data-keyboard", window.innerHeight - vv.height > 120);
+      el.toggleAttribute("data-keyboard", keyboard);
     };
     fit();
     vv?.addEventListener("resize", fit);
