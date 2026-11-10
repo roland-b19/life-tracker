@@ -3139,3 +3139,13 @@ button.bars-col:focus-visible {
 .set-input-grid label,
 .set-input-grid input,
 .set-input-grid select { text-align: left; }
+
+/* iOS zooms into any field under 16px on focus; pinch zoom stays allowed, so keep touch fields at 16px. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  select.sort-select,
+  textarea {
+    font-size: 1rem;
+  }
+}
