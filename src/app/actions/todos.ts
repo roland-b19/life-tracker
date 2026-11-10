@@ -123,16 +123,31 @@ export async function getDailyTodosAction(space: TodoSpace, date: string) {
   return { success: true, ...result };
 }
 
+/**
+ * Everything the Tasks page shows for one day, in one round trip: Next runs server actions one at a time,
+ * so eight separate calls per day change cost eight sessions, eight network trips and eight waits in a row.
+ * `weekDate` is the date a weekday's repeating tasks are read for (null when no weekday is open).
+ */
+export async function loadTodosViewAction(date: string, weekDate: string | null) {
+  const userId = await requireUser();
+  const day = isoDate.parse(date);
+  const week = weekDate === null ? null : isoDate.parse(weekDate);
+  const plannedSince = addDays(toISODate(), -1);
+  const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
+  const [daily, weekly, history, planned] = await Promise.all([
+    both((space) => getDailyTodos(userId, space, day)),
+    week ? both((space) => getDailyTodos(userId, space, week)) : null,
+    both((space) => getTodoHistory(userId, space)),
+    both((space) => getPlannedDays(userId, space, plannedSince)),
+  ]);
+  return { success: true, daily, weekly, history, planned };
+}
+
 export async function getPlannedDaysAction(space: TodoSpace) {
   const userId = await requireUser();
   const parsed = todoSpaceSchema.parse(space);
   // A day back covers the user's timezone; the calendar only marks days after its own today.
   return { success: true, days: await getPlannedDays(userId, parsed, addDays(toISODate(), -1)) };
-}
-
-export async function getTodoHistoryAction(space: TodoSpace) {
-  const userId = await requireUser();
-  return { success: true, history: await getTodoHistory(userId, todoSpaceSchema.parse(space)) };
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {
