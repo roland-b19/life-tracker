@@ -5,7 +5,7 @@ import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { AutoHeight, useDragSort, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, swapIn, useBuilt, useDragSort, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
 import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -134,6 +134,8 @@ export function GymClient({
 }: GymClientProps) {
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll } = useListMotion();
+  const previewCard = useRef<HTMLElement>(null);
+  const built = useBuilt();
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message, type: "warning" });
   };
@@ -996,7 +998,7 @@ export function GymClient({
           <div className="dashboard-grid">
             <div className="dashboard-main">
               {currentDay && (
-                <section className="surface" aria-labelledby="preview-title">
+                <section ref={previewCard} className="surface" aria-labelledby="preview-title">
                   <div className="section-head">
                     <div>
                       <h2 id="preview-title" className="section-title">
@@ -1004,7 +1006,7 @@ export function GymClient({
                       </h2>
                       <p className="muted card-sub">{DAY_NAMES[currentDay.dayOfWeek]}</p>
                     </div>
-                    <span className="head-actions">
+                    <span className="head-actions below">
                       <button type="button" className="btn-sm tint" onClick={() => openEditor(currentDay)}>
                         <PencilIcon size={14} />
                         Edit
@@ -1023,7 +1025,7 @@ export function GymClient({
                   </div>
 
                   {!currentDay.isRest && (
-                    <AutoHeight wash className="entries">
+                    <AutoHeight wash className={built ? "entries built" : "entries"}>
                       {currentDay.exercises.length > 0 ? (
                         // Keyed by the day so every switch mounts fresh rows that play row-in.
                         <Fragment key={currentDay.id}>
@@ -1072,7 +1074,13 @@ export function GymClient({
                           type="button"
                           className="split-day-select"
                           aria-pressed={isSelected}
-                          onClick={() => day.id !== selectedDayId && fadeAll(() => setSelectedDayId(day.id))}
+                          onClick={() =>
+                            day.id !== selectedDayId &&
+                            fadeAll(() => {
+                              swapIn(previewCard.current);
+                              setSelectedDayId(day.id);
+                            })
+                          }
                         >
                           <span className="split-day-title">
                             <strong>{DAY_NAMES[day.dayOfWeek]}</strong>

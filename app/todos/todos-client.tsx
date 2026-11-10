@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, fadeOut, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, fadeOut, swapIn, useBuilt, useListMotion, useMore } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal, useAfterClose } from "../components/modal";
@@ -80,6 +80,8 @@ export function TodosClient({
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
+  const tasksCard = useRef<HTMLElement>(null);
+  const built = useBuilt();
   const { later, runAfterClose } = useAfterClose();
   // The list shows this view, which follows the controls only after the old rows have faded out.
   const [view, setView] = useState({
@@ -237,7 +239,9 @@ export function TodosClient({
     const load = target.date !== date || (target.weekday && target.weekday !== weekday);
     const settled = load ? (loading.current = loadDay(target, faded)) : Promise.all([faded, loading.current]);
     void settled.then(() => {
-      if (n === viewId.current) setView({ ...target, n });
+      if (n !== viewId.current) return;
+      swapIn(tasksCard.current);
+      setView({ ...target, n });
     });
   };
 
@@ -581,12 +585,12 @@ export function TodosClient({
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="surface" aria-labelledby="tasks-title">
+          <section ref={tasksCard} className="surface" aria-labelledby="tasks-title">
             <div className="section-head">
               <h2 id="tasks-title" className="section-title">
                 {isDaily ? "Daily tasks" : "Tasks"} <span className="muted number-tabular">{listTodos.length}</span>
               </h2>
-              <span className="head-actions">
+              <span className="head-actions below">
                 {showWeek && (
                   <button
                     ref={weekBtn}
@@ -639,7 +643,7 @@ export function TodosClient({
               </p>
             )}
 
-            <AutoHeight wash className="todo-list">
+            <AutoHeight wash className={built ? "todo-list built" : "todo-list"}>
               {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
                 <Fragment key={view.n}>

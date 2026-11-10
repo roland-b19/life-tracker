@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import {
   GROUP_COLOR,
@@ -286,8 +286,19 @@ export interface PlannedExercise {
 export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
   const { rowRef, fadeAll } = useListMotion();
+  const card = useRef<HTMLElement>(null);
+  // The first group's rows build one after another; from then on a group switch swaps the whole list (swapIn).
+  const [built, setBuilt] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBuilt(Boolean(selected)), 700);
+    return () => clearTimeout(t);
+  }, [selected]);
   // The current rows fade out before the list switches, like every other list switch.
-  const setSelected = (g: MuscleGroup | null) => g !== selected && fadeAll(() => setSelectedNow(g));
+  const setSelected = (g: MuscleGroup | null) => g !== selected &&
+    fadeAll(() => {
+      swapIn(card.current);
+      setSelectedNow(g);
+    });
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)
@@ -302,7 +313,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   }
 
   return (
-    <section className="surface muscle-card" aria-labelledby="muscle-title">
+    <section ref={card} className="surface muscle-card" aria-labelledby="muscle-title">
       <div className="section-head">
         <h2 id="muscle-title" className="section-title">
           Muscle map
@@ -347,7 +358,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
             <div>
             <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
             {/* The title stays outside the list, so the first row starts the stagger. */}
-            <AutoHeight wash className="entries muscle-entries">
+            <AutoHeight wash className={built ? "entries muscle-entries built" : "entries muscle-entries"}>
               {list.length === 0 && (
                 <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
                   No exercise in your split trains this muscle.

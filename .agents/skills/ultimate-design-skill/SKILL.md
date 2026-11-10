@@ -189,7 +189,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - No blur.
    - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
 2. **Cards rise in on load.** 14px up and fade, staggered 0/40/80/120ms.
-3. **Rows build one after another** on page load and after every switch, except a Wishlist price-range or sort switch (user's call, 2026-11-10): there the old rows fade out (120ms) and the whole new list fades in (200ms). The Wishlist's page load builds row by row like every list (`.built` in `wishlist-client.tsx` switches the rows' own entrance off after 700ms). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
+3. **Rows build one after another** on page load only. After that a view switch (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick; the user's call, 2026-11-10, applied to every page) fades the old rows out (120ms), then the whole new list in (200ms), and the card resizes at once. In code: `useBuilt()` adds `built` to the list's class after 700ms (globals.css turns the rows' own entrance off), and `swapIn(card)` runs just before the state change that swaps the rows (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
    - `row-in`: opacity 0 and scale .97, 260ms, 30ms apart, capped at the 11th row.
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
    - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.
@@ -230,7 +230,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
       <section className="surface" aria-labelledby=...>   (card)
         <div className="section-head">
           <h2 className="section-title">Items <span className="muted number-tabular">N</span></h2>
-          <span className="head-actions">                 (sort select + Add button: equal halves)
+          <span className="head-actions below">           (sort select + Add button: equal halves; on a phone its own row under the title)
         <Segmented .../>                                  (filter)
         <AutoHeight wash className="entries ...">         (list)
           empty-note keyed `empty-${filter}`  |  <Fragment key={`${filter}-${sort}`}> rows

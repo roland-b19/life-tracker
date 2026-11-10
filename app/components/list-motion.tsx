@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 // DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
@@ -389,6 +389,37 @@ export function useListMotion() {
   }, []);
 
   return { rowRef, enter, leave, move, fadeAll, reorder };
+}
+
+/**
+ * True once a page's rows have built one after another on load (700ms: the 11th row starts at 300ms and runs 260ms).
+ * After that a view switch replaces the whole list at once (`swapIn`), so the list adds `built` to its class and
+ * globals.css turns the rows' own entrance off.
+ */
+export function useBuilt() {
+  const [built, setBuilt] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBuilt(true), 700);
+    return () => clearTimeout(t);
+  }, []);
+  return built;
+}
+
+/**
+ * A view switch (range, sort, day, tab, muscle group) replaces the rows in one step: the card resizes at once and the
+ * new list fades in as a whole, never row by row. Call it with the card that holds the list, just before the state
+ * change that swaps the rows (after `fadeAll` has faded the old ones).
+ */
+export function swapIn(card: Element | null | undefined) {
+  const box = card?.querySelector<HTMLElement>(".auto-height:has(> :is(.entries, .todo-list))");
+  if (!box) return;
+  box.dataset.swap = "";
+  setTimeout(() => delete box.dataset.swap, 300);
+  if (reducedMotion()) return;
+  // React has committed by the next frame, before it paints.
+  requestAnimationFrame(() =>
+    box.querySelector(":scope > :is(.entries, .todo-list)")?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: EASE }),
+  );
 }
 
 const PAGE = 10;

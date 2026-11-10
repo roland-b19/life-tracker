@@ -133,6 +133,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 - Before a list it uses margin-bottom `card-pad - .5rem`: `.section-head:has(+ .entries, + .auto-height > .entries)`.
 - `.head-actions`: flex, gap .75rem.
 - With two children, `.section-head .head-actions` becomes a grid `1fr 1fr`; each child is width 100% and centred. This gives equal-width header buttons.
+- `.head-actions.below` (every header with two buttons: Wishlist, Meals, Shopping list, Tasks, Gym day preview): on a phone (max-width 640px) it takes `flex: 1 1 100%`, so the two buttons sit on their own row under the title, equal halves of the card width. The Gym session header (a timer and Pause) stays beside its title.
 - `.section-head > button`: `white-space: nowrap`.
 
 **Shared page classes** (reuse these before writing new ones)

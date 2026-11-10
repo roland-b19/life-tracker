@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { AutoHeight, swapIn, useBuilt, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -86,13 +86,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const { showToast } = useToast();
   const { rowRef, enter, leave, move, fadeAll } = useListMotion();
   const itemsCard = useRef<HTMLElement>(null);
-  // The rows build one after another on page load, like Gym's; once built, a tab or sort change replaces the whole list
-  // at once (swapList), so the rows' own entrance is switched off (globals.css, .built).
-  const [built, setBuilt] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setBuilt(true), 700); // the 11th row starts at 300ms and runs 260ms
-    return () => clearTimeout(t);
-  }, []);
+  const built = useBuilt();
 
   // Form state
   const [name, setName] = useState("");
@@ -137,20 +131,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   // (rows never build one after another here; only the page load does).
   function swapList(change: () => void) {
     fadeAll(() => {
-      // The rows' bands change with the list, not after it (globals.css, [data-swap]).
-      const box = itemsCard.current?.querySelector<HTMLElement>(".auto-height");
-      if (box) {
-        box.dataset.swap = "";
-        setTimeout(() => delete box.dataset.swap, 300);
-      }
+      swapIn(itemsCard.current);
       change();
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      // React has committed by the next frame, before it paints.
-      requestAnimationFrame(() =>
-        itemsCard.current
-          ?.querySelector(".wishlist-entries")
-          ?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }),
-      );
     });
   }
 

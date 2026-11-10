@@ -2859,8 +2859,8 @@ button.bars-col:focus-visible {
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
 }
-/* The Wishlist builds its rows on page load like every list; after that a tab change fades the whole list (wishlist-client.tsx). */
-.wishlist-entries.built > :is(.item-row, .empty-note) { animation: none; }
+/* Rows build one after another on page load only; after that a view switch fades the whole list (swapIn in list-motion.tsx). */
+:is(.entries, .todo-list).built > :is(.entry-row, .item-row, .todo-row, .empty-note) { animation: none; }
 /* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
 .week-btn {
   animation: row-in 260ms var(--ease) backwards;
@@ -3091,7 +3091,7 @@ button.bars-col:focus-visible {
   padding-inline-end: var(--band-out);
 }
 .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
-/* A view switch (Wishlist range or sort) hides the rows, so their bands change with the list, not after it. */
+/* A view switch (range, sort, day, tab) hides the rows, so their bands change with the list, not after it. */
 .auto-height[data-swap] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: transform var(--lift); }
 .auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering])) {
   background-color: rgba(255, 255, 255, 0.03);
