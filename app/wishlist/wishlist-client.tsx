@@ -29,8 +29,8 @@ const PRIORITY_BADGE: Record<Priority, string> = {
 };
 
 const RANGE_LABEL: Record<Priority, string> = {
-  low: "Under 250",
-  medium: "250 – 750",
+  low: "< 250",
+  medium: "250-750",
   high: "750+",
 };
 
@@ -44,8 +44,8 @@ const FILTERS: { value: "all" | Priority; label: string }[] = [
 type Sort = "newest" | "price-asc" | "price-desc";
 const SORTS: { value: Sort; label: string }[] = [
   { value: "newest", label: "Newest" },
-  { value: "price-asc", label: "Lowest price" },
-  { value: "price-desc", label: "Highest price" },
+  { value: "price-asc", label: "Price ↑" },
+  { value: "price-desc", label: "Price ↓" },
 ];
 const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number> = {
   newest: (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
@@ -130,6 +130,12 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   // (rows never build one after another here, and the page itself loads its list at once).
   function swapList(change: () => void) {
     fadeAll(() => {
+      // The rows' bands change with the list, not after it (globals.css, [data-swap]).
+      const box = itemsCard.current?.querySelector<HTMLElement>(".auto-height");
+      if (box) {
+        box.dataset.swap = "";
+        setTimeout(() => delete box.dataset.swap, 300);
+      }
       change();
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       // React has committed by the next frame, before it paints.
@@ -322,7 +328,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight wash className="entries wishlist-entries">
+            <AutoHeight wash washNow className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">

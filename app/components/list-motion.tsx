@@ -72,7 +72,8 @@ function layoutX(el: HTMLElement) {
  * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
-export function AutoHeight({ className, wash, children }: { className?: string; wash?: boolean; children: ReactNode }) {
+/** `wash`: the alternating row bands fade out and in around row changes. `washNow`: and are there from the first paint (Wishlist). */
+export function AutoHeight({ className, wash, washNow, children }: { className?: string; wash?: boolean; washNow?: boolean; children: ReactNode }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
 
@@ -117,7 +118,7 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
     // A wash list hides its row wash while any row is entering or leaving (transitions are left out: the
     // wash's own fade is one), so the wash comes back once the whole list is in place.
     const washes = outer.hasAttribute("data-wash");
-    if (washes) hold(inner);
+    if (washes && !washNow) hold(inner);
     stagger(inner); // a list that mounts with its rows gets no mutation: Safari's delays on page load
 
     // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
@@ -177,12 +178,12 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
       observer.disconnect();
       outer.removeEventListener("transitionend", onEnd);
     };
-  }, []);
+  }, [washNow]); // constant per list
 
   return (
     <div ref={outerRef} className="auto-height" data-wash={wash ? "" : undefined}>
       {/* A wash list starts settling, so the rows' entrance on page load is unwashed too; hold() clears it. */}
-      <div ref={innerRef} className={className} data-settling={wash ? "" : undefined}>
+      <div ref={innerRef} className={className} data-settling={wash && !washNow ? "" : undefined}>
         {children}
       </div>
     </div>

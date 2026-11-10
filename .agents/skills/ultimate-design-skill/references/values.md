@@ -405,7 +405,8 @@ The CSS hides the outline on `[data-pointer]`.
 **Page behind**
 - Blurred, never scaled.
 - The body is pinned (`position: fixed`, with the scroll restored after), for iOS.
-- The backdrop follows `visualViewport` (height, plus an `offsetTop` transform), so the keyboard never zooms or pushes it.
+- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard.
+- The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and centres the card above the keyboard. Its height and transform transition 280ms with `--ease`, so the card glides when the keyboard opens or closes instead of jumping.
 
 **Parts**
 - Header padding 1.25rem 1.5rem .85rem; title 1.25rem, weight 600; body padding 1.5rem.

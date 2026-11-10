@@ -100,6 +100,8 @@ export function Modal({
 
   // Portaled to body so the page behind can shrink (a transformed parent would trap the fixed backdrop).
   return createPortal(
+    <>
+    <div className={closing ? "modal-scrim closing" : "modal-scrim"} aria-hidden="true" />
     <div
       ref={backdropRef}
       className={closing ? "modal-backdrop closing" : "modal-backdrop"}
@@ -133,7 +135,8 @@ export function Modal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>,
+    </div>
+    </>,
     document.body,
   );
 }

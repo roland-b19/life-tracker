@@ -155,7 +155,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
 - **Streaks** are green (success colour) with a fire icon, in the row. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
-- **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (under 250 low, 250 – 750 medium, 750+ high); there is no manual priority.
+- **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (`< 250` low, `250-750` medium, `750+` high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
 - **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
 - **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
@@ -269,8 +269,8 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 - Every form's submit says "Save" ("Saving..." while busy), for a new entry too. The button that opens the form names the object ("Add meal"); the submit does not.
 - Field labels are short nouns in sentence case: "Name", not "Meal Name / Description".
 - Units go in the label ("Price (RON)"). Optional fields say "(optional)". Fields have no placeholders. The meal form is the one exception: all four numbers (calories, protein, carbs, fat) save 0 when blank, so their labels keep only the unit ("Protein (g)").
-- Sentence case for controls and titles ("Lowest price"). The Wishlist summary title "Estimated Investment" is the one signed-off exception; do not copy it.
-- Ranges use an en dash with spaces: "250 – 750", "Under 250", "750+".
+- Sentence case for controls and titles ("Newest"). The Wishlist summary title "Estimated Investment" is the one signed-off exception; do not copy it.
+- Ranges are short and tight so the filter buttons fit a phone: "< 250", "250-750" (hyphen, no spaces), "750+". The Wishlist sort says "Price ↑" (lowest first) and "Price ↓" (highest first): text arrows, since a native select cannot hold an SVG.
 - Money uses `ro-RO` formatting with 2 decimals, then a muted "RON".
 - A busy label ends in three dots: "Saving...", "Signing in...".
 - All UI text is English, the Food Assistant included ("Send", "Sending...", "Calculating macros..."). Only the AI's replies follow the language the user writes in.
