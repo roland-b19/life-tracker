@@ -67,14 +67,18 @@ const dueOn = (day: string, t: DueColumns = todos) => or(and(eq(t.isRecurring, f
 /** A repeating task without a usable pattern repeats every day. */
 const patternFor = (isRecurring: boolean, pattern: string) => (!isRecurring ? "none" : pattern === "none" ? "daily" : pattern);
 
-/** Each repeating task's ticked days, oldest first. */
-async function doneDatesOf(ids: string[]): Promise<Map<string, string[]>> {
+/** Days of tick history a screen loads per repeating task; the streak and Undo cannot see further back. */
+// shortcut: a streak longer than this reads as this many days, raise it if a streak ever gets there.
+export const DONE_DATES_WINDOW_DAYS = 400;
+
+/** Each repeating task's ticked days, oldest first; only those on or after `since` when given. */
+async function doneDatesOf(ids: string[], since?: string): Promise<Map<string, string[]>> {
   const byTask = new Map<string, string[]>(ids.map((id) => [id, []]));
   if (!ids.length) return byTask;
   const rows = await db
     .select()
     .from(todoCompletions)
-    .where(inArray(todoCompletions.todoId, ids))
+    .where(and(inArray(todoCompletions.todoId, ids), since ? gte(todoCompletions.date, since) : undefined))
     .orderBy(asc(todoCompletions.date));
   for (const r of rows) byTask.get(r.todoId)?.push(r.date);
   return byTask;
@@ -131,7 +135,7 @@ export async function getDailyTodos(
     .from(todos)
     .where(and(eq(todos.userId, userId), eq(todos.space, space), dueOn(targetDate)));
 
-  const done = await doneDatesOf(rows.filter((r) => r.isRecurring).map((r) => r.id));
+  const done = await doneDatesOf(rows.filter((r) => r.isRecurring).map((r) => r.id), addDays(targetDate, -DONE_DATES_WINDOW_DAYS));
   const items: TodoItem[] = rows.map((r) => {
     const doneDates = done.get(r.id) ?? [];
     return {

@@ -234,6 +234,10 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 - Gym needs no import: `ensureUserDefaultSplit` already creates the user's 7-day plan with the detailed muscle groups on the first Gym visit.
 - Backups: `.github/workflows/backup.yml`, weekly, `pg_dump` (custom format) through `age` with the public key in the workflow, artifact kept 90 days, read-only role `life_tracker_backup` over the direct Neon URL, secret `BACKUP_DATABASE_URL`. The private key stays offline. A restore test (README "Backups") is required before the backup counts as working.
 
+### 2026-11-11: Decisions on the 3c list (user)
+- GitHub session stays 30 days. No nonce-based CSP (single user, no third-party content; accepted risk). Tasks `doneDates` are capped: a screen loads the last 400 days of ticks per daily task (`DONE_DATES_WINDOW_DAYS`), so a streak past 400 days reads 400 and Undo of a delete restores only that window. No URL check on the Wishlist link (the field may be a store name). The repo stays private, no licence.
+- Left for when Azure A starts: sign-in restriction (allowlist is the recommendation), Claude prompt via stdin, unique push endpoint plus unsubscribe, region `italynorth` live validation. The four Dependabot PRs were already merged (PR 76).
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

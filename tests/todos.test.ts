@@ -21,9 +21,10 @@ vi.mock("@/server/auth", () => ({
 }));
 
 import { db } from "@/server/db";
-import { users } from "@/db/schema";
+import { todoCompletions, users } from "@/db/schema";
 import {
   createTodo,
+  DONE_DATES_WINDOW_DAYS,
   deleteTodo,
   getDailyTodos,
   getTodoHistory,
@@ -530,6 +531,22 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
+    });
+
+    it("loads only the last DONE_DATES_WINDOW_DAYS of ticks for a daily task", async () => {
+      const today = toISODate();
+      const habit = await createTodo(userA, {
+        space: "personal",
+        title: "Old habit",
+        dueDate: addDays(today, -1000),
+        isRecurring: true,
+        recurrencePattern: "daily",
+      });
+      const old = addDays(today, -(DONE_DATES_WINDOW_DAYS + 1));
+      const edge = addDays(today, -DONE_DATES_WINDOW_DAYS);
+      await db.insert(todoCompletions).values([old, edge, today].map((date) => ({ todoId: habit.id, date })));
+      const [item] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(item.doneDates).toEqual([edge, today]);
     });
 
     it("ends a deleted daily task today but keeps it on the days before, owner only", async () => {
