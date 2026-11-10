@@ -107,7 +107,32 @@ export function Modal({
     };
     window.addEventListener("scroll", pin);
 
+    // The log from a phone showed iOS panning the visual viewport ~110px for a moment on every focus (the page behind
+    // flashes and the form with it), although every field was already visible. A tap focuses the field itself with
+    // preventScroll, so iOS has no scroll-into-view to do. A drag is left alone, so the form still scrolls.
+    let startX = 0;
+    let startY = 0;
+    const tapStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+    const tapEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) return;
+      const hit = (e.target as Element).closest("input, textarea, label");
+      const field = hit instanceof HTMLLabelElement ? hit.control : hit;
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+      const typing = field instanceof HTMLTextAreaElement || /^(text|number|search|email|tel|url|password)$/.test(field.type);
+      if (!typing || field.disabled || !field.closest(".modal-body")) return;
+      e.preventDefault();
+      field.focus({ preventScroll: true });
+    };
+    document.addEventListener("touchstart", tapStart, { passive: true });
+    document.addEventListener("touchend", tapEnd, { passive: false });
+
     return () => {
+      document.removeEventListener("touchstart", tapStart);
+      document.removeEventListener("touchend", tapEnd);
       document.removeEventListener("touchmove", lock);
       window.removeEventListener("scroll", pin);
       window.removeEventListener("keydown", handleKeyDown);
