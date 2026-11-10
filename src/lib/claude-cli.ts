@@ -14,15 +14,30 @@ export interface ClaudeRun {
 
 export type ClaudeResult =
   | { ok: true; output: unknown }
-  | { ok: false; reason: "auth" | "unavailable" | "error" };
+  | { ok: false; reason: "auth" | "unavailable" | "busy" | "error" };
 
 const TIMEOUT_MS = 90_000;
+// One child is a whole Node process: a few quick sends (or a stolen session in a loop) must not pile them up on a small host.
+const MAX_CONCURRENT = 2;
+const MAX_OUTPUT = 1_000_000;
+// shortcut: counted per process, not per user; fine for one container, move to the database if the app ever runs several replicas.
+let running = 0;
 
 /**
  * One headless Claude Code call. No tools, no MCP, no settings, no session files: the model can only answer.
  * The message goes through stdin (never argv), the child runs in an empty temp dir.
  */
-export async function runClaude({ system, input, schema, token }: ClaudeRun): Promise<ClaudeResult> {
+export async function runClaude(run: ClaudeRun): Promise<ClaudeResult> {
+  if (running >= MAX_CONCURRENT) return { ok: false, reason: "busy" };
+  running++;
+  try {
+    return await execute(run);
+  } finally {
+    running--;
+  }
+}
+
+async function execute({ system, input, schema, token }: ClaudeRun): Promise<ClaudeResult> {
   const dir = await mkdtemp(join(tmpdir(), "lt-claude-"));
   // With a token the child gets an empty HOME, so it can never fall back to the server's own login.
   const env = {
@@ -49,7 +64,10 @@ export async function runClaude({ system, input, schema, token }: ClaudeRun): Pr
       const child = spawn(/*turbopackIgnore: true*/ process.env.CLAUDE_BIN || "claude", args, { cwd: dir, env, stdio: ["pipe", "pipe", "ignore"] });
       let out = "";
       const timer = setTimeout(() => child.kill("SIGKILL"), TIMEOUT_MS);
-      child.stdout.on("data", (d) => (out += d));
+      child.stdout.on("data", (d) => {
+        out += d;
+        if (out.length > MAX_OUTPUT) child.kill("SIGKILL");
+      });
       child.on("error", reject);
       child.on("close", () => (clearTimeout(timer), resolve(out)));
       child.stdin.end(input);

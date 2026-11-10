@@ -443,6 +443,12 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
     });
 
+    it("refuses a push endpoint that is not https", async () => {
+      const keys = { p256dhKey: "sample-p256dh-val", authKey: "sample-auth-val" };
+      await expect(savePushSubscriptionAction({ endpoint: "http://fcm.googleapis.com/x", ...keys })).rejects.toThrow();
+      await expect(savePushSubscriptionAction({ endpoint: "ftp://example.com/x", ...keys })).rejects.toThrow();
+    });
+
     it("plans one-off tasks from today up to a week ahead only", async () => {
       const today = toISODate();
       const task = (dueDate: string) => ({ space: "personal", title: "Plan", dueDate, isRecurring: false });

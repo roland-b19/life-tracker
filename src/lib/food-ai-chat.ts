@@ -121,6 +121,7 @@ export async function sendFoodChatMessage(
     const reply = {
       auth: "Claude a refuzat tokenul. Conectează-ți din nou contul Claude din Settings.",
       unavailable: "Claude CLI nu este instalat pe server.",
+      busy: "Claude lucrează deja la alt răspuns. Reîncearcă peste un moment.",
       error: "Claude nu a răspuns. Te rog să reîncerci.",
     }[result.reason];
     return { reply, meals: [] };

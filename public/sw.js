@@ -62,7 +62,9 @@ self.addEventListener("push", (event) => {
 // Notification click: focus or open the app
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const urlToOpen = event.notification.data?.url || "/todos";
+  // Only paths of this app: a push payload must never open another site.
+  const target = new URL(event.notification.data?.url || "/todos", self.location.origin);
+  const urlToOpen = target.origin === self.location.origin ? target.pathname + target.search : "/todos";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
