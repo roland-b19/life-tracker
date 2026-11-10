@@ -218,25 +218,6 @@ async function main() {
       "unit" varchar(30) DEFAULT 'g' NOT NULL,
       "category" varchar(50) DEFAULT 'pantry' NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS "meal_plans" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
-      "name" varchar(100) DEFAULT 'Weekly Meal Plan' NOT NULL,
-      "is_active" boolean DEFAULT true NOT NULL,
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "meal_plan_days" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "plan_id" uuid NOT NULL REFERENCES "meal_plans"("id") ON DELETE cascade,
-      "day_of_week" integer NOT NULL,
-      "meal_type" varchar(30) NOT NULL,
-      "recipe_id" uuid REFERENCES "recipes"("id") ON DELETE set null,
-      "custom_name" varchar(120),
-      "calories" integer DEFAULT 0 NOT NULL,
-      "protein" numeric(5, 1) DEFAULT '0' NOT NULL,
-      "carbs" numeric(5, 1) DEFAULT '0' NOT NULL,
-      "fat" numeric(5, 1) DEFAULT '0' NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS "shopping_items" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -253,26 +234,6 @@ async function main() {
       "name" varchar(50) NOT NULL,
       "sort_order" integer DEFAULT 0 NOT NULL,
       CONSTRAINT "shopping_categories_user_id_name_pk" PRIMARY KEY("user_id","name")
-    );
-    CREATE TABLE IF NOT EXISTS "expense_categories" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid REFERENCES "users"("id") ON DELETE cascade,
-      "name" varchar(50) NOT NULL,
-      "space" varchar(20) DEFAULT 'personal' NOT NULL,
-      "icon" varchar(30),
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS "expenses" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
-      "space" varchar(20) DEFAULT 'personal' NOT NULL,
-      "amount" numeric(10, 2) NOT NULL,
-      "currency" varchar(10) DEFAULT 'RON' NOT NULL,
-      "category" varchar(50) NOT NULL,
-      "date" date NOT NULL,
-      "notes" varchar(255),
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-      CONSTRAINT "expenses_amount_positive" CHECK ("amount" > 0)
     );
     CREATE TABLE IF NOT EXISTS "todos" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -314,15 +275,6 @@ async function main() {
       "auth_key" varchar(255) NOT NULL,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS "api_tokens" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
-      "name" varchar(50) DEFAULT 'Claude / Gemini Food Connector' NOT NULL,
-      "token_hash" varchar(64) NOT NULL,
-      "scope" varchar(30) DEFAULT 'food' NOT NULL,
-      "last_used_at" timestamp with time zone,
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS "wishlist_items" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -333,23 +285,13 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       CONSTRAINT "wishlist_price_positive" CHECK ("wishlist_items"."estimated_price" > 0)
     );
-    CREATE TABLE IF NOT EXISTS "business_incomes" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
-      "amount" numeric(12, 2) NOT NULL,
-      "category" varchar(50) DEFAULT 'Sales' NOT NULL,
-      "date" date NOT NULL,
-      "note" varchar(255),
-      "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-      CONSTRAINT "business_income_positive" CHECK ("business_incomes"."amount" > 0)
-    );
     CREATE TABLE IF NOT EXISTS "claude_connections" (
       "user_id" uuid PRIMARY KEY NOT NULL REFERENCES "users"("id") ON DELETE cascade,
       "token_encrypted" varchar(1024) NOT NULL,
       "connected_at" timestamp with time zone DEFAULT now() NOT NULL
     );
   `);
-  console.log("Verified Food, Money, Todo, AI, Wishlist & Business tables.");
+  console.log("Verified Food, Todo, AI & Wishlist tables.");
 
   await appDbClient.query(`
     GRANT USAGE ON SCHEMA public TO life_tracker_app;
@@ -367,19 +309,13 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meals" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "recipes" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "recipe_ingredients" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plans" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "meal_plan_days" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_categories" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expense_categories" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "expenses" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, DELETE ON TABLE "todo_completions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "api_tokens" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "business_incomes" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "claude_connections" TO life_tracker_app;
   `);
   console.log("Granted least-privilege permissions to life_tracker_app.");

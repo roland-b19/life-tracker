@@ -19,7 +19,6 @@ import {
   addWishlistItem,
   deleteWishlistItem,
   getWishlist,
-  getWishlistStats,
   restoreWishlistItem,
   updateWishlistItem,
 } from "@/lib/wishlist";
@@ -63,10 +62,6 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
 
     const list = await getWishlist(userA);
     expect(list.length).toBe(2);
-
-    const stats = await getWishlistStats(userA);
-    expect(stats.totalItems).toBe(2);
-    expect(stats.totalEstimatedCost).toBe(1650.5);
   });
 
   it("enforces multi-user isolation on wishlist", async () => {

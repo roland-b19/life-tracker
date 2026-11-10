@@ -1,6 +1,6 @@
 # Release plan: both variants, from now to the presentation and the personal go-live
 
-Status: **proposed, waits for the user's OK. Nothing in it is implemented.** Written 2026-11-10 after an audit of the code, the infra and the docs. It extends `docs/free-hosting-plan.md` (stack, limits, verified claims) and replaces its short "Implementation plan".
+Status: **agreed by the user on 2026-11-10; sections 3 and 3b are done, the rest is not implemented.** Written 2026-11-10 after an audit of the code, the infra and the docs. It extends `docs/free-hosting-plan.md` (stack, limits, verified claims) and replaces its short "Implementation plan".
 
 Principle: **deploy is the last step.** Nothing is deployed for real until every gate in section 6 passes. Each step is its own commit with its tests, and CI stays green.
 
@@ -51,6 +51,8 @@ Each item: do it, test it, commit.
 13. **Request id** in logs for errors on every route (today only `/api/weight` logs through `logRequest`), no personal data: on Vercel Hobby logs last 1 hour, so a failure must be traceable within that time.
 
 ## 3b. Cleanup: keep strictly what the app uses (decided 2026-11-10)
+
+**Status 2026-11-10 (branch `chore/cleanup-unused`, PR open): items 1 to 5 done, with these notes.** Item 1: migration `0019_drop_unused_tables` drops the six tables (only DROP TABLE statements); it was run on a throwaway database together with 0000 to 0018, then on the local and test databases; a `pg_dump` of the six tables sits outside the repo; `scripts/db-init.cjs` no longer creates or grants them. Item 2: the Money and Business code was already gone; the dead-export scan (graphify plus a script) found and removed `getExerciseContext` with its action, type and two tests (no screen called it), `getWishlistStats` with its assertion, three unused icons and four unused type exports; no file is orphaned and no dependency is unused, so none was removed. Item 3: `seed:dev` stays (the baseline measurements need it in section 4); nothing else seeded was unused. Item 4: deleted `docs/iteration-1.md` to `iteration-8.md`, `docs/idea.md` and `docs/roadmap.md` (an out-of-date estimate that this plan replaces; `AGENTS.md` now points at this plan); kept `docs/spec.md`, `docs/spec/gym-sample.md` and `docs/free-hosting-plan.md` because they are still the module spec, the gym seed numbers and the variant B reference. `docs/STATUS.md` and `docs/decisions.md` are dated logs and still name the deleted files in old entries; git history holds them. Item 5: README rewritten; `.claude/launch.json` was committed by mistake in #72 and is untracked and git-ignored now; no env file, build output or junk is tracked. Also scrubbed the Azure tenant and client ids and the account email from `docs/STATUS.md`.
 
 **List approved by the user on 2026-11-10.** Each item is re-checked against the code (graphify plus grep) right before it is deleted; anything found to be used stays and is reported. The work itself runs at step 3 of section 7, after the shared code. Git history is the archive, so a deleted file is never lost; for the database a `pg_dump` is taken first.
 

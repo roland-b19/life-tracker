@@ -30,7 +30,6 @@ import {
   createWorkoutSession,
   deleteWorkoutSet,
   getDeloadStatus,
-  getExerciseContext,
   getExercises,
   getOpenWorkoutSession,
   getUserSplitWithDays,
@@ -42,7 +41,6 @@ import {
   cancelSessionAction,
   deleteSetAction,
   finishSessionAction,
-  getExerciseContextAction,
   getGymHistoryAction,
   logSetAction,
   reopenSessionAction,
@@ -302,89 +300,6 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(deletedByA?.id).toBe(setA.id);
   });
 
-  it("suggests progressive overload when user hits top of rep range in previous session", async () => {
-    const exercisesList = await getExercises(userA);
-    const press = exercisesList.find((e) => e.name === "Incline barbell press")!;
-
-    // Session 1: Hit 8 reps (top of 5-8 range)
-    const session1 = await createWorkoutSession(userA, {
-      date: "2026-10-22",
-      isDeload: false,
-      notes: "Felt strong today",
-    });
-
-    await logWorkoutSet(userA, {
-      sessionId: session1.id,
-      exerciseId: press.id,
-      setOrder: 1,
-      reps: 8,
-      loadType: "kg",
-      loadValue: 40,
-      extraKg: 0,
-      isFailure: true,
-      isPartial: false,
-      flagAnomaly: false,
-      notes: "Smooth lockout",
-    });
-
-    // Session 2: Next week
-    const session2 = await createWorkoutSession(userA, {
-      date: "2026-10-29",
-      isDeload: false,
-    });
-
-    const context = await getExerciseContext(userA, press.id, session2.id, 8);
-    expect(context.previousSets).toHaveLength(1);
-    expect(context.previousSets[0].reps).toBe(8);
-    expect(context.lastNote).toBe("Smooth lockout");
-    expect(context.suggestIncrease).toBe(true);
-    expect(context.pr?.loadValue).toBe("40.00");
-  });
-
-  it("excludes deload sessions from Personal Records (PRs)", async () => {
-    const exercisesList = await getExercises(userA);
-    const press = exercisesList.find((e) => e.name === "Incline barbell press")!;
-
-    // Regular session: 40 kg
-    const normalSession = await createWorkoutSession(userA, {
-      date: "2026-10-15",
-      isDeload: false,
-    });
-    await logWorkoutSet(userA, {
-      sessionId: normalSession.id,
-      exerciseId: press.id,
-      setOrder: 1,
-      reps: 8,
-      loadType: "kg",
-      loadValue: 40,
-      extraKg: 0,
-      isFailure: true,
-      isPartial: false,
-      flagAnomaly: false,
-    });
-
-    // Deload session with test weight: should NOT count as PR per spec
-    const deloadSession = await createWorkoutSession(userA, {
-      date: "2026-10-22",
-      isDeload: true,
-    });
-    await logWorkoutSet(userA, {
-      sessionId: deloadSession.id,
-      exerciseId: press.id,
-      setOrder: 1,
-      reps: 10,
-      loadType: "kg",
-      loadValue: 70, // Higher load during deload
-      extraKg: 0,
-      isFailure: false,
-      isPartial: false,
-      flagAnomaly: false,
-    });
-
-    const context = await getExerciseContext(userA, press.id);
-    expect(context.pr?.loadValue).toBe("40.00");
-  });
-
   it("tracks 5-week deload cycle and flags when deload is due", async () => {
     // New user with no sessions -> cycle week 1, not due
     const statusNew = await getDeloadStatus(userA);
@@ -460,11 +375,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(logRes.success).toBe(true);
       expect(logRes.set.reps).toBe(8);
 
-      // 3. Exercise context
-      const contextRes = await getExerciseContextAction(exercise.id);
-      expect(contextRes.success).toBe(true);
-
-      // 4. Finish session
+      // 3. Finish session
       const finishRes = await finishSessionAction({
         sessionId: startRes.session.id,
         durationMinutes: 55,
@@ -472,7 +383,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(finishRes.success).toBe(true);
       expect(finishRes.session?.durationMinutes).toBe(55);
 
-      // 5. Delete set
+      // 4. Delete set
       const deleteRes = await deleteSetAction(logRes.set.id);
       expect(deleteRes.success).toBe(true);
     });

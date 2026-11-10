@@ -134,6 +134,13 @@
       "when": 1794255572136,
       "tag": "0018_detailed_muscle_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794319141384,
+      "tag": "0019_drop_unused_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -16,12 +16,12 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 | A1 | Body weight and steps history (since 2026-11-08 the Steps and Water tabs read and edit the per-day history through owner-scoped server actions, each with an owner/other user/anonymous test) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
 | A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
 | A3 | Food logs, meal plan, recipes, shopping list and its categories (cleared items kept so Undo can restore them) | personal | database; also read and written by the in-app assistant | low to medium privacy harm |
-| A4 | Personal expenses | personal, financial | database | privacy harm |
-| A5 | Family-business income and expenses (legacy rows, no UI since 2026-11-05) | personal, financial, business | database | commercial harm; never leaves our system |
+| A4 | Personal expenses (removed 2026-11-10: module and tables deleted) | - | - | - |
+| A5 | Family-business income and expenses (removed 2026-11-10: tables deleted) | - | - | - |
 | A6 | To-do tasks, the days they were ticked, and reminders (personal and business) | personal | database, queue | low |
 | A7 | Wishlist | personal | database | low |
 | A8 | Account identity and sessions (Entra tokens, refresh tokens) | secret | Entra; tokens in browser/session | account takeover exposes A1-A7 |
-| A9 | Connector credentials (removed 2026-11-08 with the connector; the `api_tokens` table stays, empty) | secret | database (`api_tokens` table, SHA-256 hashed) | attacker acts as the user on food tools (no longer reachable) |
+| A9 | Connector credentials (removed 2026-11-08 with the connector; the `api_tokens` table was dropped 2026-11-10) | - | - | - |
 | A9b | The owner's Claude token (`claude setup-token`, since 2026-11-08) | secret | database (`claude_connections`, AES-256-GCM with `CLAUDE_TOKEN_KEY`) | attacker spends the owner's Claude plan and reads its usage; no access to app data |
 | A10 | Push subscriptions (endpoint + keys per device) | secret-ish | database | spam or tracking of the device |
 | A11 | Application secrets and infra credentials (Key Vault, CI) | secret | Key Vault, CI secrets | full compromise |

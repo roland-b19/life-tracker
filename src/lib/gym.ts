@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -17,27 +17,6 @@ import {
   SaveSplitDayInput,
 } from "./validations/gym";
 import { ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
-
-export interface ExerciseContext {
-  previousSets: Array<{
-    reps: number;
-    loadType: string;
-    loadValue: string;
-    extraKg: string;
-    isFailure: boolean;
-    isPartial: boolean;
-    notes?: string | null;
-  }>;
-  pr?: {
-    loadType: string;
-    loadValue: string;
-    extraKg: string;
-    reps: number;
-    date: string;
-  } | null;
-  lastNote?: string | null;
-  suggestIncrease: boolean;
-}
 
 export interface DeloadStatus {
   weeksSinceLastDeload: number;
@@ -393,124 +372,6 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
   return {
     session,
     sets,
-  };
-}
-
-/**
- * Get in-workout context for an exercise (last session sets, PR, note, progressive overload hint)
- */
-export async function getExerciseContext(
-  userId: string,
-  exerciseId: string,
-  currentSessionId?: string,
-  maxTargetReps?: number,
-): Promise<ExerciseContext> {
-  // Find previous sessions containing this exercise
-  let sessionDateLimit: string | undefined;
-  if (currentSessionId) {
-    const [curr] = await db
-      .select({ date: workoutSessions.date })
-      .from(workoutSessions)
-      .where(and(eq(workoutSessions.id, currentSessionId), eq(workoutSessions.userId, userId)))
-      .limit(1);
-    if (curr) sessionDateLimit = curr.date;
-  }
-
-  // Find the most recent previous session with sets for this exercise
-  const previousSessionsQuery = db
-    .select({
-      sessionId: workoutSessions.id,
-      date: workoutSessions.date,
-    })
-    .from(workoutSessions)
-    .innerJoin(workoutSets, eq(workoutSets.sessionId, workoutSessions.id))
-    .where(
-      and(
-        eq(workoutSessions.userId, userId),
-        eq(workoutSets.exerciseId, exerciseId),
-        eq(workoutSessions.isDeload, false), // an easy deload week is no baseline for the next load
-        sessionDateLimit
-          ? lt(workoutSessions.date, sessionDateLimit)
-          : undefined,
-        currentSessionId
-          ? sql`${workoutSessions.id} != ${currentSessionId}`
-          : undefined,
-      ),
-    )
-    .orderBy(desc(workoutSessions.date))
-    .limit(1);
-
-  const prevSessionRes = await previousSessionsQuery;
-  let previousSets: ExerciseContext["previousSets"] = [];
-  let lastNote: string | null = null;
-  let suggestIncrease = false;
-
-  if (prevSessionRes.length > 0) {
-    const prevSessionId = prevSessionRes[0].sessionId;
-    const sets = await db
-      .select({
-        reps: workoutSets.reps,
-        loadType: workoutSets.loadType,
-        loadValue: workoutSets.loadValue,
-        extraKg: workoutSets.extraKg,
-        isFailure: workoutSets.isFailure,
-        isPartial: workoutSets.isPartial,
-        notes: workoutSets.notes,
-      })
-      .from(workoutSets)
-      .where(
-        and(
-          eq(workoutSets.sessionId, prevSessionId),
-          eq(workoutSets.userId, userId),
-          eq(workoutSets.exerciseId, exerciseId),
-        ),
-      )
-      .orderBy(workoutSets.setOrder);
-
-    previousSets = sets;
-    for (const s of sets) {
-      if (s.notes) {
-        lastNote = s.notes;
-      }
-    }
-
-    // Progressive overload: if maxTargetReps is defined and any set hit or exceeded it without anomaly
-    if (maxTargetReps && sets.length > 0) {
-      const hitTop = sets.some((s) => s.reps >= maxTargetReps);
-      if (hitTop) {
-        suggestIncrease = true;
-      }
-    }
-  }
-
-  // Find Personal Record (PR) for this exercise
-  const allSets = await db
-    .select({
-      loadType: workoutSets.loadType,
-      loadValue: workoutSets.loadValue,
-      extraKg: workoutSets.extraKg,
-      reps: workoutSets.reps,
-      date: workoutSessions.date,
-    })
-    .from(workoutSets)
-    .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
-    .where(
-      and(
-        eq(workoutSets.userId, userId),
-        eq(workoutSets.exerciseId, exerciseId),
-        eq(workoutSessions.isDeload, false), // Exclude deload from PRs
-      ),
-    )
-    .orderBy(desc(sql`CAST(${workoutSets.loadValue} AS numeric)`), desc(workoutSets.reps))
-    .limit(1);
-
-  const pr = allSets.length > 0 ? allSets[0] : null;
-
-  return {
-    previousSets,
-    pr,
-    lastNote,
-    suggestIncrease,
   };
 }
 
