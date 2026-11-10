@@ -1234,13 +1234,12 @@ button.signin-continue:disabled {
    and the page under the keyboard must stay blurred while it does. */
 .modal-scrim {
   position: fixed;
-  /* Reaches past the top and bottom of the screen: iOS can leave a strip there (toolbar, home bar) that
-     the layout viewport does not cover, which showed as an unblurred black bar. */
-  inset: -8rem 0;
+  /* Reaches past the top and bottom of the screen, so no strip (toolbar, home bar) is left unblurred. */
+  inset: -4rem 0;
   z-index: 9999;
   background: rgba(0, 0, 0, 0.4);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur that animates and pans janked on iPhone */
   touch-action: none;
   animation: modalFadeIn var(--dur) var(--ease) both;
 }
@@ -1262,7 +1261,7 @@ button.signin-continue:disabled {
   touch-action: none;
   animation: modalFadeIn var(--dur) var(--ease) both;
   /* The keyboard opening or closing changes the height and offset set in modal.tsx: the card glides to its new centre. */
-  transition: height 280ms var(--ease), transform 280ms var(--ease);
+  transition: height 200ms var(--ease), transform 200ms var(--ease);
 }
 
 @keyframes modalFadeIn {

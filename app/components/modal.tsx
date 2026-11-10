@@ -62,14 +62,12 @@ export function Modal({
     if (!isOpen) return;
     window.addEventListener("keydown", handleKeyDown);
 
-    // iOS ignores overflow:hidden on body, so pin it in place and restore the scroll position on close.
+    // The page behind must not scroll. Not pinned with position:fixed on the body: on iOS that reflowed the whole
+    // page as the form opened (jank) and left a bare black strip at the bottom. A touchmove lock (below) stops
+    // the drags; overflow:hidden stops the wheel and keys.
     const scrollY = window.scrollY;
-    const body = document.body;
-    body.style.position = "fixed";
-    body.style.top = `${-scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    const root = document.documentElement;
+    root.style.overflow = "hidden";
 
     // Keep the backdrop the size of the visible area so the keyboard never pushes or zooms the card.
     const vv = window.visualViewport;
@@ -95,11 +93,7 @@ export function Modal({
       window.removeEventListener("keydown", handleKeyDown);
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
+      root.style.overflow = "";
       window.scrollTo(0, scrollY);
     };
   }, [isOpen, handleKeyDown]);

@@ -404,10 +404,10 @@ The CSS hides the outline on `[data-pointer]`.
 
 **Page behind**
 - Blurred, never scaled.
-- The body is pinned (`position: fixed`, with the scroll restored after), for iOS.
-- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard. It reaches 8rem past the top and bottom (`inset: -8rem 0`), so no strip of the page (iOS toolbar or home bar) is left unblurred.
+- The page behind never scrolls: `overflow: hidden` on `html` while a form is open, the scroll position restored after. The body is not pinned with `position: fixed`: on iOS that reflowed the whole page as the form opened (jank) and left a bare black strip at the bottom.
+- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard. It reaches 4rem past the top and bottom (`inset: -4rem 0`), so no strip is left unblurred. Its blur is `blur(20px)` with no saturate, lighter than the tab bar's: a full-screen blur that animates and pans janked on iPhone.
 - While a form is open a `touchmove` listener on the document (non-passive) blocks every drag except one inside a `.modal-body` that really scrolls, so the page behind never pans when the keyboard is up.
-- The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and centres the card above the keyboard; the card's `max-height: 100%` shrinks it to fit and its body scrolls, so every field stays reachable. Its height and transform transition 280ms with `--ease`, so the card glides when the keyboard opens or closes instead of jumping.
+- The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and centres the card above the keyboard; the card's `max-height: 100%` shrinks it to fit and its body scrolls, so every field stays reachable. Its height and transform transition 200ms with `--ease`, so the card glides when the keyboard opens or closes instead of jumping.
 
 **Parts**
 - Header padding 1.25rem 1.5rem .85rem; title 1.25rem, weight 600; body padding 1.5rem.
