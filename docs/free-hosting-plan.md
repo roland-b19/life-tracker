@@ -84,9 +84,10 @@ Verified on 2026-11-10 by running it against the real Neon project (PostgreSQL 1
 
 1. **Neon allows `CREATE ROLE life_tracker_app`** (the owner `neondb_owner` has CREATEROLE and CREATEDB). All 19 migrations ran with `drizzle-kit migrate` (27 tables, `GRANT ... TO life_tracker_app` included). The app role can read through both the direct and the pooled host, and is denied `CREATE TABLE`, `DROP TABLE` and `ALTER TABLE` (42501). The throwaway database and the role were removed, so the real database is still empty: create the role with a real password and migrate when implementing.
 
+2. **Vercel Hobby** (verified 2026-11-10 on a real project): the account was created without a card; Settings > Functions > Function Region allows exactly one region and offers Frankfurt (`fra1`), chosen to sit next to Neon `eu-central-1`; the app builds on Vercel with Next 16.4 and `output: "standalone"` (build 47 s, all routes listed, deploy Ready). The build needs the same placeholder variables as the `Dockerfile` build stage (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `AUTH_AZURE_*`, `AUTH_ISSUER`, `DATABASE_URL`), because `src/server/db.ts` and `src/auth.ts` throw at import when they are missing; without them the build fails with "Failed to collect page data for /api/auth/[...nextauth]". Sensitive actions on Vercel (redeploy) ask for an emailed 6-digit code. The test project is still deployed with placeholder values, so it works as a build check only: replace the values or delete the project before real use.
+
 Still unverified:
 
-2. **Vercel Hobby needs no card** (neither pasted page says), lets us pick the function region, and builds Next 16.4 with `output: "standalone"`.
 3. **Neon rules for inactive free projects** (none found on the plans page), and that the Free terms do not change.
 
 ## Long-term checklist (free, unlimited time)
