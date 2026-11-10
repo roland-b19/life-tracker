@@ -136,8 +136,8 @@ Audit result: the Azure side was verified live only for the Iteration 2 weigh-in
 1. User answers section 2.
 2. Section 3 (shared code), small commits.
 3. Section 3b (cleanup, after the user approves the list).
-4. Baseline measurements and the cost-guard fixes (section 6 cost guards). **Done 2026-11-10** (PR open): see `docs/decisions.md`; per-action query counts and `EXPLAIN (ANALYZE)` on the real Neon region stay in the gates for 3c.
-5. Section 3c: final audit and refactor, then all section 6 gates again. Nothing deploys before this.
+4. Baseline measurements and the cost-guard fixes (section 6 cost guards). **Done 2026-11-10** (PR #74 merged): see `docs/decisions.md`; per-action query counts and `EXPLAIN (ANALYZE)` on the real Neon region stay in the gates for 3c.
+5. Section 3c: final audit and refactor, then all section 6 gates again. Nothing deploys before this. **In progress 2026-11-10** (branch `chore/final-audit`): audit done, safe fixes committed, local gates run; the items that need the user's decision and the gates that need a deployed environment are listed in `docs/STATUS.md` (Current focus).
 6. Section 4 up to the rehearsal on a Neon branch; then B go-live and one week of watching usage.
 7. Section 5, rehearsal deploys on Azure (each torn down the same day), evidence collected as it is produced; the final deploy only when all 8 requirement rows are ticked.
 8. After the course: only B stays running; the Azure code and scripts stay in the repo.

@@ -158,6 +158,13 @@ export async function createWorkoutSession(
   userId: string,
   input: CreateSessionInput,
 ) {
+  if (input.splitDayId) {
+    const [day] = await db
+      .select({ id: workoutSplitDays.id })
+      .from(workoutSplitDays)
+      .where(and(eq(workoutSplitDays.id, input.splitDayId), eq(workoutSplitDays.userId, userId)));
+    if (!day) throw new Error("Split day not found or unauthorized");
+  }
   const [session] = await db
     .insert(workoutSessions)
     .values({
@@ -288,6 +295,12 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
   if (session.length === 0) {
     throw new Error("Workout session not found or unauthorized");
   }
+
+  const [exercise] = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(and(eq(exercises.id, input.exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId))));
+  if (!exercise) throw new Error("Exercise not found or unauthorized");
 
   // Automatic anomaly check: if reps < target min reps
   let flagAnomaly = input.flagAnomaly;
@@ -521,7 +534,8 @@ export async function getGymHistory(userId: string, since: string): Promise<Hist
     .innerJoin(exercises, eq(workoutSets.exerciseId, exercises.id))
     .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
     .where(and(eq(workoutSets.userId, userId), eq(workoutSessions.userId, userId), gte(workoutSessions.date, since)))
-    .orderBy(workoutSessions.date, workoutSessions.createdAt, workoutSets.setOrder)
+    // Newest first so the cap drops the oldest sets, then flip back to chronological.
+    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), desc(workoutSets.setOrder))
     .limit(8000);
-  return rows.map(({ loadValue, extraKg, ...r }) => ({ ...r, load: Number(loadValue) + Number(extraKg) }));
+  return rows.reverse().map(({ loadValue, extraKg, ...r }) => ({ ...r, load: Number(loadValue) + Number(extraKg) }));
 }

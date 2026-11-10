@@ -35,6 +35,7 @@ import {
   deleteTodoAction,
   getDailyTodosAction,
   getPlannedDaysAction,
+  loadTodosViewAction,
   moveTodoAction,
   restoreTodoAction,
   savePushSubscriptionAction,
@@ -443,6 +444,12 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
     });
 
+    it("refuses a push endpoint that is not https", async () => {
+      const keys = { p256dhKey: "sample-p256dh-val", authKey: "sample-auth-val" };
+      await expect(savePushSubscriptionAction({ endpoint: "http://fcm.googleapis.com/x", ...keys })).rejects.toThrow();
+      await expect(savePushSubscriptionAction({ endpoint: "ftp://example.com/x", ...keys })).rejects.toThrow();
+    });
+
     it("plans one-off tasks from today up to a week ahead only", async () => {
       const today = toISODate();
       const task = (dueDate: string) => ({ space: "personal", title: "Plan", dueDate, isRecurring: false });
@@ -750,6 +757,34 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       expect((await getPlannedDaysAction("personal")).days).toEqual([addDays(today, 2), addDays(today, 5)]);
       expect((await getPlannedDaysAction("business")).days).toEqual([]);
+    });
+  });
+
+  describe("loadTodosViewAction (the page's single read)", () => {
+    it("returns both spaces, history and planned days for the owner only", async () => {
+      const today = toISODate();
+      await createTodo(userA, { space: "personal", title: "Mine", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await createTodo(userA, { space: "business", title: "Work", dueDate: addDays(today, 2), isRecurring: false, recurrencePattern: "none" });
+      await createTodo(userA, { space: "personal", title: "Habit", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
+
+      authState.id = userA;
+      const view = await loadTodosViewAction(today, addDays(today, 1));
+      expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
+      expect(view.daily[1].todos).toEqual([]);
+      expect(view.weekly?.[0].todos.map((t) => t.title)).toEqual(["Habit"]);
+      expect(view.planned[1]).toEqual([addDays(today, 2)]);
+      expect(Array.isArray(view.history[0])).toBe(true);
+      expect((await loadTodosViewAction(today, null)).weekly).toBeNull();
+
+      authState.id = userB;
+      const other = await loadTodosViewAction(today, null);
+      expect(other.daily[0].todos).toEqual([]);
+      expect(other.planned).toEqual([[], []]);
+
+      authState.id = "";
+      await expect(loadTodosViewAction(today, null)).rejects.toThrow("Authentication required.");
+      authState.id = userA;
+      await expect(loadTodosViewAction("2026-02-30", null)).rejects.toThrow();
     });
   });
 });

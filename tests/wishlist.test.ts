@@ -22,7 +22,7 @@ import {
   restoreWishlistItem,
   updateWishlistItem,
 } from "@/lib/wishlist";
-import { restoreWishlistItemAction } from "@/app/actions/wishlist";
+import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/validations/wishlist";
 
 async function seedUser(subject: string) {
@@ -129,6 +129,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
         estimatedPrice: -50,
       }),
     ).rejects.toThrow();
+  });
+
+  it("rejects a price that rounds to zero and a malformed id", async () => {
+    authState.id = userA;
+    await expect(addWishlistItemAction({ name: "Tiny", estimatedPrice: 0.004 })).rejects.toThrow();
+    await expect(deleteWishlistItemAction("nope")).rejects.toThrow("Invalid id");
   });
 
   it("restores a deleted item with its id and date, for the owner only", async () => {

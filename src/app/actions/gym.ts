@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
+import { uuid } from "@/lib/validations/common";
 import { addDays, toISODate } from "@/lib/format-date";
 import {
   cancelSessionSchema,
@@ -85,10 +86,7 @@ export async function logSetAction(rawInput: unknown) {
 
 export async function deleteSetAction(setId: string) {
   const userId = await requireUser();
-  if (!setId || typeof setId !== "string") {
-    throw new Error("Invalid set ID");
-  }
-  const deleted = await deleteWorkoutSet(userId, setId);
+  const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
   return { success: true, deleted };
 }
 

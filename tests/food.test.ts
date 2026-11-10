@@ -354,6 +354,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(waterRes.success).toBe(true);
       expect(waterRes.metrics.waterMl).toBe(500);
 
+      // An impossible day and a malformed id are validation errors, not database errors.
+      await expect(addWaterAction("2026-13-45", 250)).rejects.toThrow();
+      await expect(updateStepsAction("2026-02-30", 1000)).rejects.toThrow();
+
       // 3. Update steps
       const stepsRes = await updateStepsAction("2026-11-04", 10500);
       expect(stepsRes.success).toBe(true);

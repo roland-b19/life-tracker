@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (cleanup 3b merged, PR #73; baseline and cost-guard fixes on branch `perf/baseline-cost-guards`)_
+_Last updated: 2026-11-10 by Claude (3b and baseline merged, PR #73 and #74; final audit 3c on branch `chore/final-audit`)_
 
 ## Phase
 
@@ -45,7 +45,9 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 
 ## Current focus
 
-Release plan `docs/release-plan.md` section 7, step 4: baseline measurements and cost-guard fixes, on branch `perf/baseline-cost-guards` (PR open, not merged). Sections 3 (shared code) and 3b (cleanup) are merged. Next after the user's go-ahead: final audit (3c), then the free variant B, then Azure A.
+Release plan `docs/release-plan.md` section 7, step 5: final audit and refactor (3c), on branch `chore/final-audit`. Done: whole-repo audit, security pass and review; the safe fixes (see `docs/decisions.md` 2026-11-10 "Final audit 3c"); `docs/security/asvs-matrix.md` rewritten. Local gates green: eslint, tsc, 157 Vitest tests, production build with placeholder env, container builds and runs as non-root, `npm audit` (no high or critical), query-count budgets.
+Waiting for the user's decisions before B go-live: Azure sign-in restriction, nonce CSP, GitHub 30-day session, Claude prompt via stdin, push unique index and unsubscribe, Tasks `doneDates` cap, wishlist link validation, Dependabot PRs #67 to #70.
+Gates that need a deployed environment and stay open: `EXPLAIN (ANALYZE)` and cold-start timing on Neon, Lighthouse, phone smoke test on the real host, backup restore, Trivy and gitleaks (run in CI on the PR). Next after the go-ahead: variant B (section 4), then Azure A.
 
 ## Application features (local)
 
@@ -91,7 +93,7 @@ Release plan `docs/release-plan.md` section 7, step 4: baseline measurements and
   - Trivy container scan for HIGH and CRITICAL vulnerabilities.
   - Bicep offline compilation and shell syntax validation (`bash -n`).
 - **Verified via local tests:**
-  - 14 Vitest unit, contract, and authorization tests passing.
+  - 157 Vitest unit, contract, authorization and query-count tests passing (2026-11-10).
   - Local PostgreSQL container tests passing with deterministic credentials.
   - Production container build (`linux/amd64`) and `/health` probe verified.
   - `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` (production flags) passing.
@@ -130,8 +132,8 @@ Release plan `docs/release-plan.md` section 7, step 4: baseline measurements and
 
 ## Next
 
-1. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; the cleanup list is approved; the only open question (its section 9) is the live app name; Claude is hidden on B and present on A. Waiting for the user's go-ahead to start section 3. Nothing is implemented.
-2. Maintain local-only verification until then (no Azure deployments; any Azure resource needs the user's explicit OK).
+1. The user answers the pending 3c decisions (see Current focus) and merges the 3c PR.
+2. Variant B (`docs/release-plan.md` section 4): rehearsal on a Neon branch, then go-live and one week of watching usage. Then Azure A (section 5). Nothing deploys and no Azure resource is created without the user's explicit OK.
 
 ## Open questions
 
@@ -146,6 +148,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-10 — Final audit 3c (Claude Code, branch `chore/final-audit`): audit by area (ponytail, secure-development, code-review-guide), then fixes: shared `isoDate`/`uuid` validators, gym ownership checks, wishlist price floor, `APP_TZ`, pinch zoom allowed with 16px touch fields (browser-checked at phone width), gym history order, Claude CLI caps, https-only push endpoints, same-origin notification clicks, one `loadTodosViewAction` for a Tasks day switch (browser-checked: day and week load). New gates: every server action refuses anonymous callers, every page checks the session, query budget for the day switch (12 queries, 20 KB). Checks: eslint, tsc, 157/157 vitest, production build, container build (non-root), `npm audit`. Not covered: Trivy and gitleaks (CI), Lighthouse, `EXPLAIN` on Neon, backup restore, sign-in against real Entra or GitHub; the `/todos` view still runs the carry-over UPDATE per space on every load and sends every ticked date of repeating tasks; decisions pending are listed above.
 
 - 2026-11-10 — Cleanup 3b (Claude Code, branch `chore/cleanup-unused`): six unused tables dropped (migration `0019`, tried on a throwaway database first; local and test databases migrated), dead code and old plan docs deleted, README rewritten, `.claude/launch.json` untracked, Azure tenant ids and email scrubbed from this file. Details in `docs/release-plan.md` section 3b. Checks: see the PR. Not covered: dropping the tables on Neon or Azure (neither exists yet; both start from the migrations).
 - 2026-11-10 — Baseline and cost guards (Claude Code, branch `perf/baseline-cost-guards`): measured each page with about 2 years of data (`SEED_DAYS=730 npm run seed:dev` and `tests/query-count.test.ts`). Fixed: migration `0020_add_user_indexes` (six `(user_id, ...)` indexes where `pg_stat_user_tables` showed scans), `/gym` 17 to 11 queries (one query for all routine days instead of one per day), `/food` 14 to 11 (no repeated targets check, weigh-ins limited to the last two weeks plus the latest, Past foods sorted and limited in SQL), no `revalidatePath` after Wishlist, Tasks and per-set Gym actions (their clients keep their own state). `/todos` 8 and `/wishlist` 1 are unchanged. The test is now a gate with limits per page and a check that those actions do not revalidate. Not done: a per-action query count and `EXPLAIN (ANALYZE)` on the Neon region (both for 3c); `/gym` still sends about 220 KB of props (a year of sets, accepted: about 10 to 20 KB gzipped); `/todos` still runs the carry-over UPDATE on every view; Food and the other Gym actions still revalidate. Migration `0020` must be applied wherever `db:migrate` runs (mirrored in `scripts/db-init.cjs`).

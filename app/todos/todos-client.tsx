@@ -14,9 +14,7 @@ import { isPushEnabled } from "@/lib/features";
 import {
   createTodoAction,
   deleteTodoAction,
-  getDailyTodosAction,
-  getPlannedDaysAction,
-  getTodoHistoryAction,
+  loadTodosViewAction,
   moveTodoAction,
   restoreTodoAction,
   savePushSubscriptionAction,
@@ -210,25 +208,16 @@ export function TodosClient({
     const id = ++requestId.current;
     const day = at.weekday && weekDate(at.weekday);
     try {
-      const [personal, business, hp, hb, pp, pb, wp, wb] = await Promise.all([
-        getDailyTodosAction("personal", at.date),
-        getDailyTodosAction("business", at.date),
-        getTodoHistoryAction("personal"),
-        getTodoHistoryAction("business"),
-        getPlannedDaysAction("personal"),
-        getPlannedDaysAction("business"),
-        day ? getDailyTodosAction("personal", day) : null,
-        day ? getDailyTodosAction("business", day) : null,
-      ]);
+      const view = await loadTodosViewAction(at.date, day || null);
       // A weekday's list has no day to tick, so nothing on it is done.
       const plan = (list: TodoItem[]) =>
         list.filter((t) => t.isRecurring).map((t) => ({ ...t, isCompleted: false })).sort(compareTodos);
       await before;
       if (id === requestId.current) {
-        setTodosMap({ personal: personal.todos, business: business.todos });
-        setWeekMap(wp && wb ? { personal: plan(wp.todos), business: plan(wb.todos) } : null);
-        setHistory({ personal: hp.history ?? [], business: hb.history ?? [] });
-        setPlanned({ personal: pp.days, business: pb.days });
+        setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
+        setWeekMap(view.weekly ? { personal: plan(view.weekly[0].todos), business: plan(view.weekly[1].todos) } : null);
+        setHistory({ personal: view.history[0] ?? [], business: view.history[1] ?? [] });
+        setPlanned({ personal: view.planned[0], business: view.planned[1] });
       }
     } catch {
       showToast({ message: "Failed to load tasks", type: "warning" });

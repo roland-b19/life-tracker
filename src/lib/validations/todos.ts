@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDate } from "./common";
 
 export const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task; "daily", or "days:1,3,5" for chosen ISO weekdays (1 = Monday). Fits varchar(20).
@@ -9,7 +10,7 @@ export const createTodoSchema = z.object({
   title: z.string().min(1, "Title is required").max(150).trim(),
   isRecurring: z.boolean().default(false),
   recurrencePattern: recurrencePatternSchema.default("none"),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  dueDate: isoDate,
   reminderTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:MM)")
@@ -17,7 +18,7 @@ export const createTodoSchema = z.object({
     .nullable(),
 });
 
-export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
+export { isoDate };
 
 /** Undo of a delete: the same row back, with its id and ticked days. */
 export const restoreTodoSchema = createTodoSchema.extend({
@@ -38,7 +39,7 @@ export const DEV_EDIT_PAST = process.env.NODE_ENV === "development";
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
-  currentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  currentDate: isoDate,
 });
 
 export const updateTodoSchema = z.object({
@@ -62,7 +63,8 @@ export const deleteTodoSchema = z.object({
 });
 
 export const pushSubscriptionSchema = z.object({
-  endpoint: z.string().url().max(500),
+  // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.
+  endpoint: z.url({ protocol: /^https$/ }).max(500),
   p256dhKey: z.string().min(1).max(255),
   authKey: z.string().min(1).max(255),
 });

@@ -223,6 +223,11 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 - `revalidatePath` is removed only where the client keeps its own state (Wishlist, Tasks, per-set Gym). It stays on Food (the page props `weightAnalytics` and targets are used directly) and on Gym start, finish, cancel, reopen, restore, routine and custom exercise actions.
 - Accepted: `/gym` sends about 220 KB of props for a year of sets (it feeds the History and Progress tabs); compressed it is small against the 5 GB Neon and 100 GB Vercel limits. Revisit if the Neon usage page says otherwise after the first week.
 
+### 2026-11-10: Final audit 3c (fixes made, decisions pending)
+- Audit (ponytail, secure-development, code-review-guide) on branch `chore/final-audit`. Fixed without a behaviour change a user would notice: impossible dates and malformed ids are rejected everywhere (shared `isoDate` and `uuid` in `src/lib/validations/common.ts`), gym session and set writes check ownership, wishlist price cannot round to zero, one app timezone constant (`APP_TZ`), pinch zoom allowed again with touch fields kept at 16px, gym history order, the Claude CLI is capped at 2 concurrent runs and 1 MB of output, push endpoints must be https, notification clicks stay same-origin, the Tasks day switch is one server action (`loadTodosViewAction`) instead of four.
+- New tests: `tests/actions-anonymous.test.ts` (every exported server action refuses an anonymous caller), `tests/pages-auth.test.ts` (every page checks the session), more validation and ownership cases, and a query budget for the Tasks day switch.
+- Left for the user to decide (not changed): Azure sign-in restriction (tenant assignment or allowlist), a nonce-based CSP, the 30-day GitHub session, how the Claude system prompt reaches the CLI, unique push endpoint plus unsubscribe, capping Tasks `doneDates`, wishlist link validation, Dependabot PRs #67 to #70.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

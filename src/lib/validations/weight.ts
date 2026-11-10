@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { isoDate } from "./common";
 
 export const weightInput = z
   .object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    date: isoDate,
     kilograms: z
       .number()
       .finite()
