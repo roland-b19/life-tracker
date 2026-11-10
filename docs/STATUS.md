@@ -132,7 +132,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 ## Next
 
 1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
-2. Proposed, waiting for the user's OK: the complete release plan in `docs/release-plan.md` (shared code, free variant on Vercel + Neon, Azure completion for the presentation, pre-deploy gates, order of work). Section 2 lists the decisions the user must make first. Nothing is implemented.
+2. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; open questions are in its section 9 (delete Claude entirely or keep hidden, approve the cleanup list, live app name). Waiting for the user's go-ahead to start section 3. Nothing is implemented.
 3. Maintain local-only verification until then (no Azure deployments).
 
 ## Open questions
@@ -148,6 +148,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-10 — Release plan agreed (Claude Code, docs only): decisions recorded (order shared code, B, then A; user data is small and not the local DB; B session 30 days; public Neon DB accepted as a risk; personal GitHub account; repo private; only what the app uses stays, so unused tables, legacy code and old docs are deleted; a full audit and refactor with every gate re-run comes before any deploy). Not covered: no code written, no resource created.
 
 - 2026-11-08 — Long lists and units (Claude Code, branch `feat/lists-more`): `useMore` (20 rows, then 20 more) on every list that can grow past 20; shopping Unit select; Past foods button in the Meals card. Meals already list in add order (no change). Checks: tsc, eslint, 101/101 vitest; browser: Weight history 20 → 40 rows with More, Unit select options, Past foods in Meals. Not covered: a Gym session's sets and the routine editor (sets are drawn inside a per-exercise loop and the editor reorders rows, both stay far under 20).
 - 2026-11-09 — Gym progress (Claude Code, branch `feat/gym-progress`): see the Gym progress paragraph above. Checks: tsc, eslint, 109/109 vitest. Not covered: visual check in the browser (pane was hidden), autoscroll while dragging on a long routine.

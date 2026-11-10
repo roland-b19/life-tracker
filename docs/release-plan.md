@@ -22,13 +22,13 @@ Order proposal: shared code (3), then B (4), because it is free and exercises th
 2. **Message queue (course requirement 5): DECIDED 2026-11-10.** Push is hidden behind `NEXT_PUBLIC_PUSH_ENABLED`, like Claude (off on B, on on A), not deleted. On A: an Azure Storage Queue, a scheduled Container Apps Job that enqueues due reminders, and a worker that sends the web push. Still to ask at implementation time: the `web-push` dependency and the VAPID keys (AGENTS.md: ask before adding a dependency). Needs a new `docs/threat-model.md` entry and a cost line before any deploy.
 3. **Existing data: DECIDED 2026-11-10.** The user has real data, but it is not the one in the local database, and there is little of it. Step 4.4 stays, with the source and format still to be given by the user (to ask when B reaches that step); the local database is not imported.
 4. **Session length: DECIDED 2026-11-10** (B only: 30 days with a recheck of the allowlist on every session read, as proposed; A keeps 4 hours). Reason: Now 4 hours with a 15-minute refresh, which logs a personal user out several times a day. Option for B only: 30 days, and recheck of the allowlist on every session read. Security trade-off, so the user decides.
-5. **Public database on B.** Neon Free has no private endpoint (IP allow lists are not on Free, to verify), which breaks AGENTS.md "no database reachable from the public internet". That rule is a course rule; for B it becomes a recorded, accepted risk with mitigations (TLS required, long random password, least-privilege app role, owner string only in GitHub secrets). Needs the user's explicit OK and an entry in `docs/security/risk-register.md`.
-6. **GitHub account** to use as owner and for the backups repository (the private repo already exists).
-7. **Presentation logistics.** The date in January, the format and length of the demo, and what the course needs from us (repo access, a written report?). `docs/requirements.md` gives none of this. It sets when Azure is deployed for the last time and how many rehearsals the credit allows.
-8. **Repository visibility and licence.** The repo is private; if the course must see the code, the teacher needs an invitation or the repo goes public, and a public repo needs a licence (open question in `docs/decisions.md`; the 3D muscle model is MIT with its notice in `public/models`).
-9. **The permanent URL.** The Vercel project name fixes the `*.vercel.app` address, and the GitHub OAuth app and the installed PWA are tied to it. Pick the name once (the test project has two addresses now, `life-tracker-ro-bo1` and `life-tracker-ten-chi`).
-10. **Azure prerequisites only the user can do.** Check the remaining credit before each deploy, and create a second Entra test account for the live "other user denied" authorization test.
-11. **Unused tables** (Money, `api_tokens`): proposed default is to keep them (empty tables cost nothing and Azure keeps them), so the plan's "drop in one migration" step in `docs/free-hosting-plan.md` is not done unless the user asks.
+5. **Public database on B: DECIDED 2026-11-10.** Accepted by the user (only the owner uses the app). Neon Free has no private endpoint, which breaks the course rule "no database reachable from the public internet"; for B it is a recorded, accepted risk with mitigations: TLS required, long random password, least-privilege app role, owner string only in GitHub secrets. Still to do: an entry in `docs/security/risk-register.md`. A (Azure) keeps the private database; the course rule is not relaxed there.
+6. **GitHub account: DECIDED 2026-11-10.** The user's personal account is the owner (allowlist by numeric id) and holds the private repo and the backups.
+7. **Presentation logistics: not needed for planning (user, 2026-11-10).** The user only has to show what was done, not give a formal presentation. Package 5.10 is scaled down accordingly. What is mandatory for A: every row of `docs/requirements.md` met, with evidence.
+8. **Repository: stays private (DECIDED 2026-11-10).** No licence needed while it is private; the muscle model notice stays in `public/models`.
+9. **Permanent URL.** Another address than the test project is possible: the user picks the Vercel project name (open, see section 9). It must be fixed before the GitHub OAuth app is created, because the callback URL and the installed PWA are tied to it.
+10. **Azure prerequisites only the user can do: later (user, 2026-11-10).** Credit check before each deploy and a second Entra test account for the live "other user denied" test. Required before the Azure live check (5.3), not before the shared code.
+11. **Unused things are deleted: DECIDED 2026-11-10.** Replaces "keep the unused tables". The repo keeps strictly what the app uses; old data and leftovers are removed; the project must be clean and production ready; a full audit and refactor closes the work (sections 3b and 3c). Still open: whether the Claude integration, now off on both A and B, is deleted entirely (section 9, question a).
 
 ## 3. Shared code (both variants)
 
@@ -45,8 +45,27 @@ Each item: do it, test it, commit.
 9. **Not indexable**: `app/robots.ts` disallowing everything and `robots: noindex` metadata (the sign-in page is public).
 10. **Cache header for `public/models/muscles.glb`** (5.6 MB). The service worker caches only `/_next/static`, so the model is fetched again on every open; add `Cache-Control: public, max-age=31536000, immutable` for it (rename with a version suffix if it changes) so the CDN and the browser keep it.
 11. **`scripts/db-init.cjs`**: remove the hard-coded default app password; require it from env.
-12. **Dead code** after the flags: nothing is deleted for Claude or push (they are behind flags); remove only what is truly unused (`npm ls`, dead-export check). No new dependency without asking.
+12. **Dead code**: covered by section 3b. Claude and push stay behind flags unless the user decides to delete Claude (section 9, question a). No new dependency without asking.
 13. **Request id** in logs for errors on every route (today only `/api/weight` logs through `logRequest`), no personal data: on Vercel Hobby logs last 1 hour, so a failure must be traceable within that time.
+
+## 3b. Cleanup: keep strictly what the app uses (decided 2026-11-10)
+
+Nothing is deleted before the user approves the list in section 9 (question b). Git history is the archive, so a deleted file is never lost; for the database a `pg_dump` is taken first.
+
+1. **Unused tables.** Zero code use outside `src/db/schema.ts` today: `meal_plans`, `meal_plan_days`, `expense_categories`, `api_tokens`, `business_incomes`; `expenses` is only referenced by `scripts/db-init.cjs`. `claude_connections` goes only if the Claude integration is deleted (section 9, question a). `push_subscriptions` stays (push stays, Azure uses it). One new migration drops them (after the dump), schema entries and `scripts/db-init.cjs` references are removed, the grants stay consistent, and the migration is run on a throwaway database first (as done for 0000 to 0018).
+2. **Legacy code.** Everything left from the removed Money and Business modules (components, actions, queries, validation schemas, seed data, tests), found with graphify plus a dead-export and unused-dependency check. No dependency is removed or added without telling the user.
+3. **Old and local data.** The local database is not imported anywhere; seed and fixture data that nothing uses is deleted; `seed:dev` stays only if tests or the baseline measurements need it.
+4. **Docs.** Candidates for deletion (to approve): `docs/iteration-1.md` to `docs/iteration-8.md`, `docs/idea.md`, and any plan file whose content is already in `docs/STATUS.md`, `docs/decisions.md` or `docs/release-plan.md`. Kept: AGENTS.md, `GEMINI.md`, `.github/copilot-instructions.md` and `.gemini` (AGENTS.md requires them), requirements, decisions, threat model, security docs.
+5. **Repo hygiene.** README rewritten for what exists (what it is, the two variants, runbook); no tracked build output, junk or env file except `.env.example`; `.claude/launch.json` stays untracked.
+
+## 3c. Final audit and refactor (last step before any real deploy)
+
+After sections 3, 3b and the measurements, and before B goes live or Azure is deployed:
+
+1. Whole-repo audit with `ponytail-audit` (bugs, security, load, untested risky code, what to delete, merge or split), plus a security pass with `secure-development` and a review of the full diff with `code-review-guide`.
+2. Refactor what the audit finds, in small commits: duplicated code, oversized files and components, inconsistent patterns, dead exports, naming; no behaviour change and no new feature.
+3. **Every gate in section 6 is run again after the refactor**, because the refactor can break what was already verified. Nothing deploys on results from before it.
+4. `docs/STATUS.md` and the ASVS matrix are refreshed from this final state.
 
 ## 4. Variant B: free personal (Vercel + Neon)
 
@@ -65,7 +84,7 @@ Each item: do it, test it, commit.
 
 Audit result: the Azure side was verified live only for the Iteration 2 weigh-in slice. The app has grown (Gym, Food, To-do, Wishlist) and has never been deployed whole. Nothing below is assumed to work.
 
-1. **Course requirements table** (`docs/requirements.md`): every row still says "open". Fill it with evidence at the end (section 7).
+1. **Course requirements table** (`docs/requirements.md`): every row still says "open". **Gate for A: every one of the 8 rows is ticked with evidence (a file, a command output, a screenshot or a live check) before the final deploy is called done.** Fill it as evidence is produced, and re-read the whole file at the end so no requirement is missed.
 2. **Requirement 5, queue** (decided: yes): Bicep adds a storage account (no public access, private endpoint or firewall, managed identity), a queue, a scheduled Job and the worker, plus their ASVS, threat-model and cost entries.
 3. **Full-app redeploy and live check**, not only `/health`: all 19 migrations through the `Microsoft.App/jobs` job, then, with the real Entra account: sign in, create one record in each module (weight, workout, meal, task, wishlist item), reload, sign out. Also the live authorization test (owner allowed, other account denied, anonymous denied), which needs a second Entra test account.
 4. **Entra end to end.** Only the redirect to Microsoft was verified; the return leg (callback, `users` row created, session cookie `__Host-`, sign-out) is not.
@@ -74,8 +93,8 @@ Audit result: the Azure side was verified live only for the Iteration 2 weigh-in
 7. **Image contents.** The Dockerfile has no `claude` binary, so the Claude flag stays off on Azure; say so in the presentation instead of showing a broken tab. Optional: Container Apps health probes use `/health`, which stays free of any database query.
 8. **Security evidence refresh.** `docs/security/asvs-matrix.md` is from 2026-11-03 and covers only the weigh-in slice: redo it for every module. Update `docs/threat-model.md`, `docs/security/data-inventory.md` (GitHub as a second identity provider, Neon and Vercel as processors for B, Wishlist, To-do, the Claude token) and `docs/security/risk-register.md` (public Neon database accepted for B, Free-plan terms changing). No health data goes to an AI provider (standing decision).
 9. **Azure hardening doc** (`docs/security/azure-hardening.md`) checked against what the Bicep really does.
-10. **Presentation package**: architecture diagram (both variants), the security story (private DB, Key Vault, managed identity, no public DB, authn plus authz, tests), the requirement-by-requirement evidence, the cost and teardown story, a demo script with timings, and a screen recording of a good run as a fallback if Azure misbehaves on the day. Fallback for credit: Azure Free Account (in `docs/requirements.md`).
-11. **Presentation-day sequence**: preflight, what-if, deploy, migrate, demo, teardown, confirm the resource group list is empty (only `NetworkWatcherRG` remains, not ours).
+10. **Demo material (scaled down; the user only shows what was done, no formal presentation).** One architecture diagram, a short requirement-by-requirement evidence list taken from `docs/requirements.md`, the security points (private DB, Key Vault, managed identity, authn plus authz, tests), the cost and teardown story, and a screen recording of one good run as a fallback if Azure misbehaves. Credit fallback: Azure Free Account (in `docs/requirements.md`).
+11. **Final deploy sequence**: preflight, what-if, deploy, migrate, show, teardown, confirm the resource group list is empty (only `NetworkWatcherRG` remains, not ours).
 
 ## 6. Pre-deploy gates (both variants; nothing deploys until all pass)
 
@@ -112,11 +131,12 @@ Audit result: the Azure side was verified live only for the Iteration 2 weigh-in
 
 1. User answers section 2.
 2. Section 3 (shared code), small commits.
-3. Baseline measurements and the cost-guard fixes (section 6 cost guards).
-4. Section 4 up to the rehearsal on a Neon branch; then B go-live and one week of watching usage.
-5. Section 5, rehearsal deploys on Azure (each torn down the same day), evidence collected as it is produced.
-6. Section 5.10 and 5.11: the presentation, the final deploy, the demo, the teardown.
-7. After the course: only B stays running; the Azure code and scripts stay in the repo.
+3. Section 3b (cleanup, after the user approves the list).
+4. Baseline measurements and the cost-guard fixes (section 6 cost guards).
+5. Section 3c: final audit and refactor, then all section 6 gates again. Nothing deploys before this.
+6. Section 4 up to the rehearsal on a Neon branch; then B go-live and one week of watching usage.
+7. Section 5, rehearsal deploys on Azure (each torn down the same day), evidence collected as it is produced; the final deploy only when all 8 requirement rows are ticked.
+8. After the course: only B stays running; the Azure code and scripts stay in the repo.
 
 Sizes (guess): shared code about 2 to 3 days, B about 1 to 2 days plus the wait for usage data, A about 3 to 4 days plus the presentation. Nothing was measured.
 
@@ -125,4 +145,11 @@ Sizes (guess): shared code about 2 to 3 days, B about 1 to 2 days plus the wait 
 - No keep-awake pings for Neon (it would burn the CU-hours).
 - No custom domain, no paid tier, no card on file.
 - No new feature: the spec is frozen for this release.
+- No kept-but-unused code, tables or docs "just in case": git history is the archive (section 3b).
 - No Azure resource is created without the user's explicit OK in that session.
+
+## 9. Open questions for the user
+
+a. **Claude integration**: it is off on both A and B (no `claude` binary in the image, CLI cannot spawn on Vercel). Delete it entirely (code, flag, `claude_connections` table) to honour "keep only what we use", or keep it hidden behind the flag as decided earlier (a local-only feature)?
+b. **Cleanup list** in section 3b: approve it (or edit it) before anything is deleted.
+c. **Live app name** for `<name>.vercel.app`: to be chosen before the GitHub OAuth app is created.

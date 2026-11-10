@@ -198,6 +198,15 @@ Decided by the user: the Settings page/nav entry and the Assistant tab in Food a
 ### 2026-11-10: Push hidden behind a flag; Azure gets the message queue
 Decided by the user: real push notifications are not deleted but hidden behind `NEXT_PUBLIC_PUSH_ENABLED` (off on the free variant, on on Azure). On Azure a Storage Queue, a scheduled Job and a worker send the reminders, which covers course requirement 5. Supersedes "delete real push" in the earlier free-variant entry and in `docs/free-hosting-plan.md`. The `web-push` dependency is asked for when the step starts. Plan: `docs/release-plan.md`.
 
+### 2026-11-10: Release plan decisions (user)
+- Order: shared code, then the free variant (B), then Azure (A) close to the deadline. Deploy is the last step; nothing deploys until every gate in `docs/release-plan.md` section 6 passes.
+- B session lasts 30 days with the owner allowlist rechecked on every session read; A keeps 4 hours.
+- The user's real data is small and is not the local database; the source and format come when the import step is reached. The local database is not imported.
+- B uses a public Neon database: accepted risk (only the owner uses the app), mitigated by TLS, a long random password, a least-privilege role and the owner id only in secrets; to be entered in `docs/security/risk-register.md`. Azure keeps the private database.
+- Owner is the user's personal GitHub account. The repository stays private.
+- Azure: every row of `docs/requirements.md` must be ticked with evidence; a formal presentation is not needed, only showing what was done. Credit check and a second Entra test account come later, before the live check.
+- **Keep strictly what the app uses.** Unused tables, legacy code, old data and old docs are deleted (git history and a pre-drop `pg_dump` are the archive), replacing the earlier "keep the unused tables". The work ends with a full audit and refactor, after which every gate is run again.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
