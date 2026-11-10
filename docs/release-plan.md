@@ -24,6 +24,11 @@ Order proposal: shared code (3), then B (4), because it is free and exercises th
 4. **Session length.** Now 4 hours with a 15-minute refresh, which logs a personal user out several times a day. Option for B only: 30 days, and recheck of the allowlist on every session read. Security trade-off, so the user decides.
 5. **Public database on B.** Neon Free has no private endpoint (IP allow lists are not on Free, to verify), which breaks AGENTS.md "no database reachable from the public internet". That rule is a course rule; for B it becomes a recorded, accepted risk with mitigations (TLS required, long random password, least-privilege app role, owner string only in GitHub secrets). Needs the user's explicit OK and an entry in `docs/security/risk-register.md`.
 6. **GitHub account** to use as owner and for the backups repository (the private repo already exists).
+7. **Presentation logistics.** The date in January, the format and length of the demo, and what the course needs from us (repo access, a written report?). `docs/requirements.md` gives none of this. It sets when Azure is deployed for the last time and how many rehearsals the credit allows.
+8. **Repository visibility and licence.** The repo is private; if the course must see the code, the teacher needs an invitation or the repo goes public, and a public repo needs a licence (open question in `docs/decisions.md`; the 3D muscle model is MIT with its notice in `public/models`).
+9. **The permanent URL.** The Vercel project name fixes the `*.vercel.app` address, and the GitHub OAuth app and the installed PWA are tied to it. Pick the name once (the test project has two addresses now, `life-tracker-ro-bo1` and `life-tracker-ten-chi`).
+10. **Azure prerequisites only the user can do.** Check the remaining credit before each deploy, and create a second Entra test account for the live "other user denied" authorization test.
+11. **Unused tables** (Money, `api_tokens`): proposed default is to keep them (empty tables cost nothing and Azure keeps them), so the plan's "drop in one migration" step in `docs/free-hosting-plan.md` is not done unless the user asks.
 
 ## 3. Shared code (both variants)
 
