@@ -1260,8 +1260,8 @@ button.signin-continue:disabled {
   overscroll-behavior: contain;
   touch-action: none;
   animation: modalFadeIn var(--dur) var(--ease) both;
-  /* The keyboard opening or closing changes the height and offset set in modal.tsx: the card glides to its new centre. */
-  transition: height 200ms var(--ease), transform 200ms var(--ease);
+  /* No transition on the height or offset set in modal.tsx: iOS pans the page while the keyboard opens, and the
+     backdrop follows each step; a transition would chase the pan and lag behind it. */
 }
 
 @keyframes modalFadeIn {
@@ -1373,7 +1373,14 @@ button.signin-continue:disabled {
   .modal-backdrop {
     align-items: center;
     justify-content: center;
-    padding: 2rem 1rem;
+    /* The same air above and below; the Dynamic Island (top inset) and the home bar (bottom inset) count on both
+       sides so the card stays centred. */
+    padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
+  }
+  /* With the keyboard up the island still needs room, the bottom does not. */
+  .modal-backdrop[data-keyboard] {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
+    padding-bottom: 1rem;
   }
 
   .modal-card {

@@ -76,6 +76,8 @@ export function Modal({
       if (!el || !vv) return;
       el.style.height = `${vv.height}px`;
       el.style.transform = `translateY(${vv.offsetTop}px)`;
+      // The keyboard covers the bottom, so the bottom padding for the home bar is not needed then.
+      el.toggleAttribute("data-keyboard", window.innerHeight - vv.height > 120);
     };
     fit();
     vv?.addEventListener("resize", fit);
