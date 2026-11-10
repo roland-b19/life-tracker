@@ -53,8 +53,8 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
   "price-desc": (a, b) => Number(b.estimatedPrice) - Number(a.estimatedPrice),
 };
 
-const formatRon = (n: number) =>
-  n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Whole lei with the thousands separator, no decimals (the user's call): 1.234 RON.
+const formatRon = (n: number) => n.toLocaleString("ro-RO", { maximumFractionDigits: 0 });
 
 /** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
 function linkOf(value: string) {
@@ -152,7 +152,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     setErrorMsg("");
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
-    setEstimatedPrice(item ? String(Number(item.estimatedPrice)) : "");
+    setEstimatedPrice(item ? String(Math.round(Number(item.estimatedPrice))) : "");
     setUrl(item?.url ?? "");
     setIsModalOpen(true);
   }
@@ -161,13 +161,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     e.preventDefault();
     setErrorMsg("");
 
-    const parsedPrice = parseFloat(estimatedPrice);
+    const parsedPrice = Number(estimatedPrice.trim()); // unlike parseFloat, rejects trailing junk and "1,5"
     if (!name.trim()) {
       setErrorMsg("Please enter an item name.");
       return;
     }
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      setErrorMsg("Please enter a valid price greater than 0.");
+    if (!Number.isInteger(parsedPrice) || parsedPrice <= 0) {
+      setErrorMsg("Please enter a whole-number price greater than 0.");
       return;
     }
 
@@ -402,10 +402,8 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
             <label>
               Price (RON)
               <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0.01"
+                type="text"
+                inputMode="numeric"
                 value={estimatedPrice}
                 onChange={(e) => setEstimatedPrice(e.target.value)}
                 disabled={busy}

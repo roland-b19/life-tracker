@@ -17,9 +17,7 @@ function resizeTime(p: number) {
   return 1;
 }
 
-// A wash list (AutoHeight's `wash`) fades its alternating row wash out before rows move and back in after;
-// WASH matches --fade in globals.css.
-const WASH = 240;
+// A wash list (AutoHeight's `wash`) fades its alternating row wash out (--fade) while rows move and back in after.
 const holds = new WeakMap<HTMLElement, number>();
 /**
  * Marks a wash list data-settling (no wash) until every row animation running now has finished. `keep` holds it
@@ -39,8 +37,6 @@ function hold(list: HTMLElement, keep = false) {
   if (!running.length) return clear();
   Promise.allSettled(running.map((a) => a.finished)).then(clear);
 }
-// How long a row change waits for the wash to fade out first: only in a wash list whose wash is showing.
-const washWait = (list: HTMLElement | null) => (list?.closest("[data-wash]") && !list.hasAttribute("data-settling") ? WASH : 0);
 
 // The row-in stagger in globals.css needs sibling-index(), which not every browser has (Safari): new rows get the
 // same delays here, so a list that shrinks still builds one row after another (a growing one also waits for its
@@ -279,14 +275,13 @@ export function useListMotion() {
         el.style.pointerEvents = el.style.overflow = "";
         delete el.dataset.rowMotion;
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
-        // In a wash list the other rows' wash fades out first; the row sits out the alternation until it is in,
-        // so no wash jumps to another row meanwhile.
-        const wait = washWait(el.parentElement);
-        if (wait) el.dataset.entering = "";
+        // In a wash list the wash fades out while the row moves (nothing waits for it); the row sits out the
+        // alternation until it is in, so no wash jumps to another row meanwhile.
+        if (el.closest("[data-wash]")) el.dataset.entering = "";
         if (!alone(el)) {
           el.dataset.rowMotion = "";
           el.style.overflow = "hidden";
-          const open = { duration: SPACE, easing: SPACE_EASE, delay: wait, fill: "backwards" } as const;
+          const open = { duration: SPACE, easing: SPACE_EASE, fill: "backwards" } as const;
           closeGap(el, true, open);
           el.animate(spaceFrames(el).reverse(), open).finished.catch(() => {}).finally(() => {
             el.style.overflow = "";
@@ -299,9 +294,9 @@ export function useListMotion() {
         moved.current.delete(id);
         if (from?.near.isConnected)
           from.near.animate([{ [from.side]: `${from.space}px` }, { [from.side]: "0px" }], {
-            duration: SPACE, easing: SPACE_EASE, delay: wait, fill: "backwards", composite: "add",
+            duration: SPACE, easing: SPACE_EASE, fill: "backwards", composite: "add",
           });
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: wait + (alone(el) ? 120 : SPACE), easing: EASE, fill: "backwards" })
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: alone(el) ? 120 : SPACE, easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(() => {
             delete el.dataset.entering;
             done();
@@ -334,14 +329,14 @@ export function useListMotion() {
     el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
     el.style.overflow = "hidden";
-    // In a wash list the wash fades out first and comes back once the row is gone (the next hold).
-    const wait = washWait(el.parentElement);
-    if (wait) hold(el.parentElement!, true);
+    // In a wash list the wash fades out (--fade, shorter than the exit) as the row leaves and comes back once it
+    // is gone (the next hold). The row starts at once: a wait here read as lag.
+    if (el.closest("[data-wash]")) hold(el.parentElement!, true);
     // The space closes while the row fades, so the exit is one movement of about a quarter of a second.
-    const fade = el.animate(FADE_OUT, { ...FADE, delay: wait });
+    const fade = el.animate(FADE_OUT, FADE);
     let exit = fade;
     if (!alone(el)) {
-      const close = { duration: SPACE, easing: SPACE_EASE, fill: "both", delay: wait } as const;
+      const close = { duration: SPACE, easing: SPACE_EASE, fill: "both" } as const;
       const gap = closeGap(el, false, close);
       if (gap) gaps.current.set(el, gap);
       exit = el.animate(spaceFrames(el), close);

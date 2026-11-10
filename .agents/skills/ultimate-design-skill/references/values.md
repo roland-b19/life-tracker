@@ -485,7 +485,7 @@ The CSS hides the outline on `[data-pointer]`.
 | DUR | 420ms | FLIP `reorder` |
 
 **Wash and modal**
-- WASH is 240ms (`--fade`), the wait before rows move in a wash list.
+- The wash fades over `--fade` (240ms) in parallel with a row change; no row waits for it.
 - Modal: opens over `--dur`, closes with `CLOSE_MS` 420 and `FADED_MS` 280.
 
 **Sign-out and number**

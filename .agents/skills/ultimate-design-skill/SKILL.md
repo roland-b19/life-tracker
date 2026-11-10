@@ -32,7 +32,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle; the motion is evident but never showy.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **Feedback:** every change on screen is animated in order. A row fades out where it stands while its space closes. The space opens before a row fades in. The wash fades out before rows move and back in after.
+- **Feedback:** every change on screen is animated in order. A row fades out where it stands while its space closes. The space opens before a row fades in. The wash fades out while rows move (nothing waits for it) and back in after.
 - **Stability:** nothing jumps, nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
 
@@ -202,7 +202,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - A list's only row swaps with the empty note, which has the same height, so it only fades.
 6. **An edit that moves a row** (sort or filter changes its place) uses the Undo animation: the old space closes while the row enters its new place. An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
 7. **Wash lists** (Wishlist):
-   - The alternating wash fades out (240ms) before any row moves.
+   - The alternating wash fades out (240ms) while rows move; a row never waits for it (a wait read as lag).
    - It comes back only once every row animation has finished: wash out → item → wash in.
    - A row still entering sits out the alternation, so no other row's wash flips meanwhile.
    - The wash shows only after the list has loaded.
@@ -271,7 +271,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 - Units go in the label ("Price (RON)"). Optional fields say "(optional)". Fields have no placeholders. The meal form is the one exception: all four numbers (calories, protein, carbs, fat) save 0 when blank, so their labels keep only the unit ("Protein (g)").
 - Sentence case for controls and titles ("Newest"). The Wishlist summary title "Estimated Investment" is the one signed-off exception; do not copy it.
 - Ranges are short and tight so the filter buttons fit a phone: "< 250", "250-750" (hyphen, no spaces), "750+". The Wishlist sort says "Price ↑" (lowest first) and "Price ↓" (highest first): text arrows, since a native select cannot hold an SVG.
-- Money uses `ro-RO` formatting with 2 decimals, then a muted "RON".
+- Money uses `ro-RO` formatting (thousands dot) with no decimals on the Wishlist (whole lei, the user's call), then a muted "RON".
 - A busy label ends in three dots: "Saving...", "Signing in...".
 - All UI text is English, the Food Assistant included ("Send", "Sending...", "Calculating macros..."). Only the AI's replies follow the language the user writes in.
 - `BarChart` and `LineChart` carry a text summary for screen readers (`role="img"`, or `group` for button bars, with an `aria-label`). `HBars` needs none: its values are text.
