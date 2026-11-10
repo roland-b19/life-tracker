@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { isClaudeEnabled } from "@/lib/features";
+
+// Each page renders its own Navigation, so the tab bar is new on every page change; the thumb starts at the tab
+// the last page had and slides to this one.
+let lastTab: number | null = null;
 
 interface NavigationProps {
   userName: string;
@@ -92,6 +96,14 @@ export function Navigation({ userName }: NavigationProps) {
   const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
   const initial = userName.charAt(0).toUpperCase();
+  const active = moreActive || moreOpen ? primary.length : primary.findIndex((l) => l.isActive);
+  const bar = useRef<HTMLElement>(null);
+  const [start] = useState(lastTab ?? active); // rendered once; the effect moves the thumb, so the change transitions
+  useEffect(() => {
+    lastTab = active;
+    bar.current?.style.setProperty("--i", String(Math.max(active, 0)));
+    bar.current?.toggleAttribute("data-idle", active < 0);
+  }, [active]);
   // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
   const router = useRouter();
   const { showToast } = useToast();
@@ -190,7 +202,13 @@ export function Navigation({ userName }: NavigationProps) {
           </div>
         </>
       )}
-      <nav className="tabbar" aria-label="Mobile Navigation">
+      <nav
+        ref={bar}
+        className="tabbar"
+        aria-label="Mobile Navigation"
+        data-idle={start < 0 ? "" : undefined}
+        style={{ "--n": primary.length + 1, "--i": Math.max(start, 0) } as CSSProperties}
+      >
         {primary.map((link) => (
           <NextLink
             key={link.href}

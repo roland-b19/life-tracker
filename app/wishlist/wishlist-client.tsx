@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -85,6 +85,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
 
   const { showToast } = useToast();
   const { rowRef, enter, leave, move, fadeAll } = useListMotion();
+  const itemsCard = useRef<HTMLElement>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -105,7 +106,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     .filter((item) => listRange === "all" || rangeOf(item) === listRange)
     .sort(SORT_BY[view.sort]);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
-  const [shownItems, moreItems] = useMore(filteredItems);
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
@@ -126,15 +126,30 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     else leave(to.id, write);
   }
 
+  // A tab or sort change is one simple movement: the old rows fade out, then the new list fades in as a whole
+  // (rows never build one after another here, and the page itself loads its list at once).
+  function swapList(change: () => void) {
+    fadeAll(() => {
+      change();
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      // React has committed by the next frame, before it paints.
+      requestAnimationFrame(() =>
+        itemsCard.current
+          ?.querySelector(".wishlist-entries")
+          ?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }),
+      );
+    });
+  }
+
   function switchRange(next: "all" | Priority) {
     if (next === filterRange) return;
     setFilterRange(next);
-    fadeAll(() => setView((v) => ({ ...v, range: next })));
+    swapList(() => setView((v) => ({ ...v, range: next })));
   }
 
   function switchSort(next: Sort) {
     setSort(next);
-    fadeAll(() => setView((v) => ({ ...v, sort: next })));
+    swapList(() => setView((v) => ({ ...v, sort: next })));
   }
 
   function openForm(item?: WishlistItemData) {
@@ -268,7 +283,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="surface" aria-labelledby="wishlist-items-title">
+          <section ref={itemsCard} className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
               <h2 id="wishlist-items-title" className="section-title">
                 Items <span className="muted number-tabular">{filteredItems.length}</span>
@@ -314,9 +329,9 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
-                // Keyed by the filter so every row replays its entrance when the tab changes.
+                // Keyed by the filter, so a tab change replaces the rows.
                 <Fragment key={`${listRange}-${view.sort}`}>
-                  {shownItems.map((item) => (
+                  {filteredItems.map((item) => (
                     <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -349,14 +364,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                       </div>
                     </div>
                   ))}
-                  {moreItems}
                 </Fragment>
               )}
             </AutoHeight>
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby="wishlist-summary-title">
             <div className="section-head">
               <h2 id="wishlist-summary-title" className="section-title">

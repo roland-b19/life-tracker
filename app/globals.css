@@ -226,6 +226,11 @@ h3 {
   min-width: 0;
 }
 
+/* A summary that sits above its list on a phone, beside it on a wide screen (Wishlist) */
+@media (max-width: 991.98px) {
+  .summary-first { order: -1; }
+}
+
 .topbar,
 .form-row,
 .entry-row {
@@ -328,8 +333,14 @@ h3 {
   right: 0.75rem;
   bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 850;
-  display: flex;
+  /* Like the Segmented control: --n tabs, --i the active one, a thumb that slides to it, a gap that keeps the
+     pills apart */
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  --tab-gap: 0.25rem;
+  column-gap: var(--tab-gap);
   align-items: stretch;
+  isolation: isolate;
   padding: 0.25rem;
   background: rgba(28, 28, 30, 0.72);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
@@ -338,8 +349,22 @@ h3 {
   border-radius: 1.5rem;
 }
 
+.tabbar::before {
+  content: "";
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0.25rem;
+  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--tab-gap)) / var(--n));
+  border-radius: 1.25rem;
+  background: var(--tint-subtle);
+  transform: translateX(calc(var(--i) * (100% + var(--tab-gap))));
+  transition: transform var(--dur) var(--ease), opacity var(--fade);
+  z-index: -1;
+}
+.tabbar[data-idle]::before { opacity: 0; }
+
 .tab-item {
-  flex: 1;
   min-width: 0;
   min-height: 3.25rem;
   display: flex;
@@ -358,18 +383,21 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--fade), background var(--fade);
+  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
-/* No transforms on tab items: scaling a glyph over a backdrop-filter bar leaves it blurry after the tap. */
+/* The press pulse is the Segmented tab's: the item shrinks by 4px a side (--press) and springs back. */
+.tab-item:active {
+  transform: scale(var(--press));
+}
 .tab-item svg {
   width: 1.4rem;
   height: 1.4rem;
 }
 
+/* The highlight is the bar's sliding thumb, not the item's own fill */
 .tab-item.active {
   color: var(--tint);
-  background: var(--tint-subtle);
 }
 
 .more-scrim {
@@ -894,9 +922,6 @@ button {
 button:active:not(:disabled) {
   transform: scale(var(--press));
 }
-
-/* The More tab is a button: scaling a glyph over the bar's backdrop blur makes it tremble */
-button.tab-item:active:not(:disabled) { transform: none; }
 
 button:disabled {
   cursor: not-allowed;
@@ -1927,36 +1952,39 @@ main > .error {
 }
 
 /* Wishlist rows share the list's columns (subgrid), so every price box, range box and link starts and ends at
-   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists put
-   the name and actions over the boxes (the actions sit on the name's line, which leaves them room). */
-.wishlist-entries { grid-template-columns: auto auto minmax(0, 1fr); column-gap: 0.75rem; }
-.wishlist-entries:not(:has(.item-range)) { grid-template-columns: auto minmax(0, 1fr); }
+   the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists
+   stack the name, the price and range boxes and the link, with the actions in their own column, centred on the
+   whole item. A row without a link has no third line. */
+.wishlist-entries { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
 .wishlist-entries > * { grid-column: 1 / -1; }
 .item-row {
   display: grid;
   grid-template-columns: subgrid;
-  grid-template-areas: "name name name" "price range link";
+  grid-template-areas: "name name actions" "price range actions" "link link actions";
   align-items: center;
   row-gap: 0.4rem;
 }
-.wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name name" "price link"; }
-.item-row > .item-actions { grid-area: name; justify-self: end; }
-.item-row > .item-name { padding-inline-end: calc(88px + 1.5rem); } /* the two 44px actions, their gap and one more */
+.item-row > .item-actions { grid-area: actions; justify-self: end; }
 .item-meta { display: contents; }
 .item-price { grid-area: price; justify-content: center; white-space: nowrap; }
-.item-range { grid-area: range; justify-content: center; }
+.item-range { grid-area: range; justify-self: start; justify-content: center; white-space: nowrap; }
 :is(.item-link, .item-link-text) { grid-area: link; }
 @container (min-width: 34rem) {
-  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; }
+  .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
   .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
   .item-row { grid-template-areas: "name price range link actions"; }
   .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
-  .item-row > .item-actions { grid-area: actions; }
-  .item-row > .item-name { padding-inline-end: 0; }
+  .item-range { justify-self: stretch; }
+}
+@container (max-width: 33.99rem) {
+  .item-row > .item-actions { flex-direction: column; gap: 0.5rem; } /* a phone has no room for the price, the range and two buttons side by side */
+  .item-row:not(:has(.item-link, .item-link-text)) { grid-template-areas: "name name actions" "price range actions"; }
 }
 
-/* The empty note takes one wishlist row's space: two lines when narrow, one 60px line when wide */
-.wishlist-entries { --row-h: 5.9rem; }
+@container (max-width: 18rem) { .item-range { white-space: normal; } } /* a 320px phone: let the range wrap instead of running under the buttons */
+
+/* The empty note takes one wishlist row's space: two stacked buttons when narrow, one 60px line when wide */
+.wishlist-entries { --row-h: 6.25rem; }
 @container (min-width: 34rem) { .wishlist-entries { --row-h: 3.75rem; } }
 
 /* Compact sort menu in a card header. The text is centred between the left edge and the chevron
@@ -2795,6 +2823,8 @@ button.bars-col:focus-visible {
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
 }
+/* The Wishlist loads its list at once, and a tab change fades the whole list (wishlist-client.tsx). */
+.wishlist-entries > :is(.item-row, .empty-note) { animation: none; }
 /* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
 .week-btn {
   animation: row-in 260ms var(--ease) backwards;
@@ -3147,5 +3177,25 @@ button.bars-col:focus-visible {
   select.sort-select,
   textarea {
     font-size: 1rem;
+  }
+}
+
+/* Portrait only on a phone. A web page cannot lock the orientation in a browser tab (the installed app does, through
+   the manifest), so a phone turned sideways is covered until it is turned back. Tablets and desktops are taller than
+   500px in landscape, so they are not affected. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  body::after {
+    content: "Rotate your phone back to portrait";
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: #000;
+    color: var(--secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-align: center;
   }
 }

@@ -78,7 +78,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Gaps between tags equal gaps between row buttons, and those equal the header gap (.75rem). The .4rem `.badge-row` gap is only for small badges that belong to a name (Tasks weekdays, reminder), not for tags beside buttons. Those badges sit on the name's line and wrap only when the line is full, never on a line of their own.
 - **Everything is centred against its object.**
   - Text is vertically centred in its row.
-  - Row buttons are centred on the row, never on its first or last line. The one exception is a narrow Wishlist row: its actions sit on the name's line, right-aligned, so the tags below keep the full width.
+  - Row buttons are centred on the row, never on its first or last line. On a phone a Wishlist row has its own column for the actions: Edit above Delete, centred on the whole item (name, tags and link), at the card's right edge.
   - Sort text is centred against its chevron (`text-align-last: center`).
   - The add button is centred in its header slot.
   - Toast buttons are centred in the toast. The action is at least 44×36 and the close button 36px square; both reach 44pt through `::before`.
@@ -87,7 +87,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - A control that appears later is always rendered and hidden with `visibility: hidden` (muscle map "Show all").
   - An empty list keeps one row's height (`--row-h`). One exception: a Gym exercise's set list collapses to nothing until its first set, since the target line above already says what to log.
   - Cards never jump.
-- **One line where it fits.** On a wide card a Wishlist row is one line: name, price, range, link, actions. On a phone it wraps to name, then tags. Tags and link start on the left. Price badges share one column width on every row, on a phone too (see the next rules).
+- **One line where it fits.** On a wide card a Wishlist row is one line: name, price, range, link, actions. On a phone it wraps to name, then price and range, then the link on its own line, with the actions in their own column. Tags and link start on the left. Price badges share one column width on every row, on a phone too (see the next rules).
 - **A total sits next to its title**, muted and tabular: `Items 12`, `Tasks 4`, `Meals 3`, `Shopping list 7`, `Categories 5`, `History 20`. A list still loading shows no total yet.
 - **Counts and totals follow the filter.** The count next to the title and the summary amount always show the active filter, not the whole list.
 - **Never repeat what every row says.** A tag that would be identical on every visible row is hidden: the range badge appears only in the All tab.
@@ -97,7 +97,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Value first, details muted.** The main value comes first. Dates and other secondary data are muted (`--secondary`), with a clear gap: a muted detail after its value on the same line is 1.25rem away, baseline-aligned (`.weight-main`).
 - **Full-width selectors.** A `Segmented` control spans the full card width, with centred labels. The one exception is the muscle map's Front/Back switch: a 10rem control laid over the 3D model.
 - **One card level.** Never nest a card in a card. Only the outer box is a `.surface` and gets the entrance; inner groups are plain bands or rows. Gym Training days are the exception: seven selectable `--surface-solid` cards inside the split card.
-- **The list goes first.** The list the user works in is the main (first) column; a card that supports it (a summary, or the Categories that manage its groups) goes in the aside (second column). Categories are added, renamed and deleted in their own card, never inside the list they group.
+- **The list goes first.** The list the user works in is the main (first) column; a card that supports it (a summary, or the Categories that manage its groups) goes in the aside (second column); on a phone, where the columns stack, a summary card goes above the list (`summary-first`). Categories are added, renamed and deleted in their own card, never inside the list they group.
 - **No sticky panels.** Cards and panels scroll with the page. Only the sidebar and tab bar are fixed.
 - **Forms align.** All fields share one column and one width. A checkbox is centred on its label text.
 
@@ -187,9 +187,9 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - Exit: 120ms fade with scale to .985.
    - Enter: 260ms rise of 8px, after a 40ms delay.
    - No blur.
-   - The sidebar and tab bar do not animate.
+   - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
 2. **Cards rise in on load.** 14px up and fade, staggered 0/40/80/120ms.
-3. **Rows build one after another** on page load and after every switch.
+3. **Rows build one after another** on page load and after every switch, except on the Wishlist (user's call, 2026-11-10): its rows are there at once, with no stagger and no wash fade-in; switching a price range or the sort fades the old rows out (120ms) and the whole new list in (200ms). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
    - `row-in`: opacity 0 and scale .97, 260ms, 30ms apart, capped at the 11th row.
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
    - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.

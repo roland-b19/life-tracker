@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (3b and baseline merged, PR #73 and #74; final audit 3c on branch `chore/final-audit`)_
+_Last updated: 2026-11-10 by Claude (mobile polish 1 on branch `fix/mobile-polish-1`; 3c merged)_
 
 ## Phase
 
@@ -149,6 +149,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
+- 2026-11-10 — Mobile polish 1 (Claude Code, branch `fix/mobile-polish-1`, from the user's phone test): Wishlist rows load at once (no row-in stagger, no wash fade-in) and a price-range or sort switch fades the whole list; no More button on Wishlist; on a phone the Estimated Investment card sits above the list, the link is on its own line and Edit/Delete are stacked in their own column, centred on the item; the bottom tab bar has a gap between items, a sliding highlight thumb (it keeps sliding across the page change) and the press pulse; portrait only (manifest, `screen.orientation.lock` try, and a CSS rotate-back overlay for phones in landscape, since iOS Safari cannot lock a browser tab). The `ultimate-design-skill` is updated, including the reversal of "tab-bar items never transform". Checked in the in-app browser at 320, 375 and 700px; eslint, tsc, 157 tests green. Not tested on a physical phone; the glyph crispness after the pulse and the landscape overlay need a real device. No migration, no dependency.
 - 2026-11-10 — Dependabot and test data (Claude Code, PR #76): the four open dependency PRs (#67 eslint-config-next, #68 next 16.4.5, #69 eslint 10, #70 three) were each tested on top of current `main` (eslint, tsc, 157 tests, production build, `npm audit` no high) and merged; `seed:dev` also fills 8 wishlist items. Test user for the phone run: `npm run seed:dev -- test` after opening Gym once. Not verified: the phone itself, and the 3D muscle map after the `three` bump by eye.
 
 - 2026-11-10 — Final audit 3c (Claude Code, branch `chore/final-audit`): audit by area (ponytail, secure-development, code-review-guide), then fixes: shared `isoDate`/`uuid` validators, gym ownership checks, wishlist price floor, `APP_TZ`, pinch zoom allowed with 16px touch fields (browser-checked at phone width), gym history order, Claude CLI caps, https-only push endpoints, same-origin notification clicks, one `loadTodosViewAction` for a Tasks day switch (browser-checked: day and week load). New gates: every server action refuses anonymous callers, every page checks the session, query budget for the day switch (12 queries, 20 KB). Checks: eslint, tsc, 157/157 vitest, production build, container build (non-root), `npm audit`. Not covered: Trivy and gitleaks (CI), Lighthouse, `EXPLAIN` on Neon, backup restore, sign-in against real Entra or GitHub; the `/todos` view still runs the carry-over UPDATE per space on every load and sends every ticked date of repeating tasks; decisions pending are listed above.

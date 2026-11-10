@@ -171,7 +171,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 - `--press` is measured for `.surface`, `.split-day-card`, `.macro-card`, `.routine-row`, `.side-user`, `.nav-link`, `.month-nav-btn`, buttons and fields.
 - Only these press: `:active` scale applies to buttons, `.nav-link`, `.delete-icon-btn` and `.picker-cell`, transitioned with `--lift`.
 - Cards and fields never press. The active segment and chart bars opt out with `transform: none`.
-- Tab-bar items never transform: scaling a glyph over a backdrop-filter leaves it blurry. The More tab is a `button`, so `button.tab-item:active` sets `transform: none` against the global press.
+- Tab-bar items take the same press pulse as every button (`.tab-item` is in `LIFTS` in `providers.tsx`), which reverses the earlier "never transform" rule at the user's request (2026-11-10: "the same animation as the price-range tab, the pulse plus the highlight change"). Check on a real phone that the glyph is crisp again after release.
 
 ## Buttons
 
@@ -531,7 +531,7 @@ The CSS hides the outline on `[data-pointer]`.
 **Tab bar (below 1024px)**
 - Fixed: left and right .75rem, bottom `.5rem + safe-area`, padding .25rem, radius 1.5rem.
 - Glass: `rgba(28,28,30,.72)`, `blur(28px) saturate(160%)`.
-- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; colour and background fade with `--fade`, never a transform.
+- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; colour fades with `--fade`, the press pulse is `scale(var(--press))` over `--lift`. The selected item's highlight is the bar's own thumb (`.tabbar::before`, `--tint-subtle`, radius 1.25rem): it slides to the new tab with `--dur` `--ease`, like the Segmented thumb, and keeps sliding across the page change (`lastTab` in `navigation.tsx`); on a page with no tab (Settings) it fades out. Tab items are a grid with a .25rem gap (`--tab-gap`).
 - More opens a menu (`--surface-modal`, radius 1.25rem, bottom `5.25rem + safe-area`) with `modalScaleUp` from the bottom right, over a scrim with an 8px blur. It closes on Escape and on a backdrop tap, at once, with no exit animation; so does the date picker pop-up. The menu is `role="dialog"` and its links set `aria-current="page"` like the sidebar and tab bar.
 
 **Sidebar (≥1024px)**
@@ -575,3 +575,6 @@ The CSS hides the outline on `[data-pointer]`.
 | `prefers-reduced-motion: reduce` | animation and transition durations become .01ms; view transitions 0s; the `.skeleton` shimmer stops (a static placeholder) |
 
 Sources: `app/globals.css`, `app/providers.tsx`, `app/components/{list-motion,modal,toast,segmented,animated-number,charts,navigation}.tsx`, `app/template.tsx`, `app/layout.tsx`, `app/signin/page.tsx`.
+
+**Portrait only (phone)**
+- `manifest.json` has `orientation: portrait`; `providers.tsx` also tries `screen.orientation.lock("portrait")` (ignored where unsupported). A browser tab on iOS cannot be locked from the web, so a phone in landscape (`orientation: landscape`, height up to 500px, coarse pointer) shows a black full-screen "Rotate your phone back to portrait" overlay (`body::after` at the end of `globals.css`).
