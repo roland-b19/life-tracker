@@ -31,9 +31,9 @@ Copy this pattern for every list page. It is what the user approved in `app/wish
 | Method | What it does |
 |---|---|
 | `rowRef(id)` | put on every row (and `rowRef("empty")` on the empty note) |
-| `enter(id)` | call *before* adding the row to state: in a wash list the wash fades out (100ms), the rows below glide down (240ms), then the row fades in (180ms), then the wash returns |
-| `leave(id, remove)` | in a wash list the wash fades out first (100ms); then the row fades in place (160ms) while the rows below glide up (240ms); `remove` runs at the end and must drop it from state; the wash returns as the movement ends, not after the commit |
-| `move(id, change)` | for an edit that changes the row's place: `move` = `leave` then `enter`: the wash fades out, the row fades out in place, `change` runs, the rows between glide to make space, the row fades in at the new place, the wash returns |
+| `enter(id)` | call *before* adding the row to state: in a wash list the wash fades out (100ms), the rows below glide down (240ms), then the row fades in (240ms), then the wash returns |
+| `leave(id, remove)` | in a wash list the wash fades out first (100ms); then the row fades out in place (240ms), then the rows below glide up (240ms); `remove` runs at the end and must drop it from state; the wash returns as the movement ends, not after the commit |
+| `move(id, change)` | for an edit that changes the row's place: `move` = `leave` then `enter`, in the same total time as a delete or add (120 + 240 + 120): the wash fades out, the row fades out in place (120ms), `change` runs, the rows between glide to make space, the row fades in at the new place, the wash returns |
 
 Add, delete and move share one animation: a FLIP glide of the siblings (`transform` only, 240ms `cubic-bezier(.4,0,.2,1)`) plus a row fade, and the card follows with one height animation. Never animate a row's height, margin or top. `data-hold` and `data-flip` on the card are set and cleared by the hook; in a wash list every animation starts after a 100ms wait (`--flip-delay` on the card), and a pure reorder still eases the held card back to its height (`growBox`).
 | `fadeAll(then)` | every row fades together (120ms), then `then` switches the view |

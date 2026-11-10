@@ -266,10 +266,14 @@ const FADE_OUT: Keyframe[] = [
   { opacity: 0, transform: "scale(0.97)" },
 ];
 const FADE = { duration: 160, easing: EASE, fill: "forwards" } as const;
+// Every list change takes the same time, 2 x MOVE, between the wash fading out and back in: a delete fades the row, then
+// closes the space; an add opens the space, then fades the row in; a move fades the row out (QUICK), glides the rows (MOVE)
+// and fades it in (QUICK).
+const QUICK = 120;
 const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
 // A list's only row swaps with its empty note, which takes the same space, so it only fades.
 const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
-const FADE_IN = 180; // starts once the space is open (after MOVE), like row-in in .auto-height
+const FADE_IN = MOVE; // starts once the space is open (after MOVE), like row-in in .auto-height
 
 // A control that goes away with its view (Tasks' Week button) fades like a leaving row, then `remove` runs.
 // Cancelling the fade (the control is wanted again) skips `remove`. It comes back with row-in from globals.css.
@@ -291,6 +295,8 @@ export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
   const entering = useRef(new Map<string, () => void>());
   const leaving = useRef(new WeakSet<HTMLElement>());
+  // Rows that left for a move: they fade back in QUICK, like they faded out.
+  const quick = useRef(new Set<string>());
   // Where the rows were when the next `enter` was called: they glide from there to where the commit puts them.
   const before = useRef<Map<HTMLElement, number> | null>(null);
   // What a leaving row holds in place (the rows after it have glided up, the card has shrunk) until it is removed.
@@ -356,7 +362,7 @@ export function useListMotion() {
         // A row that moved leaves the list as tall as before, so AutoHeight sees no change: the card grows back itself.
         if (freed) growBox(freed.box, freed.from);
         // A row fades in only once its space is fully open, so it is never seen clipped.
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: wait + (alone(el) ? 120 : MOVE), easing: EASE, fill: "backwards" })
+        el.animate([...FADE_OUT].reverse(), { duration: quick.current.delete(id) ? QUICK : FADE_IN, delay: wait + (alone(el) ? 120 : MOVE), easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(() => {
             delete el.dataset.entering;
             done();
@@ -377,7 +383,7 @@ export function useListMotion() {
         before.current = positions(nodes.current.values());
         // A row added outside the current filter never mounts; forget it so it does not glide later.
         // Long enough for pages that refetch the list before the row mounts (Tasks).
-        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), done()), 2000);
+        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), quick.current.delete(id), done()), 2000);
       }),
     [],
   );
@@ -401,19 +407,21 @@ export function useListMotion() {
     const motion: Animation[] = [];
     const glides: Animation[] = [];
     let box: HTMLElement | null = null;
-    if (!alone(el)) {
-      // The rows after it glide up over it and the card shrinks in step; the row itself stays in place until `remove`.
+    // A delete fades the row first, then the rows glide up over it and the card shrinks; a move only fades the row
+    // (the rows glide once it has been placed again, see `enter`). The row itself stays in place until `remove`.
+    const fade = moving ? QUICK : MOVE;
+    const glide = wait + fade;
+    if (!alone(el) && !moving) {
       const d = el.offsetHeight + gapOf(el);
       for (let next = el.nextElementSibling; next; next = next.nextElementSibling)
-        glides.push(next.animate([{ transform: "none" }, { transform: `translateY(${-d}px)` }], { duration: MOVE, delay: wait, easing: MOVE_EASE, fill: "forwards", composite: "add" }));
+        glides.push(next.animate([{ transform: "none" }, { transform: `translateY(${-d}px)` }], { duration: MOVE, delay: glide, easing: MOVE_EASE, fill: "forwards", composite: "add" }));
       box = el.closest<HTMLElement>(".auto-height");
-      if (box) shrinkBox(box, d, wait);
+      if (box) shrinkBox(box, d, glide);
       flipTiming(el);
       // A clock for the whole movement (translate is a property nothing else animates), so `remove` lands as it ends.
-      motion.push(el.animate({ translate: ["0 0", "0 0"] }, { duration: MOVE, delay: wait }));
+      motion.push(el.animate({ translate: ["0 0", "0 0"] }, { duration: MOVE, delay: glide }));
     }
-    // The row fades where it stands while the space closes, so the exit is one movement of about a quarter of a second.
-    motion.push(el.animate(FADE_OUT, { ...FADE, delay: wait }));
+    motion.push(el.animate(FADE_OUT, { ...FADE, duration: alone(el) ? FADE.duration : fade, delay: wait }));
     held.current.set(el, { glides, box });
     Promise.all(motion.map((a) => a.finished)).catch(() => {}).finally(() => {
       // The wash comes back as the movement ends, not after the commit that removes the row (a slow phone would
@@ -434,7 +442,7 @@ export function useListMotion() {
       };
       // Out like a delete (the row fades while its space closes), then in like an add (space opens, the row fades in).
       if (!el || reducedMotion() || alone(el)) return go();
-      leave(id, go, true);
+      leave(id, () => (quick.current.add(id), go()), true);
     },
     [enter, leave],
   );

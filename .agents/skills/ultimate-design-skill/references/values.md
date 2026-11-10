@@ -478,11 +478,12 @@ The CSS hides the outline on `[data-pointer]`.
 
 | Name | Value | What it does |
 |---|---|---|
-| FADE | 160ms `--ease`, forwards | a leaving row, to opacity 0 and scale .97 |
+| FADE | 160ms `--ease`, forwards | the only row of a list, leaving (a row with neighbours fades in MOVE, or QUICK in a move), to opacity 0 and scale .97 |
+| QUICK | 120ms | a moved row's fade out and fade in (the move's glide sits between them, so it takes as long as a delete or add) |
 | SWITCH | 120ms | `fadeAll` |
 | MOVE | 240ms with MOVE_EASE `cubic-bezier(.4,0,.2,1)` | a row's space opening or closing, and the card height |
 | WASH | 100ms (`--wash`) | wash fade-out before rows move; every row animation in a wash list starts after it |
-| FADE_IN | 180ms | starts after MOVE (and WASH); after 120ms when the row is the list's only row |
+| FADE_IN | 240ms (= MOVE) | starts after MOVE (and WASH); after 120ms when the row is the list's only row |
 | DUR | 420ms | FLIP `reorder` |
 
 **Wash and modal**
