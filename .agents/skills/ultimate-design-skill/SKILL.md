@@ -188,7 +188,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - Enter: 180ms rise of 8px, after a 20ms delay. The whole transition (and its click block) is 200ms.
    - No blur.
    - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
-2. **Cards rise in on load.** 14px up and fade over 300ms, staggered 0/30/60/90ms.
+2. **Cards rise in on load.** 14px up and fade over 300ms, all together (the toolbar too) on every page, the Gym one. No delay by position: `nth-child` counts a page's wrappers, so a stagger ran in a different order on each page.
 3. **Rows build one after another** on page load only. After that a view switch (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick; the user's call, 2026-11-10, applied to every page) fades the old rows out (120ms), then the whole new list in (200ms), and the card resizes at once. In code: `useBuilt()` adds `built` to the list's class after 700ms (globals.css turns the rows' own entrance off), and `swapIn(card)` runs just before the state change that swaps the rows (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
    - `row-in`: opacity 0 and scale .97, 260ms, 20ms apart, capped at the 9th row.
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.

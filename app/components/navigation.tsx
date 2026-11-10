@@ -18,6 +18,9 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  // A More-menu page is opening: the thumb stays on More until the new page's own bar takes over, instead of sliding
+  // back to the page the user is leaving.
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -96,7 +99,7 @@ export function Navigation({ userName }: NavigationProps) {
   const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
   const initial = userName.charAt(0).toUpperCase();
-  const active = moreActive || moreOpen ? primary.length : primary.findIndex((l) => l.isActive);
+  const active = moreActive || moreOpen || opening ? primary.length : primary.findIndex((l) => l.isActive);
   const bar = useRef<HTMLElement>(null);
   const [start] = useState(lastTab ?? active); // rendered once; the effect moves the thumb, so the change transitions
   useEffect(() => {
@@ -193,7 +196,10 @@ export function Navigation({ userName }: NavigationProps) {
                 href={link.href}
                 className={`nav-link ${link.isActive ? "active" : ""}`}
                 aria-current={link.isActive ? "page" : undefined}
-                onClick={() => setMoreOpen(false)}
+                onClick={() => {
+                  setOpening(true);
+                  setMoreOpen(false);
+                }}
               >
                 {link.icon}
                 <span>{link.label}</span>
@@ -215,7 +221,10 @@ export function Navigation({ userName }: NavigationProps) {
             href={link.href}
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
-            onClick={() => setMoreOpen(false)}
+            onClick={() => {
+              setOpening(false);
+              setMoreOpen(false);
+            }}
           >
             {link.icon}
             <span>{link.label}</span>
@@ -226,7 +235,10 @@ export function Navigation({ userName }: NavigationProps) {
           className={`tab-item ${moreActive || moreOpen ? "active" : ""}`}
           aria-expanded={moreOpen}
           aria-controls="more-menu"
-          onClick={() => setMoreOpen((v) => !v)}
+          onClick={() => {
+            setOpening(false);
+            setMoreOpen((v) => !v);
+          }}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="5" cy="12" r="1.8" />

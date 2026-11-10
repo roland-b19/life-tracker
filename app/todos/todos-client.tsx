@@ -79,7 +79,7 @@ export function TodosClient({
   const [moveOpen, setMoveOpen] = useState(false);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave, fadeAll, reorder } = useListMotion();
+  const { rowRef, enter, leave, move, fadeAll } = useListMotion();
   const tasksCard = useRef<HTMLElement>(null);
   const built = useBuilt();
   const { later, runAfterClose } = useAfterClose();
@@ -365,34 +365,37 @@ export function TodosClient({
     }
   };
 
-  // The streak moves with the tick, counted as the server counts it; the row slides to its new place.
-  const setCompleted = (id: string, isCompleted: boolean) =>
-    reorder(() =>
-      setTodosMap((prev) => ({
-        ...prev,
-        [space]: prev[space]
-          .map((t) => {
-            if (t.id !== id) return t;
-            const next = { ...t, isCompleted, completedAt: isCompleted ? new Date() : null };
-            if (!t.isRecurring) return next;
-            const doneDates = isCompleted ? [...new Set([...t.doneDates, date])].sort() : t.doneDates.filter((d) => d !== date);
-            return { ...next, doneDates, streak: streakOn(new Set(doneDates), t.recurrencePattern, date) };
-          })
-          .sort(compareTodos),
-      })),
-    );
+  // The streak moves with the tick, counted as the server counts it. A tick that moves the row takes it out and puts
+  // it back at its new place like a Wishlist edit (wash out, row fades, space opens, row fades in, wash in).
+  const setCompleted = (id: string, isCompleted: boolean) => {
+    const apply = (list: TodoItem[]) =>
+      list
+        .map((t) => {
+          if (t.id !== id) return t;
+          const next = { ...t, isCompleted, completedAt: isCompleted ? new Date() : null };
+          if (!t.isRecurring) return next;
+          const doneDates = isCompleted ? [...new Set([...t.doneDates, date])].sort() : t.doneDates.filter((d) => d !== date);
+          return { ...next, doneDates, streak: streakOn(new Set(doneDates), t.recurrencePattern, date) };
+        })
+        .sort(compareTodos);
+    const write = () => void setTodosMap((prev) => ({ ...prev, [space]: apply(prev[space]) }));
+    const at = (list: TodoItem[]) => list.findIndex((t) => t.id === id);
+    if (at(todosMap[space]) === at(apply(todosMap[space]))) return write();
+    return move(id, write);
+  };
 
   const handleToggleTodo = async (todo: TodoItem) => {
     const next = !todo.isCompleted;
     ++requestId.current;
-    setCompleted(todo.id, next);
+    const placed = setCompleted(todo.id, next);
     try {
       // No toast: ticking again is its own undo.
       await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: date });
     } catch {
       showToast({ message: "Failed to update task", type: "warning" });
     }
-    // Refresh to pick up the server-computed streak.
+    // Refresh to pick up the server-computed streak, once the row has finished moving.
+    await placed;
     await loadDay();
   };
 

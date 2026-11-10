@@ -433,17 +433,19 @@ export function useListMotion() {
 
   // Runs `change` (a state update that moves a row): the row leaves like a deleted one, then `change` puts it
   // at its new place, where it enters like an added row (the rows glide, then it fades in).
+  // Resolves when the row has entered its new place, so a caller can hold a refetch until then.
   const move = useCallback(
-    (id: string, change: () => void) => {
-      const el = nodes.current.get(id);
-      const go = () => {
-        void enter(id);
-        change();
-      };
-      // Out like a delete (the row fades while its space closes), then in like an add (space opens, the row fades in).
-      if (!el || reducedMotion() || alone(el)) return go();
-      leave(id, () => (quick.current.add(id), go()), true);
-    },
+    (id: string, change: () => void) =>
+      new Promise<void>((done) => {
+        const el = nodes.current.get(id);
+        const go = () => {
+          void enter(id).then(done);
+          change();
+        };
+        // Out like a delete (the row fades while its space closes), then in like an add (space opens, the row fades in).
+        if (!el || reducedMotion() || alone(el)) return go();
+        leave(id, () => (quick.current.add(id), go()), true);
+      }),
     [enter, leave],
   );
 

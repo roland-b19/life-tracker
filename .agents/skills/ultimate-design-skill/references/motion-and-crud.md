@@ -26,7 +26,7 @@ Copy this pattern for every list page. It is what the user approved in `app/wish
 - Glides `data-slide` boxes to new columns.
 - `wash` turns on the alternating band wash that fades out and back in around every change. Use it on the main card list of a page (Wishlist).
 
-**`useListMotion()`** returns `{ rowRef, enter, leave, move, fadeAll, reorder }`.
+**`useListMotion()`** returns `{ rowRef, enter, leave, move, fadeAll, reorder }`; `move` returns a promise (resolved when the row has entered).
 
 | Method | What it does |
 |---|---|
@@ -37,7 +37,7 @@ Copy this pattern for every list page. It is what the user approved in `app/wish
 
 Add, delete and move share one animation: a FLIP glide of the siblings (`transform` only, 240ms `cubic-bezier(.4,0,.2,1)`) plus a row fade, and the card follows with one height animation. Never animate a row's height, margin or top. `data-hold` and `data-flip` on the card are set and cleared by the hook; in a wash list every animation starts after a 100ms wait (`--flip-delay` on the card), and a pure reorder still eases the held card back to its height (`growBox`).
 | `fadeAll(then)` | every row fades together (120ms), then `then` switches the view |
-| `reorder(change)` | FLIP: rows slide to new places (420ms), for in-place reorders such as a ticked task sinking |
+| `reorder(change)` | FLIP: rows slide to new places (420ms), for drag sorting |
 
 **`useAfterClose()`** (`app/components/modal.tsx`) returns `{ later, runAfterClose }`.
 - `later(change)` holds a list change until the form has faded.
@@ -206,13 +206,17 @@ function openForm(item?) {
 - Every filter, sort or selection change fades out first; none swaps rows instantly.
 - A control that only exists in one view (Tasks' Week button, Daily only) leaves with the row fade, `fadeOut(el, remove)` from `list-motion.tsx`, and comes back with `row-in` (CSS `animation: row-in 260ms var(--ease) backwards`). Keep it mounted until the fade ends, and cancel the fade if the view comes back first. No new keyframes for it.
 
-## Reordering in place (FLIP)
+## Reordering in place
 
-Use this when an action re-sorts rows without adding or removing any. For example, ticking a task moves it below the open ones, at the top of the done ones (most recently completed first):
+A tick that re-sorts a list is a `move`, like a Wishlist edit that changes position: wash out, the row fades while its space closes, space opens at the new place, the row fades in, wash in. Ticking a task moves it below the open ones, at the top of the done ones (most recently completed first). If the sort leaves the row where it is, the state is written at once. `move` returns a promise that resolves once the row has entered, so the refetch after the write waits for it (otherwise the server's answer replaces the list mid-fade):
 
 ```tsx
-const setCompleted = (id, done) => reorder(() => setTodos((prev) => update(prev, id, done).sort(compareTodos)));
+const write = () => setTodos((prev) => update(prev, id, done).sort(compareTodos));
+const placed = indexBefore === indexAfter ? write() : move(id, write);
+// ...server call..., then: await placed; await refetch();
 ```
+
+`reorder(change)` (FLIP slide, 420ms) is only for drag sorting (Gym routine rows).
 
 Marking done has no Undo and no toast with Undo.
 

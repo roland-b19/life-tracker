@@ -793,9 +793,7 @@ main {
   animation: rise 300ms var(--ease) backwards;
 }
 
-.surface:nth-child(2) { animation-delay: 30ms; }
-.surface:nth-child(3) { animation-delay: 60ms; }
-.surface:nth-child(n + 4) { animation-delay: 90ms; }
+/* No stagger: nth-child counts a page's wrappers, so a delay by position ran in a different order on every page. */
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -1634,7 +1632,7 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-  animation: rise 300ms var(--ease) 90ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
+  animation: rise 300ms var(--ease) backwards; /* with the cards around it */
 }
 
 main > .error {
@@ -1894,6 +1892,14 @@ main > .error {
 ::view-transition-group(app-tabbar) {
   animation: none;
   z-index: 100;
+}
+/* The tab bar's snapshot is a rectangle with a blurred backdrop: without its radius a square box showed behind the
+   rounded bar while the page changed. */
+::view-transition-group(app-tabbar),
+::view-transition-image-pair(app-tabbar),
+::view-transition-new(app-tabbar) {
+  border-radius: 1.5rem;
+  overflow: clip;
 }
 ::view-transition-old(app-sidebar),
 ::view-transition-old(app-tabbar) {
