@@ -1574,6 +1574,7 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
+  animation: rise var(--dur) var(--ease) 120ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
 }
 
 main > .error {
@@ -2352,10 +2353,31 @@ button.bars-col:focus-visible {
   font-weight: 600;
 }
 
+/* A value axis on the left (top, middle and bottom value) with faint gridlines; the dates sit under the plot. */
+.line-plot {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  gap: 0.5rem;
+}
+.line-y {
+  position: relative;
+  font-size: 0.6875rem;
+  color: var(--secondary);
+  text-align: right;
+}
+.line-y span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+}
 .line svg {
   width: 100%;
   display: block;
   overflow: visible;
+}
+.line-grid {
+  stroke: var(--separator);
+  stroke-width: 1;
 }
 
 .line-path {
@@ -2369,7 +2391,7 @@ button.bars-col:focus-visible {
 .line-axis {
   display: flex;
   justify-content: space-between;
-  margin-top: 0.35rem;
+  margin: 0.35rem 0 0 3.25rem; /* under the plot, past the value axis */
   font-size: 0.6875rem;
   color: var(--secondary);
 }
@@ -2491,6 +2513,7 @@ button.bars-col:focus-visible {
   border-radius: 50%;
 }
 .muscle-side .group-label { margin-bottom: 0.5rem; }
+.muscle-side .hbars { margin-top: 0.25rem; } /* same gap under the title as the exercise list */
 /* The list follows its title at the band gap, so the title sits where "Planned sets per week" does */
 .group-label + .auto-height > .muscle-entries { margin-top: 0.25rem; --row-h: 4.1875rem; /* a two-part row, 67px */ }
 .muscle-entries .entry-row > div { min-width: 0; overflow-wrap: anywhere; } /* a long exercise name wraps instead of pushing the sets out */
@@ -3070,9 +3093,9 @@ button.bars-col:focus-visible {
 .history-entry { display: block; padding-block: 0.25rem; }
 .history-toggle {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 0.15rem 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+  gap: 0.15rem;
   width: 100%;
   padding: 0.5rem 0;
   border: 0;
@@ -3082,11 +3105,37 @@ button.bars-col:focus-visible {
   text-align: left;
   cursor: pointer;
 }
-.history-toggle > .history-progress { grid-column: 1; font-size: 0.875rem; }
-.history-chevron { grid-column: 2; grid-row: 1 / span 2; color: var(--secondary); transition: transform var(--lift); }
-.history-toggle[aria-expanded="true"] .history-chevron { transform: rotate(90deg); }
-.history-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+.history-toggle > .history-progress { font-size: 0.875rem; }
+/* Name, badge, then date and chevron at the end of the same row */
+.history-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
 .history-entry-side { margin-left: auto; }
-.history-details { display: grid; gap: 0.5rem; padding: 0.25rem 0 0.5rem; }
-.history-details > p { margin: 0; }
-.history-exercise { display: grid; gap: 0.15rem; margin: 0; font-size: 0.9375rem; }
+.history-chevron { flex: none; color: var(--secondary); transition: transform var(--lift); }
+.history-toggle[aria-expanded="true"] .history-chevron { transform: rotate(90deg); }
+/* An opened workout reads as one block; its exercises are bands of their own, so the sets are easy to follow */
+.history-details { display: grid; padding: 0 0 0.5rem; }
+.history-duration { margin-bottom: 0.25rem; font-size: 0.875rem; }
+.history-exercise {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.15rem 1rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+}
+.history-exercise:nth-of-type(odd) { background-color: rgba(255, 255, 255, 0.05); }
+.history-exercise > span { text-align: right; }
+
+/* The set to beat: what this exercise was last time this day was trained */
+.last-time {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+/* The fields of the set being logged read from the left, like their labels */
+.set-input-grid label,
+.set-input-grid input,
+.set-input-grid select { text-align: left; }

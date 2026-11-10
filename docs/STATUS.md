@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-09 by Claude (PR #66 merged: Gym progress, history, timer, Undo, deload skipping, detailed muscles)_
+_Last updated: 2026-11-10 by Claude (branch `feat/gym-polish-2`: Gym polish, PR open, not merged)_
 
 ## Phase
 

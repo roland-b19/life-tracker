@@ -124,31 +124,40 @@ function MuscleMap({
           render();
         };
 
-        // Front/Back turns the camera half a circle around the model (ease in-out), staying at the same
-        // height and distance; touching the model stops it, and reduced motion jumps instead.
+        // Front/Back is an absolute reset: the camera returns to the original front or back pose (same
+        // height, distance and target as on load), whatever the user dragged or zoomed. It eases there;
+        // touching the model stops it, and reduced motion jumps instead.
         let frame = 0;
         const stopTurn = () => cancelAnimationFrame(frame);
         const setView = (v: "front" | "back", animate = true) => {
           stopTurn();
-          const offset = camera.position.clone().sub(controls.target);
-          const radius = Math.hypot(offset.x, offset.z);
-          const from = Math.atan2(offset.x, offset.z);
-          const to = v === "front" ? 0 : Math.PI;
+          const to = { az: v === "front" ? 0 : Math.PI, polar: Math.PI / 2, radius: dist };
+          const off = camera.position.clone().sub(controls.target);
+          const from = {
+            az: Math.atan2(off.x, off.z),
+            polar: Math.acos(Math.min(1, Math.max(-1, off.y / (off.length() || 1)))),
+            radius: off.length(),
+          };
+          const tFrom = controls.target.clone();
           // Shortest way round, so a model dragged near the target does not spin the long way.
-          const delta = ((((to - from) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
-          const place = (angle: number) => {
+          const delta = ((((to.az - from.az) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+          const place = (k: number) => {
+            const az = from.az + delta * k;
+            const polar = from.polar + (to.polar - from.polar) * k;
+            const radius = from.radius + (to.radius - from.radius) * k;
+            controls.target.lerpVectors(tFrom, center, k);
             camera.position.set(
-              controls.target.x + Math.sin(angle) * radius,
-              camera.position.y,
-              controls.target.z + Math.cos(angle) * radius,
+              controls.target.x + radius * Math.sin(polar) * Math.sin(az),
+              controls.target.y + radius * Math.cos(polar),
+              controls.target.z + radius * Math.sin(polar) * Math.cos(az),
             );
             controls.update();
           };
-          if (!animate || reduceMotion.matches || Math.abs(delta) < 0.001) return place(to);
+          if (!animate || reduceMotion.matches) return place(1);
           const start = performance.now();
           const step = (now: number) => {
             const t = Math.min((now - start) / 700, 1);
-            place(from + delta * (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2));
+            place(t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
             if (t < 1) frame = requestAnimationFrame(step);
           };
           frame = requestAnimationFrame(step);
@@ -364,7 +373,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
             <div>
               <h3 className="group-label">Planned sets per week</h3>
               <HBars
-                rows={MUSCLE_GROUPS.map((g) => ({
+                rows={MUSCLE_GROUPS.filter((g) => setsOf(g) > 0).map((g) => ({
                   label: GROUP_LABEL[g],
                   value: setsOf(g),
                   display: String(setsOf(g)),

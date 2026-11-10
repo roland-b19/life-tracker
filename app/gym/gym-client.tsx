@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDMY } from "@/lib/format-date";
-import { pct, type HistoryEntry } from "@/lib/gym-progress";
+import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
@@ -114,6 +114,14 @@ interface GymClientProps {
   history: HistoryEntry[];
   exercises: LibraryExercise[];
   openSession: ActiveSessionData | null;
+}
+
+/** "8 × 52.5 kg": one logged set as the user reads it (the extra kg is already in `load`). */
+function setText(x: { reps: number; loadType: string; load: number }) {
+  const l = Math.round(x.load * 100) / 100;
+  const w =
+    x.loadType === "bodyweight" ? (l > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
+  return `${x.reps} × ${w}`;
 }
 
 function getTodayString() {
@@ -729,6 +737,25 @@ export function GymClient({
                     </span>
                   </div>
 
+                  {/* The same exercise the last time this day was trained: the numbers to beat */}
+                  {(() => {
+                    const last = history.find(
+                      (h) =>
+                        h.dayId === activeSession.splitDayId &&
+                        !h.isDeload &&
+                        h.date < activeSession.date &&
+                        h.exercises.some((e) => e.id === exercise.exerciseId),
+                    );
+                    const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
+                    if (!last) return null;
+                    return (
+                      <p className="last-time">
+                        <span className="muted">Last time · {formatDMY(last.date)}</span>
+                        <span className="number-tabular">{sets.map(setText).join("  ·  ")}</span>
+                      </p>
+                    );
+                  })()}
+
                   {/* Previous logged sets */}
                   <AutoHeight wash className="entries set-list">
                       {exerciseSets.map((s) => (
@@ -1112,25 +1139,23 @@ export function GymClient({
                             <strong>{h.dayName ?? "Workout"}</strong>
                             {h.isDeload && <span className="badge badge-rest">Deload</span>}
                             <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
+                            <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
                           </span>
                           <span className="muted number-tabular history-progress">
                             {h.isDeload
                               ? "Deload week, not counted"
-                              : h.progress
-                                ? `Weight ${pct(h.progress.weight)} · Reps ${pct(h.progress.reps)} vs the week before`
+                              : h.progress !== null
+                                ? `Weight ${kgDelta(h.progress)} vs the week before`
                                 : "Nothing to compare with yet"}
                           </span>
-                          <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
                         </button>
                         {open && (
                           <div id={`history-${h.id}`} className="history-details">
-                            {h.durationMinutes ? <p className="muted number-tabular">{h.durationMinutes} min</p> : null}
+                            {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
                             {h.exercises.map((ex) => (
                               <p key={ex.id} className="history-exercise">
                                 <strong>{ex.name}</strong>
-                                <span className="muted number-tabular">
-                                  {ex.sets.map((x) => `${x.reps}×${Math.round(x.load * 100) / 100}`).join("  ")}
-                                </span>
+                                <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
                               </p>
                             ))}
                           </div>
