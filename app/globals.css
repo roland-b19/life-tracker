@@ -32,6 +32,7 @@
   --quick: 180ms;
   /* Hover highlights fade in on a gentle curve: fast, but never a jump */
   --fade: 240ms ease;
+  --wash: 120ms ease; /* the Wishlist's row wash out and in around a list change; WASH in list-motion.tsx */
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: rgba(255, 255, 255, 0.05);
@@ -986,7 +987,7 @@ textarea:focus-visible {
   transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
 /* Rows added, deleted or moved (useListMotion): the card resizes in step with the rows' glide. MOVE in list-motion.tsx. */
-.auto-height[data-flip] { transition-duration: 260ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.auto-height[data-flip] { transition-duration: 240ms; transition-delay: var(--flip-delay, 0ms); transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
 
 .entry-row {
@@ -3093,6 +3094,7 @@ button.bars-col:focus-visible {
   padding-inline-end: var(--band-out);
 }
 .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
+.surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: background-color var(--wash), transform var(--lift); }
 /* A view switch (range, sort, day, tab) hides the rows, so their bands change with the list, not after it. */
 .auto-height[data-swap] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: transform var(--lift); }
 .auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering])) {
