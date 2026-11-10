@@ -7,7 +7,7 @@ export const createWishlistItemSchema = z.object({
   estimatedPrice: z
     .coerce
     .number()
-    .positive("Price must be greater than 0")
+    .min(0.01, "Price must be at least 0.01")
     .max(10000000, "Price exceeds maximum threshold"),
 });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser, UnauthorizedError } from "@/server/auth";
 import { removeWeightEntry, updateWeightEntry } from "@/server/weight";
 import { weightInput } from "@/lib/validations/weight";
+import { uuid } from "@/lib/validations/common";
 import { z } from "zod";
 import { logRequest } from "@/server/logger";
 import { isSameOrigin } from "@/server/same-origin";
@@ -30,6 +31,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     const userId = await requireUser();
     const { id } = await context.params;
+    if (!uuid.safeParse(id).success) return genericError(request, 404);
     const body = weightInput.parse(await request.json());
     const entry = await updateWeightEntry(userId, id, body.date, body.kilograms);
     if (!entry) return genericError(request, 404);
@@ -55,6 +57,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   try {
     const userId = await requireUser();
     const { id } = await context.params;
+    if (!uuid.safeParse(id).success) return genericError(request, 404);
     const entry = await removeWeightEntry(userId, id);
     if (!entry) return genericError(request, 404);
     logRequest(request, "/api/weight/[id]", 204);

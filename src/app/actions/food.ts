@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
+import { isoDate, uuid } from "@/lib/validations/common";
 import {
   clearDailyMetricSchema,
   day,
@@ -53,30 +54,27 @@ export async function logMealAction(rawInput: unknown) {
 
 export async function deleteMealAction(mealId: string) {
   const userId = await requireUser();
-  if (!mealId || typeof mealId !== "string") {
-    throw new Error("Invalid meal ID");
-  }
-  const deleted = await deleteMeal(userId, mealId);
+  const deleted = await deleteMeal(userId, uuid.parse(mealId));
   safeRevalidate("/food");
   return { success: true, deleted };
 }
 
 export async function addWaterAction(date: string, amountMl: number) {
   const userId = await requireUser();
-  if (!date || !Number.isInteger(amountMl) || Math.abs(amountMl) > 20000) {
+  if (!Number.isInteger(amountMl) || Math.abs(amountMl) > 20000) {
     throw new Error("Invalid water parameters");
   }
-  const metrics = await addWater(userId, date, amountMl);
+  const metrics = await addWater(userId, isoDate.parse(date), amountMl);
   safeRevalidate("/food");
   return { success: true, metrics };
 }
 
 export async function updateStepsAction(date: string, steps: number) {
   const userId = await requireUser();
-  if (!date || !Number.isInteger(steps) || steps < 0 || steps > 200000) {
+  if (!Number.isInteger(steps) || steps < 0 || steps > 200000) {
     throw new Error("Invalid steps parameter");
   }
-  const metrics = await updateDailySteps(userId, date, steps);
+  const metrics = await updateDailySteps(userId, isoDate.parse(date), steps);
   safeRevalidate("/food");
   return { success: true, metrics };
 }
@@ -126,20 +124,17 @@ export async function addShoppingItemAction(rawInput: unknown) {
 
 export async function toggleShoppingItemAction(itemId: string, isBought: boolean) {
   const userId = await requireUser();
-  if (!itemId || typeof isBought !== "boolean") {
+  if (typeof isBought !== "boolean") {
     throw new Error("Invalid parameters");
   }
-  const item = await toggleShoppingItem(userId, itemId, isBought);
+  const item = await toggleShoppingItem(userId, uuid.parse(itemId), isBought);
   safeRevalidate("/food");
   return { success: true, item };
 }
 
 export async function deleteShoppingItemAction(itemId: string) {
   const userId = await requireUser();
-  if (!itemId || typeof itemId !== "string") {
-    throw new Error("Invalid item ID");
-  }
-  const deleted = await deleteShoppingItem(userId, itemId);
+  const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
   safeRevalidate("/food");
   return { success: true, deleted };
 }

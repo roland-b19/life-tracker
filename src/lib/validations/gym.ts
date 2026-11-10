@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDate } from "./common";
 import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
 
 export const logSetSchema = z.object({
@@ -19,7 +20,7 @@ export const logSetSchema = z.object({
 });
 
 export const createSessionSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  date: isoDate,
   splitDayId: z.string().uuid().optional().nullable(),
   isDeload: z.boolean().default(false),
   notes: z.string().max(500).optional().nullable(),
@@ -35,7 +36,7 @@ export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
 
 /** Undo of cancelling a workout: the session as it was, with all its sets (they get new ids). */
 export const restoreSessionSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  date: isoDate,
   splitDayId: z.string().uuid().optional().nullable(),
   isDeload: z.boolean(),
   notes: z.string().max(500).optional().nullable(),

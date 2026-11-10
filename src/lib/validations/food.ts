@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { isoDate } from "./common";
 
 export const logMealSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  date: isoDate,
   name: z.string().min(1).max(120).trim(),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
@@ -11,13 +12,13 @@ export const logMealSchema = z.object({
 });
 
 export const updateMetricsSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  date: isoDate,
   waterMl: z.number().int().min(0).max(20000).optional(),
   steps: z.number().int().min(0).max(100000).optional(),
   notes: z.string().max(255).optional().nullable(),
 });
 
-export const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)");
+export const day = isoDate;
 
 /** A day's water (ml) or steps; `previousDate` moves an existing value to `date`. */
 export const saveDailyMetricSchema = z.discriminatedUnion("kind", [

@@ -9,7 +9,8 @@ export const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
   `${new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday })} ${formatDMY(iso)}`;
 
 // "Today" is the user's calendar day, not the server's: Vercel and the Azure container run in UTC.
-const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest" });
+export const APP_TZ = "Europe/Bucharest";
+const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ });
 
 /** "YYYY-MM-DD": today in Europe/Bucharest with no argument, otherwise the local calendar date of `d`. */
 export function toISODate(d?: Date): string {
