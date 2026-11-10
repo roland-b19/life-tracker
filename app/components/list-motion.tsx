@@ -17,6 +17,26 @@ function resizeTime(p: number) {
   return 1;
 }
 
+// MOVE and MOVE_EASE: the one movement every list change shares (a row added, deleted or moved to another place):
+// the rows glide to their new places and the card follows, all in MOVE. They match .auto-height[data-flip] in globals.css.
+// Only transform and opacity animate on the rows, so a phone keeps them on the compositor (no layout per frame).
+const MOVE = 260;
+const MOVE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+// A card (AutoHeight's outer box) that follows a row leaving: its height animates down while the row is still in place
+// and stays there until the row is removed. `to` is the height it is going to, `n` the rows still leaving in it.
+const boxHolds = new WeakMap<HTMLElement, { n: number; to: number }>();
+
+// While rows move, the card resizes in MOVE too (not the quicker RESIZE): the attribute switches its transition.
+const flips = new WeakMap<HTMLElement, number>();
+function flipTiming(from: Element) {
+  for (let box = from.closest<HTMLElement>(".auto-height"); box; box = box.parentElement?.closest<HTMLElement>(".auto-height") ?? null) {
+    box.dataset.flip = "";
+    clearTimeout(flips.get(box));
+    flips.set(box, window.setTimeout(() => delete box.dataset.flip, MOVE + 100));
+  }
+}
+
 // A wash list (AutoHeight's `wash`) fades its alternating row wash out (--fade) while rows move and back in after.
 const holds = new WeakMap<HTMLElement, number>();
 /**
@@ -63,8 +83,8 @@ function layoutX(el: HTMLElement) {
 
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
- * or removed), instead of popping. Rows driven by useListMotion animate their own space, so
- * the container just follows them. When it grows, each new row's entrance (row-in) waits until the
+ * or removed), instead of popping. A row leaving through useListMotion shrinks it itself while the row is still in
+ * place (`data-hold`), and the container follows a row entering. When it grows, each new row's entrance (row-in) waits until the
  * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
@@ -88,11 +108,21 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
 
     const observer = new ResizeObserver(() => {
       const next = contentHeight();
+      // A leaving row holds the card at the height it is shrinking to. Once its removal has landed (the hold is
+      // released) the card continues from there, which is a no-op when the row's space was measured right.
+      const held = outer.getAttribute("data-hold");
+      if (held !== null) {
+        if (boxHolds.get(outer)?.n) return void (last = next);
+        outer.removeAttribute("data-hold");
+        boxHolds.delete(outer);
+        settle();
+        last = Number(held);
+      }
       if (next === last) return;
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
       // data-swap: a whole-list view switch (Wishlist range or sort) fades the list and resizes the card at once.
-      if (reducedMotion() || outer.hasAttribute("data-swap") || inner.querySelector("[data-row-motion]") || Math.abs(from - next) < 1.5) return settle(); // offsetHeight rounds a subpixel gap (a row vs its empty note) up to 1px
+      if (reducedMotion() || outer.hasAttribute("data-swap") || Math.abs(from - next) < 1.5) return settle(); // offsetHeight rounds a subpixel gap (a row vs its empty note) up to 1px
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
@@ -187,25 +217,29 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
   );
 }
 
-// Keyframes that take a row's height and padding down to nothing.
-function spaceFrames(el: HTMLElement): Keyframe[] {
-  const cs = getComputedStyle(el);
-  return [
-    { height: `${el.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom },
-    { height: "0px", paddingTop: "0px", paddingBottom: "0px" },
-  ];
+// The gap a row leaves (or takes) between its neighbours, besides its own height.
+const gapOf = (el: HTMLElement) => parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
+
+// Where every child of the rows' lists is on the page now (visual: a row still gliding is measured where it is).
+function positions(rows: Iterable<HTMLElement>) {
+  const tops = new Map<HTMLElement, number>();
+  for (const parent of new Set([...rows].map((r) => r.parentElement)))
+    for (const c of parent?.children ?? []) tops.set(c as HTMLElement, c.getBoundingClientRect().top + window.scrollY);
+  return tops;
 }
 
-// A grid track never shrinks below zero, so a collapsed row still has a gap on each side and the last one
-// would pop when the row is removed. A neighbour takes in one gap instead (added to its own margin).
-function closeGap(el: HTMLElement, opening: boolean, timing: KeyframeAnimationOptions) {
-  const gap = parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
-  const next = el.nextElementSibling;
-  const near = next ?? el.previousElementSibling;
-  if (!gap || !near) return;
-  const side = next ? "marginTop" : "marginBottom";
-  const frames: Keyframe[] = [{ [side]: "0px" }, { [side]: `${-gap}px` }];
-  return near.animate(opening ? frames.reverse() : frames, { ...timing, composite: "add" });
+// Shrinks the card (AutoHeight's outer box) by `d` while the leaving row is still in place; released by the hook
+// once the row is removed (see `release`).
+function shrinkBox(box: HTMLElement, d: number) {
+  const from = box.getBoundingClientRect().height;
+  const hold = boxHolds.get(box) ?? { n: 0, to: from };
+  hold.n++;
+  hold.to -= d;
+  boxHolds.set(box, hold);
+  box.dataset.hold = String(hold.to);
+  box.style.overflow = "hidden";
+  box.getAnimations().forEach((a) => a.cancel());
+  box.animate([{ height: `${from}px` }, { height: `${hold.to}px` }], { duration: MOVE, easing: MOVE_EASE, fill: "forwards" });
 }
 
 // Rows fade where they stand; row-in in globals.css is the reverse. Opacity and transform only: they stay
@@ -216,12 +250,9 @@ const FADE_OUT: Keyframe[] = [
 ];
 const FADE = { duration: 160, easing: EASE, fill: "forwards" } as const;
 const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
-const SPACE = 260; // a row's space opening or closing
-// Ease in and out: EASE's long tail made a closing row look stuck at the end.
-const SPACE_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 // A list's only row swaps with its empty note, which takes the same space, so it only fades.
 const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
-const FADE_IN = 180; // starts once the space is open, like row-in in .auto-height
+const FADE_IN = 180; // starts once the space is open (after MOVE), like row-in in .auto-height
 
 // A control that goes away with its view (Tasks' Week button) fades like a leaving row, then `remove` runs.
 // Cancelling the fade (the control is wanted again) skips `remove`. It comes back with row-in from globals.css.
@@ -231,25 +262,36 @@ export function fadeOut(el: HTMLElement | null, remove: () => void) {
 }
 
 /**
- * Row motion for lists: `leave` fades a row out while its space closes, then calls `remove`;
- * `enter` (called just before the row is added) opens the space and fades the row in, and resolves
- * when it is done; `fadeAll` fades every row out in place before a view switch.
+ * Row motion for lists. Add, delete and move are one movement: the rows glide to their new places (MOVE) while the card
+ * follows, and a row fades out where it stood (`leave`) or fades in once its space is open (`enter`).
+ * `leave` fades a row out while the rows after it glide up over it, then calls `remove`;
+ * `enter` (called just before the row is added) resolves when the row is in;
+ * `move` fades a row out, runs `change` (the state update that puts it elsewhere) and enters it at its new place;
+ * `fadeAll` fades every row out in place before a view switch.
  * Attach `rowRef(id)` to each row.
  */
 export function useListMotion() {
   const nodes = useRef(new Map<string, HTMLElement>());
   const entering = useRef(new Map<string, () => void>());
   const leaving = useRef(new WeakSet<HTMLElement>());
-  // A leaving row's neighbour holds the closed gap until the row is gone, then drops it in the same commit.
-  const gaps = useRef(new Map<HTMLElement, Animation>());
-  // Where a moving row was: the neighbour that holds its space, on which side, and how much.
-  const moved = useRef(new Map<string, { near: HTMLElement; side: "marginTop" | "marginBottom"; space: number }>());
+  // Where the rows were when the next `enter` was called: they glide from there to where the commit puts them.
+  const before = useRef<Map<HTMLElement, number> | null>(null);
+  // What a leaving row holds in place (the rows after it have glided up, the card has shrunk) until it is removed.
+  const held = useRef(new Map<HTMLElement, { glides: Animation[]; box: HTMLElement | null }>());
+
+  // Lets go of a leaving row's hold. The commit that removed the row is already in place, so nothing moves.
+  const release = useCallback((el: HTMLElement) => {
+    const h = held.current.get(el);
+    if (!h) return;
+    held.current.delete(el);
+    h.glides.forEach((a) => a.cancel());
+    const hold = h.box && boxHolds.get(h.box);
+    if (!h.box || !hold) return;
+    // The card stays held while another row is still leaving in it. AutoHeight then continues from the held height.
+    if (--hold.n <= 0) h.box.getAnimations().forEach((a) => a.cancel());
+  }, []);
   useLayoutEffect(() => {
-    for (const [el, a] of gaps.current) {
-      if (el.isConnected) continue;
-      a.cancel();
-      gaps.current.delete(el);
-    }
+    for (const el of held.current.keys()) if (!el.isConnected) release(el);
   });
 
   const seen = useRef(new WeakSet<HTMLElement>());
@@ -270,33 +312,26 @@ export function useListMotion() {
         // A row that moved (an edit) is the same element: drop its held exit before it enters again.
         el.getAnimations().forEach((a) => a.cancel());
         leaving.current.delete(el);
-        gaps.current.get(el)?.cancel();
-        gaps.current.delete(el);
-        el.style.pointerEvents = el.style.overflow = "";
-        delete el.dataset.rowMotion;
+        release(el);
+        el.style.pointerEvents = "";
         el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
         // In a wash list the wash fades out while the row moves (nothing waits for it); the row sits out the
         // alternation until it is in, so no wash jumps to another row meanwhile.
         if (el.closest("[data-wash]")) el.dataset.entering = "";
-        if (!alone(el)) {
-          el.dataset.rowMotion = "";
-          el.style.overflow = "hidden";
-          const open = { duration: SPACE, easing: SPACE_EASE, fill: "backwards" } as const;
-          closeGap(el, true, open);
-          el.animate(spaceFrames(el).reverse(), open).finished.catch(() => {}).finally(() => {
-            el.style.overflow = "";
-            delete el.dataset.rowMotion;
-          });
+        // The rows glide from where they were to where this commit put them, and the card follows.
+        const from = before.current;
+        before.current = null;
+        if (from) {
+          for (const row of from.keys()) row.getAnimations().filter((a) => a.id === "glide").forEach((a) => a.cancel());
+          for (const [row, top] of from) {
+            const dy = top - (row.getBoundingClientRect().top + window.scrollY);
+            if (row !== el && row.isConnected && Math.abs(dy) >= 1)
+              row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { id: "glide", duration: MOVE, easing: MOVE_EASE });
+          }
+          flipTiming(el);
         }
         // A row fades in only once its space is fully open, so it is never seen clipped.
-        // A moved row's old space closes while its new one opens.
-        const from = moved.current.get(id);
-        moved.current.delete(id);
-        if (from?.near.isConnected)
-          from.near.animate([{ [from.side]: `${from.space}px` }, { [from.side]: "0px" }], {
-            duration: SPACE, easing: SPACE_EASE, fill: "backwards", composite: "add",
-          });
-        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: alone(el) ? 120 : SPACE, easing: EASE, fill: "backwards" })
+        el.animate([...FADE_OUT].reverse(), { duration: FADE_IN, delay: alone(el) ? 120 : MOVE, easing: EASE, fill: "backwards" })
           .finished.catch(() => {}).finally(() => {
             delete el.dataset.entering;
             done();
@@ -306,7 +341,7 @@ export function useListMotion() {
         if (nodes.current.get(id) === el) nodes.current.delete(id);
       };
     },
-    [],
+    [release],
   );
 
   const enter = useCallback(
@@ -314,9 +349,10 @@ export function useListMotion() {
       new Promise<void>((done) => {
         if (reducedMotion()) return done();
         entering.current.set(id, done);
-        // A row added outside the current filter never mounts; forget it so it does not grow later.
+        before.current = positions(nodes.current.values());
+        // A row added outside the current filter never mounts; forget it so it does not glide later.
         // Long enough for pages that refetch the list before the row mounts (Tasks).
-        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), moved.current.delete(id), done()), 2000);
+        setTimeout(() => entering.current.get(id) === done && (entering.current.delete(id), done()), 2000);
       }),
     [],
   );
@@ -326,36 +362,42 @@ export function useListMotion() {
     if (!el || reducedMotion()) return remove();
     if (leaving.current.has(el)) return; // a row still entering may leave
     leaving.current.add(el);
-    el.dataset.rowMotion = "";
     el.style.pointerEvents = "none";
-    el.style.overflow = "hidden";
     // In a wash list the wash fades out (--fade, shorter than the exit) as the row leaves and comes back once it
     // is gone (the next hold). The row starts at once: a wait here read as lag.
     if (el.closest("[data-wash]")) hold(el.parentElement!, true);
-    // The space closes while the row fades, so the exit is one movement of about a quarter of a second.
-    const fade = el.animate(FADE_OUT, FADE);
-    let exit = fade;
+    const motion: Animation[] = [];
+    const glides: Animation[] = [];
+    let box: HTMLElement | null = null;
     if (!alone(el)) {
-      const close = { duration: SPACE, easing: SPACE_EASE, fill: "both" } as const;
-      const gap = closeGap(el, false, close);
-      if (gap) gaps.current.set(el, gap);
-      exit = el.animate(spaceFrames(el), close);
+      // The rows after it glide up over it and the card shrinks in step; the row itself stays in place until `remove`.
+      const d = el.offsetHeight + gapOf(el);
+      for (let next = el.nextElementSibling; next; next = next.nextElementSibling)
+        glides.push(next.animate([{ transform: "none" }, { transform: `translateY(${-d}px)` }], { duration: MOVE, easing: MOVE_EASE, fill: "forwards", composite: "add" }));
+      box = el.closest<HTMLElement>(".auto-height");
+      if (box) shrinkBox(box, d);
+      flipTiming(el);
+      // A clock for the whole movement (translate is a property nothing else animates), so `remove` lands as it ends.
+      motion.push(el.animate({ translate: ["0 0", "0 0"] }, { duration: MOVE }));
     }
-    exit.finished.catch(() => {}).finally(remove);
+    // The row fades where it stands while the space closes, so the exit is one movement of about a quarter of a second.
+    motion.push(el.animate(FADE_OUT, FADE));
+    held.current.set(el, { glides, box });
+    Promise.all(motion.map((a) => a.finished)).catch(() => {}).finally(remove);
   }, []);
 
-  // Runs `change` (a state update that moves a row): the row is gone from its old place at once, that space
-  // closes while the row enters at its new place, like a deleted row put back by Undo.
+  // Runs `change` (a state update that moves a row): the row fades out where it stood, then `change` puts it
+  // at its new place, where it enters like an added row (the rows glide, then it fades in).
   const move = useCallback(
     (id: string, change: () => void) => {
       const el = nodes.current.get(id);
-      if (el && !reducedMotion() && !alone(el)) {
-        const gap = parseFloat(getComputedStyle(el.parentElement!).rowGap) || 0;
-        const near = (el.nextElementSibling ?? el.previousElementSibling) as HTMLElement;
-        moved.current.set(id, { near, side: el.nextElementSibling ? "marginTop" : "marginBottom", space: el.offsetHeight + gap });
-      }
-      void enter(id);
-      change();
+      const go = () => {
+        void enter(id);
+        change();
+      };
+      if (!el || reducedMotion() || alone(el)) return go();
+      el.style.pointerEvents = "none";
+      el.animate(FADE_OUT, FADE).finished.catch(() => {}).finally(go);
     },
     [enter],
   );

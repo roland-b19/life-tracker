@@ -471,7 +471,7 @@ The CSS hides the outline on `[data-pointer]`.
 
 **`AutoHeight`**
 - RESIZE is 180ms `cubic-bezier(.2,0,0,1)`.
-- Skipped when the change is under 1.5px, under reduced motion, or while `[data-row-motion]` is present.
+- Skipped when the change is under 1.5px, under reduced motion,. While a list change is in flight the card's height is driven by `useListMotion` (`data-hold`, `data-flip`: 260ms `cubic-bezier(.4,0,.2,1)`) so it ends together with the rows' glide.
 - Each row's entrance is delayed until the height uncovers its bottom, 1px early.
 
 **`useListMotion`**

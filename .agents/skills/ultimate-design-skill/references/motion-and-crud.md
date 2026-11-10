@@ -31,9 +31,11 @@ Copy this pattern for every list page. It is what the user approved in `app/wish
 | Method | What it does |
 |---|---|
 | `rowRef(id)` | put on every row (and `rowRef("empty")` on the empty note) |
-| `enter(id)` | call *before* adding the row to state: the space opens (260ms), then the row fades in (180ms) |
-| `leave(id, remove)` | the row fades in place and its space closes; `remove` runs at the end and must drop it from state |
-| `move(id, change)` | for an edit that changes the row's place: the old space closes while the row enters the new one; `change` writes the new state |
+| `enter(id)` | call *before* adding the row to state: the rows below glide down (260ms), then the row fades in (180ms) |
+| `leave(id, remove)` | the row fades in place (160ms) while the rows below glide up (260ms); `remove` runs at the end and must drop it from state |
+| `move(id, change)` | for an edit that changes the row's place: the row fades out in place, `change` runs, the rows between glide to their new places, then the row fades in at the new one |
+
+Add, delete and move share one animation: a FLIP glide of the siblings (`transform` only, 260ms `cubic-bezier(.4,0,0,1)`) plus a row fade, and the card follows with one height animation. Never animate a row's height, margin or top. `data-hold` and `data-flip` on the card are set and cleared by the hook.
 | `fadeAll(then)` | every row fades together (120ms), then `then` switches the view |
 | `reorder(change)` | FLIP: rows slide to new places (420ms), for in-place reorders such as a ticked task sinking |
 

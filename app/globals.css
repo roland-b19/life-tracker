@@ -985,6 +985,8 @@ textarea:focus-visible {
   display: flow-root;
   transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
+/* Rows added, deleted or moved (useListMotion): the card resizes in step with the rows' glide. MOVE in list-motion.tsx. */
+.auto-height[data-flip] { transition-duration: 260ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 .auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
 
 .entry-row {
