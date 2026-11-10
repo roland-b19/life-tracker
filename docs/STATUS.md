@@ -132,7 +132,8 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 ## Next
 
 1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
-2. Maintain local-only verification until then (no Azure deployments).
+2. Proposed, waiting for the user's OK: Iteration 10 "Free personal variant" (Vercel + Neon + GitHub login, Claude hidden behind `NEXT_PUBLIC_CLAUDE_ENABLED`), plan in `docs/free-hosting-plan.md` ("Implementation plan"). Nothing is implemented. Not started until the user agrees it and says whether it goes before or after Iteration 9.
+3. Maintain local-only verification until then (no Azure deployments).
 
 ## Open questions
 

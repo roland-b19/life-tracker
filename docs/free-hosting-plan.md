@@ -13,7 +13,7 @@ Status: **plan only, nothing implemented.** Decided 2026-11-10 (see `docs/decisi
 
 | # | Item | Resolution |
 |---|---|---|
-| 1 | Claude integration | Deleted, so the app runs serverless (`claude-cli.ts`, `claude-connection.ts`, `food-ai-chat.ts`, Settings page, Assistant UI, their tests, `CLAUDE_TOKEN_KEY`, `CLAUDE_MODEL`). Table stays unused. |
+| 1 | Claude integration | **Hidden behind a flag, not deleted** (decided 2026-11-10, replaces "delete"). `NEXT_PUBLIC_CLAUDE_ENABLED=true` shows the Settings nav entry/page and the Assistant tab in Food; when off they do not exist in the UI and the server actions reject. Off on Vercel (a CLI spawn cannot run serverless), on where the container runs. Code and table stay. |
 | 2 | Real push notifications | Deleted: the `savePushSubscription` action, `pushSubscriptionSchema`, the "enable reminders" button in `todos-client.tsx`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`. No server code ever sent a push, so nothing is lost. The `push_subscriptions` table stays unused (no migration). |
 | 3 | Custom domain | Not needed: `*.vercel.app`. |
 | 4 | Keeping the database awake | Not done, on purpose (see "Waking the database"). |
@@ -31,6 +31,21 @@ Neon Free suspends compute after 5 minutes without queries; the next query resum
 - Optional, cheap: a `GET /api/warm` that runs `SELECT 1`, called when the sign-in page opens. The OAuth round trip takes seconds, so the database is awake before the first page needs it. Keep `/health` DB-free so an uptime monitor never wakes it.
 - The weekly backup wakes it once. That is the only scheduled wake.
 - Cost of a wake: at least 5 min x 0.25 CU = about 0.02 CU-hours. Fifty wakes a day is about 30 CU-hours a month.
+
+## Implementation plan (proposed iteration, waits for the user's OK)
+
+Proposed name: **Iteration 10: Free personal variant** (Iteration 9 stays the Azure one). Order: small, each step its own commit, tests with each; CI must stay green.
+
+0. **Flag `NEXT_PUBLIC_CLAUDE_ENABLED`.** One variable, read on server and client (inlined at build, so a change needs a redeploy; fine). Helper `isClaudeEnabled()` in `src/lib/`. Where it applies (mapped with graphify): `app/components/navigation.tsx` (the Settings link, line ~76; the page holds only the Claude connection), `app/settings/page.tsx` (`notFound()` when off), `app/food/food-client.tsx` (the `chat` option at line ~877 and the `chat` panel at ~1232), `src/app/actions/claude-connection.ts` and `src/app/actions/food-chat.ts` (throw when off, so a hand-made POST cannot reach the CLI). `.env.example` documents it. Tests: both actions rejected when off, work when on (existing tests run with it on); authorization test as before.
+1. **Push removal** (action, lib function, schema, "enable reminders" button, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`).
+2. **Auth.** GitHub provider selected by env next to Entra and dev; `OWNER_ALLOWLIST` check in `signIn`; owner row remapped to the GitHub `(issuer, subject)`. Tests: allowed, other GitHub user denied, anonymous denied. Needs the user to create a GitHub OAuth app (no secret in chat).
+3. **Timezone** `Europe/Bucharest` via `Intl`; **`getWorkoutHistory`** window; **`Promise.all`** in `app/gym/page.tsx`.
+4. **DB**: serverless-safe pool (`max` 1-2, idle timeout, error handler), `scripts/db-init.cjs` default password removed, migration workflow in GitHub Actions (owner string from a secret).
+5. **Vercel + Neon go-live**: create `life_tracker_app` with a real password, migrate, set env (pooled string for the app, unpooled for migrations, real auth values, placeholders only for what the build needs), keep `fra1`. Needs the user's OK per AGENTS.md (production data, free tier only).
+6. **Backup workflow** (weekly encrypted `pg_dump`, one restore test).
+7. **Optimization** (measure first, section below).
+
+Not started: nothing above is implemented. Each step is checked with lint, typecheck, tests and, for UI, the Wishlist-based design checklist.
 
 ## Must change in code before it works (not started)
 

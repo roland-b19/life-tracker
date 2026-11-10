@@ -190,7 +190,10 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 ### 2026-11-10: Free personal variant (plan only, nothing built yet)
 - The user wants a second variant that runs completely free for personal use, next to the Azure one. Stack: Vercel Hobby + Neon Free + GitHub OAuth (owner allowlist); everything else (Entra provider, Docker, Bicep, scripts) stays so the Azure variant keeps working, the provider being picked by env.
-- Delete the Claude integration (so the app is serverless) and real push notifications (no server ever sent one). Free `*.vercel.app` domain. The database is not kept awake; backups are an encrypted scheduled `pg_dump` in GitHub Actions. Details, code changes and open checks: `docs/free-hosting-plan.md`.
+- ~~Delete the Claude integration~~ (superseded: hidden behind a flag, see the next entry) and delete real push notifications (no server ever sent one). Free `*.vercel.app` domain. The database is not kept awake; backups are an encrypted scheduled `pg_dump` in GitHub Actions. Details, code changes and open checks: `docs/free-hosting-plan.md`.
+
+### 2026-11-10: Claude integration is hidden behind a flag, not deleted
+Decided by the user: the Settings page/nav entry and the Assistant tab in Food appear only when `NEXT_PUBLIC_CLAUDE_ENABLED=true`; when off they do not appear at all and the server actions reject. This replaces the earlier "delete the Claude integration" decision in `docs/free-hosting-plan.md`. Off on Vercel because the CLI spawn cannot run serverless; the code and the `claude_connections` table stay. Plan: `docs/free-hosting-plan.md` ("Implementation plan"), proposed as Iteration 10, waiting for the user's OK.
 
 ## Open
 

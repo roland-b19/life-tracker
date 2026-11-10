@@ -53,3 +53,4 @@ crash.log
 
 # Graphify output is derived and rebuilt locally (git hooks, `graphify update .`)
 graphify-out/
+.neon
