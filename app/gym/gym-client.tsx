@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDMY } from "@/lib/format-date";
+import { formatDMY, toISODate } from "@/lib/format-date";
 import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
@@ -122,13 +122,6 @@ function setText(x: { reps: number; loadType: string; load: number }) {
   const w =
     x.loadType === "bodyweight" ? (l > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
   return `${x.reps} × ${w}`;
-}
-
-function getTodayString() {
-  const d = new Date();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 export function GymClient({
@@ -327,7 +320,7 @@ export function GymClient({
     setStatusMessage("");
     try {
       const res = await startSessionAction({
-        date: getTodayString(),
+        date: toISODate(),
         splitDayId: day.id,
         isDeload: isDeloadMode,
       });
