@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-11 by Claude (variant B live; real-data importer and weekly backup on branch `feat/personal-import-and-backup`)_
+_Last updated: 2026-11-11 by Claude (variant B live; importer and weekly backup merged; backup run and restore test passed)_
 
 ## Phase
 
@@ -45,7 +45,7 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 
 ## Current focus
 
-**Variant B is live** (2026-11-11): `https://life-tracker-robo.vercel.app` on Vercel + Neon Free (`eu-central-1`) with GitHub sign-in; 21 migrations applied; the user's phone smoke test and the other-account/anonymous check passed. Branch `feat/personal-import-and-backup` adds `scripts/import-personal.cjs` (loads the user's wishlist with estimated RON prices and today/daily tasks from the gitignored `.local/personal-data.json`; tested idempotently on a local database), `.github/workflows/backup.yml` (weekly `age`-encrypted `pg_dump`, 90-day artifact) and the README runbook; docs refreshed (decisions, risk register R6 to R8, threat model section 8, data inventory). Still to do by the user: run the import against Neon, create the `life_tracker_backup` role and the `BACKUP_DATABASE_URL` secret, run the backup once and do the restore test, set the Vercel Ignored Build Step. Then one week of real use and the Neon/Vercel usage check (release plan section 6 budget). Open decisions are listed below.
+**Variant B is live** (2026-11-11): `https://life-tracker-robo.vercel.app` on Vercel + Neon Free (`eu-central-1`) with GitHub sign-in; 21 migrations applied; the user's phone smoke test and the other-account/anonymous check passed. Branch `feat/personal-import-and-backup` adds `scripts/import-personal.cjs` (loads the user's wishlist with estimated RON prices and today/daily tasks from the gitignored `.local/personal-data.json`; tested idempotently on a local database), `.github/workflows/backup.yml` (weekly `age`-encrypted `pg_dump`, 90-day artifact) and the README runbook; docs refreshed (decisions, risk register R6 to R8, threat model section 8, data inventory). Done by the user: the backup role and secret, one green backup run and a restore test (all merged to `main` as PR 78). Still to do by the user: confirm the import ran against Neon, a second offline copy of the `age` key, set the Vercel Ignored Build Step. Then one week of real use and the Neon/Vercel usage check (release plan section 6 budget). Open decisions are listed below.
 
 Earlier focus (kept for the open decisions):
 
@@ -153,6 +153,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
+- 2026-11-11 — Backup verified: the first two manual runs failed because the `BACKUP_DATABASE_URL` secret was not a bare `postgresql://` URL; `backup.yml` now stops early with a clear message (PR 79). After the secret was fixed the run was green and the user's restore test passed (the counts matched the live app). Still open: weekly Sunday run not yet seen, second offline copy of the `age` key.
 - 2026-11-11 — Variant B live, real data and backups: user's smoke test passed. Added `scripts/import-personal.cjs` (idempotent, `--dry-run`, local data file `.local/` gitignored; verified on a local Postgres: 45 wishlist items, 4+24 personal and 3+2 business tasks, second run adds nothing), `.github/workflows/backup.yml`, the README runbook (deploy, migrate, import, rollback, rotate, Ignored Build Step, backups, restore test), `AGENTS.md` rules, risk register R6 to R8, threat model section 8, data inventory rows. Not verified: the import and the backup workflow have not run against Neon or on GitHub yet; the restore test is still to do.
 
 - 2026-11-10 — Mobile polish merged: PR #77 (polish 1 to 21) squash-merged into `main` (`722721f`), no open PRs, nothing deployed. Next: variant B go-live prerequisites (user: app name, GitHub OAuth app, Neon and Vercel 2FA, source of the real data), see `docs/release-plan.md` sections 4 and 9; waits for the user's "pornește".

@@ -32,7 +32,11 @@ jobs:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
         run: |
           set -euo pipefail
-          test -n "$BACKUP_DATABASE_URL" || { echo "Secret BACKUP_DATABASE_URL is not set"; exit 1; }
+          # A pasted `psql '...'` snippet or stray quotes make pg_dump fall back to a local socket; never print the value.
+          case "$BACKUP_DATABASE_URL" in
+            postgresql://*|postgres://*) ;;
+            *) echo "Secret BACKUP_DATABASE_URL must be set and start with postgresql:// (the URL only, no psql, no quotes)"; exit 1 ;;
+          esac
           docker run --rm -e BACKUP_DATABASE_URL "$PG_IMAGE" \
             sh -c 'pg_dump "$BACKUP_DATABASE_URL" --format=custom --no-owner --no-privileges' \
             | age -r "$AGE_PUBLIC_KEY" -o "life-tracker-$(date -u +%F).dump.age"
