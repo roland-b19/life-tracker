@@ -12,15 +12,14 @@ function deloadWeeks(sets: HistorySet[]) {
   return new Set(sets.filter((s) => s.isDeload).map((s) => weekStart(s.date)));
 }
 
-/** An exercise's best of each training day: the heaviest load and the most reps. Deload weeks are left out. */
+/** An exercise's heaviest load of each training day. Deload weeks are left out. */
 export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
   const skip = deloadWeeks(sets);
-  const byDate = new Map<string, { date: string; weight: number; reps: number }>();
+  const byDate = new Map<string, { date: string; weight: number }>();
   for (const s of sets) {
     if (s.exerciseId !== exerciseId || skip.has(weekStart(s.date))) continue;
-    const best = byDate.get(s.date) ?? { date: s.date, weight: 0, reps: 0 };
+    const best = byDate.get(s.date) ?? { date: s.date, weight: 0 };
     best.weight = Math.max(best.weight, s.load);
-    best.reps = Math.max(best.reps, s.reps);
     byDate.set(s.date, best);
   }
   return [...byDate.values()]; // sets arrive oldest first
@@ -29,47 +28,48 @@ export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 /**
- * How a workout day progressed week over week: for each week, the average over the day's exercises of the
- * percentage change of their best weight (and of their best reps) from the week before. An exercise only counts in
- * a week when it was also done the week before (with a load or reps above 0 to compare against). Deload weeks are
- * skipped: they are neither a point nor a baseline, so the week after one is compared with the week before it.
+ * How a workout day progressed week over week: for each week, the average over the day's exercises of the change in
+ * their best weight (kg) from the week before. An exercise only counts in a week when it was also done the week
+ * before. Deload weeks are skipped: they are neither a point nor a baseline, so the week after one is compared with
+ * the week before it.
  */
 export function dayProgress(sets: HistorySet[], dayId: string) {
   const skip = deloadWeeks(sets);
-  const perExercise = new Map<string, Map<string, { weight: number; reps: number }>>();
+  const perExercise = new Map<string, Map<string, number>>();
   for (const s of sets) {
     if (s.dayId !== dayId || skip.has(weekStart(s.date))) continue;
     const weeks = perExercise.get(s.exerciseId) ?? new Map();
     const w = weekStart(s.date);
-    const best = weeks.get(w) ?? { weight: 0, reps: 0 };
-    best.weight = Math.max(best.weight, s.load);
-    best.reps = Math.max(best.reps, s.reps);
-    weeks.set(w, best);
+    weeks.set(w, Math.max(weeks.get(w) ?? 0, s.load));
     perExercise.set(s.exerciseId, weeks);
   }
   const allWeeks = [...new Set([...perExercise.values()].flatMap((m) => [...m.keys()]))].sort();
   return allWeeks.map((week) => {
     let before = addDays(week, -7);
     while (skip.has(before)) before = addDays(before, -7);
-    const changes = { weight: [] as number[], reps: [] as number[] };
+    const changes: number[] = [];
     for (const weeks of perExercise.values()) {
       const now = weeks.get(week);
       const prev = weeks.get(before);
-      if (!now || !prev) continue;
-      if (prev.weight > 0) changes.weight.push(((now.weight - prev.weight) / prev.weight) * 100);
-      if (prev.reps > 0) changes.reps.push(((now.reps - prev.reps) / prev.reps) * 100);
+      if (now !== undefined && prev !== undefined) changes.push(now - prev);
     }
-    return { week, weight: mean(changes.weight), reps: mean(changes.reps) };
+    return { week, change: mean(changes) };
   });
 }
 
-export const pct = (n: number | null) => (n === null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}%`);
+/** A weight change as the user reads it: "+2.5 kg", "−1 kg", "0 kg". */
+export const kgDelta = (n: number | null) => {
+  if (n === null) return "—";
+  const r = Math.round(n * 100) / 100;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r)} kg`;
+};
 
 /**
- * Each past workout with how its day did that week against the week before (the same figures as the Progress tab's
- * Workout days), or null when there is nothing to compare: a deload week, no day, or no earlier week.
+ * Each past workout with how its day did that week against the week before (the same figure as the Progress tab's
+ * Workout days: the average kg change), or null when there is nothing to compare: a deload week, no day, or no
+ * earlier week.
  */
-export type HistoryEntry = HistorySession & { progress: { weight: number | null; reps: number | null } | null };
+export type HistoryEntry = HistorySession & { progress: number | null };
 
 export function withProgress(sessions: HistorySession[], sets: HistorySet[]): HistoryEntry[] {
   const byDay = new Map<string, ReturnType<typeof dayProgress>>();
@@ -77,7 +77,6 @@ export function withProgress(sessions: HistorySession[], sets: HistorySet[]): Hi
     if (!s.dayId || s.isDeload) return { ...s, progress: null };
     let weeks = byDay.get(s.dayId);
     if (!weeks) byDay.set(s.dayId, (weeks = dayProgress(sets, s.dayId)));
-    const w = weeks.find((x) => x.week === weekStart(s.date));
-    return { ...s, progress: w && (w.weight !== null || w.reps !== null) ? { weight: w.weight, reps: w.reps } : null };
+    return { ...s, progress: weeks.find((x) => x.week === weekStart(s.date))?.change ?? null };
   });
 }

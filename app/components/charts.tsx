@@ -161,16 +161,27 @@ export function LineChart({
   const x = (i: number) => pad + (i / (points.length - 1)) * (w - 2 * pad);
   const y = (v: number) => pad + (1 - (v - lo) / span) * (height - 2 * pad);
   const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(" ");
+  const ticks = hi === lo ? [lo] : [hi, (hi + lo) / 2, lo];
+  const fmt = (n: number) => String(Math.round(n * 100) / 100);
   return (
     <div className="line" role="img" aria-label={summary}>
-      <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ height }}>
-        <path d={path} className="line-path" vectorEffect="non-scaling-stroke" />
-      </svg>
+      <div className="line-plot">
+        <div className="line-y number-tabular" aria-hidden="true" style={{ height }}>
+          {ticks.map((t) => (
+            <span key={t} style={{ top: y(t) }}>
+              {fmt(t)}
+            </span>
+          ))}
+        </div>
+        <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ height }}>
+          {ticks.map((t) => (
+            <line key={t} x1="0" x2={w} y1={y(t)} y2={y(t)} className="line-grid" vectorEffect="non-scaling-stroke" />
+          ))}
+          <path d={path} className="line-path" vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
       <div className="line-axis" aria-hidden="true">
         <span>{points[0].label}</span>
-        <span className="number-tabular">
-          {lo} – {hi}
-        </span>
         <span>{points[points.length - 1].label}</span>
       </div>
     </div>

@@ -182,6 +182,12 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 - **2026-11-09 — Deload weeks are skipped, workout timer, Undo for Finish and Cancel, History.** A Monday-start week that contains a session marked deload is left out of the exercise charts, the day stats and the previous-session lookup, so a normal week is compared with the last normal week before it (consecutive deload weeks are all skipped). The workout timer lives in the browser (`localStorage`, `gym-timer:<sessionId>`, always paused after a reload; shortcut: another device starts from 0, upgrade to a column on the session if that matters). Undo of Finish reopens the same session; Undo of Cancel re-inserts the session and its sets in one transaction after checking that the exercises are visible to the user and the split day is theirs, so the new actions cannot link another user's data. Both have authorization tests (owner, other user, anonymous). History shows finished sessions with sets, hides the open one, and has no delete; a row is the day, the date and that week's change against the week before (null for a deload week, a first week or a workout older than the 370 days the Progress tab loads), and opens in place to the duration and the sets. Modals now have 3rem top and bottom padding everywhere. No migration, no new dependency, no new data type.
 
+### 2026-11-10: Gym polish 2 (weight-only progress, last workout, chart axis)
+- Progress is weight only, in kg: the Reps metric and every percentage are gone. "Workout days" shows the average kg change of each exercise's best weight against the week before (`dayProgress` returns `change`), and History rows say "Weight +2.5 kg vs the week before". Load types mix kg and plates, so the figure is "weight", not strictly kg.
+- The active workout shows "Last time" per exercise, taken from the `history` already on the page (latest non-deload session of the same split day before today that holds the exercise): no new query or action.
+- `LineChart` (shared with Health) has a value axis (top, middle, bottom) with faint gridlines.
+- Muscle map: Front/Back set the camera to the original front/back pose (also a reset of drag and zoom); "Planned sets per week" lists only muscles with planned sets, the category buttons stay.
+
 ## Open
 
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.

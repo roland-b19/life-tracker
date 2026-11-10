@@ -20,7 +20,7 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
-import { dayProgress, exerciseSeries, pct, weekStart, withProgress } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, kgDelta, weekStart, withProgress } from "@/lib/gym-progress";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
@@ -622,7 +622,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("keeps the best of each day and skips deload", () => {
       const sets = [set("2026-11-02", 40, 8), set("2026-11-02", 50, 5), set("2026-11-09", 100, 1, { isDeload: true })];
-      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-02", weight: 50, reps: 8 }]);
+      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-02", weight: 50 }]);
     });
 
     it("skips the whole deload week, whatever day or exercise the deload was", () => {
@@ -639,11 +639,11 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const sets = [
         set("2026-11-02", 100, 10),
         set("2026-11-09", 60, 10, { isDeload: true }),
-        set("2026-11-16", 110, 10), // +10% against 2 Nov, not against the deload
+        set("2026-11-16", 110, 10), // +10 kg against 2 Nov, not against the deload
       ];
       const weeks = dayProgress(sets, "d");
       expect(weeks.map((w) => w.week)).toEqual(["2026-11-02", "2026-11-16"]); // no deload point
-      expect(weeks[1].weight).toBeCloseTo(10);
+      expect(weeks[1].change).toBeCloseTo(10);
     });
 
     it("steps over several deload weeks in a row", () => {
@@ -653,10 +653,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         set("2026-11-16", 60, 10, { isDeload: true }),
         set("2026-11-23", 120, 10),
       ];
-      expect(dayProgress(sets, "d").at(-1)?.weight).toBeCloseTo(20);
+      expect(dayProgress(sets, "d").at(-1)?.change).toBeCloseTo(20);
     });
 
-    it("gives each past workout its week's change against the week before, none for a deload or a first week", () => {
+    it("gives each past workout its week's kg change against the week before, none for a deload or a first week", () => {
       const sets = [
         set("2026-11-02", 100, 10),
         set("2026-11-09", 60, 10, { isDeload: true }),
@@ -671,24 +671,25 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       );
       expect(first.progress).toBeNull(); // nothing before it
       expect(deload.progress).toBeNull();
-      expect(third.progress?.weight).toBeCloseTo(10);
+      expect(third.progress).toBeCloseTo(10);
       expect(noDay.progress).toBeNull();
-      expect(pct(10)).toBe("+10%");
-      expect(pct(null)).toBe("—");
+      expect(kgDelta(2.5)).toBe("+2.5 kg");
+      expect(kgDelta(-1)).toBe("−1 kg");
+      expect(kgDelta(0)).toBe("0 kg");
+      expect(kgDelta(null)).toBe("—");
     });
 
-    it("averages week-over-week change across exercises", () => {
+    it("averages the week-over-week kg change across exercises", () => {
       const sets = [
         set("2026-11-02", 100, 10, { exerciseId: "e1" }),
-        set("2026-11-09", 110, 10, { exerciseId: "e1" }), // +10% weight, 0% reps
+        set("2026-11-09", 110, 10, { exerciseId: "e1" }), // +10 kg
         set("2026-11-02", 50, 10, { exerciseId: "e2" }),
-        set("2026-11-09", 50, 12, { exerciseId: "e2" }), // 0% weight, +20% reps
+        set("2026-11-09", 50, 12, { exerciseId: "e2" }), // no change
         set("2026-11-09", 30, 8, { exerciseId: "e3" }), // no previous week: not counted
       ];
       const [first, second] = dayProgress(sets, "d");
-      expect(first).toEqual({ week: "2026-11-02", weight: null, reps: null });
-      expect(second.weight).toBeCloseTo(5);
-      expect(second.reps).toBeCloseTo(10);
+      expect(first).toEqual({ week: "2026-11-02", change: null });
+      expect(second.change).toBeCloseTo(5);
       expect(dayProgress(sets, "other")).toEqual([]);
     });
   });

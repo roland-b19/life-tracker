@@ -6,16 +6,11 @@ import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import { getGymHistoryAction } from "@/app/actions/gym";
 import { addDays, toISODate } from "@/lib/format-date";
-import { dayProgress, exerciseSeries, pct } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, kgDelta } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 
 type Range = "30" | "90" | "180" | "360";
 const RANGES: { value: Range; label: string }[] = (["30", "90", "180", "360"] as const).map((d) => ({ value: d, label: `${d}D` }));
-type Metric = "weight" | "reps";
-const METRICS: { value: Metric; label: string }[] = [
-  { value: "weight", label: "Weight" },
-  { value: "reps", label: "Reps" },
-];
 
 const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
 const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
@@ -25,7 +20,6 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
   const today = toISODate();
   const [sets, setSets] = useState<HistorySet[] | null>(null);
   const [exerciseId, setExerciseId] = useState("");
-  const [metric, setMetric] = useState<Metric>("weight");
   const [range, setRange] = useState<Range>("90");
   const [dayId, setDayId] = useState(days[0]?.id ?? "");
 
@@ -70,7 +64,6 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
   const chosen = exercises.some(([id]) => id === exerciseId) ? exerciseId : exercises[0][0];
   const since = addDays(today, 1 - Number(range));
   const series = exerciseSeries(sets, chosen).filter((p) => p.date >= since);
-  const unit = metric === "weight" ? "kg or plates" : "reps";
 
   const weeks = dayProgress(sets, dayId).slice(-8);
   const current = weeks.at(-1);
@@ -94,17 +87,16 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
           </select>
         </label>
         <div className="chart-controls">
-          <Segmented label="Metric" value={metric} options={METRICS} onChange={setMetric} />
           <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
         </div>
         <LineChart
-          points={series.map((p) => ({ label: dm(p.date), value: p[metric] }))}
-          summary={`Best ${metric} per workout over the last ${range} days`}
+          points={series.map((p) => ({ label: dm(p.date), value: p.weight }))}
+          summary={`Best weight per workout over the last ${range} days`}
         />
         {series.length < 2 && <p className="muted chart-note">Not enough workouts in the last {range} days.</p>}
         {series.length > 0 && (
           <p className="muted chart-caption">
-            Best {unit} of each workout; deload weeks are left out.
+            Heaviest load (kg or plates) of each workout; deload weeks are left out.
           </p>
         )}
       </section>
@@ -114,7 +106,6 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
           <h2 id="day-progress-title" className="section-title">
             Workout days
           </h2>
-          {current && <span className="badge badge-rest number-tabular">{pct(current.weight)} weight this week</span>}
         </div>
         {days.length > 0 && (
           <label>
@@ -130,20 +121,16 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
         )}
         <div className="stat-row">
           <div className="stat-tile">
-            <strong className="number-tabular">{pct(current?.weight ?? null)}</strong>
+            <strong className="number-tabular">{kgDelta(current?.change ?? null)}</strong>
             <span>Weight vs last week</span>
-          </div>
-          <div className="stat-tile">
-            <strong className="number-tabular">{pct(current?.reps ?? null)}</strong>
-            <span>Reps vs last week</span>
           </div>
         </div>
         <LineChart
-          points={weeks.filter((w) => w.weight !== null).map((w) => ({ label: dm(w.week), value: round(w.weight!) }))}
-          summary="Average weekly change in best weight across the day's exercises, in percent"
+          points={weeks.filter((w) => w.change !== null).map((w) => ({ label: dm(w.week), value: round(w.change!, 2) }))}
+          summary="Average weekly change in best weight across the day's exercises, in kg"
         />
         <p className="muted chart-caption">
-          Average change of each exercise&apos;s best weight from the week before (%), per week starting Monday.
+          Average change of each exercise&apos;s best weight from the week before (kg), per week starting Monday.
           Deload weeks are skipped: the week after one is compared with the week before it.
         </p>
       </section>
