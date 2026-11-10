@@ -790,12 +790,12 @@ main {
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
   transition: transform var(--lift);
-  animation: rise var(--dur) var(--ease) backwards;
+  animation: rise 300ms var(--ease) backwards;
 }
 
-.surface:nth-child(2) { animation-delay: 40ms; }
-.surface:nth-child(3) { animation-delay: 80ms; }
-.surface:nth-child(n + 4) { animation-delay: 120ms; }
+.surface:nth-child(2) { animation-delay: 30ms; }
+.surface:nth-child(3) { animation-delay: 60ms; }
+.surface:nth-child(n + 4) { animation-delay: 90ms; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -1634,7 +1634,7 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-  animation: rise var(--dur) var(--ease) 120ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
+  animation: rise 300ms var(--ease) 90ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
 }
 
 main > .error {
@@ -1866,7 +1866,7 @@ main > .error {
 /* As long as the page enter below: the transition (and its click block) lasts as long as its slowest part */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 300ms;
+  animation-duration: 200ms;
   animation-timing-function: var(--ease);
 }
 
@@ -1877,10 +1877,10 @@ main > .error {
 }
 /* Short and blur-free: the page ignores clicks while it runs, and a blur repaints the whole snapshot every frame. */
 ::view-transition-old(.page-exit) {
-  animation: page-out 120ms ease-in both;
+  animation: page-out 80ms ease-in both;
 }
 ::view-transition-new(.page-enter) {
-  animation: page-in 260ms var(--ease) 40ms both;
+  animation: page-in 180ms var(--ease) 20ms both;
 }
 @keyframes page-out {
   to { opacity: 0; transform: scale(0.985); }
@@ -2855,9 +2855,9 @@ button.bars-col:focus-visible {
 :is(.entries, .todo-list, .shopping-groups) > .empty-note {
   /* backwards, not both: a held end state would pin transform and block the hover lift */
   animation: row-in 260ms var(--ease) backwards;
-  /* Capped at the 11th row, so a long list never waits; browsers without sibling-index() drop the line and
+  /* Capped at the 9th row, so a long list never waits; browsers without sibling-index() drop the line and
      show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
-  animation-delay: calc(min(sibling-index() - 1, 10) * 30ms);
+  animation-delay: calc(min(sibling-index() - 1, 8) * 20ms);
 }
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }

@@ -156,8 +156,8 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 
 - `--card-pad` 1.35rem (1.6rem at ≥768px).
 - Radius 1.15rem, background `--surface`, `backdrop-filter: var(--glass-blur)`, `1px solid var(--edge)`.
-- Entrance `rise`: from `translateY(14px)` and opacity 0, `var(--dur) var(--ease) backwards`.
-- Delays: child 2 = 40ms, 3 = 80ms, 4+ = 120ms.
+- Entrance `rise`: from `translateY(14px)` and opacity 0, `300ms var(--ease) backwards`.
+- Delays: child 2 = 30ms, 3 = 60ms, 4+ = 90ms.
 
 ## Press
 
@@ -456,17 +456,17 @@ The CSS hides the outline on `[data-pointer]`.
 
 | What | Value |
 |---|---|
-| Page exit (`page-out`) | 120ms ease-in, to opacity 0 and scale .985 |
-| Page enter (`page-in`) | 260ms `--ease`, 40ms delay, from `translateY(8px)` |
-| View-transition root | 300ms |
-| Card rise | 420ms `--ease`, 14px, delays 0/40/80/120ms |
+| Page exit (`page-out`) | 80ms ease-in, to opacity 0 and scale .985 |
+| Page enter (`page-in`) | 180ms `--ease`, 20ms delay, from `translateY(8px)` |
+| View-transition root | 200ms |
+| Card rise | 300ms `--ease`, 14px, delays 0/30/60/90ms |
 
 **Rows**
 
 | What | Value |
 |---|---|
 | Row `row-in` | 260ms `--ease` `backwards`, from opacity 0 and scale .97 |
-| Row stagger | `calc(min(sibling-index() - 1, 10) * 30ms)`, with the JS `stagger()` fallback |
+| Row stagger | `calc(min(sibling-index() - 1, 8) * 20ms)`, with the JS `stagger()` fallback |
 | `row-in` inside `.auto-height` | 180ms |
 
 **`AutoHeight`**

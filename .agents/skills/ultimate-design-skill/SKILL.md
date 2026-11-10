@@ -148,7 +148,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
 - **Fast.**
-  - Page and tab changes feel instant (exit 120ms).
+  - Page and tab changes feel instant (exit 80ms, whole transition 200ms).
   - View switches fade old rows in 120ms.
   - Nothing animates for its own sake.
   - The resize is always faster than the item's appearance.
@@ -184,13 +184,13 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "Apple spring" motion the user chose, which settles without overshoot. Never an overshoot or a spring bounce. Full timings are in `references/values.md`.
 
 1. **Page enter/exit.** `template.tsx` wraps every page in `<ViewTransition enter="page-enter" exit="page-exit" default="none">`.
-   - Exit: 120ms fade with scale to .985.
-   - Enter: 260ms rise of 8px, after a 40ms delay.
+   - Exit: 80ms fade with scale to .985.
+   - Enter: 180ms rise of 8px, after a 20ms delay. The whole transition (and its click block) is 200ms.
    - No blur.
    - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
-2. **Cards rise in on load.** 14px up and fade, staggered 0/40/80/120ms.
+2. **Cards rise in on load.** 14px up and fade over 300ms, staggered 0/30/60/90ms.
 3. **Rows build one after another** on page load only. After that a view switch (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick; the user's call, 2026-11-10, applied to every page) fades the old rows out (120ms), then the whole new list in (200ms), and the card resizes at once. In code: `useBuilt()` adds `built` to the list's class after 700ms (globals.css turns the rows' own entrance off), and `swapIn(card)` runs just before the state change that swaps the rows (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
-   - `row-in`: opacity 0 and scale .97, 260ms, 30ms apart, capped at the 11th row.
+   - `row-in`: opacity 0 and scale .97, 260ms, 20ms apart, capped at the 9th row.
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
    - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.
    - A list that shrinks still builds in sequence.
@@ -217,7 +217,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
 9. **Height changes** go through `AutoHeight`: 180ms, faster than the rows.
    - Each new row waits until the growing height has uncovered it.
    - Tags and links marked `data-slide` glide to their new column when the column widths change.
-10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (420ms, 14px, staggered 0/40/80/120ms).
+10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (300ms, 14px, staggered 0/30/60/90ms).
 11. **Form close.** The modal reverses its open animation (fade plus scale .98 and 8px). The page blur clears. Only then does the list change (`later()`).
 12. **Sign-out.** Every `main > *` fades with opacity plus blur(2px), never scale, over 320ms `--ease` (fill `forwards`, so it stays faded). The sign-out call runs in parallel. The router goes to `/signin` and refreshes only when both are done. On failure the fade is cancelled and a warning toast says `Failed to sign out`.
 13. **Sign-in.** The card appears only after the previous page has faded. The Continue button keeps its colour while busy (opacity 1, progress cursor).

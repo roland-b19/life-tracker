@@ -69,7 +69,7 @@ const entranceOf = (row: Element) => row.getAnimations().find((a) => (a as CSSAn
 function stagger(list: HTMLElement) {
   [...list.children].forEach((row, i) => {
     const entrance = entranceOf(row);
-    const delay = Math.min(i, 10) * 30;
+    const delay = Math.min(i, 8) * 20;
     if (entrance && Number(entrance.currentTime) === 0 && Number(entrance.effect!.getTiming().delay) < delay)
       entrance.effect!.updateTiming({ delay });
   });
