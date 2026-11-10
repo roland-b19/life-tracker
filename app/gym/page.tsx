@@ -20,16 +20,18 @@ export default async function GymPage() {
   }
 
   const userId = session.user.id;
-  const split = await getUserSplitWithDays(userId);
-  const deload = await getDeloadStatus(userId);
-  const exercises = await getExercises(userId);
   const openSince = addDays(toISODate(), -2);
-  const open = await getOpenWorkoutSession(userId, openSince);
   // Same year of sets the Progress tab draws from, so a workout's figures match its Workout days chart.
-  const history = withProgress(
-    await getWorkoutHistory(userId, openSince),
-    await getGymHistory(userId, addDays(toISODate(), -370)),
-  );
+  const since = addDays(toISODate(), -370);
+  // The split and the exercise list both seed the shared default exercises on a first visit, so they run in turn.
+  const [[split, exercises], deload, open, workouts, sets] = await Promise.all([
+    getUserSplitWithDays(userId).then(async (sp) => [sp, await getExercises(userId)] as const),
+    getDeloadStatus(userId),
+    getOpenWorkoutSession(userId, openSince),
+    getWorkoutHistory(userId, openSince, since),
+    getGymHistory(userId, since),
+  ]);
+  const history = withProgress(workouts, sets);
 
   return (
     <GymClient
