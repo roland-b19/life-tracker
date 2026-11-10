@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (branch `feat/gym-polish-2`: Gym polish, PR open, not merged)_
+_Last updated: 2026-11-10 by Claude (Gym polish 2 merged in `main`, PR #71)_
 
 ## Phase
 
