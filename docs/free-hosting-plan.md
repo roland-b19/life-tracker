@@ -86,9 +86,13 @@ Verified on 2026-11-10 by running it against the real Neon project (PostgreSQL 1
 
 2. **Vercel Hobby** (verified 2026-11-10 on a real project): the account was created without a card; Settings > Functions > Function Region allows exactly one region and offers Frankfurt (`fra1`), chosen to sit next to Neon `eu-central-1`; the app builds on Vercel with Next 16.4 and `output: "standalone"` (build 47 s, all routes listed, deploy Ready). The build needs the same placeholder variables as the `Dockerfile` build stage (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `AUTH_AZURE_*`, `AUTH_ISSUER`, `DATABASE_URL`), because `src/server/db.ts` and `src/auth.ts` throw at import when they are missing; without them the build fails with "Failed to collect page data for /api/auth/[...nextauth]". Sensitive actions on Vercel (redeploy) ask for an emailed 6-digit code. The test project is still deployed with placeholder values, so it works as a build check only: replace the values or delete the project before real use.
 
-Still unverified:
+3. **Neon rules for inactive Free projects** (read from the official pages on 2026-11-10; the Neon plans page and the Neon docs were updated 2026-10/11, the Terms of Service on 2026-10-14):
+   - No page says Neon deletes, suspends or archives an inactive Free *project*, and none gives a retention period or notice for it. The only inactivity rule for Free is compute suspension after 5 minutes (fixed).
+   - The plans page says Neon "automatically archives inactive branches" on all plans, with no timing and nothing on how it applies to Free (from a summarised read of the page). Our data lives on the default branch `production`; the weekly backup wakes it anyway. Re-read that page before relying on a long idle period.
+   - The limits do not delete data (compute suspends or writes fail, see above). Downgrading a paid plan requires removing what exceeds the Free allowances, which does not affect us on Free.
+   - The Terms (a schedule under the Databricks Master Cloud Services Agreement, not read) say the agreement, schedule and pricing may change from time to time, and continued use counts as consent, with no advance notice period stated. So the Free plan can change at any time: the backup and exit plan below are the protection.
 
-3. **Neon rules for inactive free projects** (none found on the plans page), and that the Free terms do not change.
+Nothing is left unverified except what only time shows (plan changes). The three checks are done.
 
 ## Long-term checklist (free, unlimited time)
 
