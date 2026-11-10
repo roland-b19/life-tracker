@@ -228,6 +228,12 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 - New tests: `tests/actions-anonymous.test.ts` (every exported server action refuses an anonymous caller), `tests/pages-auth.test.ts` (every page checks the session), more validation and ownership cases, and a query budget for the Tasks day switch.
 - Left for the user to decide (not changed): Azure sign-in restriction (tenant assignment or allowlist), a nonce-based CSP, the 30-day GitHub session, how the Claude system prompt reaches the CLI, unique push endpoint plus unsubscribe, capping Tasks `doneDates`, wishlist link validation, Dependabot PRs #67 to #70.
 
+### 2026-11-11: Variant B is live; real data and backups
+- Go-live done: Vercel `life-tracker` (`https://life-tracker-robo.vercel.app`) + Neon Free `eu-central-1` + GitHub OAuth with `OWNER_ALLOWLIST` (numeric GitHub id). 21 migrations applied by the owner role from the user's Mac; phone smoke test and the other-account/anonymous check passed. The Neon rehearsal branch was skipped by the user's choice (the migrations were verified in the SQL Editor instead).
+- Real data goes in through `scripts/import-personal.cjs` from a gitignored `.local/personal-data.json`, never through git (health-adjacent personal data; the repo is private but the rule stays). The importer is idempotent (skips names that exist) and runs with a hidden-prompt owner URL. Wishlist categories and task groups have no home in the app, so the data is flattened; no feature was invented for them. The wishlist prices are the agent's approximate RON estimates (November 2026, no links) for the user to correct.
+- Gym needs no import: `ensureUserDefaultSplit` already creates the user's 7-day plan with the detailed muscle groups on the first Gym visit.
+- Backups: `.github/workflows/backup.yml`, weekly, `pg_dump` (custom format) through `age` with the public key in the workflow, artifact kept 90 days, read-only role `life_tracker_backup` over the direct Neon URL, secret `BACKUP_DATABASE_URL`. The private key stays offline. A restore test (README "Backups") is required before the backup counts as working.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

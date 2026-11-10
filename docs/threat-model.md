@@ -6,7 +6,7 @@ Procedure: `.agents/skills/secure-development/references/threat-modeling.md`. Sp
 Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Container Apps, PostgreSQL Flexible Server, Storage Queue, Entra External ID. Iteration 1 runs only Next.js and local PostgreSQL; Azure and Entra are deferred. The infrastructure contract now requires an immutable image digest; no Azure registry or runtime has been deployed to verify it.
 
 ## 1. Scope and assumptions
-- In scope: the web/PWA frontend, the backend API, the database, the queue and push worker, the in-app Food Assistant, authentication through Microsoft Entra External ID, the Azure hosting and the CI pipeline.
+- In scope: the web/PWA frontend, the backend API, the database, the queue and push worker, the in-app Food Assistant, authentication through Microsoft Entra External ID (variant A) or GitHub OAuth with an owner allowlist (variant B), the hosting (Azure for the course; Vercel and Neon Free for personal use), the weekly encrypted backup job and the CI pipeline.
 - Out of scope: the user's devices (iPhone, Mac) and their OS security; the consumer AI products themselves (Claude, Gemini); Apple's and Google's push services beyond what we send them; physical security.
 - Assumptions: Azure and Entra platform controls are trusted (shared responsibility); only the owner uses the app now, so the realistic adversaries are outsiders and a compromised token, not other users; multi-user isolation is still built and tested because the course grades authorization and Business reuses it.
 
@@ -100,3 +100,8 @@ Rating: H/M/L = priority. Status: `open` until the stack exists; each row names 
 
 ## 7. Risks accepted
 Tracked in `docs/security/risk-register.md`.
+
+## 8. Variant B additions (2026-11-11)
+- New trust boundaries: GitHub (identity provider; the allowlist of numeric ids is the authorization gate before any user row exists), Vercel (runs the app, holds the Production secrets as Sensitive variables) and Neon (public endpoint over TLS, restricted app role, owner role only used from the owner's Mac).
+- Backup job: runs in GitHub Actions with a read-only database role in a repository secret and writes only `age` ciphertext; the decryption key is never in GitHub. Threats: secret theft gives read access to the database until the role password is rotated (R8); a stolen artifact is unreadable without the offline key.
+- Personal data import (`scripts/import-personal.cjs`) is a local, owner-run tool that reads a gitignored file; it needs the owner URL, which is only typed into a hidden prompt.

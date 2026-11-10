@@ -1,0 +1,48 @@
+name: Backup
+
+# Weekly encrypted dump of the production database (Neon). The dump is piped through `age`, so no plaintext
+# ever touches the runner's disk or the artifact. Only the public key is here; the private key stays offline with the owner.
+# Runbook (secret, backup role, restore test): README "Backups".
+on:
+  schedule:
+    - cron: "17 3 * * 0" # Sunday 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AGE_PUBLIC_KEY: age14nc73lll20j2jxx4rflpmp70fw9ctm4z7m53adak4wtwvrpe2dyq28mesy
+      # pg_dump must be at least as new as the server; Neon's major version is shown in its console.
+      PG_IMAGE: postgres:17.6
+    steps:
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+      - name: Dump and encrypt
+        env:
+          # The direct (unpooled) Neon URL of the read-only role `life_tracker_backup`: pg_dump does not work through the pooler.
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_DATABASE_URL" || { echo "Secret BACKUP_DATABASE_URL is not set"; exit 1; }
+          docker run --rm -e BACKUP_DATABASE_URL "$PG_IMAGE" \
+            sh -c 'pg_dump "$BACKUP_DATABASE_URL" --format=custom --no-owner --no-privileges' \
+            | age -r "$AGE_PUBLIC_KEY" -o "life-tracker-$(date -u +%F).dump.age"
+          # An empty or truncated dump is a failed backup; a real one is far larger than this.
+          test "$(stat -c %s life-tracker-*.dump.age)" -gt 10000
+      - name: Upload encrypted dump
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: life-tracker-backup
+          path: life-tracker-*.dump.age
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error

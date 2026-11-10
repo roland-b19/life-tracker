@@ -42,7 +42,15 @@ Nothing about this project may live only in a chat or in an agent's private memo
 - Default branch `main` must always work. Work on short branches (`feat/...`, `fix/...`, `docs/...`) and merge through a PR; trivial doc fixes may go straight to `main`.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `infra:`). Small, frequent commits.
 - Never force-push `main`, never rewrite published history.
+- Real personal data (the user's actual wishlist, tasks, weights, anything health-adjacent) lives only in the live database and in the gitignored `.local/` folder; `scripts/import-personal.cjs` loads it. Never commit it, never paste it into docs, PRs or issues.
 - Never commit secrets, `.env` files, keys, Terraform state or Azure subscription/tenant details. `.gitignore` covers the common cases; it is not a safety net, check your diff.
+
+## Personal deploy (variant B) is live
+
+Vercel + Neon Free + GitHub sign-in at `https://life-tracker-robo.vercel.app` holds the user's real data. The runbook (deploy, migrations, data import, rollback, secrets, weekly encrypted backup and restore test) is in `README.md`. Rules:
+- Migrations are additive and run by the user from their Mac with the owner URL typed into a hidden prompt; run them before merging code that needs them. Never ask for a connection string, token or key in chat, and never run a command against the live database yourself.
+- `.github/workflows/backup.yml` makes the weekly encrypted backup; do not weaken it (no plaintext dump, no longer retention without a reason). The private `age` key is only ever with the user.
+- Preview deployments get no database or auth secrets.
 
 ## Handoff protocol (agents change over time)
 
