@@ -940,8 +940,7 @@ export function FoodClient({
                   <div key={m.label} className="macro-card">
                     <span className="macro-title">{m.label}</span>
                     <span className="macro-numbers">
-                      {/* Plain text, not counting: these boxes stay perfectly still on entry and on every change. */}
-                      <span>{oneDecimal(m.value)}</span>
+                      <AnimatedNumber value={m.value} format={oneDecimal} />
                       <span className="macro-target">
                         / {m.target}
                         {m.unit}

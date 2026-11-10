@@ -2501,11 +2501,12 @@ button.bars-col:focus-visible {
 .muscle-move {
   display: none;
   position: relative;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0; /* the global button min-height would stretch it taller than wide */
   padding: 0;
   place-items: center;
-  border-radius: 0.7rem;
+  border-radius: 0.85rem;
   background: var(--surface-secondary);
   color: var(--secondary);
   touch-action: none;
@@ -2514,10 +2515,11 @@ button.bars-col:focus-visible {
   -webkit-touch-callout: none;
   transition: background var(--fade);
 }
-.muscle-move::before { content: ""; position: absolute; inset: -0.25rem; } /* 44pt target */
 .muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), white 8%); }
 @media (pointer: coarse) {
   .muscle-move { display: grid; }
+  /* The wrapper's touch-action none would also block the canvas's pan-y: the page scrolls over the map. */
+  .muscle-canvas { touch-action: pan-y; }
 }
 .muscle-side {
   display: grid;
@@ -3065,7 +3067,7 @@ button.bars-col:focus-visible {
 @media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
 .history-entry { display: block; padding-block: 0.25rem; transition: background-color var(--fade); }
 /* The open workout is a tinted fill, so it stands out from the banded rows around it. */
-.history-entry.open { background-color: var(--tint-subtle) !important; /* wins over the band and wash rules above */ }
+.history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
 .history-entry.open .history-chevron { color: var(--tint); }
 .history-toggle {
   display: grid;
