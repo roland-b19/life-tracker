@@ -50,7 +50,7 @@ Each item: do it, test it, commit.
 
 ## 3b. Cleanup: keep strictly what the app uses (decided 2026-11-10)
 
-Nothing is deleted before the user approves the list in section 9 (question b). Git history is the archive, so a deleted file is never lost; for the database a `pg_dump` is taken first.
+**List approved by the user on 2026-11-10.** Each item is re-checked against the code (graphify plus grep) right before it is deleted; anything found to be used stays and is reported. The work itself runs at step 3 of section 7, after the shared code. Git history is the archive, so a deleted file is never lost; for the database a `pg_dump` is taken first.
 
 1. **Unused tables.** Zero code use outside `src/db/schema.ts` today: `meal_plans`, `meal_plan_days`, `expense_categories`, `api_tokens`, `business_incomes`; `expenses` is only referenced by `scripts/db-init.cjs`. `claude_connections` stays (Claude is kept: present on A, hidden on B). `push_subscriptions` stays (push stays, Azure uses it). One new migration drops them (after the dump), schema entries and `scripts/db-init.cjs` references are removed, the grants stay consistent, and the migration is run on a throwaway database first (as done for 0000 to 0018).
 2. **Legacy code.** Everything left from the removed Money and Business modules (components, actions, queries, validation schemas, seed data, tests), found with graphify plus a dead-export and unused-dependency check. No dependency is removed or added without telling the user.
@@ -151,5 +151,5 @@ Sizes (guess): shared code about 2 to 3 days, B about 1 to 2 days plus the wait 
 ## 9. Open questions for the user
 
 a. ~~Claude integration~~ **Decided 2026-11-10: hidden on B, present on A.** Not deleted; its code and table are used by A. Work in section 5.7.
-b. **Cleanup list** (Claude is out of it) in section 3b: approve it (or edit it) before anything is deleted.
+b. ~~Cleanup list~~ **Approved 2026-11-10** (section 3b).
 c. **Live app name** for `<name>.vercel.app`: to be chosen before the GitHub OAuth app is created.

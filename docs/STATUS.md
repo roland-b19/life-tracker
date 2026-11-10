@@ -132,7 +132,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 ## Next
 
 1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
-2. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; open questions are in its section 9 (approve the cleanup list, live app name); Claude is hidden on B and present on A. Waiting for the user's go-ahead to start section 3. Nothing is implemented.
+2. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; the cleanup list is approved; the only open question (its section 9) is the live app name; Claude is hidden on B and present on A. Waiting for the user's go-ahead to start section 3. Nothing is implemented.
 3. Maintain local-only verification until then (no Azure deployments).
 
 ## Open questions

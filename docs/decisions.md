@@ -210,6 +210,9 @@ Decided by the user: real push notifications are not deleted but hidden behind `
 ### 2026-11-10: Claude hidden on the personal variant, present on Azure
 Decided by the user (confirming the earlier flag decision): `NEXT_PUBLIC_CLAUDE_ENABLED` is false on B (Vercel cannot spawn the CLI) and true on A. It is not deleted. Azure therefore needs the CLI in the image, `CLAUDE_TOKEN_KEY` in Key Vault, outbound access to Anthropic and a live check; the production gap noted on 2026-11-08 is closed in that work (`docs/release-plan.md` 5.7). Installing the CLI package in the image still needs the user's OK. Supersedes "off on both" in the plan.
 
+### 2026-11-10: Cleanup list approved
+The user approved the deletion list in `docs/release-plan.md` 3b (unused tables, legacy Money/Business code, old data, old iteration docs). Each item is re-verified against the code before it is deleted. Execution waits for the shared code and a go-ahead to start implementation.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
