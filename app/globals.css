@@ -1574,7 +1574,7 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-  animation: rise var(--dur) var(--ease) backwards;
+  animation: rise var(--dur) var(--ease) 120ms backwards; /* with the cards around it (.surface:nth-child(n + 4)) */
 }
 
 main > .error {
