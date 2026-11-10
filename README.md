@@ -73,6 +73,57 @@ Scripts in [`scripts/`](scripts/) deploy and remove the Azure environment; they 
 
 The infrastructure is [`infra/main.bicep`](infra/main.bicep). Everything is ephemeral: deploy, verify, tear down.
 
+## Personal deploy (variant B): runbook
+
+Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database and GitHub sign-in. Environment variables are set in Vercel (Production only, Sensitive); never in the repo.
+
+- **Deploy:** merging to `main` deploys to Production. A pull request preview has no database or auth secrets, so it only shows that the build works.
+- **Migrations:** run before merging code that needs them, from your Mac with the Neon **owner** connection string (direct, not pooled). The hidden prompt keeps it out of your shell history.
+  ```bash
+  read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && npm run db:migrate; unset DATABASE_URL_MIGRATE
+  ```
+- **Load your own data (one time):** `scripts/import-personal.cjs` reads the gitignored `.local/personal-data.json` (wishlist with prices, today and daily tasks) into your account. Sign in to the app once first. It skips anything whose name already exists, so it is safe to run again. Gym needs no import: opening Gym creates the routine.
+  ```bash
+  read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-personal.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
+  ```
+  Remove `--dry-run` to write.
+- **Roll back:** Vercel, Deployments, the previous deployment, Instant Rollback. A bad migration is undone from a backup (below) or Neon's history window; migrations are additive, so rolling the code back is normally enough.
+- **Rotate a secret:** change it in Vercel (or GitHub for the backup), redeploy. `NEXTAUTH_SECRET` signs everyone out; the GitHub client secret is rotated in the OAuth app first, then in Vercel.
+- **Free plan changes:** Neon or Vercel may change the Free terms. The weekly backup below plus `docker build` make the app movable to any host that runs Docker and PostgreSQL.
+- **Ignored Build Step** (Vercel, Settings, Git): Behavior "Override", command `[ "$VERCEL_ENV" != "production" ]`. Pull request previews are skipped (exit 0) and production builds run (exit 1).
+
+### Backups
+
+`.github/workflows/backup.yml` runs every Sunday (and on demand): `pg_dump`, encrypted with `age` on the runner, uploaded as the artifact `life-tracker-backup` for 90 days. Only the public key is in the repo; the private key is kept offline by the owner and never in GitHub.
+
+One-time setup:
+
+1. In the Neon SQL Editor create a read-only role (use a generated password, for example from `openssl rand -base64 24 | tr -d '/+='`). If the `GRANT` is refused, use the owner string instead.
+   ```sql
+   CREATE ROLE life_tracker_backup LOGIN PASSWORD '<generated>';
+   GRANT pg_read_all_data TO life_tracker_backup;
+   ```
+2. Store its **direct** connection string as the repository secret (the prompt hides the value):
+   ```bash
+   gh secret set BACKUP_DATABASE_URL --repo roland-b19/life-tracker
+   ```
+3. Run it once: `gh workflow run backup.yml --repo roland-b19/life-tracker`, then check that the run is green.
+
+Restore test (once before relying on it, then every quarter; the dump is custom-format PostgreSQL, so `pg_restore` reads it):
+
+```bash
+gh run download --repo roland-b19/life-tracker -n life-tracker-backup -D /tmp/lt-backup
+age -d -i <path to your offline age key> -o /tmp/lt-backup/restore.dump /tmp/lt-backup/life-tracker-*.dump.age
+docker compose up -d
+docker compose exec -T postgres createdb -U postgres lt_restore
+docker compose exec -T postgres pg_restore -U postgres -d lt_restore --no-owner < /tmp/lt-backup/restore.dump
+docker compose exec -T postgres psql -U postgres -d lt_restore -c "select (select count(*) from users) users, (select count(*) from todos) todos, (select count(*) from wishlist_items) wishlist"
+docker compose exec -T postgres dropdb -U postgres lt_restore
+rm -rf /tmp/lt-backup
+```
+
+The counts must match the live app. Also download one artifact now and then and keep it somewhere that is not GitHub.
+
 ## For people and for AI agents
 
 - Working rules for every agent (Claude Code, Gemini, Antigravity, Copilot, Codex, ...): [`AGENTS.md`](AGENTS.md)

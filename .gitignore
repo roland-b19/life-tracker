@@ -55,3 +55,6 @@ crash.log
 graphify-out/
 .neon
 .claude/launch.json
+
+# Personal data for scripts/import-personal.cjs (never committed)
+/.local/

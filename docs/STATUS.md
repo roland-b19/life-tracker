@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (mobile polish 1 on branch `fix/mobile-polish-1`; 3c merged)_
+_Last updated: 2026-11-11 by Claude (variant B live; real-data importer and weekly backup on branch `feat/personal-import-and-backup`)_
 
 ## Phase
 
@@ -44,6 +44,10 @@ Gym polish and detailed muscles (same branch): spacing fixes on the Workout | Pr
 Gym history, timer, Undo and deload skipping (same branch): the Workout tab has a History list of every finished workout (newest first, rest days not counted, 10 rows then More): a row shows the day, the date and how that day did that week against the week before (weight and reps, the Progress tab's figures), and opens to the duration and the sets (`withProgress` in `src/lib/gym-progress.ts`); the Progress tab no longer lists logged workouts. The workout has a built-in timer (Pause/Resume, paused by Exit, kept in the browser's localStorage per session, so the manual minutes field is gone). Finish and Cancel have an Undo toast (`reopenSessionAction`, `restoreSessionAction`, both with authorization tests). A deload week (any week with a deload session) is skipped whole in the charts, the day stats and the previous-session comparison, so the week after it is compared with the last normal week. Modals have more padding top and bottom; Sets/Min/Max in the day editor are centred. No migration, nothing new on Azure.
 
 ## Current focus
+
+**Variant B is live** (2026-11-11): `https://life-tracker-robo.vercel.app` on Vercel + Neon Free (`eu-central-1`) with GitHub sign-in; 21 migrations applied; the user's phone smoke test and the other-account/anonymous check passed. Branch `feat/personal-import-and-backup` adds `scripts/import-personal.cjs` (loads the user's wishlist with estimated RON prices and today/daily tasks from the gitignored `.local/personal-data.json`; tested idempotently on a local database), `.github/workflows/backup.yml` (weekly `age`-encrypted `pg_dump`, 90-day artifact) and the README runbook; docs refreshed (decisions, risk register R6 to R8, threat model section 8, data inventory). Still to do by the user: run the import against Neon, create the `life_tracker_backup` role and the `BACKUP_DATABASE_URL` secret, run the backup once and do the restore test, set the Vercel Ignored Build Step. Then one week of real use and the Neon/Vercel usage check (release plan section 6 budget). Open decisions are listed below.
+
+Earlier focus (kept for the open decisions):
 
 Release plan `docs/release-plan.md` section 7, step 5: final audit and refactor (3c), on branch `chore/final-audit`. Done: whole-repo audit, security pass and review; the safe fixes (see `docs/decisions.md` 2026-11-10 "Final audit 3c"); `docs/security/asvs-matrix.md` rewritten. Local gates green: eslint, tsc, 157 Vitest tests, production build with placeholder env, container builds and runs as non-root, `npm audit` (no high or critical), query-count budgets.
 Waiting for the user's decisions before B go-live: Azure sign-in restriction, nonce CSP, GitHub 30-day session, Claude prompt via stdin, push unique index and unsubscribe, Tasks `doneDates` cap, wishlist link validation, Dependabot PRs #67 to #70.
@@ -148,6 +152,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-11 — Variant B live, real data and backups: user's smoke test passed. Added `scripts/import-personal.cjs` (idempotent, `--dry-run`, local data file `.local/` gitignored; verified on a local Postgres: 45 wishlist items, 4+24 personal and 3+2 business tasks, second run adds nothing), `.github/workflows/backup.yml`, the README runbook (deploy, migrate, import, rollback, rotate, Ignored Build Step, backups, restore test), `AGENTS.md` rules, risk register R6 to R8, threat model section 8, data inventory rows. Not verified: the import and the backup workflow have not run against Neon or on GitHub yet; the restore test is still to do.
 
 - 2026-11-10 — Mobile polish merged: PR #77 (polish 1 to 21) squash-merged into `main` (`722721f`), no open PRs, nothing deployed. Next: variant B go-live prerequisites (user: app name, GitHub OAuth app, Neon and Vercel 2FA, source of the real data), see `docs/release-plan.md` sections 4 and 9; waits for the user's "pornește".
 - 2026-11-10 — Mobile polish 21 (same branch), from "put the macro animation back, square map button, scroll over the map, subtler history highlight": Macro numbers count up again (target stays on its own row, layout unchanged). The map's move button is 44×44 (the global button `min-height` made it taller than wide). Scrolling over the map failed because the `.muscle-canvas` wrapper had `touch-action: none` (ancestors intersect with the canvas's `pan-y`): the wrapper is `pan-y` on coarse pointers. The open History workout fill is the tint at 45% of its strength (alpha about .11, was .24). Verified in the pane at 375px; not with a real finger.
