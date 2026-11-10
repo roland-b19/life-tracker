@@ -581,12 +581,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       await finished(userA, "2026-11-01", 40);
       await finished(userA, "2026-11-03", 55);
       const open = await finished(userA, "2026-11-08", null);
-      const list = await getWorkoutHistory(userA, "2026-11-07");
+      const list = await getWorkoutHistory(userA, "2026-11-07", "2026-01-01");
       expect(list.map((h) => h.date)).toEqual(["2026-11-03", "2026-11-01"]);
       expect(list[0]).toMatchObject({ durationMinutes: 55, isDeload: false });
       expect(list[0].exercises[0].sets).toEqual([{ reps: 8, loadType: "kg", load: 40 }]);
       expect(list.some((h) => h.id === open.id)).toBe(false);
-      expect(await getWorkoutHistory(userB, "2026-11-07")).toEqual([]);
+      expect((await getWorkoutHistory(userA, "2026-11-07", "2026-11-02")).map((h) => h.date)).toEqual(["2026-11-03"]);
+      expect(await getWorkoutHistory(userB, "2026-11-07", "2026-01-01")).toEqual([]);
     });
   });
 

@@ -35,6 +35,7 @@ async function seedUser() {
 describe("Claude connection", () => {
   beforeAll(() => {
     process.env.CLAUDE_TOKEN_KEY = randomBytes(32).toString("base64");
+    vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
   });
 
   afterEach(() => {

@@ -9,14 +9,8 @@ import {
   getShoppingList,
   getWeightAnalytics,
 } from "@/lib/food";
+import { toISODate } from "@/lib/format-date";
 import { FoodClient } from "./food-client";
-
-function getTodayString() {
-  const d = new Date();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
-}
 
 export default async function FoodPage() {
   const session = await getServerSession(authOptions);
@@ -25,7 +19,7 @@ export default async function FoodPage() {
   }
 
   const userId = session.user.id;
-  const today = getTodayString();
+  const today = toISODate();
 
   const [targets, summary, weightAnalytics, shoppingList, shoppingCategories, pastFoods] = await Promise.all([
     getNutritionTargets(userId),

@@ -44,3 +44,15 @@ describe("development authentication guard", () => {
     );
   });
 });
+
+describe("requireUser", () => {
+  it("rejects an anonymous request", async () => {
+    vi.resetModules();
+    vi.doMock("next-auth", () => ({ getServerSession: async () => null }));
+    vi.doMock("@/auth", () => ({ authOptions: {} }));
+    const { requireUser } = await import("@/server/auth");
+    await expect(requireUser()).rejects.toThrow("Authentication required.");
+    vi.doUnmock("next-auth");
+    vi.doUnmock("@/auth");
+  });
+});

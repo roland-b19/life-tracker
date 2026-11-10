@@ -46,7 +46,7 @@ export async function runClaude({ system, input, schema, token }: ClaudeRun): Pr
 
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
-      const child = spawn(process.env.CLAUDE_BIN || "claude", args, { cwd: dir, env, stdio: ["pipe", "pipe", "ignore"] });
+      const child = spawn(/*turbopackIgnore: true*/ process.env.CLAUDE_BIN || "claude", args, { cwd: dir, env, stdio: ["pipe", "pipe", "ignore"] });
       let out = "";
       const timer = setTimeout(() => child.kill("SIGKILL"), TIMEOUT_MS);
       child.stdout.on("data", (d) => (out += d));

@@ -574,10 +574,10 @@ export interface HistorySession {
 
 /**
  * Every past workout with sets, newest first, for the Workout tab's History. Rest days are never sessions, so they
- * do not show. A workout still open (no duration, started since `openSince`) is not past yet. Capped like
- * getGymHistory.
+ * do not show. A workout still open (no duration, started since `openSince`) is not past yet. Only workouts
+ * dated `since` or later, so the query stays bounded however long the history grows.
  */
-export async function getWorkoutHistory(userId: string, openSince: string): Promise<HistorySession[]> {
+export async function getWorkoutHistory(userId: string, openSince: string, since: string): Promise<HistorySession[]> {
   const rows = await db
     .select({
       id: workoutSessions.id,
@@ -601,11 +601,11 @@ export async function getWorkoutHistory(userId: string, openSince: string): Prom
       and(
         eq(workoutSets.userId, userId),
         eq(workoutSessions.userId, userId),
+        gte(workoutSessions.date, since),
         or(isNotNull(workoutSessions.durationMinutes), lt(workoutSessions.date, openSince)),
       ),
     )
-    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), workoutSessions.id, workoutSets.createdAt)
-    .limit(8000);
+    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), workoutSessions.id, workoutSets.createdAt);
   const sessions = new Map<string, HistorySession>();
   for (const r of rows) {
     const s =

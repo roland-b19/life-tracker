@@ -5,6 +5,7 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
+import { isClaudeEnabled } from "@/lib/features";
 
 interface NavigationProps {
   userName: string;
@@ -85,8 +86,10 @@ export function Navigation({ userName }: NavigationProps) {
     },
   ];
 
-  const primary = navLinks.slice(0, 4);
-  const overflow = navLinks.slice(4);
+  // Settings only holds the Claude connection, so it exists only when that is enabled.
+  const links = isClaudeEnabled() ? navLinks : navLinks.filter((l) => l.href !== "/settings");
+  const primary = links.slice(0, 4);
+  const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
   const initial = userName.charAt(0).toUpperCase();
   // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
@@ -129,7 +132,7 @@ export function Navigation({ userName }: NavigationProps) {
           Life Tracker
         </div>
         <nav aria-label="Main Navigation" style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-          {navLinks.map((link) => (
+          {links.map((link) => (
             <NextLink
               key={link.href}
               href={link.href}

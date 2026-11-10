@@ -2,7 +2,7 @@ import { and, asc, eq, gt, gte, inArray, isNull, like, lt, lte, ne, notExists, o
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
-import { toISODate } from "./format-date";
+import { addDays, toISODate } from "./format-date";
 
 const APP_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 import { streakOn, weekdayOf } from "./streak";
@@ -206,8 +206,6 @@ async function recordDayStats(userId: string, space: TodoSpace, date: string): P
 }
 
 export async function getTodoHistory(userId: string, space: TodoSpace, days = 90): Promise<TodoDayStat[]> {
-  const since = new Date();
-  since.setDate(since.getDate() - days + 1);
   return db
     .select({
       date: todoDayStats.date,
@@ -220,7 +218,7 @@ export async function getTodoHistory(userId: string, space: TodoSpace, days = 90
       and(
         eq(todoDayStats.userId, userId),
         eq(todoDayStats.space, space),
-        gte(todoDayStats.date, toISODate(since)),
+        gte(todoDayStats.date, addDays(toISODate(), -days + 1)),
         sql`${todoDayStats.total} > 0`,
       ),
     )

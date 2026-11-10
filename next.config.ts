@@ -24,7 +24,11 @@ const nextConfig: NextConfig = {
   // Hides the floating Next.js dev-tools "N" button.
   devIndicators: false,
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      // The muscle model never changes under the same name; cache it for a year so it is fetched once per device.
+      { source: "/models/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+    ];
   },
 };
 
