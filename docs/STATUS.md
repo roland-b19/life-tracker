@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (shared release code merged, PR #72; cleanup 3b on branch `chore/cleanup-unused`)_
+_Last updated: 2026-11-10 by Claude (cleanup 3b merged, PR #73; baseline and cost-guard fixes on branch `perf/baseline-cost-guards`)_
 
 ## Phase
 
@@ -45,7 +45,7 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 
 ## Current focus
 
-Release plan `docs/release-plan.md`: section 3 (shared code) is merged; section 3b (cleanup of everything unused) is on branch `chore/cleanup-unused`. Next: baseline measurements, final audit (3c), then the free variant B, then Azure A. Old per-iteration plan files were deleted in 3b; git history keeps them.
+Release plan `docs/release-plan.md` section 7, step 4: baseline measurements and cost-guard fixes, on branch `perf/baseline-cost-guards` (PR open, not merged). Sections 3 (shared code) and 3b (cleanup) are merged. Next after the user's go-ahead: final audit (3c), then the free variant B, then Azure A.
 
 ## Application features (local)
 
@@ -148,6 +148,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 ## Session log (newest first)
 
 - 2026-11-10 — Cleanup 3b (Claude Code, branch `chore/cleanup-unused`): six unused tables dropped (migration `0019`, tried on a throwaway database first; local and test databases migrated), dead code and old plan docs deleted, README rewritten, `.claude/launch.json` untracked, Azure tenant ids and email scrubbed from this file. Details in `docs/release-plan.md` section 3b. Checks: see the PR. Not covered: dropping the tables on Neon or Azure (neither exists yet; both start from the migrations).
+- 2026-11-10 — Baseline and cost guards (Claude Code, branch `perf/baseline-cost-guards`): measured each page with about 2 years of data (`SEED_DAYS=730 npm run seed:dev` and `tests/query-count.test.ts`). Fixed: migration `0020_add_user_indexes` (six `(user_id, ...)` indexes where `pg_stat_user_tables` showed scans), `/gym` 17 to 11 queries (one query for all routine days instead of one per day), `/food` 14 to 11 (no repeated targets check, weigh-ins limited to the last two weeks plus the latest, Past foods sorted and limited in SQL), no `revalidatePath` after Wishlist, Tasks and per-set Gym actions (their clients keep their own state). `/todos` 8 and `/wishlist` 1 are unchanged. The test is now a gate with limits per page and a check that those actions do not revalidate. Not done: a per-action query count and `EXPLAIN (ANALYZE)` on the Neon region (both for 3c); `/gym` still sends about 220 KB of props (a year of sets, accepted: about 10 to 20 KB gzipped); `/todos` still runs the carry-over UPDATE on every view; Food and the other Gym actions still revalidate. Migration `0020` must be applied wherever `db:migrate` runs (mirrored in `scripts/db-init.cjs`).
 
 - 2026-11-10 — Shared release code (Claude Code, branch `feat/shared-release-code`): build-time flags for Claude and push, GitHub sign-in with owner allowlist (30-day session, no DB read per session), Europe/Bucharest day, workout history bounded to 370 days, gym page queries in parallel, pool settings from env (`DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`) with an error handler, error / not-found / global-error pages, `robots` and noindex, immutable cache for `/models`, no hard-coded app password in `scripts/db-init.cjs`, provider-aware sign-in page. Checks: tsc, eslint, 129/129 vitest, production builds (GitHub variant flags off and on, Azure variant), browser: Settings 404 and hidden from nav, Assistant hidden, robots, glb header, 404 page. Not covered: sign-in against real GitHub or Entra, a Neon connection test of the pool, `/todos` push button with flag off in the browser, `loading.tsx`, extra request logging. Nothing deployed.
 

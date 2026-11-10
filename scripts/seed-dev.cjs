@@ -7,6 +7,8 @@
 const { Client } = require("pg");
 
 const name = process.argv[2] || "demo";
+// SEED_DAYS=730 gives about two years of history (for the cost-guard measurements); the default keeps the sample small.
+const DAYS = Number(process.env.SEED_DAYS) || 90;
 const url = process.env.DATABASE_URL_MIGRATE || process.env.DATABASE_URL || "";
 
 if (process.env.NODE_ENV === "production" || process.env.AUTH_DEV !== "true") {
@@ -39,9 +41,9 @@ async function isEmpty(db, table, userId) {
 
 async function seedWeight(db, userId) {
   let count = 0;
-  for (let i = 90; i >= 0; i--) {
+  for (let i = DAYS; i >= 0; i--) {
     if (i > 0 && random() < 0.2) continue; // some mornings without a weigh-in
-    const kg = 88 - (90 - i) * 0.06 + between(-0.6, 0.6); // about -0.4 kg/week
+    const kg = 88 - (DAYS - i) * 0.06 + between(-0.6, 0.6); // about -0.4 kg/week
     const { rowCount } = await db.query(
       "INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
       [userId, addDays(today, -i), kg.toFixed(2)],
@@ -53,7 +55,7 @@ async function seedWeight(db, userId) {
 
 async function seedWaterAndSteps(db, userId) {
   let count = 0;
-  for (let i = 90; i >= 0; i--) {
+  for (let i = DAYS; i >= 0; i--) {
     if (i > 0 && random() < 0.1) continue;
     const water = i === 0 ? 1250 : Math.round(between(1500, 3600) / 50) * 50;
     const steps = i === 0 ? 4321 : Math.round(between(3000, 15000));
@@ -78,7 +80,7 @@ const MEAL_TIME = { breakfast: "08:00", lunch: "13:00", snack: "16:30", dinner: 
 async function seedMeals(db, userId) {
   if (!(await isEmpty(db, "meals", userId))) return "meals: skipped, the user has meals";
   let count = 0;
-  for (let i = 30; i >= 0; i--) {
+  for (let i = DAYS > 90 ? DAYS : 30; i >= 0; i--) {
     const day = addDays(today, -i);
     // Today has breakfast and lunch only, so the Nutrition bars are part way.
     const slots = i === 0 ? ["breakfast", "lunch"] : Object.keys(MEALS).filter((slot) => slot !== "snack" || random() < 0.6);
@@ -150,7 +152,7 @@ const ONE_OFFS = {
   personal: ["Pay rent", "Call mom", "Buy groceries", "Clean the kitchen", "Book dentist", "Return the package", "Plan the weekend"],
   business: ["Send invoice", "Reply to client", "Prepare the slides", "Update the roadmap", "Review the contract"],
 };
-const HISTORY_DAYS = 45;
+const HISTORY_DAYS = DAYS > 90 ? DAYS : 45;
 
 async function seedTasks(db, userId) {
   if (!(await isEmpty(db, "todos", userId))) return "tasks: skipped, the user has tasks";
@@ -227,14 +229,15 @@ async function seedGym(db, userId) {
   if (!days.length) return "gym: skipped (open the Gym page once so the routine exists)";
   const byWeekday = new Map(days.map((d) => [d.day_of_week, d]));
   let sessions = 0;
-  for (let i = 56; i >= 1; i--) {
+  const WEEKS = DAYS > 90 ? Math.floor(DAYS / 7) : 8;
+  for (let i = WEEKS * 7; i >= 1; i--) {
     const date = addDays(today, -i);
     const day = byWeekday.get(new Date(`${date}T00:00:00Z`).getUTCDay());
     if (!day || random() < 0.1) continue; // a skipped workout now and then
     const taken = await db.query("SELECT 1 FROM workout_sessions WHERE user_id = $1 AND date = $2 LIMIT 1", [userId, date]);
     if (taken.rowCount) continue;
-    const week = Math.floor((56 - i) / 7); // 0..7
-    const deload = week === 4;
+    const week = Math.floor((WEEKS * 7 - i) / 7);
+    const deload = week % 8 === 4; // one deload week in every eight
     const { rows } = await db.query(
       `INSERT INTO workout_sessions (user_id, split_day_id, date, duration_minutes, is_deload, created_at)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,

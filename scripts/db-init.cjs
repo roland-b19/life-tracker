@@ -290,6 +290,12 @@ async function main() {
       "token_encrypted" varchar(1024) NOT NULL,
       "connected_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS "meals_user_date_idx" ON "meals" USING btree ("user_id","date");
+    CREATE INDEX IF NOT EXISTS "shopping_items_user_idx" ON "shopping_items" USING btree ("user_id");
+    CREATE INDEX IF NOT EXISTS "todos_user_space_due_idx" ON "todos" USING btree ("user_id","space","due_date");
+    CREATE INDEX IF NOT EXISTS "workout_sessions_user_date_idx" ON "workout_sessions" USING btree ("user_id","date");
+    CREATE INDEX IF NOT EXISTS "workout_sets_session_idx" ON "workout_sets" USING btree ("session_id");
+    CREATE INDEX IF NOT EXISTS "workout_sets_user_idx" ON "workout_sets" USING btree ("user_id");
   `);
   console.log("Verified Food, Todo, AI & Wishlist tables.");
 

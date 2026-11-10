@@ -218,6 +218,11 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 - Removed code nothing calls (`getExerciseContext` and its action, `getWishlistStats`, three icons). Deleted `docs/iteration-1.md` to `iteration-8.md`, `docs/idea.md` and `docs/roadmap.md`; git history is the archive. `AGENTS.md` scope guard now points at `docs/release-plan.md`.
 - `.claude/launch.json` is git-ignored (it was committed by mistake in #72).
 
+### 2026-11-10: Cost guards from the baseline
+- Measured with about 2 years of seeded data. Fixed what grew with history or repeated work: six `(user_id, ...)` indexes (migration `0020`), the per-day routine query on `/gym`, the repeated targets check and unbounded weigh-in read on `/food`, Past foods sorted in JS. `tests/query-count.test.ts` is the gate (queries and props bytes per page).
+- `revalidatePath` is removed only where the client keeps its own state (Wishlist, Tasks, per-set Gym). It stays on Food (the page props `weightAnalytics` and targets are used directly) and on Gym start, finish, cancel, reopen, restore, routine and custom exercise actions.
+- Accepted: `/gym` sends about 220 KB of props for a year of sets (it feeds the History and Progress tabs); compressed it is small against the 5 GB Neon and 100 GB Vercel limits. Revisit if the Neon usage page says otherwise after the first week.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

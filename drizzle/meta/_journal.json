@@ -141,6 +141,13 @@
       "when": 1794319141384,
       "tag": "0019_drop_unused_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794320047831,
+      "tag": "0020_add_user_indexes",
+      "breakpoints": true
     }
   ]
 }

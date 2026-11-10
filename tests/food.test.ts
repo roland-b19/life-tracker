@@ -32,6 +32,7 @@ import {
   clearBoughtShoppingItems,
   getShoppingCategories,
   getShoppingList,
+  getPastFoods,
   getWeightAnalytics,
   logMeal,
   renameShoppingCategory,
@@ -190,6 +191,25 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     // User B has no entries
     const analyticsB = await getWeightAnalytics(userB, "2026-10-31");
     expect(analyticsB.sevenDayAverage).toBeNull();
+  });
+
+  it("reads only the last two weeks of weigh-ins plus the latest one", async () => {
+    // A long history ending 100 days before "today": the latest weigh-in still shows, the averages stay empty.
+    for (let i = 100; i < 400; i++) {
+      await db.insert(weightEntries).values({ userId: userA, date: addDays("2026-10-31", -i), kilograms: `${70 + (i % 5)}.00` });
+    }
+    const stale = await getWeightAnalytics(userA, "2026-10-31");
+    expect(stale.latestDate).toBe(addDays("2026-10-31", -100));
+    expect(stale.sevenDayAverage).toBeNull();
+    expect(stale.sinceLastWeek).toBeNull();
+  });
+
+  it("lists past foods newest first, one per name, up to the limit", async () => {
+    for (let i = 0; i < 5; i++) await logMeal(userA, { date: "2026-10-31", name: `Food ${i}`, calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await logMeal(userA, { date: "2026-10-31", name: "FOOD 0", calories: 250, protein: 1, carbs: 1, fat: 1 }); // same name, other case, logged last
+    const foods = await getPastFoods(userA, 3);
+    expect(foods.map((f) => f.name.toLowerCase())).toEqual(["food 0", "food 4", "food 3"]);
+    expect(foods[0].calories).toBe(250);
   });
 
   it("merges the same item, keeps cleared items as history, edits and renames categories", async () => {
