@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
+import { ArrowsIcon } from "../components/icons";
 import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
 import { Segmented } from "../components/segmented";
 import {
@@ -15,6 +16,7 @@ import {
 interface MapApi {
   setSelected(g: MuscleGroup | null): void;
   setView(v: "front" | "back"): void;
+  setMovable(on: boolean): void;
 }
 
 /** Interactive 3D muscle model. Click a muscle to select its group; the chips next to it do the same without WebGL. */
@@ -30,6 +32,9 @@ function MuscleMap({
   const selectedRef = useRef(selected);
   const onSelectRef = useRef(onSelect);
   const [side, setSide] = useState<"front" | "back">("front");
+  // On a touch screen the model only moves while this is on, so the page scrolls freely over it otherwise.
+  const [movable, setMovable] = useState(false);
+  const movableRef = useRef(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -76,6 +81,12 @@ function MuscleMap({
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
         controls.addEventListener("change", render);
+        const touch = window.matchMedia("(pointer: coarse)");
+        const setMovableNow = (on: boolean) => {
+          const free = on || !touch.matches;
+          controls.enabled = free;
+          renderer.domElement.style.touchAction = free ? "none" : "pan-y";
+        };
 
         const gltf = await new GLTFLoader().loadAsync("/models/muscles.glb");
         if (disposed) {
@@ -204,7 +215,8 @@ function MuscleMap({
         canvas.addEventListener("pointerdown", onDown);
         canvas.addEventListener("pointerup", onUp);
 
-        api.current = { setSelected: paint, setView };
+        api.current = { setSelected: paint, setView, setMovable: setMovableNow };
+        setMovableNow(movableRef.current);
         camera.position.set(center.x, center.y, center.z + dist);
         setView("front", false);
         resize();
@@ -252,6 +264,19 @@ function MuscleMap({
       )}
       {status === "ready" && (
         <div className="muscle-views">
+          <button
+            type="button"
+            className={`muscle-move${movable ? " active" : ""}`}
+            aria-pressed={movable}
+            aria-label="Move the model by dragging"
+            onClick={() => {
+              movableRef.current = !movable;
+              setMovable(!movable);
+              api.current?.setMovable(!movable);
+            }}
+          >
+            <ArrowsIcon size={18} />
+          </button>
           <Segmented
             label="Model side"
             value={side}
@@ -287,12 +312,6 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
   const { rowRef, fadeAll } = useListMotion();
   const card = useRef<HTMLElement>(null);
-  // The first group's rows build one after another; from then on a group switch swaps the whole list (swapIn).
-  const [built, setBuilt] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setBuilt(Boolean(selected)), 700);
-    return () => clearTimeout(t);
-  }, [selected]);
   // The current rows fade out before the list switches, like every other list switch.
   const setSelected = (g: MuscleGroup | null) => g !== selected &&
     fadeAll(() => {
@@ -357,14 +376,13 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           {selected ? (
             <div>
             <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
-            {/* The title stays outside the list, so the first row starts the stagger. */}
-            <AutoHeight wash className={built ? "entries muscle-entries built" : "entries muscle-entries"}>
+            <AutoHeight wash className="entries muscle-entries">
               {list.length === 0 && (
                 <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
                   No exercise in your split trains this muscle.
                 </p>
               )}
-              {/* Keyed by the group so every switch mounts fresh rows that play row-in. */}
+              {/* Keyed by the group so every switch mounts fresh rows. */}
               <Fragment key={selected}>
               {list.map((e) => (
                 <div key={e.exerciseId} ref={rowRef(e.exerciseId)} className="entry-row">

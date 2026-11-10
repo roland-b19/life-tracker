@@ -686,7 +686,7 @@ main {
 /* Food & Nutrition Module Styles */
 .macro-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* equal columns however long the numbers are */
   gap: 0.75rem;
 }
 
@@ -713,6 +713,10 @@ main {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
+  /* The target sits under the number: counting changes the number's width, never the line breaks or the card. */
+  display: grid;
+  gap: 0.1rem;
+  white-space: nowrap;
 }
 
 .macro-target {
@@ -790,10 +794,7 @@ main {
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
   transition: transform var(--lift);
-  animation: rise 300ms var(--ease) backwards;
 }
-
-/* No stagger: nth-child counts a page's wrappers, so a delay by position ran in a different order on every page. */
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -1632,7 +1633,6 @@ button.btn-sm.tint {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-  animation: rise 300ms var(--ease) backwards; /* with the cards around it */
 }
 
 main > .error {
@@ -1858,65 +1858,7 @@ main > .error {
   color: var(--secondary);
 }
 
-/* ==========================================================================
-   View Transitions API Support
-   ========================================================================== */
-/* As long as the page enter below: the transition (and its click block) lasts as long as its slowest part */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 200ms;
-  animation-timing-function: var(--ease);
-}
-
-/* Page change (app/template.tsx): the old page recedes quickly, the new one settles in.
-   The sidebar and tab bar keep their place as the spatial anchor. */
-::view-transition {
-  pointer-events: none;
-}
-/* Short and blur-free: the page ignores clicks while it runs, and a blur repaints the whole snapshot every frame. */
-::view-transition-old(.page-exit) {
-  animation: page-out 80ms ease-in both;
-}
-::view-transition-new(.page-enter) {
-  animation: page-in 180ms var(--ease) 20ms both;
-}
-@keyframes page-out {
-  to { opacity: 0; transform: scale(0.985); }
-}
-@keyframes page-in {
-  from { opacity: 0; transform: translateY(8px); }
-}
-.side { view-transition-name: app-sidebar; }
-.tabbar { view-transition-name: app-tabbar; }
-::view-transition-group(app-sidebar),
-::view-transition-group(app-tabbar) {
-  animation: none;
-  z-index: 100;
-}
-/* The tab bar's snapshot is a rectangle with a blurred backdrop: without its radius a square box showed behind the
-   rounded bar while the page changed. */
-::view-transition-group(app-tabbar),
-::view-transition-image-pair(app-tabbar),
-::view-transition-new(app-tabbar) {
-  border-radius: 1.5rem;
-  overflow: clip;
-}
-::view-transition-old(app-sidebar),
-::view-transition-old(app-tabbar) {
-  display: none;
-}
-::view-transition-new(app-sidebar),
-::view-transition-new(app-tabbar) {
-  animation: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
-  }
   *,
   *::before,
   *::after {
@@ -2149,7 +2091,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 
 
-/* The title and its tags (weekdays, reminder) share a line, wrapping only when it is full */
+/* The title and its tags (carried over, reminder) share a line, wrapping only when it is full */
 .todo-main {
   flex: 1;
   min-width: 0;
@@ -2161,20 +2103,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .todo-main > .badge-row {
   margin-top: 0;
-}
-
-/* Week section on Tasks: the weekdays, Monday first, one tap to that day's list in the coming week */
-.week-strip {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.35rem;
-  /* Padding, not margin: a margin collapses out of AutoHeight's box, which then opens short and jumps at the end */
-  padding-bottom: 1rem;
-}
-
-.week-strip .weekday-btn {
-  padding: 0.5rem 0;
-  font-size: 0.8125rem;
 }
 
 /* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
@@ -2555,6 +2483,29 @@ button.bars-col:focus-visible {
   left: 0.6rem;
   bottom: 0.6rem;
   width: 10rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.muscle-views > :last-child { align-self: stretch; }
+/* Touch screens only: while off, the page scrolls over the model; on, dragging moves it. */
+.muscle-move {
+  display: none;
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: var(--surface-secondary);
+  color: var(--secondary);
+  transition: background var(--fade), color var(--fade);
+}
+.muscle-move::before { content: ""; position: absolute; inset: -0.25rem; } /* 44pt target */
+.muscle-move.active { background: var(--tint-subtle); color: var(--tint); }
+@media (pointer: coarse) {
+  .muscle-move { display: grid; }
 }
 .muscle-side {
   display: grid;
@@ -2850,31 +2801,6 @@ button.bars-col:focus-visible {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
-/* New rows fade in where they stand (the reverse of the delete fade in list-motion.tsx), one after another
-   30ms apart, so a list builds on the spot on page load and after a switch */
-.entry-row,
-.item-row,
-.shopping-row,
-.todo-row,
-.split-day-card,
-.routine-row,
-:is(.entries, .todo-list, .shopping-groups) > .empty-note {
-  /* backwards, not both: a held end state would pin transform and block the hover lift */
-  animation: row-in 260ms var(--ease) backwards;
-  /* Capped at the 9th row, so a long list never waits; browsers without sibling-index() drop the line and
-     show rows at once. A row added with useListMotion's enter runs its own entrance instead. */
-  animation-delay: calc(min(sibling-index() - 1, 8) * 20ms);
-}
-@keyframes row-in {
-  from { opacity: 0; transform: scale(0.97); }
-}
-/* Rows build one after another on page load only; after that a view switch fades the whole list (swapIn in list-motion.tsx). */
-:is(.entries, .todo-list).built > :is(.entry-row, .item-row, .todo-row, .empty-note) { animation: none; }
-/* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
-.week-btn {
-  animation: row-in 260ms var(--ease) backwards;
-}
-
 /* A day with something planned: a small dot under the number. */
 .picker-cell.marked {
   position: relative;
@@ -2891,49 +2817,6 @@ button.bars-col:focus-visible {
   border-radius: 50%;
   background: currentColor;
   opacity: 0.8;
-}
-
-/* Weekday repeats: a badge on the row, and a row of day toggles in the form. */
-.badge-repeat {
-  background: var(--tint-subtle);
-  color: var(--tint);
-  font-size: 0.75rem;
-}
-
-.weekday-picker {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.4rem;
-}
-
-/* Reads like every other field label. */
-.weekday-picker legend {
-  padding: 0;
-  margin-bottom: 0.35rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.weekday-options {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.35rem;
-}
-
-.weekday-btn {
-  min-height: 2.75rem; /* 44pt touch target */
-  padding: 0;
-  border-radius: 0.85rem;
-  background: var(--surface-secondary);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.weekday-btn[aria-pressed="true"] {
-  background: var(--tint);
-  color: var(--on-tint);
 }
 
 /* Move sheet: one full-width choice per row. */
@@ -3040,8 +2923,7 @@ button.bars-col:focus-visible {
   .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
   .date-field:hover:not(:disabled, [aria-expanded="true"]) { background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%); }
   button.secondary:hover:not(:disabled),
-  button.btn-sm:not(.tint):hover:not(:disabled),
-  .weekday-btn:not([aria-pressed="true"]):hover:not(:disabled) {
+  button.btn-sm:not(.tint):hover:not(:disabled) {
     background: var(--highlight-fill);
   }
   button.btn-sm.tint:hover:not(:disabled),
@@ -3169,7 +3051,10 @@ button.bars-col:focus-visible {
 .session-timer.paused { opacity: 0.5; }
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
 @media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
-.history-entry { display: block; padding-block: 0.25rem; }
+.history-entry { display: block; padding-block: 0.25rem; transition: background-color var(--fade); }
+/* The open workout is a tinted fill, so it stands out from the banded rows around it. */
+.history-entry.open { background-color: var(--tint-subtle) !important; /* wins over the band and wash rules above */ }
+.history-entry.open .history-chevron { color: var(--tint); }
 .history-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

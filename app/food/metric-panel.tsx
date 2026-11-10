@@ -250,7 +250,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby={`${kind}-trend-title`}>
             <div className="section-head">
               <h2 id={`${kind}-trend-title`} className="section-title">

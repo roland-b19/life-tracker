@@ -156,8 +156,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 
 - `--card-pad` 1.35rem (1.6rem at ≥768px).
 - Radius 1.15rem, background `--surface`, `backdrop-filter: var(--glass-blur)`, `1px solid var(--edge)`.
-- Entrance `rise`: from `translateY(14px)` and opacity 0, `300ms var(--ease) backwards`.
-- No delays: every card and the toolbar rise together, so every page loads the same way.
+- No entrance animation: a card is there as soon as the page is.
 
 ## Press
 
@@ -354,8 +353,6 @@ The CSS hides the outline on `[data-pointer]`.
 - Check circle (`.todo-checkbox-btn`, every list row that ticks off: Tasks and Shopping): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
 - `.todo-title`: .95rem weight 500, wraps; done is line-through in secondary.
 - `.readonly-note`: .8125rem secondary with `LockIcon` 13, gap .4rem, margin-bottom .25rem.
-- `.week-strip`: 7 columns, gap .35rem, margin-bottom 1rem; its `.weekday-btn` padding .5rem 0, .8125rem.
-- `.weekday-btn` idle: `--surface-secondary` with text colour, weight 600, min-height 2.75rem, radius .85rem. In the form, `.weekday-options` is 7 columns, gap .35rem.
 - Move task options: full-width `.secondary` buttons in a grid, gap .5rem.
 - Food Assistant chat: `.chat-log` is a `--surface-secondary` box (padding 1rem, radius .9rem, max-height 26rem, scrolls inside, collapses when empty). Bubbles: padding .65rem .9rem, .9375rem, line-height 1.4, radius 1.1rem with a .3rem tail corner; the assistant's on `--surface`, the user's on solid `--tint` with `--on-tint` text. Each message enters with the card `rise`, `backwards`. The typing bubble is italic secondary. A logged meal is a `.chat-tool` tag (tint on `--tint-subtle`, radius .5rem, .8125rem). `.chat-form`: the input and Send in a row, gap .75rem, margin-top 1rem.
 
@@ -456,23 +453,17 @@ The CSS hides the outline on `[data-pointer]`.
 
 | What | Value |
 |---|---|
-| Page exit (`page-out`) | 80ms ease-in, to opacity 0 and scale .985 |
-| Page enter (`page-in`) | 180ms `--ease`, 20ms delay, from `translateY(8px)` |
-| View-transition root | 200ms |
-| Card rise | 300ms `--ease`, 14px, no delay (toolbar too) |
+| Page change, first load, card entrance | none (removed 2026-11-10) |
 
 **Rows**
 
 | What | Value |
 |---|---|
-| Row `row-in` | 260ms `--ease` `backwards`, from opacity 0 and scale .97 |
-| Row stagger | `calc(min(sibling-index() - 1, 8) * 20ms)`, with the JS `stagger()` fallback |
-| `row-in` inside `.auto-height` | 180ms |
+| Row entrance on load | none; only `enter` (add, undo, move) animates a row in |
 
 **`AutoHeight`**
 - RESIZE is 180ms `cubic-bezier(.2,0,0,1)`.
 - Skipped when the change is under 1.5px, under reduced motion. While a list change is in flight the card's height is driven by `useListMotion` (`data-hold`, `data-flip`: 240ms `cubic-bezier(.4,0,.2,1)`, `transition-delay: var(--flip-delay)`) so it ends together with the rows' glide.
-- Each row's entrance is delayed until the height uncovers its bottom, 1px early.
 
 **`useListMotion`**
 

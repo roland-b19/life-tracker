@@ -262,7 +262,7 @@ export function WeightPanel() {
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby="trend-title">
             <div className="section-head">
               <h2 id="trend-title" className="section-title">

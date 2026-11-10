@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, swapIn, useBuilt, useListMotion } from "../components/list-motion";
+import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal, useAfterClose } from "../components/modal";
 import { Segmented } from "../components/segmented";
@@ -87,7 +87,6 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const { showToast } = useToast();
   const { rowRef, enter, leave, move, fadeAll } = useListMotion();
   const itemsCard = useRef<HTMLElement>(null);
-  const built = useBuilt();
 
   // Form state
   const [name, setName] = useState("");
@@ -318,7 +317,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight wash className={built ? "entries wishlist-entries built" : "entries wishlist-entries"}>
+            <AutoHeight wash className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">

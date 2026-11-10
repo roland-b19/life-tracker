@@ -1,9 +1,9 @@
-import { and, asc, eq, gt, gte, inArray, isNull, like, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
 import { addDays, APP_TZ, toISODate } from "./format-date";
-import { streakOn, weekdayOf } from "./streak";
+import { streakOn } from "./streak";
 import { compareTodos } from "./todo-order";
 import {
   CreateTodoInput,
@@ -51,18 +51,17 @@ const other = alias(todos, "other");
 type DueColumns = typeof todos | typeof other;
 
 /**
- * Repeating tasks due on `day`: every day, or on that day's weekday ("days:1,3,5" holds no other digits),
- * from their first day (dueDate) on, unless the task was deleted on or before `day`.
+ * Repeating tasks due on `day`: every day from their first day (dueDate) on, unless the task was deleted on or
+ * before `day`.
  */
 const repeatsOn = (day: string, t: DueColumns = todos) =>
   and(
     eq(t.isRecurring, true),
     lte(t.dueDate, day),
-    or(eq(t.recurrencePattern, "daily"), like(t.recurrencePattern, `days:%${weekdayOf(day)}%`)),
     or(isNull(t.endedOn), gt(t.endedOn, day)),
   );
 
-/** Tasks due on `day`: one-off tasks planned for it, and repeating tasks (whose dueDate is only their first day) due that weekday. */
+/** Tasks due on `day`: one-off tasks planned for it, and repeating tasks (whose dueDate is only their first day). */
 const dueOn = (day: string, t: DueColumns = todos) => or(and(eq(t.isRecurring, false), eq(t.dueDate, day)), repeatsOn(day, t));
 
 /** A repeating task without a usable pattern repeats every day. */
@@ -148,7 +147,7 @@ export async function getDailyTodos(
       isCompleted: r.isRecurring ? doneDates.includes(targetDate) : r.isCompleted,
       completedAt: r.completedAt,
       isCarriedOver: r.isCarriedOver,
-      streak: r.isRecurring ? streakOn(new Set(doneDates), r.recurrencePattern, targetDate) : 0,
+      streak: r.isRecurring ? streakOn(new Set(doneDates), targetDate) : 0,
       doneDates,
       createdAt: r.createdAt,
     };
@@ -327,7 +326,7 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): P
   }
   const today = toISODate();
   await recordDayStats(userId, restored.space as TodoSpace, restored.isRecurring ? today : restored.dueDate);
-  const streak = restored.isRecurring ? streakOn(new Set(doneDates), restored.recurrencePattern, today) : 0;
+  const streak = restored.isRecurring ? streakOn(new Set(doneDates), today) : 0;
   return { ...restored, space: restored.space as TodoSpace, streak, doneDates };
 }
 
@@ -373,13 +372,7 @@ export async function updateTodo(userId: string, input: UpdateTodoInput): Promis
     .update(todos)
     .set({ title: input.title, reminderTime: input.reminderTime ?? null })
     .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
-    .returning({ id: todos.id, space: todos.space, isRecurring: todos.isRecurring });
-
-  const [row] = updated;
-  if (row?.isRecurring && input.recurrencePattern && input.recurrencePattern !== "none") {
-    await db.update(todos).set({ recurrencePattern: input.recurrencePattern }).where(eq(todos.id, row.id));
-    await recordDayStats(userId, row.space as TodoSpace, toISODate());
-  }
+    .returning({ id: todos.id });
   return updated.length > 0;
 }
 

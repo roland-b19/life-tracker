@@ -942,7 +942,6 @@ export function FoodClient({
                     <span className="macro-numbers">
                       <AnimatedNumber value={m.value} format={oneDecimal} />
                       <span className="macro-target">
-                        {" "}
                         / {m.target}
                         {m.unit}
                       </span>

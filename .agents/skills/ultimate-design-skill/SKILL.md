@@ -183,17 +183,9 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "Apple spring" motion the user chose, which settles without overshoot. Never an overshoot or a spring bounce. Full timings are in `references/values.md`.
 
-1. **Page enter/exit.** `template.tsx` wraps every page in `<ViewTransition enter="page-enter" exit="page-exit" default="none">`.
-   - Exit: 80ms fade with scale to .985.
-   - Enter: 180ms rise of 8px, after a 20ms delay. The whole transition (and its click block) is 200ms.
-   - No blur.
-   - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
-2. **Cards rise in on load.** 14px up and fade over 300ms, all together (the toolbar too) on every page, the Gym one. No delay by position: `nth-child` counts a page's wrappers, so a stagger ran in a different order on each page.
-3. **Rows build one after another** on page load only. After that a view switch (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick; the user's call, 2026-11-10, applied to every page) fades the old rows out (120ms), then the whole new list in (200ms), and the card resizes at once. In code: `useBuilt()` adds `built` to the list's class after 700ms (globals.css turns the rows' own entrance off), and `swapIn(card)` runs just before the state change that swaps the rows (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
-   - `row-in`: opacity 0 and scale .97, 260ms, 20ms apart, capped at the 9th row.
-   - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
-   - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.
-   - A list that shrinks still builds in sequence.
+1. **No page or load animation.** A page change or first load just shows the page: no view transition, no `template.tsx`, no card rise, no row stagger (the user's call, 2026-11-10: "simply just load the page"). The tab bar's own thumb still glides.
+2. **View switches** (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick) fade the old rows out (120ms) and the new list in at once, through `fadeAll` and `swapIn(card)` (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations.
+3. **Rows are plain on arrival.** There is no `row-in`, `useBuilt` or `stagger`; a row added without `enter` simply appears. `@keyframes rise` stays only for routine rows, custom exercises and chat bubbles.
 4. **Deleting a row.** The row fades in place (240ms, scale .97), then the rows below glide up (240ms, `transform` only) and the card height follows; in a wash list the wash fades out (100ms) before all of it. Nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
 5. **Adding a row.**
    - In a wash list the wash fades out first (100ms).

@@ -5,7 +5,7 @@ import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { AutoHeight, swapIn, useBuilt, useDragSort, useListMotion, useMore } from "../components/list-motion";
+import { AutoHeight, swapIn, useDragSort, useListMotion, useMore } from "../components/list-motion";
 import { Navigation } from "../components/navigation";
 import { Modal, useAfterClose } from "../components/modal";
 import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -135,7 +135,6 @@ export function GymClient({
   const { showToast } = useToast();
   const { rowRef, enter, leave, fadeAll } = useListMotion();
   const previewCard = useRef<HTMLElement>(null);
-  const built = useBuilt();
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message, type: "warning" });
   };
@@ -1025,9 +1024,9 @@ export function GymClient({
                   </div>
 
                   {!currentDay.isRest && (
-                    <AutoHeight wash className={built ? "entries built" : "entries"}>
+                    <AutoHeight wash className="entries">
                       {currentDay.exercises.length > 0 ? (
-                        // Keyed by the day so every switch mounts fresh rows that play row-in.
+                        // Keyed by the day so every switch mounts fresh rows.
                         <Fragment key={currentDay.id}>
                         {shownExercises.map((ex, idx) => (
                           <div key={ex.id} ref={rowRef(ex.id)} className="entry-row">
@@ -1128,7 +1127,7 @@ export function GymClient({
                   {shownHistory.map((h) => {
                     const open = openHistoryId === h.id;
                     return (
-                      <div key={h.id} ref={rowRef(h.id)} className="entry-row history-entry">
+                      <div key={h.id} ref={rowRef(h.id)} className={`entry-row history-entry${open ? " open" : ""}`}>
                         <button
                           type="button"
                           className="history-toggle"

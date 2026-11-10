@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 // DUR and EASE match --dur and --ease in globals.css.
 const DUR = 420;
@@ -9,13 +9,6 @@ const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 // RESIZE and RESIZE_EASE match the .auto-height transition in globals.css.
 const RESIZE = 180;
 const RESIZE_EASE = "cubic-bezier(0.2, 0, 0, 1)";
-
-// Share of RESIZE (0..1) after which RESIZE_EASE, cubic-bezier(0.2, 0, 0, 1), has covered share p of the way.
-function resizeTime(p: number) {
-  if (p <= 0) return 0;
-  for (let s = 0; s <= 1; s += 0.01) if (3 * (1 - s) * s * s + s ** 3 >= p) return 0.6 * s * (1 - s) ** 2 + s ** 3;
-  return 1;
-}
 
 // MOVE and MOVE_EASE: the one movement every list change shares (a row added, deleted or moved to another place):
 // the rows glide to their new places and the card follows, all in MOVE. They match .auto-height[data-flip] in globals.css.
@@ -62,19 +55,6 @@ function hold(list: HTMLElement, keep = false) {
   Promise.allSettled(running.map((a) => a.finished)).then(clear);
 }
 
-// The row-in stagger in globals.css needs sibling-index(), which not every browser has (Safari): new rows get the
-// same delays here, so a list that shrinks still builds one row after another (a growing one also waits for its
-// height, in AutoHeight's ResizeObserver).
-const entranceOf = (row: Element) => row.getAnimations().find((a) => (a as CSSAnimation).animationName === "row-in");
-function stagger(list: HTMLElement) {
-  [...list.children].forEach((row, i) => {
-    const entrance = entranceOf(row);
-    const delay = Math.min(i, 8) * 20;
-    if (entrance && Number(entrance.currentTime) === 0 && Number(entrance.effect!.getTiming().delay) < delay)
-      entrance.effect!.updateTiming({ delay });
-  });
-}
-
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // An element's x on the page, ignoring transforms. offsetLeft alone is not enough: an entering row
@@ -88,8 +68,7 @@ function layoutX(el: HTMLElement) {
 /**
  * Animates its own height whenever the content changes size (a filter switch, a row added
  * or removed), instead of popping. A row leaving through useListMotion shrinks it itself while the row is still in
- * place (`data-hold`), and the container follows a row entering. When it grows, each new row's entrance (row-in) waits until the
- * growing height has uncovered the whole row, so no row is seen cut off by the container's edge. Boxes marked data-slide (Wishlist price, range, link) glide to a new
+ * place (`data-hold`), and the container follows a row entering. Boxes marked data-slide (Wishlist price, range, link) glide to a new
  * column width and position when a row added, removed or edited changes the shared columns.
  */
 /** `wash`: the alternating row bands fade out and in around row changes. */
@@ -131,18 +110,6 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning
       outer.style.height = `${next}px`;
-      if (next < from) return;
-      const top = outer.getBoundingClientRect().top;
-      for (const row of inner.children) {
-        const entrance = entranceOf(row);
-        const timing = entrance?.effect?.getTiming();
-        if (!entrance || !timing || Number(entrance.currentTime) >= Number(timing.delay)) continue; // already showing
-        // The row's layout bottom: its centre ignores the entrance scale. 1px early, as the ease's tail is slow.
-        const r = row.getBoundingClientRect();
-        const bottom = r.top + r.height / 2 + (row as HTMLElement).offsetHeight / 2 - top - 1;
-        const reach = resizeTime((bottom - from) / (next - from)) * RESIZE;
-        if (reach > Number(timing.delay)) entrance.effect!.updateTiming({ delay: reach });
-      }
     });
     const onEnd = (e: TransitionEvent) => e.target === outer && e.propertyName === "height" && settle();
 
@@ -150,7 +117,6 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
     // wash's own fade is one), so the wash comes back once the whole list is in place.
     const washes = outer.hasAttribute("data-wash");
     if (washes) hold(inner);
-    stagger(inner); // a list that mounts with its rows gets no mutation: Safari's delays on page load
 
     // Layout box (layoutX and offsetWidth ignore the rows' entrance scale) of every data-slide element.
     const boxes = new WeakMap<HTMLElement, { x: number; w: number }>();
@@ -190,7 +156,6 @@ export function AutoHeight({ className, wash, children }: { className?: string; 
     // A row added, removed or edited can change the shared columns; a window resize just re-measures.
     const mutations = new MutationObserver(() => {
       if (washes) hold(inner); // first: slide's measuring styles the new rows
-      stagger(inner);
       slide(!reducedMotion());
     });
     const widths = new ResizeObserver(() => {
@@ -259,7 +224,7 @@ function growBox(box: HTMLElement, from: number) {
     .finally(() => (box.style.overflow = ""));
 }
 
-// Rows fade where they stand; row-in in globals.css is the reverse. Opacity and transform only: they stay
+// Rows fade where they stand (and back in the same way). Opacity and transform only: they stay
 // on the compositor, while a filter would repaint the row over the glass card every frame.
 const FADE_OUT: Keyframe[] = [
   { opacity: 1, transform: "none" },
@@ -273,14 +238,7 @@ const QUICK = 120;
 const SWITCH = { ...FADE, duration: 120 }; // fadeAll: a view switch should feel instant
 // A list's only row swaps with its empty note, which takes the same space, so it only fades.
 const alone = (el: HTMLElement) => !el.previousElementSibling && !el.nextElementSibling;
-const FADE_IN = MOVE; // starts once the space is open (after MOVE), like row-in in .auto-height
-
-// A control that goes away with its view (Tasks' Week button) fades like a leaving row, then `remove` runs.
-// Cancelling the fade (the control is wanted again) skips `remove`. It comes back with row-in from globals.css.
-export function fadeOut(el: HTMLElement | null, remove: () => void) {
-  if (!el || reducedMotion()) return remove();
-  el.animate(FADE_OUT, FADE).finished.then(remove, () => {});
-}
+const FADE_IN = MOVE; // starts once the space is open (after MOVE)
 
 /**
  * Row motion for lists. Add, delete and move are one movement: the rows glide to their new places (MOVE) while the card
@@ -320,18 +278,10 @@ export function useListMotion() {
     for (const el of held.current.keys()) if (!el.isConnected) release(el);
   });
 
-  const seen = useRef(new WeakSet<HTMLElement>());
   const rowRef = useCallback(
     (id: string) => (el: HTMLElement | null) => {
       if (!el) return;
       nodes.current.set(id, el);
-      if (!seen.current.has(el)) {
-        seen.current.add(el);
-        // Once in, a row stays put: React re-inserting it (a row moved above it, an Undo of an edit) would replay row-in.
-        el.addEventListener("animationend", (e) => {
-          if (e.target === el && e.animationName === "row-in") el.style.animation = "none";
-        });
-      }
       const done = entering.current.get(id);
       if (done) {
         entering.current.delete(id);
@@ -341,7 +291,6 @@ export function useListMotion() {
         delete el.dataset.leaving;
         const freed = release(el);
         el.style.pointerEvents = "";
-        el.style.animation = "none"; // its own entrance replaces the stagger in globals.css
         // In a wash list the wash fades out while the row moves (nothing waits for it); the row sits out the
         // alternation until it is in, so no wash jumps to another row meanwhile.
         if (el.closest("[data-wash]")) el.dataset.entering = "";
@@ -476,20 +425,6 @@ export function useListMotion() {
 }
 
 /**
- * True once a page's rows have built one after another on load (700ms: the 11th row starts at 300ms and runs 260ms).
- * After that a view switch replaces the whole list at once (`swapIn`), so the list adds `built` to its class and
- * globals.css turns the rows' own entrance off.
- */
-export function useBuilt() {
-  const [built, setBuilt] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setBuilt(true), 700);
-    return () => clearTimeout(t);
-  }, []);
-  return built;
-}
-
-/**
  * A view switch (range, sort, day, tab, muscle group) replaces the rows in one step: the card resizes at once and the
  * new list fades in as a whole, never row by row. Call it with the card that holds the list, just before the state
  * change that swaps the rows (after `fadeAll` has faded the old ones).
@@ -510,7 +445,6 @@ const PAGE = 10;
 
 /**
  * A long list shows 10 rows; `more` (put it last inside the list's AutoHeight) adds 10 at a time.
- * The new rows enter with row-in while AutoHeight opens their space, like any added row.
  */
 export function useMore<T>(list: T[]) {
   const [shown, setShown] = useState(PAGE);

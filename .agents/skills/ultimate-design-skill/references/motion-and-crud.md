@@ -57,7 +57,7 @@ showToast({ message, type?: "info" | "success" | "warning", actionLabel?, onActi
     // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
     <p key={`empty-${filter}`} ref={rowRef("empty")} className="empty-note">No items yet.</p>
   ) : (
-    // Keyed by the view so every row replays its entrance when it changes.
+    // Keyed by the view so every switch mounts fresh rows.
     <Fragment key={`${filter}-${sort}`}>
       {visible.map((item) => (
         <div key={item.id} ref={rowRef(item.id)} className="entry-row">
@@ -204,7 +204,6 @@ function openForm(item?) {
 
 - A selection that switches a list does the same: the muscle map's group chips go through `fadeAll(() => setSelectedNow(g))`.
 - Every filter, sort or selection change fades out first; none swaps rows instantly.
-- A control that only exists in one view (Tasks' Week button, Daily only) leaves with the row fade, `fadeOut(el, remove)` from `list-motion.tsx`, and comes back with `row-in` (CSS `animation: row-in 260ms var(--ease) backwards`). Keep it mounted until the fade ends, and cancel the fade if the view comes back first. No new keyframes for it.
 
 ## Reordering in place
 
@@ -230,7 +229,7 @@ Some pages (Tasks) reload the list from the server after a write. `enter(id)` wa
 
 The Wishlist is the exception: it always shows every item and has no More button.
 
-A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band (not the row or the button) and the same gap below, and each press adds 10 rows that enter with row-in while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
+A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the list's `AutoHeight` (inside its keyed `Fragment` if it has one). More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band (not the row or the button) and the same gap below, and each press adds 10 rows while the list grows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select` like Category, never a text field with suggestions.
 
 ## Rules that are easy to break
 
@@ -249,8 +248,7 @@ A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)
 
 **Animation**
 - Never animate rows with `filter`, `box-shadow`, `height` in CSS transitions, or `animation-fill-mode: both`. Opacity and transform only; `useListMotion` does height and padding with WAAPI.
-- A row plays `row-in` once. `rowRef` sets `animation: none` on it after its entrance ends, because React re-inserts the other rows when one moves above them (an Undo of an edit) and that would replay the whole list's entrance. Only the moved row animates, like Delete and its Undo.
-- Inside `AutoHeight`, space below content is padding, never margin: a child's bottom margin collapses out of the measured box, so the height animation ends short and jumps (Tasks `.week-strip`).
+- Inside `AutoHeight`, space below content is padding, never margin: a child's bottom margin collapses out of the measured box, so the height animation ends short and jumps.
 - Respect `prefers-reduced-motion`. The helpers already return immediately, so do not add your own animations around them.
 
 **Optimistic updates and Undo**
@@ -263,7 +261,7 @@ A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)
 - A dialog's content lives in its own state, separate from its open flag (`moving` + `moveOpen`, `catEdit` + `catOpen`): closing sets only the flag, so the content stays while the dialog fades instead of going blank. Call `runAfterClose()` before reopening.
 - An Undo started while a row is still leaving must `await gone` first.
 - An Undo of an edit calls `runAfterClose()` first, because the form may still be closing.
-- An edit that takes a row off the list on screen (Tasks: a weekday removed while that weekday is shown, a move to another day) makes the row leave like a delete after the form closes; its Undo awaits that exit, then puts the row back with `enter`.
+- An edit that takes a row off the list on screen (Tasks: a move to another day) makes the row leave like a delete after the form closes; its Undo awaits that exit, then puts the row back with `enter`.
 - New rows go on top of the list (Tasks: open tasks newest first; done tasks still sink below them).
 
 Sources: `app/wishlist/wishlist-client.tsx`, `app/components/list-motion.tsx`, `app/components/modal.tsx`, `app/components/toast.tsx`, `app/todos/todos-client.tsx`, `app/gym/muscle-map.tsx`.
