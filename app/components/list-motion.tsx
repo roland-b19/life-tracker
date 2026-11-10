@@ -95,7 +95,8 @@ export function AutoHeight({ className, wash, washNow, children }: { className?:
       if (next === last) return;
       const from = outer.style.height ? outer.getBoundingClientRect().height : last;
       last = next;
-      if (reducedMotion() || inner.querySelector("[data-row-motion]") || Math.abs(from - next) < 1.5) return settle(); // offsetHeight rounds a subpixel gap (a row vs its empty note) up to 1px
+      // data-swap: a whole-list view switch (Wishlist range or sort) fades the list and resizes the card at once.
+      if (reducedMotion() || outer.hasAttribute("data-swap") || inner.querySelector("[data-row-motion]") || Math.abs(from - next) < 1.5) return settle(); // offsetHeight rounds a subpixel gap (a row vs its empty note) up to 1px
       outer.style.overflow = "hidden";
       outer.style.height = `${from}px`;
       void outer.offsetHeight; // commit the start height before transitioning

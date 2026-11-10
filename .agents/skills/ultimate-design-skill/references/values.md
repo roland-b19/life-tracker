@@ -405,8 +405,9 @@ The CSS hides the outline on `[data-pointer]`.
 **Page behind**
 - Blurred, never scaled.
 - The body is pinned (`position: fixed`, with the scroll restored after), for iOS.
-- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard.
-- The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and centres the card above the keyboard. Its height and transform transition 280ms with `--ease`, so the card glides when the keyboard opens or closes instead of jumping.
+- The dim and blur are `.modal-scrim`, a separate full-screen layer, so the page stays blurred under the keyboard. It reaches 8rem past the top and bottom (`inset: -8rem 0`), so no strip of the page (iOS toolbar or home bar) is left unblurred.
+- While a form is open a `touchmove` listener on the document (non-passive) blocks every drag except one inside a `.modal-body` that really scrolls, so the page behind never pans when the keyboard is up.
+- The transparent `.modal-backdrop` follows `visualViewport` (height, plus an `offsetTop` transform) and centres the card above the keyboard; the card's `max-height: 100%` shrinks it to fit and its body scrolls, so every field stays reachable. Its height and transform transition 280ms with `--ease`, so the card glides when the keyboard opens or closes instead of jumping.
 
 **Parts**
 - Header padding 1.25rem 1.5rem .85rem; title 1.25rem, weight 600; body padding 1.5rem.

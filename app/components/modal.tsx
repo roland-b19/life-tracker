@@ -83,7 +83,15 @@ export function Modal({
     vv?.addEventListener("resize", fit);
     vv?.addEventListener("scroll", fit);
 
+    // With the keyboard open iOS lets a drag pan the page behind the form. Only the form's own scroll may take one.
+    const lock = (e: TouchEvent) => {
+      const body = (e.target as Element).closest(".modal-body");
+      if (!body || body.scrollHeight <= body.clientHeight) e.preventDefault();
+    };
+    document.addEventListener("touchmove", lock, { passive: false });
+
     return () => {
+      document.removeEventListener("touchmove", lock);
       window.removeEventListener("keydown", handleKeyDown);
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);

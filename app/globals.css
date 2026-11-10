@@ -1234,7 +1234,9 @@ button.signin-continue:disabled {
    and the page under the keyboard must stay blurred while it does. */
 .modal-scrim {
   position: fixed;
-  inset: 0;
+  /* Reaches past the top and bottom of the screen: iOS can leave a strip there (toolbar, home bar) that
+     the layout viewport does not cover, which showed as an unblurred black bar. */
+  inset: -8rem 0;
   z-index: 9999;
   background: rgba(0, 0, 0, 0.4);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -2056,6 +2058,10 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 /* A card header's two buttons (Sort and Add item, Clear bought and Add item) share one width */
 .section-head .head-actions:has(> :nth-child(2)) { display: grid; grid-template-columns: 1fr 1fr; }
 .section-head .head-actions > * { width: 100%; justify-content: center; }
+/* On a phone the actions sit on a second row under the title (Wishlist), never beside it. */
+@media (max-width: 640px) {
+  .section-head .head-actions.below { flex: 1 1 100%; }
+}
 
 .item-link,
 .item-link-text {

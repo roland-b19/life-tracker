@@ -294,7 +294,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               <h2 id="wishlist-items-title" className="section-title">
                 Items <span className="muted number-tabular">{filteredItems.length}</span>
               </h2>
-              <span className="head-actions">
+              <span className="head-actions below">
                 <select
                   className="sort-select"
                   aria-label="Sort items"
