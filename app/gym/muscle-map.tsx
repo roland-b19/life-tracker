@@ -16,7 +16,7 @@ import {
 interface MapApi {
   setSelected(g: MuscleGroup | null): void;
   setView(v: "front" | "back"): void;
-  setMovable(on: boolean): void;
+  rotateBy(dx: number, dy: number): void;
 }
 
 /** Interactive 3D muscle model. Click a muscle to select its group; the chips next to it do the same without WebGL. */
@@ -32,9 +32,10 @@ function MuscleMap({
   const selectedRef = useRef(selected);
   const onSelectRef = useRef(onSelect);
   const [side, setSide] = useState<"front" | "back">("front");
-  // On a touch screen the model only moves while this is on, so the page scrolls freely over it otherwise.
-  const [movable, setMovable] = useState(false);
-  const movableRef = useRef(false);
+  // On a touch screen the model moves only while a finger holds the move button and slides; a drag on the model
+  // itself scrolls the page.
+  const [holding, setHolding] = useState(false);
+  const lastPoint = useRef<[number, number] | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -82,11 +83,12 @@ function MuscleMap({
         controls.enablePan = false;
         controls.addEventListener("change", render);
         const touch = window.matchMedia("(pointer: coarse)");
-        const setMovableNow = (on: boolean) => {
-          const free = on || !touch.matches;
-          controls.enabled = free;
-          renderer.domElement.style.touchAction = free ? "none" : "pan-y";
+        const applyPointer = () => {
+          controls.enabled = !touch.matches;
+          renderer.domElement.style.touchAction = touch.matches ? "pan-y" : "none";
         };
+        applyPointer();
+        touch.addEventListener("change", applyPointer);
 
         const gltf = await new GLTFLoader().loadAsync("/models/muscles.glb");
         if (disposed) {
@@ -174,6 +176,20 @@ function MuscleMap({
           frame = requestAnimationFrame(step);
         };
 
+        // The move button turns the model like OrbitControls does: a full turn per canvas height of travel.
+        const rotateBy = (dx: number, dy: number) => {
+          stopTurn();
+          const off = camera.position.clone().sub(controls.target);
+          const sph = new THREE.Spherical().setFromVector3(off);
+          const k = (2 * Math.PI) / (renderer.domElement.clientHeight || 1);
+          sph.theta -= dx * k;
+          sph.phi = Math.min(Math.PI - 0.01, Math.max(0.01, sph.phi - dy * k));
+          camera.position.copy(controls.target).add(off.setFromSpherical(sph));
+          camera.lookAt(controls.target);
+          controls.update();
+          render();
+        };
+
         const resize = () => {
           const w = el.clientWidth;
           const h = el.clientHeight;
@@ -215,8 +231,7 @@ function MuscleMap({
         canvas.addEventListener("pointerdown", onDown);
         canvas.addEventListener("pointerup", onUp);
 
-        api.current = { setSelected: paint, setView, setMovable: setMovableNow };
-        setMovableNow(movableRef.current);
+        api.current = { setSelected: paint, setView, rotateBy };
         camera.position.set(center.x, center.y, center.z + dist);
         setView("front", false);
         resize();
@@ -225,6 +240,7 @@ function MuscleMap({
 
         cleanup = () => {
           stopTurn();
+          touch.removeEventListener("change", applyPointer);
           ro.disconnect();
           canvas.removeEventListener("pointerdown", onDown);
           canvas.removeEventListener("pointerup", onUp);
@@ -266,14 +282,28 @@ function MuscleMap({
         <div className="muscle-views">
           <button
             type="button"
-            className={`muscle-move${movable ? " active" : ""}`}
-            aria-pressed={movable}
-            aria-label="Move the model by dragging"
-            onClick={() => {
-              movableRef.current = !movable;
-              setMovable(!movable);
-              api.current?.setMovable(!movable);
+            className={`muscle-move${holding ? " active" : ""}`}
+            aria-label="Hold and slide to move the model"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId); // the finger keeps moving the model wherever it slides
+              lastPoint.current = [e.clientX, e.clientY];
+              setHolding(true);
             }}
+            onPointerMove={(e) => {
+              const last = lastPoint.current;
+              if (!last) return;
+              api.current?.rotateBy(e.clientX - last[0], e.clientY - last[1]);
+              lastPoint.current = [e.clientX, e.clientY];
+            }}
+            onPointerUp={() => {
+              lastPoint.current = null;
+              setHolding(false);
+            }}
+            onPointerCancel={() => {
+              lastPoint.current = null;
+              setHolding(false);
+            }}
+            onContextMenu={(e) => e.preventDefault()}
           >
             <ArrowsIcon size={18} />
           </button>

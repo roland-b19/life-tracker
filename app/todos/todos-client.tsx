@@ -658,7 +658,7 @@ export function TodosClient({
           </section>
         </div>
 
-        <div className="dashboard-aside">
+        <div className="dashboard-aside summary-first">
           <section className="surface" aria-labelledby="progress-title">
             <div className="section-head">
               <h2 id="progress-title" className="section-title">
@@ -666,7 +666,8 @@ export function TodosClient({
               </h2>
             </div>
             {!totalCount ? (
-              <p className="empty-note">
+              // Same height as the ring below, so the cards under it never move when a day has no tasks.
+              <p className="empty-note dash-hero-empty">
                 {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
               </p>
             ) : (

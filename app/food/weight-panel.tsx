@@ -281,10 +281,6 @@ export function WeightPanel() {
                 <strong className="number-tabular">{tile(stats.weekStartWeight)}</strong>
                 <span>Week start</span>
               </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">{tile(stats.latestWeight)}</strong>
-                <span>Latest</span>
-              </div>
             </div>
             {sorted.length >= 2 && (
               <>

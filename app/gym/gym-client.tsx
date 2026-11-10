@@ -722,8 +722,7 @@ export function GymClient({
                         {exercise.exerciseName}
                       </h3>
                       <span className="muted exercise-meta">
-                        Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps · 0 RIR
-                        failure
+                        Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
                       </span>
                     </div>
                     <span className="badge badge-rest">
@@ -743,10 +742,14 @@ export function GymClient({
                     const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
                     if (!last) return null;
                     return (
-                      <p className="last-time">
+                      <div className="last-time">
                         <span className="muted">Last time · {formatDMY(last.date)}</span>
-                        <span className="number-tabular">{sets.map(setText).join("  ·  ")}</span>
-                      </p>
+                        {sets.map((set, i) => (
+                          <span key={i} className="number-tabular">
+                            {setText(set)}
+                          </span>
+                        ))}
+                      </div>
                     );
                   })()}
 
@@ -802,7 +805,7 @@ export function GymClient({
                     </label>
 
                     <label>
-                      Load type
+                      Unit
                       <select
                         disabled={busy}
                         value={currentState.loadType}
@@ -818,12 +821,12 @@ export function GymClient({
                       >
                         <option value="kg">kg</option>
                         <option value="plates">Plates</option>
-                        <option value="bodyweight">Bodyweight</option>
+                        <option value="bodyweight">BW</option>
                       </select>
                     </label>
 
                     <label>
-                      Load value
+                      Value
                       <input
                         type="number"
                         step="0.5"
@@ -844,8 +847,9 @@ export function GymClient({
                     </label>
 
                     <label>
-                      Extra (kg)
+                      Extra
                       <input
+                        title="Extra weight in kg"
                         type="number"
                         step="0.25"
                         min="0"
@@ -1121,13 +1125,14 @@ export function GymClient({
                 {history.length} {history.length === 1 ? "workout" : "workouts"}
               </span>
             </div>
+            {/* Not in the row motion: a training day's fadeAll would fade these rows out and never bring them back. */}
             <AutoHeight wash className="entries">
               {history.length > 0 ? (
                 <>
                   {shownHistory.map((h) => {
                     const open = openHistoryId === h.id;
                     return (
-                      <div key={h.id} ref={rowRef(h.id)} className={`entry-row history-entry${open ? " open" : ""}`}>
+                      <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
                         <button
                           type="button"
                           className="history-toggle"
@@ -1166,7 +1171,7 @@ export function GymClient({
                   {moreHistory}
                 </>
               ) : (
-                <p key="empty-history" ref={rowRef("empty-history")} className="empty-note">
+                <p key="empty-history" className="empty-note">
                   No finished workouts yet.
                 </p>
               )}
