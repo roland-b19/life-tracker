@@ -14,7 +14,7 @@ Status: **plan only, nothing implemented.** Decided 2026-11-10 (see `docs/decisi
 | # | Item | Resolution |
 |---|---|---|
 | 1 | Claude integration | **Hidden behind a flag, not deleted** (decided 2026-11-10, replaces "delete"). `NEXT_PUBLIC_CLAUDE_ENABLED=true` shows the Settings nav entry/page and the Assistant tab in Food; when off they do not exist in the UI and the server actions reject. Off on Vercel (a CLI spawn cannot run serverless), on where the container runs. Code and table stay. |
-| 2 | Real push notifications | Deleted: the `savePushSubscription` action, `pushSubscriptionSchema`, the "enable reminders" button in `todos-client.tsx`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`. No server code ever sent a push, so nothing is lost. The `push_subscriptions` table stays unused (no migration). |
+| 2 | Real push notifications | **Superseded 2026-11-10: hidden behind `NEXT_PUBLIC_PUSH_ENABLED`, not deleted (Azure keeps it, with the queue).** Original text: deleted: the `savePushSubscription` action, `pushSubscriptionSchema`, the "enable reminders" button in `todos-client.tsx`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`. No server code ever sent a push, so nothing is lost. The `push_subscriptions` table stays unused (no migration). |
 | 3 | Custom domain | Not needed: `*.vercel.app`. |
 | 4 | Keeping the database awake | Not done, on purpose (see "Waking the database"). |
 | 5 | Backups | Scheduled `pg_dump` in GitHub Actions, encrypted before it is stored. |

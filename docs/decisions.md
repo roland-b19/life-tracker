@@ -195,6 +195,9 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 ### 2026-11-10: Claude integration is hidden behind a flag, not deleted
 Decided by the user: the Settings page/nav entry and the Assistant tab in Food appear only when `NEXT_PUBLIC_CLAUDE_ENABLED=true`; when off they do not appear at all and the server actions reject. This replaces the earlier "delete the Claude integration" decision in `docs/free-hosting-plan.md`. Off on Vercel because the CLI spawn cannot run serverless; the code and the `claude_connections` table stay. Plan: `docs/release-plan.md`, waiting for the user's OK. The user also requires the Azure side to be complete for the presentation, so that plan covers both variants.
 
+### 2026-11-10: Push hidden behind a flag; Azure gets the message queue
+Decided by the user: real push notifications are not deleted but hidden behind `NEXT_PUBLIC_PUSH_ENABLED` (off on the free variant, on on Azure). On Azure a Storage Queue, a scheduled Job and a worker send the reminders, which covers course requirement 5. Supersedes "delete real push" in the earlier free-variant entry and in `docs/free-hosting-plan.md`. The `web-push` dependency is asked for when the step starts. Plan: `docs/release-plan.md`.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
