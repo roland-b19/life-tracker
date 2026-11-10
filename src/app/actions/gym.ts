@@ -75,11 +75,11 @@ export async function restoreSessionAction(rawInput: unknown) {
   return { success: Boolean(details), details };
 }
 
+// No revalidate for set edits: the client keeps its own state, and refetching the page on every set is the costliest call.
 export async function logSetAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = logSetSchema.parse(rawInput);
   const set = await logWorkoutSet(userId, parsed);
-  safeRevalidate("/gym");
   return { success: true, set };
 }
 
@@ -89,7 +89,6 @@ export async function deleteSetAction(setId: string) {
     throw new Error("Invalid set ID");
   }
   const deleted = await deleteWorkoutSet(userId, setId);
-  safeRevalidate("/gym");
   return { success: true, deleted };
 }
 

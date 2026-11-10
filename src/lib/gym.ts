@@ -78,11 +78,13 @@ export async function getUserSplitWithDays(userId: string) {
     .where(and(eq(workoutSplitDays.splitId, split.id), eq(workoutSplitDays.userId, userId)))
     .orderBy(workoutSplitDays.dayOfWeek);
 
-  const daysWithExercises = await Promise.all(
-    days.map(async (day) => {
-      const dayExercises = await db
+  // One query for every day's exercises instead of one per day.
+  const dayIds = days.map((d) => d.id);
+  const allExercises = dayIds.length
+    ? await db
         .select({
           id: workoutSplitDayExercises.id,
+          splitDayId: workoutSplitDayExercises.splitDayId,
           exerciseId: exercises.id,
           exerciseName: exercises.name,
           muscleGroup: exercises.muscleGroup,
@@ -94,15 +96,14 @@ export async function getUserSplitWithDays(userId: string) {
         })
         .from(workoutSplitDayExercises)
         .innerJoin(exercises, eq(workoutSplitDayExercises.exerciseId, exercises.id))
-        .where(eq(workoutSplitDayExercises.splitDayId, day.id))
-        .orderBy(workoutSplitDayExercises.orderIndex);
+        .where(inArray(workoutSplitDayExercises.splitDayId, dayIds))
+        .orderBy(workoutSplitDayExercises.orderIndex)
+    : [];
 
-      return {
-        ...day,
-        exercises: dayExercises,
-      };
-    }),
-  );
+  const daysWithExercises = days.map((day) => ({
+    ...day,
+    exercises: allExercises.filter((e) => e.splitDayId === day.id),
+  }));
 
   return {
     ...split,

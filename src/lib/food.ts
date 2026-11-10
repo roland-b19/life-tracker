@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   dailyMetrics,
@@ -19,7 +19,8 @@ import {
   ensureUserNutritionTargets,
   ensureUserSampleRecipes,
 } from "./food-seed";
-import { weightStats, type WeightStats } from "./weight-stats";
+import { addDays } from "./format-date";
+import { weekStartOf, weightStats, type WeightStats } from "./weight-stats";
 
 
 export async function getNutritionTargets(userId: string) {
@@ -60,8 +61,6 @@ export async function updateNutritionTargets(
 }
 
 export async function getDailyFoodSummary(userId: string, date: string) {
-  await ensureUserNutritionTargets(userId);
-
   const dayMeals = await db
     .select()
     .from(meals)
@@ -123,7 +122,7 @@ export async function logMeal(userId: string, input: LogMealInput) {
 
 /** Foods logged before, newest first, one entry per name: the "Past foods" sheet and the assistant's context. */
 export async function getPastFoods(userId: string, limit = 40) {
-  const rows = await db
+  const latest = db
     .selectDistinctOn([sql`lower(${meals.name})`], {
       name: meals.name,
       calories: meals.calories,
@@ -135,8 +134,9 @@ export async function getPastFoods(userId: string, limit = 40) {
     })
     .from(meals)
     .where(eq(meals.userId, userId))
-    .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt));
-  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+    .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt))
+    .as("latest");
+  return db.select().from(latest).orderBy(desc(latest.createdAt)).limit(limit);
 }
 
 export async function deleteMeal(userId: string, mealId: string) {
@@ -239,10 +239,20 @@ export const clearDailyMetric = (userId: string, kind: MetricKind, date: string)
 
 /** Weight stats for the Health page; `today` is the user's calendar day. */
 export async function getWeightAnalytics(userId: string, today: string): Promise<WeightStats> {
+  // Only this and last week plus the latest weigh-in are needed (see weightStats), not the whole history.
+  const since = addDays(weekStartOf(today), -7);
   const entries = await db
     .select({ date: weightEntries.date, kilograms: weightEntries.kilograms })
     .from(weightEntries)
-    .where(eq(weightEntries.userId, userId));
+    .where(
+      and(
+        eq(weightEntries.userId, userId),
+        or(
+          gte(weightEntries.date, since),
+          eq(weightEntries.date, sql`(select max(date) from weight_entries where user_id = ${userId})`),
+        ),
+      ),
+    );
   return weightStats(
     entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
     today,

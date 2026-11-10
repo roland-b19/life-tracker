@@ -2,6 +2,7 @@ import {
   boolean,
   check,
   date,
+  index,
   integer,
   numeric,
   pgTable,
@@ -118,6 +119,7 @@ export const workoutSessions = pgTable(
     notes: varchar("notes", { length: 500 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+  (table) => [index("workout_sessions_user_date_idx").on(table.userId, table.date)],
 );
 
 export const workoutSets = pgTable(
@@ -146,6 +148,8 @@ export const workoutSets = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("workout_sets_session_idx").on(table.sessionId),
+    index("workout_sets_user_idx").on(table.userId),
     check("workout_sets_reps_positive", sql`${table.reps} > 0`),
     check("workout_sets_load_non_negative", sql`${table.loadValue} >= 0`),
     check("workout_sets_extra_kg_non_negative", sql`${table.extraKg} >= 0`),
@@ -204,6 +208,7 @@ export const meals = pgTable(
     isEstimated: boolean("is_estimated").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+  (table) => [index("meals_user_date_idx").on(table.userId, table.date)],
 );
 
 export const recipes = pgTable(
@@ -254,6 +259,7 @@ export const shoppingItems = pgTable(
     // Set when a bought item is cleared: hidden from the list, kept so Undo can restore it.
     clearedAt: timestamp("cleared_at", { withTimezone: true }),
   },
+  (table) => [index("shopping_items_user_idx").on(table.userId)],
 );
 
 /** The user's store sections, in walking order; "other" is built in and never stored. */
@@ -291,6 +297,7 @@ export const todos = pgTable(
     // A deleted repeating task stops here (not due on or after this day) but stays on the days before it.
     endedOn: date("ended_on"),
   },
+  (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
 );
 
 // One row per day a repeating task was ticked; its streak is counted from these.
