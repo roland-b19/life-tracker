@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list, tasks and 8 weeks of workouts, so every Health tab, Tasks and Gym Progress have data.
+// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list, tasks, a wishlist and 8 weeks of workouts, so every Health tab, Tasks and Gym Progress have data.
 // Usage: npm run seed:dev [-- <dev user name>]   (default user: "demo"; sign in with that name)
 // Only runs against a local database with dev sign-in on. Weight, water and steps fill only the days
 // that have no entry; meals, shopping and tasks only fill when the user has none yet; workouts fill only the training days
@@ -218,6 +218,31 @@ async function seedTasks(db, userId) {
   return `tasks: ${count}`;
 }
 
+// [name, link, price]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover https, a bare domain and free text.
+const WISHLIST = [
+  ["Standing desk", "https://www.ikea.com/ro/ro/", 1450],
+  ["Mechanical keyboard", "emag.ro", 480],
+  ["Noise-cancelling headphones", "https://example.com/headphones", 1100],
+  ["Running shoes", "Decathlon", 320],
+  ["Desk lamp", null, 89.9],
+  ["Yoga mat", "decathlon.ro", 119],
+  ["Espresso machine", null, 899],
+  ["Water bottle", "emag", 45],
+];
+
+async function seedWishlist(db, userId) {
+  if (!(await isEmpty(db, "wishlist_items", userId))) return "wishlist: skipped, the user has items";
+  for (const [i, [itemName, link, price]] of WISHLIST.entries()) {
+    const priority = price >= 750 ? "high" : price >= 250 ? "medium" : "low";
+    await db.query(
+      `INSERT INTO wishlist_items (user_id, name, url, estimated_price, priority, created_at)
+       VALUES ($1, $2, $3, $4, $5, now() - make_interval(days => $6))`,
+      [userId, itemName, link, price, priority, i * 3],
+    );
+  }
+  return `wishlist: ${WISHLIST.length} items`;
+}
+
 async function seedGym(db, userId) {
   const { rows: days } = await db.query(
     `SELECT d.id, d.day_of_week, array_agg(x.exercise_id ORDER BY x.order_index) AS exercises,
@@ -280,6 +305,7 @@ async function main() {
       await seedMeals(db, userId),
       await seedShopping(db, userId),
       await seedTasks(db, userId),
+      await seedWishlist(db, userId),
       await seedGym(db, userId),
     ];
     await db.query("COMMIT");

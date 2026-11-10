@@ -31,7 +31,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open <http://localhost:3000>. With `AUTH_DEV=true` the sign-in page takes a local user name only; this is refused when `NODE_ENV=production`. To fill a dev user with sample data (weigh-ins, meals, tasks, 8 weeks of workouts): `npm run seed:dev -- <name>`.
+Open <http://localhost:3000>. With `AUTH_DEV=true` the sign-in page takes a local user name only; this is refused when `NODE_ENV=production`. To fill a dev user with sample data (weigh-ins, meals, tasks, wishlist, 8 weeks of workouts; open Gym once first so the routine exists): `npm run seed:dev -- <name>`.
 
 The database listens on `127.0.0.1` only. Stop it with `docker compose down`; add `-v` only to delete the local data on purpose.
 
