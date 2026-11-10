@@ -5,6 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Life Tracker",
   description: "Private daily tracking for your life.",
+  robots: { index: false, follow: false },
   manifest: "/manifest.json",
   icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: {

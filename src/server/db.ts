@@ -12,9 +12,15 @@ const pool =
   globalForDb.pool ??
   new Pool({
     connectionString,
-    max: 5,
+    // Serverless hosts set DB_POOL_MAX=1 or 2: every function instance has its own pool.
+    max: Number(process.env.DB_POOL_MAX) || 5,
+    // Neon suspends idle computes; a short idle timeout drops connections before the server cuts them.
+    idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS) || 10_000,
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: true } : undefined,
   });
+
+// An idle client the server closed must not crash the process; the pool opens a new one on the next query.
+pool.on("error", (err) => console.error("db pool error:", err.message));
 
 if (process.env.NODE_ENV !== "production") {
   globalForDb.pool = pool;

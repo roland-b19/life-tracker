@@ -132,7 +132,7 @@ export function Navigation({ userName }: NavigationProps) {
           Life Tracker
         </div>
         <nav aria-label="Main Navigation" style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-          {navLinks.map((link) => (
+          {links.map((link) => (
             <NextLink
               key={link.href}
               href={link.href}

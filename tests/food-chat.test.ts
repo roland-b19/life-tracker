@@ -46,6 +46,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   const originalAuthDev = process.env.AUTH_DEV;
 
   beforeAll(async () => {
+    vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
     process.env.CLAUDE_TOKEN_KEY = randomBytes(32).toString("base64");
     userId = await seedUser(`chat-user-${randomUUID()}`);
   });
@@ -173,6 +174,14 @@ describe("Food assistant: context prompt and structured answer", () => {
   });
 
   describe("sendFoodChatMessageAction", () => {
+    it("is disabled when the Claude integration flag is off", async () => {
+      vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "false");
+      await expect(sendFoodChatMessageAction({ message: "x", history: [], date: ctx.date, time: ctx.time })).rejects.toThrow(
+        "The Claude integration is disabled.",
+      );
+      vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
+    });
+
     const input = { message: "o banană", history: [], date: ctx.date, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
