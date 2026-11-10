@@ -188,8 +188,13 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 - `LineChart` (shared with Health) has a value axis (top, middle, bottom) with faint gridlines.
 - Muscle map: Front/Back set the camera to the original front/back pose (also a reset of drag and zoom); "Planned sets per week" lists only muscles with planned sets, the category buttons stay.
 
+### 2026-11-10: Free personal variant (plan only, nothing built yet)
+- The user wants a second variant that runs completely free for personal use, next to the Azure one. Stack: Vercel Hobby + Neon Free + GitHub OAuth (owner allowlist); everything else (Entra provider, Docker, Bicep, scripts) stays so the Azure variant keeps working, the provider being picked by env.
+- Delete the Claude integration (so the app is serverless) and real push notifications (no server ever sent one). Free `*.vercel.app` domain. The database is not kept awake; backups are an encrypted scheduled `pg_dump` in GitHub Actions. Details, code changes and open checks: `docs/free-hosting-plan.md`.
+
 ## Open
 
+- Free personal variant: three claims to verify by hand (Neon `CREATE ROLE`, Vercel Hobby without card and region choice, free limits) before implementing; see `docs/free-hosting-plan.md`.
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
