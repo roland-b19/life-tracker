@@ -189,7 +189,7 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
    - No blur.
    - The sidebar and tab bar do not animate on page changes, except the tab bar's own thumb (below).
 2. **Cards rise in on load.** 14px up and fade, staggered 0/40/80/120ms.
-3. **Rows build one after another** on page load and after every switch, except on the Wishlist (user's call, 2026-11-10): its rows are there at once, with no stagger and no wash fade-in; switching a price range or the sort fades the old rows out (120ms) and the whole new list in (200ms). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
+3. **Rows build one after another** on page load and after every switch, except a Wishlist price-range or sort switch (user's call, 2026-11-10): there the old rows fade out (120ms) and the whole new list fades in (200ms). The Wishlist's page load builds row by row like every list (`.built` in `wishlist-client.tsx` switches the rows' own entrance off after 700ms). Add, edit, delete, Undo and move keep their own row animations. Wishlist has no More button: it always shows every item.
    - `row-in`: opacity 0 and scale .97, 260ms, 30ms apart, capped at the 11th row.
    - Use `animation-fill-mode: backwards`, never `both`: a held end state pins the transform and breaks `:active` press.
    - Safari lacks `sibling-index()`, so `stagger()` in `list-motion.tsx` sets the same delays from JS.

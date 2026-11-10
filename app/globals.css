@@ -2859,8 +2859,8 @@ button.bars-col:focus-visible {
 @keyframes row-in {
   from { opacity: 0; transform: scale(0.97); }
 }
-/* The Wishlist loads its list at once, and a tab change fades the whole list (wishlist-client.tsx). */
-.wishlist-entries > :is(.item-row, .empty-note) { animation: none; }
+/* The Wishlist builds its rows on page load like every list; after that a tab change fades the whole list (wishlist-client.tsx). */
+.wishlist-entries.built > :is(.item-row, .empty-note) { animation: none; }
 /* Tasks' Week button comes back like a row; it leaves through fadeOut in list-motion.tsx. */
 .week-btn {
   animation: row-in 260ms var(--ease) backwards;

@@ -86,6 +86,13 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const { showToast } = useToast();
   const { rowRef, enter, leave, move, fadeAll } = useListMotion();
   const itemsCard = useRef<HTMLElement>(null);
+  // The rows build one after another on page load, like Gym's; once built, a tab or sort change replaces the whole list
+  // at once (swapList), so the rows' own entrance is switched off (globals.css, .built).
+  const [built, setBuilt] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBuilt(true), 700); // the 11th row starts at 300ms and runs 260ms
+    return () => clearTimeout(t);
+  }, []);
 
   // Form state
   const [name, setName] = useState("");
@@ -127,7 +134,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   }
 
   // A tab or sort change is one simple movement: the old rows fade out, then the new list fades in as a whole
-  // (rows never build one after another here, and the page itself loads its list at once).
+  // (rows never build one after another here; only the page load does).
   function swapList(change: () => void) {
     fadeAll(() => {
       // The rows' bands change with the list, not after it (globals.css, [data-swap]).
@@ -328,7 +335,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               onChange={switchRange}
             />
 
-            <AutoHeight wash washNow className="entries wishlist-entries">
+            <AutoHeight wash className={built ? "entries wishlist-entries built" : "entries wishlist-entries"}>
               {filteredItems.length === 0 ? (
                 // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
                 <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
