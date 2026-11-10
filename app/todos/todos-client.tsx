@@ -10,6 +10,7 @@ import { BarChart, ProgressRing } from "../components/charts";
 import { Modal, useAfterClose } from "../components/modal";
 import { DatePicker } from "../components/date-picker";
 import { useToast } from "../components/toast";
+import { isPushEnabled } from "@/lib/features";
 import {
   createTodoAction,
   deleteTodoAction,
@@ -191,7 +192,7 @@ export function TodosClient({
 
   // Check push notification availability on mount
   useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+    if (isPushEnabled() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
       navigator.serviceWorker.ready
         .then(() => {
           setPushSupported(true);

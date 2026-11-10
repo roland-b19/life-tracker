@@ -433,6 +433,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(deleteRes.success).toBe(true);
       expect(deleteRes.deleted).toBe(true);
 
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
       const subRes = await savePushSubscriptionAction({
         endpoint: "https://fcm.googleapis.com/fcm/send/test-endpoint",
         p256dhKey: "sample-p256dh-val",

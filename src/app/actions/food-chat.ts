@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/server/auth";
+import { assertClaudeEnabled } from "@/lib/features";
 import { sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { getDailyFoodSummary } from "@/lib/food";
 
@@ -22,6 +23,7 @@ const chatInputSchema = z.object({
 });
 
 export async function sendFoodChatMessageAction(input: z.input<typeof chatInputSchema>) {
+  assertClaudeEnabled();
   const userId = await requireUser();
   const { message, history, date, time } = chatInputSchema.parse(input);
 

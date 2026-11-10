@@ -1,5 +1,6 @@
 "use server";
 
+import { assertPushEnabled } from "@/lib/features";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import {
@@ -150,6 +151,7 @@ export async function getTodoHistoryAction(space: TodoSpace) {
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {
+  assertPushEnabled();
   const userId = await requireUser();
   const parsed = pushSubscriptionSchema.parse(rawInput);
   const subscription = await savePushSubscription(userId, parsed);

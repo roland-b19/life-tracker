@@ -5,6 +5,7 @@ import { addDays, dayLabel, formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
+import { isClaudeEnabled } from "@/lib/features";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -874,7 +875,7 @@ export function FoodClient({
             { value: "weight", label: "Weight" },
             { value: "steps", label: "Steps" },
             { value: "shopping", label: "Shopping", short: "Shop" },
-            { value: "chat", label: "Assistant", short: "AI" },
+            ...(isClaudeEnabled() ? [{ value: "chat" as const, label: "Assistant", short: "AI" }] : []),
           ]}
           onChange={setActiveTab}
         />
@@ -1229,7 +1230,7 @@ export function FoodClient({
         </div>
       )}
 
-      {activeTab === "chat" && (
+      {isClaudeEnabled() && activeTab === "chat" && (
         <section className="surface" aria-labelledby="chat-title">
           <div className="section-head">
             <h2 id="chat-title" className="section-title">

@@ -1,10 +1,12 @@
 import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 import { getClaudeConnection } from "@/lib/claude-connection";
+import { isClaudeEnabled } from "@/lib/features";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
+  if (!isClaudeEnabled()) notFound();
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     redirect("/signin");
