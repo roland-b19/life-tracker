@@ -153,6 +153,8 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
+- 2026-11-11 — 3c decisions answered (see `docs/decisions.md`): the Tasks tick history is capped at 400 days per screen load (branch `fix/done-dates-window`, test added; the Azure-only decisions wait for Azure A). Backup run and restore test passed earlier today.
+
 - 2026-11-11 — Backup verified: the first two manual runs failed because the `BACKUP_DATABASE_URL` secret was not a bare `postgresql://` URL; `backup.yml` now stops early with a clear message (PR 79). After the secret was fixed the run was green and the user's restore test passed (the counts matched the live app). Still open: weekly Sunday run not yet seen, second offline copy of the `age` key.
 - 2026-11-11 — Variant B live, real data and backups: user's smoke test passed. Added `scripts/import-personal.cjs` (idempotent, `--dry-run`, local data file `.local/` gitignored; verified on a local Postgres: 45 wishlist items, 4+24 personal and 3+2 business tasks, second run adds nothing), `.github/workflows/backup.yml`, the README runbook (deploy, migrate, import, rollback, rotate, Ignored Build Step, backups, restore test), `AGENTS.md` rules, risk register R6 to R8, threat model section 8, data inventory rows. Not verified: the import and the backup workflow have not run against Neon or on GitHub yet; the restore test is still to do.
 
