@@ -1,5 +1,6 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import GitHubProvider from "next-auth/providers/github";
 import type { NextAuthOptions } from "next-auth";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/server/db";
@@ -64,14 +65,46 @@ function getProductionProvider() {
   });
 }
 
+// The free variant signs in with GitHub. The GitHub numeric id is immutable, unlike the login name or email.
+const GITHUB_ISSUER = "https://github.com";
+
+function isOwner(githubId: string) {
+  const allowed = (process.env.OWNER_ALLOWLIST ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+  return allowed.includes(githubId);
+}
+
+function getGitHubProvider() {
+  const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+  const clientId = process.env.AUTH_GITHUB_ID ?? (isBuild ? "build-client" : undefined);
+  const clientSecret = process.env.AUTH_GITHUB_SECRET ?? (isBuild ? "build-client-secret" : undefined);
+  if (!clientId || !clientSecret) {
+    throw new Error("GitHub authentication requires AUTH_GITHUB_ID and AUTH_GITHUB_SECRET.");
+  }
+  if (!isBuild && !process.env.OWNER_ALLOWLIST?.trim()) {
+    throw new Error("GitHub authentication requires OWNER_ALLOWLIST (comma-separated GitHub numeric ids).");
+  }
+  return GitHubProvider({ clientId, clientSecret, authorization: { params: { scope: "read:user" } } });
+}
+
+const providerName = process.env.AUTH_PROVIDER ?? "azure-ad";
+if (providerName !== "azure-ad" && providerName !== "github") {
+  throw new Error('AUTH_PROVIDER must be "azure-ad" or "github".');
+}
+const useGitHub = providerName === "github";
+
 const providers =
-  process.env.AUTH_DEV === "true" ? devProvider : [getProductionProvider()];
+  process.env.AUTH_DEV === "true"
+    ? devProvider
+    : [useGitHub ? getGitHubProvider() : getProductionProvider()];
 
 const isProduction = process.env.NODE_ENV === "production";
 
 export const authOptions: NextAuthOptions = {
   providers,
-  session: { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 15 * 60 },
+  // Azure: 4 hours. Free variant: 30 days for one personal user; the allowlist is rechecked on every session read.
+  session: useGitHub
+    ? { strategy: "jwt", maxAge: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 }
+    : { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 15 * 60 },
   cookies: isProduction
     ? {
         sessionToken: {
@@ -89,9 +122,12 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (account?.provider === "credentials") return true;
 
-      const issuer = process.env.AUTH_ISSUER;
+      const isGitHub = account?.provider === "github";
+      const issuer = isGitHub ? GITHUB_ISSUER : process.env.AUTH_ISSUER;
       const subject = account?.providerAccountId;
       if (!issuer || !subject) return false;
+      // Denied before any users row exists.
+      if (isGitHub && !isOwner(subject)) return false;
 
       const [localUser] = await db
         .insert(users)
@@ -113,23 +149,16 @@ export const authOptions: NextAuthOptions = {
       user.id = existingUser.id;
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user?.id) token.userId = user.id;
+      if (account?.provider === "github") token.githubId = account.providerAccountId;
       return token;
     },
+    // No database lookup: this runs on every page and action. The signed token is trusted for its lifetime.
     async session({ session, token }) {
       if (session.user && typeof token.userId === "string") {
-        const [existingUser] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.id, token.userId))
-          .limit(1);
-
-        if (existingUser) {
-          session.user.id = existingUser.id;
-        } else {
-          session.user.id = undefined as unknown as string;
-        }
+        const revoked = typeof token.githubId === "string" && !isOwner(token.githubId);
+        session.user.id = revoked ? (undefined as unknown as string) : token.userId;
       }
       return session;
     },
