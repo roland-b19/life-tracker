@@ -18,7 +18,6 @@ import {
   createWorkoutSession,
   deleteWorkoutSet,
   finishWorkoutSession,
-  getExerciseContext,
   getGymHistory,
   logWorkoutSet,
   reopenWorkoutSession,
@@ -108,24 +107,6 @@ export async function createCustomExerciseAction(rawInput: unknown) {
   const exercise = await createCustomExercise(userId, parsed);
   safeRevalidate("/gym");
   return { success: true, exercise };
-}
-
-export async function getExerciseContextAction(
-  exerciseId: string,
-  currentSessionId?: string,
-  maxTargetReps?: number,
-) {
-  const userId = await requireUser();
-  if (!exerciseId || typeof exerciseId !== "string") {
-    throw new Error("Invalid exercise ID");
-  }
-  const context = await getExerciseContext(
-    userId,
-    exerciseId,
-    currentSessionId,
-    maxTargetReps,
-  );
-  return { success: true, context };
 }
 
 /** The user's sets from the last year, for the Progress view. */

@@ -213,6 +213,11 @@ Decided by the user (confirming the earlier flag decision): `NEXT_PUBLIC_CLAUDE_
 ### 2026-11-10: Cleanup list approved
 The user approved the deletion list in `docs/release-plan.md` 3b (unused tables, legacy Money/Business code, old data, old iteration docs). Each item is re-verified against the code before it is deleted. Execution waits for the shared code and a go-ahead to start implementation.
 
+### 2026-11-10: Cleanup 3b (keep only what is used)
+- Dropped `meal_plans`, `meal_plan_days`, `expense_categories`, `expenses`, `business_incomes` and `api_tokens` (migration `0019`). `claude_connections` and `push_subscriptions` stay.
+- Removed code nothing calls (`getExerciseContext` and its action, `getWishlistStats`, three icons). Deleted `docs/iteration-1.md` to `iteration-8.md`, `docs/idea.md` and `docs/roadmap.md`; git history is the archive. `AGENTS.md` scope guard now points at `docs/release-plan.md`.
+- `.claude/launch.json` is git-ignored (it was committed by mistake in #72).
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

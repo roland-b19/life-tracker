@@ -8,7 +8,6 @@ import {
   primaryKey,
   timestamp,
   unique,
-  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -239,37 +238,6 @@ export const recipeIngredients = pgTable(
   },
 );
 
-export const mealPlans = pgTable(
-  "meal_plans",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 100 }).default("Weekly Meal Plan").notNull(),
-    isActive: boolean("is_active").default(true).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-);
-
-export const mealPlanDays = pgTable(
-  "meal_plan_days",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    planId: uuid("plan_id")
-      .notNull()
-      .references(() => mealPlans.id, { onDelete: "cascade" }),
-    dayOfWeek: integer("day_of_week").notNull(), // 0 = Sun, ..., 6 = Sat
-    mealType: varchar("meal_type", { length: 30 }).notNull(),
-    recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "set null" }),
-    customName: varchar("custom_name", { length: 120 }),
-    calories: integer("calories").default(0).notNull(),
-    protein: numeric("protein", { precision: 5, scale: 1 }).default("0").notNull(),
-    carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
-    fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
-  },
-);
-
 export const shoppingItems = pgTable(
   "shopping_items",
   {
@@ -299,45 +267,6 @@ export const shoppingCategories = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.name] })],
-);
-
-// --- MONEY MODULE TABLES ---
-
-export const expenseCategories = pgTable(
-  "expense_categories",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 50 }).notNull(),
-    space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal', 'business', 'both'
-    icon: varchar("icon", { length: 30 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("expense_categories_default_unique_idx")
-      .on(table.space, table.name)
-      .where(sql`${table.userId} IS NULL`),
-  ],
-);
-
-export const expenses = pgTable(
-  "expenses",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal' | 'business'
-    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
-    currency: varchar("currency", { length: 10 }).default("RON").notNull(),
-    category: varchar("category", { length: 50 }).notNull(),
-    date: date("date").notNull(),
-    notes: varchar("notes", { length: 255 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    check("expenses_amount_positive", sql`${table.amount} > 0`),
-  ],
 );
 
 // --- TO-DO & HABITS MODULE TABLES ---
@@ -410,24 +339,6 @@ export const pushSubscriptions = pgTable(
   },
 );
 
-// --- AI CONNECTOR / API TOKENS ---
-// shortcut: unused since the connector was removed (2026-11-08); the table stays to avoid a migration, drop it in one if never revived.
-
-export const apiTokens = pgTable(
-  "api_tokens",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 50 }).default("Claude / Gemini Food Connector").notNull(),
-    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
-    scope: varchar("scope", { length: 30 }).default("food").notNull(),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-);
-
 // The owner's Claude subscription token for the in-app Assistant, AES-256-GCM encrypted (src/lib/claude-connection.ts).
 export const claudeConnections = pgTable("claude_connections", {
   userId: uuid("user_id")
@@ -454,25 +365,5 @@ export const wishlistItems = pgTable(
   },
   (table) => [
     check("wishlist_price_positive", sql`${table.estimatedPrice} > 0`),
-  ],
-);
-
-// --- TIER 3: FAMILY BUSINESS ---
-
-export const businessIncomes = pgTable(
-  "business_incomes",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-    category: varchar("category", { length: 50 }).default("Sales").notNull(),
-    date: date("date").notNull(),
-    note: varchar("note", { length: 255 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    check("business_income_positive", sql`${table.amount} > 0`),
   ],
 );

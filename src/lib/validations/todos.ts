@@ -68,12 +68,10 @@ export const pushSubscriptionSchema = z.object({
 });
 
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;
-export type RecurrencePattern = z.infer<typeof recurrencePatternSchema>;
 export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
 export type MoveTodoInput = z.infer<typeof moveTodoSchema>;
-export type DeleteTodoInput = z.infer<typeof deleteTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 

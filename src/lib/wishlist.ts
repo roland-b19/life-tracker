@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { wishlistItems } from "@/db/schema";
 import {
@@ -139,22 +139,4 @@ export async function deleteWishlistItem(
     .returning({ id: wishlistItems.id });
 
   return deleted.length > 0;
-}
-
-export async function getWishlistStats(userId: string): Promise<{
-  totalItems: number;
-  totalEstimatedCost: number;
-}> {
-  const [result] = await db
-    .select({
-      totalItems: sql<number>`count(*)::int`,
-      totalCost: sql<number>`coalesce(sum(${wishlistItems.estimatedPrice}), 0)::float`,
-    })
-    .from(wishlistItems)
-    .where(eq(wishlistItems.userId, userId));
-
-  return {
-    totalItems: result?.totalItems ?? 0,
-    totalEstimatedCost: result?.totalCost ?? 0,
-  };
 }

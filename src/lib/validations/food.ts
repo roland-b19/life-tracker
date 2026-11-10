@@ -61,8 +61,6 @@ export const toggleShoppingItemSchema = z.object({
 });
 
 export type LogMealInput = z.infer<typeof logMealSchema>;
-export type UpdateMetricsInput = z.infer<typeof updateMetricsSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
-export type ToggleShoppingItemInput = z.infer<typeof toggleShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-10 by Claude (Gym polish 2 merged in `main`, PR #71)_
+_Last updated: 2026-11-10 by Claude (shared release code merged, PR #72; cleanup 3b on branch `chore/cleanup-unused`)_
 
 ## Phase
 
@@ -45,7 +45,7 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 
 ## Current focus
 
-Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud Deployment.
+Release plan `docs/release-plan.md`: section 3 (shared code) is merged; section 3b (cleanup of everything unused) is on branch `chore/cleanup-unused`. Next: baseline measurements, final audit (3c), then the free variant B, then Azure A. Old per-iteration plan files were deleted in 3b; git history keeps them.
 
 ## Application features (local)
 
@@ -56,9 +56,9 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - Drizzle ORM schema, owner-scoped queries and restricted PostgreSQL roles.
   - Gym module: 5-day Upper/Lower split, set logging (`reps x load`), anomaly flags `!!`, PR tracking, 5-week deload tracker.
   - Food & Nutrition module: daily targets, meal logger, Past foods sheet, water tap counter (+250ml, +500ml), steps, shopping list filled by hand (categories editable and deletable), Today tab steps back through past days read-only.
-  - Money module: removed from the UI on 2026-11-06; the `expenses` tables stay in the database, unused.
+  - Money module: removed from the UI on 2026-11-06; its tables were dropped by migration `0019` (3b).
   - To-Do & Habits module: automatic carry-over rollover, streak tracking, space segregation (`personal` vs `business`), Web Push notifications.
-  - Food AI Connector (Claude MCP & Gemini): removed on 2026-11-08 (endpoints, tools, token code and tests); the `api_tokens` table stays, unused. The in-app Assistant only logs meals.
+  - Food AI Connector (Claude MCP & Gemini): removed on 2026-11-08 (endpoints, tools, token code and tests); the `api_tokens` table was dropped by migration `0019` (3b). The in-app Assistant only logs meals.
 
 ## Verification status breakdown
 
@@ -70,9 +70,8 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - Gym module:
     - PostgreSQL schema (`exercises`, `workout_splits`, `workout_split_days`, `workout_split_day_exercises`, `workout_sessions`, `workout_sets`).
     - Seed data with default 5-day Upper/Lower split and preloaded exercises matching `gym-sample.md`.
-    - Owner-scoped DAL and Server Actions (`logSetAction`, `startSessionAction`, `finishSessionAction`, `deleteSetAction`, `createCustomExerciseAction`, `getExerciseContextAction`).
+    - Owner-scoped DAL and Server Actions (`logSetAction`, `startSessionAction`, `finishSessionAction`, `deleteSetAction`, `createCustomExerciseAction`).
     - Automatic `!!` anomaly detection when reps < target min reps, manual anomaly reason flagging.
-    - In-workout context: previous session performance, PR tracking (excluding deload sessions), and progressive overload suggestion.
     - 5-week deload tracker cycle with reminder indicator.
     - Apple HIG user interface at `/gym` and segmented navigation between `/` (Weigh-ins) and `/gym`.
   - Private-network Bicep template (`infra/main.bicep`) featuring:
@@ -104,7 +103,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
   - Live health check over HTTPS: `GET /health` -> `200 OK`, `{"status":"ok"}`.
   - Live authorization rejection: `GET /api/weight` -> `401 Unauthorized`.
   - CSRF / Origin protection: `POST /api/weight` -> `403 Forbidden`.
-  - Microsoft Entra ID OIDC flow: `POST /api/auth/signin/azure-ad` -> `302 Redirect` to `https://login.microsoftonline.com/83cf6faf-7c1d-4271-bbdb-2030c5678923/oauth2/v2.0/authorize?client_id=75ae56c6-ccc7-4081-b308-1b391deaa1f0&scope=openid%20profile%20email&...`.
+  - Microsoft Entra ID OIDC flow: `POST /api/auth/signin/azure-ad` -> `302 Redirect` to the Microsoft Entra authorize endpoint (tenant and client id omitted).
   - Security headers enforced: HSTS (`max-age=31536000; includeSubDomains`), CSP, X-Frame-Options (`DENY`), X-Content-Type-Options (`nosniff`), Referrer-Policy, Permissions-Policy.
   - Absence of public access to PostgreSQL, Key Vault, and ACR from external networks: verified (`publicNetworkAccess: "Disabled"` on all three).
   - Database schema bootstrap & migration: verified via `Microsoft.App/jobs` execution `lt-migrate-stage` (`status: Succeeded`).
@@ -113,7 +112,7 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Regional audit and cost recalculation
 
-- **Subscription:** Azure for Students (`rboldesco14@gmail.com`).
+- **Subscription:** Azure for Students.
 - **Region provisioning check (read-only):**
   - Restricted for subscription: `westeurope`, `germanywestcentral`, `eastus`, `eastus2`.
   - Permitted without restrictions: `belgiumcentral`, `northeurope`, `francecentral`, `swedencentral`, `polandcentral`, `italynorth`, `spaincentral`, `uksouth`.
@@ -131,9 +130,8 @@ Iteration 9: Final Security Hardening, Production Configuration & Azure Cloud De
 
 ## Next
 
-1. Iteration 9 (Final Security Hardening, Production Configuration & Azure Cloud Deployment) per `docs/roadmap.md`, only when the user starts it. It needs explicit OK before any Azure resource is created.
-2. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; the cleanup list is approved; the only open question (its section 9) is the live app name; Claude is hidden on B and present on A. Waiting for the user's go-ahead to start section 3. Nothing is implemented.
-3. Maintain local-only verification until then (no Azure deployments).
+1. Release plan `docs/release-plan.md` (shared code, cleanup of everything unused, final audit and refactor, free variant on Vercel + Neon, Azure completion with all 8 course requirements ticked, pre-deploy gates). Decisions 1 to 11 in its section 2 are made; the cleanup list is approved; the only open question (its section 9) is the live app name; Claude is hidden on B and present on A. Waiting for the user's go-ahead to start section 3. Nothing is implemented.
+2. Maintain local-only verification until then (no Azure deployments; any Azure resource needs the user's explicit OK).
 
 ## Open questions
 
@@ -148,6 +146,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-10 — Cleanup 3b (Claude Code, branch `chore/cleanup-unused`): six unused tables dropped (migration `0019`, tried on a throwaway database first; local and test databases migrated), dead code and old plan docs deleted, README rewritten, `.claude/launch.json` untracked, Azure tenant ids and email scrubbed from this file. Details in `docs/release-plan.md` section 3b. Checks: see the PR. Not covered: dropping the tables on Neon or Azure (neither exists yet; both start from the migrations).
 
 - 2026-11-10 — Shared release code (Claude Code, branch `feat/shared-release-code`): build-time flags for Claude and push, GitHub sign-in with owner allowlist (30-day session, no DB read per session), Europe/Bucharest day, workout history bounded to 370 days, gym page queries in parallel, pool settings from env (`DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`) with an error handler, error / not-found / global-error pages, `robots` and noindex, immutable cache for `/models`, no hard-coded app password in `scripts/db-init.cjs`, provider-aware sign-in page. Checks: tsc, eslint, 129/129 vitest, production builds (GitHub variant flags off and on, Azure variant), browser: Settings 404 and hidden from nav, Assistant hidden, robots, glb header, 404 page. Not covered: sign-in against real GitHub or Entra, a Neon connection test of the pool, `/todos` push button with flag off in the browser, `loading.tsx`, extra request logging. Nothing deployed.
 
