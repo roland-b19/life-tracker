@@ -81,6 +81,7 @@ export function Modal({
     // Moving to a field with another keyboard (text, number pad) changes the visible height. The form only ever
     // shrinks while the keyboard is up, and grows back when it is dismissed, so a switch never makes it twitch.
     let low = Infinity;
+    let landed: ReturnType<typeof setTimeout>;
     const fit = () => {
       const el = backdropRef.current;
       if (!el || !vv) return;
@@ -103,6 +104,10 @@ export function Modal({
           void card.offsetHeight;
           card.style.transition = "";
           card.style.translate = "0 0";
+          // The text caret is drawn by iOS itself and does not follow the move (it jitters), so it hides until the card lands.
+          el.setAttribute("data-moving", "");
+          clearTimeout(landed);
+          landed = setTimeout(() => el.removeAttribute("data-moving"), CLOSE_MS);
         }
       }
     };
@@ -146,6 +151,7 @@ export function Modal({
     document.addEventListener("touchend", tapEnd, { passive: false });
 
     return () => {
+      clearTimeout(landed);
       document.removeEventListener("touchstart", tapStart);
       document.removeEventListener("touchend", tapEnd);
       document.removeEventListener("touchmove", lock);

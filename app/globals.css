@@ -1378,6 +1378,11 @@ button.signin-continue:disabled {
     justify-content: center;
     padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
   }
+  /* The caret is drawn by iOS and does not follow the form's move; it is hidden until the card lands (modal.tsx). */
+  .modal-backdrop[data-moving] input,
+  .modal-backdrop[data-moving] textarea {
+    caret-color: transparent;
+  }
   /* With the keyboard up the form eases to the top, above where the keyboard is, and stays there while the field
      changes. The keyboard covers the home bar, so only the bottom air shrinks. */
   .modal-backdrop[data-keyboard] {
