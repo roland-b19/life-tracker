@@ -207,6 +207,9 @@ Decided by the user: real push notifications are not deleted but hidden behind `
 - Azure: every row of `docs/requirements.md` must be ticked with evidence; a formal presentation is not needed, only showing what was done. Credit check and a second Entra test account come later, before the live check.
 - **Keep strictly what the app uses.** Unused tables, legacy code, old data and old docs are deleted (git history and a pre-drop `pg_dump` are the archive), replacing the earlier "keep the unused tables". The work ends with a full audit and refactor, after which every gate is run again.
 
+### 2026-11-10: Claude hidden on the personal variant, present on Azure
+Decided by the user (confirming the earlier flag decision): `NEXT_PUBLIC_CLAUDE_ENABLED` is false on B (Vercel cannot spawn the CLI) and true on A. It is not deleted. Azure therefore needs the CLI in the image, `CLAUDE_TOKEN_KEY` in Key Vault, outbound access to Anthropic and a live check; the production gap noted on 2026-11-08 is closed in that work (`docs/release-plan.md` 5.7). Installing the CLI package in the image still needs the user's OK. Supersedes "off on both" in the plan.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
