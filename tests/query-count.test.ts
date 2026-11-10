@@ -83,6 +83,16 @@ describe("a page view with two years of data stays cheap", () => {
     });
   }
 
+  it("switching the todos day loads everything in one action, with few queries", async () => {
+    const { loadTodosViewAction } = await import("@/app/actions/todos");
+    const today = new Date().toISOString().slice(0, 10);
+    const { result, queries, bytes } = await measure(() => loadTodosViewAction(today, today));
+    expect(result.success).toBe(true);
+    // 12 = the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history and planned days.
+    expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(12);
+    expect(bytes).toBeLessThanOrEqual(20_000);
+  });
+
   it("actions whose client keeps its own state do not re-render the page", () => {
     const src = (f: string) => readFileSync(`src/app/actions/${f}.ts`, "utf8");
     expect(src("wishlist")).not.toContain("revalidatePath");
