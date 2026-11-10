@@ -80,9 +80,12 @@ Rule: measure first, change one thing, measure again. Nothing here is started.
 
 Confirmed on 2026-11-10 from the official pages the user pasted: Neon Free limits (above) and what happens at the limits (compute suspended until the next month, or writes failing at 1 GB, no data deleted); Vercel Hobby: 1,000,000 function invocations, 4 Active CPU-hours, 100 GB data transfer, 300 s maximum function time, 100 deployments a day, 1 hour of runtime logs, non-commercial use only, no overage charges (usage is paused for 30 days instead).
 
+Verified on 2026-11-10 by running it against the real Neon project (PostgreSQL 18.6, `eu-central-1`) in a throwaway database, dropped afterwards:
+
+1. **Neon allows `CREATE ROLE life_tracker_app`** (the owner `neondb_owner` has CREATEROLE and CREATEDB). All 19 migrations ran with `drizzle-kit migrate` (27 tables, `GRANT ... TO life_tracker_app` included). The app role can read through both the direct and the pooled host, and is denied `CREATE TABLE`, `DROP TABLE` and `ALTER TABLE` (42501). The throwaway database and the role were removed, so the real database is still empty: create the role with a real password and migrate when implementing.
+
 Still unverified:
 
-1. **Neon allows `CREATE ROLE life_tracker_app`**, and our migrations (`GRANT ... TO life_tracker_app`) run.
 2. **Vercel Hobby needs no card** (neither pasted page says), lets us pick the function region, and builds Next 16.4 with `output: "standalone"`.
 3. **Neon rules for inactive free projects** (none found on the plans page), and that the Free terms do not change.
 

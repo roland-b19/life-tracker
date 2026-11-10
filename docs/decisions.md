@@ -194,7 +194,7 @@ Newest at the bottom of each section. Do not re-litigate a decision without the 
 
 ## Open
 
-- Free personal variant: three claims to verify by hand (Neon `CREATE ROLE`, Vercel Hobby without card and region choice, free limits) before implementing; see `docs/free-hosting-plan.md`.
+- Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); two claims left to verify by hand (Vercel Hobby without card and region choice, Neon inactive-project rules) before implementing; see `docs/free-hosting-plan.md`.
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
