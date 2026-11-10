@@ -144,4 +144,13 @@ describe("weight authorization", () => {
       (await POST(request("POST", `${appOrigin}/api/weight`, { date: "2026-01-03", kilograms: 82 }))).status,
     ).toBe(409);
   });
+
+  it("answers an impossible date or a malformed id with 400/404, never 500", async () => {
+    for (const date of ["2026-13-45", "2026-02-30"]) {
+      expect((await POST(request("POST", `${appOrigin}/api/weight`, { date, kilograms: 82 }))).status).toBe(400);
+    }
+    const context = { params: Promise.resolve({ id: "abc" }) };
+    expect((await PATCH(request("PATCH", `${appOrigin}/api/weight/abc`, { date: "2026-01-03", kilograms: 82 }), context)).status).toBe(404);
+    expect((await DELETE(request("DELETE", `${appOrigin}/api/weight/abc`, {}), context)).status).toBe(404);
+  });
 });

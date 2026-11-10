@@ -300,6 +300,34 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(deletedByA?.id).toBe(setA.id);
   });
 
+  it("refuses another user's split day or custom exercise when creating a workout or logging a set", async () => {
+    const dayA = (await getUserSplitWithDays(userA))!.days[0].id;
+    const custom = await createCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
+    const sessionB = await createWorkoutSession(userB, { date: "2026-10-29", isDeload: false });
+
+    await expect(createWorkoutSession(userB, { date: "2026-10-29", isDeload: false, splitDayId: dayA })).rejects.toThrow(
+      "Split day not found or unauthorized",
+    );
+    await expect(
+      logWorkoutSet(userB, {
+        sessionId: sessionB.id,
+        exerciseId: custom.id,
+        setOrder: 1,
+        reps: 5,
+        loadType: "kg",
+        loadValue: 10,
+        extraKg: 0,
+        isFailure: true,
+        isPartial: false,
+        flagAnomaly: false,
+      }),
+    ).rejects.toThrow("Exercise not found or unauthorized");
+  });
+
+  it("answers a malformed set id with a validation error, not a database error", async () => {
+    await expect(deleteSetAction("not-a-uuid")).rejects.toThrow("Invalid id");
+  });
+
   it("tracks 5-week deload cycle and flags when deload is due", async () => {
     // New user with no sessions -> cycle week 1, not due
     const statusNew = await getDeloadStatus(userA);
