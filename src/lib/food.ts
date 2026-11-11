@@ -20,6 +20,7 @@ import {
   ensureUserSampleRecipes,
 } from "./food-seed";
 import type { CategoryChange } from "./categories";
+import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
 import { weekStartOf, weightStats, type WeightStats } from "./weight-stats";
 
@@ -271,7 +272,8 @@ export async function getShoppingList(userId: string) {
     .select()
     .from(shoppingItems)
     .where(onList(userId))
-    .orderBy(shoppingItems.category, shoppingItems.name);
+    .orderBy(shoppingItems.category, shoppingItems.name)
+    .then((rows) => rows.sort(compareShopping));
 }
 
 /** Adds an item, or adds its amount to the same item (same name and unit) already on the list. */
@@ -297,7 +299,7 @@ export async function addShoppingItem(
     const amount = same.isBought ? input.amount : Math.min(9999.99, Number(same.amount) + input.amount);
     const [merged] = await db
       .update(shoppingItems)
-      .set({ amount: amount.toFixed(2), isBought: false })
+      .set({ amount: amount.toFixed(2), isBought: false, checkedAt: new Date() })
       .where(eq(shoppingItems.id, same.id))
       .returning();
     return merged;
@@ -443,7 +445,7 @@ export async function toggleShoppingItem(
 ) {
   const [updated] = await db
     .update(shoppingItems)
-    .set({ isBought })
+    .set({ isBought, checkedAt: new Date() })
     .where(and(eq(shoppingItems.id, itemId), eq(shoppingItems.userId, userId)))
     .returning();
 

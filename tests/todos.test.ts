@@ -181,6 +181,20 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect(todayResult.todos).toHaveLength(0);
   });
 
+  it("moves a ticked task to the top of the done ones and a just-unticked one to the bottom of the open ones", async () => {
+    const ids: string[] = [];
+    for (const title of ["A", "B", "C"]) {
+      ids.push((await createTodo(userA, { space: "personal", title, dueDate: "2026-11-04", isRecurring: false, recurrencePattern: "none" })).id);
+    }
+    const [ia, ib] = ids;
+    const titles = async () => (await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04")).todos.map((t) => t.title);
+    await toggleTodo(userA, { id: ia, isCompleted: true, currentDate: "2026-11-04" });
+    await toggleTodo(userA, { id: ib, isCompleted: true, currentDate: "2026-11-04" });
+    expect(await titles()).toEqual(["C", "B", "A"]);
+    await toggleTodo(userA, { id: ia, isCompleted: false, currentDate: "2026-11-04" });
+    expect(await titles()).toEqual(["C", "A", "B"]);
+  });
+
   it("tracks streak and consecutive completions accurately for recurring habits", async () => {
     const habit = await createTodo(userA, {
       space: "personal",

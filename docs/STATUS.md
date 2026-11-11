@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-11 by Claude (page stays still while dragging categories, Settings waits for the new page, shopping list folds; earlier: category drag reorder, Tasks phone order, two animations back; branch `feat/fold-categories`, pushed, no PR, not merged, not deployed)_
+_Last updated: 2026-11-11 by Claude (shared list structures, check order, remembered folds, move task inside Edit; branch `feat/shared-lists`, not pushed to a PR, not merged, NOT deployed; earlier: `feat/fold-categories`, merged)_
 
 ## Phase
 
@@ -46,6 +46,11 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 Categories (branch `feat/categories`, not merged): every Wishlist item has a category, and so does every daily task in Personal and Business. Categories are the user's own (add, rename, delete in a Categories card; "other" is built-in; deleting moves items to Other; renaming onto an existing name merges). The Wishlist All tab and the daily task list show category titles with their items beneath; the price tabs stay flat. New table `item_categories` and a `category` column on `todos` and `wishlist_items`: **migration `0021_item_categories` must be run on Neon (from the user's Mac, owner URL in a hidden prompt) before this code is merged**. No default categories ship in code; the importer (`scripts/import-personal.cjs`) takes an optional `categories` list and a category per item from `.local/personal-data.json`. Not deployed.
 
 ## Current focus
+
+**Shared list structures** (branch `feat/shared-lists`, not merged, not deployed; the user wants to test it first): More menu padding is equal top and bottom; closed categories stay closed across pages (`useFolded`); Tasks and Health shopping share one check order (tick to the top of the checked, untick to the bottom of the unchecked); a task is moved from Edit and Today to Daily asks for a category; the Tasks toolbar gap matches Health; Health's shopping Categories card and list rows use the same shared pieces as Wishlist and Tasks (`CategoriesCard` with `CategoriesApi`, `GroupedList`, `RowActions`). **Before this is merged and deployed the user must run migration `0022_shopping_checked_at` on Neon** (additive column, from the Mac, owner URL in a hidden prompt). No new dependency, no new endpoint. Gates: eslint, tsc, 172 tests green; checked in the browser pane at phone width on a dev user. Not checked: real iPhone Safari, the live build, Gym's delete-only buttons (not converted to `RowActions`).
+
+Earlier focus:
+
 
 **No animations, Undo everywhere** (branch `feat/no-motion-undo-everywhere`, PR open, not merged, not deployed): every CSS transition/animation/keyframe, view transition, smooth scroll and JS tween is removed (list motion, `AutoHeight`, counting numbers, modal/toast fade, drag glide, chart and 3D-map camera tweens); `animated-number.tsx` is deleted and `list-motion.tsx` is now `lists.tsx`. Every action that modifies something shows an Undo in its toast (create, delete, edit, toggle, move, clear, quick tap, settings, category delete/rename with a real revert, Claude token via the previous ciphertext). New server actions: category and shopping-category revert, move/push revert, Claude-token restore, custom-exercise delete; each has an authorization test. No migration, no new dependency. The design skill and `docs/decisions.md` (2026-11-11) say so. The earlier motion lines in this file are history.
 

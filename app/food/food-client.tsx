@@ -1,44 +1,33 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { compareShopping } from "@/lib/check-order";
 import { addDays, dayLabel, formatDMY } from "@/lib/format-date";
 import { Navigation } from "../components/navigation";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
-import {
-  CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  DropIcon,
-  LockIcon,
-  FootstepsIcon,
-  GripIcon,
-  ScaleIcon,
-  PencilIcon,
-  PlusIcon,
-  TrashIcon,
-} from "../components/icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, DropIcon, LockIcon, FootstepsIcon, ScaleIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { MetricPanel } from "./metric-panel";
-import { ListBox, useDragSort, useKeepPlace, useMore } from "../components/lists";
-import { GroupToggle, useFolded } from "../components/categories-card";
+import { ListBox, RowActions, useMore } from "../components/lists";
+import { CategoriesCard, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
+  addShoppingCategoryAction,
   addShoppingItemAction,
   addWaterAction,
   clearBoughtItemsAction,
   deleteMealAction,
+  deleteShoppingCategoryAction,
   deleteShoppingItemAction,
   getDaySummaryAction,
   logMealAction,
-  addShoppingCategoryAction,
-  deleteShoppingCategoryAction,
   renameShoppingCategoryAction,
   reorderShoppingCategoriesAction,
-  restoreShoppingItemsAction,
   revertShoppingCategoryAction,
+  restoreShoppingItemsAction,
   toggleShoppingItemAction,
   updateShoppingItemAction,
   updateStepsAction,
@@ -58,6 +47,16 @@ interface MealData {
   isEstimated?: boolean;
 }
 
+/** Health's shopping categories live in their own table; the shared Categories card saves through these. */
+const shoppingCategories: CategoriesApi = {
+  id: "shopping",
+  add: (name) => addShoppingCategoryAction({ name }),
+  rename: (from, to) => renameShoppingCategoryAction({ from, to }),
+  remove: (name) => deleteShoppingCategoryAction({ name }),
+  revert: (input) => revertShoppingCategoryAction(input),
+  reorder: (names) => reorderShoppingCategoriesAction({ names }),
+};
+
 interface ShoppingItemData {
   id: string;
   name: string;
@@ -65,6 +64,8 @@ interface ShoppingItemData {
   unit: string;
   category: string;
   isBought: boolean;
+  /** When the box last changed; null if it never did. */
+  checkedAt: Date | string | null;
 }
 
 const UNITS = ["pcs", "g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box", "bag", "bunch"];
@@ -146,11 +147,6 @@ export function FoodClient({
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
   const [categories, setCategories] = useState(initialCategories);
-  // from: null adds a new category, a name edits that one.
-  const [catEdit, setCatEdit] = useState<{ from: string | null }>({ from: null });
-  const [catOpen, setCatOpen] = useState(false);
-  const [catName, setCatName] = useState("");
-  const [catError, setCatError] = useState("");
   // The open meal or shopping form's error; only one form is open at a time.
   const [formError, setFormError] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
@@ -575,7 +571,7 @@ export function FoodClient({
 
   // Writes an edited item into the list; the bought state stays as it is on screen.
   const replaceShop = (to: ShoppingItemData) =>
-    setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought } : i)));
+    setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought, checkedAt: i.checkedAt } : i)));
 
   async function handleShopSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -620,154 +616,14 @@ export function FoodClient({
     }
   }
 
-  function openCategoryForm(from: string | null) {
-    setCatError("");
-    setCatEdit({ from });
-    setCatOpen(true);
-    setCatName(from ?? "");
-  }
-
-  // The new order shows at once (the shopping list above follows it); a failed save puts the old one back, and Undo saves it again.
-  const [catCard, keepCatPlace] = useKeepPlace<HTMLElement>(categories);
-  const reorderCategories = (names: string[]) => {
-    keepCatPlace();
-    setCategories(names);
-  };
-  async function moveCategory(from: number, to: number) {
-    const next = [...categories];
-    next.splice(to, 0, ...next.splice(from, 1));
-    const previous = categories;
-    reorderCategories(next);
-    const saved = (names: string[]) => reorderShoppingCategoriesAction({ names }).then((r) => r.success, () => false);
-    if (!(await saved(next))) {
-      reorderCategories(previous);
-      showToast({ message: "Failed to move category", type: "warning" });
-      return;
-    }
-    showToast({
-      message: `Moved "${next[to]}"`,
-      type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
-        reorderCategories(previous);
-        if (await saved(previous)) return;
-        reorderCategories(next);
-        showToast({ message: "Failed to undo", type: "warning" });
-      },
-    });
-  }
-  const dragCategory = useDragSort(moveCategory);
-
-  /** Moves the items `ids` that sit in `from` over to `to` on screen. */
-  const refile = (ids: Set<string>, from: string, to: string) =>
-    setShoppingList((prev) => prev.map((i) => (ids.has(i.id) && i.category === from ? { ...i, category: to } : i)));
-  const putCategory = (at: number, name: string) =>
-    setCategories((prev) => (prev.includes(name) ? prev : [...prev.slice(0, at), name, ...prev.slice(at)]));
-
-  async function handleCategorySubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const from = catEdit.from;
-    const to = catName.trim().toLowerCase();
-    if (!to) return;
-    if (to === from) return setCatOpen(false);
-    if (to === "other") return setCatError('Please pick a name other than "other".');
-    setCatError("");
-    setBusy(true);
-    try {
-      if (from === null) {
-        if (!(await addShoppingCategoryAction({ name: to })).success) return setCatError(`"${to}" already exists.`);
-        setCategories((prev) => [...prev, to]);
-        showToast({
-          message: `Added "${to}"`,
-          type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
-            setCategories((prev) => prev.filter((c) => c !== to));
-            if (await deleteShoppingCategoryAction({ name: to }).then((r) => r.success, () => false)) return;
-            setCategories((prev) => (prev.includes(to) ? prev : [...prev, to]));
-            showToast({ message: "Failed to undo", type: "warning" });
-          },
-        });
-      } else {
-        const res = await renameShoppingCategoryAction({ from, to });
-        const change = res.change;
-        if (!res.success || !change) throw new Error("Category not found");
-        const at = categories.indexOf(from);
-        const ids = new Set(change.itemIds);
-        // A name already in the list merges the groups; a new one relabels in place.
-        const forward = () => {
-          refile(ids, from, to);
-          setCategories((prev) => (change.merged ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c))));
-        };
-        forward();
-        showToast({
-          message: `Renamed "${from}" to "${to}"`,
-          type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
-            refile(ids, to, from);
-            if (change.merged) putCategory(at, from);
-            else setCategories((prev) => prev.map((c) => (c === to ? from : c)));
-            const back = await revertShoppingCategoryAction({ name: from, current: to, ...change, dropCurrent: !change.merged }).then(
-              (r) => r.success,
-              () => false,
-            );
-            if (back) return;
-            forward();
-            showToast({ message: "Failed to undo the edit", type: "warning" });
-          },
-        });
-      }
-      setCatOpen(false);
-    } catch {
-      setCatError("Failed to save category");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // The row leaves and the toast shows at once, its items move to Other alongside, and a failed delete puts both back.
-  function handleDeleteCategory(name: string) {
-    const at = categories.indexOf(name);
-    const items = shoppingList.filter((i) => i.category === name);
-    const itemIds = new Set(items.map((i) => i.id));
-    const deleted = deleteShoppingCategoryAction({ name }).then(
-      (r) => (r.success ? r.change : null),
-      () => null,
-    );
-    setCategories((prev) => prev.filter((c) => c !== name));
-    refile(itemIds, name, "other");
-    showToast({
-      message: `Removed "${name}"; its items are in Other`,
-      actionLabel: "Undo",
-      onAction: async () => {
-        const change = await deleted;
-        if (!change) return; // the failure path below puts it back
-        const ids = new Set(change.itemIds);
-        putCategory(at, name);
-        refile(ids, "other", name);
-        const back = await revertShoppingCategoryAction({ name, current: "other", ...change, dropCurrent: false }).then(
-          (r) => r.success,
-          () => false,
-        );
-        if (back) return;
-        setCategories((prev) => prev.filter((c) => c !== name));
-        refile(ids, name, "other");
-        showToast({ message: "Failed to undo", type: "warning" });
-      },
-    });
-    void deleted.then((change) => {
-      if (change) return;
-      putCategory(at, name);
-      refile(itemIds, "other", name);
-      setStatusMessage("Failed to remove category");
-    });
-  }
+  /** The shared Categories card re-files the items: a rename or delete moves them, Undo moves `only` back. */
+  const refile = (from: string, to: string, only?: string[]) =>
+    setShoppingList((prev) => prev.map((i) => (i.category === from && (!only || only.includes(i.id)) ? { ...i, category: to } : i)));
 
   function handleToggleShopping(item: ShoppingItemData) {
     const next = !item.isBought;
     const setBought = (isBought: boolean) =>
-      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought } : i)));
+      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt: new Date() } : i)));
     setBought(next);
     const saved = toggleShoppingItemAction(item.id, next).then(
       () => true,
@@ -913,9 +769,8 @@ export function FoodClient({
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const [shownMeals, moreMeals] = useMore(day.meals);
-  const [foldedShop, toggleShop] = useFolded();
-  const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c)));
-  const [shownCategories, moreCategories] = useMore(categories);
+  const [isShopFolded, toggleShop] = useFolded("shopping");
+  const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping)));
   const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
 
   return (
@@ -1190,111 +1045,35 @@ export function FoodClient({
               Your shopping list is empty.
             </p>
           )}
-          {shopCategories.filter((c) => shownShopping.some((i) => i.category === c)).map((cat) => (
-            <div key={cat} className="shopping-group">
-              <GroupToggle name={cat} folded={foldedShop.has(cat)} onToggle={() => toggleShop(cat)} />
-              {!foldedShop.has(cat) && shownShopping
-                .filter((item) => item.category === cat)
-                .map((item) => (
-                  <div key={item.id} className="shopping-row">
-                    <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
-                      <button
-                        type="button"
-                        className={`todo-checkbox-btn ${item.isBought ? "checked" : ""}`}
-                        onClick={() => handleToggleShopping(item)}
-                        aria-label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
-                      >
-                        {item.isBought && <CheckIcon size={12} strokeWidth={3} />}
-                      </button>
-                      <span>
-                        {item.name} · {Number(item.amount)} {item.unit}
-                      </span>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="delete-icon-btn edit"
-                        onClick={() => openShopForm(item)}
-                        aria-label={`Edit ${item.name}`}
-                        title="Edit"
-                      >
-                        <PencilIcon size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        className="delete-icon-btn"
-                        onClick={() => handleDeleteShoppingItem(item)}
-                        aria-label={`Delete ${item.name}`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+          <GroupedList
+            items={shownShopping}
+            wrap="shopping-group"
+            isFolded={isShopFolded}
+            onToggle={toggleShop}
+            row={(item) => (
+              <div className="shopping-row">
+              <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
+                <button
+                  type="button"
+                  className={`todo-checkbox-btn ${item.isBought ? "checked" : ""}`}
+                  onClick={() => handleToggleShopping(item)}
+                  aria-label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
+                >
+                  {item.isBought && <CheckIcon size={12} strokeWidth={3} />}
+                </button>
+                <span>
+                  {item.name} · {Number(item.amount)} {item.unit}
+                </span>
+              </div>
+              <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
             </div>
-          ))}
+            )}
+          />
           {moreShopping}
           </ListBox>
         </section>
 
-        <section ref={catCard} className="surface" aria-labelledby="categories-title">
-          <div className="section-head">
-            <h2 id="categories-title" className="section-title">
-              Categories <span className="muted number-tabular">{categories.length}</span>
-            </h2>
-            <button type="button" className="btn-sm tint" onClick={() => openCategoryForm(null)}>
-              <PlusIcon size={14} />
-              Add category
-            </button>
-          </div>
-          <ListBox wash className="entries">
-          {categories.length === 0 && (
-            <p className="empty-note">No categories yet.</p>
-          )}
-          {shownCategories.map((cat, i) => (
-            <div key={cat} className="entry-row" data-sort>
-              <button
-                type="button"
-                className="delete-icon-btn edit drag-handle"
-                aria-label={`Drag ${cat} to reorder`}
-                title="Drag to reorder"
-                {...dragCategory}
-                onKeyDown={(e) => {
-                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
-                  if (to < 0 || to >= shownCategories.length) return;
-                  e.preventDefault();
-                  moveCategory(i, to);
-                }}
-              >
-                <GripIcon size={22} />
-              </button>
-              <span className="category-name">{cat}</span>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="delete-icon-btn edit"
-                  onClick={() => openCategoryForm(cat)}
-                  aria-label={`Edit category ${cat}`}
-                  title="Edit"
-                >
-                  <PencilIcon size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="delete-icon-btn"
-                  onClick={() => handleDeleteCategory(cat)}
-                  aria-label={`Delete category ${cat}`}
-                  title="Delete"
-                >
-                  <TrashIcon size={17} />
-                </button>
-              </div>
-            </div>
-          ))}
-          {moreCategories}
-          </ListBox>
-        </section>
+        <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
       )}
 
@@ -1527,40 +1306,6 @@ export function FoodClient({
             {morePastFoods}
           </ListBox>
         </div>
-      </Modal>
-
-      <Modal
-        isOpen={catOpen}
-        onClose={() => setCatOpen(false)}
-        title={catEdit.from ? "Edit category" : "New category"}
-      >
-        <form onSubmit={handleCategorySubmit}>
-          <div className="form-stack">
-            <label>
-              Name
-              <input
-                type="text"
-                maxLength={50}
-                disabled={busy}
-                value={catName}
-                onChange={(e) => setCatName(e.target.value)}
-                required
-              />
-            </label>
-            {catEdit.from && (
-              <p className="muted move-hint">Its items move along. An existing name merges the two.</p>
-            )}
-            {catError && <p className="error" role="alert">{catError}</p>}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setCatOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !catName.trim()}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
       </Modal>
 
       <Modal

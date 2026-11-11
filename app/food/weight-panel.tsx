@@ -2,11 +2,11 @@
 
 import { LineChart } from "../components/charts";
 import { FormEvent, useEffect, useState } from "react";
-import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
-import { ListBox, useMore } from "../components/lists";
+import { ListBox, RowActions, useMore } from "../components/lists";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { signedKg, weightStats } from "@/lib/weight-stats";
@@ -213,26 +213,7 @@ export function WeightPanel() {
                       </strong>
                       <span className="muted number-tabular">{formatDMY(entry.date)}</span>
                     </span>
-                    <div className="row-actions">
-                      <button
-                        className="delete-icon-btn edit"
-                        type="button"
-                        onClick={() => openForm(entry)}
-                        aria-label={`Edit weigh-in for ${formatDMY(entry.date)}`}
-                        title="Edit"
-                      >
-                        <PencilIcon size={17} />
-                      </button>
-                      <button
-                        className="delete-icon-btn"
-                        type="button"
-                        onClick={() => void removeEntry(entry)}
-                        aria-label={`Delete weigh-in for ${formatDMY(entry.date)}`}
-                        title="Delete"
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
+                    <RowActions onEdit={() => openForm(entry)} onDelete={() => void removeEntry(entry)} editLabel={`Edit weigh-in for ${formatDMY(entry.date)}`} deleteLabel={`Delete weigh-in for ${formatDMY(entry.date)}`} />
                   </div>
                 ))}
                 {more}

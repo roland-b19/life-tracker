@@ -223,3 +223,15 @@ A list with categories (Wishlist in every tab, the Tasks daily list) shows its r
 The Categories card (`categories-card.tsx`, Wishlist and Tasks; the Health shopping Categories card does the same with `reorderShoppingCategoriesAction`) copies the Gym reorder: a `GripIcon` `.drag-handle` button first in each `.entry-row[data-sort]`, then the name, then the edit and delete buttons. The handle also takes ArrowUp/ArrowDown. A move updates the screen at once, saves the order (`reorderCategoriesAction`), and shows `Moved "x"` with an Undo that writes the previous order back; on failure the screen is restored with a warning. The items list under the same page groups by this order (`groupOrder`). The page must not move while dragging: `useDragSort` blocks touch panning, and the card keeps its screen position across the reorder and Undo (`useKeepPlace` in `lists.tsx`).
 
 On a phone the Tasks sections run Progress, Tasks, Last x days, Categories (the two column wrappers are `display: contents` there and each card has an `order`).
+
+## One shared structure per repeated piece
+
+A new page reuses these; it never copies their markup. Change the piece, every page follows.
+
+- **`RowActions`** (`lists.tsx`): the Edit + Delete icon pair at the end of a row. `className` for the wrapper (`row-actions`, `item-actions`), `bare` for no wrapper, `deleteTitle` for "Disconnect"-like wording.
+- **`GroupedList`** (`categories-card.tsx`): rows under category titles with folding. Give it `items` (each has `id` and `category`), `isFolded`/`onToggle` from `useFolded(page)`, a `row` renderer and optionally `wrap` (a class around each group) or `grouped={false}` (rows only). Wishlist, Tasks and the Health shopping list all use it.
+- **`useFolded(page)`**: which category titles are folded, kept in `localStorage["lt-folded"]`, so a closed category stays closed after navigating away and back, on every page.
+- **`CategoriesCard`** takes a `CategoriesApi` (`id`, `add`, `rename`, `remove`, `revert`, `reorder`). `scopedCategories(scope)` builds it for Wishlist and Tasks; Health passes its shopping-category actions. Add, rename, delete, drag reorder and Undo live only here.
+- **Check order** (`src/lib/check-order.ts`, `compareChecked`, `compareShopping`): unchecked rows first; ticking puts a row at the top of the checked ones; unticking puts it at the bottom of the unchecked ones (after rows nobody touched), not back where it was. Tasks (`completedAt`, same-day only) and the Health shopping list (`checked_at`) use it. Wishlist has no checks.
+- A task is moved from its Edit form (Day select, plus a Category select when it goes to Daily), not from a separate button.
+

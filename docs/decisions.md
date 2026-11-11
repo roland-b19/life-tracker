@@ -261,6 +261,14 @@ Every action that modifies something shows an Undo button in its toast and resto
 - Health's shopping Categories card reorders by dragging like the others (same handle, Undo, page stays still).
 - Health's shopping list titles are `GroupToggle`s like Wishlist and Tasks (each category folds), and the first one has 0.5rem above it.
 
+### 2026-11-11: Shared list structures; check order; folds remembered (user)
+
+- One structure per repeated piece (`RowActions`, `GroupedList`, `CategoriesCard` driven by a `CategoriesApi`, `useFolded`, `compareChecked`/`compareShopping`), used by Wishlist, Tasks and Health shopping. A new page only reuses and customizes them. Listed in `lists-and-crud.md`.
+- Folded category titles are remembered in the browser (`localStorage["lt-folded"]`, per page, tab and category) and survive navigation.
+- Ticking a task or shopping item moves it to the top of the checked rows; unticking moves it to the bottom of the unchecked rows. Tasks reuse `completedAt` as "last toggled" (an open task only counts it on the same day, so a repeating task ticked yesterday does not sink today); shopping gets `shopping_items.checked_at` (additive migration `0022_shopping_checked_at`).
+- A task is moved from Edit (Day select; going to Daily also asks for a category). The Move button is gone.
+- The Health shopping Categories card is the shared `CategoriesCard`; Health no longer has its own category code.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

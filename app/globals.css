@@ -435,6 +435,12 @@ h3 {
   padding-bottom: 0.75rem;
 }
 
+/* Alone in the menu (no Settings link below it) the row has the same space above and below */
+.more-user:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0.5rem;
+}
+
 .more-user-text {
   flex: 1;
   min-width: 0;
@@ -1548,7 +1554,7 @@ main > .error {
 .toolbar.dash {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.75rem;
+  gap: 1.25rem; /* the space Health puts between its section tabs and its day stepper */
 }
 
 .toolbar-group {
@@ -2726,16 +2732,6 @@ button.bars-col:focus-visible {
 }
 
 /* Move sheet: one full-width choice per row. */
-.move-options {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.move-options > button,
-.move-options .move-pick {
-  width: 100%;
-}
-
 /* Inside a form sheet the calendar opens in place: the card clips anything floating out of it. */
 .modal-card .picker {
   flex-direction: column;
