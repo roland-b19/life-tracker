@@ -12,20 +12,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         .register(process.env.NODE_ENV === "development" ? "/sw.js?dev" : "/sw.js")
         .catch(() => {});
     }
-    // Portrait only: this works in an installed or fullscreen app; a browser tab is kept upright by the CSS in globals.css.
-    try {
-      void (screen.orientation as { lock?: (o: string) => Promise<void> }).lock?.("portrait")?.catch(() => {});
-    } catch {}
-
-    // Which way the phone is turned, for the CSS that keeps the page upright against the device (globals.css).
-    const turn = () => {
-      const angle = screen.orientation?.angle ?? (window as { orientation?: number }).orientation ?? 0;
-      document.documentElement.dataset.rot = angle === 270 || angle === -90 ? "cw" : "ccw";
-    };
-    turn();
-    window.addEventListener("orientationchange", turn);
-    window.addEventListener("resize", turn);
-
     // iOS Safari ignores user-scalable=no, so block the pinch gesture directly.
     const blockPinch = (e: Event) => e.preventDefault();
     document.addEventListener("gesturestart", blockPinch);
@@ -44,8 +30,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     document.addEventListener("pointerover", size);
     document.addEventListener("focusin", size);
     return () => {
-      window.removeEventListener("orientationchange", turn);
-      window.removeEventListener("resize", turn);
       document.removeEventListener("gesturestart", blockPinch);
       document.removeEventListener("pointerover", size);
       document.removeEventListener("focusin", size);

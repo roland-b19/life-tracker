@@ -519,4 +519,4 @@ The CSS hides the outline on `[data-pointer]`.
 Sources: `app/globals.css`, `app/providers.tsx`, `app/components/{lists,modal,toast,segmented,charts,navigation}.tsx`, `app/layout.tsx`, `app/signin/page.tsx`.
 
 **Portrait only (phone)**
-- `manifest.json` has `orientation: portrait`; `providers.tsx` also tries `screen.orientation.lock("portrait")` (ignored where unsupported). A browser tab on iOS cannot be locked from the web, so a phone in landscape (`orientation: landscape`, height up to 500px, coarse pointer) keeps the portrait page and turns it back against the device, with no message: `html` becomes a fixed, portrait-sized scroller rotated 90deg (`data-rot` on `html`, set in `providers.tsx`, picks the direction; the modal backdrop then ignores the `visualViewport` sizing). The keyboard of a rotated page is still a landscape keyboard; it cannot be rotated.
+- The screen turns freely: `manifest.json` has no `orientation` and there is no rotation code or landscape CSS (the user's call, 2026-11-12; before it the page was locked to portrait and turned back in landscape).

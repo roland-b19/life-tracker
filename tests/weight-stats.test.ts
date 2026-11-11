@@ -44,3 +44,11 @@ describe("weightStats", () => {
     expect(stats.weekStartWeight).toBe(88);
   });
 });
+
+describe("weightInput", () => {
+  it("accepts two decimals that float math would reject (78.4, 80.1) and refuses three", async () => {
+    const { weightInput } = await import("@/lib/validations/weight");
+    for (const kilograms of [78.4, 80.1, 72.35]) expect(weightInput.safeParse({ date: "2026-11-11", kilograms }).success).toBe(true);
+    expect(weightInput.safeParse({ date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
+  });
+});

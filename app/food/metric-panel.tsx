@@ -1,12 +1,12 @@
 "use client";
 
-import { LineChart } from "../components/charts";
 import { FormEvent, useEffect, useState } from "react";
-import { AddButton, Card, ChartControls, ChartNote, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
+import { AddButton, Card, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
-import { Segmented } from "../components/segmented";
+import { TrendChart } from "./trend-chart";
+import { metricDayEditable } from "@/lib/validations/food";
 import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction } from "@/app/actions/food";
 
 type Kind = "water" | "steps";
@@ -19,12 +19,6 @@ const KINDS = {
 } as const;
 
 const today = () => toISODate();
-
-type Range = "7" | "30" | "90" | "180" | "360";
-const RANGES: { value: Range; label: string }[] = ["7", "30", "90", "180", "360"].map((d) => ({
-  value: d as Range,
-  label: `${d}D`,
-}));
 
 const sortNewestFirst = (list: Entry[]) => [...list].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -42,7 +36,6 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [range, setRange] = useState<Range>("30");
 
   const { showToast } = useToast();
 
@@ -168,8 +161,6 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
   const lastWeek = sorted.filter((e) => e.date >= addDays(today(), -6) && e.date <= today());
   const average = lastWeek.length ? Math.round(lastWeek.reduce((a, e) => a + e.value, 0) / lastWeek.length) : null;
   const todayValue = sorted.find((e) => e.date === today())?.value ?? 0;
-  const since = addDays(today(), 1 - Number(range));
-  const inRange = sorted.filter((e) => e.date >= since);
   const titleId = `${kind}-history-title`;
 
   return (
@@ -195,7 +186,10 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                       </strong>
                       <span className="muted number-tabular">{formatDMY(entry.date)}</span>
                     </span>
-                    <RowActions onEdit={() => openForm(entry)} onDelete={() => removeEntry(entry)} editLabel={`Edit ${k.noun} for ${formatDMY(entry.date)}`} deleteLabel={`Delete ${k.noun} for ${formatDMY(entry.date)}`} />
+                    {/* Older days are history: seen here and in the chart, never changed. */}
+                    {metricDayEditable(entry.date, today()) && (
+                      <RowActions onEdit={() => openForm(entry)} onDelete={() => removeEntry(entry)} editLabel={`Edit ${k.noun} for ${formatDMY(entry.date)}`} deleteLabel={`Delete ${k.noun} for ${formatDMY(entry.date)}`} />
+                    )}
                   </div>
                 ))}
                 {more}
@@ -215,21 +209,8 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                 { value: <>{Math.round(todayValue)} <span className="macro-target">{k.unit}</span></>, label: "Today" },
               ]}
             />
-            {sorted.length >= 2 && (
-              <>
-                <ChartControls>
-                  <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
-                </ChartControls>
-                <LineChart
-                  points={[...inRange]
-                    .reverse()
-                    .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: e.value }))}
-                  summary={`${k.title} over the last ${range} days`}
-                />
-                {inRange.length < 2 && <ChartNote>Not enough entries in the last {range} days.</ChartNote>}
-              </>
-            )}
           </Card>
+          <TrendChart id={`${kind}-chart-title`} noun={k.title} days={[7, 30]} entries={entries} />
         </DashboardAside>
       </Dashboard>
 
@@ -242,7 +223,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
         busy={saving}
         canSubmit={!!value}
       >
-        <DateField id={`${kind}-date`} value={date} today={today()} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
+        <DateField id={`${kind}-date`} value={date} today={today()} min={addDays(today(), -1)} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
         <Field
           label={k.label}
           type="number"

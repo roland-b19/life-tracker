@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { dayLabel, formatDMY } from "@/lib/format-date";
 import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, DayStepper, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, ReadonlyNote, SelectField, TintButton, Toolbar } from "../components/blocks";
+import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon, ScaleIcon, PlusIcon } from "../components/icons";
@@ -70,6 +71,17 @@ interface ShoppingItemData {
 const UNITS = ["pcs", "g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box", "bag", "bunch"];
 
 /** A food logged before, offered again in the "Past foods" sheet. */
+/** A meal's numbers on two lines: energy and protein, then carbs and fat. */
+function MealMacros({ m }: { m: { calories: number; protein: string | number; carbs: string | number; fat: string | number } }) {
+  return (
+    <p className="card-sub muted number-tabular">
+      {m.calories} kcal · {Number(m.protein)}g P
+      <br />
+      {Number(m.carbs)}g C · {Number(m.fat)}g F
+    </p>
+  );
+}
+
 interface PastFood {
   name: string;
   calories: number;
@@ -751,12 +763,10 @@ export function FoodClient({
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
     (c) => shoppingList.some((i) => i.category === c),
   );
-  const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
-  const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const [shownMeals, moreMeals] = useMore(day.meals);
   const [isShopFolded, toggleShop] = useFolded("shopping");
   const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping)));
-  const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
+  const [shownPastFoods, morePastFoods] = useMore(pastFoods);
 
   return (
     <Page userName={userName}>
@@ -803,7 +813,7 @@ export function FoodClient({
                     <div key={m.label} className="macro-card">
                       <span className="macro-title">{m.label}</span>
                       <span className="macro-numbers">
-                        {oneDecimal(m.value)}
+                        <AnimatedNumber value={m.value} from={m.value} format={m.unit === " kcal" ? undefined : oneDecimal} />
                         <span className="macro-target">
                           / {m.target}
                           {m.unit}
@@ -844,9 +854,7 @@ export function FoodClient({
                               <strong>{meal.name}</strong>
                               {meal.isEstimated && <Badge kind="carried">AI estimate</Badge>}
                             </div>
-                            <p className="card-sub muted number-tabular">
-                              {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
-                            </p>
+                            <MealMacros m={meal} />
                           </div>
                           {!isPast && <DeleteButton label={`Delete meal ${meal.name}`} onClick={() => handleDeleteMeal(meal)} />}
                         </div>
@@ -1083,16 +1091,14 @@ export function FoodClient({
       <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
         <div className="form-stack">
           <ListBox wash className="entries">
-            {notLoggedFoods.length === 0 ? (
-              <EmptyNote>Everything you logged before is already in today.</EmptyNote>
+            {pastFoods.length === 0 ? (
+              <EmptyNote>Nothing logged yet.</EmptyNote>
             ) : (
               shownPastFoods.map((f) => (
                 <div key={f.name} className="entry-row">
                   <div>
                     <strong>{f.name}</strong>
-                    <p className="card-sub muted number-tabular">
-                      {f.calories} kcal · {Number(f.protein)}g P · {Number(f.carbs)}g C · {Number(f.fat)}g F
-                    </p>
+                    <MealMacros m={f} />
                   </div>
                   <IconButton
                     edit

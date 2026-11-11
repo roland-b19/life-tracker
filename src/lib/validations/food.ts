@@ -1,3 +1,4 @@
+import { addDays } from "../format-date";
 import { z } from "zod";
 import { isoDate } from "./common";
 
@@ -25,6 +26,9 @@ export const saveDailyMetricSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("water"), date: day, value: z.number().int().min(1).max(20000), previousDate: day.optional() }),
   z.object({ kind: z.literal("steps"), date: day, value: z.number().int().min(1).max(200000), previousDate: day.optional() }),
 ]);
+
+/** Water and steps can be added or changed for today and yesterday only; older days are history. */
+export const metricDayEditable = (date: string, today: string) => date <= today && date >= addDays(today, -1);
 
 export const clearDailyMetricSchema = z.object({ kind: z.enum(["water", "steps"]), date: day });
 

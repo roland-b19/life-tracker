@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
+import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
   clearDailyMetricSchema,
   day,
+  metricDayEditable,
   saveDailyMetricSchema,
   createShoppingItemSchema,
   logMealSchema,
@@ -97,7 +99,11 @@ export async function listDailyMetricsAction() {
 /** `saved: false` when the day already has a value of its own. */
 export async function saveDailyMetricAction(rawInput: unknown) {
   const userId = await requireUser();
-  const saved = await saveDailyMetric(userId, saveDailyMetricSchema.parse(rawInput));
+  const input = saveDailyMetricSchema.parse(rawInput);
+  const today = toISODate();
+  if (!metricDayEditable(input.date, today) || (input.previousDate && !metricDayEditable(input.previousDate, today)))
+    throw new Error("Only today and yesterday can be changed.");
+  const saved = await saveDailyMetric(userId, input);
   safeRevalidate("/food");
   return { saved };
 }
@@ -105,6 +111,7 @@ export async function saveDailyMetricAction(rawInput: unknown) {
 export async function clearDailyMetricAction(rawInput: unknown) {
   const userId = await requireUser();
   const { kind, date } = clearDailyMetricSchema.parse(rawInput);
+  if (!metricDayEditable(date, toISODate())) throw new Error("Only today and yesterday can be changed.");
   await clearDailyMetric(userId, kind, date);
   safeRevalidate("/food");
   return { success: true };

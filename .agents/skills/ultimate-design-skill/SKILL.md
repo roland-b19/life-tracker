@@ -31,7 +31,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill and the Wishlist estimated-total count-up (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
+- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill, the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12) (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
 - **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
 - **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
@@ -108,7 +108,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Text is selectable only where it is text.
   - Respect safe-area insets. The tab bar has room under it.
   - No Next.js dev indicator (the "N" button): `devIndicators: false` in `next.config.ts` stays.
-  - It installs to the Home Screen as a standalone app, so it never shows browser chrome: `public/manifest.json` (`display: standalone`, `orientation: portrait`, black `#000000` theme and background) and `appleWebApp.capable: true` in `app/layout.tsx` stay.
+  - It installs to the Home Screen as a standalone app, so it never shows browser chrome: `public/manifest.json` (`display: standalone`, no `orientation`, so the screen turns freely; black `#000000` theme and background) and `appleWebApp.capable: true` in `app/layout.tsx` stay.
 
 **Forms and overlays**
 - **Forms are modals, never bottom sheets.** Centred on a desktop and on a phone; on a phone it moves to the top while the keyboard is open (so the keyboard never makes iOS pan the page).
@@ -159,7 +159,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (`< 250` low, `250-750` medium, `750+` high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
 - **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
-- **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
+- **Past days are frozen, yesterday has a grace day.** On Tasks, only today, yesterday and the days ahead can be changed: yesterday's tasks can still be ticked, edited, moved or deleted (one day to catch up on what was forgotten), older days cannot, and a `.readonly-note` with `LockIcon` 13 says "Days before yesterday are read-only". Add is only on today and later. An edit or delete of a daily task from a day on screen changes it from that day on only (the days before keep it as it was: the task is split in two rows); deleting a category refiles today and later, the days over keep it. Water and Steps accept a new entry for today or yesterday only (their older history is read-only; chart and History still show it). A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
 - **Charts and numbers are drawn at once** at their value: bars, `ProgressRing`, stat tiles and macro numbers never grow, count up or ease.
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
@@ -267,7 +267,7 @@ Each of these was tried or proposed and the user removed it.
 - Visible borders and separator lines between rows.
 - A blue page background (light blue, dark steel blue, Storm's blue-tinted greys). The user wanted the base black and grey (Graphite); blue is only the accent.
 - A gradient mask over a list, or a shimmer. The `.skeleton` placeholder while data loads is static.
-- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera) other than the Tasks progress ring and the Wishlist total count-up. All the rest was removed on 2026-11-11.
+- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera) other than the Tasks progress ring, the Wishlist total count-up and the Nutrition number count-up. All the rest was removed on 2026-11-11.
 
 **Layout and content**
 - Scaling the page behind a modal. Blur it only.
