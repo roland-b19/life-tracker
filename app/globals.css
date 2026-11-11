@@ -954,6 +954,9 @@ textarea:focus-visible {
 /* The layout box around a list (ListBox in lists.tsx) */
 .list-box {
   display: flow-root;
+  /* Switching a range or tab removes rows above the one the browser anchors the scroll to, which drags the page to
+     the top. Without anchoring the page stays put and only clamps when the new list is too short to fill it. */
+  overflow-anchor: none;
 }
 
 .entry-row {
