@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-12 by Claude (Health/Tasks polish, exact Undo everywhere; branch `feat/health-undo-polish`, not deployed; earlier: PR #86 deployed)_
+_Last updated: 2026-11-12 by Claude (stress test, Health/Tasks polish, exact Undo everywhere; branch `feat/health-undo-polish`, not deployed; earlier: PR #86 deployed)_
 
 ## Phase
 
@@ -171,6 +171,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-12 — Stress test on branch `feat/health-undo-polish`: local stress seed, edge-case tests (192 now) and a phone/tablet walkthrough; nine bugs fixed (whitespace-only names, price rounding, past-date writes to Water/Steps/meals, recurring tasks outside the planning window, four CSS overflows at 320-375px). Full list, what is left alone and what is unverified (real iPhone Safari, several UI flows): `docs/stress-test-report.md`. No migration, no dependency, no new endpoint; `scripts/seed-stress.cjs` is dev-only. Nothing deployed.
 
 - 2026-11-11 — Health shopping Categories card: drag to reorder like the other lists (`reorderShoppingCategories`, `reorderShoppingCategoriesAction`, `sort_order` already existed, test added), the shopping list follows the order, Undo, page stays still (`useKeepPlace` shared with `CategoriesCard`). No migration, no new dependency. Settings flash: the More menu stays open until Settings arrives, but the user reports it is still not right. Leaving Settings (tap a tab) checked in the pane at phone width, with and without a delayed fetch, sampling every DOM change: Settings stays on screen (tab bar already on the chosen tab) until the new page arrives, no frame of the page from before Settings. Not reproduced; a production build could not run locally (AUTH_DEV is refused in production), so prefetch behaviour and a real iPhone are unchecked.
 - 2026-11-11 — Branch `feat/fold-categories`, not deployed, no PR: (1) dragging a category keeps the page still (touch panning blocked during the drag; the Categories card keeps its screen position across a move or Undo; not reproducible in desktop Chrome, so real iPhone Safari is unverified); (2) a More-menu link (Settings) keeps the menu open until the new page arrives, checked with a 2 s delayed fetch; (3) Health Shopping tab: category titles fold (`GroupToggle`, `useFolded`) and the first has 0.5rem above it. No migration, no new dependency.

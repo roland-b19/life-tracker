@@ -292,6 +292,10 @@ Every action that modifies something shows an Undo button in its toast and resto
 - Deleting a single shopping item is soft (`cleared_at`, like Clear bought), so Undo restores the original row.
 - Water, Weight and Steps charts show a line without dots and from one entry on; the default range is 7 days on Health and Tasks.
 
+## 2026-11-12 — Writes are limited to today and yesterday in the server
+
+Water, Steps, and meal logging now reject any other date in the server action (`assertWritableDay`), not only in the UI; history and charts still read every date. Recurring tasks follow the same 7-day planning window as one-off tasks. Reason: the stress test showed the actions accepted any date when called directly.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
