@@ -22,7 +22,7 @@ vi.mock("@/server/auth", () => ({
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { claudeConnections, users } from "@/db/schema";
-import { connectClaudeAction, disconnectClaudeAction } from "@/app/actions/claude-connection";
+import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
 
 const TOKEN = "sk-ant-oat01-test-token-abcdefghijklmnopqrstuvwxyz";
@@ -91,7 +91,37 @@ describe("Claude connection", () => {
     expect(await getClaudeConnection(stranger)).not.toBeNull();
   });
 
+  it("undoes a replace and a disconnect, and refuses a value that does not decrypt", async () => {
+    const owner = await seedUser();
+    const stranger = await seedUser();
+    const OLD = `${TOKEN}-old`;
+    authState.id = owner;
+    await connectClaudeAction({ token: OLD });
+    const replaced = await connectClaudeAction({ token: TOKEN });
+    expect(await getClaudeToken(owner)).toBe(TOKEN);
+    await restoreClaudeConnectionAction(replaced.previous!);
+    expect(await getClaudeToken(owner)).toBe(OLD);
+
+    const gone = await disconnectClaudeAction();
+    expect(await getClaudeConnection(owner)).toBeNull();
+    await restoreClaudeConnectionAction(gone.previous!);
+    expect(await getClaudeToken(owner)).toBe(OLD);
+
+    await expect(
+      restoreClaudeConnectionAction({ tokenEncrypted: "v1:AAAA:AAAA:AAAA", connectedAt: new Date().toISOString() }),
+    ).rejects.toThrow();
+
+    // The stranger restoring the owner's ciphertext only writes their own row; the owner's stays as it was.
+    authState.id = stranger;
+    await restoreClaudeConnectionAction(gone.previous!);
+    authState.id = owner;
+    expect(await getClaudeToken(owner)).toBe(OLD);
+  });
+
   it("rejects anonymous callers", async () => {
+    await expect(restoreClaudeConnectionAction({ tokenEncrypted: "x", connectedAt: new Date().toISOString() })).rejects.toThrow(
+      "Authentication required.",
+    );
     await expect(connectClaudeAction({ token: TOKEN })).rejects.toThrow("Authentication required.");
     await expect(disconnectClaudeAction()).rejects.toThrow("Authentication required.");
   });

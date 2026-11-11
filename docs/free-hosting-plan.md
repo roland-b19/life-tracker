@@ -70,7 +70,7 @@ Rule: measure first, change one thing, measure again. Nothing here is started.
 
 **Client**
 - `three` is already imported lazily in `muscle-map.tsx`; check that the 5.6 MB `muscles.glb` loads only when the Muscle map is opened, then shrink it (mesh compression or lower detail, same look).
-- Check the shared chart, modal and list-motion code for work done on every render; check long lists render only what is visible.
+- Check the shared chart, modal and list code for work done on every render; check long lists render only what is visible.
 - Keep the service worker cache for `/_next/static` only (no personal data cached).
 
 **Infrastructure and CI**

@@ -1,7 +1,6 @@
 "use client";
 
 import { type CSSProperties } from "react";
-import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
 
@@ -18,8 +17,6 @@ export function ProgressRing({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(100, percent));
-  // Fills from empty when it appears, then eases between values (Apple Fitness rings).
-  const shown = useAnimatedNumber(p, 0, 900);
   return (
     <div className="ring" style={{ width: size, height: size }} role="img" aria-label={`${p}% ${label}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
@@ -31,11 +28,11 @@ export function ProgressRing({
           className="ring-fill"
           strokeWidth={stroke}
           strokeDasharray={c}
-          strokeDashoffset={c * (1 - shown / 100)}
+          strokeDashoffset={c * (1 - p / 100)}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
-      <span className="ring-text number-tabular">{Math.round(shown)}%</span>
+      <span className="ring-text number-tabular">{Math.round(p)}%</span>
     </div>
   );
 }
@@ -85,8 +82,6 @@ export function BarChart({
               className={`bars-bar${d.highlight ? " hl" : ""}${d.empty ? " empty" : ""}`}
               style={{
                 height: d.empty ? 3 : `${Math.max(2, Math.min(100, (d.value / max) * 100))}%`,
-                // The same spread for 7 or 90 bars, so every period draws in the same time.
-                animationDelay: `${Math.round((i / Math.max(1, data.length - 1)) * 84)}ms`,
               }}
             />
           );

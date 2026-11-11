@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { assertPushEnabled } from "@/lib/features";
 import { requireUser } from "@/server/auth";
 import {
@@ -26,7 +27,9 @@ import {
   getTodoHistory,
   hasDuplicateTodo,
   moveTodo,
+  removePushSubscription,
   restoreTodo,
+  revertMoveTodo,
   savePushSubscription,
   toggleTodo,
   updateTodo,
@@ -58,6 +61,17 @@ export async function restoreTodoAction(rawInput: unknown) {
   assertPlannable(parsed);
   if (await hasDuplicateTodo(userId, parsed, parsed.id)) return duplicate(parsed.title);
   const todo = await restoreTodo(userId, parsed);
+  return { success: todo !== null, todo };
+}
+
+/** Undo of a move: `createdId` is the task a move created in place of an ended daily one. */
+export async function revertMoveTodoAction(rawInput: unknown, createdId?: string) {
+  const userId = await requireUser();
+  const parsed = restoreTodoSchema.parse(rawInput);
+  const created = createdId ? z.string().uuid().parse(createdId) : undefined;
+  assertPlannable(parsed);
+  if (await hasDuplicateTodo(userId, parsed, created ? [parsed.id, created] : parsed.id)) return duplicate(parsed.title);
+  const todo = await revertMoveTodo(userId, parsed, created);
   return { success: todo !== null, todo };
 }
 
@@ -153,3 +167,9 @@ export async function savePushSubscriptionAction(rawInput: unknown) {
   return { success: true, subscription };
 }
 
+export async function deletePushSubscriptionAction(endpoint: string) {
+  assertPushEnabled();
+  const userId = await requireUser();
+  const parsed = pushSubscriptionSchema.shape.endpoint.parse(endpoint);
+  return { success: true, deleted: await removePushSubscription(userId, parsed) };
+}

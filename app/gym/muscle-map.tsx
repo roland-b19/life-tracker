@@ -1,9 +1,9 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
-import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
+import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import {
   GROUP_COLOR,
@@ -76,8 +76,6 @@ function MuscleMap({
         const back = new THREE.DirectionalLight(0xffffff, 0.8);
         back.position.set(-2, 2, -4);
         scene.add(back);
-
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
         const render = () => renderer.render(scene, camera);
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
@@ -137,48 +135,21 @@ function MuscleMap({
           render();
         };
 
-        // Front/Back is an absolute reset: the camera returns to the original front or back pose (same
-        // height, distance and target as on load), whatever the user dragged or zoomed. It eases there;
-        // touching the model stops it, and reduced motion jumps instead.
-        let frame = 0;
-        const stopTurn = () => cancelAnimationFrame(frame);
-        const setView = (v: "front" | "back", animate = true) => {
-          stopTurn();
+        // Front/Back is an absolute reset: the camera jumps to the original front or back pose (same
+        // height, distance and target as on load), whatever the user dragged or zoomed.
+        const setView = (v: "front" | "back") => {
           const to = { az: v === "front" ? 0 : Math.PI, polar: Math.PI / 2, radius: dist };
-          const off = camera.position.clone().sub(controls.target);
-          const from = {
-            az: Math.atan2(off.x, off.z),
-            polar: Math.acos(Math.min(1, Math.max(-1, off.y / (off.length() || 1)))),
-            radius: off.length(),
-          };
-          const tFrom = controls.target.clone();
-          // Shortest way round, so a model dragged near the target does not spin the long way.
-          const delta = ((((to.az - from.az) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
-          const place = (k: number) => {
-            const az = from.az + delta * k;
-            const polar = from.polar + (to.polar - from.polar) * k;
-            const radius = from.radius + (to.radius - from.radius) * k;
-            controls.target.lerpVectors(tFrom, center, k);
-            camera.position.set(
-              controls.target.x + radius * Math.sin(polar) * Math.sin(az),
-              controls.target.y + radius * Math.cos(polar),
-              controls.target.z + radius * Math.sin(polar) * Math.cos(az),
-            );
-            controls.update();
-          };
-          if (!animate || reduceMotion.matches) return place(1);
-          const start = performance.now();
-          const step = (now: number) => {
-            const t = Math.min((now - start) / 700, 1);
-            place(t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-            if (t < 1) frame = requestAnimationFrame(step);
-          };
-          frame = requestAnimationFrame(step);
+          controls.target.copy(center);
+          camera.position.set(
+            center.x + to.radius * Math.sin(to.polar) * Math.sin(to.az),
+            center.y + to.radius * Math.cos(to.polar),
+            center.z + to.radius * Math.sin(to.polar) * Math.cos(to.az),
+          );
+          controls.update();
         };
 
         // The move button turns the model like OrbitControls does: a full turn per canvas height of travel.
         const rotateBy = (dx: number, dy: number) => {
-          stopTurn();
           const off = camera.position.clone().sub(controls.target);
           const sph = new THREE.Spherical().setFromVector3(off);
           const k = (2 * Math.PI) / (renderer.domElement.clientHeight || 1);
@@ -207,7 +178,6 @@ function MuscleMap({
         let down: [number, number] | null = null;
         const canvas = renderer.domElement;
         const onDown = (e: PointerEvent) => {
-          stopTurn();
           down = [e.clientX, e.clientY];
         };
         const onUp = (e: PointerEvent) => {
@@ -233,13 +203,12 @@ function MuscleMap({
 
         api.current = { setSelected: paint, setView, rotateBy };
         camera.position.set(center.x, center.y, center.z + dist);
-        setView("front", false);
+        setView("front");
         resize();
         paint(selectedRef.current);
         setStatus("ready");
 
         cleanup = () => {
-          stopTurn();
           touch.removeEventListener("change", applyPointer);
           ro.disconnect();
           canvas.removeEventListener("pointerdown", onDown);
@@ -340,14 +309,7 @@ export interface PlannedExercise {
 /** 3D model + group chips; picking a group lists the exercises of the user's split that train it. */
 export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
-  const { rowRef, fadeAll } = useListMotion();
-  const card = useRef<HTMLElement>(null);
-  // The current rows fade out before the list switches, like every other list switch.
-  const setSelected = (g: MuscleGroup | null) => g !== selected &&
-    fadeAll(() => {
-      swapIn(card.current);
-      setSelectedNow(g);
-    });
+  const setSelected = (g: MuscleGroup | null) => g !== selected && setSelectedNow(g);
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)
@@ -362,7 +324,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   }
 
   return (
-    <section ref={card} className="surface muscle-card" aria-labelledby="muscle-title">
+    <section className="surface muscle-card" aria-labelledby="muscle-title">
       <div className="section-head">
         <h2 id="muscle-title" className="section-title">
           Muscle map
@@ -406,16 +368,15 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           {selected ? (
             <div>
             <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
-            <AutoHeight wash className="entries muscle-entries">
+            <ListBox wash className="entries muscle-entries">
               {list.length === 0 && (
-                <p key={`empty-${selected}`} ref={rowRef("empty")} className="empty-note">
+                <p key={`empty-${selected}`} className="empty-note">
                   No exercise in your split trains this muscle.
                 </p>
               )}
               {/* Keyed by the group so every switch mounts fresh rows. */}
-              <Fragment key={selected}>
-              {list.map((e) => (
-                <div key={e.exerciseId} ref={rowRef(e.exerciseId)} className="entry-row">
+                            {list.map((e) => (
+                <div key={e.exerciseId} className="entry-row">
                   <div>
                     <strong>{e.exerciseName}</strong>
                     <span className="muted muscle-day">{e.days.join(", ")}</span>
@@ -425,8 +386,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
                   </span>
                 </div>
               ))}
-              </Fragment>
-            </AutoHeight>
+            </ListBox>
             </div>
           ) : (
             <div>

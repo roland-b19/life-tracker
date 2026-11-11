@@ -39,6 +39,8 @@ import {
 } from "@/lib/gym";
 import {
   cancelSessionAction,
+  createCustomExerciseAction,
+  deleteCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   getGymHistoryAction,
@@ -109,6 +111,28 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     const userBExercises = await getExercises(userB);
     expect(userBExercises.some((e) => e.name === "B-Stance Hip Thrust")).toBe(false);
+  });
+
+  it("undoes a custom exercise for its owner only, and never while a set uses it", async () => {
+    const make = async (name: string) =>
+      (await createCustomExerciseAction({ name, muscleGroup: "quads", equipmentType: "barbell" })).exercise;
+    const fresh = await make("Undo Squat");
+
+    authState.id = userB;
+    expect((await deleteCustomExerciseAction(fresh.id)).success).toBe(false);
+    expect((await getExercises(userA)).some((e) => e.id === fresh.id)).toBe(true);
+    authState.id = "";
+    await expect(deleteCustomExerciseAction(fresh.id)).rejects.toThrow("Authentication required.");
+
+    authState.id = userA;
+    expect((await deleteCustomExerciseAction(fresh.id)).success).toBe(true);
+    expect((await getExercises(userA)).some((e) => e.id === fresh.id)).toBe(false);
+
+    const used = await make("Used Squat");
+    const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
+    await logSetAction({ sessionId: session.id, exerciseId: used.id, setOrder: 1, reps: 5, loadType: "kg", loadValue: 50 });
+    expect((await deleteCustomExerciseAction(used.id)).success).toBe(false);
+    expect((await getExercises(userA)).some((e) => e.id === used.id)).toBe(true);
   });
 
   describe("saveSplitDayAction (edit routine)", () => {

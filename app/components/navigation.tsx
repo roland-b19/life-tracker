@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { isClaudeEnabled } from "@/lib/features";
-
-// Each page renders its own Navigation, so the tab bar is new on every page change; the thumb starts at the tab
-// the last page had and slides to this one.
-let lastTab: number | null = null;
 
 interface NavigationProps {
   userName: string;
@@ -18,9 +14,6 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  // A More-menu page is opening: the thumb stays on More until the new page's own bar takes over, instead of sliding
-  // back to the page the user is leaving.
-  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -99,34 +92,14 @@ export function Navigation({ userName }: NavigationProps) {
   const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
   const initial = userName.charAt(0).toUpperCase();
-  const active = moreActive || moreOpen || opening ? primary.length : primary.findIndex((l) => l.isActive);
-  const bar = useRef<HTMLElement>(null);
-  const [start] = useState(lastTab ?? active); // rendered once; the effect moves the thumb, so the change transitions
-  useEffect(() => {
-    lastTab = active;
-    bar.current?.style.setProperty("--i", String(Math.max(active, 0)));
-    bar.current?.toggleAttribute("data-idle", active < 0);
-  }, [active]);
+  const active = moreActive || moreOpen ? primary.length : primary.findIndex((l) => l.isActive);
   // redirect:false because NextAuth builds the redirect from NEXTAUTH_URL (localhost in dev), which a phone cannot reach.
   const router = useRouter();
   const { showToast } = useToast();
   const signOutNow = async () => {
-    // Fade the whole page out first, so the sign-in card arrives on an empty screen.
-    const fades = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? []
-      : [...document.querySelectorAll("main > *")].map((el) =>
-          el.animate(
-            [
-              { opacity: 1, filter: "none" },
-              { opacity: 0, filter: "blur(2px)" }, // fades and blurs, never scales (like the form's backdrop)
-            ],
-            { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)", fill: "forwards" },
-          ),
-        );
     try {
-      await Promise.all([signOut({ redirect: false }), ...fades.map((a) => a.finished)]);
+      await signOut({ redirect: false });
     } catch {
-      fades.forEach((a) => a.cancel()); // never leave a blank page behind a failed sign-out
       showToast({ message: "Failed to sign out", type: "warning" });
       return;
     }
@@ -197,7 +170,6 @@ export function Navigation({ userName }: NavigationProps) {
                 className={`nav-link ${link.isActive ? "active" : ""}`}
                 aria-current={link.isActive ? "page" : undefined}
                 onClick={() => {
-                  setOpening(true);
                   setMoreOpen(false);
                 }}
               >
@@ -209,11 +181,10 @@ export function Navigation({ userName }: NavigationProps) {
         </>
       )}
       <nav
-        ref={bar}
         className="tabbar"
         aria-label="Mobile Navigation"
-        data-idle={start < 0 ? "" : undefined}
-        style={{ "--n": primary.length + 1, "--i": Math.max(start, 0) } as CSSProperties}
+        data-idle={active < 0 ? "" : undefined}
+        style={{ "--n": primary.length + 1, "--i": Math.max(active, 0) } as CSSProperties}
       >
         {primary.map((link) => (
           <NextLink
@@ -222,7 +193,6 @@ export function Navigation({ userName }: NavigationProps) {
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
             onClick={() => {
-              setOpening(false);
               setMoreOpen(false);
             }}
           >
@@ -236,7 +206,6 @@ export function Navigation({ userName }: NavigationProps) {
           aria-expanded={moreOpen}
           aria-controls="more-menu"
           onClick={() => {
-            setOpening(false);
             setMoreOpen((v) => !v);
           }}
         >

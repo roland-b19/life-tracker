@@ -24,21 +24,12 @@
   /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
      High contrast (below) brings the outline back. --press is rewritten per element by app/providers.tsx. */
   --edge: transparent;
-  --lift: 320ms var(--ease);
   --glass-blur: blur(28px) saturate(160%);
-  /* Apple motion: iOS ease-out for movement, never an overshoot */
-  --dur: 420ms;
-  /* Hover, press and selection feedback (color, opacity): quick, or every control feels late */
-  --quick: 180ms;
-  /* Hover highlights fade in on a gentle curve: fast, but never a jump */
-  --fade: 240ms ease;
-  --wash: 100ms ease; /* the Wishlist's row wash out and in around a list change; WASH in list-motion.tsx */
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
      grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: rgba(255, 255, 255, 0.05);
   --highlight-fill: rgba(255, 255, 255, 0.2);
   --tint-highlight: rgba(134, 180, 234, 0.34);
-  --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --press: 0.92;
   color-scheme: dark;
 }
@@ -302,7 +293,6 @@ h3 {
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background var(--fade), color var(--fade), transform var(--lift);
 }
 
 .nav-link svg {
@@ -360,7 +350,6 @@ h3 {
   border-radius: 1.25rem;
   background: var(--tint-subtle);
   transform: translateX(calc(var(--i) * (100% + var(--tab-gap))));
-  transition: transform var(--dur) var(--ease), opacity var(--fade);
   z-index: -1;
 }
 .tabbar[data-idle]::before { opacity: 0; }
@@ -384,7 +373,6 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
 /* The press pulse is the Segmented tab's: the item shrinks by 4px a side (--press) and springs back. */
@@ -408,7 +396,6 @@ h3 {
   background: rgba(0, 0, 0, 0.5);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  animation: modalFadeIn var(--dur) var(--ease) both;
 }
 
 .more-menu {
@@ -425,7 +412,6 @@ h3 {
   border: 1px solid var(--edge);
   border-radius: 1.25rem;
   transform-origin: bottom right;
-  animation: modalScaleUp var(--dur) var(--ease) both;
 }
 
 .more-user {
@@ -522,7 +508,6 @@ main {
     border: 1px solid var(--edge);
     border-radius: 1rem;
     background: var(--surface-secondary);
-    transition: transform var(--lift);
   }
 
   .side-user-row {
@@ -634,7 +619,6 @@ main {
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  transition: background-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 .split-day-card.selected {
@@ -697,7 +681,6 @@ main {
   border: 1px solid var(--edge);
   display: grid;
   gap: 0.3rem;
-  transition: transform var(--lift);
 }
 
 .macro-title {
@@ -739,7 +722,6 @@ main {
   height: 100%;
   background: var(--tint);
   border-radius: 1rem;
-  transition: width calc(var(--dur) * 1.5) var(--ease);
 }
 
 .progress-fill.over {
@@ -793,12 +775,6 @@ main {
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--edge);
   border-radius: 1.15rem;
-  transition: transform var(--lift);
-}
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
 }
 
 @media (min-width: 768px) {
@@ -853,7 +829,6 @@ textarea {
   background: rgba(28, 28, 30, 0.85);
   border: 1px solid var(--edge);
   border-radius: 0.85rem;
-  transition: background-color var(--fade), border-color var(--fade), transform var(--lift);
 }
 
 /* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
@@ -886,7 +861,6 @@ input[type="checkbox"] {
   border-radius: 50%;
   border: 1.5px solid var(--secondary);
   background: transparent center / 0.85rem no-repeat;
-  transition: background-color var(--fade), border-color var(--fade);
 }
 input[type="checkbox"]:checked {
   background-color: var(--tint);
@@ -916,7 +890,6 @@ button {
   justify-content: center;
   gap: 0.5rem;
   border-radius: 0.85rem;
-  transition: background var(--fade), color var(--fade), transform var(--lift), opacity var(--quick) var(--ease);
 }
 
 button:active:not(:disabled) {
@@ -965,10 +938,9 @@ textarea:focus-visible {
   gap: 0.25rem;
   margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
 }
-/* On the clip box (.auto-height), not the list inside it: a list sticking out of it would lose its last row's
-   bottom 0.5rem to the clip while the height animates, then pop it back at the end */
+/* On the list box (.list-box), not the list inside it */
 .surface > .entries:last-child,
-.surface > .auto-height:last-child {
+.surface > .list-box:last-child {
   margin-bottom: -0.5rem;
 }
 /* An empty list keeps one row's space (--row-h is the page's row height), so the card does not jump. */
@@ -979,15 +951,10 @@ textarea:focus-visible {
   padding: 0.5rem 0;
 }
 
-/* Container that animates its height when its content changes (list-motion.tsx): a quick resize, with the
-   new rows fading in as it starts */
-.auto-height {
+/* The layout box around a list (ListBox in lists.tsx) */
+.list-box {
   display: flow-root;
-  transition: height 180ms cubic-bezier(0.2, 0, 0, 1); /* RESIZE in list-motion.tsx: ends with the first row's entrance */
 }
-/* Rows added, deleted or moved (useListMotion): the card resizes in step with the rows' glide. MOVE in list-motion.tsx. */
-.auto-height[data-flip] { transition-duration: 240ms; transition-delay: var(--flip-delay, 0ms); transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-.auto-height > :is(.entries, .todo-list) > * { animation-duration: 180ms; }
 
 .entry-row {
   justify-content: space-between;
@@ -1051,10 +1018,9 @@ button.signin-continue:disabled {
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
-/* Icon-only row actions (edit, delete): same tinted fill, size and motion as the tinted text buttons */
+/* Icon-only row actions (edit, delete): same tinted fill and size as the tinted text buttons */
 .delete-icon-btn {
   background: var(--tint-subtle);
   border: none;
@@ -1066,7 +1032,6 @@ button.signin-continue:disabled {
   align-items: center;
   justify-content: center;
   flex: none;
-  transition: transform var(--lift), background-color var(--fade), opacity var(--quick) var(--ease);
   width: 44px;
   height: 44px;
 }
@@ -1134,7 +1099,6 @@ button.signin-continue:disabled {
   min-height: 0; /* the global button min-height would stretch the circle into an oval */
   flex-shrink: 0;
   position: relative;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 /* 44pt tap target around the 23px circle */
@@ -1200,17 +1164,7 @@ button.signin-continue:disabled {
     rgba(255, 255, 255, 0.04) 63%
   );
   background-size: 400% 100%;
-  animation: skeletonShimmer 1.4s ease infinite;
   border-radius: 0.5rem;
-}
-
-@keyframes skeletonShimmer {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0 50%;
-  }
 }
 
 .skeleton-text {
@@ -1241,13 +1195,8 @@ button.signin-continue:disabled {
   z-index: 9999;
   background: rgba(0, 0, 0, 0.4);
   -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur that animates and pans janked on iPhone */
+  backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur janked on iPhone */
   touch-action: none;
-  animation: modalFadeIn var(--dur) var(--ease) both;
-}
-.modal-scrim.closing {
-  pointer-events: none;
-  animation: modalFadeOut var(--dur) var(--ease) both;
 }
 
 .modal-backdrop {
@@ -1261,18 +1210,6 @@ button.signin-continue:disabled {
   height: 100dvh;
   overscroll-behavior: contain;
   touch-action: none;
-  animation: modalFadeIn var(--dur) var(--ease) both;
-  /* No transition on the height or offset set in modal.tsx: iOS pans the page while the keyboard opens, and the
-     backdrop follows each step; a transition would chase the pan and lag behind it. */
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 .modal-card {
@@ -1287,38 +1224,6 @@ button.signin-continue:disabled {
   max-height: 100%;
   margin: auto;
   touch-action: auto;
-  animation: modalScaleUp var(--dur) var(--ease) both;
-  transition: translate var(--dur) var(--ease); /* the move between centred and top-anchored (modal.tsx) */
-}
-
-/* Closing plays the opening backwards (Modal keeps the form mounted for --dur) */
-.modal-backdrop.closing {
-  pointer-events: none;
-  animation: modalFadeOut var(--dur) var(--ease) both;
-}
-.modal-backdrop.closing .modal-card {
-  animation: modalScaleDown var(--dur) var(--ease) both;
-}
-@keyframes modalFadeOut {
-  to { opacity: 0; }
-}
-@keyframes modalScaleDown {
-  to {
-    opacity: 0;
-    transform: scale(0.98) translateY(8px);
-  }
-}
-
-/* Sheet rises a few pixels and settles, no overshoot */
-@keyframes modalScaleUp {
-  from {
-    opacity: 0;
-    transform: scale(0.98) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
 }
 
 .modal-header {
@@ -1380,12 +1285,7 @@ button.signin-continue:disabled {
     justify-content: center;
     padding: calc(max(env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px)) + 1.5rem) 1rem;
   }
-  /* The caret is drawn by iOS and does not follow the form's move; it is hidden until the card lands (modal.tsx). */
-  .modal-backdrop[data-moving] input,
-  .modal-backdrop[data-moving] textarea {
-    caret-color: transparent;
-  }
-  /* With the keyboard up the form eases to the top, above where the keyboard is, and stays there while the field
+  /* With the keyboard up the form sits at the top, above where the keyboard is, and stays there while the field
      changes. The keyboard covers the home bar, so only the bottom air shrinks. */
   .modal-backdrop[data-keyboard] {
     align-items: flex-start;
@@ -1445,19 +1345,7 @@ button.signin-continue:disabled {
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
-  animation: toastSlideIn var(--dur) var(--ease) forwards;
   max-width: 100%;
-}
-
-@keyframes toastSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 
 .toast-message {
@@ -1484,7 +1372,6 @@ button.signin-continue:disabled {
   cursor: pointer;
   min-height: 36px;
   min-width: 44px;
-  transition: color var(--fade), background-color var(--fade), border-color var(--fade), opacity var(--quick) var(--ease), transform var(--lift);
 }
 
 @media (hover: hover) {
@@ -1505,7 +1392,6 @@ button.signin-continue:disabled {
   min-width: 36px;
   min-height: 36px;
   border-radius: 0.7rem; /* the same rounded square as every small button */
-  transition: color var(--fade), background-color var(--fade);
 }
 
 @media (hover: hover) {
@@ -1572,7 +1458,6 @@ button.btn-sm.tint {
   border-radius: 0.7rem;
   background: var(--tint);
   transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
-  transition: transform var(--dur) var(--ease);
   z-index: -1;
 }
 
@@ -1587,7 +1472,6 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
-  transition: color var(--fade), background var(--fade), transform var(--lift);
 }
 
 /* An idle tab lightens on hover; the selected tab stays on its thumb. */
@@ -1740,7 +1624,6 @@ main > .error {
 .picker > .month-label-btn {
   border-radius: 0.7rem;
   cursor: pointer;
-  transition: background-color var(--fade);
 }
 
 .picker > .month-label-btn[aria-expanded="true"] {
@@ -1762,14 +1645,6 @@ main > .error {
   border: 1px solid var(--edge);
   border-radius: 1.1rem;
   transform-origin: top center;
-  animation: picker-in calc(var(--dur) + 60ms) var(--ease) both;
-}
-
-@keyframes picker-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(-6px);
-  }
 }
 
 .picker-head {
@@ -1816,7 +1691,6 @@ main > .error {
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--fade), color var(--fade), transform var(--lift);
 }
 
 .picker-grid.months .picker-cell {
@@ -1856,19 +1730,6 @@ main > .error {
   margin: 0 0 0.25rem;
   font-size: 0.8125rem;
   color: var(--secondary);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-  .skeleton {
-    animation: none;
-  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -2043,7 +1904,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   text-decoration: none;
 }
 
-.auto-height:has(> .wishlist-entries) { container-type: inline-size; }
+.list-box:has(> .wishlist-entries) { container-type: inline-size; }
 
 .item-link-text {
   color: var(--secondary);
@@ -2242,7 +2103,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-variant-numeric: tabular-nums;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 120ms var(--ease);
 }
 .bars-col[data-tip]:focus-visible::after { opacity: 1; }
 @media (hover: hover) {
@@ -2264,14 +2124,6 @@ button.bars-col {
   background: var(--tint);
   opacity: 0.55;
   transform-origin: bottom;
-  animation: bar-grow var(--dur) var(--ease) backwards;
-  transition: height var(--dur) var(--ease), opacity var(--fade), background-color var(--fade); /* data moves at --dur, hover and selection fade */
-}
-
-@keyframes bar-grow {
-  from {
-    transform: scaleY(0);
-  }
 }
 
 @media (hover: hover) {
@@ -2513,7 +2365,6 @@ button.bars-col:focus-visible {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  transition: background var(--fade);
 }
 .muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), white 8%); }
 @media (pointer: coarse) {
@@ -2553,7 +2404,7 @@ button.bars-col:focus-visible {
 .muscle-side .group-label { margin-bottom: 0.5rem; }
 .muscle-side .hbars { margin-top: 0.25rem; } /* same gap under the title as the exercise list */
 /* The list follows its title at the band gap, so the title sits where "Planned sets per week" does */
-.group-label + .auto-height > .muscle-entries { margin-top: 0.25rem; --row-h: 4.1875rem; /* a two-part row, 67px */ }
+.group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 4.1875rem; /* a two-part row, 67px */ }
 .muscle-entries .entry-row > div { min-width: 0; overflow-wrap: anywhere; } /* a long exercise name wraps instead of pushing the sets out */
 .muscle-day {
   margin-left: 0.5rem;
@@ -2578,9 +2429,9 @@ button.bars-col:focus-visible {
 }
 
 /* A header directly followed by a list: the header already supplies the gap */
-.section-head:has(+ :is(.entries, .todo-list), + .auto-height > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
+.section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
 .section-head + :is(.entries, .todo-list),
-.section-head + .auto-height > :is(.entries, .todo-list) { margin-top: 0; }
+.section-head + .list-box > :is(.entries, .todo-list) { margin-top: 0; }
 
 /* Second line under a card title */
 .card-sub {
@@ -2665,8 +2516,6 @@ button.bars-col:focus-visible {
   border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
-  animation: rise var(--dur) var(--ease) backwards;
-  transition: transform var(--lift);
 }
 .routine-row-body { display: grid; gap: 0.5rem; min-width: 0; }
 .routine-row-head {
@@ -2677,11 +2526,10 @@ button.bars-col:focus-visible {
 }
 .routine-row-head strong { min-width: 0; overflow-wrap: anywhere; margin-right: auto; }
 .drag-handle { touch-action: none; cursor: grab; }
-/* The row being dragged follows the pointer (no transform transition) above the others, which slide aside. */
+/* The row being dragged follows the pointer above the others, which step aside. */
 .routine-row.dragging {
   position: relative;
   z-index: 2;
-  transition: none;
   box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35);
 }
 .routine-row.dragging .drag-handle { cursor: grabbing; }
@@ -2710,7 +2558,6 @@ button.bars-col:focus-visible {
   border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
-  animation: rise var(--dur) var(--ease) backwards;
 }
 .custom-exercise-btn { justify-self: start; }
 .delete-icon-btn:disabled { opacity: 0.35; cursor: default; }
@@ -2735,17 +2582,16 @@ button.bars-col:focus-visible {
 .head-actions + .empty-note { margin-top: 1rem; }
 
 .category-name { text-transform: capitalize; }
-/* Groups sit in a grid, so a group that leaves or enters (list-motion.tsx) closes or opens its gap with it. Group and
-   clip box widen by the row band, so neither cuts the band off while its height animates. */
+/* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
 .shopping-groups { display: grid; row-gap: 1.25rem; }
 .shopping-groups > .shopping-group > .group-label { margin-top: 0; }
-.surface > .auto-height:has(> .shopping-groups),
+.surface > .list-box:has(> .shopping-groups),
 .shopping-groups > .shopping-group {
   --band-out: calc((var(--card-pad) + 1px) / 2);
   margin-inline: calc(-1 * var(--band-out));
   padding-inline: var(--band-out);
 }
-.surface > .auto-height:has(> .shopping-groups) { margin-bottom: 0; }
+.surface > .list-box:has(> .shopping-groups) { margin-bottom: 0; }
 
 .group-label {
   margin: 0 0 0.25rem;
@@ -2781,7 +2627,6 @@ button.bars-col:focus-visible {
   flex-direction: column;
   align-items: flex-start;
   max-width: 85%;
-  animation: rise var(--dur) var(--ease) backwards;
 }
 .chat-msg.user {
   align-self: flex-end;
@@ -2961,13 +2806,12 @@ button.bars-col:focus-visible {
 }
 
 /* List rows are soft bands: every other row carries a faint grey wash (no hover highlight).
-   The band reaches 0.75rem past the text on each side, and the list's clip box (.auto-height) widens with it. */
+   The band reaches 0.75rem past the text on each side, and the list's clip box (.list-box) widens with it. */
 :is(.entries, .todo-list, .shopping-group) > :is(.entry-row, .todo-row, .shopping-row) {
   --band-out: 0.75rem;
   margin-inline: calc(-1 * var(--band-out));
   padding-inline: var(--band-out);
   border-radius: 0.75rem;
-  transition: background-color var(--fade), transform var(--lift);
 }
 /* In a card's own lists the band stops 0.5rem from the card edge, the text keeps the card's inset, and a
    trailing icon button sits 0.5rem inside the band: the same 0.5rem the band keeps from the card. */
@@ -2977,36 +2821,30 @@ button.bars-col:focus-visible {
 .surface :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child) {
   padding-inline-end: 0.5rem;
 }
-.auto-height:has(> :is(.entries, .todo-list)) {
+.list-box:has(> :is(.entries, .todo-list)) {
   --band-out: 0.75rem;
   margin-inline: calc(-1 * var(--band-out));
   padding-inline: var(--band-out);
 }
-.surface .auto-height:has(> :is(.entries, .todo-list)) {
+.surface .list-box:has(> :is(.entries, .todo-list)) {
   --band-out: calc(var(--card-pad) + 1px - 0.5rem);
 }
 :is(.entries, .todo-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row)) {
   background-color: rgba(255, 255, 255, 0.03);
 }
-/* A wash list (AutoHeight's `wash`, Wishlist): the band sits halfway between the card edge and the text, and
-   the wash fades out before rows enter or leave and back in once they are in place (list-motion.tsx). A row
-   still entering or already leaving sits out the alternation, so no other row's wash flips while it comes in
-   or when the row is removed. */
-.surface .auto-height[data-wash],
-.surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row),
+/* A wash list (ListBox's `wash`, Wishlist): the band sits halfway between the card edge and the text. */
+.surface .list-box[data-wash],
+.surface .list-box[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row),
 .surface .shopping-group > .shopping-row {
   --band-out: calc((var(--card-pad) + 1px) / 2);
 }
 /* Trailing actions keep the same inset from the band as the text, so they line up under the header's button */
-.surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child),
+.surface .list-box[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row):has(> :last-child .delete-icon-btn, > .delete-icon-btn:last-child),
 .surface .shopping-group > .shopping-row {
   padding-inline-end: var(--band-out);
 }
-.auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
-.surface .auto-height[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: background-color var(--wash), transform var(--lift); }
-/* A view switch (range, sort, day, tab) hides the rows, so their bands change with the list, not after it. */
-.auto-height[data-swap] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { transition: transform var(--lift); }
-.auto-height[data-wash] > :is(.entries, .todo-list):not([data-settling]) > :nth-child(even of :is(.entry-row, .todo-row):not([data-entering], [data-leaving])) {
+.list-box[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
+.list-box[data-wash] > :is(.entries, .todo-list) > :nth-child(even of :is(.entry-row, .todo-row)) {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
@@ -3035,14 +2873,14 @@ button.bars-col:focus-visible {
 }
 /* Logged sets: each band spans the column the exercise title and the inputs use, so nothing touches the
    exercise band's edge; the set's text is inset inside its own band instead. */
-.surface .workout-exercise-card .auto-height[data-wash],
-.surface .workout-exercise-card .auto-height[data-wash] > .entries > .entry-row {
+.surface .workout-exercise-card .list-box[data-wash],
+.surface .workout-exercise-card .list-box[data-wash] > .entries > .entry-row {
   --band-out: 0px;
 }
-.surface .workout-exercise-card .auto-height[data-wash] > .entries.set-list > .entry-row {
+.surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   padding-inline: 0.75rem 0.5rem;
 }
-.surface .workout-exercise-card .auto-height[data-wash] > .entries.set-list > .entry-row {
+.surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -3071,7 +2909,7 @@ button.bars-col:focus-visible {
 .session-timer.paused { opacity: 0.5; }
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
 @media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
-.history-entry { display: block; padding-block: 0.25rem; transition: background-color var(--fade); }
+.history-entry { display: block; padding-block: 0.25rem; }
 /* The open workout is a tinted fill, so it stands out from the banded rows around it. */
 .history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
 .history-entry.open .history-chevron { color: var(--tint); }
@@ -3093,7 +2931,7 @@ button.bars-col:focus-visible {
 /* Name, badge, then date and chevron at the end of the same row */
 .history-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
 .history-entry-side { margin-left: auto; }
-.history-chevron { flex: none; color: var(--secondary); transition: transform var(--lift); }
+.history-chevron { flex: none; color: var(--secondary); }
 .history-toggle[aria-expanded="true"] .history-chevron { transform: rotate(90deg); }
 /* An opened workout reads as one block; its exercises are bands of their own, so the sets are easy to follow */
 .history-details { display: grid; padding: 0 0 0.5rem; }

@@ -19,6 +19,7 @@ import {
   ensureUserNutritionTargets,
   ensureUserSampleRecipes,
 } from "./food-seed";
+import type { CategoryChange } from "./categories";
 import { addDays } from "./format-date";
 import { weekStartOf, weightStats, type WeightStats } from "./weight-stats";
 
@@ -378,30 +379,53 @@ export async function addShoppingCategory(userId: string, name: string) {
   return true;
 }
 
+/** Re-files the user's items (history included) of one category to another; returns the ids moved. */
+async function moveShoppingItems(tx: Pick<typeof db, "update">, userId: string, from: string, to: string) {
+  const rows = await tx
+    .update(shoppingItems)
+    .set({ category: to })
+    .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)))
+    .returning({ id: shoppingItems.id });
+  return rows.map((r) => r.id);
+}
+
 /** Renames a category on all the user's items, history included; renaming onto an existing one merges the two. */
 export async function renameShoppingCategory(userId: string, from: string, to: string) {
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx): Promise<CategoryChange | null> => {
     const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, from)).returning();
-    if (!old) return false;
-    await tx.insert(shoppingCategories).values({ userId, name: to, sortOrder: old.sortOrder }).onConflictDoNothing();
-    await tx
-      .update(shoppingItems)
-      .set({ category: to })
-      .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)));
-    return true;
+    if (!old) return null;
+    const created = await tx
+      .insert(shoppingCategories)
+      .values({ userId, name: to, sortOrder: old.sortOrder })
+      .onConflictDoNothing()
+      .returning();
+    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, from, to), merged: created.length === 0 };
   });
 }
 
 /** Deletes a category; its items, history included, move to "other". */
 export async function deleteShoppingCategory(userId: string, name: string) {
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx): Promise<CategoryChange | null> => {
     const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, name)).returning();
-    if (!old) return false;
-    await tx
-      .update(shoppingItems)
-      .set({ category: "other" })
-      .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, name)));
-    return true;
+    if (!old) return null;
+    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, name, "other"), merged: false };
+  });
+}
+
+/** Undoes a rename or delete (see `revertCategory`): the category returns and exactly the moved items are re-filed. */
+export async function revertShoppingCategory(
+  userId: string,
+  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean },
+) {
+  const { name, current, sortOrder, itemIds, dropCurrent } = input;
+  await db.transaction(async (tx) => {
+    await tx.insert(shoppingCategories).values({ userId, name, sortOrder }).onConflictDoNothing();
+    if (itemIds.length > 0)
+      await tx
+        .update(shoppingItems)
+        .set({ category: name })
+        .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, current), inArray(shoppingItems.id, itemIds)));
+    if (dropCurrent && current !== "other") await tx.delete(shoppingCategories).where(ownCategory(userId, current));
   });
 }
 

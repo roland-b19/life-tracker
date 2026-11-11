@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-11 by Claude (variant B live; importer and weekly backup merged; backup run and restore test passed)_
+_Last updated: 2026-11-11 by Claude (no animations or transitions; Undo on every action; branch `feat/no-motion-undo-everywhere`, PR open, not merged, not deployed)_
 
 ## Phase
 
@@ -46,6 +46,8 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 Categories (branch `feat/categories`, not merged): every Wishlist item has a category, and so does every daily task in Personal and Business. Categories are the user's own (add, rename, delete in a Categories card; "other" is built-in; deleting moves items to Other; renaming onto an existing name merges). The Wishlist All tab and the daily task list show category titles with their items beneath; the price tabs stay flat. New table `item_categories` and a `category` column on `todos` and `wishlist_items`: **migration `0021_item_categories` must be run on Neon (from the user's Mac, owner URL in a hidden prompt) before this code is merged**. No default categories ship in code; the importer (`scripts/import-personal.cjs`) takes an optional `categories` list and a category per item from `.local/personal-data.json`. Not deployed.
 
 ## Current focus
+
+**No animations, Undo everywhere** (branch `feat/no-motion-undo-everywhere`, PR open, not merged, not deployed): every CSS transition/animation/keyframe, view transition, smooth scroll and JS tween is removed (list motion, `AutoHeight`, counting numbers, modal/toast fade, drag glide, chart and 3D-map camera tweens); `animated-number.tsx` is deleted and `list-motion.tsx` is now `lists.tsx`. Every action that modifies something shows an Undo in its toast (create, delete, edit, toggle, move, clear, quick tap, settings, category delete/rename with a real revert, Claude token via the previous ciphertext). New server actions: category and shopping-category revert, move/push revert, Claude-token restore, custom-exercise delete; each has an authorization test. No migration, no new dependency. The design skill and `docs/decisions.md` (2026-11-11) say so. The earlier motion lines in this file are history.
 
 **Variant B is live** (2026-11-11): `https://life-tracker-robo.vercel.app` on Vercel + Neon Free (`eu-central-1`) with GitHub sign-in; 21 migrations applied; the user's phone smoke test and the other-account/anonymous check passed. Branch `feat/personal-import-and-backup` adds `scripts/import-personal.cjs` (loads the user's wishlist with estimated RON prices and today/daily tasks from the gitignored `.local/personal-data.json`; tested idempotently on a local database), `.github/workflows/backup.yml` (weekly `age`-encrypted `pg_dump`, 90-day artifact) and the README runbook; docs refreshed (decisions, risk register R6 to R8, threat model section 8, data inventory). Done by the user: the backup role and secret, one green backup run and a restore test (all merged to `main` as PR 78). Still to do by the user: confirm the import ran against Neon, a second offline copy of the `age` key, set the Vercel Ignored Build Step. Then one week of real use and the Neon/Vercel usage check (release plan section 6 budget). Open decisions are listed below.
 
@@ -138,6 +140,7 @@ Gates that need a deployed environment and stay open: `EXPLAIN (ANALYZE)` and co
 
 ## Next
 
+0. The user reviews and merges the no-motion/Undo PR (nothing was deployed; Vercel untouched).
 1. The user answers the pending 3c decisions (see Current focus) and merges the 3c PR.
 2. Variant B (`docs/release-plan.md` section 4): rehearsal on a Neon branch, then go-live and one week of watching usage. Then Azure A (section 5). Nothing deploys and no Azure resource is created without the user's explicit OK.
 
@@ -154,6 +157,8 @@ pre-existing `NetworkWatcherRG` is not owned by this project and was intentional
 Checked on 2026-11-08: the only resource group in the subscription is `NetworkWatcherRG` (Network Watchers in belgiumcentral, polandcentral and italynorth, no flow logs, no cost). The empty `lt-identity` group from the External ID attempt was deleted the same day. Six soft-deleted Key Vaults from earlier deploys cost nothing and are purged by Azure on 2027-02-01.
 
 ## Session log (newest first)
+
+- 2026-11-11 — Removed every animation and transition app-wide and added Undo to every mutating action (branch `feat/no-motion-undo-everywhere`); design skill rewritten (`references/lists-and-crud.md`), decision recorded. Not tested in a browser by hand; gaps: starting a workout is undone only before sets exist, a custom exercise only if unused, the Assistant's chat Undo covers meals only.
 
 - 2026-11-11 — 3c decisions answered (see `docs/decisions.md`): the Tasks tick history is capped at 400 days per screen load (branch `fix/done-dates-window`, test added; the Azure-only decisions wait for Azure A). Backup run and restore test passed earlier today.
 

@@ -1,12 +1,11 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
-import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
+import { ListBox } from "../components/lists";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal, useAfterClose } from "../components/modal";
+import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
@@ -68,11 +67,11 @@ function linkOf(value: string) {
 function ItemLink({ value }: { value: string }) {
   const { href, label } = linkOf(value);
   return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value} data-slide>
+    <a href={href} target="_blank" rel="noopener noreferrer" className="item-link" title={value}>
       {label}
     </a>
   ) : (
-    <span className="item-link-text" title={value} data-slide>{label}</span>
+    <span className="item-link-text" title={value}>{label}</span>
   );
 }
 
@@ -81,15 +80,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [categories, setCategories] = useState(initialCategories);
   const [filterRange, setFilterRange] = useState<"all" | Priority>("all");
   const [sort, setSort] = useState<Sort>("newest");
-  // The rows switch only after the old ones have faded out, while the tab and the sort menu change at once.
-  const [view, setView] = useState<{ range: "all" | Priority; sort: Sort }>({ range: "all", sort: "newest" });
-  const listRange = view.range;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { showToast } = useToast();
-  const { rowRef, enter, leave, move, fadeAll } = useListMotion();
-  const itemsCard = useRef<HTMLElement>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -98,22 +92,13 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [category, setCategory] = useState("other");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const { later, runAfterClose } = useAfterClose();
-  // Undo runs from a toast seconds later, so it reads the list and view as they are then.
-  const latest = useRef({ items, view, categories });
-  useEffect(() => {
-    latest.current = { items, view, categories };
-  });
 
   // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
   // The All tab lists the items under their category, each group in the chosen sort; the price tabs are one flat list.
-  const arrange = (list: WishlistItemData[], v: { range: "all" | Priority; sort: Sort }, cats: string[]) => {
-    const sorted = list.filter((i) => v.range === "all" || rangeOf(i) === v.range).sort(SORT_BY[v.sort]);
-    if (v.range !== "all") return sorted;
-    return groupOrder(cats, list).flatMap((c) => sorted.filter((i) => i.category === c));
-  };
-  const filteredItems = arrange(items, view, categories);
+  const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
+  const filteredItems =
+    filterRange !== "all" ? sorted : groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
   const toInput = (item: WishlistItemData) => ({
@@ -123,40 +108,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     category: item.category,
   });
 
-  // Writes an edited item into the list; if that moves it, it enters its new place like a deleted item put back
-  // by Undo, and if the edit takes it out of the current filter, it leaves like a delete.
-  function replace(to: WishlistItemData) {
-    const { items: now, view: v, categories: cats } = latest.current;
-    const order = (list: WishlistItemData[]) => arrange(list, v, cats).map((i) => i.id);
-    const after = order(now.map((i) => (i.id === to.id ? to : i)));
-    const write = () => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
-    if (order(now).indexOf(to.id) === after.indexOf(to.id)) return write();
-    if (after.includes(to.id)) move(to.id, write);
-    else leave(to.id, write);
-  }
-
-  // A tab or sort change is one simple movement: the old rows fade out, then the new list fades in as a whole
-  // (rows never build one after another here; only the page load does).
-  function swapList(change: () => void) {
-    fadeAll(() => {
-      swapIn(itemsCard.current);
-      change();
-    });
-  }
-
-  function switchRange(next: "all" | Priority) {
-    if (next === filterRange) return;
-    setFilterRange(next);
-    swapList(() => setView((v) => ({ ...v, range: next })));
-  }
-
-  function switchSort(next: Sort) {
-    setSort(next);
-    swapList(() => setView((v) => ({ ...v, sort: next })));
-  }
+  const replace = (to: WishlistItemData) => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
 
   function openForm(item?: WishlistItemData) {
-    runAfterClose(); // reopened before the last close finished
     setErrorMsg("");
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
@@ -197,7 +151,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         }
         const updated = res.item as WishlistItemData;
         const before = items.find((i) => i.id === editingId);
-        later(() => replace(updated));
+        replace(updated);
         showToast({
           message: `Saved "${updated.name}"`,
           type: "success",
@@ -205,7 +159,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
             actionLabel: "Undo",
             // Writes the old values back; if that fails the edit stays, so the screen matches the database.
             onAction: async () => {
-              runAfterClose(); // the edit first, if the form is still closing
               replace(before);
               const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
               if (!back?.success) {
@@ -222,12 +175,20 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           return;
         }
         const added = res.item as WishlistItemData;
-        later(() => {
-          enter(added.id);
-          setItems((prev) => [added, ...prev]);
+        setItems((prev) => [added, ...prev]);
+        showToast({
+          message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            setItems((prev) => prev.filter((i) => i.id !== added.id));
+            const gone = await deleteWishlistItemAction(added.id).catch(() => null);
+            if (gone?.success === false || !gone) {
+              setItems((prev) => (prev.some((i) => i.id === added.id) ? prev : [added, ...prev]));
+              showToast({ message: "Failed to undo", type: "warning" });
+            }
+          },
         });
-        // No Undo: a new item is one tap from Delete.
-        showToast({ message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`, type: "success" });
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -238,34 +199,25 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   }
 
   // A category was renamed or deleted: its items follow. The stored category is the only thing that changes.
-  const refile = (from: string, to: string) =>
-    setItems((prev) => prev.map((i) => (i.category === from ? { ...i, category: to } : i)));
+  const refile = (from: string, to: string, only?: string[]) =>
+    setItems((prev) => prev.map((i) => (i.category === from && (!only || only.includes(i.id)) ? { ...i, category: to } : i)));
 
-  const putBack = (item: WishlistItemData) => {
-    enter(item.id);
+  const putBack = (item: WishlistItemData) =>
     setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
-  };
-  const dropRow = (id: string) => leave(id, () => setItems((prev) => prev.filter((i) => i.id !== id)));
+  const dropRow = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
-  function handleRemove(target: WishlistItemData) {
+  async function handleRemove(target: WishlistItemData) {
+    dropRow(target.id);
     const deleted = deleteWishlistItemAction(target.id).then(
       (res) => res.success !== false,
       () => false,
-    );
-    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
-    const gone = new Promise<void>((done) =>
-      leave(target.id, () => {
-        setItems((prev) => prev.filter((i) => i.id !== target.id));
-        done();
-      }),
     );
     showToast({
       message: `Removed "${target.name}"`,
       actionLabel: "Undo",
       // Same id and date, so the row comes back where it was.
       onAction: async () => {
-        await gone;
         putBack(target);
         if (!(await deleted)) return; // the delete never happened
         const back = await restoreWishlistItemAction({
@@ -279,11 +231,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         }
       },
     });
-    void Promise.all([deleted, gone]).then(([ok]) => {
-      if (ok) return;
+    if (!(await deleted)) {
       putBack(target);
       showToast({ message: "Failed to remove item", type: "warning" });
-    });
+    }
   }
 
   return (
@@ -292,7 +243,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section ref={itemsCard} className="surface" aria-labelledby="wishlist-items-title">
+          <section className="surface" aria-labelledby="wishlist-items-title">
             <div className="section-head">
               <h2 id="wishlist-items-title" className="section-title">
                 Items <span className="muted number-tabular">{filteredItems.length}</span>
@@ -309,7 +260,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                     if (e.key !== "Escape") delete e.currentTarget.dataset.pointer;
                   }}
                   onBlur={(e) => delete e.currentTarget.dataset.pointer}
-                  onChange={(e) => switchSort(e.target.value as Sort)}
+                  onChange={(e) => setSort(e.target.value as Sort)}
                 >
                   {SORTS.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -328,29 +279,27 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               label="Filter by price range"
               value={filterRange}
               options={FILTERS}
-              onChange={switchRange}
+              onChange={setFilterRange}
             />
 
-            <AutoHeight wash className="entries wishlist-entries">
+            <ListBox wash className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
-                // Keyed like the rows: a reused note would keep fadeAll's faded-out state and stay invisible.
-                <p key={`empty-${listRange}`} ref={rowRef("empty")} className="empty-note">
+                <p className="empty-note">
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
-                // Keyed by the filter, so a tab change replaces the rows.
-                <Fragment key={`${listRange}-${view.sort}`}>
+                <>
                   {filteredItems.map((item, i) => (
                     <Fragment key={item.id}>
-                    {listRange === "all" && item.category !== filteredItems[i - 1]?.category && filteredItems.some((x) => x.category !== "other") && (
+                    {filterRange === "all" && item.category !== filteredItems[i - 1]?.category && filteredItems.some((x) => x.category !== "other") && (
                       <h3 className="group-label">{categoryLabel(item.category)}</h3>
                     )}
-                    <div ref={rowRef(item.id)} className="entry-row item-row">
+                    <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
-                        <span className="badge badge-info item-price number-tabular" data-slide>{formatRon(Number(item.estimatedPrice))} RON</span>
-                        {listRange === "all" && (
-                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`} data-slide>{RANGE_LABEL[rangeOf(item)]}</span>
+                        <span className="badge badge-info item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        {filterRange === "all" && (
+                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
                         )}
                         {item.url && <ItemLink value={item.url} />}
                       </div>
@@ -378,9 +327,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                     </div>
                     </Fragment>
                   ))}
-                </Fragment>
+                </>
               )}
-            </AutoHeight>
+            </ListBox>
           </section>
         </div>
 
@@ -392,7 +341,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               </h2>
             </div>
             <p className="item-total number-tabular">
-              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
+              {formatRon(totalCost)} <span className="muted">RON</span>
             </p>
           </section>
           <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
@@ -402,7 +351,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onExited={runAfterClose}
         title={editingId ? "Edit item" : "New item"}
       >
         <form onSubmit={handleSubmit}>

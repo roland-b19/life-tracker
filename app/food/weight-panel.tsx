@@ -1,13 +1,12 @@
 "use client";
 
 import { LineChart } from "../components/charts";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal, useAfterClose } from "../components/modal";
+import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
-import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
+import { ListBox, useMore } from "../components/lists";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { signedKg, weightStats } from "@/lib/weight-stats";
@@ -45,25 +44,9 @@ export function WeightPanel() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [range, setRange] = useState<Range>("30");
 
-  const { rowRef, enter, leave, move } = useListMotion();
-  const { later, runAfterClose } = useAfterClose();
   const { showToast } = useToast();
-  // Undo runs from a toast seconds later, so it reads the list as it is then.
-  const latest = useRef(entries);
-  useEffect(() => {
-    latest.current = entries;
-  });
 
-  // Writes an edited weigh-in into the list; if a new date moves it, it enters its new place like a deleted
-  // weigh-in put back by Undo.
-  function replace(to: WeightEntry) {
-    const now = latest.current;
-    const order = (list: WeightEntry[]) => sortNewestFirst(list).map((e) => e.id);
-    const after = now.map((e) => (e.id === to.id ? to : e));
-    const write = () => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
-    if (order(now).indexOf(to.id) === order(after).indexOf(to.id)) return write();
-    move(to.id, write);
-  }
+  const replace = (to: WeightEntry) => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
 
   useEffect(() => {
     let active = true;
@@ -81,7 +64,6 @@ export function WeightPanel() {
   }, [showToast]);
 
   function openForm(entry?: WeightEntry) {
-    runAfterClose(); // reopened before the last close finished
     setError("");
     setEditing(entry ?? null);
     setDate(entry?.date ?? today());
@@ -113,15 +95,22 @@ export function WeightPanel() {
       const { entry } = (await response.json()) as { entry: WeightEntry };
       const previous = editing;
       closeForm();
-      // Once the form has closed: a new weigh-in comes in at its date, a new date moves the row there.
-      later(() => {
-        if (previous) return replace(entry);
-        enter(entry.id);
-        setEntries((current) => [...current, entry]);
-      });
+      if (previous) replace(entry);
+      else setEntries((current) => [...current, entry]);
       if (!previous) {
-        // No Undo: a new weigh-in is one tap from Delete.
-        showToast({ message: `Added ${numericKg} kg (${formatDMY(date)})`, type: "success" });
+        showToast({
+          message: `Added ${numericKg} kg (${formatDMY(date)})`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            setEntries((current) => current.filter((e) => e.id !== entry.id));
+            const gone = await send("DELETE", `/api/weight/${entry.id}`).catch(() => null);
+            if (!gone?.ok) {
+              putBack(entry);
+              showToast({ message: "Failed to undo", type: "warning" });
+            }
+          },
+        });
         return;
       }
       showToast({
@@ -130,7 +119,6 @@ export function WeightPanel() {
         actionLabel: "Undo",
         // Writes the old values back; if that fails the edit stays, so the screen matches the database.
         onAction: async () => {
-          runAfterClose(); // the edit first, if the form is still closing
           replace(previous);
           const back = await send("PATCH", `/api/weight/${entry.id}`, {
             date: previous.date,
@@ -149,37 +137,28 @@ export function WeightPanel() {
     }
   }
 
-  const putBack = (entry: WeightEntry) => {
-    enter(entry.id);
+  const putBack = (entry: WeightEntry) =>
     setEntries((current) => (current.some((e) => e.id === entry.id) ? current : [...current, entry]));
-  };
 
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
   function removeEntry(target: WeightEntry) {
+    setEntries((current) => current.filter((e) => e.id !== target.id));
     const deleted = send("DELETE", `/api/weight/${target.id}`).then(
       (res) => res.ok,
       () => false,
-    );
-    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
-    const gone = new Promise<void>((done) =>
-      leave(target.id, () => {
-        setEntries((current) => current.filter((e) => e.id !== target.id));
-        done();
-      }),
     );
     showToast({
       message: `Removed ${Number(target.kilograms)} kg (${formatDMY(target.date)})`,
       actionLabel: "Undo",
       // A new id, so the row is put back as the server returns it.
       onAction: async () => {
-        await gone;
         if (!(await deleted)) return putBack(target); // the delete never happened
         const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) }).catch(() => null);
         if (!back?.ok) return showToast({ message: "Failed to restore weigh-in", type: "warning" });
         putBack(((await back.json()) as { entry: WeightEntry }).entry);
       },
     });
-    void Promise.all([deleted, gone]).then(([ok]) => {
+    void deleted.then((ok) => {
       if (ok) return;
       putBack(target);
       showToast({ message: "Failed to remove weigh-in", type: "warning" });
@@ -193,7 +172,7 @@ export function WeightPanel() {
     today(),
   );
   const tile = (value: number | null) =>
-    value === null ? "—" : <><AnimatedNumber value={value} format={twoDecimals} /> <span className="macro-target">kg</span></>;
+    value === null ? "—" : <>{twoDecimals(value)} <span className="macro-target">kg</span></>;
 
   // The chart's window ends today, so an old last weigh-in shows an empty range rather than old data.
   const since = addDays(today(), 1 - Number(range));
@@ -220,14 +199,14 @@ export function WeightPanel() {
                 <div className="skeleton skeleton-row" />
               </div>
             ) : (
-              <AutoHeight wash className="entries">
+              <ListBox wash className="entries">
                 {entries.length === 0 && (
-                  <p key="empty" ref={rowRef("empty")} className="empty-note">
+                  <p className="empty-note">
                     No weigh-ins yet.
                   </p>
                 )}
                 {shown.map((entry) => (
-                  <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
+                  <div className="entry-row" key={entry.id}>
                     <span className="weight-main">
                       <strong className="entry-value number-tabular">
                         {entry.kilograms} <span className="macro-target">kg</span>
@@ -257,7 +236,7 @@ export function WeightPanel() {
                   </div>
                 ))}
                 {more}
-              </AutoHeight>
+              </ListBox>
             )}
           </section>
         </div>
@@ -303,7 +282,6 @@ export function WeightPanel() {
       <Modal
         isOpen={isModalOpen}
         onClose={closeForm}
-        onExited={runAfterClose}
         title={editing ? "Edit weigh-in" : "New weigh-in"}
       >
         <form onSubmit={handleSubmit}>
