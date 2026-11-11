@@ -100,7 +100,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
   const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
-  const grouped = filteredItems.some((x) => x.category !== "other");
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
   const toInput = (item: WishlistItemData) => ({
@@ -293,10 +292,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                 <>
                   {filteredItems.map((item, i) => (
                     <Fragment key={item.id}>
-                    {grouped && item.category !== filteredItems[i - 1]?.category && (
+                    {item.category !== filteredItems[i - 1]?.category && (
                       <GroupToggle name={item.category} folded={folded.has(foldKey(item.category))} onToggle={() => toggleFolded(foldKey(item.category))} />
                     )}
-                    {!(grouped && folded.has(foldKey(item.category))) && (
+                    {!folded.has(foldKey(item.category)) && (
                     <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -335,6 +334,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               )}
             </ListBox>
           </section>
+          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
 
         <div className="dashboard-aside summary-first">
@@ -348,7 +348,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               {formatRon(totalCost)} <span className="muted">RON</span>
             </p>
           </section>
-          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
       </div>
 

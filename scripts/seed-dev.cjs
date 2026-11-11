@@ -139,15 +139,20 @@ async function seedShopping(db, userId) {
 
 const HABITS = {
   personal: [
-    { title: "Read 20 pages", pattern: "daily", odds: 0.7 },
-    { title: "Stretch 10 minutes", pattern: "daily", odds: 0.55 },
-    { title: "Gym", pattern: "days:1,3,5", odds: 0.85 },
+    { title: "Read 20 pages", pattern: "daily", odds: 0.7, category: "mind" },
+    { title: "Meditate 5 minutes", pattern: "daily", odds: 0.5, category: "mind" },
+    { title: "Stretch 10 minutes", pattern: "daily", odds: 0.55, category: "health" },
+    { title: "Gym", pattern: "days:1,3,5", odds: 0.85, category: "health" },
+    { title: "Water the plants", pattern: "days:2,6", odds: 0.8 },
   ],
   business: [
-    { title: "Inbox zero", pattern: "daily", odds: 0.6 },
-    { title: "Weekly review", pattern: "days:5", odds: 0.9 },
+    { title: "Inbox zero", pattern: "daily", odds: 0.6, category: "admin" },
+    { title: "Weekly review", pattern: "days:5", odds: 0.9, category: "admin" },
+    { title: "Learn something new", pattern: "daily", odds: 0.5, category: "growth" },
   ],
 };
+// Task categories per space, in order; a habit without one lands in Other.
+const TASK_CATEGORIES = { personal: ["health", "mind"], business: ["admin", "growth"] };
 const ONE_OFFS = {
   personal: ["Pay rent", "Call mom", "Buy groceries", "Clean the kitchen", "Book dentist", "Return the package", "Plan the weekend"],
   business: ["Send invoice", "Reply to client", "Prepare the slides", "Update the roadmap", "Review the contract"],
@@ -158,18 +163,20 @@ async function seedTasks(db, userId) {
   if (!(await isEmpty(db, "todos", userId))) return "tasks: skipped, the user has tasks";
   const start = addDays(today, -HISTORY_DAYS);
   // Created on its first day, so the app treats it like a task added back then.
-  const insert = (space, title, recurring, pattern, due, done) =>
+  const insert = (space, title, recurring, pattern, due, done, category = "other") =>
     db
       .query(
-        `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, completed_at, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 THEN ($6::date + time '18:00') END, $6::date + time '08:00')
+        `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, completed_at, created_at, category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 THEN ($6::date + time '18:00') END, $6::date + time '08:00', $8)
          RETURNING id`,
-        [userId, space, title, recurring, pattern, due, done],
+        [userId, space, title, recurring, pattern, due, done, category],
       )
       .then((r) => r.rows[0].id);
 
   let count = 0;
   for (const space of ["personal", "business"]) {
+    for (const [i, c] of TASK_CATEGORIES[space].entries())
+      await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [userId, space, c, i + 1]);
     const stats = new Map(); // "day|recurring" -> { total, done }
     const tally = (day, recurring, done) => {
       const key = `${day}|${recurring}`;
@@ -180,7 +187,7 @@ async function seedTasks(db, userId) {
     };
 
     for (const habit of HABITS[space]) {
-      const id = await insert(space, habit.title, true, habit.pattern, start, false);
+      const id = await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
       count++;
       for (let day = start; day <= today; day = addDays(day, 1)) {
         const due = habit.pattern === "daily" || habit.pattern.slice(5).split(",").includes(String(weekday(day)));
@@ -231,8 +238,8 @@ const WISHLIST = [
 ];
 
 // Wishlist categories, in order; the seed files each item under one of them (or Other).
-const WISHLIST_CATEGORIES = ["home", "tech", "sport"];
-const WISHLIST_CATEGORY = { "Standing desk": "home", "Mechanical keyboard": "tech", "Noise-cancelling headphones": "tech", "Running shoes": "sport", "Desk lamp": "home", "Yoga mat": "sport" };
+const WISHLIST_CATEGORIES = ["home", "tech", "sport", "kitchen"];
+const WISHLIST_CATEGORY = { "Standing desk": "home", "Mechanical keyboard": "tech", "Noise-cancelling headphones": "tech", "Running shoes": "sport", "Desk lamp": "home", "Yoga mat": "sport", "Espresso machine": "kitchen" };
 
 async function seedWishlist(db, userId) {
   if (!(await isEmpty(db, "wishlist_items", userId))) return "wishlist: skipped, the user has items";

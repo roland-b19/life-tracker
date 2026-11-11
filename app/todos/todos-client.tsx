@@ -139,7 +139,6 @@ export function TodosClient({
     const list = visibleFor(view.space, listDaily, view.date);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
-  const groupedList = listDaily && listTodos.some((x) => x.category !== "other");
   const [folded, toggleFolded] = useFolded();
   const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
@@ -587,14 +586,14 @@ export function TodosClient({
                 <>
                 {listTodos.map((task, i) => (
                   <Fragment key={task.id}>
-                  {groupedList && task.category !== listTodos[i - 1]?.category && (
+                  {listDaily && task.category !== listTodos[i - 1]?.category && (
                     <GroupToggle
                       name={task.category}
                       folded={folded.has(foldKey(task.category))}
                       onToggle={() => toggleFolded(foldKey(task.category))}
                     />
                   )}
-                  {!(groupedList && folded.has(foldKey(task.category))) && (
+                  {!(listDaily && folded.has(foldKey(task.category))) && (
                   <div className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
@@ -613,10 +612,10 @@ export function TodosClient({
 
                     <div className="todo-main">
                       <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
-                      {((!listDaily && task.isCarriedOver) || task.reminderTime) && (
+                      {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                         <div className="badge-row">
                           {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
-                          {task.reminderTime && <span className="badge badge-reminder">{task.reminderTime}</span>}
+                          {task.reminderTime && isPushEnabled() && <span className="badge badge-reminder">{task.reminderTime}</span>}
                         </div>
                       )}
                     </div>
@@ -813,15 +812,18 @@ export function TodosClient({
                 </select>
               </label>
             )}
-            <label>
-              Reminder (optional)
-              <input
-                type="time"
-                disabled={saving}
-                value={reminderTimeInput}
-                onChange={(e) => setReminderTimeInput(e.target.value)}
-              />
-            </label>
+            {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}
+            {isPushEnabled() && (
+              <label>
+                Reminder (optional)
+                <input
+                  type="time"
+                  disabled={saving}
+                  value={reminderTimeInput}
+                  onChange={(e) => setReminderTimeInput(e.target.value)}
+                />
+              </label>
+            )}
             {titleError && (
               <p id="task-title-error" className="error" role="alert">
                 {titleError}
