@@ -16,7 +16,7 @@ import {
   RestoreSessionInput,
   SaveSplitDayInput,
 } from "./validations/gym";
-import { ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
+import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
 
 export interface DeloadStatus {
   weeksSinceLastDeload: number;
@@ -29,12 +29,16 @@ export interface DeloadStatus {
  * Fetch all available exercises for a user (preloaded global + user custom)
  */
 export async function getExercises(userId: string) {
-  await ensureDefaultExercises();
-  return db
-    .select()
-    .from(exercises)
-    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
-    .orderBy(exercises.muscleGroup, exercises.name);
+  const read = () =>
+    db
+      .select()
+      .from(exercises)
+      .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+      .orderBy(exercises.muscleGroup, exercises.name);
+  const rows = await read();
+  // The list already holds the shared defaults, so seeding (an extra round trip) only runs when one is missing.
+  const have = new Set(rows.filter((r) => r.userId === null).map((r) => r.name));
+  return DEFAULT_EXERCISES.every((d) => have.has(d.name)) ? rows : (await ensureDefaultExercises(), read());
 }
 
 /**
@@ -74,13 +78,19 @@ export async function deleteCustomExercise(userId: string, exerciseId: string) {
  * Get the user's active split and its days with exercises
  */
 export async function getUserSplitWithDays(userId: string) {
-  await ensureUserDefaultSplit(userId);
+  const activeSplit = () =>
+    db
+      .select()
+      .from(workoutSplits)
+      .where(and(eq(workoutSplits.userId, userId), eq(workoutSplits.isActive, true)))
+      .limit(1);
 
-  const splits = await db
-    .select()
-    .from(workoutSplits)
-    .where(and(eq(workoutSplits.userId, userId), eq(workoutSplits.isActive, true)))
-    .limit(1);
+  // An active split means the user already has one, so the seeding check (a round trip) only runs without it.
+  let splits = await activeSplit();
+  if (splits.length === 0) {
+    await ensureUserDefaultSplit(userId);
+    splits = await activeSplit();
+  }
 
   if (splits.length === 0) return null;
   const split = splits[0];
@@ -300,21 +310,19 @@ export async function getOpenWorkoutSession(userId: string, since: string) {
  * Log a workout set with automatic '!!' anomaly detection
  */
 export async function logWorkoutSet(userId: string, input: LogSetInput) {
-  // Verify session belongs to user
-  const session = await db
-    .select({ id: workoutSessions.id })
-    .from(workoutSessions)
-    .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
-    .limit(1);
-
-  if (session.length === 0) {
-    throw new Error("Workout session not found or unauthorized");
-  }
-
-  const [exercise] = await db
-    .select({ id: exercises.id })
-    .from(exercises)
-    .where(and(eq(exercises.id, input.exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId))));
+  // The session and exercise checks are independent, so they share one round trip.
+  const [session, [exercise]] = await Promise.all([
+    db
+      .select({ id: workoutSessions.id })
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
+      .limit(1),
+    db
+      .select({ id: exercises.id })
+      .from(exercises)
+      .where(and(eq(exercises.id, input.exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId)))),
+  ]);
+  if (session.length === 0) throw new Error("Workout session not found or unauthorized");
   if (!exercise) throw new Error("Exercise not found or unauthorized");
 
   // Automatic anomaly check: if reps < target min reps
