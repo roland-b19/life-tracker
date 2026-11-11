@@ -238,6 +238,10 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 - GitHub session stays 30 days. No nonce-based CSP (single user, no third-party content; accepted risk). Tasks `doneDates` are capped: a screen loads the last 400 days of ticks per daily task (`DONE_DATES_WINDOW_DAYS`), so a streak past 400 days reads 400 and Undo of a delete restores only that window. No URL check on the Wishlist link (the field may be a store name). The repo stays private, no licence.
 - Left for when Azure A starts: sign-in restriction (allowlist is the recommendation), Claude prompt via stdin, unique push endpoint plus unsubscribe, region `italynorth` live validation. The four Dependabot PRs were already merged (PR 76).
 
+### 2026-11-11: Item categories
+
+Wishlist items and daily tasks (Personal, Business) each carry one category. One generic `item_categories(user_id, scope, name, sort_order)` table (scopes `wishlist`, `personal`, `business`) plus a `category` column (default `other`) on `wishlist_items` and `todos`; names are stored lowercase and shown capitalised. "Other" is built-in and never stored; deleting a category moves its items to Other (no Undo, the items could not be told apart afterwards); renaming onto an existing name merges. No categories are seeded in code: the user's own list comes from the UI or `.local/personal-data.json`. Food keeps its own shopping categories. Migration `0021` is additive.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

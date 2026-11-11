@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
+import { getCategories } from "@/lib/categories";
 import { getDailyTodos, getPlannedDays, getTodoHistory } from "@/lib/todos";
 import { addDays, toISODate } from "@/lib/format-date";
 import { TodosClient } from "./todos-client";
@@ -14,7 +15,8 @@ export default async function TodosPage() {
   const userId = session.user.id;
   const today = toISODate();
 
-  const [personalData, businessData, personalHistory, businessHistory, personalPlanned, businessPlanned] = await Promise.all([
+  const [categories, personalData, businessData, personalHistory, businessHistory, personalPlanned, businessPlanned] = await Promise.all([
+    getCategories(userId, ["personal", "business"]),
     getDailyTodos(userId, "personal", today),
     getDailyTodos(userId, "business", today),
     getTodoHistory(userId, "personal"),
@@ -31,6 +33,7 @@ export default async function TodosPage() {
       initialBusinessTodos={businessData.todos}
       initialHistory={{ personal: personalHistory, business: businessHistory }}
       initialPlanned={{ personal: personalPlanned, business: businessPlanned }}
+      initialCategories={categories}
     />
   );
 }

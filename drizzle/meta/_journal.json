@@ -148,6 +148,13 @@
       "when": 1794320047831,
       "tag": "0020_add_user_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794392993359,
+      "tag": "0021_item_categories",
+      "breakpoints": true
     }
   ]
 }

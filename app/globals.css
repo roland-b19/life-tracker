@@ -2756,6 +2756,12 @@ button.bars-col:focus-visible {
   color: var(--secondary);
 }
 
+/* The Wishlist's All tab: a category title is a full-width row of the list, set apart from the group above it */
+.wishlist-entries > .group-label,
+.todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
+.wishlist-entries > .group-label:first-child,
+.todo-list > .group-label:first-child { margin-top: 0; }
+
 /* Health: assistant chat */
 .chat-log {
   display: flex;

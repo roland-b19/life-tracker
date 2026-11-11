@@ -19,7 +19,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 | A4 | Personal expenses (removed 2026-11-10: module and tables deleted) | - | - | - |
 | A5 | Family-business income and expenses (removed 2026-11-10: tables deleted) | - | - | - |
 | A6 | To-do tasks, the days they were ticked, and reminders (personal and business) | personal | database, queue | low |
-| A7 | Wishlist | personal | database | low |
+| A7 | Wishlist (and item category names for Wishlist and Tasks) | personal | database | low |
 | A8 | Account identity and sessions (Entra tokens, refresh tokens) | secret | Entra; tokens in browser/session | account takeover exposes A1-A7 |
 | A9 | Connector credentials (removed 2026-11-08 with the connector; the `api_tokens` table was dropped 2026-11-10) | - | - | - |
 | A9b | The owner's Claude token (`claude setup-token`, since 2026-11-08) | secret | database (`claude_connections`, AES-256-GCM with `CLAUDE_TOKEN_KEY`) | attacker spends the owner's Claude plan and reads its usage; no access to app data |

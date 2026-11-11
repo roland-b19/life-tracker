@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categorySchema } from "./categories";
 import { isoDate } from "./common";
 
 export const todoSpaceSchema = z.enum(["personal", "business"]);
@@ -16,6 +17,8 @@ export const createTodoSchema = z.object({
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:MM)")
     .optional()
     .nullable(),
+  // Only the daily list shows it; every task has one, "other" when it was never filed.
+  category: categorySchema.default("other"),
 });
 
 export { isoDate };
@@ -46,6 +49,8 @@ export const updateTodoSchema = z.object({
   id: z.string().uuid(),
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
+  // Left out by the one-off form, which has no category: then the task keeps its own.
+  category: categorySchema.optional(),
 });
 
 /** Moves a task to `dueDate` as a one-off task ("none"), or makes it a repeating one. */
@@ -68,7 +73,8 @@ export const pushSubscriptionSchema = z.object({
 });
 
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;
-export type CreateTodoInput = z.infer<typeof createTodoSchema>;
+// Callers that never file a task (tests, the carry-over) can leave the category out: it is then "other".
+export type CreateTodoInput = Omit<z.infer<typeof createTodoSchema>, "category"> & { category?: string };
 export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;

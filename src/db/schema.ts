@@ -275,6 +275,20 @@ export const shoppingCategories = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.name] })],
 );
 
+/** The user's own categories for a list ("wishlist", "personal" or "business" daily tasks), in display order; "other" is built in and never stored. */
+export const itemCategories = pgTable(
+  "item_categories",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scope: varchar("scope", { length: 20 }).notNull(),
+    name: varchar("name", { length: 50 }).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.scope, table.name] })],
+);
+
 // --- TO-DO & HABITS MODULE TABLES ---
 
 export const todos = pgTable(
@@ -296,6 +310,7 @@ export const todos = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     // A deleted repeating task stops here (not due on or after this day) but stays on the days before it.
     endedOn: date("ended_on"),
+    category: varchar("category", { length: 50 }).default("other").notNull(),
   },
   (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
 );
@@ -368,6 +383,7 @@ export const wishlistItems = pgTable(
     url: varchar("url", { length: 500 }),
     estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2 }).notNull(),
     priority: varchar("priority", { length: 10 }).default("medium").notNull(), // 'low', 'medium', 'high'
+    category: varchar("category", { length: 50 }).default("other").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

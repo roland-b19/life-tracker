@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categorySchema } from "./categories";
 
 export const createWishlistItemSchema = z.object({
   name: z.string().min(1, "Name is required").max(120, "Name cannot exceed 120 chars").trim(),
@@ -9,6 +10,7 @@ export const createWishlistItemSchema = z.object({
     .number()
     .min(0.01, "Price must be at least 0.01")
     .max(10000000, "Price exceeds maximum threshold"),
+  category: categorySchema.default("other"),
 });
 
 /** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
@@ -24,5 +26,5 @@ export function priorityForPrice(price: number): Priority {
   return price < 250 ? "low" : price < 750 ? "medium" : "high";
 }
 
-export type CreateWishlistItemInput = z.infer<typeof createWishlistItemSchema>;
+export type CreateWishlistItemInput = z.input<typeof createWishlistItemSchema>;
 export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;

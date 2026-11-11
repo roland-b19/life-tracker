@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { AnimatedNumber } from "../components/animated-number";
 import { AutoHeight, swapIn, useListMotion } from "../components/list-motion";
@@ -20,6 +21,7 @@ import { Priority, priorityForPrice } from "@/lib/validations/wishlist";
 interface WishlistClientProps {
   userName: string;
   initialItems: WishlistItemData[];
+  initialCategories: string[];
 }
 
 const PRIORITY_BADGE: Record<Priority, string> = {
@@ -74,8 +76,9 @@ function ItemLink({ value }: { value: string }) {
   );
 }
 
-export function WishlistClient({ userName, initialItems }: WishlistClientProps) {
+export function WishlistClient({ userName, initialItems, initialCategories }: WishlistClientProps) {
   const [items, setItems] = useState<WishlistItemData[]>(initialItems);
+  const [categories, setCategories] = useState(initialCategories);
   const [filterRange, setFilterRange] = useState<"all" | Priority>("all");
   const [sort, setSort] = useState<Sort>("newest");
   // The rows switch only after the old ones have faded out, while the tab and the sort menu change at once.
@@ -92,34 +95,39 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
   const [name, setName] = useState("");
   const [estimatedPrice, setEstimatedPrice] = useState("");
   const [url, setUrl] = useState("");
+  const [category, setCategory] = useState("other");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const { later, runAfterClose } = useAfterClose();
   // Undo runs from a toast seconds later, so it reads the list and view as they are then.
-  const latest = useRef({ items, view });
+  const latest = useRef({ items, view, categories });
   useEffect(() => {
-    latest.current = { items, view };
+    latest.current = { items, view, categories };
   });
 
   // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
-  const filteredItems = items
-    .filter((item) => listRange === "all" || rangeOf(item) === listRange)
-    .sort(SORT_BY[view.sort]);
+  // The All tab lists the items under their category, each group in the chosen sort; the price tabs are one flat list.
+  const arrange = (list: WishlistItemData[], v: { range: "all" | Priority; sort: Sort }, cats: string[]) => {
+    const sorted = list.filter((i) => v.range === "all" || rangeOf(i) === v.range).sort(SORT_BY[v.sort]);
+    if (v.range !== "all") return sorted;
+    return groupOrder(cats, list).flatMap((c) => sorted.filter((i) => i.category === c));
+  };
+  const filteredItems = arrange(items, view, categories);
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
     estimatedPrice: Number(item.estimatedPrice),
     url: item.url || undefined,
+    category: item.category,
   });
 
   // Writes an edited item into the list; if that moves it, it enters its new place like a deleted item put back
   // by Undo, and if the edit takes it out of the current filter, it leaves like a delete.
   function replace(to: WishlistItemData) {
-    const { items: now, view: v } = latest.current;
-    const order = (list: WishlistItemData[]) =>
-      list.filter((i) => v.range === "all" || rangeOf(i) === v.range).sort(SORT_BY[v.sort]).map((i) => i.id);
+    const { items: now, view: v, categories: cats } = latest.current;
+    const order = (list: WishlistItemData[]) => arrange(list, v, cats).map((i) => i.id);
     const after = order(now.map((i) => (i.id === to.id ? to : i)));
     const write = () => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
     if (order(now).indexOf(to.id) === after.indexOf(to.id)) return write();
@@ -154,6 +162,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
     setName(item?.name ?? "");
     setEstimatedPrice(item ? String(Math.round(Number(item.estimatedPrice))) : "");
     setUrl(item?.url ?? "");
+    setCategory(item?.category ?? "other");
     setIsModalOpen(true);
   }
 
@@ -175,6 +184,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
       name: name.trim(),
       estimatedPrice: parsedPrice,
       url: url.trim() || undefined,
+      category,
     };
 
     setBusy(true);
@@ -226,6 +236,10 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
       setBusy(false);
     }
   }
+
+  // A category was renamed or deleted: its items follow. The stored category is the only thing that changes.
+  const refile = (from: string, to: string) =>
+    setItems((prev) => prev.map((i) => (i.category === from ? { ...i, category: to } : i)));
 
   const putBack = (item: WishlistItemData) => {
     enter(item.id);
@@ -326,8 +340,12 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               ) : (
                 // Keyed by the filter, so a tab change replaces the rows.
                 <Fragment key={`${listRange}-${view.sort}`}>
-                  {filteredItems.map((item) => (
-                    <div key={item.id} ref={rowRef(item.id)} className="entry-row item-row">
+                  {filteredItems.map((item, i) => (
+                    <Fragment key={item.id}>
+                    {listRange === "all" && item.category !== filteredItems[i - 1]?.category && filteredItems.some((x) => x.category !== "other") && (
+                      <h3 className="group-label">{categoryLabel(item.category)}</h3>
+                    )}
+                    <div ref={rowRef(item.id)} className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
                         <span className="badge badge-info item-price number-tabular" data-slide>{formatRon(Number(item.estimatedPrice))} RON</span>
@@ -358,6 +376,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                         </button>
                       </div>
                     </div>
+                    </Fragment>
                   ))}
                 </Fragment>
               )}
@@ -376,6 +395,7 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
               <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
             </p>
           </section>
+          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
       </div>
 
@@ -410,6 +430,17 @@ export function WishlistClient({ userName, initialItems }: WishlistClientProps) 
                 required
                 className="number-tabular"
               />
+            </label>
+
+            <label>
+              Category
+              <select disabled={busy} value={category} onChange={(e) => setCategory(e.target.value)}>
+                {[...new Set([...categories, category, "other"])].map((c) => (
+                  <option key={c} value={c}>
+                    {categoryLabel(c)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label>

@@ -82,7 +82,7 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
   ```bash
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && npm run db:migrate; unset DATABASE_URL_MIGRATE
   ```
-- **Load your own data (one time):** `scripts/import-personal.cjs` reads the gitignored `.local/personal-data.json` (wishlist with prices, today and daily tasks) into your account. Sign in to the app once first. It skips anything whose name already exists, so it is safe to run again. Gym needs no import: opening Gym creates the routine.
+- **Load your own data (one time):** `scripts/import-personal.cjs` reads the gitignored `.local/personal-data.json` (wishlist with prices, today and daily tasks, and optionally categories: a `categories` object per list, `[name, price, category]` wishlist entries, `[title, category]` daily tasks; run migration `0021` first) into your account. Sign in to the app once first. It skips anything whose name already exists, so it is safe to run again. Gym needs no import: opening Gym creates the routine.
   ```bash
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-personal.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
   ```

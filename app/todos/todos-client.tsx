@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { AnimatedNumber } from "../components/animated-number";
@@ -51,6 +52,7 @@ interface TodosClientProps {
   initialBusinessTodos: TodoItem[];
   initialHistory: Record<TodoSpace, TodoDayStat[]>;
   initialPlanned: Record<TodoSpace, string[]>;
+  initialCategories: Record<TodoSpace, string[]>;
 }
 
 export function TodosClient({
@@ -60,6 +62,7 @@ export function TodosClient({
   initialBusinessTodos,
   initialHistory,
   initialPlanned,
+  initialCategories,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [date, setDate] = useState(todayDate);
@@ -69,6 +72,7 @@ export function TodosClient({
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
   const [planned, setPlanned] = useState(initialPlanned);
+  const [categories, setCategories] = useState(initialCategories);
   const [moving, setMoving] = useState<TodoItem | null>(null); // outlives the close, so the dialog keeps its content while it fades
   const [moveOpen, setMoveOpen] = useState(false);
 
@@ -93,6 +97,7 @@ export function TodosClient({
   // Form state
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
+  const [categoryInput, setCategoryInput] = useState("other");
   const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -126,7 +131,11 @@ export function TodosClient({
   const listEditable = !listPast || DEV_EDIT_PAST;
   // A daily task is ticked on its day or later, never ahead of time.
   const listTickable = !(listDaily && view.date > todayDate);
-  const listTodos = visibleFor(view.space, listDaily, view.date);
+  // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
+  const listTodos = (() => {
+    const list = visibleFor(view.space, listDaily, view.date);
+    return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
+  })();
   const [shownTodos, moreTodos] = useMore(listTodos);
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
@@ -233,6 +242,7 @@ export function TodosClient({
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
+    setCategoryInput(todo?.category ?? "other");
     setIsTaskModalOpen(true);
   };
 
@@ -254,8 +264,10 @@ export function TodosClient({
     try {
       if (editing) {
         const before = editing;
-        const after = { ...before, title, reminderTime };
-        const res = await updateTodoAction({ id: before.id, title, reminderTime });
+        // Only a daily task has a category to pick; a one-off keeps the one it has.
+        const category = before.isRecurring ? categoryInput : before.category;
+        const after = { ...before, title, reminderTime, category };
+        const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
         if ("error" in res) return setTitleError(res.error);
         if (res.success) {
           // Once the form has closed, an edit that takes the task off this list leaves it like a delete; the
@@ -265,6 +277,8 @@ export function TodosClient({
             later(() => {
               if (shows(before) && !shows(after))
                 gone = new Promise((left) => leave(before.id, () => (drop(before), left())));
+              // A new category puts the row under another title: it moves there like an edited Wishlist item.
+              else if (shows(after) && before.category !== after.category) gone = move(before.id, () => replace(after));
               void gone.then(done);
             }),
           );
@@ -282,6 +296,7 @@ export function TodosClient({
                 id: before.id,
                 title: before.title,
                 reminderTime: before.reminderTime,
+                category: before.category,
               }).catch(() => null);
               if (!undone || !("success" in undone) || !undone.success) {
                 if (back) leave(before.id, () => drop(before));
@@ -300,6 +315,7 @@ export function TodosClient({
           // A daily task starts on the day it is added, whichever day is on screen.
           dueDate: isDaily ? todayDate : date,
           reminderTime,
+          category: isDaily ? categoryInput : "other",
         });
         if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
         if (res.todo) {
@@ -368,6 +384,9 @@ export function TodosClient({
     return entered;
   };
 
+  const replace = (task: TodoItem) =>
+    setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].map((t) => (t.id === task.id ? task : t)).sort(compareTodos) }));
+
   const drop = (task: TodoItem) => {
     setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
   };
@@ -427,9 +446,9 @@ export function TodosClient({
         // Only onto the list it was on, if that is still the one on screen.
         const entered = shows(target) ? putBack(target) : undefined;
         if (!(await deleted)) return; // the delete never happened
-        const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt } = target;
+        const { id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt } = target;
         const back = await restoreTodoAction({
-          id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, doneDates, createdAt,
+          id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt,
         }).catch(() => null);
         if (!back?.success) {
           if (entered) leave(target.id, () => drop(target));
@@ -567,8 +586,12 @@ export function TodosClient({
               {listTodos.length > 0 ? (
                 // Keyed by the view so the rows replay their entrance when the space, list or day changes.
                 <Fragment key={view.n}>
-                {shownTodos.map((task) => (
-                  <div key={task.id} ref={rowRef(task.id)} className="todo-row">
+                {shownTodos.map((task, i) => (
+                  <Fragment key={task.id}>
+                  {listDaily && task.category !== shownTodos[i - 1]?.category && shownTodos.some((x) => x.category !== "other") && (
+                    <h3 className="group-label">{categoryLabel(task.category)}</h3>
+                  )}
+                  <div ref={rowRef(task.id)} className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
                         {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
@@ -637,6 +660,7 @@ export function TodosClient({
                       </>
                     )}
                   </div>
+                  </Fragment>
                 ))}
                 {moreTodos}
                 </Fragment>
@@ -656,6 +680,21 @@ export function TodosClient({
               )}
             </AutoHeight>
           </section>
+          {/* A daily task is filed under a category of its own space, so each space has its own list. */}
+          {view.tab === "daily" && (
+            <CategoriesCard
+              key={view.space}
+              scope={view.space}
+              categories={categories[view.space]}
+              onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
+              onRefile={(from, to) =>
+                setTodosMap((prev) => ({
+                  ...prev,
+                  [view.space]: prev[view.space].map((t) => (t.category === from ? { ...t, category: to } : t)),
+                }))
+              }
+            />
+          )}
         </div>
 
         <div className="dashboard-aside summary-first">
@@ -762,6 +801,18 @@ export function TodosClient({
                 aria-describedby={titleError ? "task-title-error" : undefined}
               />
             </label>
+            {(editing ? editing.isRecurring : isDaily) && (
+              <label>
+                Category
+                <select disabled={saving} value={categoryInput} onChange={(e) => setCategoryInput(e.target.value)}>
+                  {[...new Set([...categories[editing?.space ?? space], categoryInput, "other"])].map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Reminder (optional)
               <input
