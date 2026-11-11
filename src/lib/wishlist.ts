@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { wishlistItems } from "@/db/schema";
+import { ensureCategory } from "./categories";
 import {
   CreateWishlistItemInput,
   createWishlistItemSchema,
@@ -9,25 +10,29 @@ import {
   restoreWishlistItemSchema,
 } from "./validations/wishlist";
 
+const wishlistColumns = {
+  id: wishlistItems.id,
+  name: wishlistItems.name,
+  url: wishlistItems.url,
+  estimatedPrice: wishlistItems.estimatedPrice,
+  priority: wishlistItems.priority,
+  category: wishlistItems.category,
+  createdAt: wishlistItems.createdAt,
+};
+
 export interface WishlistItemData {
   id: string;
   name: string;
   url: string | null;
   estimatedPrice: string;
   priority: "low" | "medium" | "high";
+  category: string;
   createdAt: Date;
 }
 
 export async function getWishlist(userId: string): Promise<WishlistItemData[]> {
   const items = await db
-    .select({
-      id: wishlistItems.id,
-      name: wishlistItems.name,
-      url: wishlistItems.url,
-      estimatedPrice: wishlistItems.estimatedPrice,
-      priority: wishlistItems.priority,
-      createdAt: wishlistItems.createdAt,
-    })
+    .select(wishlistColumns)
     .from(wishlistItems)
     .where(eq(wishlistItems.userId, userId))
     .orderBy(desc(wishlistItems.createdAt));
@@ -49,16 +54,11 @@ export async function addWishlistItem(
       url: validated.url || null,
       estimatedPrice: String(validated.estimatedPrice),
       priority: priorityForPrice(validated.estimatedPrice),
+      category: validated.category,
     })
-    .returning({
-      id: wishlistItems.id,
-      name: wishlistItems.name,
-      url: wishlistItems.url,
-      estimatedPrice: wishlistItems.estimatedPrice,
-      priority: wishlistItems.priority,
-      createdAt: wishlistItems.createdAt,
-    });
+    .returning(wishlistColumns);
 
+  await ensureCategory(userId, "wishlist", validated.category);
   return item as WishlistItemData;
 }
 
@@ -81,18 +81,13 @@ export async function restoreWishlistItem(
       url: validated.url || null,
       estimatedPrice: String(validated.estimatedPrice),
       priority: priorityForPrice(validated.estimatedPrice),
+      category: validated.category,
       createdAt: validated.createdAt,
     })
     .onConflictDoNothing()
-    .returning({
-      id: wishlistItems.id,
-      name: wishlistItems.name,
-      url: wishlistItems.url,
-      estimatedPrice: wishlistItems.estimatedPrice,
-      priority: wishlistItems.priority,
-      createdAt: wishlistItems.createdAt,
-    });
+    .returning(wishlistColumns);
 
+  if (item) await ensureCategory(userId, "wishlist", validated.category);
   return (item as WishlistItemData | undefined) ?? null;
 }
 
@@ -110,17 +105,12 @@ export async function updateWishlistItem(
       url: validated.url || null,
       estimatedPrice: String(validated.estimatedPrice),
       priority: priorityForPrice(validated.estimatedPrice),
+      category: validated.category,
     })
     .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)))
-    .returning({
-      id: wishlistItems.id,
-      name: wishlistItems.name,
-      url: wishlistItems.url,
-      estimatedPrice: wishlistItems.estimatedPrice,
-      priority: wishlistItems.priority,
-      createdAt: wishlistItems.createdAt,
-    });
+    .returning(wishlistColumns);
 
+  if (item) await ensureCategory(userId, "wishlist", validated.category);
   return (item as WishlistItemData | undefined) ?? null;
 }
 

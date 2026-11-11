@@ -235,6 +235,13 @@ async function main() {
       "sort_order" integer DEFAULT 0 NOT NULL,
       CONSTRAINT "shopping_categories_user_id_name_pk" PRIMARY KEY("user_id","name")
     );
+    CREATE TABLE IF NOT EXISTS "item_categories" (
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "scope" varchar(20) NOT NULL,
+      "name" varchar(50) NOT NULL,
+      "sort_order" integer DEFAULT 0 NOT NULL,
+      CONSTRAINT "item_categories_user_id_scope_name_pk" PRIMARY KEY("user_id","scope","name")
+    );
     CREATE TABLE IF NOT EXISTS "todos" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -251,6 +258,7 @@ async function main() {
       "ended_on" date
     );
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "ended_on" date;
+    ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     CREATE TABLE IF NOT EXISTS "todo_completions" (
       "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
       "date" date NOT NULL,
@@ -285,6 +293,7 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       CONSTRAINT "wishlist_price_positive" CHECK ("wishlist_items"."estimated_price" > 0)
     );
+    ALTER TABLE "wishlist_items" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     CREATE TABLE IF NOT EXISTS "claude_connections" (
       "user_id" uuid PRIMARY KEY NOT NULL REFERENCES "users"("id") ON DELETE cascade,
       "token_encrypted" varchar(1024) NOT NULL,
@@ -317,6 +326,7 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "recipe_ingredients" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_categories" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "item_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, DELETE ON TABLE "todo_completions" TO life_tracker_app;

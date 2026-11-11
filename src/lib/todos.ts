@@ -2,6 +2,7 @@ import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, notExists, or, sql
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
+import { ensureCategory } from "./categories";
 import { addDays, APP_TZ, toISODate } from "./format-date";
 import { streakOn } from "./streak";
 import { compareTodos } from "./todo-order";
@@ -28,6 +29,7 @@ export interface TodoItem {
   isCompleted: boolean;
   completedAt: Date | null;
   isCarriedOver: boolean;
+  category: string;
   /** Repeating tasks only: the run of ticked due days as seen on the day asked for. */
   streak: number;
   /** Repeating tasks only: every day it was ticked, oldest first. */
@@ -151,6 +153,7 @@ export async function getDailyTodos(
       isCompleted: r.isRecurring ? doneDates.includes(targetDate) : r.isCompleted,
       completedAt: r.completedAt,
       isCarriedOver: r.isCarriedOver,
+      category: r.category,
       streak: r.isRecurring ? streakOn(new Set(doneDates), targetDate) : 0,
       doneDates,
       createdAt: r.createdAt,
@@ -283,9 +286,11 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
       reminderTime: input.reminderTime ?? null,
       isCompleted: false,
       isCarriedOver: false,
+      category: input.category ?? "other",
     })
     .returning();
 
+  await ensureCategory(userId, input.space, created.category);
   await recordDayStats(userId, input.space, isRecurring ? toISODate() : input.dueDate);
 
   return { ...created, space: created.space as TodoSpace, streak: 0, doneDates: [] };
@@ -318,12 +323,14 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): P
           isCompleted: input.isCompleted,
           completedAt: input.isCompleted ? new Date() : null,
           isCarriedOver: input.isCarriedOver,
+          category: input.category,
           createdAt: input.createdAt,
         })
         .onConflictDoNothing()
         .returning();
   if (!restored) return null;
 
+  await ensureCategory(userId, restored.space as TodoSpace, restored.category);
   const doneDates = input.isRecurring ? [...new Set(input.doneDates)].sort() : [];
   if (doneDates.length) {
     await db.insert(todoCompletions).values(doneDates.map((date) => ({ todoId: restored.id, date }))).onConflictDoNothing();
@@ -374,9 +381,10 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
 export async function updateTodo(userId: string, input: UpdateTodoInput): Promise<boolean> {
   const updated = await db
     .update(todos)
-    .set({ title: input.title, reminderTime: input.reminderTime ?? null })
+    .set({ title: input.title, reminderTime: input.reminderTime ?? null, ...(input.category && { category: input.category }) })
     .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
-    .returning({ id: todos.id });
+    .returning({ space: todos.space });
+  if (input.category && updated[0]) await ensureCategory(userId, updated[0].space as TodoSpace, input.category);
   return updated.length > 0;
 }
 
@@ -414,6 +422,7 @@ export async function moveTodo(userId: string, input: MoveTodoInput): Promise<To
       recurrencePattern: "none",
       dueDate: input.dueDate,
       reminderTime: before.reminderTime,
+      category: before.category,
     });
     await recordDayStats(userId, space, today);
     return created;

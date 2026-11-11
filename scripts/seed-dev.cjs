@@ -230,14 +230,20 @@ const WISHLIST = [
   ["Water bottle", "emag", 45],
 ];
 
+// Wishlist categories, in order; the seed files each item under one of them (or Other).
+const WISHLIST_CATEGORIES = ["home", "tech", "sport"];
+const WISHLIST_CATEGORY = { "Standing desk": "home", "Mechanical keyboard": "tech", "Noise-cancelling headphones": "tech", "Running shoes": "sport", "Desk lamp": "home", "Yoga mat": "sport" };
+
 async function seedWishlist(db, userId) {
   if (!(await isEmpty(db, "wishlist_items", userId))) return "wishlist: skipped, the user has items";
+  for (const [i, c] of WISHLIST_CATEGORIES.entries())
+    await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, 'wishlist', $2, $3) ON CONFLICT DO NOTHING`, [userId, c, i + 1]);
   for (const [i, [itemName, link, price]] of WISHLIST.entries()) {
     const priority = price >= 750 ? "high" : price >= 250 ? "medium" : "low";
     await db.query(
-      `INSERT INTO wishlist_items (user_id, name, url, estimated_price, priority, created_at)
-       VALUES ($1, $2, $3, $4, $5, now() - make_interval(days => $6))`,
-      [userId, itemName, link, price, priority, i * 3],
+      `INSERT INTO wishlist_items (user_id, name, url, estimated_price, priority, category, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now() - make_interval(days => $7))`,
+      [userId, itemName, link, price, priority, WISHLIST_CATEGORY[itemName] ?? "other", i * 3],
     );
   }
   return `wishlist: ${WISHLIST.length} items`;

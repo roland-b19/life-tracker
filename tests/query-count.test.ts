@@ -71,8 +71,8 @@ describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [
     ["/gym", () => import("../app/gym/page"), 12, 300_000],
     ["/food", () => import("../app/food/page"), 12, 10_000],
-    ["/todos", () => import("../app/todos/page"), 9, 20_000],
-    ["/wishlist", () => import("../app/wishlist/page"), 2, 1_000],
+    ["/todos", () => import("../app/todos/page"), 10, 20_000],
+    ["/wishlist", () => import("../app/wishlist/page"), 3, 1_000],
   ];
   for (const [route, load, maxQueries, maxBytes] of pages) {
     it(`${route}: at most ${maxQueries} queries and ${maxBytes} bytes of props`, async () => {
