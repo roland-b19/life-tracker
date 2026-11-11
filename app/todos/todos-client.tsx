@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
+import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
-import { ListBox, useMore } from "../components/lists";
+import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
@@ -139,7 +139,8 @@ export function TodosClient({
     const list = visibleFor(view.space, listDaily, view.date);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
-  const [shownTodos, moreTodos] = useMore(listTodos);
+  const groupedList = listDaily && listTodos.some((x) => x.category !== "other");
+  const [folded, toggleFolded] = useFolded();
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
     const { date: day, tab: tb } = latest.current;
@@ -583,11 +584,16 @@ export function TodosClient({
             <ListBox wash className="todo-list">
               {listTodos.length > 0 ? (
                 <>
-                {shownTodos.map((task, i) => (
+                {listTodos.map((task, i) => (
                   <Fragment key={task.id}>
-                  {listDaily && task.category !== shownTodos[i - 1]?.category && shownTodos.some((x) => x.category !== "other") && (
-                    <h3 className="group-label">{categoryLabel(task.category)}</h3>
+                  {groupedList && task.category !== listTodos[i - 1]?.category && (
+                    <GroupToggle
+                      name={task.category}
+                      folded={folded.has(`${view.space}/${task.category}`)}
+                      onToggle={() => toggleFolded(`${view.space}/${task.category}`)}
+                    />
                   )}
+                  {!(groupedList && folded.has(`${view.space}/${task.category}`)) && (
                   <div className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
@@ -656,9 +662,9 @@ export function TodosClient({
                       </>
                     )}
                   </div>
+                  )}
                   </Fragment>
                 ))}
-                {moreTodos}
                 </>
               ) : (
                 <p className="empty-note">

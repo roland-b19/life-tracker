@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
-import { PencilIcon, PlusIcon, TrashIcon } from "./icons";
+import { ChevronRightIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
 import { ListBox, useMore } from "./lists";
 import { Modal } from "./modal";
 import { useToast } from "./toast";
@@ -203,6 +203,30 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
 export const groupOrder = (categories: string[], items: { category: string }[]) => [
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
+
+/** Which category groups of a list are folded; they stay folded across its tabs until the page is left. */
+export function useFolded() {
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  return [folded, toggle] as const;
+}
+
+/** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow shows which. */
+export function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
+  return (
+    <h3 className="group-label">
+      <button type="button" className="group-toggle" aria-expanded={!folded} onClick={onToggle}>
+        <ChevronRightIcon size={14} />
+        {categoryLabel(name)}
+      </button>
+    </h3>
+  );
+}
 
 /** "gifts" → "Gifts": categories are stored lower case and shown with a capital. */
 export const categoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);

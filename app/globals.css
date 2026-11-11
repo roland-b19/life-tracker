@@ -2608,8 +2608,26 @@ button.bars-col:focus-visible {
 /* The Wishlist's All tab: a category title is a full-width row of the list, set apart from the group above it */
 .wishlist-entries > .group-label,
 .todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
-.wishlist-entries > .group-label:first-child,
 .todo-list > .group-label:first-child { margin-top: 0; }
+.wishlist-entries > .group-label:first-child { margin-top: 0.5rem; } /* clear of the price-range tabs above */
+/* A title that folds its group: the whole title is the button, the arrow turns down while the group is open */
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.75rem; /* a 44pt target; the margin gives the height back so the title keeps its rhythm */
+  margin-block: -0.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 
 /* Health: assistant chat */
 .chat-log {
