@@ -90,7 +90,7 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
 - **Roll back:** Vercel, Deployments, the previous deployment, Instant Rollback. A bad migration is undone from a backup (below) or Neon's history window; migrations are additive, so rolling the code back is normally enough.
 - **Rotate a secret:** change it in Vercel (or GitHub for the backup), redeploy. `NEXTAUTH_SECRET` signs everyone out; the GitHub client secret is rotated in the OAuth app first, then in Vercel.
 - **Free plan changes:** Neon or Vercel may change the Free terms. The weekly backup below plus `docker build` make the app movable to any host that runs Docker and PostgreSQL.
-- **Ignored Build Step** (Vercel, Settings, Git): Behavior "Override", command `[ "$VERCEL_ENV" != "production" ]`. Pull request previews are skipped (exit 0) and production builds run (exit 1).
+- **Ignored Build Step** (Vercel, Settings, Build and Deployment): Behavior "Custom", command `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]`. Pull request previews are skipped (exit 0) and builds of `main` run (exit 1). `$VERCEL_ENV` is not set in this step, so a check on it skips production too ("Canceled by Ignored Build Step").
 
 ### Backups
 
