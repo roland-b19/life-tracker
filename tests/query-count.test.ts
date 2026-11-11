@@ -97,8 +97,11 @@ describe("a page view with two years of data stays cheap", () => {
     const src = (f: string) => readFileSync(`src/app/actions/${f}.ts`, "utf8");
     expect(src("wishlist")).not.toContain("revalidatePath");
     expect(src("todos")).not.toContain("revalidatePath");
+    // Food actions hand back the new rows and the page keeps its own state; the response must not carry a re-rendered page.
+    expect(src("food")).not.toContain("revalidatePath");
+    expect(src("food-chat")).not.toContain("revalidatePath");
     const gym = src("gym");
-    for (const fn of ["logSetAction", "deleteSetAction"]) {
+    for (const fn of ["logSetAction", "deleteSetAction", "startSessionAction", "cancelSessionAction", "restoreSessionAction"]) {
       const body = gym.slice(gym.indexOf(`function ${fn}`)).split("\nexport ")[0];
       expect(body, fn).not.toContain("safeRevalidate");
     }

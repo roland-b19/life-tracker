@@ -39,7 +39,6 @@ export async function startSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = createSessionSchema.parse(rawInput);
   const session = await createWorkoutSession(userId, parsed);
-  safeRevalidate("/gym");
   return { success: true, session };
 }
 
@@ -55,7 +54,6 @@ export async function cancelSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   const { sessionId } = cancelSessionSchema.parse(rawInput);
   const deleted = await cancelWorkoutSession(userId, sessionId);
-  safeRevalidate("/gym");
   return { success: Boolean(deleted) };
 }
 
@@ -73,11 +71,11 @@ export async function restoreSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = restoreSessionSchema.parse(rawInput);
   const details = await restoreWorkoutSession(userId, parsed);
-  if (details) safeRevalidate("/gym");
   return { success: Boolean(details), details };
 }
 
-// No revalidate for set edits: the client keeps its own state, and refetching the page on every set is the costliest call.
+// No revalidate for start/cancel/restore of an open workout or for set edits: the client keeps that state itself, and refetching
+// the page on every one is the costliest call. Finish, reopen, routine edits and custom exercises change lists that come from the page, so they refresh it.
 export async function logSetAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = logSetSchema.parse(rawInput);

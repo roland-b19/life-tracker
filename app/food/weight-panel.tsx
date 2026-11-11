@@ -6,7 +6,7 @@ import { useToast } from "../components/toast";
 import { formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
 import { TrendChart } from "./trend-chart";
-import { signedKg, weightStats } from "@/lib/weight-stats";
+import { signedKg, weightStats, type WeightStats } from "@/lib/weight-stats";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
@@ -24,7 +24,8 @@ async function send(method: string, url: string, body?: unknown) {
   });
 }
 
-export function WeightPanel() {
+/** `onStats` hands the weight card on the other tabs the numbers of the list as edited here, so no page refetch is needed. */
+export function WeightPanel({ onStats }: { onStats: (stats: WeightStats) => void }) {
   const [entries, setEntries] = useState<WeightEntry[]>([]);
   const [editing, setEditing] = useState<WeightEntry | null>(null);
   const [date, setDate] = useState(today);
@@ -158,6 +159,10 @@ export function WeightPanel() {
     entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
     today(),
   );
+  const statsKey = JSON.stringify(stats);
+  useEffect(() => {
+    if (!loading) onStats(JSON.parse(statsKey));
+  }, [loading, statsKey, onStats]);
   const tile = (value: number | null) =>
     value === null ? "—" : <>{twoDecimals(value)} <span className="macro-target">kg</span></>;
 
