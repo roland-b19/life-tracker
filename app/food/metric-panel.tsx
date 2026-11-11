@@ -1,13 +1,12 @@
 "use client";
 
 import { LineChart } from "../components/charts";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal, useAfterClose } from "../components/modal";
+import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
-import { AnimatedNumber } from "../components/animated-number";
-import { AutoHeight, useListMotion, useMore } from "../components/list-motion";
+import { ListBox, useMore } from "../components/lists";
 import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction } from "@/app/actions/food";
@@ -47,13 +46,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [range, setRange] = useState<Range>("30");
 
-  const { rowRef, enter, leave, move } = useListMotion();
-  const { later, runAfterClose } = useAfterClose();
   const { showToast } = useToast();
-  const latest = useRef(entries);
-  useEffect(() => {
-    latest.current = entries;
-  });
 
   useEffect(() => {
     let active = true;
@@ -75,14 +68,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
     else if (from === today()) onToday(0);
   };
 
-  function replace(to: Entry) {
-    const now = latest.current;
-    const order = (list: Entry[]) => sortNewestFirst(list).map((e) => e.id);
-    const after = now.map((e) => (e.id === to.id ? to : e));
-    const write = () => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
-    if (order(now).indexOf(to.id) === order(after).indexOf(to.id)) return write();
-    move(to.id, write);
-  }
+  const replace = (to: Entry) => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
 
   const save = (input: { date: string; value: number; previousDate?: string }) =>
     saveDailyMetricAction({ kind, ...input }).then(
@@ -91,7 +77,6 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
     );
 
   function openForm(entry?: Entry) {
-    runAfterClose();
     setError("");
     setEditing(entry ?? null);
     setDate(entry?.date ?? today());
@@ -116,13 +101,26 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
     const entry: Entry = { id: previous?.id ?? nextId(), date, value: amount };
     closeForm();
     touchToday(previous?.date, entry);
-    later(() => {
-      if (previous) return replace(entry);
-      enter(entry.id);
-      setEntries((current) => [...current, entry]);
-    });
+    if (previous) replace(entry);
+    else setEntries((current) => [...current, entry]);
     if (!previous) {
-      showToast({ message: `Added ${amount} ${k.unit} (${formatDMY(date)})`, type: "success" });
+      showToast({
+        message: `Added ${amount} ${k.unit} (${formatDMY(date)})`,
+        type: "success",
+        actionLabel: "Undo",
+        onAction: async () => {
+          setEntries((current) => current.filter((e) => e.id !== entry.id));
+          touchToday(entry.date, null);
+          const cleared = await clearDailyMetricAction({ kind, date: entry.date }).then(
+            () => true,
+            () => false,
+          );
+          if (!cleared) {
+            putBack(entry);
+            showToast({ message: "Failed to undo", type: "warning" });
+          }
+        },
+      });
       return;
     }
     showToast({
@@ -130,7 +128,6 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
       type: "success",
       actionLabel: "Undo",
       onAction: async () => {
-        runAfterClose();
         replace(previous);
         touchToday(entry.date, previous);
         if ((await save({ date: previous.date, value: previous.value, previousDate: entry.date })) !== "ok") {
@@ -143,35 +140,28 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
   }
 
   const putBack = (entry: Entry) => {
-    enter(entry.id);
     setEntries((current) => (current.some((e) => e.id === entry.id) ? current : [...current, entry]));
     touchToday(undefined, entry);
   };
 
   function removeEntry(target: Entry) {
     touchToday(target.date, null);
+    setEntries((current) => current.filter((e) => e.id !== target.id));
     const deleted = clearDailyMetricAction({ kind, date: target.date }).then(
       () => true,
       () => false,
-    );
-    const gone = new Promise<void>((done) =>
-      leave(target.id, () => {
-        setEntries((current) => current.filter((e) => e.id !== target.id));
-        done();
-      }),
     );
     showToast({
       message: `Removed ${target.value} ${k.unit} (${formatDMY(target.date)})`,
       actionLabel: "Undo",
       onAction: async () => {
-        await gone;
         if (!(await deleted)) return putBack(target);
         if ((await save({ date: target.date, value: target.value })) !== "ok")
           return showToast({ message: `Failed to restore ${k.noun}`, type: "warning" });
         putBack(target);
       },
     });
-    void Promise.all([deleted, gone]).then(([ok]) => {
+    void deleted.then((ok) => {
       if (ok) return;
       putBack(target);
       showToast({ message: `Failed to remove ${k.noun}`, type: "warning" });
@@ -208,14 +198,14 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                 <div className="skeleton skeleton-row" />
               </div>
             ) : (
-              <AutoHeight wash className="entries">
+              <ListBox wash className="entries">
                 {entries.length === 0 && (
-                  <p key="empty" ref={rowRef("empty")} className="empty-note">
+                  <p className="empty-note">
                     No {k.noun} logged yet.
                   </p>
                 )}
                 {shown.map((entry) => (
-                  <div className="entry-row" key={entry.id} ref={rowRef(entry.id)}>
+                  <div className="entry-row" key={entry.id}>
                     <span className="weight-main">
                       <strong className="entry-value number-tabular">
                         {entry.value} <span className="macro-target">{k.unit}</span>
@@ -245,7 +235,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                   </div>
                 ))}
                 {more}
-              </AutoHeight>
+              </ListBox>
             )}
           </section>
         </div>
@@ -260,13 +250,13 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
             <div className="stat-row">
               <div className="stat-tile">
                 <strong className="number-tabular">
-                  {average === null ? "—" : <><AnimatedNumber value={average} /> <span className="macro-target">{k.unit}</span></>}
+                  {average === null ? "—" : <>{Math.round(average)} <span className="macro-target">{k.unit}</span></>}
                 </strong>
                 <span>7-day average</span>
               </div>
               <div className="stat-tile">
                 <strong className="number-tabular">
-                  <AnimatedNumber value={todayValue} /> <span className="macro-target">{k.unit}</span>
+                  {Math.round(todayValue)} <span className="macro-target">{k.unit}</span>
                 </strong>
                 <span>Today</span>
               </div>
@@ -292,7 +282,6 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
       <Modal
         isOpen={isModalOpen}
         onClose={closeForm}
-        onExited={runAfterClose}
         title={editing ? `Edit ${k.noun}` : `New ${k.noun} entry`}
       >
         <form onSubmit={handleSubmit}>

@@ -54,6 +54,15 @@ const managedCategorySchema = shoppingCategorySchema.refine((c) => c !== "other"
 export const shoppingCategoryNameSchema = z.object({ name: managedCategorySchema });
 export const renameShoppingCategorySchema = z.object({ from: managedCategorySchema, to: managedCategorySchema });
 
+/** Undo of a category rename or delete: what the change reported, sent back as it was. */
+export const revertShoppingCategorySchema = z.object({
+  name: managedCategorySchema,
+  current: shoppingCategorySchema,
+  sortOrder: z.number().int(),
+  itemIds: z.array(z.string().uuid()).max(5000),
+  dropCurrent: z.boolean(),
+});
+
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
 export const toggleShoppingItemSchema = z.object({

@@ -58,6 +58,19 @@ export async function createCustomExercise(
 }
 
 /**
+ * Undo of creating a custom exercise. Refuses one a routine or a logged set already uses
+ * (deleting it would cascade into them), and any exercise that is not the user's own custom one.
+ */
+export async function deleteCustomExercise(userId: string, exerciseId: string) {
+  const own = and(eq(exercises.id, exerciseId), eq(exercises.userId, userId), eq(exercises.isCustom, true));
+  const [inRoutine] = await db.select({ id: workoutSplitDayExercises.id }).from(workoutSplitDayExercises).where(eq(workoutSplitDayExercises.exerciseId, exerciseId)).limit(1);
+  const [inSet] = await db.select({ id: workoutSets.id }).from(workoutSets).where(eq(workoutSets.exerciseId, exerciseId)).limit(1);
+  if (inRoutine || inSet) return false;
+  const deleted = await db.delete(exercises).where(own).returning({ id: exercises.id });
+  return deleted.length > 0;
+}
+
+/**
  * Get the user's active split and its days with exercises
  */
 export async function getUserSplitWithDays(userId: string) {

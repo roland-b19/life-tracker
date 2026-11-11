@@ -18,7 +18,7 @@ import { users } from "@/db/schema";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { createTodo, getDailyTodos } from "@/lib/todos";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction } from "@/app/actions/categories";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, revertCategoryAction } from "@/app/actions/categories";
 import { toISODate } from "@/lib/format-date";
 
 async function seedUser(subject: string) {
@@ -86,5 +86,44 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect((await renameCategoryAction({ scope: "business", from: "clients", to: "x" })).success).toBe(false);
     expect((await deleteCategoryAction({ scope: "business", name: "clients" })).success).toBe(false);
     expect((await getCategories(userA, ["business"])).business).toEqual(["clients"]);
+  });
+
+  it("undoes a delete and a rename for exactly the items that moved, and only for the owner", async () => {
+    authState.id = userA;
+    await addCategoryAction({ scope: "wishlist", name: "books" });
+    await addCategoryAction({ scope: "wishlist", name: "games" });
+    const inBooks = await addWishlistItem(userA, { name: "Novel", estimatedPrice: 20, category: "books" });
+    const alreadyOther = await addWishlistItem(userA, { name: "Misc", estimatedPrice: 5, category: "other" });
+    const catOf = async (id: string) => (await getWishlist(userA)).find((i) => i.id === id)?.category;
+
+    const del = await deleteCategoryAction({ scope: "wishlist", name: "books" });
+    expect(del.change?.itemIds).toEqual([inBooks.id]);
+    const undo = { scope: "wishlist", name: "books", current: "other", dropCurrent: false, ...del.change! };
+
+    // Another user cannot revert it: the owner's item stays in Other.
+    authState.id = userB;
+    await revertCategoryAction(undo);
+    expect(await catOf(inBooks.id)).toBe("other");
+
+    authState.id = userA;
+    await revertCategoryAction(undo);
+    expect(await catOf(inBooks.id)).toBe("books");
+    expect(await catOf(alreadyOther.id)).toBe("other");
+    expect((await getCategories(userA, ["wishlist"])).wishlist).toContain("books");
+
+    // A rename onto a new name is undone, dropping the new name again; a merge keeps the existing target.
+    const ren = await renameCategoryAction({ scope: "wishlist", from: "books", to: "reading" });
+    expect(await catOf(inBooks.id)).toBe("reading");
+    await revertCategoryAction({ scope: "wishlist", name: "books", current: "reading", dropCurrent: !ren.change!.merged, ...ren.change! });
+    expect(await catOf(inBooks.id)).toBe("books");
+    const cats = (await getCategories(userA, ["wishlist"])).wishlist;
+    expect(cats).toContain("books");
+    expect(cats).not.toContain("reading");
+
+    const merge = await renameCategoryAction({ scope: "wishlist", from: "books", to: "games" });
+    expect(merge.change?.merged).toBe(true);
+    await revertCategoryAction({ scope: "wishlist", name: "books", current: "games", dropCurrent: false, ...merge.change! });
+    expect(await catOf(inBooks.id)).toBe("books");
+    expect((await getCategories(userA, ["wishlist"])).wishlist).toEqual(expect.arrayContaining(["books", "games"]));
   });
 });

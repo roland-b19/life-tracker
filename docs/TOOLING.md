@@ -67,7 +67,7 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 
 ## House design skill
 
-- `.agents/skills/ultimate-design-skill/`: `SKILL.md` (principles, motion order, recipe, rejected ideas, checklist), `references/values.md` (every token and size), `references/motion-and-crud.md` (list motion and add/edit/delete/Undo code). `.claude/skills/ultimate-design-skill` is a symlink to it.
+- `.agents/skills/ultimate-design-skill/`: `SKILL.md` (principles, no-motion rule, recipe, rejected ideas, checklist), `references/values.md` (every token and size), `references/lists-and-crud.md` (lists and add/edit/delete/Undo code). `.claude/skills/ultimate-design-skill` is a symlink to it.
 - Source of truth: the Wishlist page (`app/wishlist/`). When the code changes, update the skill in the same PR.
 
 ## Starting other projects

@@ -12,6 +12,7 @@ import {
   renameShoppingCategorySchema,
   shoppingCategoryNameSchema,
   restoreShoppingItemsSchema,
+  revertShoppingCategorySchema,
   updateShoppingItemSchema,
   updateNutritionTargetsSchema,
 } from "@/lib/validations/food";
@@ -30,6 +31,7 @@ import {
   logMeal,
   renameShoppingCategory,
   restoreShoppingItems,
+  revertShoppingCategory,
   toggleShoppingItem,
   updateDailySteps,
   updateNutritionTargets,
@@ -174,15 +176,22 @@ export async function addShoppingCategoryAction(rawInput: unknown) {
 export async function renameShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
   const { from, to } = renameShoppingCategorySchema.parse(rawInput);
-  const renamed = await renameShoppingCategory(userId, from, to);
+  const change = await renameShoppingCategory(userId, from, to);
   safeRevalidate("/food");
-  return { success: renamed };
+  return { success: change !== null, change };
 }
 
 export async function deleteShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
   const { name } = shoppingCategoryNameSchema.parse(rawInput);
-  const deleted = await deleteShoppingCategory(userId, name);
+  const change = await deleteShoppingCategory(userId, name);
   safeRevalidate("/food");
-  return { success: deleted };
+  return { success: change !== null, change };
+}
+
+export async function revertShoppingCategoryAction(rawInput: unknown) {
+  const userId = await requireUser();
+  await revertShoppingCategory(userId, revertShoppingCategorySchema.parse(rawInput));
+  safeRevalidate("/food");
+  return { success: true };
 }

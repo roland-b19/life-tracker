@@ -33,12 +33,14 @@ import {
 } from "@/lib/todos";
 import {
   createTodoAction,
+  deletePushSubscriptionAction,
   deleteTodoAction,
   getDailyTodosAction,
   getPlannedDaysAction,
   loadTodosViewAction,
   moveTodoAction,
   restoreTodoAction,
+  revertMoveTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
@@ -445,6 +447,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
     });
 
+    it("removes a push subscription for its owner only", async () => {
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
+      const endpoint = "https://fcm.googleapis.com/fcm/send/undo-endpoint";
+      await savePushSubscriptionAction({ endpoint, p256dhKey: "sample-p256dh-val", authKey: "sample-auth-val" });
+      authState.id = userB;
+      expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
+      authState.id = "";
+      await expect(deletePushSubscriptionAction(endpoint)).rejects.toThrow("Authentication required.");
+      authState.id = userA;
+      expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(true);
+      expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
+    });
+
     it("refuses a push endpoint that is not https", async () => {
       const keys = { p256dhKey: "sample-p256dh-val", authKey: "sample-auth-val" };
       await expect(savePushSubscriptionAction({ endpoint: "http://fcm.googleapis.com/x", ...keys })).rejects.toThrow();
@@ -531,6 +546,43 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
+    });
+
+    it("undoes a move with the old state back, ticks included, and only for the owner", async () => {
+      const today = toISODate();
+      const yesterday = addDays(today, -1);
+      const snapshot = async (id: string, day: string) => {
+        const t = (await getDailyTodos(userA, "personal", day, today)).todos.find((x) => x.id === id);
+        if (!t) throw new Error("missing");
+        return { ...t, reminderTime: null };
+      };
+      const listed = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos;
+
+      // In place: a ticked one-off for tomorrow moves to the day after, then comes back ticked.
+      const tomorrow = addDays(today, 1);
+      const task = await createTodo(userA, { space: "personal", title: "Call", dueDate: tomorrow, isRecurring: false, recurrencePattern: "none" });
+      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: tomorrow });
+      const before = await snapshot(task.id, tomorrow);
+      await moveTodoAction({ id: task.id, recurrencePattern: "none", dueDate: addDays(today, 2) });
+      authState.id = userB;
+      expect((await revertMoveTodoAction(before)).success).toBe(false);
+      authState.id = userA;
+      expect((await revertMoveTodoAction(before)).success).toBe(true);
+      expect(await listed(tomorrow)).toMatchObject([{ id: task.id, isCompleted: true }]);
+      expect(await listed(addDays(today, 2))).toHaveLength(0);
+
+      // A daily task with past days becomes a new one-off; the undo deletes that one and un-ends the old one.
+      const habit = await createTodo(userA, { space: "personal", title: "Inbox zero", dueDate: yesterday, isRecurring: true, recurrencePattern: "daily" });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: yesterday });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: today });
+      const habitBefore = await snapshot(habit.id, today);
+      const moved = await moveTodoAction({ id: habit.id, recurrencePattern: "none", dueDate: today });
+      if (!moved.success || !moved.todo) throw new Error("move failed");
+      expect((await listed(today)).map((t) => t.id)).toEqual([moved.todo.id]);
+      const undone = await revertMoveTodoAction(habitBefore, moved.todo.id);
+      expect(undone.success).toBe(true);
+      expect((await listed(today)).map((t) => t.id)).toEqual([habit.id]);
+      expect(await listed(today)).toMatchObject([{ isRecurring: true, isCompleted: true, doneDates: [yesterday, today] }]);
     });
 
     it("loads only the last DONE_DATES_WINDOW_DAYS of ticks for a daily task", async () => {

@@ -56,6 +56,7 @@ import {
   logMealAction,
   renameShoppingCategoryAction,
   restoreShoppingItemsAction,
+  revertShoppingCategoryAction,
   updateShoppingItemAction,
   toggleShoppingItemAction,
   updateStepsAction,
@@ -239,13 +240,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     const edited = await updateShoppingItem(userA, { itemId: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
     expect(edited).toMatchObject({ name: "Rapeseed Oil", unit: "l", category: "oils" });
-    expect(await renameShoppingCategory(userA, "pantry", "dry goods")).toBe(true);
+    expect(await renameShoppingCategory(userA, "pantry", "dry goods")).not.toBeNull();
     expect((await getShoppingList(userA)).map((i) => i.category).sort()).toEqual(["dry goods", "oils"]);
 
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
     expect(await updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).toBeUndefined();
-    expect(await renameShoppingCategory(userB, "oils", "x")).toBe(false);
+    expect(await renameShoppingCategory(userB, "oils", "x")).toBeNull();
     expect(await restoreShoppingItems(userB, [oil.id])).toHaveLength(0);
   });
 
@@ -274,6 +275,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await expect(restoreShoppingItemsAction({ itemIds: [itemId] })).rejects.toThrow("Authentication required.");
       await expect(addShoppingCategoryAction({ name: "frozen" })).rejects.toThrow("Authentication required.");
       await expect(deleteShoppingCategoryAction({ name: "dairy" })).rejects.toThrow("Authentication required.");
+      await expect(
+        revertShoppingCategoryAction({ name: "dairy", current: "other", sortOrder: 1, itemIds: [itemId], dropCurrent: false }),
+      ).rejects.toThrow("Authentication required.");
 
       await expect(addWaterAction("2026-11-04", 250)).rejects.toThrow(
         "Authentication required.",
@@ -331,6 +335,36 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await deleteShoppingCategoryAction({ name: "frozen" })).success).toBe(true);
       expect((await getShoppingList(owner)).find((i) => i.id === item.id)?.category).toBe("other");
       expect(await getShoppingCategories(owner)).not.toContain("frozen");
+      authState.id = "";
+    });
+
+    it("undoes a category delete and rename with exactly the moved items, for the owner only", async () => {
+      const owner = await seedUser(`revert-${randomUUID()}`);
+      const stranger = await seedUser(`revert-${randomUUID()}`);
+      authState.id = owner;
+      const { item: milk } = await addShoppingItemAction({ name: "Milk", category: "dairy" });
+      const { item: loose } = await addShoppingItemAction({ name: "Tape", category: "other" });
+
+      const removed = await deleteShoppingCategoryAction({ name: "dairy" });
+      expect(removed.change?.itemIds).toEqual([milk.id]);
+      const undoDelete = { name: "dairy", current: "other", ...removed.change!, dropCurrent: false };
+
+      authState.id = stranger;
+      await revertShoppingCategoryAction(undoDelete);
+      expect(await getShoppingCategories(stranger)).toContain("dairy"); // its own list only
+      expect((await getShoppingList(owner)).find((i) => i.id === milk.id)?.category).toBe("other");
+
+      authState.id = owner;
+      await revertShoppingCategoryAction(undoDelete);
+      const list = await getShoppingList(owner);
+      expect(list.find((i) => i.id === milk.id)?.category).toBe("dairy");
+      expect(list.find((i) => i.id === loose.id)?.category).toBe("other");
+      expect(await getShoppingCategories(owner)).toContain("dairy");
+
+      const renamed = await renameShoppingCategoryAction({ from: "dairy", to: "fridge" });
+      await revertShoppingCategoryAction({ name: "dairy", current: "fridge", ...renamed.change!, dropCurrent: !renamed.change!.merged });
+      expect((await getShoppingList(owner)).find((i) => i.id === milk.id)?.category).toBe("dairy");
+      expect(await getShoppingCategories(owner)).not.toContain("fridge");
       authState.id = "";
     });
 

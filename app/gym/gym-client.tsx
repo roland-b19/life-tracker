@@ -4,10 +4,10 @@ import { formatDMY, toISODate } from "@/lib/format-date";
 import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
-import { Fragment, useEffect, useRef, useState } from "react";
-import { AutoHeight, swapIn, useDragSort, useListMotion, useMore } from "../components/list-motion";
+import { useEffect, useRef, useState } from "react";
+import { ListBox, useDragSort, useMore } from "../components/lists";
 import { Navigation } from "../components/navigation";
-import { Modal, useAfterClose } from "../components/modal";
+import { Modal } from "../components/modal";
 import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
@@ -17,6 +17,7 @@ import { clearWorkoutTime, formatClock, saveWorkoutTime, useWorkoutTimer, workou
 import {
   cancelSessionAction,
   createCustomExerciseAction,
+  deleteCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   logSetAction,
@@ -116,6 +117,8 @@ interface GymClientProps {
   openSession: ActiveSessionData | null;
 }
 
+type LoggedSet = WorkoutSetData;
+
 /** "8 × 52.5 kg": one logged set as the user reads it (the extra kg is already in `load`). */
 function setText(x: { reps: number; loadType: string; load: number }) {
   const l = Math.round(x.load * 100) / 100;
@@ -133,19 +136,10 @@ export function GymClient({
   openSession,
 }: GymClientProps) {
   const { showToast } = useToast();
-  const { rowRef, enter, leave, fadeAll } = useListMotion();
-  const previewCard = useRef<HTMLElement>(null);
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message, type: "warning" });
   };
-  // A save refreshes the days from the server; the list takes them once the editor has faded, not under it.
-  const [split, setSplit] = useState(serverSplit);
-  const { later, runAfterClose } = useAfterClose();
-  const editing = useRef(false); // from opening the editor until it has faded out
-  useEffect(() => {
-    later(() => setSplit(serverSplit));
-    if (!editing.current) runAfterClose();
-  }, [serverSplit, later, runAfterClose]);
+  const split = serverSplit; // a save refreshes the days from the server
   const todayDayOfWeek = new Date().getDay(); // 0 = Sun, 1 = Mon, ...
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
     const todayMatch = split?.days.find((d) => d.dayOfWeek === todayDayOfWeek);
@@ -199,12 +193,10 @@ export function GymClient({
   const [shownExercises, moreExercises] = useMore(currentDay?.exercises ?? []);
 
   // Routine editor
-  // The draft outlives the open state, so the form keeps its content while it fades out.
   const [draft, setDraft] = useState<DayDraft | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [draftError, setDraftError] = useState("");
-  const routineMotion = useListMotion(); // the day editor's exercise rows
-  const dragRow = useDragSort(routineMotion.reorder, (from, to) =>
+  const dragRow = useDragSort((from, to) =>
     setDraft((d) => {
       if (!d) return d;
       const list = [...d.exercises];
@@ -218,8 +210,6 @@ export function GymClient({
   const groups = [...new Set(addable.map((e) => e.muscleGroup))];
 
   function openEditor(day: SplitDay) {
-    runAfterClose(); // reopened before the last close finished
-    editing.current = true;
     setDraftError("");
     setDraft({
       id: day.id,
@@ -238,23 +228,17 @@ export function GymClient({
     setEditorOpen(true);
   }
 
-  function afterEditor() {
-    editing.current = false;
-    runAfterClose();
-  }
-
   function patchRow(i: number, patch: Partial<DraftExercise>) {
     setDraft((d) => d && { ...d, exercises: d.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
   }
 
   function removeRow(id: string) {
-    routineMotion.leave(id, () => setDraft((d) => d && { ...d, exercises: d.exercises.filter((e) => e.exerciseId !== id) }));
+    setDraft((d) => d && { ...d, exercises: d.exercises.filter((e) => e.exerciseId !== id) });
   }
 
   function addRow() {
     const id = addId || addable[0]?.id;
     if (!id) return;
-    routineMotion.enter(id);
     setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId: id, targetSets: "2", minReps: "5", maxReps: "8" }] });
     setAddId("");
   }
@@ -287,7 +271,6 @@ export function GymClient({
             actionLabel: "Undo",
             // Writes the old day back; the server refresh brings it to the list.
             onAction: async () => {
-              runAfterClose(); // the edit first, if the form is still closing
               const back = await saveSplitDayAction({
                 id: before.id,
                 name: before.name,
@@ -335,7 +318,30 @@ export function GymClient({
           splitDayName: day.name,
           sets: [],
         });
-        showToast({ message: `Started "${day.name}"`, type: "success" });
+        const started = res.session.id;
+        showToast({
+          message: `Started "${day.name}"`,
+          type: "success",
+          actionLabel: "Undo",
+          // Only while nothing is logged: Undo must not delete sets.
+          onAction: async () => {
+            const now = live.current;
+            if (now?.id !== started || now.sets.length > 0) {
+              showToast({ message: "Sets are logged; use Cancel workout instead", type: "warning" });
+              return;
+            }
+            const gone = await cancelSessionAction({ sessionId: started }).catch(() => null);
+            if (!gone?.success) {
+              showToast({ message: "Failed to undo", type: "warning" });
+              return;
+            }
+            clearWorkoutTime(started);
+            setConfirmCancel(false);
+            setActiveSession(null);
+            setPaused((p) => (p?.id === started ? null : p));
+            setSessionNotes("");
+          },
+        });
       } else {
         setStatusMessage("Failed to start workout");
       }
@@ -387,40 +393,34 @@ export function GymClient({
       });
 
       if (res.success && res.set) {
-        enter(res.set.id);
-        setActiveSession((prev) =>
-          prev
-            ? {
-                ...prev,
-                sets: [
-                  ...prev.sets,
-                  {
-                    id: res.set.id,
-                    exerciseId: exercise.exerciseId,
-                    setOrder: res.set.setOrder,
-                    reps: res.set.reps,
-                    loadType: res.set.loadType,
-                    loadValue: res.set.loadValue,
-                    extraKg: res.set.extraKg,
-                    isFailure: res.set.isFailure,
-                    isPartial: res.set.isPartial,
-                    flagAnomaly: res.set.flagAnomaly,
-                    anomalyReason: res.set.anomalyReason,
-                    notes: res.set.notes,
-                  },
-                ],
-              }
-            : null,
-        );
-
-        if (res.set.flagAnomaly) {
-          showToast({
-            message: `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`,
-            type: "warning",
-          });
-        } else {
-          showToast({ message: `Added set ${setOrder}`, type: "success" });
-        }
+        const logged: LoggedSet = {
+          id: res.set.id,
+          exerciseId: exercise.exerciseId,
+          setOrder: res.set.setOrder,
+          reps: res.set.reps,
+          loadType: res.set.loadType,
+          loadValue: res.set.loadValue,
+          extraKg: res.set.extraKg,
+          isFailure: res.set.isFailure,
+          isPartial: res.set.isPartial,
+          flagAnomaly: res.set.flagAnomaly,
+          anomalyReason: res.set.anomalyReason,
+          notes: res.set.notes,
+        };
+        setActiveSession((prev) => prev && { ...prev, sets: [...prev.sets, logged] });
+        showToast({
+          message: res.set.flagAnomaly
+            ? `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`
+            : `Added set ${setOrder}`,
+          type: res.set.flagAnomaly ? "warning" : "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            dropSet(logged.id);
+            if (await deleteSetAction(logged.id).then(() => true, () => false)) return;
+            putBackSet(logged);
+            showToast({ message: "Failed to undo", type: "warning" });
+          },
+        });
       } else {
         setStatusMessage("Failed to add set");
       }
@@ -431,9 +431,8 @@ export function GymClient({
     }
   }
 
-  type LoggedSet = NonNullable<typeof activeSession>["sets"][number];
+  const dropSet = (id: string) => setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: LoggedSet) => {
-    enter(set.id);
     setActiveSession((prev) =>
       prev && { ...prev, sets: [...prev.sets.filter((s) => s.id !== set.id), set].sort((a, b) => a.setOrder - b.setOrder) },
     );
@@ -447,18 +446,11 @@ export function GymClient({
       () => true,
       () => false,
     );
-    // Undo or a failure waits for the row to finish leaving, or the late removal would drop it again.
-    const gone = new Promise<void>((done) =>
-      leave(set.id, () => {
-        setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== set.id) });
-        done();
-      }),
-    );
+    dropSet(set.id);
     showToast({
       message: `Removed set ${set.setOrder}`,
       actionLabel: "Undo",
       onAction: async () => {
-        await gone;
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await logSetAction({
           sessionId,
@@ -478,7 +470,7 @@ export function GymClient({
         else showToast({ message: "Failed to restore set", type: "warning" });
       },
     });
-    void Promise.all([deleted, gone]).then(([ok]) => {
+    void deleted.then((ok) => {
       if (ok) return;
       putBackSet(set);
       showToast({ message: "Failed to remove set", type: "warning" });
@@ -628,10 +620,23 @@ export function GymClient({
       if (res.success) {
         // A new exercise is made for this day, so it goes straight into the routine.
         const exerciseId = res.exercise.id;
-        routineMotion.enter(exerciseId);
         setDraft((d) => d && { ...d, exercises: [...d.exercises, { exerciseId, targetSets: "2", minReps: "5", maxReps: "8" }] });
         setShowCustom(false);
         setCustomName("");
+        showToast({
+          message: `Created "${name}"`,
+          type: "success",
+          actionLabel: "Undo",
+          // Refused once a routine or a set uses it, so Undo never deletes data.
+          onAction: async () => {
+            const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
+            if (!gone?.success) {
+              showToast({ message: "Failed to undo: the exercise is already in use", type: "warning" });
+              return;
+            }
+            setDraft((d) => d && { ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) });
+          },
+        });
       }
     } catch {
       setDraftError("Failed to create exercise");
@@ -754,9 +759,9 @@ export function GymClient({
                   })()}
 
                   {/* Previous logged sets */}
-                  <AutoHeight wash className="entries set-list">
+                  <ListBox wash className="entries set-list">
                       {exerciseSets.map((s) => (
-                        <div key={s.id} ref={rowRef(s.id)} className="entry-row">
+                        <div key={s.id} className="entry-row">
                           <span>
                             <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
                             {s.loadValue} {s.loadType}
@@ -779,7 +784,7 @@ export function GymClient({
                           </button>
                         </div>
                       ))}
-                  </AutoHeight>
+                  </ListBox>
 
                   {/* Set input row */}
                   <div className="set-input-grid">
@@ -1001,7 +1006,7 @@ export function GymClient({
           <div className="dashboard-grid">
             <div className="dashboard-main">
               {currentDay && (
-                <section ref={previewCard} className="surface" aria-labelledby="preview-title">
+                <section className="surface" aria-labelledby="preview-title">
                   <div className="section-head">
                     <div>
                       <h2 id="preview-title" className="section-title">
@@ -1028,12 +1033,11 @@ export function GymClient({
                   </div>
 
                   {!currentDay.isRest && (
-                    <AutoHeight wash className="entries">
+                    <ListBox wash className="entries">
                       {currentDay.exercises.length > 0 ? (
-                        // Keyed by the day so every switch mounts fresh rows.
-                        <Fragment key={currentDay.id}>
+                        <>
                         {shownExercises.map((ex, idx) => (
-                          <div key={ex.id} ref={rowRef(ex.id)} className="entry-row">
+                          <div key={ex.id} className="entry-row">
                             <div className="entry-main">
                               <strong>
                                 {idx + 1}. {ex.exerciseName}
@@ -1046,11 +1050,11 @@ export function GymClient({
                           </div>
                         ))}
                         {moreExercises}
-                        </Fragment>
+                        </>
                       ) : (
-                        <p key={`empty-${currentDay.id}`} ref={rowRef("empty")} className="empty-note">No exercises yet.</p>
+                        <p className="empty-note">No exercises yet.</p>
                       )}
-                    </AutoHeight>
+                    </ListBox>
                   )}
                 </section>
               )}
@@ -1064,7 +1068,7 @@ export function GymClient({
                   </h2>
                 </div>
 
-                <AutoHeight className="split-day-list">
+                <ListBox className="split-day-list">
                   {split?.days.map((day) => {
                     const isToday = day.dayOfWeek === todayDayOfWeek;
                     const isSelected = day.id === selectedDayId;
@@ -1077,13 +1081,7 @@ export function GymClient({
                           type="button"
                           className="split-day-select"
                           aria-pressed={isSelected}
-                          onClick={() =>
-                            day.id !== selectedDayId &&
-                            fadeAll(() => {
-                              swapIn(previewCard.current);
-                              setSelectedDayId(day.id);
-                            })
-                          }
+                          onClick={() => setSelectedDayId(day.id)}
                         >
                           <span className="split-day-title">
                             <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
@@ -1112,7 +1110,7 @@ export function GymClient({
                       </div>
                     );
                   })}
-                </AutoHeight>
+                </ListBox>
               </section>
             </div>
           </div>
@@ -1125,8 +1123,7 @@ export function GymClient({
                 {history.length} {history.length === 1 ? "workout" : "workouts"}
               </span>
             </div>
-            {/* Not in the row motion: a training day's fadeAll would fade these rows out and never bring them back. */}
-            <AutoHeight wash className="entries">
+            <ListBox wash className="entries">
               {history.length > 0 ? (
                 <>
                   {shownHistory.map((h) => {
@@ -1171,11 +1168,11 @@ export function GymClient({
                   {moreHistory}
                 </>
               ) : (
-                <p key="empty-history" className="empty-note">
+                <p className="empty-note">
                   No finished workouts yet.
                 </p>
               )}
-            </AutoHeight>
+            </ListBox>
           </section>
             </>
           )}
@@ -1185,7 +1182,6 @@ export function GymClient({
       <Modal
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
-        onExited={afterEditor}
         title={draft ? `Edit ${DAY_NAMES[draft.dayOfWeek]}` : "Edit day"}
       >
         {draft && (
@@ -1214,16 +1210,16 @@ export function GymClient({
 
               {!draft.isRest && (
                 <>
-                  <AutoHeight className="routine-list">
+                  <ListBox className="routine-list">
                     {draft.exercises.length === 0 && (
-                      <p key="empty" ref={routineMotion.rowRef("empty")} className="empty-note">
+                      <p className="empty-note">
                         No exercises yet.
                       </p>
                     )}
                     {draft.exercises.map((row, i) => {
                       const name = nameOf(row.exerciseId);
                       return (
-                        <div key={row.exerciseId} ref={routineMotion.rowRef(row.exerciseId)} className="routine-row" data-sort>
+                        <div key={row.exerciseId} className="routine-row" data-sort>
                           <button
                             type="button"
                             className="delete-icon-btn edit drag-handle"
@@ -1299,7 +1295,7 @@ export function GymClient({
                         </div>
                       );
                     })}
-                  </AutoHeight>
+                  </ListBox>
 
                   {addable.length > 0 && draft.exercises.length < 20 && (
                     <div className="routine-add">

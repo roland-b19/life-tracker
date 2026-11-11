@@ -17,6 +17,7 @@ import {
   cancelWorkoutSession,
   createCustomExercise,
   createWorkoutSession,
+  deleteCustomExercise,
   deleteWorkoutSet,
   finishWorkoutSession,
   getGymHistory,
@@ -104,6 +105,14 @@ export async function createCustomExerciseAction(rawInput: unknown) {
   const exercise = await createCustomExercise(userId, parsed);
   safeRevalidate("/gym");
   return { success: true, exercise };
+}
+
+/** Undo of creating a custom exercise; false when a routine or a set already uses it. */
+export async function deleteCustomExerciseAction(exerciseId: string) {
+  const userId = await requireUser();
+  const deleted = await deleteCustomExercise(userId, uuid.parse(exerciseId));
+  if (deleted) safeRevalidate("/gym");
+  return { success: deleted };
 }
 
 /** The user's sets from the last year, for the Progress view. */

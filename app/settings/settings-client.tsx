@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
-import { AutoHeight, useListMotion } from "../components/list-motion";
+import { ListBox } from "../components/lists";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
-import { Modal, useAfterClose } from "../components/modal";
+import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
-import { connectClaudeAction, disconnectClaudeAction } from "@/app/actions/claude-connection";
+import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { formatDMY } from "@/lib/format-date";
 
 interface SettingsClientProps {
@@ -20,12 +20,9 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const { rowRef, enter, leave } = useListMotion();
-  const { later, runAfterClose } = useAfterClose();
   const { showToast } = useToast();
 
   function openForm() {
-    runAfterClose();
     setErrorMsg("");
     setToken("");
     setIsModalOpen(true);
@@ -41,14 +38,14 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
         setErrorMsg(res.error ?? "Failed to connect Claude");
         return;
       }
-      const at = res.connectedAt;
-      const replaced = connectedAt !== null;
-      later(() => {
-        if (!replaced) enter("claude");
-        setConnectedAt(at);
+      const before = connectedAt;
+      setConnectedAt(res.connectedAt);
+      showToast({
+        message: before ? "Saved the new Claude token" : "Connected Claude",
+        type: "success",
+        actionLabel: "Undo",
+        onAction: () => undo(before, res.previous, res.connectedAt),
       });
-      // No Undo: the old token never reaches the browser, and a new one is one `claude setup-token` away.
-      showToast({ message: replaced ? "Saved the new Claude token" : "Connected Claude", type: "success" });
       setToken("");
       setIsModalOpen(false);
     } catch {
@@ -58,26 +55,36 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     }
   }
 
-  function handleDisconnect() {
-    const before = connectedAt;
-    const done = disconnectClaudeAction().then(
+  type Previous = { tokenEncrypted: string; connectedAt: string } | null;
+
+  // Puts the earlier connection back: the stored (still encrypted) token, or none when there was none.
+  async function undo(before: string | null, previous: Previous, now: string | null) {
+    setConnectedAt(before);
+    const ok = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).then(
       () => true,
       () => false,
     );
-    const gone = new Promise<void>((resolve) =>
-      leave("claude", () => {
-        setConnectedAt(null);
-        resolve();
-      }),
-    );
-    // No Undo, for the same reason as a token change.
-    showToast({ message: "Disconnected Claude", type: "success" });
-    void Promise.all([done, gone]).then(([ok]) => {
-      if (ok) return;
-      enter("claude");
+    if (!ok) {
+      setConnectedAt(now);
+      showToast({ message: "Failed to undo", type: "warning" });
+    }
+  }
+
+  async function handleDisconnect() {
+    const before = connectedAt;
+    setConnectedAt(null);
+    try {
+      const { previous } = await disconnectClaudeAction();
+      showToast({
+        message: "Disconnected Claude",
+        type: "success",
+        actionLabel: "Undo",
+        onAction: () => undo(before, previous, null),
+      });
+    } catch {
       setConnectedAt(before);
       showToast({ message: "Failed to disconnect Claude", type: "warning" });
-    });
+    }
   }
 
   return (
@@ -105,13 +112,13 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
               </button>
             </div>
 
-            <AutoHeight className="entries">
+            <ListBox className="entries">
               {connectedAt === null ? (
-                <p key="empty" ref={rowRef("empty")} className="empty-note">
+                <p className="empty-note">
                   Not connected.
                 </p>
               ) : (
-                <div key="claude" ref={rowRef("claude")} className="entry-row item-row">
+                <div className="entry-row item-row">
                   <strong className="item-name">Claude account</strong>
                   <div className="item-meta">
                     <span className="muted number-tabular">Connected {formatDMY(connectedAt)}</span>
@@ -138,7 +145,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
                   </div>
                 </div>
               )}
-            </AutoHeight>
+            </ListBox>
           </section>
         </div>
       </div>
@@ -146,7 +153,6 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onExited={runAfterClose}
         title={connectedAt ? "Edit token" : "Connect Claude"}
       >
         <form onSubmit={handleSubmit}>

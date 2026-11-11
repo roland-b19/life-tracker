@@ -1,45 +1,61 @@
 "use client";
 
 import { useState } from "react";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction } from "@/app/actions/categories";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import { PencilIcon, PlusIcon, TrashIcon } from "./icons";
-import { AutoHeight, useListMotion, useMore } from "./list-motion";
-import { Modal, useAfterClose } from "./modal";
+import { ListBox, useMore } from "./lists";
+import { Modal } from "./modal";
 import { useToast } from "./toast";
 
 interface Props {
   scope: CategoryScope;
   categories: string[];
   onChange: (update: (prev: string[]) => string[]) => void;
-  /** The page re-files its items: a rename (merging onto an existing name included) or a delete (to "other"). */
-  onRefile: (from: string, to: string) => void;
+  /** The page re-files its items: a rename (merging onto an existing name included) or a delete (to "other"). `only` limits it to those item ids (Undo). */
+  onRefile: (from: string, to: string, only?: string[]) => void;
+}
+
+/** What a rename or delete reported moving, as the server sent it. */
+interface Change {
+  sortOrder: number;
+  itemIds: string[];
+  merged: boolean;
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
 export function CategoriesCard({ scope, categories, onChange, onRefile }: Props) {
   const { showToast } = useToast();
-  const { rowRef, enter, leave, move } = useListMotion();
-  const { later, runAfterClose } = useAfterClose();
   const [open, setOpen] = useState(false);
-  const [from, setFrom] = useState<string | null>(null); // outlives the close, so the dialog keeps its content while it fades
+  const [from, setFrom] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [shown, more] = useMore(categories);
-  // A row keeps its key when renamed, so it glides to its new place instead of being replaced.
-  const [keys] = useState(() => new Map<string, string>());
-  const keyOf = (cat: string) => {
-    if (!keys.has(cat)) keys.set(cat, `cat:${cat}`);
-    return keys.get(cat)!;
-  };
 
   function openForm(edit: string | null) {
-    runAfterClose(); // reopened before the last close finished
     setError("");
     setFrom(edit);
     setName(edit ?? "");
     setOpen(true);
+  }
+
+  // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure undoes that.
+  async function revert(name: string, current: string, change: Change, dropCurrent: boolean, at: number) {
+    const put = () => {
+      onChange((prev) => {
+        const without = dropCurrent ? prev.filter((c) => c !== current) : prev;
+        return without.includes(name) ? without : [...without.slice(0, at), name, ...without.slice(at)];
+      });
+      onRefile(current, name, change.itemIds);
+    };
+    put();
+    const back = await revertCategoryAction({ scope, name, current, dropCurrent, ...change }).catch(() => null);
+    if (!back?.success) {
+      onChange((prev) => (current === "other" ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
+      onRefile(name, current, change.itemIds);
+      showToast({ message: "Failed to undo", type: "warning" });
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -53,21 +69,38 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
     try {
       if (from === null) {
         if (!(await addCategoryAction({ scope, name: to })).success) return setError(`"${to}" already exists.`);
-        later(() => {
-          void enter(keyOf(to));
-          onChange((prev) => [...prev, to]);
+        onChange((prev) => [...prev, to]);
+        showToast({
+          message: `Added "${to}"`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: async () => {
+            onChange((prev) => prev.filter((c) => c !== to));
+            const gone = await deleteCategoryAction({ scope, name: to }).catch(() => null);
+            if (!gone?.success) {
+              onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
+              showToast({ message: "Failed to undo", type: "warning" });
+              return;
+            }
+            // Items filed under it since go to Other, like any delete.
+            onRefile(to, "other");
+          },
         });
-        showToast({ message: `Added "${to}"`, type: "success" });
       } else {
-        if (!(await renameCategoryAction({ scope, from, to })).success) throw new Error("Category not found");
-        later(() => {
-          onRefile(from, to);
-          if (categories.includes(to)) return leave(keyOf(from), () => onChange((prev) => prev.filter((c) => c !== from)));
-          keys.set(to, keyOf(from));
-          keys.delete(from);
-          void move(keyOf(to), () => onChange((prev) => prev.map((c) => (c === from ? to : c))));
+        const res = await renameCategoryAction({ scope, from, to });
+        if (!res.success || !res.change) throw new Error("Category not found");
+        const change = res.change;
+        const at = categories.indexOf(from);
+        onRefile(from, to);
+        onChange((prev) =>
+          prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
+        );
+        showToast({
+          message: `Renamed "${from}" to "${to}"`,
+          type: "success",
+          actionLabel: "Undo",
+          onAction: () => revert(from, to, change, !change.merged, at),
         });
-        showToast({ message: `Renamed "${from}" to "${to}"`, type: "success" });
       }
       setOpen(false);
     } catch {
@@ -77,24 +110,23 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
     }
   }
 
-  // Like a row delete: the row leaves and the toast shows at once and a failed delete puts it back. No Undo:
-  // the server merges its items into Other, so a restore could not tell them apart.
-  function remove(cat: string) {
+  // The row leaves and the toast shows at once; a failed delete puts it back. Undo re-files exactly the items
+  // that moved to Other.
+  async function remove(cat: string) {
     const at = categories.indexOf(cat);
-    const deleted = deleteCategoryAction({ scope, name: cat }).then((r) => r.success, () => false);
-    const gone = new Promise<void>((done) =>
-      leave(keyOf(cat), () => {
-        onChange((prev) => prev.filter((c) => c !== cat));
-        done();
-      }),
-    );
-    onRefile(cat, "other");
-    showToast({ message: `Removed "${cat}"; its items are in Other` });
-    void Promise.all([deleted, gone]).then(([ok]) => {
-      if (ok) return;
-      void enter(keyOf(cat));
+    onChange((prev) => prev.filter((c) => c !== cat));
+    const res = await deleteCategoryAction({ scope, name: cat }).catch(() => null);
+    if (!res?.success || !res.change) {
       onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
       showToast({ message: "Failed to remove category", type: "warning" });
+      return;
+    }
+    const change = res.change;
+    onRefile(cat, "other");
+    showToast({
+      message: `Removed "${cat}"; its items are in Other`,
+      actionLabel: "Undo",
+      onAction: () => revert(cat, "other", change, false, at),
     });
   }
 
@@ -110,12 +142,12 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
             Add category
           </button>
         </div>
-        <AutoHeight wash className="entries">
+        <ListBox wash className="entries">
           {categories.length === 0 && (
-            <p key="cat-empty" ref={rowRef("cat:empty")} className="empty-note">No categories yet.</p>
+            <p className="empty-note">No categories yet.</p>
           )}
           {shown.map((cat) => (
-            <div key={keyOf(cat)} ref={rowRef(keyOf(cat))} className="entry-row">
+            <div key={cat} className="entry-row">
               <span className="category-name">{cat}</span>
               <div className="row-actions">
                 <button
@@ -140,10 +172,10 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
             </div>
           ))}
           {more}
-        </AutoHeight>
+        </ListBox>
       </section>
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} onExited={runAfterClose} title={from ? "Edit category" : "New category"}>
+      <Modal isOpen={open} onClose={() => setOpen(false)} title={from ? "Edit category" : "New category"}>
         <form onSubmit={submit}>
           <div className="form-stack">
             <label>

@@ -15,3 +15,13 @@ export const renameCategorySchema = z.object({
   from: managedCategorySchema,
   to: managedCategorySchema,
 });
+
+/** Undo of a rename or delete: what the change reported, sent back as it was. */
+export const revertCategorySchema = z.object({
+  scope: categoryScopeSchema,
+  name: managedCategorySchema,
+  current: categorySchema,
+  sortOrder: z.number().int(),
+  itemIds: z.array(z.string().uuid()).max(5000),
+  dropCurrent: z.boolean(),
+});

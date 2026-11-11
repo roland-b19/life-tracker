@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
@@ -238,7 +238,7 @@ export async function getTodoHistory(userId: string, space: TodoSpace, days = 90
 export async function hasDuplicateTodo(
   userId: string,
   task: Pick<CreateTodoInput, "title" | "isRecurring" | "dueDate"> & { space: string },
-  exceptId?: string,
+  exceptId?: string | string[],
 ): Promise<boolean> {
   const [row] = await db
     .select({ id: todos.id })
@@ -248,7 +248,7 @@ export async function hasDuplicateTodo(
         eq(todos.userId, userId),
         eq(todos.space, task.space),
         sql`lower(${todos.title}) = lower(${task.title})`,
-        exceptId ? ne(todos.id, exceptId) : undefined,
+        exceptId ? notInArray(todos.id, [exceptId].flat()) : undefined,
         task.isRecurring
           ? or(
               and(eq(todos.isRecurring, true), isNull(todos.endedOn)),
@@ -448,6 +448,46 @@ export async function moveTodo(userId: string, input: MoveTodoInput): Promise<To
   return { ...moved, space, streak: 0, doneDates: [] };
 }
 
+/**
+ * Undoes a move: the task goes back to the state it was in (ticked days included), and the task the move created
+ * in its place, if any, is deleted. Null when the snapshot cannot be put back.
+ */
+export async function revertMoveTodo(userId: string, rawInput: RestoreTodoInput, createdId?: string): Promise<TodoItem | null> {
+  const input = restoreTodoSchema.parse(rawInput);
+  const created = createdId && createdId !== input.id ? await findTodo(userId, createdId) : undefined;
+  const existing = await findTodo(userId, input.id);
+  if (!existing && !created) return restoreTodo(userId, input);
+  if (created) await db.delete(todos).where(and(eq(todos.id, created.id), eq(todos.userId, userId)));
+  if (!existing) return restoreTodo(userId, input);
+
+  const [back] = await db
+    .update(todos)
+    .set({
+      space: input.space,
+      title: input.title,
+      isRecurring: input.isRecurring,
+      recurrencePattern: patternFor(input.isRecurring, input.recurrencePattern),
+      dueDate: input.dueDate,
+      reminderTime: input.reminderTime ?? null,
+      isCompleted: input.isCompleted,
+      completedAt: input.isCompleted ? new Date() : null,
+      isCarriedOver: input.isCarriedOver,
+      category: input.category,
+      endedOn: null,
+    })
+    .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
+    .returning();
+  await db.delete(todoCompletions).where(eq(todoCompletions.todoId, input.id));
+  const doneDates = input.isRecurring ? [...new Set(input.doneDates)].sort() : [];
+  if (doneDates.length) await db.insert(todoCompletions).values(doneDates.map((date) => ({ todoId: input.id, date })));
+  await ensureCategory(userId, input.space, back.category);
+  // Every day the move or its undo touched counts again.
+  const today = toISODate();
+  const days = new Set([today, input.dueDate, existing.dueDate, ...(created ? [created.dueDate] : [])]);
+  for (const day of days) await recordDayStats(userId, input.space, day);
+  return { ...back, space: input.space, streak: input.isRecurring ? streakOn(new Set(doneDates), today) : 0, doneDates };
+}
+
 /** Days after `after` that have one-off tasks planned, for the calendar's dots. */
 export async function getPlannedDays(userId: string, space: TodoSpace, after: string): Promise<string[]> {
   const rows = await db
@@ -493,3 +533,12 @@ export async function savePushSubscription(
   return created;
 }
 
+
+/** Removes the user's own subscription for this push endpoint (Undo of enabling reminders). */
+export async function removePushSubscription(userId: string, endpoint: string): Promise<boolean> {
+  const gone = await db
+    .delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .returning({ id: pushSubscriptions.id });
+  return gone.length > 0;
+}

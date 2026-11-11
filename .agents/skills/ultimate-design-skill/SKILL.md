@@ -1,6 +1,6 @@
 ---
 name: ultimate-design-skill
-description: The Life Tracker house design system, distilled from the Wishlist page the user signed off as "completely done, everything is perfect". Every principle, value, timing and rejected idea from that work, so any page, list, form, button, toast, modal, animation, chart or sign-in/sign-out screen matches it exactly. Use whenever you design, build, restyle or review any UI in this project (pages, lists, rows, cards, buttons, fields, selects, segmented controls, badges, spacing, fonts, colours, motion, add/edit/delete flows, Undo, toasts, modals, page transitions, empty states), or when the user says "like the wishlist", "same as wishlist", "consistent", "polish", "animation", "design".
+description: The Life Tracker house design system, distilled from the Wishlist page the user signed off as "completely done, everything is perfect". Every principle, value and rejected idea from that work, so any page, list, form, button, toast, modal, chart or sign-in/sign-out screen matches it exactly. Use whenever you design, build, restyle or review any UI in this project (pages, lists, rows, cards, buttons, fields, selects, segmented controls, badges, spacing, fonts, colours, add/edit/delete flows, Undo, toasts, modals, empty states), or when the user says "like the wishlist", "same as wishlist", "consistent", "polish", "design".
 ---
 
 # Ultimate design skill (Life Tracker house style)
@@ -12,14 +12,13 @@ It sits on top of the `apple-design` skill (HIG rules, accessibility) and below 
 ## How to use
 
 1. Read this file completely before any UI change. It is the rulebook.
-2. Exact values (tokens, sizes, radii, paddings, timings): `references/values.md`.
-3. Lists, add/edit/delete, Undo, motion code: `references/motion-and-crud.md`. Copy the Wishlist pattern, never reinvent it.
+2. Exact values (tokens, sizes, radii, paddings): `references/values.md`.
+3. Lists, add/edit/delete and the Undo of every action: `references/lists-and-crud.md`. Copy the Wishlist pattern, never reinvent it.
 4. Reuse the house parts; never build a second version of them:
-   - `Modal`, `useAfterClose` (`app/components/modal.tsx`);
+   - `Modal` (`app/components/modal.tsx`);
    - `useToast` (`toast.tsx`);
-   - `AutoHeight`, `useListMotion` (`list-motion.tsx`);
+   - `ListBox`, `useMore`, `useDragSort` (`lists.tsx`);
    - `Segmented` (`segmented.tsx`);
-   - `AnimatedNumber` (`animated-number.tsx`);
    - icons (`icons.tsx`);
    - charts (`charts.tsx`);
    - the date picker;
@@ -30,10 +29,11 @@ It sits on top of the `apple-design` skill (HIG rules, accessibility) and below 
 
 Professional, minimalist and dynamic: it should feel like a native Apple app on a phone.
 
-- **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle; the motion is evident but never showy.
+- **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **Feedback:** every change on screen is animated in order. Add, delete and an edit that moves a row share one animation: the wash fades out first (100ms, wash lists), the rows below glide to make or close space (240ms), the row itself fades (out where it stands, or in after the glide), and the wash comes back last.
-- **Stability:** nothing jumps, nothing shifts, nothing gets stuck, nothing lags.
+- **No motion:** there are no animations or transitions anywhere (the user's call, 2026-11-11). Everything appears, changes and disappears instantly: rows, modals, toasts, charts, numbers, hover and press states, page changes.
+- **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
+- **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
 
 ## 2. Principles (each one came from user feedback)
@@ -43,7 +43,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Subtle colour.** Fills are low-alpha tints of their own colour (`--tint-subtle`, `--success-subtle`, ...), never solid bright blocks. A tinted button is tint text on `--tint-subtle`.
 - **One accent.** The steel blue `--tint` is the only accent, and status colours mean status only. Two exceptions are data the user asked to colour: the Wishlist price ranges (low grey, medium `--warning`, high `--danger`, as `-subtle` badges) and the muscle map's groups (`app/gym/muscle-groups.ts`), shown on the model and as a dot on each group chip. The chip itself stays neutral and turns `--tint-subtle` when selected. A muscle group named in a list row is a neutral `badge-rest`.
 - **Subtle but legible.** The `-subtle` fills (.22–.24 alpha) were raised because fainter ones blended into the dark theme. Never go lower.
-- **Highlights are grey and smooth.** Every hover, focus or open fill change transitions with `--fade`; nothing snaps. The row wash is neutral grey (white at .03), not a variation of the accent. The user first asked for accent-coloured rows, then for grey highlights everywhere.
+- **Highlights are grey.** Every hover, focus or open fill change is a subtle grey step, applied at once. The row wash is neutral grey (white at .03), not a variation of the accent. The user first asked for accent-coloured rows, then for grey highlights everywhere.
 - **Hover is a subtle derivative of the element's own colour.**
   - A tinted control hovers to `--tint-highlight`.
   - A grey one hovers to `--highlight-fill`.
@@ -111,17 +111,16 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - It installs to the Home Screen as a standalone app, so it never shows browser chrome: `public/manifest.json` (`display: standalone`, `orientation: portrait`, black `#000000` theme and background) and `appleWebApp.capable: true` in `app/layout.tsx` stay.
 
 **Forms and overlays**
-- **Forms are modals, never bottom sheets.** Centred on a desktop and on a phone; on a phone it eases up to the top while the keyboard is open (so the keyboard never makes iOS pan the page).
+- **Forms are modals, never bottom sheets.** Centred on a desktop and on a phone; on a phone it moves to the top while the keyboard is open (so the keyboard never makes iOS pan the page).
   - The page behind blurs and is never scaled.
   - The keyboard never zooms or pushes the form.
-  - The form closes exactly like it opens (the reverse animation).
+  - The form opens and closes at once.
   - A form is short enough that it does not scroll while the user types. The modal body's own scroll is only a fallback for unusually long content.
-  - Any list change from the form starts only after the form has finished closing.
 - **Toasts are only as wide as their content.**
   - Hovering or focusing a toast keeps it. Leaving resumes its remaining time, but never less than 1.5s.
   - Touch never pins it.
   - Only a success toast carries the check icon.
-  - A toast has no exit animation: it disappears at once. Tapping its action also dismisses it.
+  - A toast appears and disappears at once. Tapping its action also dismisses it.
 - **Forms guard themselves.**
   - Fields disable while saving (`disabled={busy}` on every input and select, inline Gym set fields and sign-in included). Save stays disabled until the required fields are filled, the inline Gym "Log set" included (until reps are entered). No modal form autofocuses a field; the sign-in Username is the one field that does. Sign-in is the exception: Continue is only disabled while busy (it keeps its colour), and an empty Username is caught by `required`.
   - Numeric fields use `inputMode="decimal"`, or `"numeric"` for whole numbers (calories, reps, minutes, water, steps).
@@ -134,24 +133,26 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Date pickers have limits.** Future days only where the user can plan ahead (tasks: up to 7 days), never on logs such as weight. Pass `marked` so days with planned items show a dot: only future days with one-off items, and never in a view where every day has items (Daily).
 
 **Behaviour**
-- **Undo exactly where it helps.**
-  - Delete has Undo.
-  - Edit has Undo.
-  - Add has no Undo: a new item is one tap from Delete. Adding onto something that already exists is an edit and has Undo: a water tap (`Added 250 ml`), a shopping item already on the list (`"X" is now 2 kg`), setting water or steps (`Water set to 2000 ml`), a goal (`Saved nutrition goals`, `Water goal set to 3500 ml`).
-  - Clearing bought items has Undo (`Cleared 3 bought items`).
-  - Moving a task (to another day, into Daily or out of it) has no Undo (`Moved "X" to Tomorrow`, `Moved "X" to Daily`): it is one more Move away.
-  - Marking a task done or reopening it has no Undo, and neither does ticking a shopping item: a tick is undone by another tick.
-  - Deleting a shopping category (its row's Trash) has no Undo: the server merges its items into Other, so a restore could not tell them apart. Its toast says where the items went: `Removed "X"; its items are in Other`. The row leaves at once while its Shopping group leaves and its items enter Other; a failed delete puts both back.
-  - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-creates with a new id (meals, gym sets, weigh-ins, shopping items): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh; on failure only the warning toast shows.
-  - Every Undo has a failure path: if writing the old values back fails, the screen keeps the change and a warning says `Failed to undo the edit`.
+- **Undo on every action that modifies something.** The toast of a create, edit, delete, toggle, move, clear, quick tap or setting shows an Undo button, and Undo restores the previous state:
+  - create → delete it (`Added "X"`);
+  - delete → restore it with the same data and id (`Removed "X"`);
+  - edit → write the old values back (`Saved "X"`);
+  - toggle → toggle back: ticking a task or a shopping item, reopening a task;
+  - move → move back: a task to another day, into or out of Daily (`Moved "X" to Tomorrow`);
+  - quick tap and set value → the previous amount (`Added 250 ml`, `Water set to 2000 ml`, `"X" is now 2 kg`, `Saved nutrition goals`);
+  - clear → bring them back (`Cleared 3 bought items`);
+  - category delete or rename → a real revert: the items that moved go back to their old category (a category deleted with items has them restored to it; a rename that merged two categories un-merges);
+  - a secret the browser never sees back (Claude token): Undo sends the previous encrypted value to a restore action that validates it;
+  - starting a workout is undone only while it has no sets (otherwise a warning points to Cancel workout); a custom exercise is removed only if no routine or set uses it.
+  - Only a change with no user action behind it (a background carry-over of tasks) has no toast.
+  - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-creates with a new id (meals, gym sets, weigh-ins, shopping items): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh.
+  - Every Undo has a failure path: if writing the old values back fails, the screen shows what the database holds and a warning says `Failed to undo`, `Failed to undo the edit` or `Failed to restore item`.
+  - A new server action behind an Undo ships an authorization test (owner allowed, other user denied).
 - **Optimistic and honest.**
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
-- **Fast.**
-  - Page and tab changes feel instant (exit 80ms, whole transition 200ms).
-  - View switches fade old rows in 120ms.
-  - Nothing animates for its own sake.
-  - The resize is always faster than the item's appearance.
+- **Instant.**
+  - Page and tab changes, view switches, adds, deletes and Undo show at once. Nothing animates.
 - **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
 - **Streaks** are green (success colour) with a fire icon, in the row. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
@@ -160,63 +161,34 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
 - **Past days are read-only.** Their tasks can be ticked but not edited, moved or deleted (dev builds excepted through `DEV_EDIT_PAST`), and a `.readonly-note` with `LockIcon` 13 says so: "Past days can be ticked, not edited". A future Daily view says "Daily tasks are ticked on the day". Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
-- **Rows build at once.** Rows start building with the page enter. They never wait about a second after the page shows.
-- **Charts and numbers animate on entry and on every view change** (day, tab, filter, period). Bars grow from 0 and summary amounts count up from 0, because their wrapper is keyed by the view. `ProgressRing` is the exception: it fills from 0 when it first appears, then eases from the old share to the new one on every view change, down as well as up (100% → 0% animates); it is never keyed by the view (the user's call).
+- **Charts and numbers are drawn at once** at their value: bars, `ProgressRing`, stat tiles and macro numbers never grow, count up or ease.
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
-- **A fraction never counts.** "X of Y" is plain text with the real numbers from the first frame, on entry and on change; only the ring beside it fills, so the card never reads "0 of 0" (the user's call).
-- **Macro cards count up, the layout stays fixed.** The Health macro numbers use `AnimatedNumber` like every stat; the target sits on its own row under the number (`/ 3350 kcal`), so counting never changes a line break or the card.
-- **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; "Log set" is the next row at full width; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row. History rows never use the page's `useListMotion` refs (a training-day `fadeAll` would fade them out for good).
+- **A fraction is plain text** with the real numbers: "X of Y".
+- **Macro cards keep a fixed layout.** The target sits on its own row under the number (`/ 3350 kcal`), so a change never moves a line break or the card.
+- **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; "Log set" is the next row at full width; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row.
 - **Muscle map move button (touch only).** Always grey, 2.75rem square (a faint lighter fill while held, never tinted; override the global button `min-height`). Press and hold it and slide the same finger to turn the model; a drag on the model itself scrolls the page (`touch-action: pan-y` on the canvas AND its wrapper, since the effective value is the intersection of the ancestors; OrbitControls off on a coarse pointer). The Tasks dashboard sits above its list on a phone (`summary-first`) and its empty Progress card keeps the ring's height, so changing day never moves the page.
-- **Stat tiles count up.** Every number in a `.stat-tile` is an `AnimatedNumber`, never a plain value beside a counting one. A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
+- **Stat tiles.** A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
   - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
-  - replay their grow animation on every view change (day, tab, filter, period);
   - have a labelled value axis (0, half, max);
   - show the exact value on bar hover (`title`, or a `data-tip` bubble when bars are buttons);
-  - pick their period with a `Segmented` (7D/30D/90D; weight also 180D/360D);
-  - switch equally fast for every period.
-- **`LineChart`** (weight, water and steps trends) is a line only, with no dots (the user's call) and no grow animation. Its axis shows the first label, `lo – hi` and the last label.
-- **A pie or donut chart** (none today; the Money page that had one is gone) animates like `ProgressRing`, and the hovered or tapped slice comes forward with a subtle animation.
-- **`HBars`** is a plain list: label, track, value as text. No role and no animation, because the values are already readable.
+  - pick their period with a `Segmented` (7D/30D/90D; weight also 180D/360D).
+- **`LineChart`** (weight, water and steps trends) is a line only, with no dots (the user's call). Its axis shows the first label, `lo – hi` and the last label.
+- **`HBars`** is a plain list: label, track, value as text. No role, because the values are already readable.
 - **Selection is a fill, never a border.** A selected card or chip gets `--tint-subtle` (split day cards, muscle chips). A selected toggle (a picker day, a `.weekday-btn`, the `Segmented` thumb) is solid `--tint` with `--on-tint` text. No coloured outline or left stripe, and "today" gets no extra border.
 - **Small controls still have 44pt targets.** Compact buttons keep their look and get an invisible `::before` with `inset: min(0px, (100% - 44px) / 2)`. Dense picker grids and the muscle-map group chips are the exceptions, so a tap never lands on a neighbour.
 
-## 3. Motion rules (order matters more than speed)
+## 3. No animations or transitions
 
-Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "Apple spring" motion the user chose, which settles without overshoot. Never an overshoot or a spring bounce. Full timings are in `references/values.md`.
+The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**.
 
-1. **No page or load animation.** A page change or first load just shows the page: no view transition, no `template.tsx`, no card rise, no row stagger (the user's call, 2026-11-10: "simply just load the page"). The tab bar's own thumb still glides.
-2. **View switches** (Wishlist range or sort, Tasks space, list or day, Gym training-day or muscle-group pick) fade the old rows out (120ms) and the new list in at once, through `fadeAll` and `swapIn(card)` (`list-motion.tsx`). Add, edit, delete, Undo and move keep their own row animations.
-3. **Rows are plain on arrival.** There is no `row-in`, `useBuilt` or `stagger`; a row added without `enter` simply appears. `@keyframes rise` stays only for routine rows, custom exercises and chat bubbles.
-4. **Deleting a row.** The row fades in place (240ms, scale .97), then the rows below glide up (240ms, `transform` only) and the card height follows; in a wash list the wash fades out (100ms) before all of it. Nothing pops at the end. The list's only row has no space to close: it only fades, and the empty note fades in.
-5. **Adding a row.**
-   - In a wash list the wash fades out first (100ms).
-   - The rows below glide down (240ms) and the card grows with them.
-   - Then the row fades in (240ms).
-   - It is never seen clipped.
-   - A list's only row swaps with the empty note, which has the same height, so it only fades.
-6. **An edit that moves a row** (sort or filter changes its place) uses the same steps as add and delete, in the same total time: the row fades out in place (120ms), the rows between glide to make space (240ms), the row fades in at its new place (120ms). An edit that takes the row out of the current filter leaves like a delete. A row alone in its list only fades, as in 4 and 5.
-7. **Wash lists** (Wishlist):
-   - The alternating wash fades out first (100ms) and the rows wait for it: remove / make space / place, in that order (the user's sequence, 2026-11-10).
-   - **All four animations take the same time** between the wash going and coming back: 2 x 240ms. Delete: fade, then close. Add and undo: open, then fade in. Move: fade out, glide, fade in (120 + 240 + 120). The user asked for them to look the same (2026-11-10); never add a step to one without changing the others.
-   - It comes back as soon as the last row animation ends (it never waits for React's commit, which on a phone adds a dead pause), fading in over the same 100ms it faded out in, in all four animations (delete, undo, add, move).
-   - A leaving row sits out the alternation at once (`data-leaving`), so the bands do not flip when it is removed.
-   - A row still entering sits out the alternation, so no other row's wash flips meanwhile.
-   - The wash shows only after the list has loaded.
-8. **View switch** (filter tab, sort, selected group):
-   - The control changes at once.
-   - The old rows fade together (`fadeAll`, 120ms).
-   - Then the new rows build in sequence.
-   - Rows sit in a `<Fragment key={filter-sort}>` so they remount and replay.
-9. **Height changes** go through `AutoHeight`: 180ms, faster than the rows.
-   - Each new row waits until the growing height has uncovered it.
-   - Tags and links marked `data-slide` glide to their new column when the column widths change.
-10. **Page-level section switch** (Health: Today, Water, Weight, Steps, Shopping, Assistant; on a phone "Shopping" and "Assistant" read "Shop" and "AI"): a full-width `Segmented` in a `.toolbar` above the cards, its `label` naming the sections. It swaps the cards at once (no `fadeAll`), and the new cards enter with the card rise (300ms, 14px, staggered 0/30/60/90ms).
-11. **Form close.** The modal reverses its open animation (fade plus scale .98 and 8px). The page blur clears. Only then does the list change (`later()`).
-12. **Sign-out.** Every `main > *` fades with opacity plus blur(2px), never scale, over 320ms `--ease` (fill `forwards`, so it stays faded). The sign-out call runs in parallel. The router goes to `/signin` and refreshes only when both are done. On failure the fade is cancelled and a warning toast says `Failed to sign out`.
-13. **Sign-in.** The card appears only after the previous page has faded. The Continue button keeps its colour while busy (opacity 1, progress cursor).
-14. **Reduced motion.** All durations become 0.01ms and `useListMotion` skips its animations, so changes are immediate. Never remove an animation for everyone to fix reduced motion; gate it.
+- No CSS `transition`, `animation` or `@keyframes`; no view or page transitions; no smooth scrolling.
+- No JS-driven motion either: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart, ring or camera tween, no counting numbers (WAAPI, `requestAnimationFrame` and timers included).
+- Elements appear, disappear and change instantly: rows, modals, toasts, hover and press states, selected tabs, chart values, page changes.
+- Hover fills and the `:active` press scale (`--press`) still apply, but at once, with no transition.
+- Feedback comes from the toast and its Undo, not from motion.
+- `prefers-reduced-motion` needs no handling, because there is no motion. If a new feature seems to need an animation, show the end state instead and tell the user.
 
 ## 4. Building a list page: the Wishlist recipe
 
@@ -230,23 +202,22 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
           <h2 className="section-title">Items <span className="muted number-tabular">N</span></h2>
           <span className="head-actions below">           (sort select + Add button: equal halves; on a phone its own row under the title)
         <Segmented .../>                                  (filter)
-        <AutoHeight wash className="entries ...">         (list)
-          empty-note keyed `empty-${filter}`  |  <Fragment key={`${filter}-${sort}`}> rows
-    <div className="dashboard-aside"> summary card with AnimatedNumber
+        <ListBox wash className="entries ...">            (list)
+          empty-note  |  rows
+    <div className="dashboard-aside"> summary card
   <Modal> form: .form-stack labels, .error, .form-actions (Cancel secondary | Save)
 ```
 
-- **Row markup:** `div.entry-row` (`ref={rowRef(id)}`) containing:
+- **Row markup:** `div.entry-row` containing:
   - the name (`strong`);
-  - meta badges (`data-slide`);
+  - meta badges;
   - `.item-actions` with two `.delete-icon-btn` (`PencilIcon` 17, `TrashIcon` 17), with `aria-label` "Edit X"/"Delete X" and `title` "Edit"/"Delete". A task row puts a Move button first (`MoveIcon` 17, `aria-label` "Move X", `title` "Move"). Reorder buttons use `ArrowUpIcon` / `ArrowDownIcon` 17 ("Move X up" / "Move X down"), never text arrows.
   - A card-level Edit in a section head is the icon-only `.delete-icon-btn.edit` (`PencilIcon` 17, `aria-label` naming the target: "Edit nutrition goals", "Edit water and goal") when it stands alone (Health Nutrition, Water and Steps). Beside another header button it is a `btn-sm tint` with `PencilIcon` 14 and "Edit", so the pair splits `1fr 1fr` like the Wishlist's sort and Add (Gym day card). The Gym day card keeps its `btn-sm tint` Edit on a rest day, where Start is hidden, so the header keeps one shape between days.
 - **Header add button:** `button.btn-sm.tint` with `<PlusIcon size={14} />` and the label "Add item".
 - **Navigation entry:** a new page adds itself to `navLinks` and its title to `getPageTitle()` in `app/components/navigation.tsx`, with an inline 24×24 stroke icon (strokeWidth 2, round caps and joins). The first four links are tabs on a phone; the rest go to More. A route without a title shows "Life Tracker".
-- **State and handlers:** copy them from `references/motion-and-crud.md`:
-  - the `latest` ref;
-  - `replace`, `switchRange`, `switchSort`, `openForm`;
-  - `handleSubmit` with `later`;
+- **State and handlers:** copy them from `references/lists-and-crud.md`:
+  - `replace`, `openForm`;
+  - `handleSubmit` (add and edit, each with Undo);
   - `putBack`, `dropRow`, `handleRemove`.
 
 ## 5. Copy (UI text)
@@ -256,7 +227,8 @@ Shared easing: `--ease` = `cubic-bezier(0.32, 0.72, 0, 1)`, the iOS curve: the "
   - `Saved "X"`;
   - `Removed "X"`;
   - `Renamed "X" to "Y"`; `Started "Push day"`, `Finished the workout`;
-  - failures: `Failed to remove item`, `Failed to restore item`, `Failed to undo the edit`.
+  - failures: `Failed to remove item`, `Failed to restore item`, `Failed to undo`, `Failed to undo the edit`.
+  - every one of these toasts, except a failure, carries an Undo button.
 - A warning toast reports a failure, with one exception: a saved set below its rep target says so as a warning (`Added set 3 (below the 8 – 12 target)`), since it is something to look at.
 - Failure text is `Failed to <verb> <object>`, with no full stop, using the same verbs as the success toasts: `Failed to add meal`, `Failed to save day`, `Failed to remove set`. Never "Could not ...", never an exclamation mark.
 - Form errors without a server message: `Failed to save item`, `Item not found.`
@@ -289,7 +261,8 @@ Each of these was tried or proposed and the user removed it.
 - Box shadows of any kind, including toasts, modals and cards.
 - Visible borders and separator lines between rows.
 - A blue page background (light blue, dark steel blue, Storm's blue-tinted greys). The user wanted the base black and grey (Graphite); blue is only the accent.
-- A bottom-to-top gradient mask over a resizing list. It was tried in several variants and removed; the sequential row build replaced it. No shimmer as decoration either. The one allowed shimmer is the `.skeleton` placeholder while data is still loading (weight history).
+- A gradient mask over a list, or a shimmer. The `.skeleton` placeholder while data loads is static.
+- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera). All of it was removed on 2026-11-11.
 
 **Layout and content**
 - Scaling the page behind a modal. Blur it only.
@@ -305,17 +278,13 @@ Each of these was tried or proposed and the user removed it.
 - Meal types (Breakfast, Lunch, Dinner, Snack) on Food, a "Recent workouts" tab on Gym, and adding shopping items from recipes: the shopping list is filled by hand only.
 
 **Interaction and speed**
-- Undo on add, on task done or on reopening a task.
-- Edit without Undo. It was briefly removed, then the user asked for it back.
+- A modifying action without an Undo in its toast (2026-11-11: every one has it, add and task done included).
+- A "delete" of a category that cannot be undone: it reverts the moved items.
 - A zero without the slash. It was tried; the user kept the slashed zero.
 - Accent-coloured row stripes. They were replaced by the neutral grey wash.
 - Hover highlight on rows. It was added, then removed.
 - Price tags only as wide as their text. Asked at 13:32 on 2026-11-06, then reversed at 14:01: tags of one kind share one width.
 - A focus ring after picking a sort option with mouse or touch. It appears only for keyboard use.
-- Doubling motion speed or tripling wash speed: tried and reverted. Keep the timings in `references/values.md`.
-- `animation-fill-mode: both` on entrances of anything that later presses or hovers (rows, bars, chat bubbles). Use `backwards`. Overlays that only open and close (modal, More menu, picker, page transition) may keep `both`.
-- Filters (blur) on rows during list motion: they repaint the glass card every frame. Rows use opacity and transform only.
-- Closing a deleted row's space only after it has faded. It was asked for first, then felt stuck at the end: the space now closes while the row fades.
 
 ## 7. Checklist ("done" for every screen)
 
@@ -326,19 +295,19 @@ Each of these was tried or proposed and the user removed it.
 - [ ] Rows are bands with no hover. Trailing buttons are 44×44, with an inset equal to the band-to-card gap.
 - [ ] The empty note keeps one row's height. No layout shift when controls appear.
 
-**Motion**
-- [ ] Every add, edit, delete and switch follows the motion order in section 3. No row is ever seen clipped, and nothing pops at the end.
-- [ ] Delete and Edit have Undo. Add and task done do not. Server failures restore the screen and show a warning.
-- [ ] The form opens and closes symmetrically. List changes start after the close.
+**Behaviour**
+- [ ] No `transition`, `animation`, `@keyframes`, view transition, smooth scroll or JS tween anywhere.
+- [ ] Every action that modifies something has an Undo button in its toast, and Undo restores the previous state. Server failures restore the screen and show a warning.
+- [ ] A new server action has an authorization test (owner allowed, other user denied).
 
 **Accessibility**
 - [ ] Every hover rule is inside `@media (hover: hover)`. `:active` presses with `scale(var(--press))`.
 - [ ] Focus ring: 2px tint, offset 2px, keyboard only. Targets are at least 44pt (`::before` with `inset: min(0px, (100% - 44px) / 2)` on small controls; picker grids excepted).
 - [ ] `aria-label` on icon buttons, `aria-labelledby` on sections, `role=tablist` on segmented controls.
-- [ ] Works with reduced motion, reduced transparency and increased contrast.
+- [ ] Works with reduced transparency and increased contrast.
 
 **Browser**
 - [ ] Checked at 375px (no horizontal overflow, labels fit) and on desktop.
 - [ ] Checked in Safari terms: no reliance on `sibling-index()` alone.
 
-Sources: `app/wishlist/wishlist-client.tsx`, `app/globals.css`, `app/providers.tsx`, `app/components/{list-motion,modal,toast,segmented,animated-number,charts,navigation}.tsx`, `app/template.tsx`, `app/layout.tsx`, and the user's design feedback from 2026-11-04 to 2026-11-06 (recorded in `docs/decisions.md`).
+Sources: `app/wishlist/wishlist-client.tsx`, `app/globals.css`, `app/providers.tsx`, `app/components/{lists,modal,toast,segmented,charts,navigation}.tsx`, `app/layout.tsx`, and the user's design feedback from 2026-11-04 to 2026-11-06 (recorded in `docs/decisions.md`).

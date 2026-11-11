@@ -242,6 +242,12 @@ The user approved the deletion list in `docs/release-plan.md` 3b (unused tables,
 
 Wishlist items and daily tasks (Personal, Business) each carry one category. One generic `item_categories(user_id, scope, name, sort_order)` table (scopes `wishlist`, `personal`, `business`) plus a `category` column (default `other`) on `wishlist_items` and `todos`; names are stored lowercase and shown capitalised. "Other" is built-in and never stored; deleting a category moves its items to Other (no Undo, the items could not be told apart afterwards); renaming onto an existing name merges. No categories are seeded in code: the user's own list comes from the UI or `.local/personal-data.json`. Food keeps its own shopping categories. Migration `0021` is additive.
 
+### 2026-11-11: No animations or transitions; Undo on every action
+
+Supersedes every earlier motion decision above (list motion, page transitions, AutoHeight, counting numbers, chart and camera tweens, `prefers-reduced-motion` handling). Nothing in the app animates: no CSS `transition`/`animation`/`@keyframes`, no view transitions, no smooth scroll, no JS tweens; things appear, change and disappear at once. `animated-number.tsx` is deleted and `list-motion.tsx` is now `lists.tsx` (`ListBox`, `useMore`, `useDragSort`). The `:active` press scale stays as an instant state.
+
+Every action that modifies something shows an Undo button in its toast and restores the previous state: create, delete, edit, toggle, move, clear, quick tap, settings. Reused the existing restore actions. Notable cases: category delete and rename revert exactly the items that moved (`revertCategory`, `revertShoppingCategory`); moving a task is undone by `revertMoveTodo`; a Claude token is undone by sending the previous ciphertext back to a restore action that validates it (`decryptToken`); starting a workout is undone only while it has no sets; a custom exercise is removed on Undo only if no routine or set uses it (`deleteCustomExercise`). A background carry-over has no user action, so no toast. No migration, no new dependency. The design skill reference `motion-and-crud.md` was renamed `lists-and-crud.md`.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
