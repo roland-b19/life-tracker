@@ -203,7 +203,7 @@ export async function finishWorkoutSession(
     .update(workoutSessions)
     .set({
       durationMinutes: input.durationMinutes ?? null,
-      notes: input.notes ?? undefined,
+      notes: input.notes ?? null,
     })
     .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
     .returning();
@@ -217,14 +217,14 @@ export async function finishWorkoutSession(
 export async function reopenWorkoutSession(userId: string, sessionId: string) {
   const [reopened] = await db
     .update(workoutSessions)
-    .set({ durationMinutes: null })
+    .set({ durationMinutes: null, notes: null })
     .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
     .returning({ id: workoutSessions.id });
   return reopened;
 }
 
 /**
- * Put back a cancelled workout (Undo of Cancel) as an open one, with its sets under new ids. Returns null when an
+ * Put back a cancelled workout (Undo of Cancel) as an open one, with its sets under their own ids and times. Returns null when an
  * exercise is not visible to the user; a split day that is not theirs is dropped, not linked.
  */
 export async function restoreWorkoutSession(userId: string, input: RestoreSessionInput) {
@@ -245,8 +245,10 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
       : [];
     const [session] = await tx
       .insert(workoutSessions)
-      .values({ userId, date: input.date, splitDayId: day?.id ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .values({ ...(input.id && { id: input.id }), ...(input.createdAt && { createdAt: input.createdAt }), userId, date: input.date, splitDayId: day?.id ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .onConflictDoNothing()
       .returning({ id: workoutSessions.id });
+    if (!session) return null;
     if (input.sets.length) {
       await tx.insert(workoutSets).values(
         input.sets.map((s) => ({
@@ -329,6 +331,8 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
   const [createdSet] = await db
     .insert(workoutSets)
     .values({
+      ...(input.id && { id: input.id }),
+      ...(input.createdAt && { createdAt: input.createdAt }),
       sessionId: input.sessionId,
       userId,
       exerciseId: input.exerciseId,
@@ -343,6 +347,7 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
       anomalyReason: anomalyReason ?? null,
       notes: input.notes ?? null,
     })
+    .onConflictDoNothing() // an Undo id that is taken (by anyone) writes nothing
     .returning();
 
   return createdSet;

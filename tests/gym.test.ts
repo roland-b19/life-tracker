@@ -524,6 +524,53 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       await expect(restoreSessionAction(input)).rejects.toThrow("Authentication required.");
     });
 
+    it("brings a cancelled workout back with the same ids and times, and refuses ids that are taken", async () => {
+      const { id, exerciseId } = await finished(userA, "2026-11-03", null);
+      const before = (await getWorkoutSessionDetails(userA, id))!;
+      const set = before.sets[0];
+      await cancelSessionAction({ sessionId: id });
+      const input = {
+        id,
+        createdAt: before.session.createdAt,
+        date: "2026-11-03",
+        isDeload: false,
+        sets: [{ id: set.id, createdAt: set.createdAt, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: false, isPartial: false, flagAnomaly: false }],
+      };
+      const back = await restoreSessionAction(input);
+      expect(back.details?.session.id).toBe(id);
+      expect(back.details?.session.createdAt).toEqual(before.session.createdAt);
+      expect(back.details?.sets[0].id).toBe(set.id);
+      expect(back.details?.sets[0].createdAt).toEqual(set.createdAt);
+      // Restoring twice, or into an id another user holds, writes nothing.
+      expect((await restoreSessionAction(input)).success).toBe(false);
+      authState.id = userB;
+      expect((await restoreSessionAction({ ...input, sets: [] })).success).toBe(false);
+      expect((await getWorkoutSessionDetails(userA, id))?.sets).toHaveLength(1);
+    });
+
+    it("restores a deleted set under its own id and time, and an id that is taken writes nothing", async () => {
+      const { id, exerciseId } = await finished(userA, "2026-11-03", null);
+      const set = (await getWorkoutSessionDetails(userA, id))!.sets[0];
+      await deleteSetAction(set.id);
+      const input = { id: set.id, createdAt: set.createdAt, sessionId: id, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40 };
+      const res = await logSetAction(input);
+      expect(res.set?.id).toBe(set.id);
+      expect(res.set?.createdAt).toEqual(set.createdAt);
+      expect((await logSetAction(input)).success).toBe(false); // already there
+      authState.id = userB;
+      await expect(logSetAction(input)).rejects.toThrow(); // not their workout
+    });
+
+    it("Undo of Finish clears the duration and the notes the Finish wrote", async () => {
+      const { id } = await finished(userA, "2026-11-03", null);
+      await finishSessionAction({ sessionId: id, durationMinutes: 50, notes: "felt strong" });
+      expect((await getWorkoutSessionDetails(userA, id))?.session.notes).toBe("felt strong");
+      await reopenSessionAction({ sessionId: id });
+      const open = (await getWorkoutSessionDetails(userA, id))!.session;
+      expect(open.durationMinutes).toBeNull();
+      expect(open.notes).toBeNull();
+    });
+
     it("does not link a restored workout to another user's day or exercise", async () => {
       const { exerciseId } = await finished(userA, "2026-11-03", 50);
       const dayA = (await getUserSplitWithDays(userA))!.days[0].id;

@@ -284,6 +284,14 @@ Every action that modifies something shows an Undo button in its toast and resto
 - Nutrition numbers animate on change (a new exception to "no animations", with the Tasks ring and the Wishlist total). Screen orientation is not locked or rotated any more.
 - No data is deleted by the app on its own and there is no retention limit; the only caps are on reads (Gym progress, Past foods, Assistant history, "More" paging).
 
+## 2026-11-12 — Undo restores exactly
+
+- Every Undo puts back the same row: same id, same timestamps, same flags (gym sets and sessions, meals, tasks with `completedAt`, shopping items with bought state and `checked_at`). The restore actions take optional `id`/`createdAt`, insert with `ON CONFLICT DO NOTHING` and report `success: false` when the id is taken, so one user can never claim or overwrite another's row.
+- Deleting a task category and undoing it joins the split halves of the daily tasks back (`splits` in `revertCategory`), so no leftover rows remain.
+- Meals get `forgotten` (additive migration `0023_meals_forgotten`): "Past foods" delete hides a food from that list without touching the days it was eaten; Undo clears the flag.
+- Deleting a single shopping item is soft (`cleared_at`, like Clear bought), so Undo restores the original row.
+- Water, Weight and Steps charts show a line without dots and from one entry on; the default range is 7 days on Health and Tasks.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

@@ -135,7 +135,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 **Behaviour**
 - **Undo on every action that modifies something.** The toast of a create, edit, delete, toggle, move, clear, quick tap or setting shows an Undo button, and Undo restores the previous state:
   - create → delete it (`Added "X"`);
-  - delete → restore it with the same data and id (`Removed "X"`);
+  - delete → restore it with the same data, id and timestamps (`Removed "X"`); nothing about the row may differ afterwards (completion time, bought state, flags, order);
   - edit → write the old values back (`Saved "X"`);
   - toggle → toggle back: ticking a task or a shopping item, reopening a task;
   - move → move back: a task to another day, into or out of Daily (`Moved "X" to Tomorrow`);
@@ -145,9 +145,10 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - a secret the browser never sees back (Claude token): Undo sends the previous encrypted value to a restore action that validates it;
   - starting a workout is undone only while it has no sets (otherwise a warning points to Cancel workout); a custom exercise is removed only if no routine or set uses it.
   - Only a change with no user action behind it (a background carry-over of tasks) has no toast.
-  - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-creates with a new id (meals, gym sets, weigh-ins, shopping items): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh.
+  - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-inserts under its old id and time (meals, gym sets, weigh-ins): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh.
   - Every Undo has a failure path: if writing the old values back fails, the screen shows what the database holds and a warning says `Failed to undo`, `Failed to undo the edit` or `Failed to restore item`.
-  - A new server action behind an Undo ships an authorization test (owner allowed, other user denied).
+  - A new server action behind an Undo ships an authorization test (owner allowed, other user denied, anonymous denied) and a test that the restored row equals the original.
+  - Date entry for Water, Weight and Steps is a `DayField` selector (Today default, Yesterday, other day), not the date picker; Past foods opens in a sheet that scrolls inside itself; Shopping lists every item (no More).
 - **Optimistic and honest.**
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.

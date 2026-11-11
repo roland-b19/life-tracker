@@ -562,6 +562,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
     });
 
+    it("restores a ticked task with the time it was ticked, not the time of the Undo", async () => {
+      const today = toISODate();
+      const task = await createTodo(userA, { space: "personal", title: "Call", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: today });
+      const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(before.completedAt).toBeTruthy();
+      await new Promise((r) => setTimeout(r, 10));
+      await deleteTodoAction(task.id);
+      expect((await restoreTodoAction({ ...before, reminderTime: null })).success).toBe(true);
+      const [back] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(new Date(back.completedAt as unknown as string).getTime()).toBe(new Date(before.completedAt as unknown as string).getTime());
+    });
+
     it("undoes a move with the old state back, ticks included, and only for the owner", async () => {
       const today = toISODate();
       const yesterday = addDays(today, -1);

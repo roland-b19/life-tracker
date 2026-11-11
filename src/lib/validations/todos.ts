@@ -28,6 +28,7 @@ export const restoreTodoSchema = createTodoSchema.extend({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
+  completedAt: z.coerce.date().nullable().optional(), // when the box last changed, so Undo keeps the list order
   // shortcut: a repeating task ticked on more than 20 years of days cannot be restored, raise the cap if that ever matters.
   doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),

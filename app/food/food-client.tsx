@@ -20,10 +20,13 @@ import {
   addWaterAction,
   clearBoughtItemsAction,
   deleteMealAction,
+  forgetPastFoodAction,
+  restorePastFoodAction,
   deleteShoppingCategoryAction,
   deleteShoppingItemAction,
   getDaySummaryAction,
   logMealAction,
+  restoreMealAction,
   renameShoppingCategoryAction,
   reorderShoppingCategoriesAction,
   revertShoppingCategoryAction,
@@ -45,6 +48,8 @@ interface MealData {
   carbs: string;
   fat: string;
   isEstimated?: boolean;
+  forgotten?: boolean;
+  createdAt?: Date | string;
 }
 
 /** Health's shopping categories live in their own table; the shared Categories card saves through these. */
@@ -75,9 +80,9 @@ const UNITS = ["pcs", "g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box
 function MealMacros({ m }: { m: { calories: number; protein: string | number; carbs: string | number; fat: string | number } }) {
   return (
     <p className="card-sub muted number-tabular">
-      {m.calories} kcal · {Number(m.protein)}g P
+      {m.calories} kcal · {Math.round(Number(m.protein))}g P
       <br />
-      {Number(m.carbs)}g C · {Number(m.fat)}g F
+      {Math.round(Number(m.carbs))}g C · {Math.round(Number(m.fat))}g F
     </p>
   );
 }
@@ -228,7 +233,7 @@ export function FoodClient({
       if (prev.meals.some((m) => m.id === meal.id) === (sign === 1)) return prev;
       return {
         ...prev,
-        meals: sign === 1 ? [...prev.meals, meal] : prev.meals.filter((m) => m.id !== meal.id),
+        meals: sign === 1 ? [...prev.meals, meal].sort((a, b) => +new Date(a.createdAt ?? 0) - +new Date(b.createdAt ?? 0)) : prev.meals.filter((m) => m.id !== meal.id),
         totals: {
           calories: Math.max(0, prev.totals.calories + sign * meal.calories),
           protein: Math.max(0, round1(prev.totals.protein + sign * parseFloat(meal.protein))),
@@ -301,6 +306,38 @@ export function FoodClient({
     });
   }
 
+  /** Takes a food off the list (its days keep it); Undo puts back exactly the meals it hid, in the same place. */
+  function handleForgetPastFood(food: PastFood) {
+    const index = pastFoods.findIndex((f) => f.name === food.name);
+    setPastFoods((prev) => prev.filter((f) => f.name !== food.name));
+    const hidden = forgetPastFoodAction({ name: food.name }).then(
+      (r) => r.ids,
+      () => null,
+    );
+    const putBack = () =>
+      setPastFoods((prev) => (prev.some((f) => f.name.toLowerCase() === food.name.toLowerCase()) ? prev : [...prev.slice(0, index), food, ...prev.slice(index)]));
+    showToast({
+      message: `Removed "${food.name}"`,
+      onUndo: async () => {
+        const ids = await hidden;
+        if (!ids) return; // the failure path below puts it back
+        putBack();
+        const restored = await restorePastFoodAction({ ids }).then(
+          () => true,
+          () => false,
+        );
+        if (restored) return;
+        setPastFoods((prev) => prev.filter((f) => f.name !== food.name));
+        showToast({ message: "Failed to restore past food", type: "warning" });
+      },
+    });
+    void hidden.then((ids) => {
+      if (ids) return;
+      putBack();
+      showToast({ message: "Failed to remove past food", type: "warning" });
+    });
+  }
+
   async function handleLogPastFood(food: PastFood) {
     setBusy(true);
     try {
@@ -338,7 +375,10 @@ export function FoodClient({
       message: `Removed "${meal.name}"`,
       onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
-        const res = await logMealAction({
+        const res = await restoreMealAction({
+          id: meal.id,
+          createdAt: meal.createdAt,
+          forgotten: meal.forgotten,
           date: meal.date,
           name: meal.name,
           calories: meal.calories,
@@ -347,7 +387,7 @@ export function FoodClient({
           fat: parseFloat(meal.fat),
           isEstimated: meal.isEstimated,
         }).catch(() => null);
-        if (res?.success && res.meal) applyMeal(res.meal as MealData, 1);
+        if (res?.success) applyMeal(meal, 1);
         else showToast({ message: "Failed to restore meal", type: "warning" });
       },
     });
@@ -554,12 +594,16 @@ export function FoodClient({
               type: "success",
               onUndo: async () => {
                 upsertShop(before);
-                const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
+                const back = await updateShoppingItemAction({
+                  ...toShopInput(before),
+                  itemId: before.id,
+                  isBought: before.isBought,
+                  checkedAt: before.checkedAt,
+                }).catch(() => null);
                 if (!back?.item) {
                   upsertShop(item);
                   return showToast({ message: "Failed to undo the edit", type: "warning" });
                 }
-                if (before.isBought) await toggleShoppingItemAction(before.id, true).catch(() => null);
               },
             },
       );
@@ -660,12 +704,9 @@ export function FoodClient({
       message: `Removed "${item.name}"`,
       onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
-        const res = await addShoppingItemAction(toShopInput(item)).catch(() => null);
-        if (!res?.item) return setStatusMessage("Failed to restore item");
-        const restored = res.item as ShoppingItemData;
-        const bought = item.isBought && (await toggleShoppingItemAction(restored.id, true).then(() => true, () => false));
-        upsertShop({ ...restored, isBought: bought });
-        if (item.isBought && !bought) setStatusMessage("Failed to mark item as bought");
+        const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
+        if (!back?.success) return setStatusMessage("Failed to restore item");
+        upsertShop(item);
       },
     });
     void deleted.then((ok) => {
@@ -758,15 +799,13 @@ export function FoodClient({
   const pct = (value: number, target: number) => (target > 0 ? Math.min(100, Math.round((value / target) * 100)) : value > 0 ? 100 : 0);
   const waterPct = pct(day.metrics.waterMl, goals.waterMl);
   const stepsPct = pct(day.metrics.steps, goals.steps);
-  const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
   // Walking order, unknown categories after the user's own, "other" last.
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
     (c) => shoppingList.some((i) => i.category === c),
   );
   const [shownMeals, moreMeals] = useMore(day.meals);
   const [isShopFolded, toggleShop] = useFolded("shopping");
-  const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping)));
-  const [shownPastFoods, morePastFoods] = useMore(pastFoods);
+  const allShopping = shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping));
 
   return (
     <Page userName={userName}>
@@ -813,7 +852,7 @@ export function FoodClient({
                     <div key={m.label} className="macro-card">
                       <span className="macro-title">{m.label}</span>
                       <span className="macro-numbers">
-                        <AnimatedNumber value={m.value} from={m.value} format={m.unit === " kcal" ? undefined : oneDecimal} />
+                        <AnimatedNumber value={m.value} from={m.value} />
                         <span className="macro-target">
                           / {m.target}
                           {m.unit}
@@ -930,7 +969,7 @@ export function FoodClient({
             <ListBox className="shopping-groups">
               {shoppingList.length === 0 && <EmptyNote>Your shopping list is empty.</EmptyNote>}
               <GroupedList
-                items={shownShopping}
+                items={allShopping}
                 wrap="shopping-group"
                 isFolded={isShopFolded}
                 onToggle={toggleShop}
@@ -950,7 +989,6 @@ export function FoodClient({
                   </div>
                 )}
               />
-              {moreShopping}
             </ListBox>
           </Card>
 
@@ -1089,29 +1127,31 @@ export function FoodClient({
       </FormModal>
 
       <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
-        <div className="form-stack">
+        <div className="past-foods">
           <ListBox wash className="entries">
             {pastFoods.length === 0 ? (
               <EmptyNote>Nothing logged yet.</EmptyNote>
             ) : (
-              shownPastFoods.map((f) => (
+              pastFoods.map((f) => (
                 <div key={f.name} className="entry-row">
                   <div>
                     <strong>{f.name}</strong>
                     <MealMacros m={f} />
                   </div>
-                  <IconButton
-                    edit
-                    icon={<PlusIcon size={17} />}
-                    disabled={busy}
-                    onClick={() => handleLogPastFood(f)}
-                    label={`Log ${f.name}, ${f.calories} kcal`}
-                    title="Log"
-                  />
+                  <div className="row-actions">
+                    <IconButton
+                      edit
+                      icon={<PlusIcon size={17} />}
+                      disabled={busy}
+                      onClick={() => handleLogPastFood(f)}
+                      label={`Log ${f.name}, ${f.calories} kcal`}
+                      title="Log"
+                    />
+                    <DeleteButton label={`Delete past food ${f.name}`} onClick={() => handleForgetPastFood(f)} />
+                  </div>
                 </div>
               ))
             )}
-            {morePastFoods}
           </ListBox>
         </div>
       </Modal>

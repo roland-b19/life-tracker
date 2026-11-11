@@ -14,7 +14,8 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 import { db } from "@/server/db";
-import { users } from "@/db/schema";
+import { todoCompletions, todos, users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { createTodo, getDailyTodos } from "@/lib/todos";
@@ -88,6 +89,30 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect(await catOn(day(2), "Lift")).toBe("other");
     expect(old.category).toBe("gym");
     expect((await getCategories(userA, ["personal"])).personal).not.toContain("gym");
+  });
+
+  it("Undo of a task category delete brings every row back exactly as it was, split tasks included", async () => {
+    authState.id = userA;
+    const today = toISODate();
+    const day = (n: number) => addDays(today, n);
+    await addCategoryAction({ scope: "personal", name: "undo-cat" });
+    const run = await createTodo(userA, { space: "personal", title: "Undo run", isRecurring: true, recurrencePattern: "daily", dueDate: day(-5), category: "undo-cat" });
+    const fresh = await createTodo(userA, { space: "personal", title: "Undo fresh", isRecurring: true, recurrencePattern: "daily", dueDate: today, category: "undo-cat" });
+    await db.insert(todoCompletions).values([{ todoId: run.id, date: day(-2) }, { todoId: run.id, date: today }, { todoId: fresh.id, date: today }]);
+    const state = async () => ({
+      rows: (await db.select().from(todos).where(eq(todos.userId, userA))).sort((a, b) => a.id.localeCompare(b.id)),
+      ticks: (await db.select().from(todoCompletions)).filter((t) => [run.id, fresh.id].includes(t.todoId)).sort((a, b) => `${a.date}${a.todoId}`.localeCompare(`${b.date}${b.todoId}`)),
+    });
+    const before = await state();
+
+    const del = await deleteCategoryAction({ scope: "personal", name: "undo-cat" });
+    expect((await state()).rows.length).toBe(before.rows.length + 1); // "Undo run" was split in two
+    await revertCategoryAction({ scope: "personal", name: "undo-cat", current: "other", dropCurrent: false, ...del.change! });
+
+    const after = await state();
+    expect(after.rows).toEqual(before.rows);
+    expect(after.ticks).toEqual(before.ticks);
+    expect((await getCategories(userA, ["personal"])).personal).toContain("undo-cat");
   });
 
   it("adds a category when an item is saved with a new one", async () => {

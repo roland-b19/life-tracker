@@ -140,26 +140,34 @@ export function HBars({ rows }: { rows: HBarRow[] }) {
   );
 }
 
+/**
+ * A line and nothing else (no dots). A `null` value is a day with no entry: the line skips it, so a window of days
+ * with few entries still draws; a single entry is a flat line across and none leaves the empty grid.
+ */
 export function LineChart({
   points,
   summary,
   height = 140,
 }: {
-  points: { label: string; value: number }[];
+  points: { label: string; value: number | null }[];
   summary: string;
   height?: number;
 }) {
   if (points.length < 2) return null;
   const w = 600;
   const pad = 8;
-  const values = points.map((p) => p.value);
-  const lo = Math.min(...values);
-  const hi = Math.max(...values);
+  const values = points.flatMap((p) => (p.value === null ? [] : [p.value]));
+  const lo = values.length ? Math.min(...values) : 0;
+  const hi = values.length ? Math.max(...values) : 0;
   const span = hi - lo || 1;
   const x = (i: number) => pad + (i / (points.length - 1)) * (w - 2 * pad);
-  const y = (v: number) => pad + (1 - (v - lo) / span) * (height - 2 * pad);
-  const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(" ");
-  const ticks = hi === lo ? [lo] : [hi, (hi + lo) / 2, lo];
+  const y = (v: number) => (hi === lo ? height / 2 : pad + (1 - (v - lo) / span) * (height - 2 * pad));
+  const known = points.flatMap((p, i) => (p.value === null ? [] : [{ x: x(i), y: y(p.value) }]));
+  // One entry has nothing to connect to, so it is drawn across the whole plot.
+  const line = known.length === 1 ? [{ x: pad, y: known[0].y }, { x: w - pad, y: known[0].y }] : known;
+  const path = line.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const ticks = !values.length ? [] : hi === lo ? [lo] : [hi, (hi + lo) / 2, lo];
+  const grid = ticks.length ? ticks.map(y) : [pad, height / 2, height - pad];
   const fmt = (n: number) => String(Math.round(n * 100) / 100);
   return (
     <div className="line" role="img" aria-label={summary}>
@@ -172,10 +180,10 @@ export function LineChart({
           ))}
         </div>
         <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" style={{ height }}>
-          {ticks.map((t) => (
-            <line key={t} x1="0" x2={w} y1={y(t)} y2={y(t)} className="line-grid" vectorEffect="non-scaling-stroke" />
+          {grid.map((g) => (
+            <line key={g} x1="0" x2={w} y1={g} y2={g} className="line-grid" vectorEffect="non-scaling-stroke" />
           ))}
-          <path d={path} className="line-path" vectorEffect="non-scaling-stroke" />
+          {path && <path d={path} className="line-path" vectorEffect="non-scaling-stroke" />}
         </svg>
       </div>
       <div className="line-axis" aria-hidden="true">

@@ -225,6 +225,35 @@ async function seedTasks(db, userId) {
   return `tasks: ${count}`;
 }
 
+// Tuesday 10.11.2026 as a fixed test day (two days back on the 12th: read-only in Tasks): ticked, missed and ended daily
+// tasks plus a done and an open one-off. Runs once per user; the title prefix marks its rows.
+const FIXTURE_DAY = "2026-11-10";
+async function seedFixtureDay(db, userId) {
+  const { rows } = await db.query("SELECT 1 FROM todos WHERE user_id = $1 AND title LIKE 'Tue 10.11 %' LIMIT 1", [userId]);
+  if (rows.length) return "fixture day: skipped, already there";
+  const add = async (title, recurring, due, { ticked = false, endedOn = null, done = false, category = "other" } = {}) => {
+    const { rows } = await db.query(
+      `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, completed_at, created_at, ended_on, category)
+       VALUES ($1, 'personal', $2, $3, $4, $5, $6, CASE WHEN $6 THEN $5::date + time '18:00' END, $5::date + time '08:00', $7, $8) RETURNING id`,
+      [userId, title, recurring, recurring ? "daily" : "none", due, done, endedOn, category],
+    );
+    if (ticked) await db.query("INSERT INTO todo_completions (todo_id, date) VALUES ($1, $2)", [rows[0].id, FIXTURE_DAY]);
+  };
+  await add("Tue 10.11 daily, ticked", true, "2026-11-03", { ticked: true, category: "health" });
+  await add("Tue 10.11 daily, missed", true, "2026-11-03", { category: "mind" });
+  await add("Tue 10.11 daily, ended next day", true, "2026-11-05", { ticked: true, endedOn: "2026-11-11" });
+  await add("Tue 10.11 one-off, done", false, FIXTURE_DAY, { done: true });
+  await add("Tue 10.11 one-off, open", false, FIXTURE_DAY);
+  // The frozen totals the Progress chart reads: 3 daily (2 done) and 2 one-offs (1 done) on top of what is there.
+  for (const [recurring, total, done] of [[true, 3, 2], [false, 2, 1]])
+    await db.query(
+      `INSERT INTO todo_day_stats (user_id, space, is_recurring, date, total, done) VALUES ($1, 'personal', $2, $3, $4, $5)
+       ON CONFLICT (user_id, space, is_recurring, date) DO UPDATE SET total = todo_day_stats.total + EXCLUDED.total, done = todo_day_stats.done + EXCLUDED.done`,
+      [userId, recurring, FIXTURE_DAY, total, done],
+    );
+  return `fixture day: 5 tasks on ${FIXTURE_DAY}`;
+}
+
 // [name, link, price]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover https, a bare domain and free text.
 const WISHLIST = [
   ["Standing desk", "https://www.ikea.com/ro/ro/", 1450],
@@ -318,6 +347,7 @@ async function main() {
       await seedMeals(db, userId),
       await seedShopping(db, userId),
       await seedTasks(db, userId),
+      await seedFixtureDay(db, userId),
       await seedWishlist(db, userId),
       await seedGym(db, userId),
     ];

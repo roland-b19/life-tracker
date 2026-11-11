@@ -980,6 +980,13 @@ textarea:focus-visible {
   padding: 0.5rem 0;
 }
 
+/* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
+.past-foods { margin-top: -0.85rem; }
+.past-foods .entries { margin-top: 0; }
+@media (max-width: 640px) {
+  .past-foods { margin-top: -0.75rem; }
+}
+
 .entry-value {
   font-variant-numeric: tabular-nums;
   font-weight: 600;

@@ -12,6 +12,16 @@ export const logMealSchema = z.object({
   isEstimated: z.boolean().default(false).optional(),
 });
 
+/** Undo of deleting a meal: the same meal back, same id, same time (so the day's order holds), still hidden from Past foods if it was. */
+export const restoreMealSchema = logMealSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+  forgotten: z.boolean().default(false),
+});
+
+export const forgetPastFoodSchema = z.object({ name: z.string().min(1).max(120).trim() });
+export const restorePastFoodSchema = z.object({ ids: z.array(z.string().uuid()).max(500) });
+
 export const updateMetricsSchema = z.object({
   date: isoDate,
   waterMl: z.number().int().min(0).max(20000).optional(),
@@ -51,7 +61,12 @@ export const createShoppingItemSchema = z.object({
   category: shoppingCategorySchema.default("other"),
 });
 
-export const updateShoppingItemSchema = createShoppingItemSchema.extend({ itemId: z.string().uuid() });
+export const updateShoppingItemSchema = createShoppingItemSchema.extend({
+  itemId: z.string().uuid(),
+  // Only Undo sends these, to put back the bought state an "add again" reset.
+  isBought: z.boolean().optional(),
+  checkedAt: z.coerce.date().nullable().optional(),
+});
 
 /** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
 const managedCategorySchema = shoppingCategorySchema.refine((c) => c !== "other", "\"other\" is built in.");
@@ -78,6 +93,7 @@ export const toggleShoppingItemSchema = z.object({
 });
 
 export type LogMealInput = z.infer<typeof logMealSchema>;
+export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

@@ -12,6 +12,7 @@ import {
 import {
   CreateShoppingItemInput,
   LogMealInput,
+  RestoreMealInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
@@ -122,6 +123,23 @@ export async function logMeal(userId: string, input: LogMealInput) {
   return created;
 }
 
+/** Puts a deleted meal back as it was; an id that is already taken is left alone and returns null. */
+export async function restoreMeal(userId: string, input: RestoreMealInput) {
+  const [restored] = await db
+    .insert(meals)
+    .values({
+      ...input,
+      userId,
+      protein: input.protein.toFixed(1),
+      carbs: input.carbs.toFixed(1),
+      fat: input.fat.toFixed(1),
+      isEstimated: input.isEstimated ?? false,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return restored ?? null;
+}
+
 /** Foods logged before, newest first, one entry per name: the "Past foods" sheet and the assistant's context. */
 export async function getPastFoods(userId: string, limit = 40) {
   const latest = db
@@ -135,10 +153,26 @@ export async function getPastFoods(userId: string, limit = 40) {
       createdAt: meals.createdAt,
     })
     .from(meals)
-    .where(eq(meals.userId, userId))
+    .where(and(eq(meals.userId, userId), eq(meals.forgotten, false)))
     .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt))
     .as("latest");
   return db.select().from(latest).orderBy(desc(latest.createdAt)).limit(limit);
+}
+
+/** Takes a food off the "Past foods" list without touching the days it was logged on; returns the meals it hid. */
+export async function forgetPastFood(userId: string, name: string) {
+  const hidden = await db
+    .update(meals)
+    .set({ forgotten: true })
+    .where(and(eq(meals.userId, userId), eq(meals.forgotten, false), sql`lower(${meals.name}) = lower(${name})`))
+    .returning({ id: meals.id });
+  return hidden.map((m) => m.id);
+}
+
+/** Undo of `forgetPastFood`: exactly the meals it hid come back. */
+export async function restorePastFood(userId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  await db.update(meals).set({ forgotten: false }).where(and(eq(meals.userId, userId), inArray(meals.id, ids)));
 }
 
 export async function deleteMeal(userId: string, mealId: string) {
@@ -323,7 +357,14 @@ export async function addShoppingItem(
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
   const [updated] = await db
     .update(shoppingItems)
-    .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
+    .set({
+      name: input.name,
+      amount: input.amount.toFixed(2),
+      unit: input.unit,
+      category: input.category,
+      ...(input.isBought !== undefined && { isBought: input.isBought }),
+      ...(input.checkedAt !== undefined && { checkedAt: input.checkedAt }),
+    })
     .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
     .returning();
   if (updated) await ensureShoppingCategory(userId, input.category);
@@ -452,10 +493,12 @@ export async function toggleShoppingItem(
   return updated;
 }
 
+/** Takes an item off the list; the row stays so Undo (restoreShoppingItems) brings it back exactly, bought state included. */
 export async function deleteShoppingItem(userId: string, itemId: string) {
   const [deleted] = await db
-    .delete(shoppingItems)
-    .where(and(eq(shoppingItems.id, itemId), eq(shoppingItems.userId, userId)))
+    .update(shoppingItems)
+    .set({ clearedAt: new Date() })
+    .where(and(eq(shoppingItems.id, itemId), onList(userId)))
     .returning();
 
   return deleted;

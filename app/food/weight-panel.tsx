@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
+import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, DayField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
@@ -223,7 +223,7 @@ export function WeightPanel() {
         busy={saving}
         canSubmit={!!kilograms}
       >
-        <DateField id="weigh-date" value={date} today={today()} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
+        <DayField value={date} today={today()} onChange={setDate} />
         <Field
           label="Weight (kg)"
           type="number"

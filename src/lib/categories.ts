@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { itemCategories, todos, wishlistItems } from "@/db/schema";
+import { itemCategories, todoCompletions, todos, wishlistItems } from "@/db/schema";
 import { toISODate } from "./format-date";
 import { splitTodo } from "./todo-split";
 import type { CategoryScope } from "./validations/categories";
@@ -28,7 +28,7 @@ async function moveItems(tx: Pick<typeof db, "update">, userId: string, scope: C
 /**
  * Takes a deleted category off the tasks of today and the days ahead (they go to "other"); the days before keep it.
  * A repeating task that already ran before today is split, so the new half starts today in "other". Returns the
- * ids of the tasks now in "other".
+ * ids of the tasks now in "other" and the splits, so Undo can join the halves again.
  */
 async function refileFromToday(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string, scope: CategoryScope, name: string) {
   const today = toISODate();
@@ -36,16 +36,20 @@ async function refileFromToday(tx: Parameters<Parameters<typeof db.transaction>[
     .select()
     .from(todos)
     .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
-  const ids: string[] = [];
+  const itemIds: string[] = [];
+  const splits: NonNullable<CategoryChange["splits"]> = [];
   for (const t of rows) {
     if (t.isRecurring ? t.endedOn && t.endedOn <= today : t.dueDate < today) continue; // only on days that are over
-    const [row] =
-      t.isRecurring && t.dueDate < today
-        ? [await splitTodo(tx, t, today, { category: "other" })]
-        : await tx.update(todos).set({ category: "other" }).where(eq(todos.id, t.id)).returning();
-    ids.push(row.id);
+    if (t.isRecurring && t.dueDate < today) {
+      const next = await splitTodo(tx, t, today, { category: "other" });
+      splits.push({ from: t.id, to: next.id, day: today, endedOn: t.endedOn });
+      itemIds.push(next.id);
+    } else {
+      await tx.update(todos).set({ category: "other" }).where(eq(todos.id, t.id));
+      itemIds.push(t.id);
+    }
   }
-  return ids;
+  return { itemIds, splits };
 }
 
 /** Adds a category at the end of the list unless it is there already or is the built-in "other". */
@@ -88,6 +92,8 @@ export interface CategoryChange {
   itemIds: string[];
   /** The rename landed on a category that already existed, so Undo must not delete it. */
   merged: boolean;
+  /** Repeating tasks a delete split in two (the old half ended on `day`, the new half is in `itemIds`); Undo joins them again. */
+  splits?: { from: string; to: string; day: string; endedOn: string | null }[];
 }
 
 /** Renames a category on all the list's items; renaming onto an existing one merges the two. */
@@ -100,7 +106,7 @@ export async function renameCategory(userId: string, scope: CategoryScope, from:
       .values({ userId, scope, name: to, sortOrder: old.sortOrder })
       .onConflictDoNothing()
       .returning();
-    return { sortOrder: old.sortOrder, itemIds: await moveItems(tx, userId, scope, from, to), merged: created.length === 0 };
+    return { sortOrder: old.sortOrder, itemIds: await moveItems(tx, userId, scope, from, to), merged: created.length === 0, splits: [] };
   });
 }
 
@@ -109,8 +115,11 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
   return db.transaction(async (tx): Promise<CategoryChange | null> => {
     const [old] = await tx.delete(itemCategories).where(own(userId, scope, name)).returning();
     if (!old) return null;
-    const itemIds = scope === "wishlist" ? await moveItems(tx, userId, scope, name, "other") : await refileFromToday(tx, userId, scope, name);
-    return { sortOrder: old.sortOrder, itemIds, merged: false };
+    const moved =
+      scope === "wishlist"
+        ? { itemIds: await moveItems(tx, userId, scope, name, "other"), splits: [] }
+        : await refileFromToday(tx, userId, scope, name);
+    return { sortOrder: old.sortOrder, merged: false, ...moved };
   });
 }
 
@@ -122,11 +131,26 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
 export async function revertCategory(
   userId: string,
   scope: CategoryScope,
-  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean },
+  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; splits?: CategoryChange["splits"] },
 ) {
-  const { name, current, sortOrder, itemIds, dropCurrent } = input;
+  const { name, current, sortOrder, dropCurrent, splits = [] } = input;
   await db.transaction(async (tx) => {
     await tx.insert(itemCategories).values({ userId, scope, name, sortOrder }).onConflictDoNothing();
+    // A task the delete split is joined again: its ticks from the split day on go back to the old half, which runs on
+    // as before, and the new half goes. Halves the user has changed since stay as they are and are only re-filed.
+    const joined = new Set<string>();
+    for (const sp of scope === "wishlist" ? [] : splits) {
+      const half = and(eq(todos.userId, userId), eq(todos.space, scope));
+      const [moved] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.to), eq(todos.category, current)));
+      const [orig] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.from)));
+      if (!moved || moved.endedOn || !orig || orig.endedOn !== sp.day) continue;
+      const ticks = await tx.select().from(todoCompletions).where(and(eq(todoCompletions.todoId, moved.id), gte(todoCompletions.date, sp.day)));
+      if (ticks.length) await tx.insert(todoCompletions).values(ticks.map((t) => ({ todoId: orig.id, date: t.date }))).onConflictDoNothing();
+      await tx.update(todos).set({ endedOn: sp.endedOn }).where(eq(todos.id, orig.id));
+      await tx.delete(todos).where(eq(todos.id, moved.id));
+      joined.add(moved.id);
+    }
+    const itemIds = input.itemIds.filter((id) => !joined.has(id));
     if (itemIds.length > 0) {
       if (scope === "wishlist")
         await tx

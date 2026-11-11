@@ -6,11 +6,14 @@ import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
   clearDailyMetricSchema,
+  forgetPastFoodSchema,
+  restorePastFoodSchema,
   day,
   metricDayEditable,
   saveDailyMetricSchema,
   createShoppingItemSchema,
   logMealSchema,
+  restoreMealSchema,
   renameShoppingCategorySchema,
   reorderShoppingCategoriesSchema,
   shoppingCategoryNameSchema,
@@ -29,9 +32,12 @@ import {
   getDailyMetricsHistory,
   saveDailyMetric,
   deleteMeal,
+  forgetPastFood,
+  restorePastFood,
   deleteShoppingCategory,
   deleteShoppingItem,
   logMeal,
+  restoreMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreShoppingItems,
@@ -63,6 +69,29 @@ export async function deleteMealAction(mealId: string) {
   const deleted = await deleteMeal(userId, uuid.parse(mealId));
   safeRevalidate("/food");
   return { success: true, deleted };
+}
+
+export async function restoreMealAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const meal = await restoreMeal(userId, restoreMealSchema.parse(rawInput));
+  safeRevalidate("/food");
+  return { success: meal !== null, meal };
+}
+
+/** Removes a food from the "Past foods" list (the days it was logged on keep it); `ids` is what Undo sends back. */
+export async function forgetPastFoodAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { name } = forgetPastFoodSchema.parse(rawInput);
+  const ids = await forgetPastFood(userId, name);
+  safeRevalidate("/food");
+  return { success: true, ids };
+}
+
+export async function restorePastFoodAction(rawInput: unknown) {
+  const userId = await requireUser();
+  await restorePastFood(userId, restorePastFoodSchema.parse(rawInput).ids);
+  safeRevalidate("/food");
+  return { success: true };
 }
 
 export async function addWaterAction(date: string, amountMl: number) {
