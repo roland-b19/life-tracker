@@ -110,6 +110,22 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     ]);
   });
 
+  it("derives the priority from the price as stored (cents), not from the raw number", async () => {
+    const edge = await addWishlistItem(userA, { name: "Edge", estimatedPrice: 249.999 });
+    expect(edge.estimatedPrice).toBe("250.00");
+    expect(edge.priority).toBe("medium");
+    const high = await addWishlistItem(userA, { name: "Edge high", estimatedPrice: "749.996" as unknown as number });
+    expect([high.estimatedPrice, high.priority]).toEqual(["750.00", "high"]);
+    expect((await addWishlistItem(userA, { name: "Floor", estimatedPrice: 0.0149 })).estimatedPrice).toBe("0.01");
+  });
+
+  it("rejects names that are only spaces and trims the rest", async () => {
+    await expect(addWishlistItem(userA, { name: "   ", estimatedPrice: 10 })).rejects.toThrow();
+    expect((await addWishlistItem(userA, { name: "  Lamp  ", estimatedPrice: 10 })).name).toBe("Lamp");
+    await expect(addWishlistItem(userA, { name: "x".repeat(121), estimatedPrice: 10 })).rejects.toThrow();
+    expect((await addWishlistItem(userA, { name: "x".repeat(120), estimatedPrice: 10 })).name).toHaveLength(120);
+  });
+
   it("accepts any text as a link", async () => {
     const item = await addWishlistItem(userA, { name: "Lamp", url: "emag", estimatedPrice: 50 });
     expect(item.url).toBe("emag");

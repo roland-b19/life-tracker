@@ -243,8 +243,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   it("restores a deleted meal as the very same row, in its place, and refuses a taken id", async () => {
     authState.id = userA;
-    const first = await logMeal(userA, { date: "2026-10-31", name: "Eggs", calories: 200, protein: 10, carbs: 1, fat: 12 });
-    const second = await logMeal(userA, { date: "2026-10-31", name: "Rice", calories: 300, protein: 6, carbs: 60, fat: 1 });
+    const first = await logMeal(userA, { date: toISODate(), name: "Eggs", calories: 200, protein: 10, carbs: 1, fat: 12 });
+    const second = await logMeal(userA, { date: toISODate(), name: "Rice", calories: 300, protein: 6, carbs: 60, fat: 1 });
     await db.update(meals).set({ forgotten: true }).where(eq(meals.id, first.id)); // a meal removed from Past foods too
     const before = (await db.select().from(meals).where(eq(meals.id, first.id)))[0];
     await deleteMealAction(first.id);
@@ -252,7 +252,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const res = await restoreMealAction(input);
     expect(res.success).toBe(true);
     expect((await db.select().from(meals).where(eq(meals.id, first.id)))[0]).toEqual(before);
-    expect((await getDailyFoodSummary(userA, "2026-10-31")).meals.map((m) => m.id)).toEqual([first.id, second.id]);
+    expect((await getDailyFoodSummary(userA, toISODate())).meals.map((m) => m.id)).toEqual([first.id, second.id]);
     expect((await restoreMealAction(input)).success).toBe(false); // the id is taken now
     authState.id = userB;
     await deleteMealAction(first.id); // not B's: nothing happens
@@ -468,10 +468,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     it("executes food server actions for authenticated owner", async () => {
       authState.id = userA;
+      const today = toISODate();
 
       // 1. Log meal
       const mealRes = await logMealAction({
-        date: "2026-11-04",
+        date: today,
         name: "Whey Shake",
         calories: 200,
         protein: 30,
@@ -482,7 +483,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(mealRes.meal.name).toBe("Whey Shake");
 
       // 2. Add water
-      const waterRes = await addWaterAction("2026-11-04", 500);
+      const waterRes = await addWaterAction(today, 500);
       expect(waterRes.success).toBe(true);
       expect(waterRes.metrics.waterMl).toBe(500);
 
@@ -491,7 +492,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await expect(updateStepsAction("2026-02-30", 1000)).rejects.toThrow();
 
       // 3. Update steps
-      const stepsRes = await updateStepsAction("2026-11-04", 10500);
+      const stepsRes = await updateStepsAction(today, 10500);
       expect(stepsRes.success).toBe(true);
       expect(stepsRes.metrics.steps).toBe(10500);
 
@@ -549,6 +550,31 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await updateTargetsAction({ ...goals, calories: 2000 });
       expect((await getNutritionTargets(userA)).calories).toBe(3000);
       expect((await getNutritionTargets(userB)).calories).toBe(2000);
+    });
+
+    it("refuses to write meals, water or steps outside today and yesterday (the rule the UI already keeps)", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      const locked = "Only today and yesterday can be changed.";
+      const meal = { name: "Oats", calories: 100, protein: 1, carbs: 1, fat: 1 };
+      for (const date of [addDays(today, -2), addDays(today, 1)]) {
+        await expect(logMealAction({ ...meal, date })).rejects.toThrow(locked);
+        await expect(addWaterAction(date, 250)).rejects.toThrow(locked);
+        await expect(updateStepsAction(date, 5000)).rejects.toThrow(locked);
+        await expect(restoreMealAction({ ...meal, date, id: randomUUID(), createdAt: new Date() })).rejects.toThrow(locked);
+      }
+      expect((await logMealAction({ ...meal, date: addDays(today, -1) })).success).toBe(true); // yesterday is the grace day
+      expect((await addWaterAction(today, 250)).metrics.waterMl).toBe(250);
+    });
+
+    it("rejects a name that is only spaces instead of storing an empty one", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      await expect(
+        logMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
+      ).rejects.toThrow();
+      await expect(forgetPastFoodAction({ name: " \t " })).rejects.toThrow();
+      expect((await logMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal.name).toBe("Rice");
     });
 
     it("keeps water and steps history per owner, today and yesterday only: add, move, refuse a taken day, clear", async () => {

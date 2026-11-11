@@ -4,7 +4,7 @@ import { isoDate } from "./common";
 
 export const logMealSchema = z.object({
   date: isoDate,
-  name: z.string().min(1).max(120).trim(),
+  name: z.string().trim().min(1).max(120),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
   carbs: z.number().min(0).max(1000),
@@ -19,7 +19,7 @@ export const restoreMealSchema = logMealSchema.extend({
   forgotten: z.boolean().default(false),
 });
 
-export const forgetPastFoodSchema = z.object({ name: z.string().min(1).max(120).trim() });
+export const forgetPastFoodSchema = z.object({ name: z.string().trim().min(1).max(120) });
 export const restorePastFoodSchema = z.object({ ids: z.array(z.string().uuid()).max(500) });
 
 export const updateMetricsSchema = z.object({

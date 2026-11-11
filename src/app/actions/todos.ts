@@ -35,9 +35,10 @@ import {
 } from "@/lib/todos";
 
 // One-off tasks go on today up to a week ahead, or yesterday (a day of slack either side covers the user's timezone).
-function assertPlannable(task: { isRecurring?: boolean; dueDate: string }) {
+// A repeating task keeps its first day for good, so Undo (`startedBefore`) may bring one back from long ago; a new or moved one must start in the window too.
+function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, startedBefore = false) {
   const today = toISODate();
-  if (!task.isRecurring && (task.dueDate < addDays(today, -1) || task.dueDate > addDays(today, PLAN_AHEAD_DAYS + 1))) {
+  if (!(startedBefore && task.isRecurring) && (task.dueDate < addDays(today, -1) || task.dueDate > addDays(today, PLAN_AHEAD_DAYS + 1))) {
     throw new Error(`Tasks can be planned up to ${PLAN_AHEAD_DAYS} days ahead.`);
   }
 }
@@ -67,7 +68,7 @@ export async function createTodoAction(rawInput: unknown) {
 export async function restoreTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
-  assertPlannable(parsed);
+  assertPlannable(parsed, true);
   if (await hasDuplicateTodo(userId, parsed, parsed.id)) return duplicate(parsed.title);
   const todo = await restoreTodo(userId, parsed);
   return { success: todo !== null, todo };
@@ -78,7 +79,7 @@ export async function revertMoveTodoAction(rawInput: unknown, createdId?: string
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
   const created = createdId ? z.string().uuid().parse(createdId) : undefined;
-  assertPlannable(parsed);
+  assertPlannable(parsed, true);
   if (await hasDuplicateTodo(userId, parsed, created ? [parsed.id, created] : parsed.id)) return duplicate(parsed.title);
   const todo = await revertMoveTodo(userId, parsed, created);
   return { success: todo !== null, todo };

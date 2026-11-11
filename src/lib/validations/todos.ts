@@ -8,7 +8,7 @@ export const recurrencePatternSchema = z.enum(["none", "daily"]);
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
-  title: z.string().min(1, "Title is required").max(150).trim(),
+  title: z.string().trim().min(1, "Title is required").max(150),
   isRecurring: z.boolean().default(false),
   recurrencePattern: recurrencePatternSchema.default("none"),
   dueDate: isoDate,

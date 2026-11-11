@@ -488,6 +488,35 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(createTodoAction(task(addDays(today, -5)))).rejects.toThrow("up to 7 days ahead");
     });
 
+    it("starts a repeating task only inside the planning window, but Undo may bring an old one back", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      const habit = (dueDate: string) => ({ space: "personal", title: "Stretch", dueDate, isRecurring: true, recurrencePattern: "daily" });
+      await expect(createTodoAction(habit(addDays(today, -400)))).rejects.toThrow("up to 7 days ahead");
+      await expect(createTodoAction(habit(addDays(today, 400)))).rejects.toThrow("up to 7 days ahead");
+      const made = await createTodoAction(habit(addDays(today, -1)));
+      expect(made.success).toBe(true);
+      // A one-off moved to repeat from a far-off day is refused too.
+      const once = await createTodo(userA, { space: "personal", title: "Once", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await expect(moveTodoAction({ id: once.id, recurrencePattern: "daily", dueDate: addDays(today, 90) })).rejects.toThrow("up to 7 days ahead");
+      await expect(moveTodoAction({ id: once.id, recurrencePattern: "daily", dueDate: addDays(today, -90) })).rejects.toThrow("up to 7 days ahead");
+      // Undo of deleting a long-running habit keeps its real first day.
+      if (!made.success) throw new Error(made.error);
+      const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date(), doneDates: [] as string[] };
+      expect((await restoreTodoAction(old)).success).toBe(true);
+    });
+
+    it("rejects task titles that are only spaces", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      await expect(createTodoAction({ space: "personal", title: "   ", dueDate: today, isRecurring: false })).rejects.toThrow();
+      const ok = await createTodoAction({ space: "personal", title: "  Pay rent  ", dueDate: today, isRecurring: false });
+      if (!ok.success) throw new Error(ok.error);
+      expect(ok.todo.title).toBe("Pay rent");
+      await expect(updateTodoAction({ id: ok.todo.id, title: "\n\t " })).rejects.toThrow();
+      await expect(createTodoAction({ space: "personal", title: "x".repeat(151), dueDate: today, isRecurring: false })).rejects.toThrow();
+    });
+
     it("refuses bad input and changes on days a task cannot change", async () => {
       authState.id = userA;
       const today = toISODate();

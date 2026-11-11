@@ -49,7 +49,7 @@ export const restoreSessionSchema = z.object({
 });
 
 export const createCustomExerciseSchema = z.object({
-  name: z.string().min(2).max(120).trim(),
+  name: z.string().trim().min(2).max(120),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
