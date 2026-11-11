@@ -31,7 +31,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **No motion:** there are no animations or transitions anywhere (the user's call, 2026-11-11). Everything appears, changes and disappears instantly: rows, modals, toasts, charts, numbers, hover and press states, page changes.
+- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill and the Wishlist estimated-total count-up (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
 - **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
 - **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
@@ -181,14 +181,19 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 ## 3. No animations or transitions
 
-The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**.
+The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**, with exactly two exceptions the user brought back (same day):
+
+- the Tasks Progress ring (`ProgressRing` in `app/components/charts.tsx`): the fill and the percentage ease from 0 to the value in 900 ms (`useAnimatedNumber(p, 0, 900)`);
+- the Wishlist estimated total (`AnimatedNumber` in `app/wishlist/wishlist-client.tsx`): it counts up from 0 on entry and eases between values.
+
+Both live in `app/components/animated-number.tsx`, which jumps straight to the value under `prefers-reduced-motion`. Nothing else uses it: the Tasks stat tiles, every other number, chart and list stay instant. Do not add a third animation without the user asking for it.
 
 - No CSS `transition`, `animation` or `@keyframes`; no view or page transitions; no smooth scrolling.
-- No JS-driven motion either: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart, ring or camera tween, no counting numbers (WAAPI, `requestAnimationFrame` and timers included).
+- No JS-driven motion either, apart from the two exceptions above: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart or camera tween, no other counting numbers (WAAPI, `requestAnimationFrame` and timers included).
 - Elements appear, disappear and change instantly: rows, modals, toasts, hover and press states, selected tabs, chart values, page changes.
 - Hover fills and the `:active` press scale (`--press`) still apply, but at once, with no transition.
 - Feedback comes from the toast and its Undo, not from motion.
-- `prefers-reduced-motion` needs no handling, because there is no motion. If a new feature seems to need an animation, show the end state instead and tell the user.
+- `prefers-reduced-motion` needs no handling beyond the two exceptions, which already honour it. If a new feature seems to need an animation, show the end state instead and tell the user.
 
 ## 4. Building a list page: the Wishlist recipe
 
@@ -262,7 +267,7 @@ Each of these was tried or proposed and the user removed it.
 - Visible borders and separator lines between rows.
 - A blue page background (light blue, dark steel blue, Storm's blue-tinted greys). The user wanted the base black and grey (Graphite); blue is only the accent.
 - A gradient mask over a list, or a shimmer. The `.skeleton` placeholder while data loads is static.
-- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera). All of it was removed on 2026-11-11.
+- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera) other than the Tasks progress ring and the Wishlist total count-up. All the rest was removed on 2026-11-11.
 
 **Layout and content**
 - Scaling the page behind a modal. Blur it only.
@@ -296,7 +301,7 @@ Each of these was tried or proposed and the user removed it.
 - [ ] The empty note keeps one row's height. No layout shift when controls appear.
 
 **Behaviour**
-- [ ] No `transition`, `animation`, `@keyframes`, view transition, smooth scroll or JS tween anywhere.
+- [ ] No `transition`, `animation`, `@keyframes`, view transition, smooth scroll or JS tween anywhere, except the Tasks progress ring and the Wishlist total (`animated-number.tsx`).
 - [ ] Every action that modifies something has an Undo button in its toast, and Undo restores the previous state. Server failures restore the screen and show a warning.
 - [ ] A new server action has an authorization test (owner allowed, other user denied).
 

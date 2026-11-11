@@ -36,6 +36,7 @@ import {
   getWeightAnalytics,
   logMeal,
   renameShoppingCategory,
+  reorderShoppingCategories,
   restoreShoppingItems,
   toggleShoppingItem,
   updateDailySteps,
@@ -55,6 +56,7 @@ import {
   getDaySummaryAction,
   logMealAction,
   renameShoppingCategoryAction,
+  reorderShoppingCategoriesAction,
   restoreShoppingItemsAction,
   revertShoppingCategoryAction,
   updateShoppingItemAction,
@@ -243,6 +245,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(await renameShoppingCategory(userA, "pantry", "dry goods")).not.toBeNull();
     expect((await getShoppingList(userA)).map((i) => i.category).sort()).toEqual(["dry goods", "oils"]);
 
+    // Reordering puts the owner's categories in the given order; another user changes nothing.
+    await reorderShoppingCategories(userA, ["oils", "dry goods"]);
+    const order = async () => (await getShoppingCategories(userA)).filter((c) => ["oils", "dry goods"].includes(c));
+    expect(await order()).toEqual(["oils", "dry goods"]);
+    await reorderShoppingCategories(userB, ["dry goods", "oils"]);
+    expect(await order()).toEqual(["oils", "dry goods"]);
+
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
     expect(await updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).toBeUndefined();
@@ -273,6 +282,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         "Authentication required.",
       );
       await expect(restoreShoppingItemsAction({ itemIds: [itemId] })).rejects.toThrow("Authentication required.");
+      await expect(reorderShoppingCategoriesAction({ names: ["dairy"] })).rejects.toThrow("Authentication required.");
       await expect(addShoppingCategoryAction({ name: "frozen" })).rejects.toThrow("Authentication required.");
       await expect(deleteShoppingCategoryAction({ name: "dairy" })).rejects.toThrow("Authentication required.");
       await expect(

@@ -116,3 +116,10 @@ export async function revertCategory(
     if (dropCurrent && current !== "other") await tx.delete(itemCategories).where(own(userId, scope, current));
   });
 }
+
+/** Puts the user's categories of a list in the given order, top first; names that are not theirs change nothing. */
+export async function reorderCategories(userId: string, scope: CategoryScope, names: string[]) {
+  await db.transaction(async (tx) => {
+    for (const [i, name] of names.entries()) await tx.update(itemCategories).set({ sortOrder: i + 1 }).where(own(userId, scope, name));
+  });
+}

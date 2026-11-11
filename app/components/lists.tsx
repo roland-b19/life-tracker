@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 /**
  * The card around a list: the layout box the rows' bands widen into (globals.css). `wash`: every other row carries
@@ -30,6 +30,27 @@ export function useMore<T>(list: T[]) {
 }
 
 /**
+ * A category reorder also reorders the items list above its card; the page must not shift under the finger, so the
+ * card keeps its place on screen across that render (Safari has no scroll anchoring). Put `ref` on the card, call
+ * `keep()` right before changing `dep` (the categories), and the card is scrolled back to where it was.
+ */
+export function useKeepPlace<T extends HTMLElement>(dep: unknown) {
+  const ref = useRef<T>(null);
+  const top = useRef<number | null>(null);
+  const keep = () => {
+    top.current = ref.current?.getBoundingClientRect().top ?? null;
+  };
+  useLayoutEffect(() => {
+    if (top.current !== null && ref.current) window.scrollBy(0, ref.current.getBoundingClientRect().top - top.current);
+    top.current = null;
+  }, [dep]);
+  return [ref, keep] as const;
+}
+
+// Safari on iPhone can still pan the page under a finger that started on a handle; the page must not move while dragging.
+const noPan = (e: TouchEvent) => e.preventDefault();
+
+/**
  * Drag a row by its handle to any place in its list. Rows are the list's children marked `data-sort`; the dragged
  * row follows the pointer, the rows in between step aside, and on drop `move(from, to)` reorders them.
  * Spread the result on the handle; it needs `touch-action: none`.
@@ -38,6 +59,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
   const drag = useRef<{ rows: HTMLElement[]; i: number; to: number; y: number; mids: number[]; step: number } | null>(null);
 
   const settle = (rows: HTMLElement[], i: number) => {
+    document.removeEventListener("touchmove", noPan);
     rows[i].classList.remove("dragging");
     for (const r of rows) r.style.transform = "";
   };
@@ -59,6 +81,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
     };
     e.preventDefault(); // no text selection while dragging
     e.currentTarget.setPointerCapture(e.pointerId);
+    document.addEventListener("touchmove", noPan, { passive: false });
     row.classList.add("dragging");
   };
 

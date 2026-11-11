@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
+import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
-import { ListBox, useMore } from "../components/lists";
+import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
@@ -139,7 +139,8 @@ export function TodosClient({
     const list = visibleFor(view.space, listDaily, view.date);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
-  const [shownTodos, moreTodos] = useMore(listTodos);
+  const [folded, toggleFolded] = useFolded();
+  const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
     const { date: day, tab: tb } = latest.current;
@@ -552,7 +553,7 @@ export function TodosClient({
         </div>
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid todos-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="tasks-title">
             <div className="section-head">
@@ -583,11 +584,16 @@ export function TodosClient({
             <ListBox wash className="todo-list">
               {listTodos.length > 0 ? (
                 <>
-                {shownTodos.map((task, i) => (
+                {listTodos.map((task, i) => (
                   <Fragment key={task.id}>
-                  {listDaily && task.category !== shownTodos[i - 1]?.category && shownTodos.some((x) => x.category !== "other") && (
-                    <h3 className="group-label">{categoryLabel(task.category)}</h3>
+                  {listDaily && task.category !== listTodos[i - 1]?.category && (
+                    <GroupToggle
+                      name={task.category}
+                      folded={folded.has(foldKey(task.category))}
+                      onToggle={() => toggleFolded(foldKey(task.category))}
+                    />
                   )}
+                  {!(listDaily && folded.has(foldKey(task.category))) && (
                   <div className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
@@ -606,10 +612,10 @@ export function TodosClient({
 
                     <div className="todo-main">
                       <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
-                      {((!listDaily && task.isCarriedOver) || task.reminderTime) && (
+                      {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                         <div className="badge-row">
                           {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
-                          {task.reminderTime && <span className="badge badge-reminder">{task.reminderTime}</span>}
+                          {task.reminderTime && isPushEnabled() && <span className="badge badge-reminder">{task.reminderTime}</span>}
                         </div>
                       )}
                     </div>
@@ -656,9 +662,9 @@ export function TodosClient({
                       </>
                     )}
                   </div>
+                  )}
                   </Fragment>
                 ))}
-                {moreTodos}
                 </>
               ) : (
                 <p className="empty-note">
@@ -692,7 +698,7 @@ export function TodosClient({
           )}
         </div>
 
-        <div className="dashboard-aside summary-first">
+        <div className="dashboard-aside">
           <section className="surface" aria-labelledby="progress-title">
             <div className="section-head">
               <h2 id="progress-title" className="section-title">
@@ -706,7 +712,7 @@ export function TodosClient({
               </p>
             ) : (
               <div className="dash-hero">
-                                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
+                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   <span className="todo-stats-fraction number-tabular">
                     {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
@@ -806,15 +812,18 @@ export function TodosClient({
                 </select>
               </label>
             )}
-            <label>
-              Reminder (optional)
-              <input
-                type="time"
-                disabled={saving}
-                value={reminderTimeInput}
-                onChange={(e) => setReminderTimeInput(e.target.value)}
-              />
-            </label>
+            {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}
+            {isPushEnabled() && (
+              <label>
+                Reminder (optional)
+                <input
+                  type="time"
+                  disabled={saving}
+                  value={reminderTimeInput}
+                  onChange={(e) => setReminderTimeInput(e.target.value)}
+                />
+              </label>
+            )}
             {titleError && (
               <p id="task-title-error" className="error" role="alert">
                 {titleError}

@@ -18,7 +18,7 @@ import { users } from "@/db/schema";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { createTodo, getDailyTodos } from "@/lib/todos";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction, revertCategoryAction } from "@/app/actions/categories";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import { toISODate } from "@/lib/format-date";
 
 async function seedUser(subject: string) {
@@ -125,5 +125,25 @@ describe("Categories: lists, items and multi-user isolation", () => {
     await revertCategoryAction({ scope: "wishlist", name: "books", current: "games", dropCurrent: false, ...merge.change! });
     expect(await catOf(inBooks.id)).toBe("books");
     expect((await getCategories(userA, ["wishlist"])).wishlist).toEqual(expect.arrayContaining(["books", "games"]));
+  });
+
+  it("reorders the owner's categories; another user or an anonymous caller changes nothing", async () => {
+    authState.id = userA;
+    for (const name of ["first", "second", "third"]) await addCategoryAction({ scope: "personal", name });
+    const list = async () => (await getCategories(userA, ["personal"])).personal.filter((c) => ["first", "second", "third"].includes(c));
+    expect(await list()).toEqual(["first", "second", "third"]);
+
+    await reorderCategoriesAction({ scope: "personal", names: ["third", "first", "second"] });
+    expect(await list()).toEqual(["third", "first", "second"]);
+
+    authState.id = userB;
+    await addCategoryAction({ scope: "personal", name: "first" });
+    await reorderCategoriesAction({ scope: "personal", names: ["third", "second", "first"] });
+    expect(await list()).toEqual(["third", "first", "second"]);
+
+    authState.id = userA;
+    await expect(reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).rejects.toThrow();
+    authState.id = "";
+    await expect(reorderCategoriesAction({ scope: "personal", names: ["first"] })).rejects.toThrow();
   });
 });

@@ -2,7 +2,7 @@
 
 Copy this pattern for every list page (`app/wishlist/wishlist-client.tsx`). Other pages follow it: Food categories and weight, Tasks, Gym days and routine, Settings.
 
-**There is no motion anywhere** (decision 2026-11-11). Rows, modals and toasts appear, change and disappear instantly. Never add a CSS `transition`, `animation` or `@keyframes`, a view transition, smooth scrolling, a WAAPI/rAF tween or a counting number.
+**There is no motion anywhere** (decision 2026-11-11), except the Tasks progress ring and the Wishlist total count-up (`animated-number.tsx`). Rows, modals and toasts appear, change and disappear instantly. Never add a CSS `transition`, `animation` or `@keyframes`, a view transition, smooth scrolling, a WAAPI/rAF tween or another counting number.
 
 ## Contents
 - The parts
@@ -183,7 +183,7 @@ Nothing fades; the control and the rows change in the same render. The page keep
 
 ## Long lists (More)
 
-The Wishlist always shows every item and has no More button. A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
+The Wishlist and the Tasks lists always show every item and have no More button. A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
 
 ## Rules that are easy to break
 
@@ -213,3 +213,13 @@ Sources: `app/wishlist/wishlist-client.tsx`, `app/components/lists.tsx`, `app/co
 - Every checkbox is the round `.todo-checkbox-btn` look, Gym included.
 - A screen of rows (the workout session) gets the same wash striping as lists, so rows are easy to tell apart.
 - Exit and Cancel live in the session footer (`.session-exit`); Cancel always asks first; an exited workout shows a Resume bar.
+
+## Category groups
+
+A list with categories (Wishlist in every tab, the Tasks daily list) shows its rows under category titles. A title is a `GroupToggle` (`categories-card.tsx`): the title keeps the plain title look, with an arrow after the text (right when folded, down when open), and the whole title is the button (its tap area is widened with `::before`, so nothing moves). State is `useFolded()`, keyed by tab too (Wishlist by price range, Tasks by space and tab), so every tab folds on its own; totals still count folded rows. Every group has its title, even when a tab has one category (or only Other). The Categories card sits under the Items section. The first title of Wishlist, Tasks and the Health shopping list has 0.5rem above it. The Health shopping list folds the same way (`useFolded`, one key per category). The task Reminder field and badge show only where push is on (`isPushEnabled()`), so not on the Vercel deploy. A More-menu link (Settings) leaves the menu open until the new page arrives, so the old page never shows through. In the tab bar a pressed link sets `target` so the bar's thumb goes straight to the chosen page, not back to the current one first.
+
+## Reordering categories
+
+The Categories card (`categories-card.tsx`, Wishlist and Tasks; the Health shopping Categories card does the same with `reorderShoppingCategoriesAction`) copies the Gym reorder: a `GripIcon` `.drag-handle` button first in each `.entry-row[data-sort]`, then the name, then the edit and delete buttons. The handle also takes ArrowUp/ArrowDown. A move updates the screen at once, saves the order (`reorderCategoriesAction`), and shows `Moved "x"` with an Undo that writes the previous order back; on failure the screen is restored with a warning. The items list under the same page groups by this order (`groupOrder`). The page must not move while dragging: `useDragSort` blocks touch panning, and the card keeps its screen position across the reorder and Undo (`useKeepPlace` in `lists.tsx`).
+
+On a phone the Tasks sections run Progress, Tasks, Last x days, Categories (the two column wrappers are `display: contents` there and each card has an `order`).

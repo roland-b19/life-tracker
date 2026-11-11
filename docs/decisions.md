@@ -248,6 +248,19 @@ Supersedes every earlier motion decision above (list motion, page transitions, A
 
 Every action that modifies something shows an Undo button in its toast and restores the previous state: create, delete, edit, toggle, move, clear, quick tap, settings. Reused the existing restore actions. Notable cases: category delete and rename revert exactly the items that moved (`revertCategory`, `revertShoppingCategory`); moving a task is undone by `revertMoveTodo`; a Claude token is undone by sending the previous ciphertext back to a restore action that validates it (`decryptToken`); starting a workout is undone only while it has no sets; a custom exercise is removed on Undo only if no routine or set uses it (`deleteCustomExercise`). A background carry-over has no user action, so no toast. No migration, no new dependency. The design skill reference `motion-and-crud.md` was renamed `lists-and-crud.md`.
 
+### 2026-11-11: Category reorder by dragging; two animations come back
+
+- Categories (Wishlist, Tasks Personal and Business) can be reordered with the same grip handle and `useDragSort` as Gym; the arrow keys on the handle also move a category. The order is stored in `item_categories.sort_order` (`reorderCategories`, server action `reorderCategoriesAction`, owner-scoped, duplicate names rejected, test in `tests/categories.test.ts`) and the items lists follow it. A move has a toast with Undo (it writes the previous order back). No migration, no new dependency.
+- Tasks on a phone: Progress, Tasks, Last x days, Categories (desktop keeps its two columns).
+- Narrow exception to "No animations or transitions" above, at the user's request: the Tasks progress ring fill and the Wishlist estimated-total count-up are back (`animated-number.tsx`, reduced motion jumps to the value). Nothing else animates; the design skill says so.
+
+### 2026-11-11: Page stays still, Settings waits, shopping list folds (user)
+
+- Dragging a category must not move the page (Wishlist, Tasks): `useDragSort` blocks touch panning while a handle is held, and `CategoriesCard` keeps its place on screen across the reorder and Undo.
+- A More-menu link (Settings) leaves the menu open until the new page arrives, so the previous page never shows through; a tap on the current page just closes the menu.
+- Health's shopping Categories card reorders by dragging like the others (same handle, Undo, page stays still).
+- Health's shopping list titles are `GroupToggle`s like Wishlist and Tasks (each category folds), and the first one has 0.5rem above it.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

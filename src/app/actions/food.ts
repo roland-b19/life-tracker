@@ -10,6 +10,7 @@ import {
   createShoppingItemSchema,
   logMealSchema,
   renameShoppingCategorySchema,
+  reorderShoppingCategoriesSchema,
   shoppingCategoryNameSchema,
   restoreShoppingItemsSchema,
   revertShoppingCategorySchema,
@@ -30,6 +31,7 @@ import {
   deleteShoppingItem,
   logMeal,
   renameShoppingCategory,
+  reorderShoppingCategories,
   restoreShoppingItems,
   revertShoppingCategory,
   toggleShoppingItem,
@@ -171,6 +173,14 @@ export async function addShoppingCategoryAction(rawInput: unknown) {
   const added = await addShoppingCategory(userId, name);
   safeRevalidate("/food");
   return { success: added, name };
+}
+
+export async function reorderShoppingCategoriesAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { names } = reorderShoppingCategoriesSchema.parse(rawInput);
+  await reorderShoppingCategories(userId, names);
+  safeRevalidate("/food");
+  return { success: true };
 }
 
 export async function renameShoppingCategoryAction(rawInput: unknown) {

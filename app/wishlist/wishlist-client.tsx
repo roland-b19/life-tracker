@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
+import { AnimatedNumber } from "../components/animated-number";
+import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { ListBox } from "../components/lists";
 import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
@@ -95,10 +96,11 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
   // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
-  // The All tab lists the items under their category, each group in the chosen sort; the price tabs are one flat list.
+  // Every tab lists its items under their category, each group in the chosen sort; a group can be folded.
+  const [folded, toggleFolded] = useFolded();
+  const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
-  const filteredItems =
-    filterRange !== "all" ? sorted : groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
+  const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
   const totalCost = filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0);
 
   const toInput = (item: WishlistItemData) => ({
@@ -291,9 +293,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                 <>
                   {filteredItems.map((item, i) => (
                     <Fragment key={item.id}>
-                    {filterRange === "all" && item.category !== filteredItems[i - 1]?.category && filteredItems.some((x) => x.category !== "other") && (
-                      <h3 className="group-label">{categoryLabel(item.category)}</h3>
+                    {item.category !== filteredItems[i - 1]?.category && (
+                      <GroupToggle name={item.category} folded={folded.has(foldKey(item.category))} onToggle={() => toggleFolded(foldKey(item.category))} />
                     )}
+                    {!folded.has(foldKey(item.category)) && (
                     <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -325,12 +328,14 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                         </button>
                       </div>
                     </div>
+                    )}
                     </Fragment>
                   ))}
                 </>
               )}
             </ListBox>
           </section>
+          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
 
         <div className="dashboard-aside summary-first">
@@ -341,10 +346,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               </h2>
             </div>
             <p className="item-total number-tabular">
-              {formatRon(totalCost)} <span className="muted">RON</span>
+              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
             </p>
           </section>
-          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
       </div>
 

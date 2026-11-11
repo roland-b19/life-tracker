@@ -13,6 +13,7 @@ import {
   DropIcon,
   LockIcon,
   FootstepsIcon,
+  GripIcon,
   ScaleIcon,
   PencilIcon,
   PlusIcon,
@@ -22,7 +23,8 @@ import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { MetricPanel } from "./metric-panel";
-import { ListBox, useMore } from "../components/lists";
+import { ListBox, useDragSort, useKeepPlace, useMore } from "../components/lists";
+import { GroupToggle, useFolded } from "../components/categories-card";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -34,6 +36,7 @@ import {
   addShoppingCategoryAction,
   deleteShoppingCategoryAction,
   renameShoppingCategoryAction,
+  reorderShoppingCategoriesAction,
   restoreShoppingItemsAction,
   revertShoppingCategoryAction,
   toggleShoppingItemAction,
@@ -624,6 +627,37 @@ export function FoodClient({
     setCatName(from ?? "");
   }
 
+  // The new order shows at once (the shopping list above follows it); a failed save puts the old one back, and Undo saves it again.
+  const [catCard, keepCatPlace] = useKeepPlace<HTMLElement>(categories);
+  const reorderCategories = (names: string[]) => {
+    keepCatPlace();
+    setCategories(names);
+  };
+  async function moveCategory(from: number, to: number) {
+    const next = [...categories];
+    next.splice(to, 0, ...next.splice(from, 1));
+    const previous = categories;
+    reorderCategories(next);
+    const saved = (names: string[]) => reorderShoppingCategoriesAction({ names }).then((r) => r.success, () => false);
+    if (!(await saved(next))) {
+      reorderCategories(previous);
+      showToast({ message: "Failed to move category", type: "warning" });
+      return;
+    }
+    showToast({
+      message: `Moved "${next[to]}"`,
+      type: "success",
+      actionLabel: "Undo",
+      onAction: async () => {
+        reorderCategories(previous);
+        if (await saved(previous)) return;
+        reorderCategories(next);
+        showToast({ message: "Failed to undo", type: "warning" });
+      },
+    });
+  }
+  const dragCategory = useDragSort(moveCategory);
+
   /** Moves the items `ids` that sit in `from` over to `to` on screen. */
   const refile = (ids: Set<string>, from: string, to: string) =>
     setShoppingList((prev) => prev.map((i) => (ids.has(i.id) && i.category === from ? { ...i, category: to } : i)));
@@ -879,6 +913,7 @@ export function FoodClient({
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const [shownMeals, moreMeals] = useMore(day.meals);
+  const [foldedShop, toggleShop] = useFolded();
   const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c)));
   const [shownCategories, moreCategories] = useMore(categories);
   const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
@@ -1157,8 +1192,8 @@ export function FoodClient({
           )}
           {shopCategories.filter((c) => shownShopping.some((i) => i.category === c)).map((cat) => (
             <div key={cat} className="shopping-group">
-              <h3 className="group-label">{cat}</h3>
-              {shownShopping
+              <GroupToggle name={cat} folded={foldedShop.has(cat)} onToggle={() => toggleShop(cat)} />
+              {!foldedShop.has(cat) && shownShopping
                 .filter((item) => item.category === cat)
                 .map((item) => (
                   <div key={item.id} className="shopping-row">
@@ -1203,7 +1238,7 @@ export function FoodClient({
           </ListBox>
         </section>
 
-        <section className="surface" aria-labelledby="categories-title">
+        <section ref={catCard} className="surface" aria-labelledby="categories-title">
           <div className="section-head">
             <h2 id="categories-title" className="section-title">
               Categories <span className="muted number-tabular">{categories.length}</span>
@@ -1217,8 +1252,23 @@ export function FoodClient({
           {categories.length === 0 && (
             <p className="empty-note">No categories yet.</p>
           )}
-          {shownCategories.map((cat) => (
-            <div key={cat} className="entry-row">
+          {shownCategories.map((cat, i) => (
+            <div key={cat} className="entry-row" data-sort>
+              <button
+                type="button"
+                className="delete-icon-btn edit drag-handle"
+                aria-label={`Drag ${cat} to reorder`}
+                title="Drag to reorder"
+                {...dragCategory}
+                onKeyDown={(e) => {
+                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                  if (to < 0 || to >= shownCategories.length) return;
+                  e.preventDefault();
+                  moveCategory(i, to);
+                }}
+              >
+                <GripIcon size={22} />
+              </button>
               <span className="category-name">{cat}</span>
               <div className="row-actions">
                 <button

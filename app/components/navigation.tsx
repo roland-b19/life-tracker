@@ -14,6 +14,15 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  // The page a pressed link goes to. Until it loads the bar already shows it, instead of snapping back to this page.
+  const [target, setTarget] = useState<string | null>(null);
+  const at = target ?? pathname;
+  const go = (href: string) => {
+    setTarget(href);
+    setMoreOpen(false);
+  };
+  // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
+  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget(href));
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -35,7 +44,7 @@ export function Navigation({ userName }: NavigationProps) {
     {
       href: "/gym",
       label: "Gym",
-      isActive: pathname.startsWith("/gym"),
+      isActive: at.startsWith("/gym"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12" />
@@ -45,7 +54,7 @@ export function Navigation({ userName }: NavigationProps) {
     {
       href: "/food",
       label: "Health",
-      isActive: pathname.startsWith("/food"),
+      isActive: at.startsWith("/food"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3" />
@@ -55,7 +64,7 @@ export function Navigation({ userName }: NavigationProps) {
     {
       href: "/todos",
       label: "Tasks",
-      isActive: pathname.startsWith("/todos"),
+      isActive: at.startsWith("/todos"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 11l3 3L22 4" />
@@ -66,7 +75,7 @@ export function Navigation({ userName }: NavigationProps) {
     {
       href: "/wishlist",
       label: "Wishlist",
-      isActive: pathname.startsWith("/wishlist"),
+      isActive: at.startsWith("/wishlist"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -76,7 +85,7 @@ export function Navigation({ userName }: NavigationProps) {
     {
       href: "/settings",
       label: "Settings",
-      isActive: pathname.startsWith("/settings"),
+      isActive: at.startsWith("/settings"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
@@ -169,9 +178,7 @@ export function Navigation({ userName }: NavigationProps) {
                 href={link.href}
                 className={`nav-link ${link.isActive ? "active" : ""}`}
                 aria-current={link.isActive ? "page" : undefined}
-                onClick={() => {
-                  setMoreOpen(false);
-                }}
+                onClick={() => goFromMenu(link.href)}
               >
                 {link.icon}
                 <span>{link.label}</span>
@@ -192,9 +199,7 @@ export function Navigation({ userName }: NavigationProps) {
             href={link.href}
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
-            onClick={() => {
-              setMoreOpen(false);
-            }}
+            onClick={() => go(link.href)}
           >
             {link.icon}
             <span>{link.label}</span>

@@ -218,6 +218,16 @@ h3 {
   min-width: 0;
 }
 
+/* Tasks on a phone is one column: Progress, Tasks, Last x days, Categories. The two columns dissolve so each card can take its place. */
+@media (max-width: 991.98px) {
+  .todos-grid > div { display: contents; }
+  .todos-grid [aria-labelledby="progress-title"] { order: 1; }
+  .todos-grid [aria-labelledby="tasks-title"] { order: 2; }
+  .todos-grid [aria-labelledby="history-title"] { order: 3; }
+  .todos-grid [aria-labelledby^="categories-title"] { order: 4; }
+  .todos-grid .push-toggle-card { order: 5; }
+}
+
 /* A summary that sits above its list on a phone, beside it on a wide screen (Wishlist) */
 @media (max-width: 991.98px) {
   .summary-first { order: -1; }
@@ -2584,10 +2594,16 @@ button.bars-col:focus-visible {
 }
 .head-actions + .empty-note { margin-top: 1rem; }
 
-.category-name { text-transform: capitalize; }
+.category-name { text-transform: capitalize; flex: 1; min-width: 0; margin-inline: 0.5rem; overflow-wrap: anywhere; }
+/* A dragged category row follows the pointer above the others, on a solid ground. */
+.entry-row.dragging { position: relative; z-index: 2; box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35); }
+.entry-row.dragging .drag-handle { cursor: grabbing; }
+.surface .list-box[data-wash] > .entries > .entry-row.dragging { background-color: var(--surface-solid); }
 /* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
 .shopping-groups { display: grid; row-gap: 1.25rem; }
 .shopping-groups > .shopping-group > .group-label { margin-top: 0; }
+/* clear of the section head, like the first title in Wishlist and Tasks */
+.shopping-groups > .shopping-group:first-child > .group-label { margin-top: 0.5rem; }
 .surface > .list-box:has(> .shopping-groups),
 .shopping-groups > .shopping-group {
   --band-out: calc((var(--card-pad) + 1px) / 2);
@@ -2608,8 +2624,30 @@ button.bars-col:focus-visible {
 /* The Wishlist's All tab: a category title is a full-width row of the list, set apart from the group above it */
 .wishlist-entries > .group-label,
 .todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
-.wishlist-entries > .group-label:first-child,
-.todo-list > .group-label:first-child { margin-top: 0; }
+/* clear of the tabs above */
+.todo-list > .group-label:first-child,
+.wishlist-entries > .group-label:first-child { margin-top: 0.5rem; }
+/* A title that folds its group looks like any other title; the arrow after the text turns down while the group is open.
+   The tap area reaches 0.75rem past the text without moving it. */
+.group-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.group-toggle::before { content: ""; position: absolute; inset: -0.75rem -0.5rem; }
+.group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 
 /* Health: assistant chat */
 .chat-log {

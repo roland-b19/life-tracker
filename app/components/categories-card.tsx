@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction, revertCategoryAction } from "@/app/actions/categories";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
-import { PencilIcon, PlusIcon, TrashIcon } from "./icons";
-import { ListBox, useMore } from "./lists";
+import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
+import { ListBox, useDragSort, useKeepPlace, useMore } from "./lists";
 import { Modal } from "./modal";
 import { useToast } from "./toast";
 
@@ -32,6 +32,40 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [shown, more] = useMore(categories);
+
+  const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
+  const reorder = (update: string[]) => {
+    keepPlace();
+    onChange(() => update);
+  };
+
+  // The new order shows at once (the pages list their items in it too); a failed save puts the old one back, and Undo saves it again.
+  async function move(from: number, to: number) {
+    const next = [...categories];
+    next.splice(to, 0, ...next.splice(from, 1));
+    const previous = categories;
+    reorder(next);
+    const res = await reorderCategoriesAction({ scope, names: next }).catch(() => null);
+    if (!res?.success) {
+      reorder(previous);
+      showToast({ message: "Failed to move category", type: "warning" });
+      return;
+    }
+    showToast({
+      message: `Moved "${next[to]}"`,
+      type: "success",
+      actionLabel: "Undo",
+      onAction: async () => {
+        reorder(previous);
+        const back = await reorderCategoriesAction({ scope, names: previous }).catch(() => null);
+        if (!back?.success) {
+          reorder(next);
+          showToast({ message: "Failed to undo", type: "warning" });
+        }
+      },
+    });
+  }
+  const dragRow = useDragSort(move);
 
   function openForm(edit: string | null) {
     setError("");
@@ -132,7 +166,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
 
   return (
     <>
-      <section className="surface" aria-labelledby={`categories-title-${scope}`}>
+      <section ref={card} className="surface" aria-labelledby={`categories-title-${scope}`}>
         <div className="section-head">
           <h2 id={`categories-title-${scope}`} className="section-title">
             Categories <span className="muted number-tabular">{categories.length}</span>
@@ -146,8 +180,23 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
           {categories.length === 0 && (
             <p className="empty-note">No categories yet.</p>
           )}
-          {shown.map((cat) => (
-            <div key={cat} className="entry-row">
+          {shown.map((cat, i) => (
+            <div key={cat} className="entry-row" data-sort>
+              <button
+                type="button"
+                className="delete-icon-btn edit drag-handle"
+                aria-label={`Drag ${cat} to reorder`}
+                title="Drag to reorder"
+                {...dragRow}
+                onKeyDown={(e) => {
+                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                  if (to < 0 || to >= shown.length) return;
+                  e.preventDefault();
+                  move(i, to);
+                }}
+              >
+                <GripIcon size={22} />
+              </button>
               <span className="category-name">{cat}</span>
               <div className="row-actions">
                 <button
@@ -203,6 +252,30 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
 export const groupOrder = (categories: string[], items: { category: string }[]) => [
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
+
+/** Which category groups of a list are folded. The caller keys each by its tab too, so tabs fold independently. */
+export function useFolded() {
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  return [folded, toggle] as const;
+}
+
+/** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
+export function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
+  return (
+    <h3 className="group-label">
+      <button type="button" className="group-toggle" aria-expanded={!folded} onClick={onToggle}>
+        {categoryLabel(name)}
+        <ChevronRightIcon size={14} />
+      </button>
+    </h3>
+  );
+}
 
 /** "gifts" → "Gifts": categories are stored lower case and shown with a capital. */
 export const categoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);

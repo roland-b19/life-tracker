@@ -25,3 +25,9 @@ export const revertCategorySchema = z.object({
   itemIds: z.array(z.string().uuid()).max(5000),
   dropCurrent: z.boolean(),
 });
+
+/** The list's categories in their new order, top first. */
+export const reorderCategoriesSchema = z.object({
+  scope: categoryScopeSchema,
+  names: z.array(managedCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique."),
+});
