@@ -29,7 +29,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("pointerover", size);
     document.addEventListener("focusin", size);
+
+    // Most writes no longer re-render the page (the client keeps its own state), but back/forward replays the cached,
+    // pre-write page. After any server action ran, a back/forward therefore reloads once instead of showing old data.
+    let wrote = false;
+    const realFetch = window.fetch;
+    window.fetch = (input, init) => {
+      if (new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).has("next-action")) wrote = true;
+      return realFetch(input, init);
+    };
+    const onPop = () => {
+      if (wrote) window.location.reload();
+    };
+    window.addEventListener("popstate", onPop);
     return () => {
+      window.fetch = realFetch;
+      window.removeEventListener("popstate", onPop);
       document.removeEventListener("gesturestart", blockPinch);
       document.removeEventListener("pointerover", size);
       document.removeEventListener("focusin", size);

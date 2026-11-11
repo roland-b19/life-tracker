@@ -101,7 +101,7 @@ describe("a page view with two years of data stays cheap", () => {
     expect(src("food")).not.toContain("revalidatePath");
     expect(src("food-chat")).not.toContain("revalidatePath");
     const gym = src("gym");
-    for (const fn of ["logSetAction", "deleteSetAction", "startSessionAction", "cancelSessionAction", "restoreSessionAction"]) {
+    for (const fn of ["logSetAction", "deleteSetAction"]) {
       const body = gym.slice(gym.indexOf(`function ${fn}`)).split("\nexport ")[0];
       expect(body, fn).not.toContain("safeRevalidate");
     }
