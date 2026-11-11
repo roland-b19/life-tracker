@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { PencilIcon, TrashIcon } from "./icons";
 
 /**
  * The card around a list: the layout box the rows' bands widen into (globals.css). `wash`: every other row carries
@@ -12,6 +13,40 @@ export function ListBox({ className, wash, children }: { className?: string; was
       <div className={className}>{children}</div>
     </div>
   );
+}
+
+/**
+ * The Edit and Delete icon buttons at the end of a row. `bare`: no wrapper, for rows that lay the buttons out themselves.
+ * `deleteTitle` is the tooltip (a disconnect says "Disconnect").
+ */
+export function RowActions({
+  onEdit,
+  onDelete,
+  editLabel,
+  deleteLabel,
+  deleteTitle = "Delete",
+  className = "row-actions",
+  bare,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  editLabel: string;
+  deleteLabel: string;
+  deleteTitle?: string;
+  className?: string;
+  bare?: boolean;
+}) {
+  const buttons = (
+    <>
+      <button type="button" className="delete-icon-btn edit" onClick={onEdit} aria-label={editLabel} title="Edit">
+        <PencilIcon size={17} />
+      </button>
+      <button type="button" className="delete-icon-btn" onClick={onDelete} aria-label={deleteLabel} title={deleteTitle}>
+        <TrashIcon size={17} />
+      </button>
+    </>
+  );
+  return bare ? buttons : <div className={className}>{buttons}</div>;
 }
 
 const PAGE = 10;

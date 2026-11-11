@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
+import { CategoriesCard, GroupedList, categoryLabel, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
-import { ListBox } from "../components/lists";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, BellIcon, LockIcon, PlusIcon } from "../components/icons";
+import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
 import { Modal } from "../components/modal";
@@ -74,8 +74,6 @@ export function TodosClient({
   const [history, setHistory] = useState(initialHistory);
   const [planned, setPlanned] = useState(initialPlanned);
   const [categories, setCategories] = useState(initialCategories);
-  const [moving, setMoving] = useState<TodoItem | null>(null);
-  const [moveOpen, setMoveOpen] = useState(false);
 
   const { showToast } = useToast();
   // The list shows this view, which follows the controls once the day's tasks have loaded.
@@ -101,6 +99,9 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
+  // Editing can also move the task: "keep" leaves it where it is.
+  const [whenInput, setWhenInput] = useState<"keep" | "today" | "tomorrow" | "pick" | "daily">("keep");
+  const [pickDate, setPickDate] = useState(todayDate);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -139,7 +140,7 @@ export function TodosClient({
     const list = visibleFor(view.space, listDaily, view.date);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
-  const [folded, toggleFolded] = useFolded();
+  const [isFolded, toggleFolded] = useFolded("todos");
   const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
@@ -242,6 +243,8 @@ export function TodosClient({
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
     setCategoryInput(todo?.category ?? "other");
+    setWhenInput("keep");
+    setPickDate(todo && !todo.isRecurring ? todo.dueDate : todayDate);
     setIsTaskModalOpen(true);
   };
 
@@ -249,6 +252,13 @@ export function TodosClient({
     setIsTaskModalOpen(false);
     setTitleInput("");
     setReminderTimeInput("");
+  };
+
+  // Where the edit form sends the task; null when it stays.
+  const moveTarget = (task: TodoItem) => {
+    if (whenInput === "daily") return { pattern: "daily", day: todayDate };
+    const day = whenInput === "today" ? todayDate : whenInput === "tomorrow" ? tomorrow : whenInput === "pick" ? pickDate : null;
+    return day && (task.isRecurring || day !== task.dueDate) ? { pattern: "none", day } : null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -262,11 +272,17 @@ export function TodosClient({
     try {
       if (editing) {
         const before = editing;
-        // Only a daily task has a category to pick; a one-off keeps the one it has.
-        const category = before.isRecurring ? categoryInput : before.category;
+        const target = moveTarget(before);
+        // Only a daily task (or one that becomes daily) has a category to pick; a one-off keeps the one it has.
+        const category = before.isRecurring || target?.pattern === "daily" ? categoryInput : before.category;
         const after = { ...before, title, reminderTime, category };
         const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
         if ("error" in res) return setTitleError(res.error);
+        if (res.success && target) {
+          closeForm();
+          await moveTask(before, after, target.pattern, target.day);
+          return;
+        }
         if (res.success) {
           ++requestId.current;
           replace(after);
@@ -342,7 +358,7 @@ export function TodosClient({
       list
         .map((t) => {
           if (t.id !== task.id) return t;
-          const next = { ...t, isCompleted, completedAt: isCompleted ? new Date() : null };
+          const next = { ...t, isCompleted, completedAt: new Date() }; // when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones
           if (!t.isRecurring) return next;
           const doneDates = isCompleted ? [...new Set([...t.doneDates, day])].sort() : t.doneDates.filter((d) => d !== day);
           return { ...next, doneDates, streak: streakOn(new Set(doneDates), day) };
@@ -392,29 +408,27 @@ export function TodosClient({
     id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt,
   });
 
-  // Moving always takes the row out of this list; Undo puts the task back as it was (a new task a move created is deleted).
-  const handleMove = async (task: TodoItem, recurrencePattern: string, day: string) => {
-    setMoveOpen(false);
-    if (recurrencePattern === "none" && !task.isRecurring && day === task.dueDate) return;
+  // Moving always takes the row out of this list; Undo puts the task back as it was, edits included (a new task a move created is deleted).
+  const moveTask = async (before: TodoItem, after: TodoItem, recurrencePattern: string, day: string) => {
     ++requestId.current;
-    drop(task);
-    const res = await moveTodoAction({ id: task.id, recurrencePattern, dueDate: day }).catch(() => null);
+    drop(before);
+    const res = await moveTodoAction({ id: before.id, recurrencePattern, dueDate: day }).catch(() => null);
     if (!res?.success) {
-      if (shows(task)) putBack(task); // unless the list on screen changed meanwhile
+      if (shows(after)) putBack(after); // unless the list on screen changed meanwhile
       showToast({ message: res && "error" in res ? res.error : "Failed to move task", type: "warning" });
       return;
     }
-    const createdId = res.todo && res.todo.id !== task.id ? res.todo.id : undefined;
+    const createdId = res.todo && res.todo.id !== before.id ? res.todo.id : undefined;
     showToast({
-      message: `Moved "${task.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
+      message: `Moved "${after.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
       type: "success",
       actionLabel: "Undo",
       onAction: async () => {
         ++requestId.current;
-        if (shows(task)) putBack(task);
-        const back = await revertMoveTodoAction(snapshot(task), createdId).catch(() => null);
+        if (shows(before)) putBack(before);
+        const back = await revertMoveTodoAction(snapshot(before), createdId).catch(() => null);
         if (!back?.success) {
-          if (shows(task)) drop(task);
+          if (shows(before)) drop(before);
           showToast({ message: back && "error" in back ? back.error : "Failed to undo the move", type: "warning" });
         }
         await loadDay();
@@ -583,89 +597,51 @@ export function TodosClient({
 
             <ListBox wash className="todo-list">
               {listTodos.length > 0 ? (
-                <>
-                {listTodos.map((task, i) => (
-                  <Fragment key={task.id}>
-                  {listDaily && task.category !== listTodos[i - 1]?.category && (
-                    <GroupToggle
-                      name={task.category}
-                      folded={folded.has(foldKey(task.category))}
-                      onToggle={() => toggleFolded(foldKey(task.category))}
-                    />
-                  )}
-                  {!(listDaily && folded.has(foldKey(task.category))) && (
-                  <div className="todo-row">
-                    {!listTickable ? (
-                      <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
-                        {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                        onClick={() => handleToggleTodo(task)}
-                        aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                      >
-                        {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                      </button>
-                    )}
+                <GroupedList
+                  items={listTodos}
+                  grouped={listDaily}
+                  isFolded={(c) => isFolded(foldKey(c))}
+                  onToggle={(c) => toggleFolded(foldKey(c))}
+                  row={(task) => (
+                    <div className="todo-row">
+                      {!listTickable ? (
+                        <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
+                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
+                          onClick={() => handleToggleTodo(task)}
+                          aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                        >
+                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
+                        </button>
+                      )}
 
-                    <div className="todo-main">
-                      <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
-                      {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
-                        <div className="badge-row">
-                          {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
-                          {task.reminderTime && isPushEnabled() && <span className="badge badge-reminder">{task.reminderTime}</span>}
-                        </div>
+                      <div className="todo-main">
+                        <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
+                        {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
+                          <div className="badge-row">
+                            {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
+                            {task.reminderTime && isPushEnabled() && <span className="badge badge-reminder">{task.reminderTime}</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {listDaily && task.streak > 0 && (
+                        <span className="streak number-tabular" title={`${task.streak}-day streak`}>
+                          <FlameIcon size={15} />
+                          {task.streak}
+                        </span>
+                      )}
+
+                      {listEditable && (
+                        <RowActions bare onEdit={() => openForm(task)} onDelete={() => handleDeleteTodo(task)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
                       )}
                     </div>
-
-                    {listDaily && task.streak > 0 && (
-                      <span className="streak number-tabular" title={`${task.streak}-day streak`}>
-                        <FlameIcon size={15} />
-                        {task.streak}
-                      </span>
-                    )}
-
-                    {listEditable && (
-                      <>
-                        <button
-                          type="button"
-                          className="delete-icon-btn edit"
-                          onClick={() => {
-                            setMoving(task);
-                            setMoveOpen(true);
-                          }}
-                          aria-label={`Move ${task.title}`}
-                          title="Move"
-                        >
-                          <MoveIcon size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          className="delete-icon-btn edit"
-                          onClick={() => openForm(task)}
-                          aria-label={`Edit ${task.title}`}
-                          title="Edit"
-                        >
-                          <PencilIcon size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          className="delete-icon-btn"
-                          onClick={() => handleDeleteTodo(task)}
-                          aria-label={`Delete ${task.title}`}
-                          title="Delete"
-                        >
-                          <TrashIcon size={17} />
-                        </button>
-                      </>
-                    )}
-                  </div>
                   )}
-                  </Fragment>
-                ))}
-                </>
+                />
               ) : (
                 <p className="empty-note">
                   {view.date === todayDate
@@ -685,7 +661,7 @@ export function TodosClient({
           {view.tab === "daily" && (
             <CategoriesCard
               key={view.space}
-              scope={view.space}
+              api={scopedCategories(view.space)}
               categories={categories[view.space]}
               onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
               onRefile={(from, to, only) =>
@@ -800,7 +776,39 @@ export function TodosClient({
                 aria-describedby={titleError ? "task-title-error" : undefined}
               />
             </label>
-            {(editing ? editing.isRecurring : isDaily) && (
+            {editing && (
+              <>
+                <label>
+                  Day
+                  <select disabled={saving} value={whenInput} onChange={(e) => setWhenInput(e.target.value as typeof whenInput)}>
+                    <option value="keep">{editing.isRecurring ? "Daily" : whenLabel(editing.dueDate)}</option>
+                    {(editing.isRecurring || editing.dueDate !== todayDate) && <option value="today">Today</option>}
+                    {(editing.isRecurring || editing.dueDate !== tomorrow) && <option value="tomorrow">Tomorrow</option>}
+                    <option value="pick">Another day…</option>
+                    {!editing.isRecurring && <option value="daily">Daily</option>}
+                  </select>
+                </label>
+                {whenInput === "pick" && (
+                  // Not a <label>: a click inside the open calendar would re-trigger the button.
+                  <div className="field">
+                    <span id="task-pick-date">Date</span>
+                    <DatePicker
+                      mode="day"
+                      className="date-field"
+                      value={pickDate}
+                      today={todayDate}
+                      min={DEV_EDIT_PAST ? undefined : todayDate}
+                      max={maxDate}
+                      label={dayLabel(pickDate)}
+                      labelledBy="task-pick-date"
+                      disabled={saving}
+                      onChange={setPickDate}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            {(editing ? editing.isRecurring || whenInput === "daily" : isDaily) && (
               <label>
                 Category
                 <select disabled={saving} value={categoryInput} onChange={(e) => setCategoryInput(e.target.value)}>
@@ -840,43 +848,6 @@ export function TodosClient({
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal isOpen={moveOpen} onClose={() => setMoveOpen(false)} title="Move task">
-        {moving && (
-          <div className="move-options">
-            {moving.isRecurring && (
-              <p className="muted move-hint">
-                It leaves the daily list and becomes a task for the day you pick. Its streak starts over.
-              </p>
-            )}
-            {(moving.isRecurring || moving.dueDate !== todayDate) && (
-              <button type="button" className="secondary" onClick={() => handleMove(moving, "none", todayDate)}>
-                Today
-              </button>
-            )}
-            {(moving.isRecurring || moving.dueDate !== tomorrow) && (
-              <button type="button" className="secondary" onClick={() => handleMove(moving, "none", tomorrow)}>
-                Tomorrow
-              </button>
-            )}
-            <DatePicker
-              mode="day"
-              className="secondary move-pick"
-              value={moving.isRecurring ? todayDate : moving.dueDate}
-              today={todayDate}
-              min={DEV_EDIT_PAST ? undefined : todayDate}
-              max={maxDate}
-              label="Another day…"
-              onChange={(d) => handleMove(moving, "none", d)}
-            />
-            {!moving.isRecurring && (
-              <button type="button" className="secondary" onClick={() => handleMove(moving, "daily", todayDate)}>
-                Daily
-              </button>
-            )}
-          </div>
-        )}
       </Modal>
     </main>
   );

@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
 import { ensureCategory } from "./categories";
-import { addDays, APP_TZ, toISODate } from "./format-date";
+import { addDays, APP_TZ, appDay, toISODate } from "./format-date";
 import { streakOn } from "./streak";
 import { compareTodos } from "./todo-order";
 import {
@@ -140,6 +140,7 @@ export async function getDailyTodos(
   const done = await doneDatesOf(rows.filter((r) => r.isRecurring).map((r) => r.id), addDays(targetDate, -DONE_DATES_WINDOW_DAYS));
   const items: TodoItem[] = rows.map((r) => {
     const doneDates = done.get(r.id) ?? [];
+    const isCompleted = r.isRecurring ? doneDates.includes(targetDate) : r.isCompleted;
     return {
       id: r.id,
       userId: r.userId,
@@ -150,8 +151,9 @@ export async function getDailyTodos(
       dueDate: r.dueDate,
       reminderTime: r.reminderTime,
       // A repeating task is done on the days it was ticked.
-      isCompleted: r.isRecurring ? doneDates.includes(targetDate) : r.isCompleted,
-      completedAt: r.completedAt,
+      isCompleted,
+      // An unticked task sits at the bottom of its list for the day it was unticked, no longer.
+      completedAt: isCompleted || (r.completedAt && appDay(r.completedAt) === targetDate) ? r.completedAt : null,
       isCarriedOver: r.isCarriedOver,
       category: r.category,
       streak: r.isRecurring ? streakOn(new Set(doneDates), targetDate) : 0,
@@ -356,19 +358,19 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
     const day = { todoId: existing.id, date: input.currentDate };
     if (input.isCompleted) {
       await db.insert(todoCompletions).values(day).onConflictDoNothing();
-      await db.update(todos).set({ completedAt: new Date() }).where(eq(todos.id, existing.id));
     } else {
       await db
         .delete(todoCompletions)
         .where(and(eq(todoCompletions.todoId, day.todoId), eq(todoCompletions.date, day.date)));
     }
+    await db.update(todos).set({ completedAt: new Date() }).where(eq(todos.id, existing.id));
   } else {
     // One-off task
     await db
       .update(todos)
       .set({
         isCompleted: input.isCompleted,
-        completedAt: input.isCompleted ? new Date() : null,
+        completedAt: new Date(), // when the box last changed: orders the list
       })
       .where(eq(todos.id, existing.id));
   }

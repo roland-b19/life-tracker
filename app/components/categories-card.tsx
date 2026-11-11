@@ -1,15 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
-import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
-import { ListBox, useDragSort, useKeepPlace, useMore } from "./lists";
+import { ChevronRightIcon, GripIcon, PlusIcon } from "./icons";
+import { ListBox, RowActions, useDragSort, useKeepPlace, useMore } from "./lists";
 import { Modal } from "./modal";
 import { useToast } from "./toast";
 
+/** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
+export interface CategoriesApi {
+  /** Keeps this list's heading id apart from the other lists on the page. */
+  id: string;
+  add: (name: string) => Promise<{ success: boolean }>;
+  rename: (from: string, to: string) => Promise<{ success: boolean; change?: Change | null }>;
+  remove: (name: string) => Promise<{ success: boolean; change?: Change | null }>;
+  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<{ success: boolean }>;
+  reorder: (names: string[]) => Promise<{ success: boolean }>;
+}
+
+/** The api of a scope-based list (Wishlist, or a Tasks space). */
+export const scopedCategories = (scope: CategoryScope): CategoriesApi => ({
+  id: scope,
+  add: (name) => addCategoryAction({ scope, name }),
+  rename: (from, to) => renameCategoryAction({ scope, from, to }),
+  remove: (name) => deleteCategoryAction({ scope, name }),
+  revert: (input) => revertCategoryAction({ scope, ...input }),
+  reorder: (names) => reorderCategoriesAction({ scope, names }),
+});
+
 interface Props {
-  scope: CategoryScope;
+  api: CategoriesApi;
   categories: string[];
   onChange: (update: (prev: string[]) => string[]) => void;
   /** The page re-files its items: a rename (merging onto an existing name included) or a delete (to "other"). `only` limits it to those item ids (Undo). */
@@ -24,7 +45,7 @@ interface Change {
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
-export function CategoriesCard({ scope, categories, onChange, onRefile }: Props) {
+export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
@@ -45,7 +66,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
     next.splice(to, 0, ...next.splice(from, 1));
     const previous = categories;
     reorder(next);
-    const res = await reorderCategoriesAction({ scope, names: next }).catch(() => null);
+    const res = await api.reorder(next).catch(() => null);
     if (!res?.success) {
       reorder(previous);
       showToast({ message: "Failed to move category", type: "warning" });
@@ -57,7 +78,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
       actionLabel: "Undo",
       onAction: async () => {
         reorder(previous);
-        const back = await reorderCategoriesAction({ scope, names: previous }).catch(() => null);
+        const back = await api.reorder(previous).catch(() => null);
         if (!back?.success) {
           reorder(next);
           showToast({ message: "Failed to undo", type: "warning" });
@@ -84,7 +105,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
       onRefile(current, name, change.itemIds);
     };
     put();
-    const back = await revertCategoryAction({ scope, name, current, dropCurrent, ...change }).catch(() => null);
+    const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
     if (!back?.success) {
       onChange((prev) => (current === "other" ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
       onRefile(name, current, change.itemIds);
@@ -102,7 +123,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
     setBusy(true);
     try {
       if (from === null) {
-        if (!(await addCategoryAction({ scope, name: to })).success) return setError(`"${to}" already exists.`);
+        if (!(await api.add(to)).success) return setError(`"${to}" already exists.`);
         onChange((prev) => [...prev, to]);
         showToast({
           message: `Added "${to}"`,
@@ -110,7 +131,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
           actionLabel: "Undo",
           onAction: async () => {
             onChange((prev) => prev.filter((c) => c !== to));
-            const gone = await deleteCategoryAction({ scope, name: to }).catch(() => null);
+            const gone = await api.remove(to).catch(() => null);
             if (!gone?.success) {
               onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
               showToast({ message: "Failed to undo", type: "warning" });
@@ -121,7 +142,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
           },
         });
       } else {
-        const res = await renameCategoryAction({ scope, from, to });
+        const res = await api.rename(from, to);
         if (!res.success || !res.change) throw new Error("Category not found");
         const change = res.change;
         const at = categories.indexOf(from);
@@ -149,7 +170,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
   async function remove(cat: string) {
     const at = categories.indexOf(cat);
     onChange((prev) => prev.filter((c) => c !== cat));
-    const res = await deleteCategoryAction({ scope, name: cat }).catch(() => null);
+    const res = await api.remove(cat).catch(() => null);
     if (!res?.success || !res.change) {
       onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
       showToast({ message: "Failed to remove category", type: "warning" });
@@ -166,9 +187,9 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
 
   return (
     <>
-      <section ref={card} className="surface" aria-labelledby={`categories-title-${scope}`}>
+      <section ref={card} className="surface" aria-labelledby={`categories-title-${api.id}`}>
         <div className="section-head">
-          <h2 id={`categories-title-${scope}`} className="section-title">
+          <h2 id={`categories-title-${api.id}`} className="section-title">
             Categories <span className="muted number-tabular">{categories.length}</span>
           </h2>
           <button type="button" className="btn-sm tint" onClick={() => openForm(null)}>
@@ -198,26 +219,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
                 <GripIcon size={22} />
               </button>
               <span className="category-name">{cat}</span>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="delete-icon-btn edit"
-                  onClick={() => openForm(cat)}
-                  aria-label={`Edit category ${cat}`}
-                  title="Edit"
-                >
-                  <PencilIcon size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="delete-icon-btn"
-                  onClick={() => remove(cat)}
-                  aria-label={`Delete category ${cat}`}
-                  title="Delete"
-                >
-                  <TrashIcon size={17} />
-                </button>
-              </div>
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit category ${cat}`} deleteLabel={`Delete category ${cat}`} />
             </div>
           ))}
           {more}
@@ -253,16 +255,44 @@ export const groupOrder = (categories: string[], items: { category: string }[]) 
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
 
-/** Which category groups of a list are folded. The caller keys each by its tab too, so tabs fold independently. */
-export function useFolded() {
-  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (key: string) =>
-    setFolded((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
-  return [folded, toggle] as const;
+const FOLD_STORAGE = "lt-folded";
+let foldedKeys: ReadonlySet<string> | null = null; // read from storage on first use in the browser
+const foldListeners = new Set<() => void>();
+const noFolds: ReadonlySet<string> = new Set();
+
+const loadFolded = (): ReadonlySet<string> => {
+  if (!foldedKeys) {
+    try {
+      foldedKeys = new Set<string>(JSON.parse(localStorage.getItem(FOLD_STORAGE) ?? "[]"));
+    } catch {
+      foldedKeys = new Set(); // storage blocked or corrupt: folds last until the page reloads
+    }
+  }
+  return foldedKeys;
+};
+
+const toggleFolded = (key: string) => {
+  const next = new Set(loadFolded());
+  if (!next.delete(key)) next.add(key);
+  foldedKeys = next;
+  try {
+    localStorage.setItem(FOLD_STORAGE, JSON.stringify([...next]));
+  } catch {}
+  foldListeners.forEach((l) => l());
+};
+
+const subscribeFolded = (l: () => void) => {
+  foldListeners.add(l);
+  return () => void foldListeners.delete(l);
+};
+
+/**
+ * Which category groups of a list are folded, kept in this browser so a group stays folded across pages and reloads.
+ * `page` keeps pages apart; the caller keys each group by its tab too, so tabs fold independently.
+ */
+export function useFolded(page: string) {
+  const folded = useSyncExternalStore(subscribeFolded, loadFolded, () => noFolds);
+  return [(key: string) => folded.has(`${page}/${key}`), (key: string) => toggleFolded(`${page}/${key}`)] as const;
 }
 
 /** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
@@ -275,6 +305,45 @@ export function GroupToggle({ name, folded, onToggle }: { name: string; folded: 
       </button>
     </h3>
   );
+}
+
+/**
+ * Rows grouped under category titles with fold: Wishlist, the Tasks daily list and the Health shopping list all draw their
+ * rows through this. `items` arrive with each category together; `row` draws one row; `wrap` puts a div of that class around
+ * each group (the shopping list's cards); `grouped: false` draws the rows alone (Tasks outside the daily list).
+ */
+export function GroupedList<T extends { id: string; category: string }>({
+  items,
+  isFolded,
+  onToggle,
+  row,
+  wrap,
+  grouped = true,
+}: {
+  items: T[];
+  isFolded: (category: string) => boolean;
+  onToggle: (category: string) => void;
+  row: (item: T) => ReactNode;
+  wrap?: string;
+  grouped?: boolean;
+}) {
+  if (!grouped) return items.map((item) => <Fragment key={item.id}>{row(item)}</Fragment>);
+  const groups: T[][] = [];
+  for (const item of items) {
+    const last = groups.at(-1);
+    if (last && last[0].category === item.category) last.push(item);
+    else groups.push([item]);
+  }
+  return groups.map((group) => {
+    const category = group[0].category;
+    const body = (
+      <>
+        <GroupToggle name={category} folded={isFolded(category)} onToggle={() => onToggle(category)} />
+        {!isFolded(category) && group.map((item) => <Fragment key={item.id}>{row(item)}</Fragment>)}
+      </>
+    );
+    return wrap ? <div key={category} className={wrap}>{body}</div> : <Fragment key={category}>{body}</Fragment>;
+  });
 }
 
 /** "gifts" → "Gifts": categories are stored lower case and shown with a capital. */

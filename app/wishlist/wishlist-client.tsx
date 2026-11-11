@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { AnimatedNumber } from "../components/animated-number";
-import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
+import { CategoriesCard, GroupedList, categoryLabel, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
-import { ListBox } from "../components/lists";
-import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { ListBox, RowActions } from "../components/lists";
+import { PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
@@ -97,7 +97,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   // The range comes from the price, never from the stored column.
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
   // Every tab lists its items under their category, each group in the chosen sort; a group can be folded.
-  const [folded, toggleFolded] = useFolded();
+  const [isFolded, toggleFolded] = useFolded("wishlist");
   const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
   const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
@@ -290,13 +290,11 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                   {items.length === 0 ? "No items yet." : "No items in this range."}
                 </p>
               ) : (
-                <>
-                  {filteredItems.map((item, i) => (
-                    <Fragment key={item.id}>
-                    {item.category !== filteredItems[i - 1]?.category && (
-                      <GroupToggle name={item.category} folded={folded.has(foldKey(item.category))} onToggle={() => toggleFolded(foldKey(item.category))} />
-                    )}
-                    {!folded.has(foldKey(item.category)) && (
+                <GroupedList
+                  items={filteredItems}
+                  isFolded={(c) => isFolded(foldKey(c))}
+                  onToggle={(c) => toggleFolded(foldKey(c))}
+                  row={(item) => (
                     <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
@@ -307,35 +305,14 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                         {item.url && <ItemLink value={item.url} />}
                       </div>
 
-                      <div className="item-actions">
-                        <button
-                          type="button"
-                          className="delete-icon-btn edit"
-                          onClick={() => openForm(item)}
-                          aria-label={`Edit ${item.name}`}
-                          title="Edit"
-                        >
-                          <PencilIcon size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          className="delete-icon-btn"
-                          onClick={() => handleRemove(item)}
-                          aria-label={`Delete ${item.name}`}
-                          title="Delete"
-                        >
-                          <TrashIcon size={17} />
-                        </button>
-                      </div>
+                      <RowActions className="item-actions" onEdit={() => openForm(item)} onDelete={() => handleRemove(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
                     </div>
-                    )}
-                    </Fragment>
-                  ))}
-                </>
+                  )}
+                />
               )}
             </ListBox>
           </section>
-          <CategoriesCard scope="wishlist" categories={categories} onChange={setCategories} onRefile={refile} />
+          <CategoriesCard api={scopedCategories("wishlist")} categories={categories} onChange={setCategories} onRefile={refile} />
         </div>
 
         <div className="dashboard-aside summary-first">

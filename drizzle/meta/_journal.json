@@ -155,6 +155,13 @@
       "when": 1794392993359,
       "tag": "0021_item_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794410792788,
+      "tag": "0022_shopping_checked_at",
+      "breakpoints": true
     }
   ]
 }

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Navigation } from "../components/navigation";
-import { ListBox } from "../components/lists";
-import { PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { ListBox, RowActions } from "../components/lists";
+import { PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
@@ -123,26 +123,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
                   <div className="item-meta">
                     <span className="muted number-tabular">Connected {formatDMY(connectedAt)}</span>
                   </div>
-                  <div className="item-actions">
-                    <button
-                      type="button"
-                      className="delete-icon-btn edit"
-                      aria-label="Replace the Claude token"
-                      title="Edit"
-                      onClick={openForm}
-                    >
-                      <PencilIcon size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="delete-icon-btn"
-                      aria-label="Disconnect Claude"
-                      title="Disconnect"
-                      onClick={handleDisconnect}
-                    >
-                      <TrashIcon size={17} />
-                    </button>
-                  </div>
+                  <RowActions className="item-actions" onEdit={openForm} onDelete={handleDisconnect} editLabel="Replace the Claude token" deleteLabel="Disconnect Claude" deleteTitle="Disconnect" />
                 </div>
               )}
             </ListBox>

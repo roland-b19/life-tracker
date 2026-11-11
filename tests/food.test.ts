@@ -259,6 +259,21 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect(await restoreShoppingItems(userB, [oil.id])).toHaveLength(0);
   });
 
+  it("lists a just-bought item first among the bought and a just-unticked one last among the unbought", async () => {
+    const names = async () => (await getShoppingList(userA)).map((i) => i.name);
+    const [a, b, c] = [
+      await addShoppingItem(userA, { name: "Apples", amount: 1, unit: "kg", category: "produce" }),
+      await addShoppingItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "produce" }),
+      await addShoppingItem(userA, { name: "Cheese", amount: 1, unit: "pack", category: "produce" }),
+    ];
+    await toggleShoppingItem(userA, a.id, true);
+    await toggleShoppingItem(userA, b.id, true);
+    expect(await names()).toEqual(["Cheese", "Bread", "Apples"]);
+    await toggleShoppingItem(userA, a.id, false);
+    expect(await names()).toEqual(["Cheese", "Apples", "Bread"]);
+    expect(c.isBought).toBe(false);
+  });
+
   describe("Server Actions for Food", () => {
     it("rejects unauthenticated requests", async () => {
       authState.id = "";

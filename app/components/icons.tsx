@@ -234,31 +234,6 @@ export function PencilIcon({ size = 16, className, ...props }: IconProps) {
   );
 }
 
-/** Calendar with an arrow: move to another day. */
-export function MoveIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <path d="M21 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h7" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-      <path d="M16 18h6M19 15l3 3-3 3" />
-    </svg>
-  );
-}
-
-
-
 /** Arrows up, down, left and right: "drag to move" (the muscle map's touch lock). */
 export function ArrowsIcon({ size = 16, className, ...props }: IconProps) {
   return (

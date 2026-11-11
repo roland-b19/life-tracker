@@ -257,6 +257,7 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       "ended_on" date
     );
+    ALTER TABLE "shopping_items" ADD COLUMN IF NOT EXISTS "checked_at" timestamp with time zone;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "ended_on" date;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     CREATE TABLE IF NOT EXISTS "todo_completions" (

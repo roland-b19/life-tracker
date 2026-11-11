@@ -12,6 +12,9 @@ export const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
 export const APP_TZ = "Europe/Bucharest";
 const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ });
 
+/** The calendar day of a moment, in the app's timezone. */
+export const appDay = (d: Date) => todayFormat.format(d);
+
 /** "YYYY-MM-DD": today in Europe/Bucharest with no argument, otherwise the local calendar date of `d`. */
 export function toISODate(d?: Date): string {
   if (!d) return todayFormat.format(new Date());

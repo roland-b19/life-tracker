@@ -255,6 +255,8 @@ export const shoppingItems = pgTable(
     unit: varchar("unit", { length: 30 }).default("pcs").notNull(),
     category: varchar("category", { length: 50 }).default("other").notNull(),
     isBought: boolean("is_bought").default(false).notNull(),
+    // When the box last changed (bought or not bought again): bought items list the latest first, an item put back goes last.
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     // Set when a bought item is cleared: hidden from the list, kept so Undo can restore it.
     clearedAt: timestamp("cleared_at", { withTimezone: true }),
