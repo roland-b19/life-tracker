@@ -73,8 +73,8 @@ export const deleteTodoSchema = z.object({
 export const pushSubscriptionSchema = z.object({
   // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.
   endpoint: z.url({ protocol: /^https$/ }).max(500),
-  p256dhKey: z.string().min(1).max(255),
-  authKey: z.string().min(1).max(255),
+  p256dhKey: z.string().trim().min(1).max(255),
+  authKey: z.string().trim().min(1).max(255),
 });
 
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;

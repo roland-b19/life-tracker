@@ -760,7 +760,7 @@ export function GymClient({
                       label="Reps"
                       type="number"
                       min="1"
-                      max="100"
+                      max="200"
                       inputMode="numeric"
                       disabled={busy}
                       value={currentState.reps}

@@ -26,6 +26,7 @@ import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
+import { toISODate } from "@/lib/format-date";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 
@@ -182,7 +183,8 @@ describe("Food assistant: context prompt and structured answer", () => {
       vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
     });
 
-    const input = { message: "o banană", history: [], date: ctx.date, time: ctx.time };
+    const today = toISODate();
+    const input = { message: "o banană", history: [], date: today, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
       await expect(sendFoodChatMessageAction(input)).rejects.toThrow("Authentication required.");
@@ -199,7 +201,16 @@ describe("Food assistant: context prompt and structured answer", () => {
 
       expect(res.meals).toHaveLength(1);
       expect(res.freshSummary?.meals.map((m) => m.name)).toEqual(["1 banană"]);
-      expect((await getDailyFoodSummary(stranger, ctx.date)).meals).toHaveLength(0);
+      expect((await getDailyFoodSummary(stranger, today)).meals).toHaveLength(0);
+    });
+
+    it("writes only into today or yesterday, like logging by hand", async () => {
+      authState.id = userId;
+      process.env.AUTH_DEV = "true";
+      for (const date of ["2026-11-05", "2999-01-01"]) {
+        await expect(sendFoodChatMessageAction({ ...input, date })).rejects.toThrow("Only today and yesterday can be changed.");
+      }
+      expect(runClaude).not.toHaveBeenCalled();
     });
 
     it("rejects invalid input before calling the model", async () => {

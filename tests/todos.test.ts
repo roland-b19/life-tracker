@@ -20,8 +20,9 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
+import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
-import { todoCompletions, users } from "@/db/schema";
+import { pushSubscriptions, todoCompletions, users } from "@/db/schema";
 import {
   createTodo,
   DONE_DATES_WINDOW_DAYS,
@@ -472,6 +473,17 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(true);
       expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
+    });
+
+    it("keeps one row per endpoint when the same browser subscribes twice", async () => {
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
+      const endpoint = "https://fcm.googleapis.com/fcm/send/twice-endpoint";
+      await savePushSubscriptionAction({ endpoint, p256dhKey: "old-p256dh", authKey: "old-auth" });
+      await savePushSubscriptionAction({ endpoint, p256dhKey: "new-p256dh", authKey: "new-auth" });
+      const rows = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].p256dhKey).toBe("new-p256dh");
+      expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(true);
     });
 
     it("refuses a push endpoint that is not https", async () => {

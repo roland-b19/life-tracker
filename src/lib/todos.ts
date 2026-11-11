@@ -529,17 +529,15 @@ export async function savePushSubscription(
   userId: string,
   input: PushSubscriptionInput,
 ) {
-  const [created] = await db
-    .insert(pushSubscriptions)
-    .values({
-      userId,
-      endpoint: input.endpoint,
-      p256dhKey: input.p256dhKey,
-      authKey: input.authKey,
-    })
-    .returning();
-
-  return created;
+  // One row per endpoint: re-enabling reminders (or a double tap) must not send every reminder twice.
+  return db.transaction(async (tx) => {
+    await tx.delete(pushSubscriptions).where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, input.endpoint)));
+    const [created] = await tx
+      .insert(pushSubscriptions)
+      .values({ userId, endpoint: input.endpoint, p256dhKey: input.p256dhKey, authKey: input.authKey })
+      .returning();
+    return created;
+  });
 }
 
 
