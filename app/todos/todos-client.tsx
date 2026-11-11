@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, categoryLabel, groupOrder } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, FlameIcon, BellIcon, LockIcon, MoveIcon, PencilIcon, PlusIcon } from "../components/icons";
@@ -85,6 +85,12 @@ export function TodosClient({
     date: todayDate,
   });
   const viewId = useRef(0);
+  // The page position when a switch started: the list changes a render after the controls, so put the page back then too.
+  const scrolled = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (scrolled.current !== null) window.scrollTo(0, scrolled.current);
+    scrolled.current = null;
+  }, [view]);
 
   const [todosMap, setTodosMap] = useState<Record<TodoSpace, TodoItem[]>>({
     personal: initialPersonalTodos,
@@ -210,6 +216,7 @@ export function TodosClient({
   const switchView = (next: { space?: TodoSpace; tab?: TaskTab; date?: string }) => {
     const target = { space, tab, date, ...next };
     if (target.space === space && target.tab === tab && target.date === date) return;
+    scrolled.current = window.scrollY;
     setSpace(target.space);
     setTab(target.tab);
     setDate(target.date);

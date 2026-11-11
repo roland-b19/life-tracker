@@ -158,6 +158,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
+- 2026-11-11 — Safari on iPhone still jumped on the Wishlist ranges 250-750 and 750+ (it has no scroll anchoring, so the CSS rule does nothing there; cause not reproduced, no Xcode here). `Segmented` now saves the page position on press and restores it in a layout effect (clamps for a short list); Tasks does the same when its list follows the controls. Checked in Chrome with anchoring forced on; to be checked on the phone.
 - 2026-11-11 — Switching a list range or tab no longer throws the page to the top: the browser's scroll anchoring followed a row that moved up; `.list-box` now has `overflow-anchor: none` (one CSS rule), so the page keeps its position and only clamps when the new list is too short. Checked in Chrome on a 48-row Wishlist (scroll 1500 to a 15-row range gave the page end, 300 stayed 300); not checked on iOS Safari (it has no anchoring, so it already behaved this way).
 
 - 2026-11-11 — Removed every animation and transition app-wide and added Undo to every mutating action (branch `feat/no-motion-undo-everywhere`); design skill rewritten (`references/lists-and-crud.md`), decision recorded. Not tested in a browser by hand; gaps: starting a workout is undone only before sets exist, a custom exercise only if unused, the Assistant's chat Undo covers meals only.

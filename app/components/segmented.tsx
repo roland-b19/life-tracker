@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
 interface SegmentedProps<T extends string> {
   label: string;
@@ -12,6 +12,13 @@ interface SegmentedProps<T extends string> {
 
 export function Segmented<T extends string>({ label, value, options, onChange }: SegmentedProps<T>) {
   const index = Math.max(0, options.findIndex((o) => o.value === value));
+  const scrolled = useRef<number | null>(null);
+  // Safari on iPhone throws the page to the top when the rows under a pressed option change; put it back before paint.
+  // A list too short for that position clamps to its end.
+  useLayoutEffect(() => {
+    if (scrolled.current !== null) window.scrollTo(0, scrolled.current);
+    scrolled.current = null;
+  }, [value]);
   return (
     <div
       className={`segmented${options.length > 4 ? " dense" : ""}${options.some((o) => o.short) ? " has-short" : ""}`}
@@ -27,7 +34,10 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
           aria-selected={value === o.value}
           className={value === o.value ? "active" : ""}
           aria-label={o.short ? o.label : undefined}
-          onClick={() => onChange(o.value)}
+          onClick={() => {
+            if (o.value !== value) scrolled.current = window.scrollY;
+            onChange(o.value);
+          }}
         >
           {o.short ? (
             <>

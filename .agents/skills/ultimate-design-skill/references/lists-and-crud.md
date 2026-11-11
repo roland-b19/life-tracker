@@ -179,7 +179,7 @@ const [sort, setSort] = useState("newest");
 const visible = items.filter(inView(filter)).sort(SORT_BY[sort]);
 ```
 
-Nothing fades; the control and the rows change in the same render. The page keeps its scroll position: `.list-box` has `overflow-anchor: none`, so the browser does not pull the page up to follow a row that moved. Only a list too short to fill the page moves it, and then its end sits at the bottom of the screen.
+Nothing fades; the control and the rows change in the same render. The page keeps its scroll position: `.list-box` has `overflow-anchor: none`, so the browser does not pull the page up to follow a row that moved. `Segmented` also puts the page back in a layout effect, because Safari on iPhone ignores `overflow-anchor`. Only a list too short to fill the page moves it, and then its end sits at the bottom of the screen.
 
 ## Long lists (More)
 
