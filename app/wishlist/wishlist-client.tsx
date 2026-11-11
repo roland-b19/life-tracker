@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { AnimatedNumber } from "../components/animated-number";
-import { CategoriesCard, GroupedList, categoryLabel, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { Navigation } from "../components/navigation";
+import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect } from "../components/blocks";
+import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { ListBox, RowActions } from "../components/lists";
-import { PlusIcon } from "../components/icons";
-import { Modal } from "../components/modal";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
 import {
@@ -25,9 +23,9 @@ interface WishlistClientProps {
 }
 
 const PRIORITY_BADGE: Record<Priority, string> = {
-  high: "badge-danger",
-  medium: "badge-warning",
-  low: "badge-rest",
+  high: "danger",
+  medium: "warning",
+  low: "rest",
 };
 
 const RANGE_LABEL: Record<Priority, string> = {
@@ -158,9 +156,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           message: `Saved "${updated.name}"`,
           type: "success",
           ...(before && {
-            actionLabel: "Undo",
             // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-            onAction: async () => {
+            onUndo: async () => {
               replace(before);
               const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
               if (!back?.success) {
@@ -181,8 +178,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         showToast({
           message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+          onUndo: async () => {
             setItems((prev) => prev.filter((i) => i.id !== added.id));
             const gone = await deleteWishlistItemAction(added.id).catch(() => null);
             if (gone?.success === false || !gone) {
@@ -217,9 +213,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     );
     showToast({
       message: `Removed "${target.name}"`,
-      actionLabel: "Undo",
       // Same id and date, so the row comes back where it was.
-      onAction: async () => {
+      onUndo: async () => {
         putBack(target);
         if (!(await deleted)) return; // the delete never happened
         const back = await restoreWishlistItemAction({
@@ -240,43 +235,21 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   }
 
   return (
-    <main>
-      <Navigation userName={userName} />
-
-      <div className="dashboard-grid">
-        <div className="dashboard-main">
-          <section className="surface" aria-labelledby="wishlist-items-title">
-            <div className="section-head">
-              <h2 id="wishlist-items-title" className="section-title">
-                Items <span className="muted number-tabular">{filteredItems.length}</span>
-              </h2>
-              <span className="head-actions below">
-                <select
-                  className="sort-select"
-                  aria-label="Sort items"
-                  value={sort}
-                  // data-pointer marks a mouse or touch open, which gets no focus ring; a key press (not the
-                  // Escape that closes the menu) brings it back.
-                  onPointerDown={(e) => (e.currentTarget.dataset.pointer = "")}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Escape") delete e.currentTarget.dataset.pointer;
-                  }}
-                  onBlur={(e) => delete e.currentTarget.dataset.pointer}
-                  onChange={(e) => setSort(e.target.value as Sort)}
-                >
-                  {SORTS.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                  <PlusIcon size={14} />
-                  Add item
-                </button>
-              </span>
-            </div>
-
+    <Page userName={userName}>
+      <Dashboard>
+        <DashboardMain>
+          <Card
+            id="wishlist-items-title"
+            title="Items"
+            count={filteredItems.length}
+            below
+            actions={
+              <>
+                <SortSelect label="Sort items" value={sort} options={SORTS} onChange={setSort} />
+                <AddButton onClick={() => openForm()}>Add item</AddButton>
+              </>
+            }
+          >
             <Segmented
               label="Filter by price range"
               value={filterRange}
@@ -286,9 +259,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
             <ListBox wash className="entries wishlist-entries">
               {filteredItems.length === 0 ? (
-                <p className="empty-note">
-                  {items.length === 0 ? "No items yet." : "No items in this range."}
-                </p>
+                <EmptyNote>{items.length === 0 ? "No items yet." : "No items in this range."}</EmptyNote>
               ) : (
                 <GroupedList
                   items={filteredItems}
@@ -298,9 +269,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                     <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">
-                        <span className="badge badge-info item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</span>
+                        <Badge kind="info" className="item-price number-tabular">{formatRon(Number(item.estimatedPrice))} RON</Badge>
                         {filterRange === "all" && (
-                          <span className={`badge item-range ${PRIORITY_BADGE[rangeOf(item)]}`}>{RANGE_LABEL[rangeOf(item)]}</span>
+                          <Badge kind={PRIORITY_BADGE[rangeOf(item)]} className="item-range">{RANGE_LABEL[rangeOf(item)]}</Badge>
                         )}
                         {item.url && <ItemLink value={item.url} />}
                       </div>
@@ -311,91 +282,42 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                 />
               )}
             </ListBox>
-          </section>
+          </Card>
           <CategoriesCard api={scopedCategories("wishlist")} categories={categories} onChange={setCategories} onRefile={refile} />
-        </div>
+        </DashboardMain>
 
-        <div className="dashboard-aside summary-first">
-          <section className="surface" aria-labelledby="wishlist-summary-title">
-            <div className="section-head">
-              <h2 id="wishlist-summary-title" className="section-title">
-                Estimated Investment
-              </h2>
-            </div>
+        <DashboardAside summaryFirst>
+          <Card id="wishlist-summary-title" title="Estimated Investment">
             <p className="item-total number-tabular">
               <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
             </p>
-          </section>
-        </div>
-      </div>
+          </Card>
+        </DashboardAside>
+      </Dashboard>
 
-      <Modal
+      <FormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingId ? "Edit item" : "New item"}
+        onSubmit={handleSubmit}
+        error={errorMsg}
+        busy={busy}
+        canSubmit={!!name.trim() && !!estimatedPrice}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="form-stack">
-            <label>
-              Name
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={busy}
-                maxLength={120}
-                required
-              />
-            </label>
-
-            <label>
-              Price (RON)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={estimatedPrice}
-                onChange={(e) => setEstimatedPrice(e.target.value)}
-                disabled={busy}
-                required
-                className="number-tabular"
-              />
-            </label>
-
-            <label>
-              Category
-              <select disabled={busy} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {[...new Set([...categories, category, "other"])].map((c) => (
-                  <option key={c} value={c}>
-                    {categoryLabel(c)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Link or store (optional)
-              <input
-                type="text"
-                maxLength={500}
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-
-            {errorMsg && <p className="error" role="alert">{errorMsg}</p>}
-          </div>
-
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !name.trim() || !estimatedPrice}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </main>
+        <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} disabled={busy} maxLength={120} required />
+        <Field
+          label="Price (RON)"
+          type="text"
+          inputMode="numeric"
+          value={estimatedPrice}
+          onChange={(e) => setEstimatedPrice(e.target.value)}
+          disabled={busy}
+          required
+          className="number-tabular"
+        />
+        <CategoryField categories={categories} value={category} onChange={setCategory} disabled={busy} />
+        <Field label="Link or store (optional)" type="text" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} />
+      </FormModal>
+    </Page>
   );
 }

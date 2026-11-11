@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-11 by Claude (shared list structures, check order, remembered folds, move task inside Edit; branch `feat/shared-lists`, not pushed to a PR, not merged, NOT deployed; earlier: `feat/fold-categories`, merged)_
+_Last updated: 2026-11-11 by Claude (every repeating UI structure is now one shared component, branch `refactor/shared-structures`; earlier: `feat/shared-lists`, merged in PR #84 and deployed)_
 
 ## Phase
 
@@ -47,7 +47,11 @@ Categories (branch `feat/categories`, not merged): every Wishlist item has a cat
 
 ## Current focus
 
-**Shared list structures** (branch `feat/shared-lists`, not merged, not deployed; the user wants to test it first): More menu padding is equal top and bottom; closed categories stay closed across pages (`useFolded`); Tasks and Health shopping share one check order (tick to the top of the checked, untick to the bottom of the unchecked); a task is moved from Edit and Today to Daily asks for a category; the Tasks toolbar gap matches Health; Health's shopping Categories card and list rows use the same shared pieces as Wishlist and Tasks (`CategoriesCard` with `CategoriesApi`, `GroupedList`, `RowActions`). **Before this is merged and deployed the user must run migration `0022_shopping_checked_at` on Neon** (additive column, from the Mac, owner URL in a hidden prompt). No new dependency, no new endpoint. Gates: eslint, tsc, 172 tests green; checked in the browser pane at phone width on a dev user. Not checked: real iPhone Safari, the live build, Gym's delete-only buttons (not converted to `RowActions`).
+**Shared UI structures** (branch `refactor/shared-structures`): every repeating piece of UI is one shared component or hook, so a new page only reuses and customizes them. `app/components/blocks.tsx` (new) holds the page and section structures (`Page`, `CenterCard`, `Toolbar`, `Dashboard`/`DashboardMain`/`DashboardAside`, `Card`, `Banner`, `Hint`, `EmptyNote`, `SkeletonRows`, `StatRow`, `BigNumber`, `ProgressBar`, `Badge`, `AddButton`, `TintButton`, `Checkbox`, `Field`, `Toggle`, `FieldPair`, `DateField`, `SortSelect`, `SelectField`, `FormActions`, `FormModal`, `DayStepper`, chart controls); `lists.tsx` adds `IconButton`, `EditButton`, `DeleteButton`, `DragHandle`; the toast takes one `onUndo`. Wishlist, Tasks, Health (all tabs), Gym, Settings, sign-in and the error pages use them; class names and DOM are kept, so the look is unchanged. The few things left inline are listed in `docs/decisions.md` (2026-11-11 "One shared component per UI structure"). No migration, no new dependency, no new endpoint. Gates: eslint, tsc, 172 tests green; checked in the browser pane at phone width (Tasks, Wishlist add/delete/Undo, Health Today/Weight/Shopping, Gym, Settings, meal modal). Not checked: real iPhone Safari, the live build, Gym's workout screen and routine editor by hand.
+
+Earlier focus:
+
+**Shared list structures** (merged in PR #84, deployed): More menu padding is equal top and bottom; closed categories stay closed across pages (`useFolded`); Tasks and Health shopping share one check order; a task is moved from Edit; Health's shopping Categories card and rows use the same shared pieces as Wishlist and Tasks (`CategoriesCard` with `CategoriesApi`, `GroupedList`, `RowActions`). Migration `0022_shopping_checked_at` was run by the user.
 
 Earlier focus:
 

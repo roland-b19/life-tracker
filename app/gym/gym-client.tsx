@@ -5,10 +5,9 @@ import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useRef, useState } from "react";
-import { ListBox, useDragSort, useMore } from "../components/lists";
-import { Navigation } from "../components/navigation";
-import { Modal } from "../components/modal";
-import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { DeleteButton, DragHandle, ListBox, useDragSort, useMore } from "../components/lists";
+import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle, Toolbar } from "../components/blocks";
+import { ChevronRightIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
@@ -268,9 +267,8 @@ export function GymClient({
           message: `Saved "${draft.name.trim()}"`,
           type: "success",
           ...(before && {
-            actionLabel: "Undo",
             // Writes the old day back; the server refresh brings it to the list.
-            onAction: async () => {
+            onUndo: async () => {
               const back = await saveSplitDayAction({
                 id: before.id,
                 name: before.name,
@@ -322,9 +320,8 @@ export function GymClient({
         showToast({
           message: `Started "${day.name}"`,
           type: "success",
-          actionLabel: "Undo",
           // Only while nothing is logged: Undo must not delete sets.
-          onAction: async () => {
+          onUndo: async () => {
             const now = live.current;
             if (now?.id !== started || now.sets.length > 0) {
               showToast({ message: "Sets are logged; use Cancel workout instead", type: "warning" });
@@ -413,8 +410,7 @@ export function GymClient({
             ? `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`
             : `Added set ${setOrder}`,
           type: res.set.flagAnomaly ? "warning" : "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+          onUndo: async () => {
             dropSet(logged.id);
             if (await deleteSetAction(logged.id).then(() => true, () => false)) return;
             putBackSet(logged);
@@ -449,8 +445,7 @@ export function GymClient({
     dropSet(set.id);
     showToast({
       message: `Removed set ${set.setOrder}`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await logSetAction({
           sessionId,
@@ -527,8 +522,7 @@ export function GymClient({
       showToast({
         message: "Cancelled the workout",
         type: "success",
-        actionLabel: "Undo",
-        onAction: takeBack(
+        onUndo: takeBack(
           async () => {
             const res = await restoreSessionAction({
               date: snap.session.date,
@@ -588,8 +582,7 @@ export function GymClient({
       showToast({
         message: `Finished the workout · ${minutes} min`,
         type: "success",
-        actionLabel: "Undo",
-        onAction: takeBack(
+        onUndo: takeBack(
           async () => ((await reopenSessionAction({ sessionId: snap.session.id })).success ? snap.session : null),
           snap,
           "Failed to reopen the workout",
@@ -626,9 +619,8 @@ export function GymClient({
         showToast({
           message: `Created "${name}"`,
           type: "success",
-          actionLabel: "Undo",
           // Refused once a routine or a set uses it, so Undo never deletes data.
-          onAction: async () => {
+          onUndo: async () => {
             const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
             if (!gone?.success) {
               showToast({ message: "Failed to undo: the exercise is already in use", type: "warning" });
@@ -646,59 +638,36 @@ export function GymClient({
   }
 
   return (
-    <main>
-      <Navigation userName={userName} />
-
+    <Page userName={userName}>
       {/* Deload Status Card */}
-      <section
-        className="surface deload-card"
-        aria-labelledby="deload-title"
+      <Banner
+        id="deload-title"
+        className="deload-card"
+        title={deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
+        sub={
+          deload.isDeloadDue
+            ? "Deload sessions are excluded from PRs."
+            : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
+        }
       >
-        <div>
-          <h2 id="deload-title" className="section-title">
-            {deload.isDeloadDue
-              ? "Deload week due"
-              : `Week ${deload.currentCycleWeek} of 5`}
-          </h2>
-          <p className="muted card-sub">
-            {deload.isDeloadDue
-              ? "Deload sessions are excluded from PRs."
-              : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`}
-          </p>
-        </div>
-        <label className="toggle-label">
-          <input
-            type="checkbox"
-            checked={isDeloadMode}
-            disabled={busy}
-            onChange={(e) => setIsDeloadMode(e.target.checked)}
-          />
-          Deload session
-        </label>
-      </section>
+        <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => setIsDeloadMode(e.target.checked)} />
+      </Banner>
 
       {/* Active Workout Session Logger */}
       {activeSession ? (
-        <section className="surface" aria-labelledby="active-session-title">
-          <div className="section-head">
-            <div>
-              <h2 id="active-session-title" className="section-title">
-                {activeSession.splitDayName || "Workout session"}
-              </h2>
-              <p className="muted card-sub">
-                {formatDMY(activeSession.date)} {activeSession.isDeload ? "· Deload" : ""}
-              </p>
-            </div>
-            <span className="head-actions">
+        <Card
+          id="active-session-title"
+          title={activeSession.splitDayName || "Workout session"}
+          sub={`${formatDMY(activeSession.date)} ${activeSession.isDeload ? "· Deload" : ""}`}
+          actions={
+            <>
               <span className={`session-timer number-tabular${timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
                 {formatClock(timer.shown)}
               </span>
-              <button type="button" className="btn-sm tint" onClick={() => setTimerPaused((p) => !p)}>
-                {timerPaused ? "Resume" : "Pause"}
-              </button>
-            </span>
-          </div>
-
+              <TintButton onClick={() => setTimerPaused((p) => !p)}>{timerPaused ? "Resume" : "Pause"}</TintButton>
+            </>
+          }
+        >
           <div>
             {currentDay?.exercises.map((exercise) => {
               const exerciseSets = activeSession.sets.filter(
@@ -718,6 +687,8 @@ export function GymClient({
                 isPartial: false,
                 notes: "",
               };
+              const patch = (change: Partial<typeof currentState>) =>
+                setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...currentState, ...change } }));
 
               return (
                 <div key={exercise.id} className="workout-exercise-card">
@@ -730,9 +701,7 @@ export function GymClient({
                         Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
                       </span>
                     </div>
-                    <span className="badge badge-rest">
-                      {muscleLabel(exercise.muscleGroup)}
-                    </span>
+                    <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
                   </div>
 
                   {/* The same exercise the last time this day was trained: the numbers to beat */}
@@ -760,119 +729,64 @@ export function GymClient({
 
                   {/* Previous logged sets */}
                   <ListBox wash className="entries set-list">
-                      {exerciseSets.map((s) => (
-                        <div key={s.id} className="entry-row">
-                          <span>
-                            <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
-                            {s.loadValue} {s.loadType}
-                            {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
-                            {s.isPartial ? " (partials)" : ""}
-                            {s.flagAnomaly && (
-                              <span className="badge badge-danger set-flag">
-                                {s.anomalyReason || "Anomaly"}
-                              </span>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            className="delete-icon-btn"
-                            onClick={() => handleDeleteSet(s, exercise)}
-                            aria-label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`}
-                            title="Delete"
-                          >
-                            <TrashIcon size={17} />
-                          </button>
-                        </div>
-                      ))}
+                    {exerciseSets.map((s) => (
+                      <div key={s.id} className="entry-row">
+                        <span>
+                          <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
+                          {s.loadValue} {s.loadType}
+                          {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
+                          {s.isPartial ? " (partials)" : ""}
+                          {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
+                        </span>
+                        <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s, exercise)} />
+                      </div>
+                    ))}
                   </ListBox>
 
                   {/* Set input row */}
                   <div className="set-input-grid">
-                    <label>
-                      Reps
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        inputMode="numeric"
-                        disabled={busy}
-                        value={currentState.reps}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              reps: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-
-                    <label>
-                      Unit
-                      <select
-                        disabled={busy}
-                        value={currentState.loadType}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              loadType: e.target.value as "kg" | "plates" | "bodyweight",
-                            },
-                          }))
-                        }
-                      >
-                        <option value="kg">kg</option>
-                        <option value="plates">Plates</option>
-                        <option value="bodyweight">BW</option>
-                      </select>
-                    </label>
-
-                    <label>
-                      Value
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        inputMode="decimal"
-                        disabled={busy}
-                        value={currentState.loadValue}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              loadValue: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-
-                    <label>
-                      Extra
-                      <input
-                        title="Extra weight in kg"
-                        type="number"
-                        step="0.25"
-                        min="0"
-                        inputMode="decimal"
-                        disabled={busy}
-                        value={currentState.extraKg}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              extraKg: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-
+                    <Field
+                      label="Reps"
+                      type="number"
+                      min="1"
+                      max="100"
+                      inputMode="numeric"
+                      disabled={busy}
+                      value={currentState.reps}
+                      onChange={(e) => patch({ reps: e.target.value })}
+                    />
+                    <SelectField
+                      label="Unit"
+                      disabled={busy}
+                      value={currentState.loadType}
+                      onChange={(e) => patch({ loadType: e.target.value as "kg" | "plates" | "bodyweight" })}
+                      options={[
+                        { value: "kg", label: "kg" },
+                        { value: "plates", label: "Plates" },
+                        { value: "bodyweight", label: "BW" },
+                      ]}
+                    />
+                    <Field
+                      label="Value"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      inputMode="decimal"
+                      disabled={busy}
+                      value={currentState.loadValue}
+                      onChange={(e) => patch({ loadValue: e.target.value })}
+                    />
+                    <Field
+                      label="Extra"
+                      title="Extra weight in kg"
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      inputMode="decimal"
+                      disabled={busy}
+                      value={currentState.extraKg}
+                      onChange={(e) => patch({ extraKg: e.target.value })}
+                    />
                     <button
                       type="button"
                       disabled={busy || !(parseInt(currentState.reps, 10) > 0)}
@@ -884,41 +798,8 @@ export function GymClient({
                   </div>
 
                   <div className="toggle-row">
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={currentState.isFailure}
-                        disabled={busy}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              isFailure: e.target.checked,
-                            },
-                          }))
-                        }
-                      />
-                      True failure (0 RIR)
-                    </label>
-
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={currentState.isPartial}
-                        disabled={busy}
-                        onChange={(e) =>
-                          setInputStates((prev) => ({
-                            ...prev,
-                            [exercise.exerciseId]: {
-                              ...currentState,
-                              isPartial: e.target.checked,
-                            },
-                          }))
-                        }
-                      />
-                      Partial reps at end
-                    </label>
+                    <Toggle label="True failure (0 RIR)" checked={currentState.isFailure} disabled={busy} onChange={(e) => patch({ isFailure: e.target.checked })} />
+                    <Toggle label="Partial reps at end" checked={currentState.isPartial} disabled={busy} onChange={(e) => patch({ isPartial: e.target.checked })} />
                   </div>
                 </div>
               );
@@ -927,15 +808,14 @@ export function GymClient({
 
           <div className="session-footer">
             <div className="form-row">
-              <label className="grow-2">
-                Session notes (optional)
-                <input
-                  type="text"
-                  disabled={busy}
-                  value={sessionNotes}
-                  onChange={(e) => setSessionNotes(e.target.value)}
-                />
-              </label>
+              <Field
+                label="Session notes (optional)"
+                labelClassName="grow-2"
+                type="text"
+                disabled={busy}
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+              />
               <button
                 type="button"
                 className="secondary"
@@ -968,24 +848,20 @@ export function GymClient({
               )}
             </div>
           </div>
-        </section>
+        </Card>
       ) : (
         <>
           {paused && (
-            <section className="surface resume-bar" aria-label="Workout in progress">
-              <div>
-                <h2 className="section-title">Workout in progress</h2>
-                <p className="muted card-sub">
-                  {paused.splitDayName || "Workout"} · {formatDMY(paused.date)} · {paused.sets.length}{" "}
-                  {paused.sets.length === 1 ? "set" : "sets"} logged
-                </p>
-              </div>
-              <button type="button" className="btn-sm tint" onClick={handleResumeSession}>
-                Resume
-              </button>
-            </section>
+            <Banner
+              label="Workout in progress"
+              className="resume-bar"
+              title="Workout in progress"
+              sub={`${paused.splitDayName || "Workout"} · ${formatDMY(paused.date)} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
+            >
+              <TintButton onClick={handleResumeSession}>Resume</TintButton>
+            </Banner>
           )}
-          <div className="toolbar">
+          <Toolbar>
             <Segmented
               label="Gym view"
               value={view}
@@ -995,429 +871,343 @@ export function GymClient({
               ]}
               onChange={setView}
             />
-          </div>
+          </Toolbar>
           {view === "progress" ? (
             <ProgressPanel days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
           ) : (
             <>
-          <MuscleExplorer
-            planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
-          />
-          <div className="dashboard-grid">
-            <div className="dashboard-main">
-              {currentDay && (
-                <section className="surface" aria-labelledby="preview-title">
-                  <div className="section-head">
-                    <div>
-                      <h2 id="preview-title" className="section-title">
-                        {currentDay.isRest ? "Rest day" : currentDay.name}
-                      </h2>
-                      <p className="muted card-sub">{DAY_NAMES[currentDay.dayOfWeek]}</p>
-                    </div>
-                    <span className="head-actions below">
-                      <button type="button" className="btn-sm tint" onClick={() => openEditor(currentDay)}>
-                        <PencilIcon size={14} />
-                        Edit
-                      </button>
-                      {!currentDay.isRest && (
-                        <button
-                          type="button"
-                          className="btn-sm tint"
-                          disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
-                          onClick={() => void handleStartSession(currentDay)}
-                        >
-                          Start
-                        </button>
-                      )}
-                    </span>
-                  </div>
-
-                  {!currentDay.isRest && (
-                    <ListBox wash className="entries">
-                      {currentDay.exercises.length > 0 ? (
+              <MuscleExplorer
+                planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
+              />
+              <Dashboard>
+                <DashboardMain>
+                  {currentDay && (
+                    <Card
+                      id="preview-title"
+                      title={currentDay.isRest ? "Rest day" : currentDay.name}
+                      sub={DAY_NAMES[currentDay.dayOfWeek]}
+                      below
+                      actions={
                         <>
-                        {shownExercises.map((ex, idx) => (
-                          <div key={ex.id} className="entry-row">
-                            <div className="entry-main">
-                              <strong>
-                                {idx + 1}. {ex.exerciseName}
-                              </strong>
-                              <span className="badge badge-rest">{muscleLabel(ex.muscleGroup)}</span>
-                            </div>
-                            <span className="muted number-tabular entry-side">
-                              {ex.targetSets} × {ex.minReps} – {ex.maxReps}
-                            </span>
-                          </div>
-                        ))}
-                        {moreExercises}
+                          <TintButton icon={<PencilIcon size={14} />} onClick={() => openEditor(currentDay)}>
+                            Edit
+                          </TintButton>
+                          {!currentDay.isRest && (
+                            <TintButton
+                              disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
+                              onClick={() => void handleStartSession(currentDay)}
+                            >
+                              Start
+                            </TintButton>
+                          )}
                         </>
-                      ) : (
-                        <p className="empty-note">No exercises yet.</p>
+                      }
+                    >
+                      {!currentDay.isRest && (
+                        <ListBox wash className="entries">
+                          {currentDay.exercises.length > 0 ? (
+                            <>
+                              {shownExercises.map((ex, idx) => (
+                                <div key={ex.id} className="entry-row">
+                                  <div className="entry-main">
+                                    <strong>
+                                      {idx + 1}. {ex.exerciseName}
+                                    </strong>
+                                    <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
+                                  </div>
+                                  <span className="muted number-tabular entry-side">
+                                    {ex.targetSets} × {ex.minReps} – {ex.maxReps}
+                                  </span>
+                                </div>
+                              ))}
+                              {moreExercises}
+                            </>
+                          ) : (
+                            <EmptyNote>No exercises yet.</EmptyNote>
+                          )}
+                        </ListBox>
                       )}
-                    </ListBox>
+                    </Card>
                   )}
-                </section>
-              )}
-            </div>
+                </DashboardMain>
 
-            <div className="dashboard-aside">
-              <section className="surface" aria-labelledby="split-title">
-                <div className="section-head">
-                  <h2 id="split-title" className="section-title">
-                    Training days
-                  </h2>
-                </div>
-
-                <ListBox className="split-day-list">
-                  {split?.days.map((day) => {
-                    const isToday = day.dayOfWeek === todayDayOfWeek;
-                    const isSelected = day.id === selectedDayId;
-                    return (
-                      <div
-                        key={day.id}
-                        className={`split-day-card${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          className="split-day-select"
-                          aria-pressed={isSelected}
-                          onClick={() => setSelectedDayId(day.id)}
-                        >
-                          <span className="split-day-title">
-                            <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
-                            {isToday && <span className="badge badge-info">Today</span>}
-                            {day.isRest ? (
-                              <span className="badge badge-rest">Rest</span>
-                            ) : (
-                              <span className="badge badge-info number-tabular">{day.exercises.length}</span>
-                            )}
-                          </span>
-                          <span className="muted split-day-sub">{day.name}</span>
-                        </button>
-                        {!day.isRest && day.exercises.length > 0 && (
-                          <button
-                            type="button"
-                            disabled={busy || Boolean(paused)}
-                            className="btn-sm tint"
-                            onClick={() => {
-                              setSelectedDayId(day.id);
-                              void handleStartSession(day);
-                            }}
+                <DashboardAside>
+                  <Card id="split-title" title="Training days">
+                    <ListBox className="split-day-list">
+                      {split?.days.map((day) => {
+                        const isToday = day.dayOfWeek === todayDayOfWeek;
+                        const isSelected = day.id === selectedDayId;
+                        return (
+                          <div
+                            key={day.id}
+                            className={`split-day-card${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
                           >
-                            Start
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </ListBox>
-              </section>
-            </div>
-          </div>
-          <section className="surface gym-history" aria-labelledby="history-title">
-            <div className="section-head">
-              <h2 id="history-title" className="section-title">
-                History
-              </h2>
-              <span className="muted number-tabular">
-                {history.length} {history.length === 1 ? "workout" : "workouts"}
-              </span>
-            </div>
-            <ListBox wash className="entries">
-              {history.length > 0 ? (
-                <>
-                  {shownHistory.map((h) => {
-                    const open = openHistoryId === h.id;
-                    return (
-                      <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
-                        <button
-                          type="button"
-                          className="history-toggle"
-                          aria-expanded={open}
-                          aria-controls={`history-${h.id}`}
-                          onClick={() => setOpenHistoryId(open ? null : h.id)}
-                        >
-                          <span className="history-entry-head">
-                            <strong>{h.dayName ?? "Workout"}</strong>
-                            {h.isDeload && <span className="badge badge-rest">Deload</span>}
-                            <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
-                            <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
-                          </span>
-                          <span className="muted number-tabular history-progress">
-                            {h.isDeload
-                              ? "Deload week, not counted"
-                              : h.progress !== null
-                                ? `Weight ${kgDelta(h.progress)} vs the week before`
-                                : "Nothing to compare with yet"}
-                          </span>
-                        </button>
-                        {open && (
-                          <div id={`history-${h.id}`} className="history-details">
-                            {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
-                            {h.exercises.map((ex) => (
-                              <p key={ex.id} className="history-exercise">
-                                <strong>{ex.name}</strong>
-                                <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
-                              </p>
-                            ))}
+                            <button
+                              type="button"
+                              className="split-day-select"
+                              aria-pressed={isSelected}
+                              onClick={() => setSelectedDayId(day.id)}
+                            >
+                              <span className="split-day-title">
+                                <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
+                                {isToday && <Badge kind="info">Today</Badge>}
+                                {day.isRest ? (
+                                  <Badge kind="rest">Rest</Badge>
+                                ) : (
+                                  <Badge kind="info" className="number-tabular">{day.exercises.length}</Badge>
+                                )}
+                              </span>
+                              <span className="muted split-day-sub">{day.name}</span>
+                            </button>
+                            {!day.isRest && day.exercises.length > 0 && (
+                              <TintButton
+                                disabled={busy || Boolean(paused)}
+                                onClick={() => {
+                                  setSelectedDayId(day.id);
+                                  void handleStartSession(day);
+                                }}
+                              >
+                                Start
+                              </TintButton>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {moreHistory}
-                </>
-              ) : (
-                <p className="empty-note">
-                  No finished workouts yet.
-                </p>
-              )}
-            </ListBox>
-          </section>
+                        );
+                      })}
+                    </ListBox>
+                  </Card>
+                </DashboardAside>
+              </Dashboard>
+              <Card
+                id="history-title"
+                title="History"
+                className="gym-history"
+                end={
+                  <span className="muted number-tabular">
+                    {history.length} {history.length === 1 ? "workout" : "workouts"}
+                  </span>
+                }
+              >
+                <ListBox wash className="entries">
+                  {history.length > 0 ? (
+                    <>
+                      {shownHistory.map((h) => {
+                        const open = openHistoryId === h.id;
+                        return (
+                          <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
+                            <button
+                              type="button"
+                              className="history-toggle"
+                              aria-expanded={open}
+                              aria-controls={`history-${h.id}`}
+                              onClick={() => setOpenHistoryId(open ? null : h.id)}
+                            >
+                              <span className="history-entry-head">
+                                <strong>{h.dayName ?? "Workout"}</strong>
+                                {h.isDeload && <Badge kind="rest">Deload</Badge>}
+                                <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
+                                <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
+                              </span>
+                              <span className="muted number-tabular history-progress">
+                                {h.isDeload
+                                  ? "Deload week, not counted"
+                                  : h.progress !== null
+                                    ? `Weight ${kgDelta(h.progress)} vs the week before`
+                                    : "Nothing to compare with yet"}
+                              </span>
+                            </button>
+                            {open && (
+                              <div id={`history-${h.id}`} className="history-details">
+                                {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
+                                {h.exercises.map((ex) => (
+                                  <p key={ex.id} className="history-exercise">
+                                    <strong>{ex.name}</strong>
+                                    <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {moreHistory}
+                    </>
+                  ) : (
+                    <EmptyNote>No finished workouts yet.</EmptyNote>
+                  )}
+                </ListBox>
+              </Card>
             </>
           )}
         </>
       )}
 
-      <Modal
+      <FormModal
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
         title={draft ? `Edit ${DAY_NAMES[draft.dayOfWeek]}` : "Edit day"}
+        onSubmit={handleSaveDay}
+        error={draftError}
+        busy={busy}
+        canSubmit={!!draft?.name.trim()}
       >
         {draft && (
-          <form onSubmit={handleSaveDay}>
-            <div className="form-stack">
-              <label>
-                Name
-                <input
-                  disabled={busy}
-                  type="text"
-                  required
-                  maxLength={100}
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
-              </label>
-              <label className="toggle-label">
-                <input
-                  disabled={busy}
-                  type="checkbox"
-                  checked={draft.isRest}
-                  onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })}
-                />
-                Rest day
-              </label>
+          <>
+            <Field
+              label="Name"
+              disabled={busy}
+              type="text"
+              required
+              maxLength={100}
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
+            <Toggle label="Rest day" disabled={busy} checked={draft.isRest} onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })} />
 
-              {!draft.isRest && (
-                <>
-                  <ListBox className="routine-list">
-                    {draft.exercises.length === 0 && (
-                      <p className="empty-note">
-                        No exercises yet.
-                      </p>
-                    )}
-                    {draft.exercises.map((row, i) => {
-                      const name = nameOf(row.exerciseId);
-                      return (
-                        <div key={row.exerciseId} className="routine-row" data-sort>
-                          <button
-                            type="button"
-                            className="delete-icon-btn edit drag-handle"
-                            disabled={busy}
-                            aria-label={`Drag ${name} to reorder`}
-                            title="Drag to reorder"
-                            {...dragRow}
-                          >
-                            <GripIcon size={22} />
-                          </button>
-                          <div className="routine-row-body">
+            {!draft.isRest && (
+              <>
+                <ListBox className="routine-list">
+                  {draft.exercises.length === 0 && <EmptyNote>No exercises yet.</EmptyNote>}
+                  {draft.exercises.map((row, i) => {
+                    const name = nameOf(row.exerciseId);
+                    return (
+                      <div key={row.exerciseId} className="routine-row" data-sort>
+                        <DragHandle disabled={busy} label={`Drag ${name} to reorder`} {...dragRow} />
+                        <div className="routine-row-body">
                           <div className="routine-row-head">
                             <strong>
                               {i + 1}. {name}
                             </strong>
                             <div className="row-actions">
-                              <button
-                                type="button"
-                                className="delete-icon-btn"
-                                onClick={() => removeRow(row.exerciseId)}
-                                aria-label={`Remove ${name}`}
-                                title="Remove"
-                              >
-                                <TrashIcon size={17} />
-                              </button>
+                              <DeleteButton label={`Remove ${name}`} title="Remove" onClick={() => removeRow(row.exerciseId)} />
                             </div>
                           </div>
                           <div className="routine-fields">
-                            <label>
-                              Sets
-                              <input
-                                disabled={busy}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                max={10}
-                                required
-                                className="number-tabular"
-                                value={row.targetSets}
-                                onChange={(e) => patchRow(i, { targetSets: e.target.value })}
-                              />
-                            </label>
-                            <label>
-                              Min reps
-                              <input
-                                disabled={busy}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                max={100}
-                                required
-                                className="number-tabular"
-                                value={row.minReps}
-                                onChange={(e) => patchRow(i, { minReps: e.target.value })}
-                              />
-                            </label>
-                            <label>
-                              Max reps
-                              <input
-                                disabled={busy}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                max={100}
-                                required
-                                className="number-tabular"
-                                value={row.maxReps}
-                                onChange={(e) => patchRow(i, { maxReps: e.target.value })}
-                              />
-                            </label>
-                          </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </ListBox>
-
-                  {addable.length > 0 && draft.exercises.length < 20 && (
-                    <div className="routine-add">
-                      <label>
-                        Exercise
-                        <select disabled={busy} value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
-                          {groups.map((g) => (
-                            <optgroup key={g} label={muscleLabel(g)}>
-                              {addable
-                                .filter((e) => e.muscleGroup === g)
-                                .map((e) => (
-                                  <option key={e.id} value={e.id}>
-                                    {e.name}
-                                  </option>
-                                ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </label>
-                      <button type="button" className="secondary" onClick={addRow}>
-                        <PlusIcon size={14} />
-                        Add exercise
-                      </button>
-                    </div>
-                  )}
-
-                  {draft.exercises.length < 20 &&
-                    (showCustom ? (
-                      <div className="custom-exercise">
-                        <label>
-                          New exercise
-                          <input
-                            disabled={busy}
-                            type="text"
-                            maxLength={100}
-                            value={customName}
-                            onChange={(e) => setCustomName(e.target.value)}
-                            onKeyDown={(e) => {
-                              // Enter creates the exercise instead of submitting the whole day.
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                void handleCreateCustomExercise();
-                              }
-                            }}
-                          />
-                        </label>
-                        <div className="form-pair">
-                          <label>
-                            Muscle group
-                            <select
+                            <Field
+                              label="Sets"
                               disabled={busy}
-                              value={customMuscle}
-                              onChange={(e) =>
-                                setCustomMuscle(
-                                  e.target.value as MuscleGroupKey | "other",
-                                )
-                              }
-                            >
-                              {MUSCLE_GROUP_KEYS.map((g) => (
-                                <option key={g} value={g}>
-                                  {MUSCLE_GROUP_LABEL[g]}
-                                </option>
-                              ))}
-                              <option value="other">Other</option>
-                            </select>
-                          </label>
-                          <label>
-                            Equipment
-                            <select
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={10}
+                              required
+                              className="number-tabular"
+                              value={row.targetSets}
+                              onChange={(e) => patchRow(i, { targetSets: e.target.value })}
+                            />
+                            <Field
+                              label="Min reps"
                               disabled={busy}
-                              value={customEquipment}
-                              onChange={(e) =>
-                                setCustomEquipment(
-                                  e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight",
-                                )
-                              }
-                            >
-                              <option value="barbell">Barbell</option>
-                              <option value="dumbbell">Dumbbell</option>
-                              <option value="cable">Cable</option>
-                              <option value="machine">Machine</option>
-                              <option value="bodyweight">Bodyweight</option>
-                            </select>
-                          </label>
-                        </div>
-                        <div className="form-actions">
-                          <button type="button" className="secondary btn-sm" onClick={() => setShowCustom(false)}>
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-sm tint"
-                            disabled={busy || !customName.trim()}
-                            onClick={handleCreateCustomExercise}
-                          >
-                            Create and add
-                          </button>
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={100}
+                              required
+                              className="number-tabular"
+                              value={row.minReps}
+                              onChange={(e) => patchRow(i, { minReps: e.target.value })}
+                            />
+                            <Field
+                              label="Max reps"
+                              disabled={busy}
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={100}
+                              required
+                              className="number-tabular"
+                              value={row.maxReps}
+                              onChange={(e) => patchRow(i, { maxReps: e.target.value })}
+                            />
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={() => setShowCustom(true)}>
-                        <PlusIcon size={14} />
-                        New exercise
-                      </button>
-                    ))}
-                </>
-              )}
-              {draftError && <p className="error" role="alert">{draftError}</p>}
-            </div>
+                    );
+                  })}
+                </ListBox>
 
-            <div className="form-actions">
-              <button type="button" className="secondary" onClick={() => setEditorOpen(false)}>
-                Cancel
-              </button>
-              <button type="submit" disabled={busy || !draft.name.trim()}>
-                {busy ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </form>
+                {addable.length > 0 && draft.exercises.length < 20 && (
+                  <div className="routine-add">
+                    <Label text="Exercise">
+                      <select disabled={busy} value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
+                        {groups.map((g) => (
+                          <optgroup key={g} label={muscleLabel(g)}>
+                            {addable
+                              .filter((e) => e.muscleGroup === g)
+                              .map((e) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </Label>
+                    <button type="button" className="secondary" onClick={addRow}>
+                      <PlusIcon size={14} />
+                      Add exercise
+                    </button>
+                  </div>
+                )}
+
+                {draft.exercises.length < 20 &&
+                  (showCustom ? (
+                    <div className="custom-exercise">
+                      <Field
+                        label="New exercise"
+                        disabled={busy}
+                        type="text"
+                        maxLength={100}
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value)}
+                        onKeyDown={(e) => {
+                          // Enter creates the exercise instead of submitting the whole day.
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleCreateCustomExercise();
+                          }
+                        }}
+                      />
+                      <FieldPair>
+                        <SelectField
+                          label="Muscle group"
+                          disabled={busy}
+                          value={customMuscle}
+                          onChange={(e) => setCustomMuscle(e.target.value as MuscleGroupKey | "other")}
+                          options={[...MUSCLE_GROUP_KEYS.map((g) => ({ value: g, label: MUSCLE_GROUP_LABEL[g] })), { value: "other", label: "Other" }]}
+                        />
+                        <SelectField
+                          label="Equipment"
+                          disabled={busy}
+                          value={customEquipment}
+                          onChange={(e) => setCustomEquipment(e.target.value as "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight")}
+                          options={[
+                            { value: "barbell", label: "Barbell" },
+                            { value: "dumbbell", label: "Dumbbell" },
+                            { value: "cable", label: "Cable" },
+                            { value: "machine", label: "Machine" },
+                            { value: "bodyweight", label: "Bodyweight" },
+                          ]}
+                        />
+                      </FieldPair>
+                      <FormActions
+                        compact
+                        onCancel={() => setShowCustom(false)}
+                        onSubmit={handleCreateCustomExercise}
+                        canSubmit={!busy && !!customName.trim()}
+                        submitLabel="Create and add"
+                      />
+                    </div>
+                  ) : (
+                    <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={() => setShowCustom(true)}>
+                      <PlusIcon size={14} />
+                      New exercise
+                    </button>
+                  ))}
+              </>
+            )}
+          </>
         )}
-      </Modal>
-
-    </main>
+      </FormModal>
+    </Page>
   );
 }

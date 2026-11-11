@@ -1,14 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CategoriesCard, GroupedList, categoryLabel, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { Navigation } from "../components/navigation";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, BellIcon, LockIcon, PlusIcon } from "../components/icons";
+import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
+import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, DateField, DayStepper, EmptyNote, Field, FormModal, Page, ReadonlyNote, SelectField, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { FlameIcon, BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
-import { Modal } from "../components/modal";
-import { DatePicker } from "../components/date-picker";
 import { useToast } from "../components/toast";
 import { isPushEnabled } from "@/lib/features";
 import {
@@ -231,7 +229,6 @@ export function TodosClient({
 
   const goTo = (next: string) => switchView({ date: next });
 
-  const stepDay = (delta: number) => goTo(addDays(date, delta));
 
   // Undone tasks carry over to today, so the Today tab never shows a past day.
   const changeTab = (next: TaskTab) =>
@@ -289,8 +286,7 @@ export function TodosClient({
           showToast({
             message: `Saved "${title}"`,
             type: "success",
-            actionLabel: "Undo",
-            onAction: async () => {
+            onUndo: async () => {
               ++requestId.current;
               replace(before);
               const undone = await updateTodoAction({
@@ -326,8 +322,7 @@ export function TodosClient({
           showToast({
             message: `Added "${title}"`,
             type: "success",
-            actionLabel: "Undo",
-            onAction: async () => {
+            onUndo: async () => {
               ++requestId.current;
               drop(created);
               const gone = await deleteTodoAction(created.id, date).then(
@@ -374,8 +369,7 @@ export function TodosClient({
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
-        actionLabel: "Undo",
-        onAction: () => toggle(todo, !next, day, false),
+        onUndo: () => toggle(todo, !next, day, false),
       });
     }
     try {
@@ -422,8 +416,7 @@ export function TodosClient({
     showToast({
       message: `Moved "${after.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         ++requestId.current;
         if (shows(before)) putBack(before);
         const back = await revertMoveTodoAction(snapshot(before), createdId).catch(() => null);
@@ -448,8 +441,7 @@ export function TodosClient({
     );
     showToast({
       message: `Removed "${target.title}"`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         ++requestId.current;
         // Only onto the list it was on, if that is still the one on screen.
         if (shows(target)) putBack(target);
@@ -490,9 +482,8 @@ export function TodosClient({
       showToast({
         message: "Reminders enabled",
         type: "success",
-        actionLabel: "Undo",
         // Forgets the subscription here and on the server, so no reminder arrives.
-        onAction: async () => {
+        onUndo: async () => {
           setPushSubscribed(false);
           try {
             if (enabled) {
@@ -511,11 +502,9 @@ export function TodosClient({
   };
 
   return (
-    <main>
-      <Navigation userName={userName} />
-
-      <div className="toolbar dash">
-        <div className="toolbar-group">
+    <Page userName={userName}>
+      <Toolbar dash>
+        <ToolbarGroup>
           <Segmented
             label="Space"
             value={space}
@@ -534,66 +523,29 @@ export function TodosClient({
             ]}
             onChange={changeTab}
           />
-        </div>
-        <div className="month-selector" role="group" aria-label="Day">
-          <button
-            type="button"
-            className="month-nav-btn"
-            onClick={() => stepDay(-1)}
-            disabled={!isDaily && date <= todayDate}
-            aria-label="Previous day"
-          >
-            <ChevronLeftIcon size={17} />
-          </button>
-          <DatePicker
-            mode="day"
-            value={date}
-            today={todayDate}
-            max={maxDate}
-            min={isDaily ? undefined : todayDate}
-            marked={isDaily ? undefined : planned[space].filter((d) => d > todayDate)}
-            label={dayLabel(date)}
-            onChange={goTo}
-          />
-          <button
-            type="button"
-            className="month-nav-btn"
-            onClick={() => stepDay(1)}
-            disabled={date >= maxDate}
-            aria-label="Next day"
-          >
-            <ChevronRightIcon size={17} />
-          </button>
-        </div>
-      </div>
+        </ToolbarGroup>
+        <DayStepper
+          value={date}
+          today={todayDate}
+          max={maxDate}
+          min={isDaily ? undefined : todayDate}
+          marked={isDaily ? undefined : planned[space].filter((d) => d > todayDate)}
+          label={dayLabel(date)}
+          onChange={goTo}
+        />
+      </Toolbar>
 
-      <div className="dashboard-grid todos-grid">
-        <div className="dashboard-main">
-          <section className="surface" aria-labelledby="tasks-title">
-            <div className="section-head">
-              <h2 id="tasks-title" className="section-title">
-                {isDaily ? "Daily tasks" : "Tasks"} <span className="muted number-tabular">{listTodos.length}</span>
-              </h2>
-              <span className="head-actions below">
-                {editable && (
-                  <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                    <PlusIcon size={14} />
-                    Add task
-                  </button>
-                )}
-              </span>
-            </div>
-
-            {isPast && !DEV_EDIT_PAST && (
-              <p className="readonly-note">
-                <LockIcon size={13} /> Past days can be ticked, not edited
-              </p>
-            )}
-            {isDaily && date > todayDate && (
-              <p className="readonly-note">
-                <LockIcon size={13} /> Daily tasks are ticked on the day
-              </p>
-            )}
+      <Dashboard className="todos-grid">
+        <DashboardMain>
+          <Card
+            id="tasks-title"
+            title={isDaily ? "Daily tasks" : "Tasks"}
+            count={listTodos.length}
+            below
+            actions={editable && <AddButton onClick={() => openForm()}>Add task</AddButton>}
+          >
+            {isPast && !DEV_EDIT_PAST && <ReadonlyNote>Past days can be ticked, not edited</ReadonlyNote>}
+            {isDaily && date > todayDate && <ReadonlyNote>Daily tasks are ticked on the day</ReadonlyNote>}
 
             <ListBox wash className="todo-list">
               {listTodos.length > 0 ? (
@@ -604,27 +556,18 @@ export function TodosClient({
                   onToggle={(c) => toggleFolded(foldKey(c))}
                   row={(task) => (
                     <div className="todo-row">
-                      {!listTickable ? (
-                        <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">
-                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className={`todo-checkbox-btn ${task.isCompleted ? "checked" : ""}`}
-                          onClick={() => handleToggleTodo(task)}
-                          aria-label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
-                        >
-                          {task.isCompleted && <CheckIcon size={12} strokeWidth={3} />}
-                        </button>
-                      )}
+                      <Checkbox
+                        checked={task.isCompleted}
+                        onChange={listTickable ? () => handleToggleTodo(task) : undefined}
+                        label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
+                      />
 
                       <div className="todo-main">
                         <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
                         {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                           <div className="badge-row">
-                            {!listDaily && task.isCarriedOver && <span className="badge badge-carried">Carried over</span>}
-                            {task.reminderTime && isPushEnabled() && <span className="badge badge-reminder">{task.reminderTime}</span>}
+                            {!listDaily && task.isCarriedOver && <Badge kind="carried">Carried over</Badge>}
+                            {task.reminderTime && isPushEnabled() && <Badge kind="reminder">{task.reminderTime}</Badge>}
                           </div>
                         )}
                       </div>
@@ -643,7 +586,7 @@ export function TodosClient({
                   )}
                 />
               ) : (
-                <p className="empty-note">
+                <EmptyNote>
                   {view.date === todayDate
                     ? listDaily
                       ? "No daily tasks yet."
@@ -653,10 +596,10 @@ export function TodosClient({
                       : listPast
                         ? "Nothing was planned for this day."
                         : "Nothing planned for this day."}
-                </p>
+                </EmptyNote>
               )}
             </ListBox>
-          </section>
+          </Card>
           {/* A daily task is filed under a category of its own space, so each space has its own list. */}
           {view.tab === "daily" && (
             <CategoriesCard
@@ -672,20 +615,15 @@ export function TodosClient({
               }
             />
           )}
-        </div>
+        </DashboardMain>
 
-        <div className="dashboard-aside">
-          <section className="surface" aria-labelledby="progress-title">
-            <div className="section-head">
-              <h2 id="progress-title" className="section-title">
-                Progress
-              </h2>
-            </div>
+        <DashboardAside>
+          <Card id="progress-title" title="Progress">
             {!totalCount ? (
               // Same height as the ring below, so the cards under it never move when a day has no tasks.
-              <p className="empty-note dash-hero-empty">
+              <EmptyNote className="dash-hero-empty">
                 {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
-              </p>
+              </EmptyNote>
             ) : (
               <div className="dash-hero">
                 <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
@@ -698,38 +636,20 @@ export function TodosClient({
                 </div>
               </div>
             )}
-          </section>
+          </Card>
 
-          <section className="surface" aria-labelledby="history-title">
-            <div className="section-head">
-              <h2 id="history-title" className="section-title">
-                Last {span} days
-              </h2>
-            </div>
-            <div className="chart-controls">
+          <Card id="history-title" title={`Last ${span} days`}>
+            <ChartControls>
               <Segmented label="Period" value={period} options={PERIODS} onChange={setPeriod} />
               <Segmented label="Show" value={metric} options={METRICS} onChange={setMetric} />
-            </div>
-            <div className="stat-row">
-              <div className="stat-tile">
-                <strong className="number-tabular">
-                  {tracked.length ? `${Math.round(avg)}%` : "—"}
-                </strong>
-                <span>Average</span>
-              </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">
-                  {Math.round(perfectDays)}
-                </strong>
-                <span>Perfect days</span>
-              </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">
-                  {Math.round(doneTotal)}
-                </strong>
-                <span>Tasks done</span>
-              </div>
-            </div>
+            </ChartControls>
+            <StatRow
+              stats={[
+                { value: tracked.length ? `${Math.round(avg)}%` : "—", label: "Average" },
+                { value: Math.round(perfectDays), label: "Perfect days" },
+                { value: Math.round(doneTotal), label: "Tasks done" },
+              ]}
+            />
             <BarChart
               key={`${period}-${metric}-${space}-${tab}-${date}`}
               data={bars}
@@ -738,117 +658,80 @@ export function TodosClient({
               summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%.${isDaily ? " Choose a day to open it." : ""}`}
               onSelect={isDaily ? (i) => goTo(days[i].iso) : undefined}
             />
-          </section>
+          </Card>
           {/* Last in the aside: it appears once the service worker is ready, so nothing sits below it to shift. */}
           {pushSupported && !pushSubscribed && (
-            <section className="surface push-toggle-card" aria-label="Task reminders">
+            <Card className="push-toggle-card" label="Task reminders">
               <span className="push-toggle-label">
                 <BellIcon size={16} /> Task reminders
               </span>
-              <button type="button" className="btn-sm tint" onClick={handleEnablePush}>
-                Enable
-              </button>
-            </section>
+              <TintButton onClick={handleEnablePush}>Enable</TintButton>
+            </Card>
           )}
-        </div>
-      </div>
+        </DashboardAside>
+      </Dashboard>
 
-      <Modal
+      <FormModal
         isOpen={isTaskModalOpen}
         onClose={closeForm}
         title={editing ? "Edit task" : isDaily ? "New daily task" : "New task"}
+        onSubmit={handleSubmit}
+        error={titleError}
+        errorId="task-title-error"
+        busy={saving}
+        canSubmit={!!titleInput.trim()}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="form-stack">
-            <label>
-              Title
-              <input
-                type="text"
-                required
-                maxLength={150}
+        <Field
+          label="Title"
+          type="text"
+          required
+          maxLength={150}
+          disabled={saving}
+          value={titleInput}
+          onChange={(e) => {
+            setTitleInput(e.target.value);
+            setTitleError(null);
+          }}
+          aria-invalid={titleError ? true : undefined}
+          aria-describedby={titleError ? "task-title-error" : undefined}
+        />
+        {editing && (
+          <>
+            <SelectField
+              label="Day"
+              disabled={saving}
+              value={whenInput}
+              onChange={(e) => setWhenInput(e.target.value as typeof whenInput)}
+              options={[
+                { value: "keep", label: editing.isRecurring ? "Daily" : whenLabel(editing.dueDate) },
+                ...(editing.isRecurring || editing.dueDate !== todayDate ? [{ value: "today", label: "Today" }] : []),
+                ...(editing.isRecurring || editing.dueDate !== tomorrow ? [{ value: "tomorrow", label: "Tomorrow" }] : []),
+                { value: "pick", label: "Another day…" },
+                ...(!editing.isRecurring ? [{ value: "daily", label: "Daily" }] : []),
+              ]}
+            />
+            {whenInput === "pick" && (
+              <DateField
+                id="task-pick-date"
+                value={pickDate}
+                today={todayDate}
+                min={DEV_EDIT_PAST ? undefined : todayDate}
+                max={maxDate}
+                text={dayLabel(pickDate)}
                 disabled={saving}
-                value={titleInput}
-                onChange={(e) => {
-                  setTitleInput(e.target.value);
-                  setTitleError(null);
-                }}
-                aria-invalid={titleError ? true : undefined}
-                aria-describedby={titleError ? "task-title-error" : undefined}
+                onChange={setPickDate}
               />
-            </label>
-            {editing && (
-              <>
-                <label>
-                  Day
-                  <select disabled={saving} value={whenInput} onChange={(e) => setWhenInput(e.target.value as typeof whenInput)}>
-                    <option value="keep">{editing.isRecurring ? "Daily" : whenLabel(editing.dueDate)}</option>
-                    {(editing.isRecurring || editing.dueDate !== todayDate) && <option value="today">Today</option>}
-                    {(editing.isRecurring || editing.dueDate !== tomorrow) && <option value="tomorrow">Tomorrow</option>}
-                    <option value="pick">Another day…</option>
-                    {!editing.isRecurring && <option value="daily">Daily</option>}
-                  </select>
-                </label>
-                {whenInput === "pick" && (
-                  // Not a <label>: a click inside the open calendar would re-trigger the button.
-                  <div className="field">
-                    <span id="task-pick-date">Date</span>
-                    <DatePicker
-                      mode="day"
-                      className="date-field"
-                      value={pickDate}
-                      today={todayDate}
-                      min={DEV_EDIT_PAST ? undefined : todayDate}
-                      max={maxDate}
-                      label={dayLabel(pickDate)}
-                      labelledBy="task-pick-date"
-                      disabled={saving}
-                      onChange={setPickDate}
-                    />
-                  </div>
-                )}
-              </>
             )}
-            {(editing ? editing.isRecurring || whenInput === "daily" : isDaily) && (
-              <label>
-                Category
-                <select disabled={saving} value={categoryInput} onChange={(e) => setCategoryInput(e.target.value)}>
-                  {[...new Set([...categories[editing?.space ?? space], categoryInput, "other"])].map((c) => (
-                    <option key={c} value={c}>
-                      {categoryLabel(c)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}
-            {isPushEnabled() && (
-              <label>
-                Reminder (optional)
-                <input
-                  type="time"
-                  disabled={saving}
-                  value={reminderTimeInput}
-                  onChange={(e) => setReminderTimeInput(e.target.value)}
-                />
-              </label>
-            )}
-            {titleError && (
-              <p id="task-title-error" className="error" role="alert">
-                {titleError}
-              </p>
-            )}
-          </div>
-
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={closeForm}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving || !titleInput.trim()}>
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </main>
+          </>
+        )}
+        {(editing ? editing.isRecurring || whenInput === "daily" : isDaily) && (
+          <CategoryField categories={categories[editing?.space ?? space]} value={categoryInput} onChange={setCategoryInput} disabled={saving} />
+        )}
+        {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}
+        {isPushEnabled() && (
+          <Field label="Reminder (optional)" type="time" disabled={saving} value={reminderTimeInput} onChange={(e) => setReminderTimeInput(e.target.value)} />
+        )}
+      </FormModal>
+    </Page>
   );
 }

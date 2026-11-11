@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Card, EmptyNote, GroupLabel, TintButton } from "../components/blocks";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
@@ -324,23 +325,22 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   }
 
   return (
-    <section className="surface muscle-card" aria-labelledby="muscle-title">
-      <div className="section-head">
-        <h2 id="muscle-title" className="section-title">
-          Muscle map
-        </h2>
-        {/* Always rendered so the card never shifts when it appears */}
-        <button
-          type="button"
-          className="btn-sm tint"
+    <Card
+      id="muscle-title"
+      title="Muscle map"
+      className="muscle-card"
+      end={
+        // Always rendered so the card never shifts when it appears
+        <TintButton
           onClick={() => setSelected(null)}
           style={{ visibility: selected ? "visible" : "hidden" }}
           aria-hidden={!selected}
           tabIndex={selected ? 0 : -1}
         >
           Show all
-        </button>
-      </div>
+        </TintButton>
+      }
+    >
 
       <div className="muscle-layout">
         <MuscleMap selected={selected} onSelect={setSelected} />
@@ -367,12 +367,10 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
 
           {selected ? (
             <div>
-            <h3 className="group-label">{GROUP_LABEL[selected]} workouts</h3>
+            <GroupLabel>{GROUP_LABEL[selected]} workouts</GroupLabel>
             <ListBox wash className="entries muscle-entries">
               {list.length === 0 && (
-                <p key={`empty-${selected}`} className="empty-note">
-                  No exercise in your split trains this muscle.
-                </p>
+                <EmptyNote key={`empty-${selected}`}>No exercise in your split trains this muscle.</EmptyNote>
               )}
               {/* Keyed by the group so every switch mounts fresh rows. */}
                             {list.map((e) => (
@@ -390,7 +388,7 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
             </div>
           ) : (
             <div>
-              <h3 className="group-label">Planned sets per week</h3>
+              <GroupLabel>Planned sets per week</GroupLabel>
               <HBars
                 rows={MUSCLE_GROUPS.filter((g) => setsOf(g) > 0).map((g) => ({
                   label: GROUP_LABEL[g],
@@ -402,7 +400,6 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
           )}
         </div>
       </div>
-
-    </section>
+    </Card>
   );
 }

@@ -3,9 +3,9 @@
 import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
-import { ChevronRightIcon, GripIcon, PlusIcon } from "./icons";
-import { ListBox, RowActions, useDragSort, useKeepPlace, useMore } from "./lists";
-import { Modal } from "./modal";
+import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
+import { ChevronRightIcon } from "./icons";
+import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace, useMore } from "./lists";
 import { useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
@@ -75,8 +75,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         reorder(previous);
         const back = await api.reorder(previous).catch(() => null);
         if (!back?.success) {
@@ -128,8 +127,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
         showToast({
           message: `Added "${to}"`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+          onUndo: async () => {
             onChange((prev) => prev.filter((c) => c !== to));
             const gone = await api.remove(to).catch(() => null);
             if (!gone?.success) {
@@ -153,8 +151,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
         showToast({
           message: `Renamed "${from}" to "${to}"`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: () => revert(from, to, change, !change.merged, at),
+          onUndo: () => revert(from, to, change, !change.merged, at),
         });
       }
       setOpen(false);
@@ -180,34 +177,25 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
     onRefile(cat, "other");
     showToast({
       message: `Removed "${cat}"; its items are in Other`,
-      actionLabel: "Undo",
-      onAction: () => revert(cat, "other", change, false, at),
+      onUndo: () => revert(cat, "other", change, false, at),
     });
   }
 
   return (
     <>
-      <section ref={card} className="surface" aria-labelledby={`categories-title-${api.id}`}>
-        <div className="section-head">
-          <h2 id={`categories-title-${api.id}`} className="section-title">
-            Categories <span className="muted number-tabular">{categories.length}</span>
-          </h2>
-          <button type="button" className="btn-sm tint" onClick={() => openForm(null)}>
-            <PlusIcon size={14} />
-            Add category
-          </button>
-        </div>
+      <Card
+        ref={card}
+        id={`categories-title-${api.id}`}
+        title="Categories"
+        count={categories.length}
+        actions={<AddButton onClick={() => openForm(null)}>Add category</AddButton>}
+      >
         <ListBox wash className="entries">
-          {categories.length === 0 && (
-            <p className="empty-note">No categories yet.</p>
-          )}
+          {categories.length === 0 && <EmptyNote>No categories yet.</EmptyNote>}
           {shown.map((cat, i) => (
             <div key={cat} className="entry-row" data-sort>
-              <button
-                type="button"
-                className="delete-icon-btn edit drag-handle"
-                aria-label={`Drag ${cat} to reorder`}
-                title="Drag to reorder"
+              <DragHandle
+                label={`Drag ${cat} to reorder`}
                 {...dragRow}
                 onKeyDown={(e) => {
                   const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
@@ -215,37 +203,27 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
                   e.preventDefault();
                   move(i, to);
                 }}
-              >
-                <GripIcon size={22} />
-              </button>
+              />
               <span className="category-name">{cat}</span>
               <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit category ${cat}`} deleteLabel={`Delete category ${cat}`} />
             </div>
           ))}
           {more}
         </ListBox>
-      </section>
+      </Card>
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={from ? "Edit category" : "New category"}>
-        <form onSubmit={submit}>
-          <div className="form-stack">
-            <label>
-              Name
-              <input type="text" maxLength={50} disabled={busy} value={name} onChange={(e) => setName(e.target.value)} required />
-            </label>
-            {from && <p className="muted move-hint">Its items move along. An existing name merges the two.</p>}
-            {error && <p className="error" role="alert">{error}</p>}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !name.trim()}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <FormModal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={from ? "Edit category" : "New category"}
+        onSubmit={submit}
+        error={error}
+        busy={busy}
+        canSubmit={!!name.trim()}
+      >
+        <Field label="Name" type="text" maxLength={50} disabled={busy} value={name} onChange={(e) => setName(e.target.value)} required />
+        {from && <p className="muted move-hint">Its items move along. An existing name merges the two.</p>}
+      </FormModal>
     </>
   );
 }
@@ -298,12 +276,12 @@ export function useFolded(page: string) {
 /** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
 export function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
   return (
-    <h3 className="group-label">
+    <GroupLabel>
       <button type="button" className="group-toggle" aria-expanded={!folded} onClick={onToggle}>
         {categoryLabel(name)}
         <ChevronRightIcon size={14} />
       </button>
-    </h3>
+    </GroupLabel>
   );
 }
 
@@ -348,3 +326,26 @@ export function GroupedList<T extends { id: string; category: string }>({
 
 /** "gifts" → "Gifts": categories are stored lower case and shown with a capital. */
 export const categoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
+
+/** The Category drop-down of an item's form: the list's categories, the item's own if the list lacks it, and Other. */
+export function CategoryField({
+  categories,
+  value,
+  onChange,
+  disabled,
+}: {
+  categories: string[];
+  value: string;
+  onChange: (category: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <SelectField
+      label="Category"
+      disabled={disabled}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      options={[...new Set([...categories, value, "other"])].map((c) => ({ value: c, label: categoryLabel(c) }))}
+    />
+  );
+}
