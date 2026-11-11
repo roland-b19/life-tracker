@@ -1,8 +1,8 @@
 "use server";
 
 import { requireUser } from "@/server/auth";
-import { addCategory, deleteCategory, renameCategory, revertCategory } from "@/lib/categories";
-import { categoryNameSchema, renameCategorySchema, revertCategorySchema } from "@/lib/validations/categories";
+import { addCategory, deleteCategory, renameCategory, reorderCategories, revertCategory } from "@/lib/categories";
+import { categoryNameSchema, renameCategorySchema, reorderCategoriesSchema, revertCategorySchema } from "@/lib/validations/categories";
 
 // No revalidatePath: the clients keep their own state, like the other list actions.
 
@@ -30,5 +30,12 @@ export async function revertCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
   const { scope, ...input } = revertCategorySchema.parse(rawInput);
   await revertCategory(userId, scope, input);
+  return { success: true };
+}
+
+export async function reorderCategoriesAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { scope, names } = reorderCategoriesSchema.parse(rawInput);
+  await reorderCategories(userId, scope, names);
   return { success: true };
 }

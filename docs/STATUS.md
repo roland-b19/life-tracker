@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-11 by Claude (no animations or transitions; Undo on every action; branch `feat/no-motion-undo-everywhere`, PR open, not merged, not deployed)_
+_Last updated: 2026-11-11 by Claude (category drag reorder, Tasks phone order, two animations back; branch `feat/fold-categories`, pushed, no PR, not merged, not deployed)_
 
 ## Phase
 
@@ -161,6 +161,7 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 - 2026-11-11 — Safari on iPhone still jumped on the Wishlist ranges 250-750 and 750+ (it has no scroll anchoring, so the CSS rule does nothing there; cause not reproduced, no Xcode here). `Segmented` now saves the page position on press and restores it in a layout effect (clamps for a short list); Tasks does the same when its list follows the controls. Checked in Chrome with anchoring forced on; to be checked on the phone.
 - 2026-11-11 — Switching a list range or tab no longer throws the page to the top: the browser's scroll anchoring followed a row that moved up; `.list-box` now has `overflow-anchor: none` (one CSS rule), so the page keeps its position and only clamps when the new list is too short. Checked in Chrome on a 48-row Wishlist (scroll 1500 to a 15-row range gave the page end, 300 stayed 300); not checked on iOS Safari (it has no anchoring, so it already behaved this way).
 
+- 2026-11-11 — Categories reorder (branch `feat/fold-categories`, not deployed, no PR): the Categories card on Wishlist and Tasks has the Gym grip handle (drag or ArrowUp/ArrowDown), order saved in `item_categories.sort_order` (`reorderCategoriesAction`, test for owner, other user, anonymous, duplicates), Undo in the toast, and the items lists follow it. Tasks on a phone: Progress, Tasks, Last x days, Categories; first group title has 0.5rem top padding on both pages. Two animations are back and nothing else: the Tasks progress ring and the Wishlist estimated total (`animated-number.tsx`). Checked at 375px in the pane: drag on both pages, order survives a reload, keyboard move, Undo, section order, both animations (sampled with rAF replaced by timers because the hidden pane pauses it). Not checked: a real finger on iPhone Safari, the reminder hidden with push off in the live deploy. No migration, no new dependency. Test data: the dev user `catseed` was left with its categories in the order Mind, Health.
 - 2026-11-11 — Removed every animation and transition app-wide and added Undo to every mutating action (branch `feat/no-motion-undo-everywhere`); design skill rewritten (`references/lists-and-crud.md`), decision recorded. Not tested in a browser by hand; gaps: starting a workout is undone only before sets exist, a custom exercise only if unused, the Assistant's chat Undo covers meals only.
 
 - 2026-11-11 — 3c decisions answered (see `docs/decisions.md`): the Tasks tick history is capped at 400 days per screen load (branch `fix/done-dates-window`, test added; the Azure-only decisions wait for Azure A). Backup run and restore test passed earlier today.

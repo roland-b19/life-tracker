@@ -2,7 +2,7 @@
 
 Copy this pattern for every list page (`app/wishlist/wishlist-client.tsx`). Other pages follow it: Food categories and weight, Tasks, Gym days and routine, Settings.
 
-**There is no motion anywhere** (decision 2026-11-11). Rows, modals and toasts appear, change and disappear instantly. Never add a CSS `transition`, `animation` or `@keyframes`, a view transition, smooth scrolling, a WAAPI/rAF tween or a counting number.
+**There is no motion anywhere** (decision 2026-11-11), except the Tasks progress ring and the Wishlist total count-up (`animated-number.tsx`). Rows, modals and toasts appear, change and disappear instantly. Never add a CSS `transition`, `animation` or `@keyframes`, a view transition, smooth scrolling, a WAAPI/rAF tween or another counting number.
 
 ## Contents
 - The parts
@@ -217,3 +217,9 @@ Sources: `app/wishlist/wishlist-client.tsx`, `app/components/lists.tsx`, `app/co
 ## Category groups
 
 A list with categories (Wishlist in every tab, the Tasks daily list) shows its rows under category titles. A title is a `GroupToggle` (`categories-card.tsx`): the title keeps the plain title look, with an arrow after the text (right when folded, down when open), and the whole title is the button (its tap area is widened with `::before`, so nothing moves). State is `useFolded()`, keyed by tab too (Wishlist by price range, Tasks by space and tab), so every tab folds on its own; totals still count folded rows. Every group has its title, even when a tab has one category (or only Other). The Categories card sits under the Items section. The first Wishlist title has 0.5rem above it to clear the price tabs. The task Reminder field and badge show only where push is on (`isPushEnabled()`), so not on the Vercel deploy. In the tab bar a pressed link sets `target` so the bar's thumb goes straight to the chosen page, not back to the current one first.
+
+## Reordering categories
+
+The Categories card (`categories-card.tsx`, Wishlist and Tasks) copies the Gym reorder: a `GripIcon` `.drag-handle` button first in each `.entry-row[data-sort]`, then the name, then the edit and delete buttons. The handle also takes ArrowUp/ArrowDown. A move updates the screen at once, saves the order (`reorderCategoriesAction`), and shows `Moved "x"` with an Undo that writes the previous order back; on failure the screen is restored with a warning. The items list under the same page groups by this order (`groupOrder`).
+
+On a phone the Tasks sections run Progress, Tasks, Last x days, Categories (the two column wrappers are `display: contents` there and each card has an `order`).

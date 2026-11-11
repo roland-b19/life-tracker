@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { AnimatedNumber } from "../components/animated-number";
 import { CategoriesCard, GroupToggle, categoryLabel, groupOrder, useFolded } from "../components/categories-card";
 import { Navigation } from "../components/navigation";
 import { ListBox } from "../components/lists";
@@ -345,7 +346,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               </h2>
             </div>
             <p className="item-total number-tabular">
-              {formatRon(totalCost)} <span className="muted">RON</span>
+              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
             </p>
           </section>
         </div>

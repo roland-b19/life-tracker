@@ -553,7 +553,7 @@ export function TodosClient({
         </div>
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid todos-grid">
         <div className="dashboard-main">
           <section className="surface" aria-labelledby="tasks-title">
             <div className="section-head">
@@ -698,7 +698,7 @@ export function TodosClient({
           )}
         </div>
 
-        <div className="dashboard-aside summary-first">
+        <div className="dashboard-aside">
           <section className="surface" aria-labelledby="progress-title">
             <div className="section-head">
               <h2 id="progress-title" className="section-title">
@@ -712,7 +712,7 @@ export function TodosClient({
               </p>
             ) : (
               <div className="dash-hero">
-                                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
+                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   <span className="todo-stats-fraction number-tabular">
                     {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
