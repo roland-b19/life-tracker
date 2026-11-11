@@ -245,7 +245,8 @@ export function StatRow({ stats }: { stats: { value: ReactNode; label: string }[
     <div className="stat-row">
       {stats.map((s) => (
         <div key={s.label} className="stat-tile">
-          <strong className="number-tabular">{s.value}</strong>
+          {/* The "—" placeholder and a number are different elements, so a number never gets painted over the dash's leftover pixels. */}
+          <strong key={typeof s.value === "string" ? "text" : "number"} className="number-tabular">{s.value}</strong>
           <span>{s.label}</span>
         </div>
       ))}

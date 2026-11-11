@@ -1,23 +1,16 @@
 "use client";
 
-import { LineChart } from "../components/charts";
 import { FormEvent, useEffect, useState } from "react";
-import { AddButton, Badge, Card, ChartControls, ChartNote, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
+import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
-import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
-import { Segmented } from "../components/segmented";
+import { TrendChart } from "./trend-chart";
 import { signedKg, weightStats } from "@/lib/weight-stats";
 
 type WeightEntry = { id: string; date: string; kilograms: string };
 
 const today = () => toISODate();
-
-type Range = "7" | "30" | "90" | "180" | "360";
-const RANGES: { value: Range; label: string }[] = ["7", "30", "90", "180", "360"].map((d) => ({
-  value: d as Range,
-  label: `${d}D`,
-}));
 
 const twoDecimals = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -40,7 +33,6 @@ export function WeightPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [range, setRange] = useState<Range>("30");
 
   const { showToast } = useToast();
 
@@ -169,10 +161,6 @@ export function WeightPanel() {
   const tile = (value: number | null) =>
     value === null ? "—" : <>{twoDecimals(value)} <span className="macro-target">kg</span></>;
 
-  // The chart's window ends today, so an old last weigh-in shows an empty range rather than old data.
-  const since = addDays(today(), 1 - Number(range));
-  const inRange = sorted.filter((e) => e.date >= since);
-
   return (
     <>
       <Dashboard>
@@ -221,21 +209,8 @@ export function WeightPanel() {
                 { value: tile(stats.weekStartWeight), label: "Week start" },
               ]}
             />
-            {sorted.length >= 2 && (
-              <>
-                <ChartControls>
-                  <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
-                </ChartControls>
-                <LineChart
-                  points={inRange
-                    .reverse()
-                    .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
-                  summary={`Weight over the last ${range} days`}
-                />
-                {inRange.length < 2 && <ChartNote>Not enough weigh-ins in the last {range} days.</ChartNote>}
-              </>
-            )}
           </Card>
+          <TrendChart id="weight-chart-title" noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
         </DashboardAside>
       </Dashboard>
 

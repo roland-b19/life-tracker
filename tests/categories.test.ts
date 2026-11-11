@@ -19,7 +19,7 @@ import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { createTodo, getDailyTodos } from "@/lib/todos";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
-import { toISODate } from "@/lib/format-date";
+import { addDays, toISODate } from "@/lib/format-date";
 
 async function seedUser(subject: string) {
   const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
@@ -70,6 +70,24 @@ describe("Categories: lists, items and multi-user isolation", () => {
 
     await expect(renameCategoryAction({ scope: "personal", from: "house", to: "other" })).rejects.toThrow();
     await expect(addCategoryAction({ scope: "personal", name: "other" })).rejects.toThrow();
+  });
+
+  it("deleting a task category leaves the days that are over with it, and refiles today and later", async () => {
+    authState.id = userA;
+    const today = toISODate();
+    const day = (n: number) => addDays(today, n);
+    await addCategoryAction({ scope: "personal", name: "gym" });
+    await createTodo(userA, { space: "personal", title: "Lift", isRecurring: true, recurrencePattern: "daily", dueDate: day(-3), category: "gym" });
+    const old = await createTodo(userA, { space: "personal", title: "Old one", isRecurring: false, recurrencePattern: "none", dueDate: day(-1), category: "gym" });
+    const catOn = async (d: string, title: string) => (await getDailyTodos(userA, "personal", d, today)).todos.find((t) => t.title === title)?.category;
+
+    await deleteCategoryAction({ scope: "personal", name: "gym" });
+    expect(await catOn(day(-2), "Lift")).toBe("gym");
+    expect(await catOn(day(-1), "Old one")).toBe("gym");
+    expect(await catOn(today, "Lift")).toBe("other");
+    expect(await catOn(day(2), "Lift")).toBe("other");
+    expect(old.category).toBe("gym");
+    expect((await getCategories(userA, ["personal"])).personal).not.toContain("gym");
   });
 
   it("adds a category when an item is saved with a new one", async () => {

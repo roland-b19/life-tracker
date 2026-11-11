@@ -276,6 +276,14 @@ Every action that modifies something shows an Undo button in its toast and resto
 - Left inline on purpose: `global-error.tsx` (it replaces the root layout, so it cannot import the design system); the sign-out buttons in `navigation.tsx` (circular import with `blocks.tsx`); the "Past foods" sheet (a plain `Modal`, not a form); the sign-in wrapper `form-stack signin-form`; base `<button>` variants (primary, secondary, danger, tap, Log set, session exit); the internals of date-picker, segmented, charts, toast and modal; the Food chat form and Gym's split-day card and history toggle (used on one page only).
 - Pure refactor: same class names and DOM, so the look is unchanged. No migration, no new dependency.
 
+### 2026-11-12: Frozen past days, yesterday grace, split daily tasks (user)
+
+- Tasks: days before yesterday cannot be changed at all (no tick, edit, move or delete); yesterday can (one day of grace); the 7-days-ahead planning limit stays. The dev-only `DEV_EDIT_PAST` switch is removed.
+- A change to a daily task made on a given day applies from that day on and never to earlier days: the task row is split (old row ends on that day with its ticks, a copy starts on it with the old ticks). The two halves are not linked afterwards (`shortcut:` in `todo-split.ts`). Deleting ends the task on that day; deleting a category refiles only today and later.
+- Water and Steps: new entries, edits and deletes only for today and yesterday; older days are read-only, still shown in the chart and History.
+- Nutrition numbers animate on change (a new exception to "no animations", with the Tasks ring and the Wishlist total). Screen orientation is not locked or rotated any more.
+- No data is deleted by the app on its own and there is no retention limit; the only caps are on reads (Gym progress, Past foods, Assistant history, "More" paging).
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

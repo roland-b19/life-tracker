@@ -21,7 +21,7 @@ vi.mock("@/server/auth", () => ({
 }));
 
 import { db } from "@/server/db";
-import { addDays } from "@/lib/format-date";
+import { addDays, toISODate } from "@/lib/format-date";
 import { users, weightEntries } from "@/db/schema";
 import {
   addShoppingItem,
@@ -266,8 +266,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await addShoppingItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "produce" }),
       await addShoppingItem(userA, { name: "Cheese", amount: 1, unit: "pack", category: "produce" }),
     ];
+    // checked_at has millisecond resolution, so each tick needs its own millisecond.
+    const tick = () => new Promise((r) => setTimeout(r, 5));
     await toggleShoppingItem(userA, a.id, true);
+    await tick();
     await toggleShoppingItem(userA, b.id, true);
+    await tick();
     expect(await names()).toEqual(["Cheese", "Bread", "Apples"]);
     await toggleShoppingItem(userA, a.id, false);
     expect(await names()).toEqual(["Cheese", "Apples", "Bread"]);
@@ -478,42 +482,54 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await getNutritionTargets(userB)).calories).toBe(2000);
     });
 
-    it("keeps water and steps history per owner: add, move, refuse a taken day, clear", async () => {
+    it("keeps water and steps history per owner, today and yesterday only: add, move, refuse a taken day, clear", async () => {
+      const today = toISODate();
+      const yesterday = addDays(today, -1);
+      const older = addDays(today, -2);
       authState.id = "";
       await expect(listDailyMetricsAction()).rejects.toThrow("Authentication required.");
-      await expect(saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 500 })).rejects.toThrow(
+      await expect(saveDailyMetricAction({ kind: "water", date: yesterday, value: 500 })).rejects.toThrow(
         "Authentication required.",
       );
-      await expect(clearDailyMetricAction({ kind: "water", date: "2026-11-01" })).rejects.toThrow(
+      await expect(clearDailyMetricAction({ kind: "water", date: yesterday })).rejects.toThrow(
         "Authentication required.",
       );
 
       authState.id = userA;
-      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 500 })).saved).toBe(true);
-      expect((await saveDailyMetricAction({ kind: "steps", date: "2026-11-01", value: 8000 })).saved).toBe(true);
+      expect((await saveDailyMetricAction({ kind: "water", date: yesterday, value: 500 })).saved).toBe(true);
+      expect((await saveDailyMetricAction({ kind: "steps", date: yesterday, value: 8000 })).saved).toBe(true);
       // The day already has water: a second add is refused, steps there are untouched.
-      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-01", value: 900 })).saved).toBe(false);
-      // An edit moves the water to 02.11 and leaves the steps on 01.11.
+      expect((await saveDailyMetricAction({ kind: "water", date: yesterday, value: 900 })).saved).toBe(false);
+      // An edit moves the water to today and leaves the steps on yesterday.
       expect(
-        (await saveDailyMetricAction({ kind: "water", date: "2026-11-02", value: 700, previousDate: "2026-11-01" })).saved,
+        (await saveDailyMetricAction({ kind: "water", date: today, value: 700, previousDate: yesterday })).saved,
       ).toBe(true);
       expect(await listDailyMetricsAction()).toEqual([
-        { date: "2026-11-02", waterMl: 700, steps: 0 },
-        { date: "2026-11-01", waterMl: 0, steps: 8000 },
+        { date: today, waterMl: 700, steps: 0 },
+        { date: yesterday, waterMl: 0, steps: 8000 },
       ]);
-      await expect(saveDailyMetricAction({ kind: "steps", date: "2026-11-03", value: 0 })).rejects.toThrow();
-      await expect(saveDailyMetricAction({ kind: "water", date: "2026-11-03", value: 20001 })).rejects.toThrow();
+      await expect(saveDailyMetricAction({ kind: "steps", date: today, value: 0 })).rejects.toThrow();
+      await expect(saveDailyMetricAction({ kind: "water", date: today, value: 20001 })).rejects.toThrow();
       await expect(saveDailyMetricAction({ kind: "water", date: "11/03/2026", value: 1 })).rejects.toThrow();
+
+      // Older days (and tomorrow) are history: no add, no move to or from them, no clear.
+      const locked = "Only today and yesterday can be changed.";
+      await expect(saveDailyMetricAction({ kind: "water", date: older, value: 1 })).rejects.toThrow(locked);
+      await expect(saveDailyMetricAction({ kind: "water", date: addDays(today, 1), value: 1 })).rejects.toThrow(locked);
+      await expect(
+        saveDailyMetricAction({ kind: "steps", date: today, value: 5, previousDate: older }),
+      ).rejects.toThrow(locked);
+      await expect(clearDailyMetricAction({ kind: "steps", date: older })).rejects.toThrow(locked);
 
       // Another user sees none of it and their writes land in their own days only.
       authState.id = userB;
       expect(await listDailyMetricsAction()).toEqual([]);
-      expect((await saveDailyMetricAction({ kind: "water", date: "2026-11-02", value: 100 })).saved).toBe(true);
-      await clearDailyMetricAction({ kind: "steps", date: "2026-11-01" });
+      expect((await saveDailyMetricAction({ kind: "water", date: today, value: 100 })).saved).toBe(true);
+      await clearDailyMetricAction({ kind: "steps", date: yesterday });
 
       authState.id = userA;
-      await clearDailyMetricAction({ kind: "water", date: "2026-11-02" });
-      expect(await listDailyMetricsAction()).toEqual([{ date: "2026-11-01", waterMl: 0, steps: 8000 }]);
+      await clearDailyMetricAction({ kind: "water", date: today });
+      expect(await listDailyMetricsAction()).toEqual([{ date: yesterday, waterMl: 0, steps: 8000 }]);
     });
   });
 });

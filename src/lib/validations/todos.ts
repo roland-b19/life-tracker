@@ -36,9 +36,6 @@ export const restoreTodoSchema = createTodoSchema.extend({
 /** How far ahead one-off tasks can be planned. */
 export const PLAN_AHEAD_DAYS = 7;
 
-/** Dev builds may also edit and plan past days, for testing; never in production. Ticking past days is always allowed. */
-export const DEV_EDIT_PAST = process.env.NODE_ENV === "development";
-
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
@@ -47,6 +44,8 @@ export const toggleTodoSchema = z.object({
 
 export const updateTodoSchema = z.object({
   id: z.string().uuid(),
+  // The day on screen: a repeating task is edited from that day on, the days before keep it as it was.
+  day: isoDate.optional(),
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
   // Left out by the one-off form, which has no category: then the task keeps its own.
@@ -58,6 +57,11 @@ export const moveTodoSchema = z.object({
   id: z.string().uuid(),
   recurrencePattern: recurrencePatternSchema,
   dueDate: isoDate,
+  // The day on screen (a repeating task leaves it from that day on) and the edits made in the same step.
+  from: isoDate.optional(),
+  title: createTodoSchema.shape.title.optional(),
+  reminderTime: createTodoSchema.shape.reminderTime,
+  category: categorySchema.optional(),
 });
 
 export const deleteTodoSchema = z.object({

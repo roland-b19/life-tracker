@@ -336,8 +336,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect(toggleByB).toBe(false);
 
     // User B tries to edit
-    expect(await updateTodo(userB, { id: task.id, title: "Hijacked", reminderTime: null })).toBe(false);
-    expect(await updateTodo(userA, { id: task.id, title: "Renamed", reminderTime: "08:30" })).toBe(true);
+    expect(await updateTodo(userB, { id: task.id, title: "Hijacked", reminderTime: null })).toBeNull();
+    expect(await updateTodo(userA, { id: task.id, title: "Renamed", reminderTime: "08:30" })).toMatchObject({ title: "Renamed" });
 
     // User B tries to delete
     const deleteByB = await deleteTodo(userB, task.id);
@@ -503,13 +503,13 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(tick(addDays(today, -1))).rejects.toThrow("not due"); // before it started
       expect((await tick(today)).success).toBe(true);
 
-      // A one-off on a past day can be ticked, not edited.
+      // A one-off from before yesterday is frozen: not edited, deleted or ticked.
       const old = await createTodo(userA, {
         space: "personal", title: "Old", dueDate: addDays(today, -5), isRecurring: false, recurrencePattern: "none",
       });
-      await expect(updateTodoAction({ id: old.id, title: "New" })).rejects.toThrow("up to 7 days ahead");
-      await expect(deleteTodoAction(old.id)).rejects.toThrow("up to 7 days ahead");
-      expect((await toggleTodoAction({ id: old.id, isCompleted: true, currentDate: addDays(today, -5) })).success).toBe(true);
+      await expect(updateTodoAction({ id: old.id, title: "New" })).rejects.toThrow("before yesterday");
+      await expect(deleteTodoAction(old.id)).rejects.toThrow("before yesterday");
+      await expect(toggleTodoAction({ id: old.id, isCompleted: true, currentDate: addDays(today, -5) })).rejects.toThrow("before yesterday");
     });
 
     it("rejects a duplicate task on the same list, not on another list or user", async () => {
@@ -666,7 +666,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = "";
       await expect(updateTodoAction({ id: b.id, title: "x" })).rejects.toThrow("Authentication required.");
       authState.id = userB;
-      expect(await updateTodoAction({ id: b.id, title: "Hijacked" })).toEqual({ success: false });
+      expect(await updateTodoAction({ id: b.id, title: "Hijacked" })).toEqual({ success: false, todo: null });
 
       authState.id = userA;
       expect(await updateTodoAction({ id: b.id, title: "call MOM" })).toEqual({ success: false, error: '"call MOM" is already on this list.' });
@@ -799,6 +799,61 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       expect((await getPlannedDaysAction("personal")).days).toEqual([addDays(today, 2), addDays(today, 5)]);
       expect((await getPlannedDaysAction("business")).days).toEqual([]);
+    });
+  });
+
+  describe("Past days stay as they were", () => {
+    const today = toISODate();
+    const daily = (title: string, dueDate: string) =>
+      createTodo(userA, { space: "personal", title, dueDate, isRecurring: true, recurrencePattern: "daily" });
+    const titlesOn = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.title);
+
+    it("edits a daily task from the day on screen on, keeping the days before it", async () => {
+      const task = await daily("Walk", addDays(today, -5));
+      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, -3) });
+      const saved = await updateTodo(userA, { id: task.id, title: "Run", reminderTime: null }, today);
+      expect(saved?.id).not.toBe(task.id);
+      expect(await titlesOn(addDays(today, -2))).toEqual(["Walk"]);
+      expect(await titlesOn(today)).toEqual(["Run"]);
+      expect(await titlesOn(addDays(today, 2))).toEqual(["Run"]);
+      // The ticks of the past stay on the days they were made.
+      const past = (await getDailyTodos(userA, "personal", addDays(today, -3), today)).todos;
+      expect(past.map((t) => [t.title, t.isCompleted])).toEqual([["Walk", true]]);
+      // A task that starts on the day on screen is edited in place.
+      const fresh = await daily("Read", today);
+      expect((await updateTodo(userA, { id: fresh.id, title: "Study", reminderTime: null }, today))?.id).toBe(fresh.id);
+    });
+
+    it("deletes a daily task from the day on screen on, keeping the days before it", async () => {
+      const task = await daily("Stretch", addDays(today, -4));
+      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, -1) });
+      expect(await deleteTodo(userA, task.id, today)).toBe(true);
+      expect(await titlesOn(addDays(today, -1))).toEqual(["Stretch"]);
+      expect(await titlesOn(today)).toEqual([]);
+      expect(await titlesOn(addDays(today, 3))).toEqual([]);
+    });
+
+    it("lets yesterday be changed by the actions, and nothing before it", async () => {
+      const yesterday = addDays(today, -1);
+      const task = await daily("Floss", addDays(today, -6));
+      const edit = (day: string) => updateTodoAction({ id: task.id, title: "Floss well", day });
+      await expect(edit(addDays(today, -2))).rejects.toThrow("before yesterday");
+      await expect(toggleTodoAction({ id: task.id, isCompleted: true, currentDate: addDays(today, -2) })).rejects.toThrow("before yesterday");
+      await expect(deleteTodoAction(task.id, addDays(today, -2))).rejects.toThrow("before yesterday");
+      expect((await toggleTodoAction({ id: task.id, isCompleted: true, currentDate: yesterday })).success).toBe(true);
+      const res = await edit(yesterday);
+      expect(res.success && res.todo?.id).not.toBe(task.id);
+      expect(await titlesOn(addDays(today, -2))).toEqual(["Floss"]);
+      expect(await titlesOn(yesterday)).toEqual(["Floss well"]);
+    });
+
+    it("moves a daily task to one day with the edits, and the days before keep the daily one", async () => {
+      const task = await daily("Plan", addDays(today, -3));
+      const res = await moveTodoAction({ id: task.id, recurrencePattern: "none", dueDate: addDays(today, 2), from: today, title: "Plan trip" });
+      expect(res.success).toBe(true);
+      expect(await titlesOn(addDays(today, -1))).toEqual(["Plan"]);
+      expect(await titlesOn(today)).toEqual([]);
+      expect(await titlesOn(addDays(today, 2))).toEqual(["Plan trip"]);
     });
   });
 

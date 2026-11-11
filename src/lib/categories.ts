@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { itemCategories, todos, wishlistItems } from "@/db/schema";
+import { toISODate } from "./format-date";
+import { splitTodo } from "./todo-split";
 import type { CategoryScope } from "./validations/categories";
 
 const own = (userId: string, scope: CategoryScope, name: string) =>
@@ -21,6 +23,29 @@ async function moveItems(tx: Pick<typeof db, "update">, userId: string, scope: C
           .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, from)))
           .returning({ id: todos.id });
   return rows.map((r) => r.id);
+}
+
+/**
+ * Takes a deleted category off the tasks of today and the days ahead (they go to "other"); the days before keep it.
+ * A repeating task that already ran before today is split, so the new half starts today in "other". Returns the
+ * ids of the tasks now in "other".
+ */
+async function refileFromToday(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string, scope: CategoryScope, name: string) {
+  const today = toISODate();
+  const rows = await tx
+    .select()
+    .from(todos)
+    .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
+  const ids: string[] = [];
+  for (const t of rows) {
+    if (t.isRecurring ? t.endedOn && t.endedOn <= today : t.dueDate < today) continue; // only on days that are over
+    const [row] =
+      t.isRecurring && t.dueDate < today
+        ? [await splitTodo(tx, t, today, { category: "other" })]
+        : await tx.update(todos).set({ category: "other" }).where(eq(todos.id, t.id)).returning();
+    ids.push(row.id);
+  }
+  return ids;
 }
 
 /** Adds a category at the end of the list unless it is there already or is the built-in "other". */
@@ -79,12 +104,13 @@ export async function renameCategory(userId: string, scope: CategoryScope, from:
   });
 }
 
-/** Deletes a category; its items move to "other". */
+/** Deletes a category; its items move to "other" (a task keeps it on the days that are over). */
 export async function deleteCategory(userId: string, scope: CategoryScope, name: string) {
   return db.transaction(async (tx): Promise<CategoryChange | null> => {
     const [old] = await tx.delete(itemCategories).where(own(userId, scope, name)).returning();
     if (!old) return null;
-    return { sortOrder: old.sortOrder, itemIds: await moveItems(tx, userId, scope, name, "other"), merged: false };
+    const itemIds = scope === "wishlist" ? await moveItems(tx, userId, scope, name, "other") : await refileFromToday(tx, userId, scope, name);
+    return { sortOrder: old.sortOrder, itemIds, merged: false };
   });
 }
 

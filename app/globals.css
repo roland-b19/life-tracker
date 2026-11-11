@@ -2309,14 +2309,6 @@ button.bars-col:focus-visible {
   text-align: center;
 }
 
-/* An empty day's note keeps the ring's height (132px ring, gap, two text lines) so the cards below never move */
-.dash-hero-empty {
-  box-sizing: border-box;
-  min-height: 13rem;
-  display: grid;
-  place-items: center;
-}
-
 .dash-hero-text {
   display: flex;
   flex-direction: column;
@@ -3017,33 +3009,5 @@ button.bars-col:focus-visible {
   select.sort-select,
   textarea {
     font-size: 1rem;
-  }
-}
-
-/* Portrait only on a phone. A web page cannot lock the orientation in a browser tab (the installed app does, through
-   the manifest), so a phone turned sideways keeps the portrait page and turns it back against the device, like a
-   portrait-locked app: no message, the page just does not rotate. html becomes a fixed portrait-sized scroller
-   (the short side wide, the long side tall) rotated 90deg; data-rot (providers.tsx) says which way. Tablets and
-   desktops are taller than 500px in landscape, so they are not affected. */
-@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  html {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100dvh;
-    height: 100dvw;
-    overflow-x: hidden;
-    overflow-y: auto;
-    transform-origin: 0 0;
-    transform: translateY(100dvh) rotate(-90deg);
-    background: #000;
-  }
-  html[data-rot="cw"] {
-    transform: translateX(100dvw) rotate(90deg);
-  }
-  /* The modal's visualViewport sizing is for an upright phone; here the backdrop is the rotated html. */
-  html .modal-backdrop {
-    height: 100% !important;
-    transform: none !important;
   }
 }

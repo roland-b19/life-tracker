@@ -22,7 +22,7 @@ import {
   updateTodoAction,
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
-import { DEV_EDIT_PAST, PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
+import { PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
 import { addDays, dayLabel, toISODate } from "@/lib/format-date";
 import { streakOn } from "@/lib/streak";
 import { compareTodos } from "@/lib/todo-order";
@@ -122,17 +122,18 @@ export function TodosClient({
   // Both lists look a week ahead: one-off tasks to plan them, daily ones to see what is coming.
   const maxDate = addDays(todayDate, PLAN_AHEAD_DAYS);
   const tomorrow = addDays(todayDate, 1);
-  // Past days can be ticked but not edited, except in dev builds, for testing.
+  // Days before today are only looked at, except yesterday: one day of grace to tick, edit or delete what was forgotten.
+  const yesterday = addDays(todayDate, -1);
   const isPast = date < todayDate;
-  const editable = !isPast || DEV_EDIT_PAST;
+  const editable = !isPast;
   // A repeating task's dueDate is its first day: it is not on the days before it.
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
     todosMap[s].filter((t) => t.isRecurring === daily && (!t.isRecurring || t.dueDate <= day));
   const listDaily = view.tab === "daily";
   const listPast = view.date < todayDate;
-  const listEditable = !listPast || DEV_EDIT_PAST;
+  const listEditable = view.date >= yesterday;
   // A daily task is ticked on its day or later, never ahead of time.
-  const listTickable = !(listDaily && view.date > todayDate);
+  const listTickable = listEditable && !(listDaily && view.date > todayDate);
   // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
   const listTodos = (() => {
     const list = visibleFor(view.space, listDaily, view.date);
@@ -273,30 +274,37 @@ export function TodosClient({
         // Only a daily task (or one that becomes daily) has a category to pick; a one-off keeps the one it has.
         const category = before.isRecurring || target?.pattern === "daily" ? categoryInput : before.category;
         const after = { ...before, title, reminderTime, category };
-        const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
-        if ("error" in res) return setTitleError(res.error);
-        if (res.success && target) {
+        if (target) {
+          // The edits travel with the move, so the server changes the task once.
           closeForm();
           await moveTask(before, after, target.pattern, target.day);
           return;
         }
+        const res = await updateTodoAction({ id: before.id, title, reminderTime, category, day: date });
+        if ("error" in res) return setTitleError(res.error);
         if (res.success) {
+          // A daily task edited from a later day is a new task from that day on: it has a new id.
+          const saved = { ...after, id: res.todo?.id ?? before.id };
           ++requestId.current;
-          replace(after);
+          drop(before);
+          putBack(saved);
           showToast({
             message: `Saved "${title}"`,
             type: "success",
             onUndo: async () => {
               ++requestId.current;
-              replace(before);
+              drop(saved);
+              putBack({ ...before, id: saved.id });
               const undone = await updateTodoAction({
-                id: before.id,
+                id: saved.id,
                 title: before.title,
                 reminderTime: before.reminderTime,
                 category: before.category,
+                day: date,
               }).catch(() => null);
               if (!undone || !("success" in undone) || !undone.success) {
-                replace(after);
+                drop({ ...before, id: saved.id });
+                putBack(saved);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
               }
               await loadDay();
@@ -325,7 +333,7 @@ export function TodosClient({
             onUndo: async () => {
               ++requestId.current;
               drop(created);
-              const gone = await deleteTodoAction(created.id, date).then(
+              const gone = await deleteTodoAction(created.id, created.dueDate).then(
                 (r) => r.success,
                 () => false,
               );
@@ -390,9 +398,6 @@ export function TodosClient({
       [task.space]: prev[task.space].some((t) => t.id === task.id) ? prev[task.space] : [...prev[task.space], task].sort(compareTodos),
     }));
 
-  const replace = (task: TodoItem) =>
-    setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].map((t) => (t.id === task.id ? task : t)).sort(compareTodos) }));
-
   const drop = (task: TodoItem) => {
     setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
   };
@@ -406,7 +411,15 @@ export function TodosClient({
   const moveTask = async (before: TodoItem, after: TodoItem, recurrencePattern: string, day: string) => {
     ++requestId.current;
     drop(before);
-    const res = await moveTodoAction({ id: before.id, recurrencePattern, dueDate: day }).catch(() => null);
+    const res = await moveTodoAction({
+      id: before.id,
+      recurrencePattern,
+      dueDate: day,
+      from: date,
+      title: after.title,
+      reminderTime: after.reminderTime,
+      category: after.category,
+    }).catch(() => null);
     if (!res?.success) {
       if (shows(after)) putBack(after); // unless the list on screen changed meanwhile
       showToast({ message: res && "error" in res ? res.error : "Failed to move task", type: "warning" });
@@ -544,7 +557,7 @@ export function TodosClient({
             below
             actions={editable && <AddButton onClick={() => openForm()}>Add task</AddButton>}
           >
-            {isPast && !DEV_EDIT_PAST && <ReadonlyNote>Past days can be ticked, not edited</ReadonlyNote>}
+            {date < yesterday && <ReadonlyNote>Days before yesterday are read-only</ReadonlyNote>}
             {isDaily && date > todayDate && <ReadonlyNote>Daily tasks are ticked on the day</ReadonlyNote>}
 
             <ListBox wash className="todo-list">
@@ -607,12 +620,15 @@ export function TodosClient({
               api={scopedCategories(view.space)}
               categories={categories[view.space]}
               onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
-              onRefile={(from, to, only) =>
-                setTodosMap((prev) => ({
-                  ...prev,
-                  [view.space]: prev[view.space].map((t) => (t.category === from && (!only || only.includes(t.id)) ? { ...t, category: to } : t)),
-                }))
-              }
+              onRefile={(from, to, only) => {
+                // Days that are over keep their categories, so only today and the days ahead change on screen; the server decides the rest.
+                if (view.date >= todayDate)
+                  setTodosMap((prev) => ({
+                    ...prev,
+                    [view.space]: prev[view.space].map((t) => (t.category === from && (!only || only.includes(t.id)) ? { ...t, category: to } : t)),
+                  }));
+                void loadDay();
+              }}
             />
           )}
         </DashboardMain>
@@ -620,8 +636,7 @@ export function TodosClient({
         <DashboardAside>
           <Card id="progress-title" title="Progress">
             {!totalCount ? (
-              // Same height as the ring below, so the cards under it never move when a day has no tasks.
-              <EmptyNote className="dash-hero-empty">
+              <EmptyNote>
                 {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
               </EmptyNote>
             ) : (
@@ -715,7 +730,7 @@ export function TodosClient({
                 id="task-pick-date"
                 value={pickDate}
                 today={todayDate}
-                min={DEV_EDIT_PAST ? undefined : todayDate}
+                min={todayDate}
                 max={maxDate}
                 text={dayLabel(pickDate)}
                 disabled={saving}

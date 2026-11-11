@@ -87,6 +87,11 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-personal.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
   ```
   Remove `--dry-run` to write.
+- **Replace your shopping list (one time):** `scripts/import-shopping.cjs` reads the gitignored `.local/shopping-list.json` (`{"category": ["item", ...]}`, in walking order) and **deletes every shopping item, its history and all shopping categories of your account first**, then adds the file's. Nothing else is touched. Names are kept as written; category names are lower-cased, as the app does. Run the dry run first, it prints what it would delete and add and writes nothing.
+  ```bash
+  read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-shopping.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
+  ```
+  Remove `--dry-run` to write.
 - **Roll back:** Vercel, Deployments, the previous deployment, Instant Rollback. A bad migration is undone from a backup (below) or Neon's history window; migrations are additive, so rolling the code back is normally enough.
 - **Rotate a secret:** change it in Vercel (or GitHub for the backup), redeploy. `NEXTAUTH_SECRET` signs everyone out; the GitHub client secret is rotated in the OAuth app first, then in Vercel.
 - **Free plan changes:** Neon or Vercel may change the Free terms. The weekly backup below plus `docker build` make the app movable to any host that runs Docker and PostgreSQL.
