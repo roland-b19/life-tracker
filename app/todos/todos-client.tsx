@@ -66,7 +66,7 @@ export function TodosClient({
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [date, setDate] = useState(todayDate);
   const [tab, setTab] = useState<TaskTab>("daily");
-  const [period, setPeriod] = useState<Period>("30");
+  const [period, setPeriod] = useState<Period>("7");
   const [metric, setMetric] = useState<Metric>("rate");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
@@ -403,8 +403,8 @@ export function TodosClient({
   };
 
   // What the server needs to put a task back as it was.
-  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt }: TodoItem) => ({
-    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt,
+  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, completedAt }: TodoItem) => ({
+    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, completedAt,
   });
 
   // Moving always takes the row out of this list; Undo puts the task back as it was, edits included (a new task a move created is deleted).
@@ -627,8 +627,9 @@ export function TodosClient({
                     ...prev,
                     [view.space]: prev[view.space].map((t) => (t.category === from && (!only || only.includes(t.id)) ? { ...t, category: to } : t)),
                   }));
-                void loadDay();
               }}
+              // Read the tasks again once the server has saved (or undone) the change: a delete splits a repeating task into new rows.
+              onSynced={() => void loadDay()}
             />
           )}
         </DashboardMain>

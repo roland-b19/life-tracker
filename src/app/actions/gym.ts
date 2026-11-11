@@ -82,7 +82,7 @@ export async function logSetAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = logSetSchema.parse(rawInput);
   const set = await logWorkoutSet(userId, parsed);
-  return { success: true, set };
+  return { success: Boolean(set), set };
 }
 
 export async function deleteSetAction(setId: string) {

@@ -6,11 +6,14 @@ import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
   clearDailyMetricSchema,
+  forgetPastFoodSchema,
+  restorePastFoodSchema,
   day,
   metricDayEditable,
   saveDailyMetricSchema,
   createShoppingItemSchema,
   logMealSchema,
+  restoreMealSchema,
   renameShoppingCategorySchema,
   reorderShoppingCategoriesSchema,
   shoppingCategoryNameSchema,
@@ -29,9 +32,12 @@ import {
   getDailyMetricsHistory,
   saveDailyMetric,
   deleteMeal,
+  forgetPastFood,
+  restorePastFood,
   deleteShoppingCategory,
   deleteShoppingItem,
   logMeal,
+  restoreMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreShoppingItems,
@@ -50,9 +56,15 @@ function safeRevalidate(path: string) {
   }
 }
 
+/** Water, steps and meals are written for today or yesterday only; older days are history (same rule as saveDailyMetricAction). */
+function assertWritableDay(date: string) {
+  if (!metricDayEditable(date, toISODate())) throw new Error("Only today and yesterday can be changed.");
+}
+
 export async function logMealAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = logMealSchema.parse(rawInput);
+  assertWritableDay(parsed.date);
   const meal = await logMeal(userId, parsed);
   safeRevalidate("/food");
   return { success: true, meal };
@@ -65,12 +77,38 @@ export async function deleteMealAction(mealId: string) {
   return { success: true, deleted };
 }
 
+export async function restoreMealAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const input = restoreMealSchema.parse(rawInput);
+  assertWritableDay(input.date);
+  const meal = await restoreMeal(userId, input);
+  safeRevalidate("/food");
+  return { success: meal !== null, meal };
+}
+
+/** Removes a food from the "Past foods" list (the days it was logged on keep it); `ids` is what Undo sends back. */
+export async function forgetPastFoodAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const { name } = forgetPastFoodSchema.parse(rawInput);
+  const ids = await forgetPastFood(userId, name);
+  safeRevalidate("/food");
+  return { success: true, ids };
+}
+
+export async function restorePastFoodAction(rawInput: unknown) {
+  const userId = await requireUser();
+  await restorePastFood(userId, restorePastFoodSchema.parse(rawInput).ids);
+  safeRevalidate("/food");
+  return { success: true };
+}
+
 export async function addWaterAction(date: string, amountMl: number) {
   const userId = await requireUser();
   if (!Number.isInteger(amountMl) || Math.abs(amountMl) > 20000) {
     throw new Error("Invalid water parameters");
   }
-  const metrics = await addWater(userId, isoDate.parse(date), amountMl);
+  assertWritableDay(isoDate.parse(date));
+  const metrics = await addWater(userId, date, amountMl);
   safeRevalidate("/food");
   return { success: true, metrics };
 }
@@ -80,7 +118,8 @@ export async function updateStepsAction(date: string, steps: number) {
   if (!Number.isInteger(steps) || steps < 0 || steps > 200000) {
     throw new Error("Invalid steps parameter");
   }
-  const metrics = await updateDailySteps(userId, isoDate.parse(date), steps);
+  assertWritableDay(isoDate.parse(date));
+  const metrics = await updateDailySteps(userId, date, steps);
   safeRevalidate("/food");
   return { success: true, metrics };
 }
@@ -100,9 +139,8 @@ export async function listDailyMetricsAction() {
 export async function saveDailyMetricAction(rawInput: unknown) {
   const userId = await requireUser();
   const input = saveDailyMetricSchema.parse(rawInput);
-  const today = toISODate();
-  if (!metricDayEditable(input.date, today) || (input.previousDate && !metricDayEditable(input.previousDate, today)))
-    throw new Error("Only today and yesterday can be changed.");
+  assertWritableDay(input.date);
+  if (input.previousDate) assertWritableDay(input.previousDate);
   const saved = await saveDailyMetric(userId, input);
   safeRevalidate("/food");
   return { saved };

@@ -92,10 +92,12 @@ interface WorkoutSetData {
   flagAnomaly: boolean;
   anomalyReason?: string | null;
   notes?: string | null;
+  createdAt?: Date | string;
 }
 
 interface ActiveSessionData {
   id: string;
+  createdAt?: Date | string;
   date: string;
   isDeload: boolean;
   splitDayId?: string | null;
@@ -310,6 +312,7 @@ export function GymClient({
         setTimerPaused(false);
         setActiveSession({
           id: res.session.id,
+          createdAt: res.session.createdAt,
           date: res.session.date,
           isDeload: res.session.isDeload,
           splitDayId: day.id,
@@ -403,6 +406,7 @@ export function GymClient({
           flagAnomaly: res.set.flagAnomaly,
           anomalyReason: res.set.anomalyReason,
           notes: res.set.notes,
+          createdAt: res.set.createdAt,
         };
         setActiveSession((prev) => prev && { ...prev, sets: [...prev.sets, logged] });
         showToast({
@@ -448,6 +452,8 @@ export function GymClient({
       onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await logSetAction({
+          id: set.id,
+          createdAt: set.createdAt,
           sessionId,
           exerciseId: set.exerciseId,
           setOrder: set.setOrder,
@@ -461,7 +467,7 @@ export function GymClient({
           minTargetReps: exercise.minReps,
           maxTargetReps: exercise.maxReps,
         }).catch(() => null);
-        if (res?.success && res.set) putBackSet({ ...set, id: res.set.id });
+        if (res?.success && res.set) putBackSet(set);
         else showToast({ message: "Failed to restore set", type: "warning" });
       },
     });
@@ -525,11 +531,15 @@ export function GymClient({
         onUndo: takeBack(
           async () => {
             const res = await restoreSessionAction({
+              id: snap.session.id,
+              createdAt: snap.session.createdAt,
               date: snap.session.date,
               splitDayId: snap.session.splitDayId,
               isDeload: snap.session.isDeload,
               notes: snap.notes || null,
               sets: snap.session.sets.map((x) => ({
+                id: x.id,
+                createdAt: x.createdAt,
                 exerciseId: x.exerciseId,
                 setOrder: x.setOrder,
                 reps: x.reps,
@@ -547,6 +557,7 @@ export function GymClient({
             const { session, sets } = res.details;
             return {
               id: session.id,
+              createdAt: session.createdAt,
               date: session.date,
               isDeload: session.isDeload,
               splitDayId: session.splitDayId,
@@ -749,7 +760,7 @@ export function GymClient({
                       label="Reps"
                       type="number"
                       min="1"
-                      max="100"
+                      max="200"
                       inputMode="numeric"
                       disabled={busy}
                       value={currentState.reps}

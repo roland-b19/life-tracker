@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { AddButton, Card, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
+import { AddButton, Card, Dashboard, DashboardAside, DashboardMain, DayField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
@@ -158,7 +158,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
 
   const sorted = sortNewestFirst(entries);
   const [shown, more] = useMore(sorted);
-  const lastWeek = sorted.filter((e) => e.date >= addDays(today(), -6) && e.date <= today());
+    const lastWeek = sorted.filter((e) => e.date >= addDays(today(), -6) && e.date <= today());
   const average = lastWeek.length ? Math.round(lastWeek.reduce((a, e) => a + e.value, 0) / lastWeek.length) : null;
   const todayValue = sorted.find((e) => e.date === today())?.value ?? 0;
   const titleId = `${kind}-history-title`;
@@ -223,7 +223,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
         busy={saving}
         canSubmit={!!value}
       >
-        <DateField id={`${kind}-date`} value={date} today={today()} min={addDays(today(), -1)} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
+        <DayField value={date} today={today()} onChange={setDate} />
         <Field
           label={k.label}
           type="number"

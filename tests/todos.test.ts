@@ -20,8 +20,9 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
+import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
-import { todoCompletions, users } from "@/db/schema";
+import { pushSubscriptions, todoCompletions, users } from "@/db/schema";
 import {
   createTodo,
   DONE_DATES_WINDOW_DAYS,
@@ -474,6 +475,17 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
     });
 
+    it("keeps one row per endpoint when the same browser subscribes twice", async () => {
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
+      const endpoint = "https://fcm.googleapis.com/fcm/send/twice-endpoint";
+      await savePushSubscriptionAction({ endpoint, p256dhKey: "old-p256dh", authKey: "old-auth" });
+      await savePushSubscriptionAction({ endpoint, p256dhKey: "new-p256dh", authKey: "new-auth" });
+      const rows = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].p256dhKey).toBe("new-p256dh");
+      expect((await deletePushSubscriptionAction(endpoint)).deleted).toBe(true);
+    });
+
     it("refuses a push endpoint that is not https", async () => {
       const keys = { p256dhKey: "sample-p256dh-val", authKey: "sample-auth-val" };
       await expect(savePushSubscriptionAction({ endpoint: "http://fcm.googleapis.com/x", ...keys })).rejects.toThrow();
@@ -486,6 +498,35 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await createTodoAction(task(addDays(today, 7)))).success).toBe(true);
       await expect(createTodoAction(task(addDays(today, 30)))).rejects.toThrow("up to 7 days ahead");
       await expect(createTodoAction(task(addDays(today, -5)))).rejects.toThrow("up to 7 days ahead");
+    });
+
+    it("starts a repeating task only inside the planning window, but Undo may bring an old one back", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      const habit = (dueDate: string) => ({ space: "personal", title: "Stretch", dueDate, isRecurring: true, recurrencePattern: "daily" });
+      await expect(createTodoAction(habit(addDays(today, -400)))).rejects.toThrow("up to 7 days ahead");
+      await expect(createTodoAction(habit(addDays(today, 400)))).rejects.toThrow("up to 7 days ahead");
+      const made = await createTodoAction(habit(addDays(today, -1)));
+      expect(made.success).toBe(true);
+      // A one-off moved to repeat from a far-off day is refused too.
+      const once = await createTodo(userA, { space: "personal", title: "Once", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await expect(moveTodoAction({ id: once.id, recurrencePattern: "daily", dueDate: addDays(today, 90) })).rejects.toThrow("up to 7 days ahead");
+      await expect(moveTodoAction({ id: once.id, recurrencePattern: "daily", dueDate: addDays(today, -90) })).rejects.toThrow("up to 7 days ahead");
+      // Undo of deleting a long-running habit keeps its real first day.
+      if (!made.success) throw new Error(made.error);
+      const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date(), doneDates: [] as string[] };
+      expect((await restoreTodoAction(old)).success).toBe(true);
+    });
+
+    it("rejects task titles that are only spaces", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      await expect(createTodoAction({ space: "personal", title: "   ", dueDate: today, isRecurring: false })).rejects.toThrow();
+      const ok = await createTodoAction({ space: "personal", title: "  Pay rent  ", dueDate: today, isRecurring: false });
+      if (!ok.success) throw new Error(ok.error);
+      expect(ok.todo.title).toBe("Pay rent");
+      await expect(updateTodoAction({ id: ok.todo.id, title: "\n\t " })).rejects.toThrow();
+      await expect(createTodoAction({ space: "personal", title: "x".repeat(151), dueDate: today, isRecurring: false })).rejects.toThrow();
     });
 
     it("refuses bad input and changes on days a task cannot change", async () => {
@@ -560,6 +601,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
+    });
+
+    it("restores a ticked task with the time it was ticked, not the time of the Undo", async () => {
+      const today = toISODate();
+      const task = await createTodo(userA, { space: "personal", title: "Call", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: today });
+      const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(before.completedAt).toBeTruthy();
+      await new Promise((r) => setTimeout(r, 10));
+      await deleteTodoAction(task.id);
+      expect((await restoreTodoAction({ ...before, reminderTime: null })).success).toBe(true);
+      const [back] = (await getDailyTodos(userA, "personal", today)).todos;
+      expect(new Date(back.completedAt as unknown as string).getTime()).toBe(new Date(before.completedAt as unknown as string).getTime());
     });
 
     it("undoes a move with the old state back, ticks included, and only for the owner", async () => {

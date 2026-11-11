@@ -8,7 +8,7 @@ export const recurrencePatternSchema = z.enum(["none", "daily"]);
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
-  title: z.string().min(1, "Title is required").max(150).trim(),
+  title: z.string().trim().min(1, "Title is required").max(150),
   isRecurring: z.boolean().default(false),
   recurrencePattern: recurrencePatternSchema.default("none"),
   dueDate: isoDate,
@@ -28,6 +28,7 @@ export const restoreTodoSchema = createTodoSchema.extend({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
+  completedAt: z.coerce.date().nullable().optional(), // when the box last changed, so Undo keeps the list order
   // shortcut: a repeating task ticked on more than 20 years of days cannot be restored, raise the cap if that ever matters.
   doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
@@ -72,8 +73,8 @@ export const deleteTodoSchema = z.object({
 export const pushSubscriptionSchema = z.object({
   // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.
   endpoint: z.url({ protocol: /^https$/ }).max(500),
-  p256dhKey: z.string().min(1).max(255),
-  authKey: z.string().min(1).max(255),
+  p256dhKey: z.string().trim().min(1).max(255),
+  authKey: z.string().trim().min(1).max(255),
 });
 
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;

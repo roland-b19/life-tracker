@@ -3,6 +3,9 @@ import { isoDate } from "./common";
 import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
 
 export const logSetSchema = z.object({
+  // Only Undo sends these, to bring a deleted set back as it was (same id, same time).
+  id: z.string().uuid().optional(),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future").optional(),
   sessionId: z.string().uuid(),
   exerciseId: z.string().uuid(),
   setOrder: z.number().int().min(1).max(50),
@@ -34,8 +37,10 @@ export const finishSessionSchema = z.object({
 
 export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
 
-/** Undo of cancelling a workout: the session as it was, with all its sets (they get new ids). */
+/** Undo of cancelling a workout: the session as it was, with all its sets (same ids and times). */
 export const restoreSessionSchema = z.object({
+  id: z.string().uuid().optional(),
+  createdAt: logSetSchema.shape.createdAt,
   date: isoDate,
   splitDayId: z.string().uuid().optional().nullable(),
   isDeload: z.boolean(),
@@ -44,7 +49,7 @@ export const restoreSessionSchema = z.object({
 });
 
 export const createCustomExerciseSchema = z.object({
-  name: z.string().min(2).max(120).trim(),
+  name: z.string().trim().min(2).max(120),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });

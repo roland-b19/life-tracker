@@ -35,6 +35,8 @@ interface Props {
   onChange: (update: (prev: string[]) => string[]) => void;
   /** The page re-files its items: a rename (merging onto an existing name included) or a delete (to "other"). `only` limits it to those item ids (Undo). */
   onRefile: (from: string, to: string, only?: string[]) => void;
+  /** Called once the server has saved a change or an Undo, so a page that reads its items from the server reads them after it. */
+  onSynced?: () => void;
 }
 
 /** What a rename or delete reported moving, as the server sent it. */
@@ -42,10 +44,12 @@ interface Change {
   sortOrder: number;
   itemIds: string[];
   merged: boolean;
+  /** Tasks a delete split in two; Undo sends them back to join the halves again. */
+  splits?: { from: string; to: string; day: string; endedOn: string | null }[];
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
-export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
+export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }: Props) {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
@@ -105,6 +109,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
     };
     put();
     const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
+    onSynced?.();
     if (!back?.success) {
       onChange((prev) => (current === "other" ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
       onRefile(name, current, change.itemIds);
@@ -130,6 +135,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
           onUndo: async () => {
             onChange((prev) => prev.filter((c) => c !== to));
             const gone = await api.remove(to).catch(() => null);
+            onSynced?.();
             if (!gone?.success) {
               onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
               showToast({ message: "Failed to undo", type: "warning" });
@@ -145,6 +151,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
         const change = res.change;
         const at = categories.indexOf(from);
         onRefile(from, to);
+        onSynced?.();
         onChange((prev) =>
           prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
         );
@@ -175,6 +182,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile }: Props) {
     }
     const change = res.change;
     onRefile(cat, "other");
+    onSynced?.();
     showToast({
       message: `Removed "${cat}"; its items are in Other`,
       onUndo: () => revert(cat, "other", change, false, at),

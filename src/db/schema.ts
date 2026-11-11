@@ -206,6 +206,8 @@ export const meals = pgTable(
     carbs: numeric("carbs", { precision: 5, scale: 1 }).default("0").notNull(),
     fat: numeric("fat", { precision: 5, scale: 1 }).default("0").notNull(),
     isEstimated: boolean("is_estimated").default(false).notNull(),
+    /** Removed from the "Past foods" list; the meal itself stays in its day. */
+    forgotten: boolean("forgotten").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("meals_user_date_idx").on(table.userId, table.date)],

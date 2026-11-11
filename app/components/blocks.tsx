@@ -1,11 +1,12 @@
 "use client";
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
-import { addDays } from "@/lib/format-date";
+import { addDays, formatDMY } from "@/lib/format-date";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, LockIcon, PlusIcon } from "./icons";
 import { DatePicker } from "./date-picker";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
+import { Segmented } from "./segmented";
 
 /*
  * The structures every page is made of, in one place. A page picks and fills them; it never writes their markup,
@@ -341,6 +342,22 @@ export function Field({ label, labelClassName, ...input }: { label: ReactNode; l
  * A captioned date picker. Not a <label>: a click inside the open calendar would re-trigger the button. `text` is
  * what the button reads (the date written out).
  */
+/** Today or yesterday as a segmented control, for entries that can only be logged for those two days; an older day an entry already has stays a third option. */
+export function DayField({ value, today, onChange }: { value: string; today: string; onChange: (date: string) => void }) {
+  const yesterday = addDays(today, -1);
+  const options = [
+    { value: today, label: "Today" },
+    { value: yesterday, label: "Yesterday" },
+    ...(value < yesterday ? [{ value, label: formatDMY(value) }] : []),
+  ];
+  return (
+    <div className="field">
+      <span>Day</span>
+      <Segmented label="Day" value={value} options={options} onChange={onChange} />
+    </div>
+  );
+}
+
 export function DateField({
   id,
   value,

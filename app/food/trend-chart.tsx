@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, ChartControls, ChartNote } from "../components/blocks";
+import { Card, ChartControls } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { Segmented } from "../components/segmented";
 import { addDays, toISODate } from "@/lib/format-date";
@@ -18,19 +18,20 @@ export function TrendChart({
   days: readonly number[];
   entries: { date: string; value: number }[];
 }) {
-  const [range, setRange] = useState(String(days.includes(30) ? 30 : days[0]));
-  const since = addDays(toISODate(), 1 - Number(range));
-  const inRange = entries.filter((e) => e.date >= since).sort((a, b) => a.date.localeCompare(b.date));
+  const [range, setRange] = useState(String(days[0]));
+  const today = toISODate();
+  const byDate = new Map(entries.map((e) => [e.date, e.value]));
+  // Every day of the window is on the axis, so a few entries still make a chart.
+  const points = Array.from({ length: Number(range) }, (_, i) => {
+    const date = addDays(today, i + 1 - Number(range));
+    return { label: date.slice(5).split("-").reverse().join("."), value: byDate.get(date) ?? null };
+  });
   return (
     <Card id={id} title="Chart">
       <ChartControls>
         <Segmented label="Chart period" value={range} options={days.map((d) => ({ value: String(d), label: `${d}D` }))} onChange={setRange} />
       </ChartControls>
-      <LineChart
-        points={inRange.map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: e.value }))}
-        summary={`${noun} over the last ${range} days`}
-      />
-      {inRange.length < 2 && <ChartNote>Not enough entries in the last {range} days.</ChartNote>}
+      <LineChart points={points} summary={`${noun} over the last ${range} days`} />
     </Card>
   );
 }
