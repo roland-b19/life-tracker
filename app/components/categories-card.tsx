@@ -1,10 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
-import { ListBox, useDragSort, useMore } from "./lists";
+import { ListBox, useDragSort, useKeepPlace, useMore } from "./lists";
 import { Modal } from "./modal";
 import { useToast } from "./toast";
 
@@ -33,18 +33,11 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
   const [busy, setBusy] = useState(false);
   const [shown, more] = useMore(categories);
 
-  // A reorder also reorders the items list above this card; the page must not shift under the finger, so the card
-  // keeps its place on screen across that render (Safari has no scroll anchoring).
-  const card = useRef<HTMLElement>(null);
-  const top = useRef<number | null>(null);
+  const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
   const reorder = (update: string[]) => {
-    top.current = card.current?.getBoundingClientRect().top ?? null;
+    keepPlace();
     onChange(() => update);
   };
-  useLayoutEffect(() => {
-    if (top.current !== null && card.current) window.scrollBy(0, card.current.getBoundingClientRect().top - top.current);
-    top.current = null;
-  }, [categories]);
 
   // The new order shows at once (the pages list their items in it too); a failed save puts the old one back, and Undo saves it again.
   async function move(from: number, to: number) {

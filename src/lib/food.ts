@@ -371,6 +371,13 @@ export async function getShoppingCategories(userId: string): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
+/** Puts the user's categories in the given order, top first; names that are not theirs change nothing. */
+export async function reorderShoppingCategories(userId: string, names: string[]) {
+  await db.transaction(async (tx) => {
+    for (const [i, name] of names.entries()) await tx.update(shoppingCategories).set({ sortOrder: i + 1 }).where(ownCategory(userId, name));
+  });
+}
+
 /** Returns false when the user already has a category with that name. */
 export async function addShoppingCategory(userId: string, name: string) {
   const [existing] = await db.select().from(shoppingCategories).where(ownCategory(userId, name));

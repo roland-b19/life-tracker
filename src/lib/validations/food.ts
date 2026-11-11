@@ -52,6 +52,9 @@ export const updateShoppingItemSchema = createShoppingItemSchema.extend({ itemId
 /** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
 const managedCategorySchema = shoppingCategorySchema.refine((c) => c !== "other", "\"other\" is built in.");
 export const shoppingCategoryNameSchema = z.object({ name: managedCategorySchema });
+export const reorderShoppingCategoriesSchema = z.object({
+  names: z.array(managedCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique."),
+});
 export const renameShoppingCategorySchema = z.object({ from: managedCategorySchema, to: managedCategorySchema });
 
 /** Undo of a category rename or delete: what the change reported, sent back as it was. */

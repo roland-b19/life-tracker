@@ -258,6 +258,7 @@ Every action that modifies something shows an Undo button in its toast and resto
 
 - Dragging a category must not move the page (Wishlist, Tasks): `useDragSort` blocks touch panning while a handle is held, and `CategoriesCard` keeps its place on screen across the reorder and Undo.
 - A More-menu link (Settings) leaves the menu open until the new page arrives, so the previous page never shows through; a tap on the current page just closes the menu.
+- Health's shopping Categories card reorders by dragging like the others (same handle, Undo, page stays still).
 - Health's shopping list titles are `GroupToggle`s like Wishlist and Tasks (each category folds), and the first one has 0.5rem above it.
 
 ## Open
