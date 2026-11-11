@@ -2,18 +2,17 @@
 
 import { useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
-import { addDays, dayLabel, formatDMY } from "@/lib/format-date";
-import { Navigation } from "../components/navigation";
-import { DatePicker } from "../components/date-picker";
+import { dayLabel, formatDMY } from "@/lib/format-date";
+import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, DayStepper, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, ReadonlyNote, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, DropIcon, LockIcon, FootstepsIcon, ScaleIcon, PencilIcon, PlusIcon, TrashIcon } from "../components/icons";
+import { DropIcon, FootstepsIcon, ScaleIcon, PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { MetricPanel } from "./metric-panel";
-import { ListBox, RowActions, useMore } from "../components/lists";
-import { CategoriesCard, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
+import { DeleteButton, EditButton, IconButton, ListBox, RowActions, useMore } from "../components/lists";
+import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
   addShoppingCategoryAction,
   addShoppingItemAction,
@@ -269,8 +268,7 @@ export function FoodClient({
         showToast({
           message: `Added "${meal.name}" (${meal.calories} kcal)`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: () => void undoLogged([meal]),
+          onUndo: () => void undoLogged([meal]),
         });
       } else setFormError("Failed to add meal");
     } catch {
@@ -308,8 +306,7 @@ export function FoodClient({
       showToast({
         message: `Added "${meal.name}" (${meal.calories} kcal)`,
         type: "success",
-        actionLabel: "Undo",
-        onAction: () => void undoLogged([meal]),
+        onUndo: () => void undoLogged([meal]),
       });
     } catch {
       setStatusMessage("Failed to add meal");
@@ -327,8 +324,7 @@ export function FoodClient({
     );
     showToast({
       message: `Removed "${meal.name}"`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await logMealAction({
           date: meal.date,
@@ -362,8 +358,7 @@ export function FoodClient({
     showToast({
       message: `Added ${delta} ml`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         undone = true;
         bump(-delta);
         if (!(await saved)) return; // the add never happened
@@ -419,8 +414,7 @@ export function FoodClient({
           ? `${name} set to ${value}${unit}, goal ${goal}${unit}`
           : `${name} goal set to ${goal}${unit}`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         if (amountChanged) setMetric(key, previous);
         if (goalChanged) putGoals({ [key]: previousGoal });
         let failed = false;
@@ -493,8 +487,7 @@ export function FoodClient({
     showToast({
       message: "Saved nutrition goals",
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         putGoals(previous);
         if (await writeGoals(previous)) return;
         putGoals(next);
@@ -537,8 +530,7 @@ export function FoodClient({
           ? {
               message: `Added "${item.name}"`,
               type: "success",
-              actionLabel: "Undo",
-              onAction: async () => {
+              onUndo: async () => {
                 dropShop(item.id);
                 if (await deleteShoppingItemAction(item.id).then(() => true, () => false)) return;
                 upsertShop(item);
@@ -548,8 +540,7 @@ export function FoodClient({
           : {
               message: `"${item.name}" is now ${Number(item.amount)} ${item.unit}`,
               type: "success",
-              actionLabel: "Undo",
-              onAction: async () => {
+              onUndo: async () => {
                 upsertShop(before);
                 const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
                 if (!back?.item) {
@@ -598,9 +589,8 @@ export function FoodClient({
       showToast({
         message: `Saved "${item.name}"`,
         type: "success",
-        actionLabel: "Undo",
         // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-        onAction: async () => {
+        onUndo: async () => {
           replaceShop(before);
           const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
           if (!back?.item) {
@@ -632,8 +622,7 @@ export function FoodClient({
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         setBought(!next);
         if (!(await saved)) return; // the failure path below put it back
         if (await toggleShoppingItemAction(item.id, !next).then(() => true, () => false)) return;
@@ -657,8 +646,7 @@ export function FoodClient({
     );
     showToast({
       message: `Removed "${item.name}"`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
         const res = await addShoppingItemAction(toShopInput(item)).catch(() => null);
         if (!res?.item) return setStatusMessage("Failed to restore item");
@@ -689,8 +677,7 @@ export function FoodClient({
     drop();
     showToast({
       message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         putBack();
         if (!(await done)) return; // the clear never happened
         const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
@@ -733,8 +720,7 @@ export function FoodClient({
         showToast({
           message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+          onUndo: async () => {
             const removed = await undoLogged(meals);
             setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m)));
           },
@@ -765,7 +751,6 @@ export function FoodClient({
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
     (c) => shoppingList.some((i) => i.category === c),
   );
-  const categoryOptions = [...new Set([...categories, shopCategory, "other"])];
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const [shownMeals, moreMeals] = useMore(day.meals);
@@ -774,10 +759,8 @@ export function FoodClient({
   const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
 
   return (
-    <main>
-      <Navigation userName={userName} />
-
-      <div className="toolbar">
+    <Page userName={userName}>
+      <Toolbar>
         <Segmented
           label="Health sections"
           value={activeTab}
@@ -791,7 +774,7 @@ export function FoodClient({
           ]}
           onChange={setActiveTab}
         />
-      </div>
+      </Toolbar>
 
       {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} />}
       {activeTab === "weight" && <WeightPanel />}
@@ -799,292 +782,176 @@ export function FoodClient({
 
       {activeTab === "daily" && (
         <>
-        <div className="toolbar dash day-toolbar">
-          <div className="month-selector" role="group" aria-label="Day">
-            <button
-              type="button"
-              className="month-nav-btn"
-              onClick={() => goToDay(addDays(selectedDate, -1))}
-              aria-label="Previous day"
-            >
-              <ChevronLeftIcon size={17} />
-            </button>
-            <DatePicker
-              mode="day"
+          <Toolbar dash className="day-toolbar">
+            <DayStepper
               value={selectedDate}
               today={todayDate}
               max={todayDate}
               label={selectedDate === todayDate ? "Today" : dayLabel(selectedDate)}
               onChange={goToDay}
             />
-            <button
-              type="button"
-              className="month-nav-btn"
-              onClick={() => goToDay(addDays(selectedDate, 1))}
-              disabled={selectedDate >= todayDate}
-              aria-label="Next day"
-            >
-              <ChevronRightIcon size={17} />
-            </button>
-          </div>
-        </div>
-        <div className="dashboard-grid">
-          <div className="dashboard-main">
-            <section className="surface" aria-labelledby="macros-title">
-              <div className="section-head">
-                <h2 id="macros-title" className="section-title">
-                  Nutrition
-                </h2>
-                {!isPast && (
-                <button
-                  type="button"
-                  className="delete-icon-btn edit"
-                  onClick={openGoals}
-                  aria-label="Edit nutrition goals"
-                  title="Edit"
-                >
-                  <PencilIcon size={17} />
-                </button>
-                )}
-              </div>
-              <div className="macro-grid">
-                {macros.map((m) => (
-                  <div key={m.label} className="macro-card">
-                    <span className="macro-title">{m.label}</span>
-                    <span className="macro-numbers">
-                      {oneDecimal(m.value)}
-                      <span className="macro-target">
-                        / {m.target}
-                        {m.unit}
+          </Toolbar>
+          <Dashboard>
+            <DashboardMain>
+              <Card
+                id="macros-title"
+                title="Nutrition"
+                end={!isPast && <EditButton label="Edit nutrition goals" onClick={openGoals} />}
+              >
+                <div className="macro-grid">
+                  {macros.map((m) => (
+                    <div key={m.label} className="macro-card">
+                      <span className="macro-title">{m.label}</span>
+                      <span className="macro-numbers">
+                        {oneDecimal(m.value)}
+                        <span className="macro-target">
+                          / {m.target}
+                          {m.unit}
+                        </span>
                       </span>
-                    </span>
-                    <div className="progress-track">
-                      <div
-                        className={`progress-fill ${m.value > m.target ? "over" : ""}`}
-                        style={{ width: `${pct(m.value, m.target)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="surface" aria-labelledby="meals-title">
-              <div className="section-head">
-                <div>
-                  <h2 id="meals-title" className="section-title">
-                    Meals <span className="muted number-tabular">{day.meals.length}</span>
-                  </h2>
-                  <p className="card-sub muted number-tabular">{formatDMY(day.date)}</p>
-                </div>
-                {!isPast && (
-                  <span className="head-actions below">
-                    <button type="button" className="btn-sm tint" onClick={() => setIsPastOpen(true)}>
-                      Past foods
-                    </button>
-                    <button type="button" className="btn-sm tint" onClick={() => (setFormError(""), setIsMealModalOpen(true))}>
-                      <PlusIcon size={14} />
-                      Add meal
-                    </button>
-                  </span>
-                )}
-              </div>
-
-              {isPast && (
-                <p className="readonly-note">
-                  <LockIcon size={13} /> Past days are read-only
-                </p>
-              )}
-
-              <ListBox wash className="entries">
-                {day.meals.length === 0 ? (
-                  <p className="empty-note">
-                    {isPast ? "No meals were logged this day." : "No meals logged today."}
-                  </p>
-                ) : (
-                  <>
-                  {shownMeals.map((meal) => (
-                    <div key={meal.id} className="entry-row">
-                      <div>
-                        <div className="entry-main">
-                          <strong>{meal.name}</strong>
-                          {meal.isEstimated && <span className="badge badge-carried">AI estimate</span>}
-                        </div>
-                        <p className="card-sub muted number-tabular">
-                          {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
-                        </p>
-                      </div>
-                      {!isPast && (
-                        <button
-                          type="button"
-                          className="delete-icon-btn"
-                          onClick={() => handleDeleteMeal(meal)}
-                          aria-label={`Delete meal ${meal.name}`}
-                          title="Delete"
-                        >
-                          <TrashIcon size={17} />
-                        </button>
-                      )}
+                      <ProgressBar percent={pct(m.value, m.target)} over={m.value > m.target} />
                     </div>
                   ))}
-                  {moreMeals}
-                  </>
-                )}
-              </ListBox>
-            </section>
-          </div>
+                </div>
+              </Card>
 
-          <div className="dashboard-aside">
-            <section className="surface" aria-labelledby="water-title">
-              <div className="section-head">
-                <h2 id="water-title" className="section-title icon-title">
-                  <DropIcon size={18} /> Water
-                </h2>
+              <Card
+                id="meals-title"
+                title="Meals"
+                count={day.meals.length}
+                sub={formatDMY(day.date)}
+                below
+                actions={
+                  !isPast && (
+                    <>
+                      <TintButton onClick={() => setIsPastOpen(true)}>Past foods</TintButton>
+                      <AddButton onClick={() => (setFormError(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                    </>
+                  )
+                }
+              >
+                {isPast && <ReadonlyNote>Past days are read-only</ReadonlyNote>}
+
+                <ListBox wash className="entries">
+                  {day.meals.length === 0 ? (
+                    <EmptyNote>{isPast ? "No meals were logged this day." : "No meals logged today."}</EmptyNote>
+                  ) : (
+                    <>
+                      {shownMeals.map((meal) => (
+                        <div key={meal.id} className="entry-row">
+                          <div>
+                            <div className="entry-main">
+                              <strong>{meal.name}</strong>
+                              {meal.isEstimated && <Badge kind="carried">AI estimate</Badge>}
+                            </div>
+                            <p className="card-sub muted number-tabular">
+                              {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fat}g F
+                            </p>
+                          </div>
+                          {!isPast && <DeleteButton label={`Delete meal ${meal.name}`} onClick={() => handleDeleteMeal(meal)} />}
+                        </div>
+                      ))}
+                      {moreMeals}
+                    </>
+                  )}
+                </ListBox>
+              </Card>
+            </DashboardMain>
+
+            <DashboardAside>
+              <Card
+                id="water-title"
+                title="Water"
+                icon={<DropIcon size={18} />}
+                end={!isPast && <EditButton label="Edit water and goal" onClick={() => openMetricEdit("water")} />}
+              >
+                <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
+                <ProgressBar percent={waterPct} />
                 {!isPast && (
-                <button
-                  type="button"
-                  className="delete-icon-btn edit"
-                  onClick={() => openMetricEdit("water")}
-                  aria-label="Edit water and goal"
-                  title="Edit"
-                >
-                  <PencilIcon size={17} />
-                </button>
+                  <div className="tap-buttons">
+                    <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
+                      +250 ml
+                    </button>
+                    <button type="button" className="secondary tap-btn" onClick={() => addWater(500)}>
+                      +500 ml
+                    </button>
+                  </div>
                 )}
-              </div>
-              <p className="metric-big number-tabular">
-                {Math.round(day.metrics.waterMl)}
-                <span className="macro-target"> / {goals.waterMl} ml</span>
-              </p>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${waterPct}%` }} />
-              </div>
-              {!isPast && (
-              <div className="tap-buttons">
-                <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
-                  +250 ml
-                </button>
-                <button type="button" className="secondary tap-btn" onClick={() => addWater(500)}>
-                  +500 ml
-                </button>
-              </div>
-              )}
-            </section>
+              </Card>
 
-            <section className="surface" aria-labelledby="weight-trend-title">
-              <div className="section-head">
-                <h2 id="weight-trend-title" className="section-title icon-title">
-                  <ScaleIcon size={18} /> Weight
-                </h2>
-              </div>
-              <p className="metric-big number-tabular">
-                {shownWeight === null ? "—" : Math.round(shownWeight * 100) / 100}
-                <span className="macro-target"> kg{weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}</span>
-              </p>
-              {weightAnalytics.sinceLastWeek !== null && (
-                <p className="card-sub muted number-tabular">{signedKg(weightAnalytics.sinceLastWeek)} since last week</p>
-              )}
-            </section>
-
-            <section className="surface" aria-labelledby="steps-title">
-              <div className="section-head">
-                <h2 id="steps-title" className="section-title icon-title">
-                  <FootstepsIcon size={18} /> Steps
-                </h2>
-                {!isPast && (
-                <button
-                  type="button"
-                  className="delete-icon-btn edit"
-                  onClick={() => openMetricEdit("steps")}
-                  aria-label="Edit steps and goal"
-                  title="Edit"
-                >
-                  <PencilIcon size={17} />
-                </button>
+              <Card id="weight-trend-title" title="Weight" icon={<ScaleIcon size={18} />}>
+                <BigNumber
+                  value={shownWeight === null ? "—" : Math.round(shownWeight * 100) / 100}
+                  of={`kg${weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}`}
+                />
+                {weightAnalytics.sinceLastWeek !== null && (
+                  <p className="card-sub muted number-tabular">{signedKg(weightAnalytics.sinceLastWeek)} since last week</p>
                 )}
-              </div>
-              <p className="metric-big number-tabular">
-                {Math.round(day.metrics.steps)}
-                <span className="macro-target"> / {goals.steps}</span>
-              </p>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${stepsPct}%` }} />
-              </div>
-            </section>
-          </div>
-        </div>
+              </Card>
+
+              <Card
+                id="steps-title"
+                title="Steps"
+                icon={<FootstepsIcon size={18} />}
+                end={!isPast && <EditButton label="Edit steps and goal" onClick={() => openMetricEdit("steps")} />}
+              >
+                <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />
+                <ProgressBar percent={stepsPct} />
+              </Card>
+            </DashboardAside>
+          </Dashboard>
         </>
       )}
 
       {activeTab === "shopping" && (
-        <div className="dashboard-grid">
-        <section className="surface" aria-labelledby="shopping-title">
-          <div className="section-head">
-            <h2 id="shopping-title" className="section-title">
-              Shopping list <span className="muted number-tabular">{shoppingList.length}</span>
-            </h2>
-            <span className="head-actions below">
-              <button
-                type="button"
-                className="btn-sm tint"
-                disabled={shoppingList.every((i) => !i.isBought)}
-                onClick={handleClearBought}
-              >
-                Clear bought
-              </button>
-              <button type="button" className="btn-sm tint" onClick={() => openShopForm(null)}>
-                <PlusIcon size={14} />
-                Add item
-              </button>
-            </span>
-          </div>
+        <Dashboard>
+          <Card
+            id="shopping-title"
+            title="Shopping list"
+            count={shoppingList.length}
+            below
+            actions={
+              <>
+                <TintButton disabled={shoppingList.every((i) => !i.isBought)} onClick={handleClearBought}>
+                  Clear bought
+                </TintButton>
+                <AddButton onClick={() => openShopForm(null)}>Add item</AddButton>
+              </>
+            }
+          >
+            <ListBox className="shopping-groups">
+              {shoppingList.length === 0 && <EmptyNote>Your shopping list is empty.</EmptyNote>}
+              <GroupedList
+                items={shownShopping}
+                wrap="shopping-group"
+                isFolded={isShopFolded}
+                onToggle={toggleShop}
+                row={(item) => (
+                  <div className="shopping-row">
+                    <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
+                      <Checkbox
+                        checked={item.isBought}
+                        onChange={() => handleToggleShopping(item)}
+                        label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
+                      />
+                      <span>
+                        {item.name} · {Number(item.amount)} {item.unit}
+                      </span>
+                    </div>
+                    <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
+                  </div>
+                )}
+              />
+              {moreShopping}
+            </ListBox>
+          </Card>
 
-          <ListBox className="shopping-groups">
-          {shoppingList.length === 0 && (
-            <p className="empty-note">
-              Your shopping list is empty.
-            </p>
-          )}
-          <GroupedList
-            items={shownShopping}
-            wrap="shopping-group"
-            isFolded={isShopFolded}
-            onToggle={toggleShop}
-            row={(item) => (
-              <div className="shopping-row">
-              <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
-                <button
-                  type="button"
-                  className={`todo-checkbox-btn ${item.isBought ? "checked" : ""}`}
-                  onClick={() => handleToggleShopping(item)}
-                  aria-label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
-                >
-                  {item.isBought && <CheckIcon size={12} strokeWidth={3} />}
-                </button>
-                <span>
-                  {item.name} · {Number(item.amount)} {item.unit}
-                </span>
-              </div>
-              <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
-            </div>
-            )}
-          />
-          {moreShopping}
-          </ListBox>
-        </section>
-
-        <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
-        </div>
+          <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
+        </Dashboard>
       )}
 
       {isClaudeEnabled() && activeTab === "chat" && (
-        <section className="surface" aria-labelledby="chat-title">
-          <div className="section-head">
-            <h2 id="chat-title" className="section-title">
-              Food assistant
-            </h2>
-          </div>
-
+        <Card id="chat-title" title="Food assistant">
           <div className="chat-log" aria-live="polite">
             {chatMessages.map((msg, index) => (
               <div key={index} className={`chat-msg ${msg.role === "user" ? "user" : "model"}`}>
@@ -1122,165 +989,102 @@ export function FoodClient({
               {chatLoading ? "Sending..." : "Send"}
             </button>
           </form>
-        </section>
+        </Card>
       )}
 
-      {/* Pop-up Modal with Heavy Blurred Background */}
-      <Modal
+      <FormModal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
         title="New meal"
+        onSubmit={handleLogMeal}
+        error={formError}
+        busy={busy}
+        canSubmit={!!mealName.trim()}
       >
-        <form onSubmit={handleLogMeal}>
-          <div className="form-stack">
-          <label>
-            Name
-            <input
-              type="text"
-              disabled={busy}
-                value={mealName}
-              onChange={(e) => setMealName(e.target.value)}
-              required
-            />
-          </label>
+        <Field label="Name" type="text" disabled={busy} value={mealName} onChange={(e) => setMealName(e.target.value)} required />
+        <FieldPair>
+          <Field
+            label="Calories (kcal)"
+            type="number"
+            inputMode="numeric"
+            disabled={busy}
+            value={mealCalories}
+            onChange={(e) => setMealCalories(e.target.value)}
+            className="number-tabular"
+          />
+          <Field
+            label="Protein (g)"
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            disabled={busy}
+            value={mealProtein}
+            onChange={(e) => setMealProtein(e.target.value)}
+            className="number-tabular"
+          />
+        </FieldPair>
+        <FieldPair>
+          <Field
+            label="Carbs (g)"
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            disabled={busy}
+            value={mealCarbs}
+            onChange={(e) => setMealCarbs(e.target.value)}
+            className="number-tabular"
+          />
+          <Field
+            label="Fat (g)"
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            disabled={busy}
+            value={mealFat}
+            onChange={(e) => setMealFat(e.target.value)}
+            className="number-tabular"
+          />
+        </FieldPair>
+      </FormModal>
 
-          <div className="form-pair">
-            <label>
-              Calories (kcal)
-              <input
-                type="number"
-                inputMode="numeric"
-                disabled={busy}
-                value={mealCalories}
-                onChange={(e) => setMealCalories(e.target.value)}
-                className="number-tabular"
-              />
-            </label>
-            <label>
-              Protein (g)
-              <input
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                disabled={busy}
-                value={mealProtein}
-                onChange={(e) => setMealProtein(e.target.value)}
-                className="number-tabular"
-              />
-            </label>
-          </div>
-
-          <div className="form-pair">
-            <label>
-              Carbs (g)
-              <input
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                disabled={busy}
-                value={mealCarbs}
-                onChange={(e) => setMealCarbs(e.target.value)}
-                className="number-tabular"
-              />
-            </label>
-            <label>
-              Fat (g)
-              <input
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                disabled={busy}
-                value={mealFat}
-                onChange={(e) => setMealFat(e.target.value)}
-                className="number-tabular"
-              />
-            </label>
-          </div>
-
-          {formError && <p className="error" role="alert">{formError}</p>}
-          </div>
-
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setIsMealModalOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !mealName.trim()}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
+      <FormModal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
         title={editingShop ? "Edit shopping item" : "New shopping item"}
+        onSubmit={handleShopSubmit}
+        error={formError}
+        busy={busy}
+        canSubmit={!!shopName.trim()}
       >
-        <form onSubmit={handleShopSubmit}>
-          <div className="form-stack">
-            <label>
-              Name
-              <input
-                type="text"
-                disabled={busy}
-                value={shopName}
-                onChange={(e) => setShopName(e.target.value)}
-                required
-              />
-            </label>
-            <div className="form-pair">
-              <label>
-                Amount
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  inputMode="decimal"
-                  disabled={busy}
-                value={shopAmount}
-                  onChange={(e) => setShopAmount(e.target.value)}
-                />
-              </label>
-              <label>
-                Unit
-                <select disabled={busy} value={shopUnit} onChange={(e) => setShopUnit(e.target.value)}>
-                  {/* An older item with a typed-in unit keeps it as an option. */}
-                  {(UNITS.includes(shopUnit) ? UNITS : [shopUnit, ...UNITS]).map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label>
-              Category
-              <select disabled={busy} value={shopCategory} onChange={(e) => setShopCategory(e.target.value)}>
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {formError && <p className="error" role="alert">{formError}</p>}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setIsShopModalOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !shopName.trim()}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        <Field label="Name" type="text" disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
+        <FieldPair>
+          <Field
+            label="Amount"
+            type="number"
+            step="0.5"
+            min="0.5"
+            inputMode="decimal"
+            disabled={busy}
+            value={shopAmount}
+            onChange={(e) => setShopAmount(e.target.value)}
+          />
+          <SelectField
+            label="Unit"
+            disabled={busy}
+            value={shopUnit}
+            onChange={(e) => setShopUnit(e.target.value)}
+            // An older item with a typed-in unit keeps it as an option.
+            options={(UNITS.includes(shopUnit) ? UNITS : [shopUnit, ...UNITS]).map((u) => ({ value: u, label: u }))}
+          />
+        </FieldPair>
+        <CategoryField categories={categories} value={shopCategory} onChange={setShopCategory} disabled={busy} />
+      </FormModal>
 
       <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
         <div className="form-stack">
           <ListBox wash className="entries">
             {notLoggedFoods.length === 0 ? (
-              <p className="empty-note">Everything you logged before is already in today.</p>
+              <EmptyNote>Everything you logged before is already in today.</EmptyNote>
             ) : (
               shownPastFoods.map((f) => (
                 <div key={f.name} className="entry-row">
@@ -1290,16 +1094,14 @@ export function FoodClient({
                       {f.calories} kcal · {Number(f.protein)}g P · {Number(f.carbs)}g C · {Number(f.fat)}g F
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="delete-icon-btn edit"
+                  <IconButton
+                    edit
+                    icon={<PlusIcon size={17} />}
                     disabled={busy}
                     onClick={() => handleLogPastFood(f)}
-                    aria-label={`Log ${f.name}, ${f.calories} kcal`}
+                    label={`Log ${f.name}, ${f.calories} kcal`}
                     title="Log"
-                  >
-                    <PlusIcon size={17} />
-                  </button>
+                  />
                 </div>
               ))
             )}
@@ -1308,87 +1110,68 @@ export function FoodClient({
         </div>
       </Modal>
 
-      <Modal
+      <FormModal
         isOpen={metricOpen}
         onClose={() => setMetricOpen(false)}
         title={metricEdit === "water" ? "Edit water" : "Edit steps"}
+        onSubmit={handleMetricSubmit}
+        error={formError}
+        busy={busy}
+        canSubmit={metricInput !== "" && metricGoalInput !== ""}
       >
-        <form onSubmit={handleMetricSubmit}>
-          <div className="form-stack">
-            <label>
-              {metricEdit === "water" ? "Water today (ml)" : "Steps today"}
-              <input
-                type="number"
-                inputMode="numeric"
-                min="0"
-                max={metricEdit === "water" ? 20000 : 200000}
-                step="1"
-                required
-                disabled={busy}
-                value={metricInput}
-                onChange={(e) => setMetricInput(e.target.value)}
-              />
-            </label>
-            <label>
-              {metricEdit === "water" ? "Daily goal (ml)" : "Daily goal (steps)"}
-              <input
-                type="number"
-                inputMode="numeric"
-                min={METRIC_GOAL[metricEdit].min}
-                max={METRIC_GOAL[metricEdit].max}
-                step="1"
-                required
-                disabled={busy}
-                value={metricGoalInput}
-                onChange={(e) => setMetricGoalInput(e.target.value)}
-                className="number-tabular"
-              />
-            </label>
-            {formError && <p className="error" role="alert">{formError}</p>}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setMetricOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || metricInput === "" || metricGoalInput === ""}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        <Field
+          label={metricEdit === "water" ? "Water today (ml)" : "Steps today"}
+          type="number"
+          inputMode="numeric"
+          min="0"
+          max={metricEdit === "water" ? 20000 : 200000}
+          step="1"
+          required
+          disabled={busy}
+          value={metricInput}
+          onChange={(e) => setMetricInput(e.target.value)}
+        />
+        <Field
+          label={metricEdit === "water" ? "Daily goal (ml)" : "Daily goal (steps)"}
+          type="number"
+          inputMode="numeric"
+          min={METRIC_GOAL[metricEdit].min}
+          max={METRIC_GOAL[metricEdit].max}
+          step="1"
+          required
+          disabled={busy}
+          value={metricGoalInput}
+          onChange={(e) => setMetricGoalInput(e.target.value)}
+          className="number-tabular"
+        />
+      </FormModal>
 
-      <Modal isOpen={goalsOpen} onClose={() => setGoalsOpen(false)} title="Edit goals">
-        <form onSubmit={handleGoalsSubmit}>
-          <div className="form-stack">
-            {NUTRITION_GOALS.map((g) => (
-              <label key={g.key}>
-                {g.label}
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={g.min}
-                  max={g.max}
-                  step="1"
-                  required
-                  disabled={busy}
-                  value={goalInputs[g.key]}
-                  onChange={(e) => setGoalInputs((prev) => ({ ...prev, [g.key]: e.target.value }))}
-                  className="number-tabular"
-                />
-              </label>
-            ))}
-            {formError && <p className="error" role="alert">{formError}</p>}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setGoalsOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || Object.values(goalInputs).some((v) => v === "")}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </main>
+      <FormModal
+        isOpen={goalsOpen}
+        onClose={() => setGoalsOpen(false)}
+        title="Edit goals"
+        onSubmit={handleGoalsSubmit}
+        error={formError}
+        busy={busy}
+        canSubmit={!Object.values(goalInputs).some((v) => v === "")}
+      >
+        {NUTRITION_GOALS.map((g) => (
+          <Field
+            key={g.key}
+            label={g.label}
+            type="number"
+            inputMode="numeric"
+            min={g.min}
+            max={g.max}
+            step="1"
+            required
+            disabled={busy}
+            value={goalInputs[g.key]}
+            onChange={(e) => setGoalInputs((prev) => ({ ...prev, [g.key]: e.target.value }))}
+            className="number-tabular"
+          />
+        ))}
+      </FormModal>
+    </Page>
   );
 }

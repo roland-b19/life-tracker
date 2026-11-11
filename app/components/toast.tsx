@@ -7,8 +7,8 @@ interface Toast {
   id: string;
   message: string;
   type?: "info" | "success" | "warning";
-  actionLabel?: string;
-  onAction?: () => void;
+  /** Shows an Undo button that runs this. */
+  onUndo?: () => void;
   duration?: number;
 }
 
@@ -42,16 +42,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               {t.message}
             </span>
             <div className="toast-actions">
-              {t.actionLabel && t.onAction && (
+              {t.onUndo && (
                 <button
                   type="button"
                   className="toast-action-btn"
                   onClick={() => {
-                    t.onAction?.();
+                    t.onUndo?.();
                     removeToast(t.id);
                   }}
                 >
-                  {t.actionLabel}
+                  Undo
                 </button>
               )}
               <button

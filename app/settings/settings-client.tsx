@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Navigation } from "../components/navigation";
+import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
-import { PlusIcon } from "../components/icons";
-import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { formatDMY } from "@/lib/format-date";
@@ -43,8 +41,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
       showToast({
         message: before ? "Saved the new Claude token" : "Connected Claude",
         type: "success",
-        actionLabel: "Undo",
-        onAction: () => undo(before, res.previous, res.connectedAt),
+        onUndo: () => undo(before, res.previous, res.connectedAt),
       });
       setToken("");
       setIsModalOpen(false);
@@ -78,8 +75,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
       showToast({
         message: "Disconnected Claude",
         type: "success",
-        actionLabel: "Undo",
-        onAction: () => undo(before, previous, null),
+        onUndo: () => undo(before, previous, null),
       });
     } catch {
       setConnectedAt(before);
@@ -88,35 +84,27 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
   }
 
   return (
-    <main>
-      <Navigation userName={userName} />
-
-      <div className="dashboard-grid">
-        <div className="dashboard-main">
-          <section className="surface" aria-labelledby="claude-title">
-            <div className="section-head">
-              <h2 id="claude-title" className="section-title">
-                Claude
-              </h2>
-              {/* Always rendered, so the header keeps its shape once connected. */}
-              <button
-                type="button"
-                className="btn-sm tint"
+    <Page userName={userName}>
+      <Dashboard>
+        <DashboardMain>
+          <Card
+            id="claude-title"
+            title="Claude"
+            end={
+              // Always rendered, so the header keeps its shape once connected.
+              <AddButton
                 onClick={openForm}
                 style={connectedAt ? { visibility: "hidden" } : undefined}
                 aria-hidden={connectedAt ? true : undefined}
                 tabIndex={connectedAt ? -1 : undefined}
               >
-                <PlusIcon size={14} />
                 Connect Claude
-              </button>
-            </div>
-
+              </AddButton>
+            }
+          >
             <ListBox className="entries">
               {connectedAt === null ? (
-                <p className="empty-note">
-                  Not connected.
-                </p>
+                <EmptyNote>Not connected.</EmptyNote>
               ) : (
                 <div className="entry-row item-row">
                   <strong className="item-name">Claude account</strong>
@@ -127,48 +115,34 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
                 </div>
               )}
             </ListBox>
-          </section>
-        </div>
-      </div>
+          </Card>
+        </DashboardMain>
+      </Dashboard>
 
-      <Modal
+      <FormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={connectedAt ? "Edit token" : "Connect Claude"}
+        onSubmit={handleSubmit}
+        error={errorMsg}
+        busy={busy}
+        canSubmit={!!token.trim()}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="form-stack">
-            <p className="muted move-hint">
-              Run claude setup-token in a terminal and paste the token it prints. The Assistant then uses your Claude
-              plan.
-            </p>
-            <label>
-              Token
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                disabled={busy}
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={600}
-                required
-              />
-            </label>
-
-            {errorMsg && <p className="error" role="alert">{errorMsg}</p>}
-          </div>
-
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !token.trim()}>
-              {busy ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </main>
+        <p className="muted move-hint">
+          Run claude setup-token in a terminal and paste the token it prints. The Assistant then uses your Claude plan.
+        </p>
+        <Field
+          label="Token"
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          disabled={busy}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={600}
+          required
+        />
+      </FormModal>
+    </Page>
   );
 }

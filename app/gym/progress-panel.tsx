@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Card, ChartCaption, ChartControls, ChartNote, Dashboard, EmptyNote, SelectField, SkeletonRows, StatRow } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { Segmented } from "../components/segmented";
 import { useToast } from "../components/toast";
@@ -45,19 +46,16 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
 
   if (!sets) {
     return (
-      <section className="surface" aria-busy="true">
-        <div className="entries">
-          <div className="skeleton skeleton-row" />
-          <div className="skeleton skeleton-row" />
-        </div>
-      </section>
+      <Card busy label="Loading progress">
+        <SkeletonRows />
+      </Card>
     );
   }
   if (!sets.length) {
     return (
-      <section className="surface">
-        <p className="empty-note">Log a workout to see your progress.</p>
-      </section>
+      <Card label="Progress">
+        <EmptyNote>Log a workout to see your progress.</EmptyNote>
+      </Card>
     );
   }
 
@@ -69,71 +67,39 @@ export function ProgressPanel({ days }: { days: { id: string; name: string }[] }
   const current = weeks.at(-1);
 
   return (
-    <div className="dashboard-grid-even gym-progress">
-      <section className="surface" aria-labelledby="ex-progress-title">
-        <div className="section-head">
-          <h2 id="ex-progress-title" className="section-title">
-            Exercise progress
-          </h2>
-        </div>
-        <label>
-          Exercise
-          <select value={chosen} onChange={(e) => setExerciseId(e.target.value)}>
-            {exercises.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="chart-controls">
+    <Dashboard even className="gym-progress">
+      <Card id="ex-progress-title" title="Exercise progress">
+        <SelectField
+          label="Exercise"
+          value={chosen}
+          onChange={(e) => setExerciseId(e.target.value)}
+          options={exercises.map(([id, name]) => ({ value: id, label: name }))}
+        />
+        <ChartControls>
           <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
-        </div>
+        </ChartControls>
         <LineChart
           points={series.map((p) => ({ label: dm(p.date), value: p.weight }))}
           summary={`Best weight per workout over the last ${range} days`}
         />
-        {series.length < 2 && <p className="muted chart-note">Not enough workouts in the last {range} days.</p>}
-        {series.length > 0 && (
-          <p className="muted chart-caption">
-            Heaviest load (kg or plates) of each workout; deload weeks are left out.
-          </p>
-        )}
-      </section>
+        {series.length < 2 && <ChartNote>Not enough workouts in the last {range} days.</ChartNote>}
+        {series.length > 0 && <ChartCaption>Heaviest load (kg or plates) of each workout; deload weeks are left out.</ChartCaption>}
+      </Card>
 
-      <section className="surface" aria-labelledby="day-progress-title">
-        <div className="section-head">
-          <h2 id="day-progress-title" className="section-title">
-            Workout days
-          </h2>
-        </div>
+      <Card id="day-progress-title" title="Workout days">
         {days.length > 0 && (
-          <label>
-            Day
-            <select value={dayId} onChange={(e) => setDayId(e.target.value)}>
-              {days.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField label="Day" value={dayId} onChange={(e) => setDayId(e.target.value)} options={days.map((d) => ({ value: d.id, label: d.name }))} />
         )}
-        <div className="stat-row">
-          <div className="stat-tile">
-            <strong className="number-tabular">{kgDelta(current?.change ?? null)}</strong>
-            <span>Weight vs last week</span>
-          </div>
-        </div>
+        <StatRow stats={[{ value: kgDelta(current?.change ?? null), label: "Weight vs last week" }]} />
         <LineChart
           points={weeks.filter((w) => w.change !== null).map((w) => ({ label: dm(w.week), value: round(w.change!, 2) }))}
           summary="Average weekly change in best weight across the day's exercises, in kg"
         />
-        <p className="muted chart-caption">
+        <ChartCaption>
           Average change of each exercise&apos;s best weight from the week before (kg), per week starting Monday.
           Deload weeks are skipped: the week after one is compared with the week before it.
-        </p>
-      </section>
-    </div>
+        </ChartCaption>
+      </Card>
+    </Dashboard>
   );
 }

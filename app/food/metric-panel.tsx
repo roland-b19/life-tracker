@@ -2,12 +2,10 @@
 
 import { LineChart } from "../components/charts";
 import { FormEvent, useEffect, useState } from "react";
-import { PlusIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { AddButton, Card, ChartControls, ChartNote, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
-import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction } from "@/app/actions/food";
 
@@ -107,8 +105,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
       showToast({
         message: `Added ${amount} ${k.unit} (${formatDMY(date)})`,
         type: "success",
-        actionLabel: "Undo",
-        onAction: async () => {
+        onUndo: async () => {
           setEntries((current) => current.filter((e) => e.id !== entry.id));
           touchToday(entry.date, null);
           const cleared = await clearDailyMetricAction({ kind, date: entry.date }).then(
@@ -126,8 +123,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
     showToast({
       message: `Saved ${amount} ${k.unit} (${formatDMY(date)})`,
       type: "success",
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         replace(previous);
         touchToday(entry.date, previous);
         if ((await save({ date: previous.date, value: previous.value, previousDate: entry.date })) !== "ok") {
@@ -153,8 +149,7 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
     );
     showToast({
       message: `Removed ${target.value} ${k.unit} (${formatDMY(target.date)})`,
-      actionLabel: "Undo",
-      onAction: async () => {
+      onUndo: async () => {
         if (!(await deleted)) return putBack(target);
         if ((await save({ date: target.date, value: target.value })) !== "ok")
           return showToast({ message: `Failed to restore ${k.noun}`, type: "warning" });
@@ -179,31 +174,19 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
 
   return (
     <>
-      <div className="dashboard-grid">
-        <div className="dashboard-main">
-          <section className="surface" aria-labelledby={titleId}>
-            <div className="section-head">
-              <h2 id={titleId} className="section-title">
-                History {!loading && <span className="muted number-tabular">{entries.length}</span>}
-              </h2>
-              <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                <PlusIcon size={14} />
-                Add {k.noun}
-              </button>
-            </div>
-
+      <Dashboard>
+        <DashboardMain>
+          <Card
+            id={titleId}
+            title="History"
+            count={loading ? undefined : entries.length}
+            actions={<AddButton onClick={() => openForm()}>Add {k.noun}</AddButton>}
+          >
             {loading ? (
-              <div className="entries">
-                <div className="skeleton skeleton-row" />
-                <div className="skeleton skeleton-row" />
-              </div>
+              <SkeletonRows />
             ) : (
               <ListBox wash className="entries">
-                {entries.length === 0 && (
-                  <p className="empty-note">
-                    No {k.noun} logged yet.
-                  </p>
-                )}
+                {entries.length === 0 && <EmptyNote>No {k.noun} logged yet.</EmptyNote>}
                 {shown.map((entry) => (
                   <div className="entry-row" key={entry.id}>
                     <span className="weight-main">
@@ -218,99 +201,61 @@ export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: nu
                 {more}
               </ListBox>
             )}
-          </section>
-        </div>
+          </Card>
+        </DashboardMain>
 
-        <div className="dashboard-aside summary-first">
-          <section className="surface" aria-labelledby={`${kind}-trend-title`}>
-            <div className="section-head">
-              <h2 id={`${kind}-trend-title`} className="section-title">
-                Trend
-              </h2>
-            </div>
-            <div className="stat-row">
-              <div className="stat-tile">
-                <strong className="number-tabular">
-                  {average === null ? "—" : <>{Math.round(average)} <span className="macro-target">{k.unit}</span></>}
-                </strong>
-                <span>7-day average</span>
-              </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">
-                  {Math.round(todayValue)} <span className="macro-target">{k.unit}</span>
-                </strong>
-                <span>Today</span>
-              </div>
-            </div>
+        <DashboardAside summaryFirst>
+          <Card id={`${kind}-trend-title`} title="Trend">
+            <StatRow
+              stats={[
+                {
+                  value: average === null ? "—" : <>{Math.round(average)} <span className="macro-target">{k.unit}</span></>,
+                  label: "7-day average",
+                },
+                { value: <>{Math.round(todayValue)} <span className="macro-target">{k.unit}</span></>, label: "Today" },
+              ]}
+            />
             {sorted.length >= 2 && (
               <>
-                <div className="chart-controls">
+                <ChartControls>
                   <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
-                </div>
+                </ChartControls>
                 <LineChart
                   points={[...inRange]
                     .reverse()
                     .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: e.value }))}
                   summary={`${k.title} over the last ${range} days`}
                 />
-                {inRange.length < 2 && <p className="muted chart-note">Not enough entries in the last {range} days.</p>}
+                {inRange.length < 2 && <ChartNote>Not enough entries in the last {range} days.</ChartNote>}
               </>
             )}
-          </section>
-        </div>
-      </div>
+          </Card>
+        </DashboardAside>
+      </Dashboard>
 
-      <Modal
+      <FormModal
         isOpen={isModalOpen}
         onClose={closeForm}
         title={editing ? `Edit ${k.noun}` : `New ${k.noun} entry`}
+        onSubmit={handleSubmit}
+        error={error}
+        busy={saving}
+        canSubmit={!!value}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="form-stack">
-            <div className="field">
-              <span id={`${kind}-date`}>Date</span>
-              <DatePicker
-                mode="day"
-                className="date-field"
-                value={date}
-                today={today()}
-                max={today()}
-                label={formatDMY(date)}
-                labelledBy={`${kind}-date`}
-                disabled={saving}
-                onChange={setDate}
-              />
-            </div>
-            <label>
-              {k.label}
-              <input
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max={k.max}
-                step="1"
-                disabled={saving}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                required
-              />
-            </label>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={closeForm}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving || !value}>
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        <DateField id={`${kind}-date`} value={date} today={today()} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
+        <Field
+          label={k.label}
+          type="number"
+          inputMode="numeric"
+          min="1"
+          max={k.max}
+          step="1"
+          disabled={saving}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          required
+        />
+      </FormModal>
     </>
   );
 }

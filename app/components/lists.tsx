@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { PencilIcon, TrashIcon } from "./icons";
+import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode } from "react";
+import { GripIcon, PencilIcon, TrashIcon } from "./icons";
 
 /**
  * The card around a list: the layout box the rows' bands widen into (globals.css). `wash`: every other row carries
@@ -15,6 +15,48 @@ export function ListBox({ className, wash, children }: { className?: string; was
   );
 }
 
+/** A round icon button of a row or a card head: the shared look of Edit, Delete and the drag handle. */
+export function IconButton({
+  icon,
+  label,
+  title,
+  edit,
+  className,
+  ...rest
+}: {
+  icon: ReactNode;
+  label: string;
+  title?: string;
+  /** The neutral look (Edit, drag); without it the button is the red one (Delete). */
+  edit?: boolean;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "title" | "aria-label" | "children">) {
+  return (
+    <button
+      type="button"
+      className={["delete-icon-btn", edit && "edit", className].filter(Boolean).join(" ")}
+      aria-label={label}
+      title={title}
+      {...rest}
+    >
+      {icon}
+    </button>
+  );
+}
+
+export function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <IconButton edit icon={<PencilIcon size={17} />} label={label} title="Edit" onClick={onClick} />;
+}
+
+/** `title` is the tooltip (a disconnect says "Disconnect"). */
+export function DeleteButton({ label, title = "Delete", onClick }: { label: string; title?: string; onClick: () => void }) {
+  return <IconButton icon={<TrashIcon size={17} />} label={label} title={title} onClick={onClick} />;
+}
+
+/** The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. */
+export function DragHandle({ label, ...handlers }: { label: string } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "children" | "aria-label" | "title">) {
+  return <IconButton edit className="drag-handle" icon={<GripIcon size={22} />} label={label} title="Drag to reorder" {...handlers} />;
+}
+
 /**
  * The Edit and Delete icon buttons at the end of a row. `bare`: no wrapper, for rows that lay the buttons out themselves.
  * `deleteTitle` is the tooltip (a disconnect says "Disconnect").
@@ -24,7 +66,7 @@ export function RowActions({
   onDelete,
   editLabel,
   deleteLabel,
-  deleteTitle = "Delete",
+  deleteTitle,
   className = "row-actions",
   bare,
 }: {
@@ -38,12 +80,8 @@ export function RowActions({
 }) {
   const buttons = (
     <>
-      <button type="button" className="delete-icon-btn edit" onClick={onEdit} aria-label={editLabel} title="Edit">
-        <PencilIcon size={17} />
-      </button>
-      <button type="button" className="delete-icon-btn" onClick={onDelete} aria-label={deleteLabel} title={deleteTitle}>
-        <TrashIcon size={17} />
-      </button>
+      <EditButton label={editLabel} onClick={onEdit} />
+      <DeleteButton label={deleteLabel} title={deleteTitle} onClick={onDelete} />
     </>
   );
   return bare ? buttons : <div className={className}>{buttons}</div>;

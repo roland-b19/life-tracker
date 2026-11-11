@@ -269,6 +269,13 @@ Every action that modifies something shows an Undo button in its toast and resto
 - A task is moved from Edit (Day select; going to Daily also asks for a category). The Move button is gone.
 - The Health shopping Categories card is the shared `CategoriesCard`; Health no longer has its own category code.
 
+### 2026-11-11: One shared component per UI structure (user)
+
+- Every repeating UI structure is one shared component or hook, with no exceptions for pages: page frame, cards, banners, rows, buttons, fields, modals and forms live in `app/components/blocks.tsx` and `lists.tsx` (and `categories-card.tsx` for categories); a new page only reuses and customizes them. Listed in `lists-and-crud.md`.
+- The toast has a single Undo pattern: `showToast({ message, onUndo })`; there is no `actionLabel`/`onAction`.
+- Left inline on purpose: `global-error.tsx` (it replaces the root layout, so it cannot import the design system); the sign-out buttons in `navigation.tsx` (circular import with `blocks.tsx`); the "Past foods" sheet (a plain `Modal`, not a form); the sign-in wrapper `form-stack signin-form`; base `<button>` variants (primary, secondary, danger, tap, Log set, session exit); the internals of date-picker, segmented, charts, toast and modal; the Food chat form and Gym's split-day card and history toggle (used on one page only).
+- Pure refactor: same class names and DOM, so the look is unchanged. No migration, no new dependency.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

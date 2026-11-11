@@ -2,12 +2,10 @@
 
 import { LineChart } from "../components/charts";
 import { FormEvent, useEffect, useState } from "react";
-import { PlusIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { AddButton, Badge, Card, ChartControls, ChartNote, Dashboard, DashboardAside, DashboardMain, DateField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
-import { DatePicker } from "../components/date-picker";
 import { Segmented } from "../components/segmented";
 import { signedKg, weightStats } from "@/lib/weight-stats";
 
@@ -101,8 +99,7 @@ export function WeightPanel() {
         showToast({
           message: `Added ${numericKg} kg (${formatDMY(date)})`,
           type: "success",
-          actionLabel: "Undo",
-          onAction: async () => {
+          onUndo: async () => {
             setEntries((current) => current.filter((e) => e.id !== entry.id));
             const gone = await send("DELETE", `/api/weight/${entry.id}`).catch(() => null);
             if (!gone?.ok) {
@@ -116,9 +113,8 @@ export function WeightPanel() {
       showToast({
         message: `Saved ${numericKg} kg (${formatDMY(date)})`,
         type: "success",
-        actionLabel: "Undo",
         // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-        onAction: async () => {
+        onUndo: async () => {
           replace(previous);
           const back = await send("PATCH", `/api/weight/${entry.id}`, {
             date: previous.date,
@@ -149,9 +145,8 @@ export function WeightPanel() {
     );
     showToast({
       message: `Removed ${Number(target.kilograms)} kg (${formatDMY(target.date)})`,
-      actionLabel: "Undo",
       // A new id, so the row is put back as the server returns it.
-      onAction: async () => {
+      onUndo: async () => {
         if (!(await deleted)) return putBack(target); // the delete never happened
         const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) }).catch(() => null);
         if (!back?.ok) return showToast({ message: "Failed to restore weigh-in", type: "warning" });
@@ -180,31 +175,19 @@ export function WeightPanel() {
 
   return (
     <>
-      <div className="dashboard-grid">
-        <div className="dashboard-main">
-          <section className="surface" aria-labelledby="history-title">
-            <div className="section-head">
-              <h2 id="history-title" className="section-title">
-                History {!loading && <span className="muted number-tabular">{entries.length}</span>}
-              </h2>
-              <button type="button" className="btn-sm tint" onClick={() => openForm()}>
-                <PlusIcon size={14} />
-                Add weigh-in
-              </button>
-            </div>
-
+      <Dashboard>
+        <DashboardMain>
+          <Card
+            id="history-title"
+            title="History"
+            count={loading ? undefined : entries.length}
+            actions={<AddButton onClick={() => openForm()}>Add weigh-in</AddButton>}
+          >
             {loading ? (
-              <div className="entries">
-                <div className="skeleton skeleton-row" />
-                <div className="skeleton skeleton-row" />
-              </div>
+              <SkeletonRows />
             ) : (
               <ListBox wash className="entries">
-                {entries.length === 0 && (
-                  <p className="empty-note">
-                    No weigh-ins yet.
-                  </p>
-                )}
+                {entries.length === 0 && <EmptyNote>No weigh-ins yet.</EmptyNote>}
                 {shown.map((entry) => (
                   <div className="entry-row" key={entry.id}>
                     <span className="weight-main">
@@ -219,99 +202,66 @@ export function WeightPanel() {
                 {more}
               </ListBox>
             )}
-          </section>
-        </div>
+          </Card>
+        </DashboardMain>
 
-        <div className="dashboard-aside summary-first">
-          <section className="surface" aria-labelledby="trend-title">
-            <div className="section-head">
-              <h2 id="trend-title" className="section-title">
-                Trend
-              </h2>
-              {stats.sinceLastWeek !== null && (
-                <span className="badge badge-rest number-tabular">{signedKg(stats.sinceLastWeek)} since last week</span>
-              )}
-            </div>
-            <div className="stat-row">
-              <div className="stat-tile">
-                <strong className="number-tabular">{tile(stats.sevenDayAverage)}</strong>
-                <span>7-day average</span>
-              </div>
-              <div className="stat-tile">
-                <strong className="number-tabular">{tile(stats.weekStartWeight)}</strong>
-                <span>Week start</span>
-              </div>
-            </div>
+        <DashboardAside summaryFirst>
+          <Card
+            id="trend-title"
+            title="Trend"
+            end={
+              stats.sinceLastWeek !== null && (
+                <Badge kind="rest" className="number-tabular">{signedKg(stats.sinceLastWeek)} since last week</Badge>
+              )
+            }
+          >
+            <StatRow
+              stats={[
+                { value: tile(stats.sevenDayAverage), label: "7-day average" },
+                { value: tile(stats.weekStartWeight), label: "Week start" },
+              ]}
+            />
             {sorted.length >= 2 && (
               <>
-                <div className="chart-controls">
+                <ChartControls>
                   <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
-                </div>
+                </ChartControls>
                 <LineChart
                   points={inRange
                     .reverse()
                     .map((e) => ({ label: e.date.slice(5).split("-").reverse().join("."), value: Number(e.kilograms) }))}
                   summary={`Weight over the last ${range} days`}
                 />
-                {inRange.length < 2 && <p className="muted chart-note">Not enough weigh-ins in the last {range} days.</p>}
+                {inRange.length < 2 && <ChartNote>Not enough weigh-ins in the last {range} days.</ChartNote>}
               </>
             )}
-          </section>
-        </div>
-      </div>
+          </Card>
+        </DashboardAside>
+      </Dashboard>
 
-      <Modal
+      <FormModal
         isOpen={isModalOpen}
         onClose={closeForm}
         title={editing ? "Edit weigh-in" : "New weigh-in"}
+        onSubmit={handleSubmit}
+        error={error}
+        busy={saving}
+        canSubmit={!!kilograms}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="form-stack">
-            {/* Not a <label>: a click inside the open calendar would re-trigger the button. */}
-            <div className="field">
-              <span id="weigh-date">Date</span>
-              <DatePicker
-                mode="day"
-                className="date-field"
-                value={date}
-                today={today()}
-                max={today()}
-                label={formatDMY(date)}
-                labelledBy="weigh-date"
-                disabled={saving}
-                onChange={setDate}
-              />
-            </div>
-            <label>
-              Weight (kg)
-              <input
-                type="number"
-                inputMode="decimal"
-                min="20"
-                max="500"
-                step="0.01"
-                disabled={saving}
-                value={kilograms}
-                onChange={(e) => setKilograms(e.target.value)}
-                required
-              />
-            </label>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={closeForm}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving || !kilograms}>
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        <DateField id="weigh-date" value={date} today={today()} max={today()} text={formatDMY(date)} disabled={saving} onChange={setDate} />
+        <Field
+          label="Weight (kg)"
+          type="number"
+          inputMode="decimal"
+          min="20"
+          max="500"
+          step="0.01"
+          disabled={saving}
+          value={kilograms}
+          onChange={(e) => setKilograms(e.target.value)}
+          required
+        />
+      </FormModal>
     </>
   );
 }
