@@ -23,6 +23,7 @@ import { useToast } from "../components/toast";
 import { WeightPanel } from "./weight-panel";
 import { MetricPanel } from "./metric-panel";
 import { ListBox, useMore } from "../components/lists";
+import { GroupToggle, useFolded } from "../components/categories-card";
 import {
   addShoppingItemAction,
   addWaterAction,
@@ -879,6 +880,7 @@ export function FoodClient({
   const loggedNames = new Set(summary.meals.map((m) => m.name.toLowerCase()));
   const notLoggedFoods = pastFoods.filter((f) => !loggedNames.has(f.name.toLowerCase()));
   const [shownMeals, moreMeals] = useMore(day.meals);
+  const [foldedShop, toggleShop] = useFolded();
   const [shownShopping, moreShopping] = useMore(shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c)));
   const [shownCategories, moreCategories] = useMore(categories);
   const [shownPastFoods, morePastFoods] = useMore(notLoggedFoods);
@@ -1157,8 +1159,8 @@ export function FoodClient({
           )}
           {shopCategories.filter((c) => shownShopping.some((i) => i.category === c)).map((cat) => (
             <div key={cat} className="shopping-group">
-              <h3 className="group-label">{cat}</h3>
-              {shownShopping
+              <GroupToggle name={cat} folded={foldedShop.has(cat)} onToggle={() => toggleShop(cat)} />
+              {!foldedShop.has(cat) && shownShopping
                 .filter((item) => item.category === cat)
                 .map((item) => (
                   <div key={item.id} className="shopping-row">

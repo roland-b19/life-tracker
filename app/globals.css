@@ -2602,6 +2602,8 @@ button.bars-col:focus-visible {
 /* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
 .shopping-groups { display: grid; row-gap: 1.25rem; }
 .shopping-groups > .shopping-group > .group-label { margin-top: 0; }
+/* clear of the section head, like the first title in Wishlist and Tasks */
+.shopping-groups > .shopping-group:first-child > .group-label { margin-top: 0.5rem; }
 .surface > .list-box:has(> .shopping-groups),
 .shopping-groups > .shopping-group {
   --band-out: calc((var(--card-pad) + 1px) / 2);

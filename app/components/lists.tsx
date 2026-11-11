@@ -29,6 +29,9 @@ export function useMore<T>(list: T[]) {
   return [list.slice(0, shown), more] as const;
 }
 
+// Safari on iPhone can still pan the page under a finger that started on a handle; the page must not move while dragging.
+const noPan = (e: TouchEvent) => e.preventDefault();
+
 /**
  * Drag a row by its handle to any place in its list. Rows are the list's children marked `data-sort`; the dragged
  * row follows the pointer, the rows in between step aside, and on drop `move(from, to)` reorders them.
@@ -38,6 +41,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
   const drag = useRef<{ rows: HTMLElement[]; i: number; to: number; y: number; mids: number[]; step: number } | null>(null);
 
   const settle = (rows: HTMLElement[], i: number) => {
+    document.removeEventListener("touchmove", noPan);
     rows[i].classList.remove("dragging");
     for (const r of rows) r.style.transform = "";
   };
@@ -59,6 +63,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
     };
     e.preventDefault(); // no text selection while dragging
     e.currentTarget.setPointerCapture(e.pointerId);
+    document.addEventListener("touchmove", noPan, { passive: false });
     row.classList.add("dragging");
   };
 

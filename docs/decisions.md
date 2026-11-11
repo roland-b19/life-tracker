@@ -254,6 +254,12 @@ Every action that modifies something shows an Undo button in its toast and resto
 - Tasks on a phone: Progress, Tasks, Last x days, Categories (desktop keeps its two columns).
 - Narrow exception to "No animations or transitions" above, at the user's request: the Tasks progress ring fill and the Wishlist estimated-total count-up are back (`animated-number.tsx`, reduced motion jumps to the value). Nothing else animates; the design skill says so.
 
+### 2026-11-11: Page stays still, Settings waits, shopping list folds (user)
+
+- Dragging a category must not move the page (Wishlist, Tasks): `useDragSort` blocks touch panning while a handle is held, and `CategoriesCard` keeps its place on screen across the reorder and Undo.
+- A More-menu link (Settings) leaves the menu open until the new page arrives, so the previous page never shows through; a tap on the current page just closes the menu.
+- Health's shopping list titles are `GroupToggle`s like Wishlist and Tasks (each category folds), and the first one has 0.5rem above it.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

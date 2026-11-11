@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import { ChevronRightIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
@@ -33,15 +33,28 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
   const [busy, setBusy] = useState(false);
   const [shown, more] = useMore(categories);
 
+  // A reorder also reorders the items list above this card; the page must not shift under the finger, so the card
+  // keeps its place on screen across that render (Safari has no scroll anchoring).
+  const card = useRef<HTMLElement>(null);
+  const top = useRef<number | null>(null);
+  const reorder = (update: string[]) => {
+    top.current = card.current?.getBoundingClientRect().top ?? null;
+    onChange(() => update);
+  };
+  useLayoutEffect(() => {
+    if (top.current !== null && card.current) window.scrollBy(0, card.current.getBoundingClientRect().top - top.current);
+    top.current = null;
+  }, [categories]);
+
   // The new order shows at once (the pages list their items in it too); a failed save puts the old one back, and Undo saves it again.
   async function move(from: number, to: number) {
     const next = [...categories];
     next.splice(to, 0, ...next.splice(from, 1));
     const previous = categories;
-    onChange(() => next);
+    reorder(next);
     const res = await reorderCategoriesAction({ scope, names: next }).catch(() => null);
     if (!res?.success) {
-      onChange(() => previous);
+      reorder(previous);
       showToast({ message: "Failed to move category", type: "warning" });
       return;
     }
@@ -50,10 +63,10 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
       type: "success",
       actionLabel: "Undo",
       onAction: async () => {
-        onChange(() => previous);
+        reorder(previous);
         const back = await reorderCategoriesAction({ scope, names: previous }).catch(() => null);
         if (!back?.success) {
-          onChange(() => next);
+          reorder(next);
           showToast({ message: "Failed to undo", type: "warning" });
         }
       },
@@ -160,7 +173,7 @@ export function CategoriesCard({ scope, categories, onChange, onRefile }: Props)
 
   return (
     <>
-      <section className="surface" aria-labelledby={`categories-title-${scope}`}>
+      <section ref={card} className="surface" aria-labelledby={`categories-title-${scope}`}>
         <div className="section-head">
           <h2 id={`categories-title-${scope}`} className="section-title">
             Categories <span className="muted number-tabular">{categories.length}</span>

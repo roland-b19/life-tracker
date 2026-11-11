@@ -21,6 +21,8 @@ export function Navigation({ userName }: NavigationProps) {
     setTarget(href);
     setMoreOpen(false);
   };
+  // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
+  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget(href));
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -176,7 +178,7 @@ export function Navigation({ userName }: NavigationProps) {
                 href={link.href}
                 className={`nav-link ${link.isActive ? "active" : ""}`}
                 aria-current={link.isActive ? "page" : undefined}
-                onClick={() => go(link.href)}
+                onClick={() => goFromMenu(link.href)}
               >
                 {link.icon}
                 <span>{link.label}</span>
