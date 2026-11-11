@@ -141,6 +141,7 @@ export function TodosClient({
   })();
   const groupedList = listDaily && listTodos.some((x) => x.category !== "other");
   const [folded, toggleFolded] = useFolded();
+  const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
     const { date: day, tab: tb } = latest.current;
@@ -589,11 +590,11 @@ export function TodosClient({
                   {groupedList && task.category !== listTodos[i - 1]?.category && (
                     <GroupToggle
                       name={task.category}
-                      folded={folded.has(`${view.space}/${task.category}`)}
-                      onToggle={() => toggleFolded(`${view.space}/${task.category}`)}
+                      folded={folded.has(foldKey(task.category))}
+                      onToggle={() => toggleFolded(foldKey(task.category))}
                     />
                   )}
-                  {!(groupedList && folded.has(`${view.space}/${task.category}`)) && (
+                  {!(groupedList && folded.has(foldKey(task.category))) && (
                   <div className="todo-row">
                     {!listTickable ? (
                       <span className={`todo-checkbox-btn static ${task.isCompleted ? "checked" : ""}`} aria-hidden="true">

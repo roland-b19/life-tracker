@@ -2610,15 +2610,17 @@ button.bars-col:focus-visible {
 .todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
 .todo-list > .group-label:first-child { margin-top: 0; }
 .wishlist-entries > .group-label:first-child { margin-top: 0.5rem; } /* clear of the price-range tabs above */
-/* A title that folds its group: the whole title is the button, the arrow turns down while the group is open */
+/* A title that folds its group looks like any other title; the arrow after the text turns down while the group is open.
+   The tap area reaches 0.75rem past the text without moving it. */
 .group-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  min-height: 2.75rem; /* a 44pt target; the margin gives the height back so the title keeps its rhythm */
-  margin-block: -0.75rem;
+  min-height: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: none;
   color: inherit;
   font: inherit;
@@ -2627,6 +2629,7 @@ button.bars-col:focus-visible {
   text-transform: inherit;
   cursor: pointer;
 }
+.group-toggle::before { content: ""; position: absolute; inset: -0.75rem -0.5rem; }
 .group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 
 /* Health: assistant chat */

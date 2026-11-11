@@ -97,6 +97,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const rangeOf = (item: WishlistItemData) => priorityForPrice(Number(item.estimatedPrice));
   // Every tab lists its items under their category, each group in the chosen sort; a group can be folded.
   const [folded, toggleFolded] = useFolded();
+  const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
   const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
   const grouped = filteredItems.some((x) => x.category !== "other");
@@ -293,9 +294,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
                   {filteredItems.map((item, i) => (
                     <Fragment key={item.id}>
                     {grouped && item.category !== filteredItems[i - 1]?.category && (
-                      <GroupToggle name={item.category} folded={folded.has(item.category)} onToggle={() => toggleFolded(item.category)} />
+                      <GroupToggle name={item.category} folded={folded.has(foldKey(item.category))} onToggle={() => toggleFolded(foldKey(item.category))} />
                     )}
-                    {!(grouped && folded.has(item.category)) && (
+                    {!(grouped && folded.has(foldKey(item.category))) && (
                     <div className="entry-row item-row">
                       <strong className="item-name">{item.name}</strong>
                       <div className="item-meta">

@@ -204,7 +204,7 @@ export const groupOrder = (categories: string[], items: { category: string }[]) 
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
 
-/** Which category groups of a list are folded; they stay folded across its tabs until the page is left. */
+/** Which category groups of a list are folded. The caller keys each by its tab too, so tabs fold independently. */
 export function useFolded() {
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const toggle = (key: string) =>
@@ -216,13 +216,13 @@ export function useFolded() {
   return [folded, toggle] as const;
 }
 
-/** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow shows which. */
+/** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
 export function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
   return (
     <h3 className="group-label">
       <button type="button" className="group-toggle" aria-expanded={!folded} onClick={onToggle}>
-        <ChevronRightIcon size={14} />
         {categoryLabel(name)}
+        <ChevronRightIcon size={14} />
       </button>
     </h3>
   );
