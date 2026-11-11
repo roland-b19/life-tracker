@@ -771,7 +771,10 @@ main {
   align-items: center;
   gap: 0.75rem;
   font-size: 0.95rem;
+  min-width: 0;
+  overflow-wrap: anywhere; /* a 90-char name with no spaces wraps instead of widening the page */
 }
+.shopping-item-name > :first-child { flex-shrink: 0; }
 
 .shopping-item-name.bought {
   text-decoration: line-through;
@@ -979,6 +982,8 @@ textarea:focus-visible {
   justify-content: space-between;
   padding: 0.5rem 0;
 }
+/* A long name with no spaces (a 120-char meal) wraps instead of widening the whole page and the tab bar. */
+.entry-row > div { min-width: 0; overflow-wrap: anywhere; }
 
 /* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
 .past-foods { margin-top: -0.85rem; }
@@ -2495,7 +2500,8 @@ button.bars-col:focus-visible {
   display: grid;
   gap: 0.6rem;
 }
-.split-day-card { padding: 0.5rem 0.75rem 0.5rem 1rem; gap: 0.75rem; }
+/* min-width 0: a grid item never shrinks below its content, which pushed the card 6px past the list at 320px */
+.split-day-card { padding: 0.5rem 0.75rem 0.5rem 1rem; gap: 0.75rem; min-width: 0; }
 .split-day-select { /* the card lifts, not this button inside it */
   flex: 1;
   display: grid;
@@ -2652,6 +2658,9 @@ button.bars-col:focus-visible {
   cursor: pointer;
 }
 .group-toggle::before { content: ""; position: absolute; inset: -0.75rem -0.5rem; }
+/* A 50-char category name with no spaces wraps instead of widening the page. */
+.group-toggle { max-width: 100%; text-align: start; overflow-wrap: anywhere; }
+.group-toggle svg { flex-shrink: 0; }
 .group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 
 /* Health: assistant chat */
@@ -2757,7 +2766,8 @@ button.bars-col:focus-visible {
 .weight-main {
   display: flex;
   align-items: baseline;
-  gap: 1.25rem;
+  flex-wrap: wrap; /* the date drops under the value on a 320px phone instead of widening the row */
+  gap: 0 1.25rem;
   min-width: 0;
 }
 
