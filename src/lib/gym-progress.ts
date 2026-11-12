@@ -57,6 +57,37 @@ export function dayProgress(sets: HistorySet[], dayId: string) {
   });
 }
 
+type OpenWorkout = {
+  id: string;
+  date: string;
+  isDeload: boolean;
+  splitDayId?: string | null;
+  splitDayName?: string | null;
+  sets: { exerciseId: string; setOrder: number; reps: number; loadType: string; loadValue: string; extraKg: string }[];
+};
+
+/**
+ * Every set the progress figures read, oldest first: the finished workouts the page already holds plus the open one,
+ * so the Progress tab needs no second read of the same year of sets.
+ */
+export function progressSets(history: HistorySession[], open: OpenWorkout | null, names: Map<string, string>): HistorySet[] {
+  const sets: HistorySet[] = history.flatMap((s) =>
+    s.exercises.flatMap((e) =>
+      e.sets.map((x, i) => ({ date: s.date, sessionId: s.id, isDeload: s.isDeload, dayId: s.dayId, dayName: s.dayName, exerciseId: e.id, exerciseName: e.name, setOrder: i + 1, ...x })),
+    ),
+  );
+  if (open) {
+    const { id: sessionId, date, isDeload } = open;
+    const [dayId, dayName] = [open.splitDayId ?? null, open.splitDayName ?? null];
+    for (const x of open.sets) {
+      const { exerciseId, setOrder, reps, loadType } = x;
+      const exerciseName = names.get(exerciseId) ?? "Exercise";
+      sets.push({ date, sessionId, isDeload, dayId, dayName, exerciseId, exerciseName, setOrder, reps, loadType, load: Number(x.loadValue) + Number(x.extraKg) });
+    }
+  }
+  return sets.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** A weight change as the user reads it: "+2.5 kg", "−1 kg", "0 kg". */
 export const kgDelta = (n: number | null) => {
   if (n === null) return "—";

@@ -12,7 +12,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 - Card
 - Press
 - Buttons
-- Row icon buttons and streak
+- Row icon buttons
 - Fields
 - Sort select
 - Segmented control
@@ -53,7 +53,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 | `--tint-hover` | `#9bc2ef` | hover on solid tint buttons |
 | `--on-tint` | `#0b1b30` | text on solid tint |
 | `--tint-subtle` | `rgba(134,180,234,.24)` | tinted button and badge fill |
-| `--success` / `--success-subtle` | `#8fd4a3` / `.22` | streak, success badges |
+| `--success` / `--success-subtle` | `#8fd4a3` / `.22` | success badges |
 | `--warning` / `--warning-subtle` | `#ebc673` / `.22` | mid range |
 | `--danger` / `--danger-subtle` | `#ef8f8f` / `.22` | high range, `.danger`, `.error` |
 
@@ -197,7 +197,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 | `.danger`, idle muscle chips, idle tab items | `--highlight` |
 | `.split-day-card` (not selected) | `color-mix(in srgb, var(--surface-solid), white 6%)` |
 
-## Row icon buttons and streak
+## Row icon buttons
 
 **`.delete-icon-btn`** (edit and delete)
 - 44×44, radius .85rem, tint colour on `--tint-subtle`.
@@ -210,10 +210,6 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 **Hit area (compact controls)**
 - `button.btn-sm`, `.toast-action-btn`, `.toast-close-btn`, `.month-nav-btn`, and `.tap-btn` are `position: relative` with `::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }`.
 - The visual size stays; the target grows to 44pt. Picker cells are left out on purpose, and so is `.muscle-chip` (padding .35rem .75rem, .85rem, in a wrapping row with a .4rem gap), whose grown targets would overlap the next row.
-
-**`.streak`**
-- A 44px slot, success colour, weight 700, .9375rem, with a fire icon.
-- Order in the row: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete). Move is `MoveIcon` 17 in a `.delete-icon-btn.edit`.
 
 ## Fields
 
@@ -347,7 +343,6 @@ The CSS hides the outline on `[data-pointer]`.
 - Check circle (`.todo-checkbox-btn`, every list row that ticks off: Tasks and Shopping): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
 - `.todo-title`: .95rem weight 500, wraps; done is line-through in secondary.
 - `.readonly-note`: .8125rem secondary with `LockIcon` 13, gap .4rem, margin-bottom .25rem.
-- Move task options: full-width `.secondary` buttons in a grid, gap .5rem.
 - Food Assistant chat: `.chat-log` is a `--surface-secondary` box (padding 1rem, radius .9rem, max-height 26rem, scrolls inside, collapses when empty). Bubbles: padding .65rem .9rem, .9375rem, line-height 1.4, radius 1.1rem with a .3rem tail corner; the assistant's on `--surface`, the user's on solid `--tint` with `--on-tint` text. The typing bubble is italic secondary. A logged meal is a `.chat-tool` tag (tint on `--tint-subtle`, radius .5rem, .8125rem). `.chat-form`: the input and Send in a row, gap .75rem, margin-top 1rem.
 
 ## Empty note

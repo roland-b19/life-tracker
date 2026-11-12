@@ -357,3 +357,28 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Undo of a task delete and a move carries `placedAt` and `markDay` (the day on screen) and restores the day mark.
 - Streak display: green when the task is ticked on the day shown, grey when not, hidden on days after today.
 - Wishlist sort ties (equal price) fall back to newest first, then id, so equal items never swap places.
+
+## 2026-11-12 — Daily is a single list for today only
+
+- Daily (Personal and Business) has no date picker and no past or future view: it shows today's list, the same tasks every day. History stays in `todo_completions` (streaks) and `todo_day_stats` (charts).
+- Edit changes the task in place (no split in two rows). Delete ends a task that started before today (`ended_on` = today, today's and later ticks dropped; Undo restores it), or deletes it outright if it started today. Category delete and rename re-file the tasks in place.
+- `todo_day_marks` (decision of 2026-11-12 above, migration 0024) is dropped: the order key of a repeating task is `todos.completed_at`, valid only on the day it was set. Migration `0025_todo_daily_today` backfills it from the marks and drops the table; the user runs it after the deploy.
+- The server ticks a repeating task for its own "today", whatever day the page sent, so a page left open past midnight cannot tick yesterday.
+
+
+## 2026-11-12 — No date logic on the Tasks page, no Move (user)
+- Neither Tasks tab has a day stepper or date picker. Tasks are added only for today; the only date logic is the carry-over of unfinished one-off tasks to today (done on the server). Charts read their days from the database.
+- The Move feature is removed (daily to today, between days, the Day select in the edit form). To change a task's kind, delete it and add it again.
+- The server refuses to add or change a task for a day beyond today ±1 (a day of slack for the timezone and a page left open past midnight). One-off tasks planned earlier for a later day stay in the database and show up on their day.
+
+## 2026-11-12 — Tasks are deleted for good, no streaks (supersedes the Daily-today-only delete rules and the streak display)
+
+- Delete is a hard delete, one `DELETE`; nothing of the task stays except the per-day counts in `todo_day_stats` (date, total, done, no titles), which the charts read. `recordDayStats` recounts the one kind (daily or one-off) of that day in a single SQL query after every create, restore, tick and delete. Undo restores the row from the screen's copy under the same id (`onConflictDoNothing`, so another user's row is never touched). A delayed delete (waiting for the Undo toast to go) was rejected: a closed tab or a lost connection would leave the task behind.
+- Streaks are removed completely (`src/lib/streak.ts`, the flame icon, `.streak` CSS, `doneDates`, `todo_completions`, `todos.ended_on`). A daily task is done only if `is_completed` and `completed_at` falls on today (Europe/Bucharest), so every day starts open without a daily reset job; the tick time is also its order key. Charts keep their data: `todo_day_stats` is written from the counts, not from the ticks.
+- Migration `0026_todo_hard_delete` (destructive, run by the user AFTER the deploy, after `0025`): keeps today's ticks (`is_completed = true`), deletes the tasks that were only ended, drops `todo_completions` and `todos.ended_on`. Until it runs, ended daily tasks still show and today's ticks look unticked. Backups keep deleted data until their retention ends.
+- Privacy effect: a deleted task's title no longer stays in the database.
+
+## 2026-11-12 — Every tab opens from data already in hand
+- Gym Progress no longer loads anything: it is drawn from the workouts the page already holds plus the open or paused workout (`progressSets` in `src/lib/gym-progress.ts`). `getGymHistoryAction` and `getGymHistory` are removed, so `/gym` runs one query fewer and the Progress tab shows no skeleton. A workout left open from before the latest open one is not counted (the page holds only the latest).
+- Health's Water, Steps and Weight lists load once per visit and are kept by the page (`FoodClient` state), so reopening a tab is instant and a late Undo still lands in the list. Opening a tab sets its today row from the Today card. They are page state only: gone on reload, sign-out or another user, so no new storage. A fresh page load fetches them again.
+- The service worker shows a stored page only when it was stored on the same day (device clock, the response's `Date` header); an older one waits for the server, so a page of yesterday is never shown as today.

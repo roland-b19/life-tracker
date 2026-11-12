@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
 import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, DayField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { formatDMY, toISODate } from "@/lib/format-date";
@@ -8,7 +8,7 @@ import { ListBox, RowActions, useMore } from "../components/lists";
 import { TrendChart } from "./trend-chart";
 import { signedKg, weightStats, type WeightStats } from "@/lib/weight-stats";
 
-type WeightEntry = { id: string; date: string; kilograms: string };
+export type WeightEntry = { id: string; date: string; kilograms: string };
 
 const today = () => toISODate();
 
@@ -24,14 +24,22 @@ async function send(method: string, url: string, body?: unknown) {
   });
 }
 
-/** `onStats` hands the weight card on the other tabs the numbers of the list as edited here, so no page refetch is needed. */
-export function WeightPanel({ onStats }: { onStats: (stats: WeightStats) => void }) {
-  const [entries, setEntries] = useState<WeightEntry[]>([]);
+/**
+ * `onStats` hands the weight card on the other tabs the numbers of the list as edited here, so no page refetch is
+ * needed. The list lives with the page (`list`, null until loaded), so reopening the tab shows it at once.
+ */
+export function WeightPanel({ onStats, list, setList }: {
+  onStats: (stats: WeightStats) => void;
+  list: WeightEntry[] | null;
+  setList: Dispatch<SetStateAction<WeightEntry[] | null>>;
+}) {
+  const entries = list ?? [];
+  const setEntries = (next: (current: WeightEntry[]) => WeightEntry[]) => setList((current) => next(current ?? []));
   const [editing, setEditing] = useState<WeightEntry | null>(null);
   const [date, setDate] = useState(today);
   const [kilograms, setKilograms] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(list === null);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -40,19 +48,20 @@ export function WeightPanel({ onStats }: { onStats: (stats: WeightStats) => void
   const replace = (to: WeightEntry) => setEntries((current) => current.map((e) => (e.id === to.id ? to : e)));
 
   useEffect(() => {
+    if (!loading) return;
     let active = true;
     fetch("/api/weight", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("load failed");
         return (await response.json()) as { entries: WeightEntry[] };
       })
-      .then((data) => active && setEntries(data.entries))
+      .then((data) => active && setList(data.entries))
       .catch(() => active && showToast({ message: "Failed to load weigh-ins", type: "warning" }))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [showToast]);
+  }, [showToast, loading, setList]);
 
   function openForm(entry?: WeightEntry) {
     setError("");

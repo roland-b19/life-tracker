@@ -72,7 +72,6 @@ showToast({ message, type?: "info" | "success" | "warning", actionLabel?, onActi
 | edit | writes the old values back |
 | toggle (tick, bought) | toggles back |
 | quick tap (+250 ml, a set) | removes or reverts it |
-| move (task to another day / into Daily) | moves it back (`revertMoveTodo`) |
 | category rename / delete | reverts exactly the items that moved (`revertCategory`, `revertShoppingCategory`) |
 | a secret the browser cannot read back (Claude token) | sends the previous ciphertext back to a restore action that validates it |
 
@@ -203,7 +202,6 @@ The Wishlist and the Tasks lists always show every item and have no More button.
 - A picker dialog that stays open while you use it (Food "Past foods") is the exception to closing: each row has a `PlusIcon` 17 `.delete-icon-btn.edit` titled "Log" (aria-label "Log {name}, {kcal} kcal"), and a logged row leaves the picker at once. Its toast has Undo too. When nothing is left it shows an `.empty-note`.
 - A chat message that fails to send is taken back: its bubble is removed, the text returns to the input, and a `warning` toast says `Failed to send message`. Never answer with a fake assistant message. Meals the Assistant logged show an Undo that removes them.
 - A dialog's content lives in its own state, separate from its open flag (`moving` + `moveOpen`, `catEdit` + `catOpen`), so closing never blanks the content mid-close.
-- An edit that takes a row off the list on screen (Tasks: a move to another day) simply removes it; its Undo moves it back.
 
 Sources: `app/wishlist/wishlist-client.tsx`, `app/components/lists.tsx`, `app/components/modal.tsx`, `app/components/toast.tsx`, `app/todos/todos-client.tsx`, `app/gym/muscle-map.tsx`.
 
@@ -237,5 +235,4 @@ A new page reuses these; it never copies their markup. Change the piece, every p
 - **Buttons in rows** (`lists.tsx`): `IconButton`, `EditButton`, `DeleteButton`, `DragHandle`; `RowActions` is built from them.
 - **Undo**: every toast that can be undone is `showToast({ message, onUndo })`.
 - The few structures left inline on purpose are listed in `docs/decisions.md` (2026-11-11, "One shared component per UI structure").
-- A task is moved from its Edit form (Day select, plus a Category select when it goes to Daily), not from a separate button.
 

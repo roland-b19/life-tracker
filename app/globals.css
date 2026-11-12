@@ -147,7 +147,6 @@ h3,
 .calendar-day-header,
 .gym-set-row input,
 .todo-title,
-.streak,
 .badge-carried,
 .wishlist-price {
   font-variant-numeric: tabular-nums;
@@ -1985,7 +1984,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   gap: 0.25rem;
 }
 
-/* Task rows: checkbox, title (wraps) with badges below, streak, edit, delete */
+/* Task rows: checkbox, title (wraps) with badges below, edit, delete */
 .todo-list {
   display: grid;
   gap: 0.25rem; /* the Wishlist's band gap */
@@ -2010,23 +2009,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .todo-main > .badge-row {
   margin-top: 0;
-}
-
-/* Same 44px slot as the edit and delete buttons beside it, so all three are evenly spaced */
-.streak {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  gap: 0.2rem;
-  flex-shrink: 0;
-  color: var(--success);
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-.streak.pending {
-  color: var(--secondary);
 }
 
 .segmented + .empty-note {

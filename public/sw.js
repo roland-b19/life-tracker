@@ -2,7 +2,8 @@
 // Two caches, both only for a fast start:
 // - content-hashed static bundles (/_next/static/*), cache first;
 // - the signed-in pages (HTML), stale while revalidate: opening the app shows the last seen page at once and the
-//   server's answer replaces it in the background. Server actions and /api/* are never cached.
+//   server's answer replaces it in the background (only a page stored today: an older one waits for the server).
+//   Server actions and /api/* are never cached.
 // The pages cache holds personal data on this device until Sign out (and the sign-in screen) delete it.
 
 const CACHE = "life-tracker-v3";
@@ -79,7 +80,8 @@ async function page(event, url) {
     })
     .catch(() => false);
   event.waitUntil(changed);
-  if (!cached) return fetched;
+  // A page stored on an earlier day (device clock) would show that day's lists as today's: wait for the server.
+  if (!cached || new Date(cached.headers.get("date")).toDateString() !== new Date().toDateString()) return fetched;
   pending.set(key, changed);
   return cached;
 }

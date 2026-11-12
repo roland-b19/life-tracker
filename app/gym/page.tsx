@@ -4,14 +4,13 @@ import { authOptions } from "@/auth";
 import {
   getDeloadStatus,
   getOpenWorkoutSession,
-  getGymHistory,
   getWorkoutHistory,
   getExercises,
   getUserSplitWithDays,
 } from "@/lib/gym";
 import { GymClient } from "./gym-client";
 import { addDays, toISODate } from "@/lib/format-date";
-import { withProgress } from "@/lib/gym-progress";
+import { progressSets, withProgress } from "@/lib/gym-progress";
 
 export default async function GymPage() {
   const session = await getServerSession(authOptions);
@@ -23,15 +22,15 @@ export default async function GymPage() {
   const openSince = addDays(toISODate(), -2);
   // Same year of sets the Progress tab draws from, so a workout's figures match its Workout days chart.
   const since = addDays(toISODate(), -370);
-  const [split, exercises, deload, open, workouts, sets] = await Promise.all([
+  const [split, exercises, deload, open, workouts] = await Promise.all([
     getUserSplitWithDays(userId),
     getExercises(userId),
     getDeloadStatus(userId),
     getOpenWorkoutSession(userId, openSince),
     getWorkoutHistory(userId, openSince, since),
-    getGymHistory(userId, since),
   ]);
-  const history = withProgress(workouts, sets);
+  const names = new Map(exercises.map((e) => [e.id, e.name]));
+  const history = withProgress(workouts, progressSets(workouts, open && { ...open.session, splitDayName: open.splitDayName, sets: open.sets }, names));
 
   return (
     <GymClient

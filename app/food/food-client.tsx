@@ -10,8 +10,8 @@ import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon, ScaleIcon, PlusIcon } from "../components/icons";
 import { Modal } from "../components/modal";
 import { useToast } from "../components/toast";
-import { WeightPanel } from "./weight-panel";
-import { MetricPanel } from "./metric-panel";
+import { WeightPanel, type WeightEntry } from "./weight-panel";
+import { MetricPanel, withDay, type Entry } from "./metric-panel";
 import { DeleteButton, EditButton, IconButton, ListBox, RowActions, useMore } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
@@ -183,6 +183,16 @@ export function FoodClient({
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
   const [weightAnalytics, setWeightAnalytics] = useState(initialWeight);
+  // Each health tab's list, kept for this visit so reopening a tab is instant (it goes with the page, so never to another user).
+  const [waterList, setWaterList] = useState<Entry[] | null>(null);
+  const [stepsList, setStepsList] = useState<Entry[] | null>(null);
+  const [weightList, setWeightList] = useState<WeightEntry[] | null>(null);
+  // Today's water and steps can change on the other tabs while their tab is closed: a tab opens with today's value.
+  function openTab(tab: typeof activeTab) {
+    setWaterList((l) => l && withDay(l, todayDate, summary.metrics.waterMl));
+    setStepsList((l) => l && withDay(l, todayDate, summary.metrics.steps));
+    setActiveTab(tab);
+  }
   const [pastFoods, setPastFoods] = useState(initialPastFoods);
   const [isPastOpen, setIsPastOpen] = useState(false);
 
@@ -830,13 +840,13 @@ export function FoodClient({
             { value: "shopping", label: "Shopping", short: "Shop" },
             ...(isClaudeEnabled() ? [{ value: "chat" as const, label: "Assistant", short: "AI" }] : []),
           ]}
-          onChange={setActiveTab}
+          onChange={openTab}
         />
       </Toolbar>
 
-      {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} />}
-      {activeTab === "weight" && <WeightPanel onStats={setWeightAnalytics} />}
-      {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} />}
+      {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} list={waterList} setList={setWaterList} />}
+      {activeTab === "weight" && <WeightPanel onStats={setWeightAnalytics} list={weightList} setList={setWeightList} />}
+      {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} list={stepsList} setList={setStepsList} />}
 
       {activeTab === "daily" && (
         <>

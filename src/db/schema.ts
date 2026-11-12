@@ -309,42 +309,15 @@ export const todos = pgTable(
     dueDate: date("due_date").notNull(),
     reminderTime: varchar("reminder_time", { length: 10 }), // e.g. "09:00"
     isCompleted: boolean("is_completed").default(false).notNull(),
-    // One-off tasks: when the box last changed (ticked or unticked). Repeating tasks keep this per day in todo_day_marks.
+    // When the box last changed (ticked or unticked). A repeating task is done only if it was ticked today: the next day it reads as open.
     completedAt: timestamp("completed_at", { withTimezone: true }),
     isCarriedOver: boolean("is_carried_over").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     // When the task last took its place in a list (created, moved, carried over, restored): the newest is on top.
     placedAt: timestamp("placed_at", { withTimezone: true }).defaultNow().notNull(),
-    // A deleted repeating task stops here (not due on or after this day) but stays on the days before it.
-    endedOn: date("ended_on"),
     category: varchar("category", { length: 50 }).default("other").notNull(),
   },
   (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
-);
-
-// One row per day a repeating task was ticked; its streak is counted from these.
-export const todoCompletions = pgTable(
-  "todo_completions",
-  {
-    todoId: uuid("todo_id")
-      .notNull()
-      .references(() => todos.id, { onDelete: "cascade" }),
-    date: date("date").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.todoId, table.date] })],
-);
-
-// When the box of a repeating task last changed (ticked or unticked) on one day, so each day orders its own list.
-export const todoDayMarks = pgTable(
-  "todo_day_marks",
-  {
-    todoId: uuid("todo_id")
-      .notNull()
-      .references(() => todos.id, { onDelete: "cascade" }),
-    date: date("date").notNull(),
-    at: timestamp("at", { withTimezone: true }).notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.todoId, table.date] })],
 );
 
 // One frozen row per user, space, kind and day: how many tasks existed and how many were done.

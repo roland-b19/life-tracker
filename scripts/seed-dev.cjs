@@ -187,13 +187,12 @@ async function seedTasks(db, userId) {
     };
 
     for (const habit of HABITS[space]) {
-      const id = await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
+      await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
       count++;
       for (let day = start; day <= today; day = addDays(day, 1)) {
         const due = habit.pattern === "daily" || habit.pattern.slice(5).split(",").includes(String(weekday(day)));
         if (!due) continue;
         const done = day < today && random() < habit.odds;
-        if (done) await db.query("INSERT INTO todo_completions (todo_id, date) VALUES ($1, $2)", [id, day]);
         if (day < today) tally(day, true, done);
       }
     }
@@ -225,23 +224,20 @@ async function seedTasks(db, userId) {
   return `tasks: ${count}`;
 }
 
-// Tuesday 10.11.2026 as a fixed test day (two days back on the 12th: read-only in Tasks): ticked, missed and ended daily
-// tasks plus a done and an open one-off. Runs once per user; the title prefix marks its rows.
+// Tuesday 10.11.2026 as a fixed test day: daily tasks plus a done and an open one-off. Runs once per user; the title prefix marks its rows.
 const FIXTURE_DAY = "2026-11-10";
 async function seedFixtureDay(db, userId) {
   const { rows } = await db.query("SELECT 1 FROM todos WHERE user_id = $1 AND title LIKE 'Tue 10.11 %' LIMIT 1", [userId]);
   if (rows.length) return "fixture day: skipped, already there";
-  const add = async (title, recurring, due, { ticked = false, endedOn = null, done = false, category = "other" } = {}) => {
-    const { rows } = await db.query(
-      `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, completed_at, created_at, ended_on, category)
-       VALUES ($1, 'personal', $2, $3, $4, $5, $6, CASE WHEN $6 THEN $5::date + time '18:00' END, $5::date + time '08:00', $7, $8) RETURNING id`,
-      [userId, title, recurring, recurring ? "daily" : "none", due, done, endedOn, category],
+  const add = async (title, recurring, due, { done = false, category = "other" } = {}) => {
+    await db.query(
+      `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, completed_at, created_at, category)
+       VALUES ($1, 'personal', $2, $3, $4, $5, $6, CASE WHEN $6 THEN $5::date + time '18:00' END, $5::date + time '08:00', $7) RETURNING id`,
+      [userId, title, recurring, recurring ? "daily" : "none", due, done, category],
     );
-    if (ticked) await db.query("INSERT INTO todo_completions (todo_id, date) VALUES ($1, $2)", [rows[0].id, FIXTURE_DAY]);
   };
-  await add("Tue 10.11 daily, ticked", true, "2026-11-03", { ticked: true, category: "health" });
-  await add("Tue 10.11 daily, missed", true, "2026-11-03", { category: "mind" });
-  await add("Tue 10.11 daily, ended next day", true, "2026-11-05", { ticked: true, endedOn: "2026-11-11" });
+  await add("Tue 10.11 daily, health", true, "2026-11-03", { category: "health" });
+  await add("Tue 10.11 daily, mind", true, "2026-11-03", { category: "mind" });
   await add("Tue 10.11 one-off, done", false, FIXTURE_DAY, { done: true });
   await add("Tue 10.11 one-off, open", false, FIXTURE_DAY);
   // The frozen totals the Progress chart reads: 3 daily (2 done) and 2 one-offs (1 done) on top of what is there.
