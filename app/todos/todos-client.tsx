@@ -294,10 +294,11 @@ export function TodosClient({
             type: "success",
             onUndo: async () => {
               ++requestId.current;
-              drop(saved);
-              putBack({ ...before, id: saved.id });
-              // A day that was over is a one-day task of its own: Undo joins it back into the task instead of editing again.
+              // A split or a day that was over made a new task: Undo joins it back into the old one (its id) instead of editing again.
               const join = res.todo?.join;
+              const restored = join ? before : { ...before, id: saved.id };
+              drop(saved);
+              putBack(restored);
               const undone = await (join
                 ? revertMoveTodoAction(snapshot(before), saved.id, join)
                 : updateTodoAction({
@@ -309,7 +310,7 @@ export function TodosClient({
                   })
               ).catch(() => null);
               if (!undone || !("success" in undone) || !undone.success) {
-                drop({ ...before, id: saved.id });
+                drop(restored);
                 putBack(saved);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
               }

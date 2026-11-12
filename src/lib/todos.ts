@@ -265,7 +265,7 @@ export async function hasDuplicateTodo(
         exceptId ? notInArray(todos.id, [exceptId].flat()) : undefined,
         task.isRecurring
           ? or(
-              and(eq(todos.isRecurring, true), isNull(todos.endedOn)),
+              and(eq(todos.isRecurring, true), or(isNull(todos.endedOn), gt(todos.endedOn, toISODate()))),
               and(eq(todos.isRecurring, false), eq(todos.dueDate, task.dueDate)),
             )
           : dueOn(task.dueDate),
@@ -412,15 +412,16 @@ export async function updateTodo(userId: string, input: UpdateTodoInput, day = t
   const changes = { title: input.title, reminderTime: input.reminderTime ?? null, ...(input.category && { category: input.category }) };
   const over = task.isRecurring && day < toISODate();
   const isolated = over ? await db.transaction((tx) => isolateDay(tx, task, day, changes)) : undefined;
+  const split = !isolated && hasPast(task, day);
   const row =
     isolated?.middle ??
-    (hasPast(task, day)
+    (split
       ? await db.transaction((tx) => splitTodo(tx, task, day, changes))
       : (await db.update(todos).set(changes).where(eq(todos.id, task.id)).returning())[0]);
   const space = row.space as TodoSpace;
   if (input.category) await ensureCategory(userId, space, input.category);
   const doneDates = row.isRecurring ? (await doneDatesOf([row.id])).get(row.id) ?? [] : [];
-  return { ...row, space, streak: row.isRecurring ? streakOn(new Set(doneDates), day) : 0, doneDates, join: isolated?.join };
+  return { ...row, space, streak: row.isRecurring ? streakOn(new Set(doneDates), day) : 0, doneDates, join: isolated?.join ?? (split ? { endedOn: task.endedOn, day } : undefined) };
 }
 
 /** Whether a task is a repeating one that was already part of days before `day`. */
@@ -519,9 +520,12 @@ export async function revertMoveTodo(
     .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
     .returning();
   await rejoin(userId, input.id, join);
-  await db.delete(todoCompletions).where(eq(todoCompletions.todoId, input.id));
+  // The snapshot holds only the last DONE_DATES_WINDOW_DAYS of ticks, so older ones are left alone.
+  await db
+    .delete(todoCompletions)
+    .where(and(eq(todoCompletions.todoId, input.id), gte(todoCompletions.date, addDays(toISODate(), -DONE_DATES_WINDOW_DAYS))));
   const doneDates = input.isRecurring ? [...new Set(input.doneDates)].sort() : [];
-  if (doneDates.length) await db.insert(todoCompletions).values(doneDates.map((date) => ({ todoId: input.id, date })));
+  if (doneDates.length) await db.insert(todoCompletions).values(doneDates.map((date) => ({ todoId: input.id, date }))).onConflictDoNothing();
   await ensureCategory(userId, input.space, back.category);
   // Every day the move or its undo touched counts again.
   const today = toISODate();

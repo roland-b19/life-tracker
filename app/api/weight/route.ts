@@ -4,7 +4,7 @@ import { requireUser, UnauthorizedError } from "@/server/auth";
 import { createWeightEntry, listWeightEntries } from "@/server/weight";
 import { logRequest } from "@/server/logger";
 import { isSameOrigin } from "@/server/same-origin";
-import { weightInput } from "@/lib/validations/weight";
+import { weightCreateInput } from "@/lib/validations/weight";
 
 export const runtime = "nodejs";
 
@@ -45,8 +45,9 @@ export async function POST(request: Request) {
 
   try {
     const userId = await requireUser();
-    const body = weightInput.parse(await request.json());
-    const entry = await createWeightEntry(userId, body.date, body.kilograms);
+    const body = weightCreateInput.parse(await request.json());
+    const entry = await createWeightEntry(userId, body.date, body.kilograms, body.id);
+    if (!entry) return genericError(request, 409);
     logRequest(request, "/api/weight", 201);
     return noStore(NextResponse.json({ entry }, { status: 201 }));
   } catch (error) {

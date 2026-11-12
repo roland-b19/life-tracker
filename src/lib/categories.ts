@@ -143,7 +143,7 @@ export async function revertCategory(
       const half = and(eq(todos.userId, userId), eq(todos.space, scope));
       const [moved] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.to), eq(todos.category, current)));
       const [orig] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.from)));
-      if (!moved || moved.endedOn || !orig || orig.endedOn !== sp.day) continue;
+      if (!moved || (moved.endedOn ?? null) !== (sp.endedOn ?? null) || !orig || orig.endedOn !== sp.day) continue;
       const ticks = await tx.select().from(todoCompletions).where(and(eq(todoCompletions.todoId, moved.id), gte(todoCompletions.date, sp.day)));
       if (ticks.length) await tx.insert(todoCompletions).values(ticks.map((t) => ({ todoId: orig.id, date: t.date }))).onConflictDoNothing();
       await tx.update(todos).set({ endedOn: sp.endedOn }).where(eq(todos.id, orig.id));

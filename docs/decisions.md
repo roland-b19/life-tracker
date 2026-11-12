@@ -311,6 +311,12 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - More tab and desktop sidebar get "Export data": all of the signed-in user's data as a `.txt`, built by the server (`src/lib/export.ts`), without the Claude token and push subscriptions.
 - Before any change to the live database the user takes a full copy with `scripts/backup-now.sh`. The import brings back a deleted daily task as a new row from today and keeps history. Test data is additive and marked, and `--remove` deletes exactly the recorded ids. No agent ever runs these against the live database.
 
+## 2026-11-12: Audit fixes (user asked for a full audit by an Opus/high orchestrator)
+- Findings fixed are listed in `docs/STATUS.md` ("Audit fixes"). Dropped as already decided or wrong: the `.then(() => true, () => false)` pattern in food-client, the check-circle target size, Tasks Today `min={todayDate}`, the Claude prompt via argv.
+- Deferred: AES-GCM AAD for the Claude token (existing tokens would need a reconnect), the 4.37:1 contrast of `.split-day-sub`, a skip link, contradictory toasts on failure, dead CSS.
+- Correction: the 3D muscle map uses `three` 0.187.0 (pinned in `package.json`), not 0.180.0 as the 2026-11-05 entry says.
+- The live database may lack migrations 0021 to 0023; the user applies them with `npm run db:migrate` (see README). An agent never runs it.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

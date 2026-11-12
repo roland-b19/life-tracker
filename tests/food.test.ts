@@ -282,6 +282,21 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await expect(deleteShoppingItemAction(item.id)).rejects.toThrow("Authentication required.");
   });
 
+  it("ticks and deletes a shopping item for the owner only", async () => {
+    const item = await addShoppingItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "pantry" });
+    const bought = async () => (await getShoppingList(userA)).find((i) => i.id === item.id)?.isBought;
+    authState.id = userB;
+    await toggleShoppingItemAction(item.id, true);
+    await deleteShoppingItemAction(item.id);
+    authState.id = "";
+    await expect(toggleShoppingItemAction(item.id, true)).rejects.toThrow("Authentication required.");
+    await expect(deleteShoppingItemAction(item.id)).rejects.toThrow("Authentication required.");
+    expect(await bought()).toBe(false); // still on A's list, untouched
+    authState.id = userA;
+    await toggleShoppingItemAction(item.id, true);
+    expect(await bought()).toBe(true);
+  });
+
   it("merges the same item, keeps cleared items as history, edits and renames categories", async () => {
     const oil = await addShoppingItem(userA, { name: "Olive Oil", amount: 1, unit: "bottle", category: "pantry" });
     // Same name (any case) and unit: one row, amounts added.

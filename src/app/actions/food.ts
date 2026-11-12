@@ -43,6 +43,7 @@ import {
   revertShoppingCategory,
   toggleShoppingItem,
   updateDailySteps,
+  updateDailyWater,
   updateNutritionTargets,
   updateShoppingItem,
 } from "@/lib/food";
@@ -62,7 +63,7 @@ export async function logMealAction(rawInput: unknown) {
 
 export async function deleteMealAction(mealId: string) {
   const userId = await requireUser();
-  const deleted = await deleteMeal(userId, uuid.parse(mealId));
+  const deleted = await deleteMeal(userId, uuid.parse(mealId), assertWritableDay);
   return { success: true, deleted };
 }
 
@@ -95,6 +96,17 @@ export async function addWaterAction(date: string, amountMl: number) {
   }
   assertWritableDay(isoDate.parse(date));
   const metrics = await addWater(userId, date, amountMl);
+  return { success: true, metrics };
+}
+
+/** Sets the day's water to an exact amount, so an edit from a stale screen cannot add onto a newer total. */
+export async function setWaterAction(date: string, waterMl: number) {
+  const userId = await requireUser();
+  if (!Number.isInteger(waterMl) || waterMl < 0 || waterMl > 20000) {
+    throw new Error("Invalid water parameters");
+  }
+  assertWritableDay(isoDate.parse(date));
+  const metrics = await updateDailyWater(userId, date, waterMl);
   return { success: true, metrics };
 }
 

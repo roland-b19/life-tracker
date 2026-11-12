@@ -154,6 +154,23 @@ async function main() {
         ALTER TABLE "weight_entries" ADD CONSTRAINT "weight_entries_user_id_users_id_fk"
           FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
       END IF;
+      -- the gym tables are created without foreign keys above; without them deleting a session leaves its sets behind
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'workout_sets_session_id_workout_sessions_id_fk') THEN
+        ALTER TABLE "workout_sets" ADD CONSTRAINT "workout_sets_session_id_workout_sessions_id_fk"
+          FOREIGN KEY ("session_id") REFERENCES "workout_sessions"("id") ON DELETE cascade;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'workout_sets_user_id_users_id_fk') THEN
+        ALTER TABLE "workout_sets" ADD CONSTRAINT "workout_sets_user_id_users_id_fk"
+          FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'workout_sets_exercise_id_exercises_id_fk') THEN
+        ALTER TABLE "workout_sets" ADD CONSTRAINT "workout_sets_exercise_id_exercises_id_fk"
+          FOREIGN KEY ("exercise_id") REFERENCES "exercises"("id") ON DELETE cascade;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'workout_sessions_user_id_users_id_fk') THEN
+        ALTER TABLE "workout_sessions" ADD CONSTRAINT "workout_sessions_user_id_users_id_fk"
+          FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade;
+      END IF;
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'weight_entries_kilograms_range'
       ) THEN
@@ -197,8 +214,10 @@ async function main() {
       "carbs" numeric(5, 1) DEFAULT '0' NOT NULL,
       "fat" numeric(5, 1) DEFAULT '0' NOT NULL,
       "is_estimated" boolean DEFAULT false NOT NULL,
+      "forgotten" boolean DEFAULT false NOT NULL,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
+    ALTER TABLE "meals" ADD COLUMN IF NOT EXISTS "forgotten" boolean DEFAULT false NOT NULL;
     CREATE TABLE IF NOT EXISTS "recipes" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,

@@ -176,7 +176,12 @@ export async function restorePastFood(userId: string, ids: string[]) {
   await db.update(meals).set({ forgotten: false }).where(and(eq(meals.userId, userId), inArray(meals.id, ids)));
 }
 
-export async function deleteMeal(userId: string, mealId: string) {
+/** `assertDay` throws for a day that can no longer change, so a delete never outlives the day its Undo is allowed on. */
+export async function deleteMeal(userId: string, mealId: string, assertDay?: (date: string) => void) {
+  if (assertDay) {
+    const [meal] = await db.select({ date: meals.date }).from(meals).where(and(eq(meals.id, mealId), eq(meals.userId, userId)));
+    if (meal) assertDay(meal.date);
+  }
   const [deleted] = await db
     .delete(meals)
     .where(and(eq(meals.id, mealId), eq(meals.userId, userId)))
@@ -200,6 +205,16 @@ export async function addWater(userId: string, date: string, amountMl: number) {
         waterMl: sql`GREATEST(0, ${dailyMetrics.waterMl} + ${amountMl})`,
       },
     })
+    .returning();
+
+  return updated;
+}
+
+export async function updateDailyWater(userId: string, date: string, waterMl: number) {
+  const [updated] = await db
+    .insert(dailyMetrics)
+    .values({ userId, date, waterMl: Math.max(0, waterMl), steps: 0 })
+    .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { waterMl: Math.max(0, waterMl) } })
     .returning();
 
   return updated;
@@ -331,7 +346,7 @@ export async function addShoppingItem(
 
   if (same) {
     // Already bought but needed again: it starts over at the new amount.
-    const amount = same.isBought ? input.amount : Math.min(9999.99, Number(same.amount) + input.amount);
+    const amount = same.isBought ? input.amount : Math.min(1000, Number(same.amount) + input.amount);
     const [merged] = await db
       .update(shoppingItems)
       .set({ amount: amount.toFixed(2), isBought: false, checkedAt: new Date() })

@@ -22,7 +22,7 @@ import {
   restoreWishlistItem,
   updateWishlistItem,
 } from "@/lib/wishlist";
-import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction } from "@/app/actions/wishlist";
+import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/validations/wishlist";
 
 async function seedUser(subject: string) {
@@ -145,6 +145,20 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
         estimatedPrice: -50,
       }),
     ).rejects.toThrow();
+  });
+
+  it("updates an item for the owner only", async () => {
+    const item = await addWishlistItem(userA, { name: "Monitor", estimatedPrice: 300 });
+    const edit = { name: "Monitor 4K", estimatedPrice: 350 };
+    authState.id = userB;
+    expect((await updateWishlistItemAction(item.id, edit)).success).toBe(false);
+    authState.id = "";
+    await expect(updateWishlistItemAction(item.id, edit)).rejects.toThrow();
+    expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor");
+    authState.id = userA;
+    expect((await updateWishlistItemAction(item.id, edit)).success).toBe(true);
+    expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor 4K");
+    authState.id = "";
   });
 
   it("rejects a price that rounds to zero and a malformed id", async () => {
