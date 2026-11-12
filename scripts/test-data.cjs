@@ -108,15 +108,14 @@ async function addAll(db, userId) {
     await addTodo(space, "TEST same name", false, "none", today, false);
     await addTodo(space, "TEST same name", false, "none", addDays(today, 2), false);
   } // ...and the Daily one of each space is in the habits below
-  // Habits. Each ticked day is recorded; a habit's ticks are random but repeatable, with the last 12 days of the first one all done (a streak).
+  // Habits (the app only knows "daily" and "none", so no weekday patterns). Each ticked day is recorded; a habit's ticks are random but repeatable, with the last 12 days of the first one all done (a streak).
   const habits = [
     ["personal", "TEST daily habit", "daily", startAll, null],
-    ["personal", "TEST Mon Wed Fri habit", "days:1,3,5", startAll, null],
-    ["personal", "TEST weekend habit", "days:6,7", startAll, null],
+    ["personal", "TEST second habit", "daily", startAll, null],
     ["personal", "TEST same name", "daily", addDays(today, -10), null],
     ["business", "TEST same name", "daily", addDays(today, -10), null],
     ["business", "TEST daily review", "daily", startAll, null],
-    ["business", "TEST weekday standup", "days:1,2,3,4,5", startAll, null],
+    ["business", "TEST standup", "daily", startAll, null],
     ["personal", "TEST ended habit", "daily", startAll, addDays(today, -15)], // stopped 15 days ago: its days before stay in the history
   ];
   for (const [h, [space, title, pattern, first, endedOn]] of habits.entries()) {
