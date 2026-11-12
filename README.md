@@ -93,6 +93,18 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-shopping.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
   ```
   Remove `--dry-run` to write.
+- **Copy your live data first (before any import or test data):** `scripts/backup-now.sh` writes one full `pg_dump` of the live database, exactly as it is, to the gitignored `.local/backups/` and checks that it can be read. Keep it on your Mac; it is plaintext.
+  ```bash
+  read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && scripts/backup-now.sh; unset DATABASE_URL_MIGRATE
+  ```
+  To get it back into a local database: `docker compose exec -T postgres createdb -U postgres lt_copy`, then `docker compose exec -T postgres pg_restore -U postgres -d lt_copy --no-owner < .local/backups/<file>.dump`.
+- **Bring back a daily task deleted by mistake:** `import-personal.cjs` treats a daily task that was deleted (it has an end day) as missing and adds it again from today; past days keep the old row as it was. Nothing else is touched.
+- **Test data (3 days back and 3 days ahead, on every page):** `scripts/test-data.cjs` adds clearly marked rows ("TEST") and never changes or deletes an existing row. It records the exact ids in `.local/test-data-<subject>.json`, so `--remove` deletes precisely those and nothing else. Run `--dry-run` first. Health and Gym get past days and today only (the app does not log the future); tasks get both directions.
+  ```bash
+  read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/test-data.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
+  ```
+  Remove `--dry-run` to add; use `--remove` instead to take it out again.
+- **Export your data:** More tab (desktop: the sidebar), "Export data" downloads `life-tracker-export-<date>.txt` with everything your account holds. It leaves out the Claude token and the push-notification device keys.
 - **Roll back:** Vercel, Deployments, the previous deployment, Instant Rollback. A bad migration is undone from a backup (below) or Neon's history window; migrations are additive, so rolling the code back is normally enough.
 - **Rotate a secret:** change it in Vercel (or GitHub for the backup), redeploy. `NEXTAUTH_SECRET` signs everyone out; the GitHub client secret is rotated in the OAuth app first, then in Vercel.
 - **Free plan changes:** Neon or Vercel may change the Free terms. The weekly backup below plus `docker build` make the app movable to any host that runs Docker and PostgreSQL.

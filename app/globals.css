@@ -305,6 +305,21 @@ h3 {
   text-decoration: none;
 }
 
+button.nav-link {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.nav-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .nav-link svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -1212,6 +1227,18 @@ button.signin-continue:disabled {
   height: 2.75rem;
   margin-bottom: 0.5rem;
 }
+
+/* A stand-in for one line of text: as tall as a 1.5 line of its font (the body's line height), inset so it reads as a bar. */
+.bone-line {
+  display: block;
+  height: 1em;
+  margin-block: 0.25em;
+  border-radius: 0.4rem;
+}
+
+/* The segmented shell of a loading page: no thumb, no pressed look. */
+.segmented.loading::before { display: none; }
+.segmented.loading button { cursor: default; }
 
 /* ==========================================================================
    Precision Details: Blurred Modal Popups (Centered on Desktop & Mobile)

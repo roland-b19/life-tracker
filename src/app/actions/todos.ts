@@ -10,6 +10,7 @@ import {
   moveTodoSchema,
   restoreTodoSchema,
   PLAN_AHEAD_DAYS,
+  rejoinSchema,
   pushSubscriptionSchema,
   TodoSpace,
   todoSpaceSchema,
@@ -65,23 +66,27 @@ export async function createTodoAction(rawInput: unknown) {
   return { success: true as const, todo };
 }
 
-export async function restoreTodoAction(rawInput: unknown) {
+/** Undo of a delete; `join` is what a delete from a day that was over gave back, so only that day returns. */
+export async function restoreTodoAction(rawInput: unknown, rawJoin?: unknown) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
+  const join = rawJoin ? rejoinSchema.parse(rawJoin) : undefined;
   assertPlannable(parsed, true);
-  if (await hasDuplicateTodo(userId, parsed, parsed.id)) return duplicate(parsed.title);
-  const todo = await restoreTodo(userId, parsed);
+  if (await hasDuplicateTodo(userId, parsed, join?.laterId ? [parsed.id, join.laterId] : parsed.id)) return duplicate(parsed.title);
+  const todo = await restoreTodo(userId, parsed, join);
   return { success: todo !== null, todo };
 }
 
 /** Undo of a move: `createdId` is the task a move created in place of an ended daily one. */
-export async function revertMoveTodoAction(rawInput: unknown, createdId?: string) {
+export async function revertMoveTodoAction(rawInput: unknown, createdId?: string, rawJoin?: unknown) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
   const created = createdId ? z.string().uuid().parse(createdId) : undefined;
+  const join = rawJoin ? rejoinSchema.parse(rawJoin) : undefined;
   assertPlannable(parsed, true);
-  if (await hasDuplicateTodo(userId, parsed, created ? [parsed.id, created] : parsed.id)) return duplicate(parsed.title);
-  const todo = await revertMoveTodo(userId, parsed, created);
+  const except = [parsed.id, ...(created ? [created] : []), ...(join?.laterId ? [join.laterId] : [])];
+  if (await hasDuplicateTodo(userId, parsed, except)) return duplicate(parsed.title);
+  const todo = await revertMoveTodo(userId, parsed, created, join);
   return { success: todo !== null, todo };
 }
 
@@ -138,8 +143,8 @@ export async function deleteTodoAction(todoId: string, day?: string) {
   if (!task) return { success: true, deleted: false };
   const from = changeDay(task, parsed.day);
   assertChangeable(from);
-  const deleted = await deleteTodo(userId, parsed.id, from);
-  return { success: true, deleted };
+  const result = await deleteTodo(userId, parsed.id, from);
+  return { success: true, deleted: result !== null, join: result?.join };
 }
 
 export async function getDailyTodosAction(space: TodoSpace, date: string) {

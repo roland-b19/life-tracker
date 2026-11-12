@@ -105,3 +105,9 @@ Tracked in `docs/security/risk-register.md`.
 - New trust boundaries: GitHub (identity provider; the allowlist of numeric ids is the authorization gate before any user row exists), Vercel (runs the app, holds the Production secrets as Sensitive variables) and Neon (public endpoint over TLS, restricted app role, owner role only used from the owner's Mac).
 - Backup job: runs in GitHub Actions with a read-only database role in a repository secret and writes only `age` ciphertext; the decryption key is never in GitHub. Threats: secret theft gives read access to the database until the role password is rotated (R8); a stolen artifact is unreadable without the offline key.
 - Personal data import (`scripts/import-personal.cjs`) is a local, owner-run tool that reads a gitignored file; it needs the owner URL, which is only typed into a hidden prompt.
+
+## 9. Data export (2026-11-12)
+- New server action `exportDataAction` (More tab) returns one text file with everything the signed-in user owns. It takes no input: the user id comes only from the session, every query is filtered by it, and an anonymous caller is rejected. Tests: owner gets own data, another user's rows are absent, anonymous is denied.
+- Threat: the file is a full copy of personal and health data. Mitigation: it goes only to the authenticated browser, is never stored or logged on the server, and the user decides where to save it. A stolen session could read it, as it could read every page; sessions are short and HttpOnly.
+- Left out on purpose so it cannot leak a credential: the encrypted Claude token and the push-notification subscriptions (a test asserts neither appears).
+- Cost: eleven small indexed queries per click, run in parallel; the action is only reachable when signed in.
