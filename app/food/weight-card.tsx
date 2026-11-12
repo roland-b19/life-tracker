@@ -93,7 +93,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     <>
       <Card id="weight-title" title="Weight" icon={<ScaleIcon size={18} />} end={<EditButton label="Edit today's weight" onClick={openForm} />}>
         <BigNumber value={current ? twoDecimals(Number(current.kilograms)) : "—"} of="kg today" />
-        <p className="muted card-sub number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${stats.sevenDayAverage} kg`}</p>
+        <p className="muted metric-avg number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${stats.sevenDayAverage} kg`}</p>
         <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
       </Card>
 

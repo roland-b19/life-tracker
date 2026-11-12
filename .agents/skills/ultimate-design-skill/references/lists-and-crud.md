@@ -182,7 +182,7 @@ Nothing fades; the control and the rows change in the same render. The page keep
 
 ## Long lists (More)
 
-The Wishlist and the Tasks lists always show every item and have no More button. A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
+The Wishlist and the Tasks lists always show every item and have no More button, and neither do the Categories and Units cards (they always show every name). A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
 
 ## Rules that are easy to break
 

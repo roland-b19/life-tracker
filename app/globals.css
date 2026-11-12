@@ -783,6 +783,8 @@ main {
 }
 .shopping-item-name > :first-child { flex-shrink: 0; }
 .shopping-item-name > span { min-width: 0; }
+/* The dot, amount and unit wrap to the next line together, never split */
+.shopping-qty { white-space: nowrap; }
 
 .shopping-item-name.bought {
   text-decoration: line-through;
@@ -2429,6 +2431,15 @@ button.bars-col:focus-visible {
 .section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
 .section-head + :is(.entries, .todo-list),
 .section-head + .list-box > :is(.entries, .todo-list) { margin-top: 0; }
+
+/* The 7-day average under a metric: the same gap above and below it */
+.metric-avg {
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+.metric-avg:last-child { margin-bottom: 0; }
+.metric-big:has(+ .metric-avg) { margin-bottom: 0; }
+.metric-avg + .tap-buttons { margin-top: 0; }
 
 /* Second line under a card title */
 .card-sub {

@@ -3,7 +3,8 @@ import { isoDate } from "./common";
 
 export const logMealSchema = z.object({
   date: isoDate,
-  name: z.string().trim().min(1).max(120),
+  // The manual form has no name field (meals are not listed any more); the assistant still names its own.
+  name: z.string().trim().min(1).max(120).default("Meal"),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
   carbs: z.number().min(0).max(1000),

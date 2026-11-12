@@ -390,3 +390,9 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Categories cards fold with a plain arrow next to the count; the state is kept in the browser (`lt-folded`).
 - Shopping Units: a card under Categories with the same logic (add, rename, delete, reorder, Undo); "pcs" is the fixed fallback like "other" for categories; items keep their unit text, so renaming or deleting a unit re-files them.
 - No press scale (the "pulse") on any button or tab; hover rules stay. The Tasks progress ring fades out when it returns to 0%.
+
+## 2026-11-12 — Health and Shopping follow-ups (user)
+- The 7-day average sits 0.75rem below the value and 0.75rem above the buttons on Weight and Water (Steps: card padding below); the average itself is unchanged (mean of the days with an entry among the last 7, today from the live total).
+- Add meal has no Name field: nothing shows meal names any more. `logMealSchema.name` defaults to "Meal" (the column stays NOT NULL; the Assistant still sends its own name). Save needs at least one value above 0.
+- A shopping row's "· amount unit" never splits: it moves to the next line whole, with its dot.
+- Categories and Units cards show every row, with no More button (on every page that uses the card).

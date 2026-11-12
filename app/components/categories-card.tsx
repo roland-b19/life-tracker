@@ -5,7 +5,7 @@ import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderC
 import type { CategoryScope } from "@/lib/validations/categories";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
-import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace, useMore } from "./lists";
+import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
@@ -62,7 +62,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [shown, more] = useMore(categories);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
 
@@ -209,14 +208,14 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
       >
         <ListBox wash className="entries">
           {categories.length === 0 && <EmptyNote>No {noun === "unit" ? "units" : "categories"} yet.</EmptyNote>}
-          {shown.map((cat, i) => (
+          {categories.map((cat, i) => (
             <div key={cat} className="entry-row" data-sort>
               <DragHandle
                 label={`Drag ${cat} to reorder`}
                 {...dragRow}
                 onKeyDown={(e) => {
                   const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
-                  if (to < 0 || to >= shown.length) return;
+                  if (to < 0 || to >= categories.length) return;
                   e.preventDefault();
                   move(i, to);
                 }}
@@ -225,7 +224,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
               <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
-          {more}
         </ListBox>
       </Card>
 

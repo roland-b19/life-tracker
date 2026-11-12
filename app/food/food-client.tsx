@@ -172,11 +172,11 @@ export function FoodClient({
   const [chatLoading, setChatLoading] = useState(false);
 
   // Meal input state
-  const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
   const [mealProtein, setMealProtein] = useState("");
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
+  const mealHasValues = [mealCalories, mealProtein, mealCarbs, mealFat].some((v) => Number(v) > 0);
 
   // Shopping input state
   const [shopName, setShopName] = useState("");
@@ -222,14 +222,13 @@ export function FoodClient({
 
   async function handleLogMeal(e: React.FormEvent) {
     e.preventDefault();
-    if (!mealName.trim()) return;
+    if (!mealHasValues) return;
 
     setBusy(true);
     setFormError("");
     try {
       const res = await logMealAction({
         date: todayDate,
-        name: mealName.trim(),
         calories: parseInt(mealCalories, 10) || 0,
         protein: parseFloat(mealProtein) || 0,
         carbs: parseFloat(mealCarbs) || 0,
@@ -239,14 +238,13 @@ export function FoodClient({
       if (res.success && res.meal) {
         const meal = res.meal as MealData;
         applyMeal(meal, 1);
-        setMealName("");
         setMealCalories("");
         setMealProtein("");
         setMealCarbs("");
         setMealFat("");
         setIsMealModalOpen(false);
         showToast({
-          message: `Added "${meal.name}" (${meal.calories} kcal)`,
+          message: `Added meal (${meal.calories} kcal)`,
           type: "success",
           onUndo: () => void undoLogged([meal]),
         });
@@ -735,7 +733,7 @@ export function FoodClient({
             >
               <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
               <ProgressBar percent={waterPct} />
-              <p className="muted card-sub number-tabular">{average("waterMl", " ml")}</p>
+              <p className="muted metric-avg number-tabular">{average("waterMl", " ml")}</p>
               <div className="tap-buttons">
                 <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
                   +250 ml
@@ -754,7 +752,7 @@ export function FoodClient({
             >
               <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />
               <ProgressBar percent={stepsPct} />
-              <p className="muted card-sub number-tabular">{average("steps", "")}</p>
+              <p className="muted metric-avg number-tabular">{average("steps", "")}</p>
             </Card>
           </DashboardAside>
         </Dashboard>
@@ -792,7 +790,7 @@ export function FoodClient({
                         label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
                       />
                       <span>
-                        {item.name} · {Number(item.amount)} {item.unit}
+                        {item.name} <span className="shopping-qty">· {Number(item.amount)} {item.unit}</span>
                       </span>
                     </div>
                     <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
@@ -856,9 +854,8 @@ export function FoodClient({
         onSubmit={handleLogMeal}
         error={formError}
         busy={busy}
-        canSubmit={!!mealName.trim()}
+        canSubmit={mealHasValues}
       >
-        <Field label="Name" type="text" disabled={busy} value={mealName} onChange={(e) => setMealName(e.target.value)} required />
         <FieldPair>
           <Field
             label="Calories (kcal)"
