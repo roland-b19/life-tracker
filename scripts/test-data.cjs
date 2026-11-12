@@ -108,25 +108,22 @@ async function addAll(db, userId) {
     await addTodo(space, "TEST same name", false, "none", today, false);
     await addTodo(space, "TEST same name", false, "none", addDays(today, 2), false);
   } // ...and the Daily one of each space is in the habits below
-  // Habits (the app only knows "daily" and "none", so no weekday patterns). Each ticked day is recorded; a habit's ticks are random but repeatable, with the last 12 days of the first one all done (a streak).
+  // Habits (the app only knows "daily" and "none", so no weekday patterns). Each past day only feeds the frozen per-day totals; a habit's ticks are random but repeatable.
   const habits = [
-    ["personal", "TEST daily habit", "daily", startAll, null],
-    ["personal", "TEST second habit", "daily", startAll, null],
-    ["personal", "TEST same name", "daily", addDays(today, -10), null],
-    ["business", "TEST same name", "daily", addDays(today, -10), null],
-    ["business", "TEST daily review", "daily", startAll, null],
-    ["business", "TEST standup", "daily", startAll, null],
-    ["personal", "TEST ended habit", "daily", startAll, addDays(today, -15)], // stopped 15 days ago: its days before stay in the history
+    ["personal", "TEST daily habit", "daily", startAll],
+    ["personal", "TEST second habit", "daily", startAll],
+    ["personal", "TEST same name", "daily", addDays(today, -10)],
+    ["business", "TEST same name", "daily", addDays(today, -10)],
+    ["business", "TEST daily review", "daily", startAll],
+    ["business", "TEST standup", "daily", startAll],
   ];
-  for (const [h, [space, title, pattern, first, endedOn]] of habits.entries()) {
-    const id = await addTodo(space, title, true, pattern, first, false);
-    if (endedOn) await db.query("UPDATE todos SET ended_on = $2 WHERE id = $1", [id, endedOn]);
+  for (const [h, [space, title, pattern, first]] of habits.entries()) {
+    await addTodo(space, title, true, pattern, first, false);
     for (const n of OFFSETS.filter((o) => o <= -1)) {
       const day = addDays(today, n);
-      if (day < first || (endedOn && day >= endedOn)) continue;
+      if (day < first) continue;
       if (pattern !== "daily" && !pattern.slice(5).split(",").includes(String(weekday(day)))) continue;
       const done = (h === 0 && n >= -12) || pick(n, h, 70);
-      if (done) await db.query("INSERT INTO todo_completions (todo_id, date) VALUES ($1, $2)", [id, day]);
       tally(space, true, day, done);
     }
   }

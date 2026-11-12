@@ -12,7 +12,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 - Card
 - Press
 - Buttons
-- Row icon buttons and streak
+- Row icon buttons
 - Fields
 - Sort select
 - Segmented control
@@ -53,7 +53,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 | `--tint-hover` | `#9bc2ef` | hover on solid tint buttons |
 | `--on-tint` | `#0b1b30` | text on solid tint |
 | `--tint-subtle` | `rgba(134,180,234,.24)` | tinted button and badge fill |
-| `--success` / `--success-subtle` | `#8fd4a3` / `.22` | streak, success badges |
+| `--success` / `--success-subtle` | `#8fd4a3` / `.22` | success badges |
 | `--warning` / `--warning-subtle` | `#ebc673` / `.22` | mid range |
 | `--danger` / `--danger-subtle` | `#ef8f8f` / `.22` | high range, `.danger`, `.error` |
 
@@ -197,7 +197,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 | `.danger`, idle muscle chips, idle tab items | `--highlight` |
 | `.split-day-card` (not selected) | `color-mix(in srgb, var(--surface-solid), white 6%)` |
 
-## Row icon buttons and streak
+## Row icon buttons
 
 **`.delete-icon-btn`** (edit and delete)
 - 44×44, radius .85rem, tint colour on `--tint-subtle`.
@@ -210,10 +210,6 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 **Hit area (compact controls)**
 - `button.btn-sm`, `.toast-action-btn`, `.toast-close-btn`, `.month-nav-btn`, and `.tap-btn` are `position: relative` with `::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }`.
 - The visual size stays; the target grows to 44pt. Picker cells are left out on purpose, and so is `.muscle-chip` (padding .35rem .75rem, .85rem, in a wrapping row with a .4rem gap), whose grown targets would overlap the next row.
-
-**`.streak`**
-- A 44px slot, success colour, weight 700, .9375rem, with a fire icon.
-- Order in the row: check circle (Tasks), name, streak, then the icon buttons (Edit, Delete everywhere).
 
 ## Fields
 

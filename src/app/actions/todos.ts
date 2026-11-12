@@ -68,12 +68,9 @@ export async function toggleTodoAction(rawInput: unknown) {
   const parsed = toggleTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
   if (task) assertChangeable(task);
-  // A daily task is ticked for today only (the server's today, whatever day the screen shows), and only while it runs.
-  const today = toISODate();
-  if (task?.isRecurring && (today < task.dueDate || (task.endedOn && today >= task.endedOn))) {
-    throw new Error("This task is not due today.");
-  }
-  const updated = await toggleTodo(userId, task?.isRecurring ? { ...parsed, currentDate: today } : parsed);
+  // A daily task is ticked for today only, and only once it has started.
+  if (task?.isRecurring && toISODate() < task.dueDate) throw new Error("This task is not due today.");
+  const updated = await toggleTodo(userId, parsed);
   return { success: true, updated };
 }
 
@@ -88,7 +85,7 @@ export async function updateTodoAction(rawInput: unknown) {
   return { success: todo !== null, todo };
 }
 
-/** A daily task is deleted from today on, the days before keep it. */
+/** Deleted for good; Undo restores it from the screen's copy. */
 export async function deleteTodoAction(todoId: string) {
   const userId = await requireUser();
   const parsed = deleteTodoSchema.parse({ id: todoId });

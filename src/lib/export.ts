@@ -9,13 +9,9 @@ const sections = (u: string): [string, SQL][] => [
   [
     "Tasks",
     sql`SELECT space, title, CASE WHEN is_recurring THEN recurrence_pattern ELSE 'one-off' END AS repeats, due_date::text AS "first day",
-               ended_on::text AS "ended on", category, reminder_time::text AS reminder, is_completed AS done, completed_at::text AS "done at",
+               category, reminder_time::text AS reminder, is_completed AS done, completed_at::text AS "done at",
                is_carried_over AS "carried over", created_at::text AS created
           FROM todos WHERE user_id = ${u}::uuid ORDER BY space, created_at`,
-  ],
-  [
-    "Daily task ticks",
-    sql`SELECT t.space, t.title, c.date::text AS day FROM todo_completions c JOIN todos t ON t.id = c.todo_id WHERE t.user_id = ${u}::uuid ORDER BY c.date, t.title`,
   ],
   [
     "Daily task totals (Progress chart)",

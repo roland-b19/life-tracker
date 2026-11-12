@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
-import { FlameIcon, BellIcon } from "../components/icons";
+import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { BarChart, ProgressRing } from "../components/charts";
@@ -22,7 +22,6 @@ import {
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
 import type { TodoSpace } from "@/lib/validations/todos";
 import { dayLabel, toISODate } from "@/lib/format-date";
-import { streakOn } from "@/lib/streak";
 import { blockPlacements, compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
@@ -300,41 +299,32 @@ export function TodosClient({
     }
   };
 
-  // The streak moves with the tick, counted as the server counts it.
-  const setCompleted = (task: TodoItem, isCompleted: boolean, day: string) => {
-    const apply = (list: TodoItem[]) =>
-      list
-        .map((t) => {
-          if (t.id !== task.id) return t;
-          const next = { ...t, isCompleted, completedAt: new Date() }; // when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones
-          if (!t.isRecurring) return next;
-          const doneDates = isCompleted ? [...new Set([...t.doneDates, day])].sort() : t.doneDates.filter((d) => d !== day);
-          return { ...next, doneDates, streak: streakOn(new Set(doneDates), day) };
-        })
-        .sort(compareTodos);
-    setTodosMap((prev) => ({ ...prev, [task.space]: apply(prev[task.space]) }));
-  };
+  const setCompleted = (task: TodoItem, isCompleted: boolean) =>
+    setTodosMap((prev) => ({
+      ...prev,
+      // completedAt is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
+      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt: new Date() } : t)).sort(compareTodos),
+    }));
 
-  // `day` is the day it was ticked on, which may no longer be the one on screen when Undo comes.
-  const toggle = async (todo: TodoItem, next: boolean, day: string, withUndo: boolean) => {
+  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean) => {
     ++requestId.current;
-    setCompleted(todo, next, day);
+    setCompleted(todo, next);
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
-        onUndo: () => toggle(todo, !next, day, false),
+        onUndo: () => toggle(todo, !next, false),
       });
     }
     try {
-      await toggleTodoAction({ id: todo.id, isCompleted: next, currentDate: day });
+      await toggleTodoAction({ id: todo.id, isCompleted: next });
     } catch {
       showToast({ message: "Failed to update task", type: "warning" });
     }
-    // Refresh to pick up the server-computed streak.
+    // Refresh so the screen matches the database, whatever the server answered.
     await loadDay();
   };
 
-  const handleToggleTodo = (todo: TodoItem) => toggle(todo, !todo.isCompleted, todayDate, true);
+  const handleToggleTodo = (todo: TodoItem) => toggle(todo, !todo.isCompleted, true);
 
   // Back in the list where the server would sort it.
   const putBack = (task: TodoItem) =>
@@ -348,12 +338,12 @@ export function TodosClient({
   };
 
   // What the server needs to put a task back as it was.
-  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt }: TodoItem) => ({
-    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt,
+  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, createdAt, placedAt, completedAt }: TodoItem) => ({
+    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, createdAt, placedAt, completedAt,
   });
 
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
-  // Undo restores the same task, streak included.
+  // Undo restores the same task.
   const handleDeleteTodo = (target: TodoItem) => {
     ++requestId.current;
     drop(target);
@@ -481,14 +471,6 @@ export function TodosClient({
                           </div>
                         )}
                       </div>
-
-                      {/* Green once the task is done today, grey while it is not. */}
-                      {listDaily && task.streak > 0 && (
-                        <span className={`streak number-tabular${task.isCompleted ? "" : " pending"}`} title={`${task.streak}-day streak`}>
-                          <FlameIcon size={15} />
-                          {task.streak}
-                        </span>
-                      )}
 
                       <RowActions bare onEdit={() => openForm(task)} onDelete={() => handleDeleteTodo(task)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
                     </div>

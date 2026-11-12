@@ -22,10 +22,9 @@ vi.mock("@/server/auth", () => ({
 
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
-import { pushSubscriptions, todoCompletions, users } from "@/db/schema";
+import { pushSubscriptions, users } from "@/db/schema";
 import {
   createTodo,
-  DONE_DATES_WINDOW_DAYS,
   deleteTodo,
   getDailyTodos,
   getTodoHistory,
@@ -43,7 +42,6 @@ import {
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
-import { streakOn } from "@/lib/streak";
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -172,7 +170,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     await toggleTodo(userA, {
       id: task.id,
       isCompleted: true,
-      currentDate: "2026-11-01",
     });
 
     const todayResult = await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04");
@@ -186,123 +183,37 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     }
     const [ia, ib] = ids;
     const titles = async () => (await getDailyTodos(userA, "personal", "2026-11-04", "2026-11-04")).todos.map((t) => t.title);
-    await toggleTodo(userA, { id: ia, isCompleted: true, currentDate: "2026-11-04" });
-    await toggleTodo(userA, { id: ib, isCompleted: true, currentDate: "2026-11-04" });
+    await toggleTodo(userA, { id: ia, isCompleted: true});
+    await toggleTodo(userA, { id: ib, isCompleted: true});
     expect(await titles()).toEqual(["C", "B", "A"]);
-    await toggleTodo(userA, { id: ia, isCompleted: false, currentDate: "2026-11-04" });
+    await toggleTodo(userA, { id: ia, isCompleted: false});
     expect(await titles()).toEqual(["C", "A", "B"]);
   });
 
-  it("tracks streak and consecutive completions accurately for recurring habits", async () => {
+  it("a daily task is done only on the day it was ticked", async () => {
+    const today = toISODate();
     const habit = await createTodo(userA, {
       space: "personal",
       title: "Daily Creatine 5g",
-      dueDate: "2026-11-01",
+      dueDate: addDays(today, -3),
       isRecurring: true,
       recurrencePattern: "daily",
     });
+    const view = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos[0];
 
-    expect(habit.isRecurring).toBe(true);
-    expect(habit.streak).toBe(0);
+    expect((await view(today)).isCompleted).toBe(false);
+    await toggleTodo(userA, { id: habit.id, isCompleted: true });
+    expect((await view(today)).isCompleted).toBe(true);
+    expect((await view(addDays(today, 1))).isCompleted).toBe(false); // tomorrow starts open
 
-    // Complete on Day 1
-    await toggleTodo(userA, {
-      id: habit.id,
-      isCompleted: true,
-      currentDate: "2026-11-01",
-    });
+    // The tick was made yesterday (the stored flag is still true): today reads open again.
+    await admin.query("UPDATE todos SET completed_at = now() - interval '1 day' WHERE id = $1", [habit.id]);
+    expect((await view(today)).isCompleted).toBe(false);
 
-    const day1Result = await getDailyTodos(userA, "personal", "2026-11-01");
-    expect(day1Result.todos[0].isCompleted).toBe(true);
-    expect(day1Result.todos[0].streak).toBe(1);
-
-    // Complete on Day 2 (consecutive)
-    await toggleTodo(userA, {
-      id: habit.id,
-      isCompleted: true,
-      currentDate: "2026-11-02",
-    });
-
-    const day2Result = await getDailyTodos(userA, "personal", "2026-11-02");
-    expect(day2Result.todos[0].isCompleted).toBe(true);
-    expect(day2Result.todos[0].streak).toBe(2);
-
-    // Skip to Day 5 (broken streak)
-    await toggleTodo(userA, {
-      id: habit.id,
-      isCompleted: true,
-      currentDate: "2026-11-05",
-    });
-
-    const day5Result = await getDailyTodos(userA, "personal", "2026-11-05");
-    expect(day5Result.todos[0].isCompleted).toBe(true);
-    expect(day5Result.todos[0].streak).toBe(1);
-  });
-
-  it("keeps the streak through untick, re-tick, double ticks and missed days", async () => {
-    const habit = await createTodo(userA, {
-      space: "personal",
-      title: "Read",
-      dueDate: "2026-11-01",
-      isRecurring: true,
-      recurrencePattern: "daily",
-    });
-    const tick = (day: string, isCompleted = true) => toggleTodo(userA, { id: habit.id, isCompleted, currentDate: day });
-    const view = async (day: string) => (await getDailyTodos(userA, "personal", day)).todos[0];
-
-    await tick("2026-11-01");
-    await tick("2026-11-02");
-    await tick("2026-11-03");
-    expect((await view("2026-11-03")).streak).toBe(3);
-
-    // Untick takes back only today's tick; re-ticking lands on the same streak.
-    await tick("2026-11-03", false);
-    expect(await view("2026-11-03")).toMatchObject({ isCompleted: false, streak: 2 });
-    await tick("2026-11-03");
-    expect((await view("2026-11-03")).streak).toBe(3);
-
-    // A double tick does not reset or double count.
-    await tick("2026-11-03");
-    expect((await view("2026-11-03")).streak).toBe(3);
-
-    // Tick the next day: the run goes on.
-    await tick("2026-11-04");
-    expect((await view("2026-11-04")).streak).toBe(4);
-
-    // Unticking a day that was not ticked changes nothing.
-    await tick("2026-10-30", false);
-    expect((await view("2026-11-04")).streak).toBe(4);
-
-    // Past days can be unticked and ticked again after later days were ticked.
-    await tick("2026-11-02", false);
-    expect(await view("2026-11-02")).toMatchObject({ isCompleted: false, streak: 1 });
-    expect((await view("2026-11-04")).streak).toBe(2);
-    await tick("2026-11-02");
-    expect(await view("2026-11-02")).toMatchObject({ isCompleted: true, streak: 2 });
-    expect((await view("2026-11-04")).streak).toBe(4);
-
-    // Tomorrow still shows the run; a whole missed day shows it broken.
-    expect((await view("2026-11-05")).streak).toBe(4);
-    expect((await view("2026-11-06")).streak).toBe(0);
-
-    // A day left unticked breaks the run: the next tick starts again at 1.
-    await tick("2026-11-06");
-    expect((await view("2026-11-06")).streak).toBe(1);
-  });
-
-  it("computes streaks as pure functions, timezone-proof", () => {
-    const done = (...days: string[]) => new Set(days);
-    expect(streakOn(done(), "2026-03-01")).toBe(0);
-    expect(streakOn(done("2026-03-01"), "2026-03-01")).toBe(1);
-    // Month and leap-day boundaries.
-    expect(streakOn(done("2028-02-28", "2028-02-29", "2028-03-01"), "2028-03-01")).toBe(3);
-    expect(streakOn(done("2026-12-31", "2027-01-01"), "2027-01-01")).toBe(2);
-    // An unticked today still shows yesterday's run; a missed day ends it.
-    expect(streakOn(done("2026-03-04", "2026-03-05"), "2026-03-06")).toBe(2);
-    expect(streakOn(done("2026-03-04", "2026-03-05"), "2026-03-07")).toBe(0);
-    // A gap in the past splits the run.
-    expect(streakOn(done("2026-03-01", "2026-03-03"), "2026-03-03")).toBe(1);
-    expect(addDays("2026-03-29", 1)).toBe("2026-03-30"); // DST change in Europe
+    // Ticking and unticking again is plain.
+    await toggleTodo(userA, { id: habit.id, isCompleted: true });
+    await toggleTodo(userA, { id: habit.id, isCompleted: false });
+    expect((await view(today)).isCompleted).toBe(false);
   });
 
   it("never carries overdue tasks into a future day being planned", async () => {
@@ -329,7 +240,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     const toggleByB = await toggleTodo(userB, {
       id: task.id,
       isCompleted: true,
-      currentDate: "2026-11-04",
     });
     expect(toggleByB).toBe(false);
 
@@ -369,8 +279,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       recurrencePattern: "none",
     });
 
-    await toggleTodo(userA, { id: t1.id, isCompleted: true, currentDate: "2026-11-04" });
-    await toggleTodo(userA, { id: t2.id, isCompleted: true, currentDate: "2026-11-04" });
+    await toggleTodo(userA, { id: t1.id, isCompleted: true});
+    await toggleTodo(userA, { id: t2.id, isCompleted: true});
 
     const res = await getDailyTodos(userA, "personal", "2026-11-04");
     expect(res.stats.total).toBe(3);
@@ -382,7 +292,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     const day = "2026-11-04";
     const a = await createTodo(userA, { space: "personal", title: "A", dueDate: day, isRecurring: false, recurrencePattern: "none" });
     await createTodo(userA, { space: "personal", title: "B", dueDate: day, isRecurring: false, recurrencePattern: "none" });
-    await toggleTodo(userA, { id: a.id, isCompleted: true, currentDate: day });
+    await toggleTodo(userA, { id: a.id, isCompleted: true});
 
     expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: day, isRecurring: false, total: 2, done: 1 });
     expect(await getTodoHistory(userA, "business")).toEqual([]);
@@ -408,7 +318,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         toggleTodoAction({
           id: randomUUID(),
           isCompleted: true,
-          currentDate: "2026-11-04",
         }),
       ).rejects.toThrow("Authentication required.");
 
@@ -436,7 +345,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const toggleRes = await toggleTodoAction({
         id: createRes.todo.id,
         isCompleted: true,
-        currentDate: today,
       });
       expect(toggleRes.success).toBe(true);
 
@@ -507,7 +415,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(made.success).toBe(true);
       // Undo of deleting a long-running habit keeps its real first day.
       if (!made.success) throw new Error(made.error);
-      const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date(), doneDates: [] as string[] };
+      const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date() };
       expect((await restoreTodoAction(old)).success).toBe(true);
     });
 
@@ -532,11 +440,10 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         space: "personal", title: "Walk", dueDate: today, isRecurring: true, recurrencePattern: "daily",
       });
       if (!habit.success) throw new Error(habit.error);
-      const tick = (currentDate: string) => toggleTodoAction({ id: habit.todo.id, isCompleted: true, currentDate });
-      expect((await tick(addDays(today, 5))).success).toBe(true); // a daily task is always ticked for today, whatever day was sent
-      expect((await admin.query("SELECT date::text FROM todo_completions WHERE todo_id = $1", [habit.todo.id])).rows).toEqual([{ date: today }]);
+      expect((await toggleTodoAction({ id: habit.todo.id, isCompleted: true })).success).toBe(true);
+      expect((await getDailyTodos(userA, "personal", today)).todos.find((t) => t.id === habit.todo.id)?.isCompleted).toBe(true);
       const later = await createTodo(userA, { space: "personal", title: "Later", dueDate: addDays(today, 3), isRecurring: true, recurrencePattern: "daily" });
-      await expect(toggleTodoAction({ id: later.id, isCompleted: true, currentDate: today })).rejects.toThrow("not due today"); // before it starts
+      await expect(toggleTodoAction({ id: later.id, isCompleted: true})).rejects.toThrow("not due today"); // before it starts
 
       // A one-off from before yesterday is frozen: not edited, deleted or ticked.
       const old = await createTodo(userA, {
@@ -544,7 +451,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       });
       await expect(updateTodoAction({ id: old.id, title: "New" })).rejects.toThrow("only be added or changed for today");
       await expect(deleteTodoAction(old.id)).rejects.toThrow("only be added or changed for today");
-      await expect(toggleTodoAction({ id: old.id, isCompleted: true, currentDate: addDays(today, -5) })).rejects.toThrow("only be added or changed for today");
+      await expect(toggleTodoAction({ id: old.id, isCompleted: true})).rejects.toThrow("only be added or changed for today");
     });
 
     it("rejects a duplicate task on the same list, not on another list or user", async () => {
@@ -569,7 +476,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(createTodoAction(task)).rejects.toThrow("Authentication required");
     });
 
-    it("restores a deleted task with its streak, owner only", async () => {
+    it("restores a deleted task as it was, owner only", async () => {
       const today = toISODate();
       const habit = await createTodo(userA, {
         space: "personal",
@@ -578,9 +485,9 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         isRecurring: true,
         recurrencePattern: "daily",
       });
-      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: addDays(today, -1) });
-      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: today });
+      await toggleTodo(userA, { id: habit.id, isCompleted: true });
       const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      const rowBefore = (await admin.query("SELECT * FROM todos WHERE id = $1", [habit.id])).rows[0];
       const input = { ...before, reminderTime: null };
 
       authState.id = "";
@@ -595,13 +502,14 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await deleteTodoAction(habit.id);
       expect((await restoreTodoAction(input)).success).toBe(true);
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
-      expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [addDays(today, -1), today] });
+      expect(back).toMatchObject({ id: habit.id, isCompleted: true });
+      expect((await admin.query("SELECT * FROM todos WHERE id = $1", [habit.id])).rows[0]).toEqual(rowBefore);
     });
 
     it("restores a ticked task with the time it was ticked, not the time of the Undo", async () => {
       const today = toISODate();
       const task = await createTodo(userA, { space: "personal", title: "Call", dueDate: today, isRecurring: false, recurrencePattern: "none" });
-      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: today });
+      await toggleTodo(userA, { id: task.id, isCompleted: true});
       const [before] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(before.completedAt).toBeTruthy();
       await new Promise((r) => setTimeout(r, 10));
@@ -611,59 +519,39 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(new Date(back.completedAt as unknown as string).getTime()).toBe(new Date(before.completedAt as unknown as string).getTime());
     });
 
-    it("loads only the last DONE_DATES_WINDOW_DAYS of ticks for a daily task", async () => {
+    it("deletes a task for good, keeps only the day's counts for the charts, owner only", async () => {
       const today = toISODate();
-      const habit = await createTodo(userA, {
-        space: "personal",
-        title: "Old habit",
-        dueDate: addDays(today, -1000),
-        isRecurring: true,
-        recurrencePattern: "daily",
-      });
-      const old = addDays(today, -(DONE_DATES_WINDOW_DAYS + 1));
-      const edge = addDays(today, -DONE_DATES_WINDOW_DAYS);
-      await db.insert(todoCompletions).values([old, edge, today].map((date) => ({ todoId: habit.id, date })));
-      const [item] = (await getDailyTodos(userA, "personal", today)).todos;
-      expect(item.doneDates).toEqual([edge, today]);
-    });
-
-    it("ends a deleted daily task today but keeps it on the days before, owner only", async () => {
-      const today = toISODate();
-      const yesterday = addDays(today, -1);
       const habit = await createTodo(userA, { space: "personal", title: "Stretch", dueDate: addDays(today, -3), isRecurring: true, recurrencePattern: "daily" });
-      await admin.query("UPDATE todos SET created_at = now() - interval '3 days' WHERE id = $1", [habit.id]);
-      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: yesterday });
-      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: today });
-      const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      await toggleTodo(userA, { id: habit.id, isCompleted: true });
+      const other = await createTodo(userA, { space: "personal", title: "Floss", dueDate: addDays(today, -3), isRecurring: true, recurrencePattern: "daily" });
+      const [before] = (await getDailyTodos(userA, "personal", today)).todos.filter((t) => t.id === habit.id);
       const input = { ...before, reminderTime: null };
-      const ids = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.id);
+      const rows = async (id: string) => (await admin.query("SELECT id FROM todos WHERE id = $1", [id])).rows.length;
 
       authState.id = userB;
       expect((await deleteTodoAction(habit.id)).deleted).toBe(false);
-      expect(await ids(today)).toEqual([habit.id]);
+      expect(await rows(habit.id)).toBe(1);
+      authState.id = "";
+      await expect(deleteTodoAction(habit.id)).rejects.toThrow("Authentication required.");
 
       authState.id = userA;
       expect((await deleteTodoAction(habit.id)).deleted).toBe(true);
-      expect(await ids(today)).toEqual([]);
-      expect(await ids(addDays(today, 1))).toEqual([]);
-      const [past] = (await getDailyTodos(userA, "personal", yesterday, today)).todos;
-      expect(past).toMatchObject({ id: habit.id, isCompleted: true, doneDates: [yesterday] });
-      expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: yesterday, isRecurring: true, total: 1, done: 1 });
+      expect(await rows(habit.id)).toBe(0); // nothing of the task is left
+      expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1", [userA])).rows[0].n).toBe(1);
+      // The chart keeps the day: 2 daily tasks counted when ticked, 1 left after the delete.
+      expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: today, isRecurring: true, total: 1, done: 0 });
 
-      // An ended task is not a duplicate, but it cannot come back while a new one has its title.
+      // Undo while another task has its title is refused; otherwise it gives the row back.
       const again = await createTodoAction({ space: "personal", title: "stretch", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
       if (!again.success) throw new Error(again.error);
       expect(await restoreTodoAction(input)).toEqual({ success: false, error: '"Stretch" is already on this list.' });
       await deleteTodo(userA, again.todo.id);
-
-      authState.id = userB;
-      expect((await restoreTodoAction(input)).success).toBe(false);
-      expect(await ids(today)).toEqual([]);
-
-      authState.id = userA;
       expect((await restoreTodoAction(input)).success).toBe(true);
-      const [back] = (await getDailyTodos(userA, "personal", today)).todos;
-      expect(back).toMatchObject({ id: habit.id, isCompleted: true, streak: 2, doneDates: [yesterday, today] });
+      expect(await rows(habit.id)).toBe(1);
+      authState.id = userB; // the id is taken now: another user cannot overwrite or take the row
+      expect((await restoreTodoAction(input)).success).toBe(false);
+      authState.id = userA;
+      expect(await rows(other.id)).toBe(1);
     });
 
   });
@@ -697,9 +585,9 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await make("C");
       await new Promise((r) => setTimeout(r, 5));
       await make("D");
-      await toggleTodo(userA, { id: a.id, isCompleted: true, currentDate: day });
+      await toggleTodo(userA, { id: a.id, isCompleted: true});
       await new Promise((r) => setTimeout(r, 5));
-      await toggleTodo(userA, { id: b.id, isCompleted: true, currentDate: day });
+      await toggleTodo(userA, { id: b.id, isCompleted: true});
       const order = (await getDailyTodos(userA, "personal", day, day)).todos.map((t) => t.title);
       expect(order).toEqual(["D", "C", "B", "A"]);
     });
@@ -770,25 +658,24 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     const daily = (title: string, dueDate = today) =>
       createTodo(userA, { space: "personal", title, dueDate, isRecurring: true, recurrencePattern: "daily" });
     const titlesOn = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.title);
-    const ticks = async (id: string) => (await admin.query("SELECT date::text FROM todo_completions WHERE todo_id = $1 ORDER BY date", [id])).rows.map((r) => r.date);
     const snapOf = async (id: string) => ({ ...(await getDailyTodos(userA, "personal", today, today)).todos.find((t) => t.id === id)!, reminderTime: null });
 
-    it("edits in place: same id, same ticks, same streak", async () => {
+    it("edits in place: same id, same tick", async () => {
       const task = await daily("Walk", addDays(today, -5));
-      for (const d of [-2, -1, 0]) await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, d) });
+      await toggleTodo(userA, { id: task.id, isCompleted: true });
       const saved = await updateTodo(userA, { id: task.id, title: "Run", reminderTime: null });
-      expect(saved).toMatchObject({ id: task.id, title: "Run", streak: 3 });
-      expect(await ticks(task.id)).toEqual([-2, -1, 0].map((d) => addDays(today, d)));
+      expect(saved).toMatchObject({ id: task.id, title: "Run" });
       expect(await titlesOn(today)).toEqual(["Run"]);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos[0].isCompleted).toBe(true);
     });
 
     it("ticks today whatever day the screen sent, and the tick orders today's list only", async () => {
       const a = await daily("A");
       await daily("B");
-      expect((await toggleTodoAction({ id: a.id, isCompleted: true, currentDate: yesterday })).success).toBe(true);
-      expect(await ticks(a.id)).toEqual([today]);
+      expect((await toggleTodoAction({ id: a.id, isCompleted: true})).success).toBe(true);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos.find((t) => t.id === a.id)?.isCompleted).toBe(true);
       expect(await titlesOn(today)).toEqual(["B", "A"]);
-      await expect(toggleTodoAction({ id: (await daily("C", addDays(today, 3))).id, isCompleted: true, currentDate: today })).rejects.toThrow("not due today");
+      await expect(toggleTodoAction({ id: (await daily("C", addDays(today, 3))).id, isCompleted: true})).rejects.toThrow("not due today");
     });
 
     it("edit and delete actions: owner allowed, other user and anonymous denied", async () => {
@@ -806,27 +693,25 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await titlesOn(today)).toEqual(["Floss well"]);
     });
 
-    it("deleting a task that ran before today ends it today, and Undo gives back the same row", async () => {
+    it("deleting a task that ran before today removes it for good, and Undo gives back the same row", async () => {
       const task = await daily("Stretch", addDays(today, -4));
-      for (const d of [-3, -1]) await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, d) });
+      await toggleTodo(userA, { id: task.id, isCompleted: true });
       const before = await snapOf(task.id);
       const rowBefore = (await admin.query("SELECT * FROM todos WHERE id = $1", [task.id])).rows[0];
       expect(await deleteTodoAction(task.id)).toMatchObject({ success: true, deleted: true });
       expect(await titlesOn(today)).toEqual([]);
-      expect(await titlesOn(addDays(today, 3))).toEqual([]);
-      expect(await titlesOn(yesterday)).toEqual(["Stretch"]); // the days before keep it: history and streak stay
-      expect(await ticks(task.id)).toEqual([-3, -1].map((d) => addDays(today, d)));
+      expect(await titlesOn(yesterday)).toEqual([]); // nothing of it is left on any day
+      expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE id = $1", [task.id])).rows[0].n).toBe(0);
 
       expect((await restoreTodoAction(before)).success).toBe(true);
       expect(await titlesOn(today)).toEqual(["Stretch"]);
       expect((await admin.query("SELECT * FROM todos WHERE id = $1", [task.id])).rows[0]).toEqual(rowBefore);
-      expect(await ticks(task.id)).toEqual([-3, -1].map((d) => addDays(today, d)));
       expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1 AND title = 'Stretch'", [userA])).rows[0].n).toBe(1);
     });
 
     it("deleting a task that started today removes it, and Undo gives it back", async () => {
       const task = await daily("Read");
-      await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: today });
+      await toggleTodo(userA, { id: task.id, isCompleted: true});
       const before = await snapOf(task.id);
       expect(await deleteTodo(userA, task.id)).toBe(true);
       expect(await deleteTodo(userB, task.id)).toBeNull();
@@ -839,7 +724,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const a = await daily("A", addDays(today, -2));
       const b = await daily("B", addDays(today, -2));
       await admin.query("UPDATE todos SET created_at = now() - interval '1 hour', placed_at = now() - interval '1 hour' WHERE id = $1", [a.id]);
-      await toggleTodo(userA, { id: b.id, isCompleted: true, currentDate: today });
+      await toggleTodo(userA, { id: b.id, isCompleted: true});
       expect(await titlesOn(today)).toEqual(["A", "B"]); // ticked goes down
       expect(await titlesOn(addDays(today, 1))).toEqual(["B", "A"]); // the tick does not order another day
       // A mark left by an earlier day is ignored today.

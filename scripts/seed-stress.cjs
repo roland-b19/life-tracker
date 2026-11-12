@@ -89,16 +89,16 @@ const weird = ["🍕 Pizza 🍕", "العربية שלום", "O'Brien \"quoted\"
     [userId, today],
   );
 
-  // Tasks: both spaces, 30 categories, repeating tasks with and without end days, completions, a 150-char title, weird titles.
+  // Tasks: both spaces, 30 categories, repeating tasks, a 150-char title, weird titles.
   await db.query(
     `INSERT INTO item_categories (user_id, scope, name, sort_order) SELECT $1, sc, 'tcat-' || g, g FROM generate_series(1, 30) g, unnest(ARRAY['personal','business']) sc ON CONFLICT DO NOTHING`,
     [userId],
   );
   await db.query(
-    `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, category, ended_on, created_at)
+    `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, category, created_at)
      SELECT $1, CASE WHEN g % 2 = 0 THEN 'personal' ELSE 'business' END, CASE WHEN g % 50 = 0 THEN repeat('T', 150) ELSE 'Task ' || g END,
             g % 4 = 0, CASE WHEN g % 4 = 0 THEN 'daily' ELSE 'none' END, ($2::date + ((g % 9) - 4)), g % 3 = 0, 'tcat-' || (g % 30 + 1),
-            CASE WHEN g % 20 = 0 AND g % 4 = 0 THEN ($2::date + 2) ELSE NULL END, now() - (g || ' minutes')::interval
+            now() - (g || ' minutes')::interval
      FROM generate_series(1, 300) g`,
     [userId, today],
   );
@@ -108,11 +108,6 @@ const weird = ["🍕 Pizza 🍕", "العربية שלום", "O'Brien \"quoted\"
       [userId, w.slice(0, 150) + " #" + i, today],
     );
   }
-  await db.query(
-    `INSERT INTO todo_completions (todo_id, date) SELECT t.id, d::date FROM todos t, generate_series(($2::date - 120), $2::date, '1 day') d
-     WHERE t.user_id = $1 AND t.is_recurring AND d::date >= t.due_date AND (t.ended_on IS NULL OR d::date < t.ended_on) AND extract(day from d)::int % 3 <> 0 ON CONFLICT DO NOTHING`,
-    [userId, today],
-  );
   console.log(`Seeded stress user "${name}" (today ${today}). Long name sample: ${long120.length} chars.`);
   await db.end();
 })();

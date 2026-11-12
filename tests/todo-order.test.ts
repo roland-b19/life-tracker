@@ -58,19 +58,19 @@ describe("Task order: only the user's own actions move a task", () => {
     add(title, { space, isRecurring: true, recurrencePattern: "daily", category });
   const titles = async (day = today, space: "personal" | "business" = "personal") =>
     (await getDailyTodos(user, space, day, today)).todos.map((t) => t.title);
-  const tick = (id: string, day: string, isCompleted: boolean) => toggleTodo(user, { id, isCompleted, currentDate: day });
+  const tick = (id: string, isCompleted: boolean) => toggleTodo(user, { id, isCompleted });
 
   it("ticked goes to the top of the ticked, unticked to the bottom of the open, and nothing else moves", async () => {
     const a = await daily("A");
     const b = await daily("B");
     await daily("C");
     expect(await titles()).toEqual(["C", "B", "A"]);
-    await tick(a.id, today, true);
-    await tick(b.id, today, true);
+    await tick(a.id, true);
+    await tick(b.id, true);
     expect(await titles()).toEqual(["C", "B", "A"]);
-    await tick(a.id, today, false);
+    await tick(a.id, false);
     expect(await titles()).toEqual(["C", "A", "B"]); // A: bottom of the open ones
-    await tick(a.id, today, true);
+    await tick(a.id, true);
     expect(await titles()).toEqual(["C", "A", "B"]); // A: top of the ticked ones
     // Another day reads no tick of today: all open, newest first.
     expect(await titles(tomorrow)).toEqual(["C", "B", "A"]);
@@ -80,8 +80,8 @@ describe("Task order: only the user's own actions move a task", () => {
   it("an unticked task stays at the bottom of the open ones when the day is read again later", async () => {
     const a = await daily("A");
     await daily("B");
-    await tick(a.id, today, true);
-    await tick(a.id, today, false);
+    await tick(a.id, true);
+    await tick(a.id, false);
     expect(await titles()).toEqual(["B", "A"]);
     expect(await titles()).toEqual(["B", "A"]);
     expect(await titles()).toEqual(["B", "A"]);
@@ -92,7 +92,7 @@ describe("Task order: only the user's own actions move a task", () => {
     await daily("B");
     const c = await daily("C");
     await admin.query("UPDATE todos SET due_date = $1", [addDays(today, -3)]); // running since before yesterday
-    await tick(c.id, today, true);
+    await tick(c.id, true);
     expect(await titles(today)).toEqual(["B", "A", "C"]);
     expect(await titles(yesterday)).toEqual(["C", "B", "A"]);
     expect(await titles(tomorrow)).toEqual(["C", "B", "A"]);
@@ -103,7 +103,7 @@ describe("Task order: only the user's own actions move a task", () => {
     const biz = await daily("Same", "business");
     await daily("P2", "personal");
     await daily("B2", "business");
-    await tick(p.id, today, true);
+    await tick(p.id, true);
     expect(await titles(today, "business")).toEqual(["B2", "Same"]);
     expect(await titles(today, "personal")).toEqual(["P2", "Same"]);
     await deleteTodo(user, p.id);
@@ -128,7 +128,7 @@ describe("Task order: only the user's own actions move a task", () => {
     await daily("y1", "personal", "test");
     const y2 = await daily("y2", "personal", "test");
     await daily("y3", "personal", "test");
-    await tick(y2.id, today, true);
+    await tick(y2.id, true);
     // Old, uneven placements: the block must still land together on top, nothing of "other" between its tasks.
     await admin.query("UPDATE todos SET placed_at = now() - interval '5 days' WHERE title = 'y1'");
     await admin.query("UPDATE todos SET placed_at = now() - interval '2 days' WHERE title IN ('x1', 'x2')");
@@ -145,8 +145,8 @@ describe("Task order: only the user's own actions move a task", () => {
     const a = await daily("A");
     const b = await daily("B");
     await daily("C");
-    await tick(b.id, today, true);
-    await tick(a.id, today, true);
+    await tick(b.id, true);
+    await tick(a.id, true);
     const before = await titles();
     const snap = (await getDailyTodos(user, "personal", today, today)).todos.find((t) => t.id === b.id)!;
     expect(await deleteTodo(user, b.id)).toBe(true);

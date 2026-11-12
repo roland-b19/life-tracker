@@ -23,14 +23,12 @@ export const createTodoSchema = z.object({
 
 export { isoDate };
 
-/** Undo of a delete: the same row back, with its id and ticked days. */
+/** Undo of a delete: the same row back, with its id. */
 export const restoreTodoSchema = createTodoSchema.extend({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
   completedAt: z.coerce.date().nullable().optional(), // when the box last changed, so Undo keeps the list order
-  // shortcut: a repeating task ticked on more than 20 years of days cannot be restored, raise the cap if that ever matters.
-  doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
   placedAt: z.coerce.date().optional(), // its place in the list, so Undo keeps the order
 });
@@ -38,7 +36,6 @@ export const restoreTodoSchema = createTodoSchema.extend({
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
-  currentDate: isoDate,
 });
 
 export const updateTodoSchema = z.object({
