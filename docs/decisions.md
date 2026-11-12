@@ -423,3 +423,4 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Every card on the Gym page keeps the same gap from the next (1.25rem, 1.5rem on desktop): the resume banner used 1rem.
 - In a started workout every exercise starts collapsed (state per page visit, not stored). The fold arrow sits right after the exercise name, inside the title; the muscle tag is always at the right edge (the card's column is full width, so it never moves with the title).
 - Exercise progress folds with the shared arrow (key `progress`, kept in `localStorage`).
+- In the Training days preview (a day's exercise list) the muscle tag is always on the line below the name. In a started workout the tag is at the right edge whether the exercise is collapsed or open.

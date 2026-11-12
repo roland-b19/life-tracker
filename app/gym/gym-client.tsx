@@ -980,7 +980,7 @@ export function GymClient({
                         {day.exercises.length > 0 ? (
                           day.exercises.map((ex, idx) => (
                             <div key={ex.id} className="entry-row">
-                              <div className="entry-main">
+                              <div className="entry-main entry-stack">
                                 <strong>
                                   {idx + 1}. {ex.exerciseName}
                                 </strong>
