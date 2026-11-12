@@ -580,3 +580,18 @@ export function DayStepper({
     </div>
   );
 }
+
+/** What a page shows while its data loads (a route's loading.tsx): the real navigation and a card of stand-in rows. */
+export function PageSkeleton() {
+  return (
+    <Page userName="">
+      <Dashboard>
+        <DashboardMain>
+          <Card label="Loading" busy>
+            <SkeletonRows count={5} />
+          </Card>
+        </DashboardMain>
+      </Dashboard>
+    </Page>
+  );
+}
