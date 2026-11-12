@@ -37,7 +37,7 @@ function MuscleMap({
   canGoBack,
 }: {
   selected: MuscleGroup[];
-  onSelect: (g: MuscleGroup | null, additive: boolean) => void;
+  onSelect: (g: MuscleGroup, additive: boolean) => void;
   onGoBack: () => void;
   canGoBack: boolean;
 }) {
@@ -213,8 +213,8 @@ function MuscleMap({
             parts.filter((p) => p.group).map((p) => p.mesh),
             false,
           )[0];
-          const g = (hit && MESH_GROUP[hit.object.name]) || null;
-          onSelectRef.current(g, e.shiftKey || e.ctrlKey || e.metaKey);
+          const g = hit && MESH_GROUP[hit.object.name];
+          if (g) onSelectRef.current(g, e.shiftKey || e.ctrlKey || e.metaKey); // empty space changes nothing
         };
         canvas.addEventListener("pointerdown", onDown);
         canvas.addEventListener("pointerup", onUp);
@@ -265,22 +265,6 @@ function MuscleMap({
       {/* Its own strip under the model, so the buttons never sit over the body */}
       <div className="muscle-views">
         {status === "ready" && (
-          <div className="muscle-side-switch">
-            <Segmented
-              label="Model side"
-              value={side}
-              options={[
-                { value: "front", label: "Front" },
-                { value: "back", label: "Back" },
-              ]}
-              onChange={(v) => {
-                setSide(v);
-                api.current?.setView(v);
-              }}
-            />
-          </div>
-        )}
-        {status === "ready" && (
           <button
             type="button"
             className={`muscle-move${holding ? " active" : ""}`}
@@ -308,6 +292,22 @@ function MuscleMap({
           >
             <ArrowsIcon size={18} />
           </button>
+        )}
+        {status === "ready" && (
+          <div className="muscle-side-switch">
+            <Segmented
+              label="Model side"
+              value={side}
+              options={[
+                { value: "front", label: "Front" },
+                { value: "back", label: "Back" },
+              ]}
+              onChange={(v) => {
+                setSide(v);
+                api.current?.setView(v);
+              }}
+            />
+          </div>
         )}
         {/* Always rendered so the strip never shifts; it shows once the picked muscles differ from the day's */}
         <TintButton
@@ -355,8 +355,8 @@ export function MuscleExplorer({
   }
   const toggle = (g: MuscleGroup) => setSelected((s) => (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]));
   // A tap picks one muscle (a second tap clears it); Shift, Ctrl or Cmd adds to the picked ones.
-  const pick = (g: MuscleGroup | null, additive: boolean) =>
-    setSelected((s) => (g === null ? (additive ? s : []) : additive ? (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]) : sameGroups(s, [g]) ? [] : [g]));
+  const pick = (g: MuscleGroup, additive: boolean) =>
+    setSelected((s) => (additive ? (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]) : sameGroups(s, [g]) ? [] : [g]));
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)

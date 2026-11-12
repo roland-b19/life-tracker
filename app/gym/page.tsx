@@ -55,6 +55,7 @@ export default async function GymPage() {
             extraKg: s.extraKg,
             isFailure: s.isFailure,
             isPartial: s.isPartial,
+            isGoodForm: s.isGoodForm,
             flagAnomaly: s.flagAnomaly,
             anomalyReason: s.anomalyReason,
             notes: s.notes,

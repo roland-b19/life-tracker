@@ -134,6 +134,7 @@ async function main() {
       "extra_kg" numeric(5, 2) DEFAULT '0' NOT NULL,
       "is_failure" boolean DEFAULT true NOT NULL,
       "is_partial" boolean DEFAULT false NOT NULL,
+      "is_good_form" boolean DEFAULT true NOT NULL,
       "flag_anomaly" boolean DEFAULT false NOT NULL,
       "anomaly_reason" varchar(50),
       "notes" varchar(255),
@@ -282,6 +283,9 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
     ALTER TABLE "shopping_items" ADD COLUMN IF NOT EXISTS "checked_at" timestamp with time zone;
+    ALTER TABLE "workout_sets" ADD COLUMN IF NOT EXISTS "is_good_form" boolean DEFAULT true NOT NULL;
+    UPDATE "exercises" SET "muscle_group" = 'back' WHERE "muscle_group" IN ('lats', 'upper-back', 'lower-back');
+    UPDATE "exercises" SET "muscle_group" = 'obliques' WHERE "muscle_group" = 'abs';
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "placed_at" timestamp with time zone DEFAULT now() NOT NULL;
     CREATE TABLE IF NOT EXISTS "push_subscriptions" (

@@ -15,6 +15,7 @@ export const logSetSchema = z.object({
   extraKg: z.number().min(0).max(300).default(0),
   isFailure: z.boolean().default(true),
   isPartial: z.boolean().default(false),
+  isGoodForm: z.boolean().default(true),
   flagAnomaly: z.boolean().default(false),
   anomalyReason: z.enum(["too_heavy", "pain", "form", "other"]).optional().nullable(),
   notes: z.string().max(255).optional().nullable(),

@@ -14,10 +14,10 @@ export const DEFAULT_EXERCISES = [
   { name: "Cable fly (push down)", muscleGroup: "chest", equipmentType: "cable" },
   { name: "Dumbbell bench press", muscleGroup: "chest", equipmentType: "dumbbell" },
   // Back
-  { name: "Weighted pull-ups", muscleGroup: "lats", equipmentType: "bodyweight" },
-  { name: "Chest-supported row", muscleGroup: "upper-back", equipmentType: "machine" },
-  { name: "Lat pulldown", muscleGroup: "lats", equipmentType: "cable" },
-  { name: "Barbell deadlift", muscleGroup: "lower-back", equipmentType: "barbell" },
+  { name: "Weighted pull-ups", muscleGroup: "back", equipmentType: "bodyweight" },
+  { name: "Chest-supported row", muscleGroup: "back", equipmentType: "machine" },
+  { name: "Lat pulldown", muscleGroup: "back", equipmentType: "cable" },
+  { name: "Barbell deadlift", muscleGroup: "back", equipmentType: "barbell" },
   // Legs
   { name: "Seated/lying hamstring curl", muscleGroup: "hamstrings", equipmentType: "machine" },
   { name: "Barbell squat / Leg press", muscleGroup: "quads", equipmentType: "barbell" },
@@ -38,8 +38,8 @@ export const DEFAULT_EXERCISES = [
   { name: "Incline curl", muscleGroup: "biceps", equipmentType: "dumbbell" },
   { name: "Dumbbell curl", muscleGroup: "biceps", equipmentType: "dumbbell" },
   // Abs
-  { name: "Cable crunch", muscleGroup: "abs", equipmentType: "cable" },
-  { name: "Hanging leg raise", muscleGroup: "abs", equipmentType: "bodyweight" },
+  { name: "Cable crunch", muscleGroup: "obliques", equipmentType: "cable" },
+  { name: "Hanging leg raise", muscleGroup: "obliques", equipmentType: "bodyweight" },
 ] as const;
 
 let seeding: Promise<Map<string, string>> | null = null;

@@ -53,7 +53,7 @@ const sections = (u: string): [string, SQL][] => [
   [
     "Workout sets",
     sql`SELECT w.date::text AS day, d.name AS "training day", w.is_deload AS deload, w.duration_minutes AS minutes, w.notes AS "workout notes", w.created_at::text AS started, e.name AS exercise, t.set_order AS "set", t.reps,
-               t.load_type AS "load type", t.load_value AS "load", t.extra_kg AS "extra kg", t.is_failure AS failure, t.is_partial AS partial, t.flag_anomaly AS anomaly, t.anomaly_reason AS "anomaly reason", t.notes, t.created_at::text AS logged
+               t.load_type AS "load type", t.load_value AS "load", t.extra_kg AS "extra kg", t.is_failure AS failure, t.is_partial AS partial, t.is_good_form AS "good form", t.flag_anomaly AS anomaly, t.anomaly_reason AS "anomaly reason", t.notes, t.created_at::text AS logged
           FROM workout_sessions w LEFT JOIN workout_split_days d ON d.id = w.split_day_id
           LEFT JOIN workout_sets t ON t.session_id = w.id LEFT JOIN exercises e ON e.id = t.exercise_id
          WHERE w.user_id = ${u}::uuid ORDER BY w.date, t.set_order`,

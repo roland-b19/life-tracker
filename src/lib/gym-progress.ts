@@ -13,12 +13,12 @@ export function weeksBetween(from: string, to: string): number {
   return Math.round((monday(to) - monday(from)) / (7 * 86_400_000));
 }
 
-/** Mondays of the weeks that hold a deload session: easier training, so the whole week stays out of every figure. */
+/** Mondays of the weeks that hold a deload session: easier training, so the whole week stays out of the Exercise progress chart (and nothing else). */
 function deloadWeeks(sets: HistorySet[]) {
   return new Set(sets.filter((s) => s.isDeload).map((s) => weekStart(s.date)));
 }
 
-/** An exercise's heaviest load of each training day. Deload weeks are left out. */
+/** An exercise's heaviest load of each training day. Deload weeks are left out: only this chart ignores them. */
 export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
   const skip = deloadWeeks(sets);
   const byDate = new Map<string, { date: string; weight: number }>();
@@ -36,14 +36,12 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 /**
  * How a workout day progressed week over week: for each week, the average over the day's exercises of the change in
  * their best weight (kg) from the week before. An exercise only counts in a week when it was also done the week
- * before. Deload weeks are skipped: they are neither a point nor a baseline, so the week after one is compared with
- * the week before it.
+ * before. Deload weeks count like any other week.
  */
 export function dayProgress(sets: HistorySet[], dayId: string) {
-  const skip = deloadWeeks(sets);
   const perExercise = new Map<string, Map<string, number>>();
   for (const s of sets) {
-    if (s.dayId !== dayId || skip.has(weekStart(s.date))) continue;
+    if (s.dayId !== dayId) continue;
     const weeks = perExercise.get(s.exerciseId) ?? new Map();
     const w = weekStart(s.date);
     weeks.set(w, Math.max(weeks.get(w) ?? 0, s.load));
@@ -51,8 +49,7 @@ export function dayProgress(sets: HistorySet[], dayId: string) {
   }
   const allWeeks = [...new Set([...perExercise.values()].flatMap((m) => [...m.keys()]))].sort();
   return allWeeks.map((week) => {
-    let before = addDays(week, -7);
-    while (skip.has(before)) before = addDays(before, -7);
+    const before = addDays(week, -7);
     const changes: number[] = [];
     for (const weeks of perExercise.values()) {
       const now = weeks.get(week);
@@ -102,21 +99,17 @@ export const kgDelta = (n: number | null) => {
 };
 
 /**
- * Each past workout with how its day did that week against the week before (the same figure as the Progress tab's
- * Workout days: the average kg change), or null when there is nothing to compare: a deload week (any session of
- * it, flagged or not), no day, or no earlier week.
+ * Each past workout with how its day did that week against the week before (the average kg change of its
+ * exercises), or null when there is nothing to compare: no day, or no earlier week. Deload weeks count like any other.
  */
-export type HistoryEntry = HistorySession & { progress: number | null; deloadWeek: boolean };
+export type HistoryEntry = HistorySession & { progress: number | null };
 
 export function withProgress(sessions: HistorySession[], sets: HistorySet[]): HistoryEntry[] {
   const byDay = new Map<string, ReturnType<typeof dayProgress>>();
-  // A deload week is every week with a deload session (even one with no sets yet), whether or not this session is the flagged one.
-  const skip = new Set([...deloadWeeks(sets), ...sessions.filter((s) => s.isDeload).map((s) => weekStart(s.date))]);
   return sessions.map((s) => {
-    const deloadWeek = skip.has(weekStart(s.date));
-    if (!s.dayId || deloadWeek) return { ...s, progress: null, deloadWeek };
+    if (!s.dayId) return { ...s, progress: null };
     let weeks = byDay.get(s.dayId);
     if (!weeks) byDay.set(s.dayId, (weeks = dayProgress(sets, s.dayId)));
-    return { ...s, progress: weeks.find((x) => x.week === weekStart(s.date))?.change ?? null, deloadWeek };
+    return { ...s, progress: weeks.find((x) => x.week === weekStart(s.date))?.change ?? null };
   });
 }

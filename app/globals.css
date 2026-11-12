@@ -646,15 +646,12 @@ main {
   background: var(--tint-subtle);
 }
 
-/* A plain group inside the session card (one card level), separated by space only */
-.workout-exercise-card + .workout-exercise-card {
-  margin-top: 1.5rem;
-}
-
+/* The title block, its muscle badge and the fold arrow: the arrow is a column of its own, centred on the whole block */
 .exercise-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .exercise-context-box {
@@ -2349,13 +2346,14 @@ button.bars-col:focus-visible {
   gap: 0.75rem;
   padding: 0 0.6rem 0.6rem;
 }
-/* Front/Back, Move and Go back share the strip in equal parts with one gap */
-.muscle-views > * { flex: 1 1 0; min-width: 0; }
-.muscle-views > .muscle-back { height: auto; min-height: 0; padding-inline: 0; border-width: 0; } /* no padding, so the three parts come out the same width */
+/* Move is a 2.75rem square (touch only), Go back a fixed width, Front/Back takes all the space between; nothing resizes when one shows or hides */
+.muscle-views > .muscle-side-switch { flex: 1 1 0; min-width: 0; }
+.muscle-views > .muscle-back { flex: 0 0 6.5rem; height: auto; min-height: 0; padding-inline: 0; }
 /* Touch screens only: always grey. Hold it and slide the same finger to move the model; a drag on the model scrolls the page. */
 .muscle-move {
   display: none;
   position: relative;
+  flex: 0 0 2.75rem;
   min-height: 0;
   padding: 0;
   place-items: center;
@@ -2901,27 +2899,21 @@ button.bars-col:focus-visible {
   margin-bottom: 0.5rem;
 }
 
-/* Gym session: each exercise is a soft band like a Wishlist row (the band reaches halfway to the card edge), and
-   its logged sets are bands inside it, every one lit, so a single set is as easy to see as a list of them. */
-.surface .workout-exercise-card {
-  --band-out: calc((var(--card-pad) + 1px) / 2);
-  margin-inline: calc(-1 * var(--band-out));
-  padding: 1rem var(--band-out);
-  border-radius: 0.75rem;
-  background-color: rgba(255, 255, 255, 0.03);
+/* Gym session: one exercise is one item of a wash list (alternating bands, list gaps); its sets, fields and Log set
+   stack inside it with one gap. Logged sets are bands of their own inside the column the title uses. */
+.workout-exercise-card {
   display: grid;
-  gap: 0.75rem; /* header, last time, sets, fields, switches and Log set: one gap */
+  align-items: stretch;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
 }
-/* Logged sets: each band spans the column the exercise title and the inputs use, so nothing touches the
-   exercise band's edge; the set's text is inset inside its own band instead. */
+.workout-exercise-card .entries { margin-top: 0; }
 .surface .workout-exercise-card .list-box[data-wash],
 .surface .workout-exercise-card .list-box[data-wash] > .entries > .entry-row {
   --band-out: 0px;
 }
 .surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   padding-inline: 0.75rem 0.5rem;
-}
-.surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   background-color: rgba(255, 255, 255, 0.05);
 }
 

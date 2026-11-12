@@ -142,6 +142,7 @@ export const workoutSets = pgTable(
     extraKg: numeric("extra_kg", { precision: 5, scale: 2 }).default("0").notNull(),
     isFailure: boolean("is_failure").default(true).notNull(),
     isPartial: boolean("is_partial").default(false).notNull(),
+    isGoodForm: boolean("is_good_form").default(true).notNull(),
     flagAnomaly: boolean("flag_anomaly").default(false).notNull(),
     anomalyReason: varchar("anomaly_reason", { length: 50 }),
     notes: varchar("notes", { length: 255 }),

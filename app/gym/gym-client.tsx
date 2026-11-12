@@ -90,6 +90,7 @@ interface WorkoutSetData {
   extraKg: string;
   isFailure: boolean;
   isPartial: boolean;
+  isGoodForm: boolean;
   flagAnomaly: boolean;
   anomalyReason?: string | null;
   notes?: string | null;
@@ -183,6 +184,7 @@ export function GymClient({
         extraKg: string;
         isFailure: boolean;
         isPartial: boolean;
+        isGoodForm: boolean;
         notes: string;
       }
     >
@@ -370,6 +372,7 @@ export function GymClient({
       extraKg: "0",
       isFailure: true,
       isPartial: false,
+      isGoodForm: true,
       notes: "",
     };
 
@@ -396,6 +399,7 @@ export function GymClient({
         extraKg: extraNum,
         isFailure: state.isFailure,
         isPartial: state.isPartial,
+        isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
         minTargetReps: exercise.minReps,
         maxTargetReps: exercise.maxReps,
@@ -412,6 +416,7 @@ export function GymClient({
           extraKg: res.set.extraKg,
           isFailure: res.set.isFailure,
           isPartial: res.set.isPartial,
+          isGoodForm: res.set.isGoodForm,
           flagAnomaly: res.set.flagAnomaly,
           anomalyReason: res.set.anomalyReason,
           notes: res.set.notes,
@@ -472,6 +477,7 @@ export function GymClient({
           extraKg: Number(set.extraKg),
           isFailure: set.isFailure,
           isPartial: set.isPartial,
+          isGoodForm: set.isGoodForm,
           notes: set.notes || undefined,
           minTargetReps: exercise.minReps,
           maxTargetReps: exercise.maxReps,
@@ -557,6 +563,7 @@ export function GymClient({
                 extraKg: Number(x.extraKg),
                 isFailure: x.isFailure,
                 isPartial: x.isPartial,
+                isGoodForm: x.isGoodForm,
                 flagAnomaly: x.flagAnomaly,
                 anomalyReason: x.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
                 notes: x.notes,
@@ -666,7 +673,7 @@ export function GymClient({
         title={deload.inDeloadWeek ? "Deload week" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
         sub={
           deload.inDeloadWeek || deload.isDeloadDue
-            ? "A deload week is not counted in progress."
+            ? "A deload week stays out of the Exercise progress chart."
             : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
       >
@@ -688,7 +695,7 @@ export function GymClient({
             </>
           }
         >
-          <div>
+          <ListBox wash className="entries">
             {currentDay?.exercises.map((exercise) => {
               const exerciseSets = activeSession.sets.filter(
                 (s) => s.exerciseId === exercise.exerciseId,
@@ -705,6 +712,7 @@ export function GymClient({
                 extraKg: "0",
                 isFailure: true,
                 isPartial: false,
+                isGoodForm: true,
                 notes: "",
               };
               const folded = foldedEx.includes(exercise.exerciseId);
@@ -712,26 +720,24 @@ export function GymClient({
                 setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...currentState, ...change } }));
 
               return (
-                <div key={exercise.id} className="workout-exercise-card">
+                <div key={exercise.id} className="entry-row workout-exercise-card">
                   <div className="exercise-header">
                     <div>
-                      <h3 className="exercise-title">
-                        {exercise.exerciseName}{" "}
-                        <button
-                          type="button"
-                          className="group-toggle"
-                          aria-expanded={!folded}
-                          aria-label={`Show ${exercise.exerciseName}`}
-                          onClick={() => setFoldedEx((f) => (f.includes(exercise.exerciseId) ? f.filter((x) => x !== exercise.exerciseId) : [...f, exercise.exerciseId]))}
-                        >
-                          <ChevronRightIcon size={14} />
-                        </button>
-                      </h3>
+                      <h3 className="exercise-title">{exercise.exerciseName}</h3>
                       <span className="muted exercise-meta">
                         Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
                       </span>
                     </div>
                     <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
+                    <button
+                      type="button"
+                      className="group-toggle"
+                      aria-expanded={!folded}
+                      aria-label={`Show ${exercise.exerciseName}`}
+                      onClick={() => setFoldedEx((f) => (f.includes(exercise.exerciseId) ? f.filter((x) => x !== exercise.exerciseId) : [...f, exercise.exerciseId]))}
+                    >
+                      <ChevronRightIcon size={14} />
+                    </button>
                   </div>
 
                   {!folded && (
@@ -741,7 +747,6 @@ export function GymClient({
                       const last = history.find(
                         (h) =>
                           h.dayId === activeSession.splitDayId &&
-                          !h.deloadWeek &&
                           h.date < activeSession.date &&
                           h.exercises.some((e) => e.id === exercise.exerciseId),
                       );
@@ -769,6 +774,7 @@ export function GymClient({
                               {s.loadValue} {s.loadType}
                               {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
                               {s.isPartial ? " (partials)" : ""}
+                              {s.isGoodForm ? "" : " (poor form)"}
                               {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
                             </span>
                             <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s, exercise)} />
@@ -826,6 +832,7 @@ export function GymClient({
                     <div className="toggle-row">
                       <Toggle label="True failure (0 RIR)" checked={currentState.isFailure} disabled={busy} onChange={(e) => patch({ isFailure: e.target.checked })} />
                       <Toggle label="Partial reps at end" checked={currentState.isPartial} disabled={busy} onChange={(e) => patch({ isPartial: e.target.checked })} />
+                      <Toggle label="Good form" checked={currentState.isGoodForm} disabled={busy} onChange={(e) => patch({ isGoodForm: e.target.checked })} />
                     </div>
 
                     <button
@@ -842,7 +849,7 @@ export function GymClient({
                 </div>
               );
             })}
-          </div>
+          </ListBox>
 
           <div className="session-footer">
             <Field
@@ -893,7 +900,7 @@ export function GymClient({
           )}
           <Dashboard>
             <DashboardMain>
-              <Card id="split-title" title="Training days">
+              <Card id="split-title" title="Training days" fold={{ folded: isFolded("split"), onToggle: () => toggleFolded("split") }}>
                 <ListBox className="split-day-list">
                   {split?.days.map((day) => {
                     const isToday = day.dayOfWeek === todayDayOfWeek;
@@ -1029,11 +1036,7 @@ export function GymClient({
                             <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
                           </span>
                           <span className="muted number-tabular history-progress">
-                            {h.deloadWeek
-                              ? "Deload week, not counted"
-                              : h.progress !== null
-                                ? `Weight ${kgDelta(h.progress)} vs the week before`
-                                : "Nothing to compare with yet"}
+                            {h.progress !== null ? `Weight ${kgDelta(h.progress)} vs the week before` : "Nothing to compare with yet"}
                           </span>
                         </button>
                         {open && (
