@@ -136,9 +136,12 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       return;
     }
 
+    // The form shows a whole price; saving an edit without touching it keeps the stored cents (99.90 must not become 100).
+    const stored = editingId ? items.find((i) => i.id === editingId) : undefined;
+    const keepsCents = !!stored && parsedPrice === Math.round(Number(stored.estimatedPrice));
     const input = {
       name: name.trim(),
-      estimatedPrice: parsedPrice,
+      estimatedPrice: keepsCents ? Number(stored!.estimatedPrice) : parsedPrice,
       url: url.trim() || undefined,
       category,
     };
