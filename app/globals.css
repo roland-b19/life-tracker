@@ -654,6 +654,9 @@ main {
   gap: 0.75rem;
 }
 
+/* The tag goes out over the row's inner padding, so it sits against the row's right edge */
+.exercise-header > .badge { margin-right: calc(-1 * var(--band-out)); }
+
 .exercise-context-box {
   background: var(--surface-secondary);
   border-radius: 0.65rem;
