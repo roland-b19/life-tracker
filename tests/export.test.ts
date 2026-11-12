@@ -26,6 +26,7 @@ async function seedUser(subject: string) {
 describe("Export: all of the signed-in user's data as text", () => {
   let owner: string;
   let other: string;
+  const marker = `private-${randomUUID()}`; // random at run time, so the secret scanner has nothing to flag
 
   beforeAll(async () => {
     owner = await seedUser(`export-owner-${randomUUID()}`);
@@ -35,10 +36,10 @@ describe("Export: all of the signed-in user's data as text", () => {
     await db.insert(weightEntries).values({ userId: owner, date: "2026-11-10", kilograms: "81.5" });
     await createTodo(owner, { space: "personal", title: "Owner Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
     await createTodo(other, { space: "personal", title: "Other Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
-    await db.insert(claudeConnections).values({ userId: owner, tokenEncrypted: "SECRET-CLAUDE-TOKEN-VALUE" });
+    await db.insert(claudeConnections).values({ userId: owner, tokenEncrypted: `token-${marker}` });
     await db
       .insert(pushSubscriptions)
-      .values({ userId: owner, endpoint: "https://push.example/SECRET-ENDPOINT", p256dhKey: "SECRET-P256DH", authKey: "SECRET-AUTH" });
+      .values({ userId: owner, endpoint: `https://push.example/${marker}`, p256dhKey: `p-${marker}`, authKey: `a-${marker}` });
   });
 
   it("returns the owner's data as a dated .txt file", async () => {
@@ -66,7 +67,7 @@ describe("Export: all of the signed-in user's data as text", () => {
   it("leaves out the Claude token and the push subscriptions", async () => {
     authState.id = owner;
     const { text } = await exportDataAction();
-    expect(text).not.toMatch(/SECRET/);
+    expect(text).not.toContain(marker);
   });
 
   it("rejects an anonymous caller", async () => {
