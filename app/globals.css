@@ -31,6 +31,12 @@
   --highlight-fill: rgba(255, 255, 255, 0.2);
   --tint-highlight: rgba(134, 180, 234, 0.34);
   --press: 0.92;
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --rise: 4px;
+  --pop: 0.96;
   color-scheme: dark;
 }
 
@@ -3064,3 +3070,30 @@ button.bars-col:focus-visible {
     font-size: 1rem;
   }
 }
+
+/* Motion: subtle, transform and opacity only. */
+button { transition: transform var(--motion-fast) var(--ease-out); }
+.tabbar::before,
+.segmented::before { transition: transform var(--motion-base) var(--ease-out); }
+.group-toggle svg { transition: transform var(--motion-fast) var(--ease-out); }
+
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(var(--rise)); } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(var(--rise)) scale(0.98); } }
+.modal-scrim { animation: fade-in var(--motion-base) var(--ease-out) both; }
+.modal-card { animation: modal-in var(--motion-slow) var(--ease-out) both; }
+.toast-item { animation: rise-in var(--motion-base) var(--ease-out) both; }
+
+/* main[data-live] is set on the first interaction, so loads and streamed skeleton swaps do not animate. */
+main[data-live] :is(.entry-row, .todo-row, .item-row, .surface) {
+  transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(var(--rise)); }
+}
+/* Drag-sort moves [data-sort] rows with inline transforms; easing them would make the row lag and jump on drop. */
+main[data-live] [data-sort] { transition: opacity var(--motion-base) var(--ease-out); }
+main[data-live] .todo-checkbox-btn svg {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(var(--pop)); }
+}
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
