@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-12 by Claude (audit fixes; subtle motion on branch `feat/subtle-motion`; branch `fix/audit-findings`; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
+_Last updated: 2026-11-12 by Claude (audit fixes and subtle motion; branch `fix/audit-findings`; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
 
 ## Phase
 
@@ -178,7 +178,6 @@ Checked on 2026-11-08: the only resource group in the subscription is `NetworkWa
 
 ## Session log (newest first)
 
-- 2026-11-12 — Subtle motion (branch `feat/subtle-motion`, not merged): CSS-only enter/press/slide motion per decision 2026-11-12.
 - 2026-11-12 — Performance pass on branch `perf/instant-feel` (PR open, not merged, not deployed): no page re-render after food writes and gym set edits, `loading.tsx` skeletons on food, gym, todos, wishlist and settings (layouts keep the 307 for anonymous), reload on back/forward after a write, parallel reads on gym, daily food and daily tasks, `src/lib/rules.ts` keeps zod out of client code. Checks: tsc, eslint, vitest, production build measured against a clean `origin/main` build, phone-width browser walk (todo toggle, gym start/log set/cancel/Undo, water taps and a failed call rolling back, wishlist delete/Undo, tab skeletons). Not covered: real Neon or Vercel latency, the real pool size, a real phone. Details: `docs/performance-report.md`.
 
 - 2026-11-12 — Stress test on branch `feat/health-undo-polish`: local stress seed, edge-case tests (194 now) and a phone/tablet walkthrough; twelve bugs fixed (the Assistant writes only today or yesterday, push subscriptions are one row per endpoint, gym reps max 200; whitespace-only names, price rounding, past-date writes to Water/Steps/meals, recurring tasks outside the planning window, four CSS overflows at 320-375px). Full list, what is left alone and what is unverified (real iPhone Safari, sign-out on :3000): `docs/stress-test-report.md`. No migration, no dependency, no new endpoint; `scripts/seed-stress.cjs` is dev-only. Nothing deployed.

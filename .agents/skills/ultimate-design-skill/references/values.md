@@ -2,7 +2,7 @@
 
 Every number the Wishlist uses, read from `app/globals.css` and `app/components/`. Use the token or class, never a copy of the number. If you must change a value, change it here and in the code in the same commit.
 
-**Motion is subtle and limited** (decision 2026-11-12): the set and hard limits are in `SKILL.md` section 3. Everything else changes at once.
+**The app has no animations or transitions** (decision 2026-11-11): no `transition`, `animation` or `@keyframes` in CSS, no WAAPI or timer-driven tweens. Every state change (hover, press, open, close, add, delete, view switch, chart value) shows at once.
 
 ## Contents
 - Tokens
