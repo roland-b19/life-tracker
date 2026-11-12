@@ -2,17 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
-import { dayLabel, formatDMY, toISODate } from "@/lib/format-date";
-import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, DayStepper, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, ReadonlyNote, SelectField, TintButton, Toolbar } from "../components/blocks";
+import { toISODate } from "@/lib/format-date";
+import { AddButton, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
-import { DropIcon, FootstepsIcon, ScaleIcon, PlusIcon } from "../components/icons";
-import { Modal } from "../components/modal";
+import { DropIcon, FootstepsIcon } from "../components/icons";
 import { useToast } from "../components/toast";
-import { WeightPanel, type WeightEntry } from "./weight-panel";
-import { MetricPanel, withDay, type Entry } from "./metric-panel";
-import { DeleteButton, EditButton, IconButton, ListBox, RowActions, useMore } from "../components/lists";
+import { WeightCard, type WeightEntry } from "./weight-card";
+import { EditButton, ListBox, RowActions } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
   addShoppingCategoryAction,
@@ -21,13 +19,9 @@ import {
   setWaterAction,
   clearBoughtItemsAction,
   deleteMealAction,
-  forgetPastFoodAction,
-  restorePastFoodAction,
   deleteShoppingCategoryAction,
   deleteShoppingItemAction,
-  getDaySummaryAction,
   logMealAction,
-  restoreMealAction,
   renameShoppingCategoryAction,
   reorderShoppingCategoriesAction,
   revertShoppingCategoryAction,
@@ -38,7 +32,6 @@ import {
   updateTargetsAction,
 } from "@/app/actions/food";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
-import { signedKg, type WeightStats } from "@/lib/weight-stats";
 
 interface MealData {
   id: string;
@@ -49,19 +42,22 @@ interface MealData {
   carbs: string;
   fat: string;
   isEstimated?: boolean;
-  forgotten?: boolean;
   createdAt?: Date | string;
 }
 
 /** Health's shopping categories live in their own table; the shared Categories card saves through these. */
-const shoppingCategories: CategoriesApi = {
-  id: "shopping",
-  add: (name) => addShoppingCategoryAction({ name }),
-  rename: (from, to) => renameShoppingCategoryAction({ from, to }),
-  remove: (name) => deleteShoppingCategoryAction({ name }),
-  revert: (input) => revertShoppingCategoryAction(input),
-  reorder: (names) => reorderShoppingCategoriesAction({ names }),
-};
+const shoppingNames = (kind: "category" | "unit"): CategoriesApi => ({
+  id: kind === "unit" ? "units" : "shopping",
+  noun: kind,
+  builtIn: kind === "unit" ? "pcs" : "other",
+  add: (name) => addShoppingCategoryAction({ kind, name }),
+  rename: (from, to) => renameShoppingCategoryAction({ kind, from, to }),
+  remove: (name) => deleteShoppingCategoryAction({ kind, name }),
+  revert: (input) => revertShoppingCategoryAction({ kind, ...input }),
+  reorder: (names) => reorderShoppingCategoriesAction({ kind, names }),
+});
+const shoppingCategories = shoppingNames("category");
+const shoppingUnitsApi = shoppingNames("unit");
 
 interface ShoppingItemData {
   id: string;
@@ -74,28 +70,6 @@ interface ShoppingItemData {
   checkedAt: Date | string | null;
 }
 
-const UNITS = ["pcs", "g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box", "bag", "bunch"];
-
-/** A food logged before, offered again in the "Past foods" sheet. */
-/** A meal's numbers on two lines: energy and protein, then carbs and fat. */
-function MealMacros({ m }: { m: { calories: number; protein: string | number; carbs: string | number; fat: string | number } }) {
-  return (
-    <p className="card-sub muted number-tabular">
-      {m.calories} kcal · {Math.round(Number(m.protein))}g P
-      <br />
-      {Math.round(Number(m.carbs))}g C · {Math.round(Number(m.fat))}g F
-    </p>
-  );
-}
-
-interface PastFood {
-  name: string;
-  calories: number;
-  protein: string;
-  carbs: string;
-  fat: string;
-  isEstimated: boolean;
-}
 
 interface FoodClientProps {
   userName: string;
@@ -123,11 +97,15 @@ interface FoodClientProps {
       notes: string | null;
     };
   };
-  weightAnalytics: WeightStats;
+  /** The last 365 days of weigh-ins (the database keeps all of them). */
+  initialWeights: WeightEntry[];
+  /** Water and steps of the last 7 days (today included), for the 7-day average. */
+  weekMetrics: { date: string; waterMl: number; steps: number }[];
   initialShoppingList: ShoppingItemData[];
   /** The user's store sections in walking order, without the built-in "other". */
   shoppingCategories: string[];
-  pastFoods: PastFood[];
+  /** The user's units in order, without the built-in "pcs". */
+  shoppingUnits: string[];
 }
 
 type Goals = FoodClientProps["targets"];
@@ -146,10 +124,11 @@ export function FoodClient({
   todayDate,
   targets,
   initialSummary,
-  weightAnalytics: initialWeight,
+  initialWeights,
+  weekMetrics,
   initialShoppingList,
   shoppingCategories: initialCategories,
-  pastFoods: initialPastFoods,
+  shoppingUnits: initialUnits,
 }: FoodClientProps) {
   // Writes always go to today. The page knows its day only from when it loaded, so resuming it after midnight reloads it.
   useEffect(() => {
@@ -159,18 +138,15 @@ export function FoodClient({
     document.addEventListener("visibilitychange", onShow);
     return () => document.removeEventListener("visibilitychange", onShow);
   }, [todayDate]);
-  const [selectedDate, setSelectedDate] = useState(todayDate);
-  const [pastSummary, setPastSummary] = useState<FoodClientProps["initialSummary"] | null>(null);
   const [summary, setSummary] = useState(initialSummary);
-  const day = selectedDate < todayDate && pastSummary ? pastSummary : summary;
-  const isPast = day.date < todayDate;
-  const dayRequest = useRef(0);
+  const day = summary;
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
-  const [activeTab, setActiveTab] = useState<"daily" | "water" | "weight" | "steps" | "shopping" | "chat">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
   const [categories, setCategories] = useState(initialCategories);
+  const [units, setUnits] = useState(initialUnits);
   // The open meal or shopping form's error; only one form is open at a time.
   const [formError, setFormError] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
@@ -182,22 +158,7 @@ export function FoodClient({
   const latestGoals = useRef(targets);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
-  const [weightAnalytics, setWeightAnalytics] = useState(initialWeight);
-  // Each health tab's list, kept for this visit so reopening a tab is instant (it goes with the page, so never to another user).
-  const [waterList, setWaterList] = useState<Entry[] | null>(null);
-  const [stepsList, setStepsList] = useState<Entry[] | null>(null);
-  const [weightList, setWeightList] = useState<WeightEntry[] | null>(null);
-  // Today's water and steps can change on the other tabs while their tab is closed: a tab opens with today's value.
-  function openTab(tab: typeof activeTab) {
-    setWaterList((l) => l && withDay(l, todayDate, summary.metrics.waterMl));
-    setStepsList((l) => l && withDay(l, todayDate, summary.metrics.steps));
-    setActiveTab(tab);
-  }
-  const [pastFoods, setPastFoods] = useState(initialPastFoods);
-  const [isPastOpen, setIsPastOpen] = useState(false);
-
   const { showToast } = useToast();
-  const shownWeight = weightAnalytics.sevenDayAverage ?? weightAnalytics.latestWeight;
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -211,11 +172,11 @@ export function FoodClient({
   const [chatLoading, setChatLoading] = useState(false);
 
   // Meal input state
-  const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
   const [mealProtein, setMealProtein] = useState("");
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
+  const mealHasValues = [mealCalories, mealProtein, mealCarbs, mealFat].some((v) => Number(v) > 0);
 
   // Shopping input state
   const [shopName, setShopName] = useState("");
@@ -227,22 +188,6 @@ export function FoodClient({
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message, type: "warning" });
   };
-
-  // Only past days load; the latest request wins, a failed one steps back to the day on screen.
-  async function goToDay(date: string) {
-    const shown = day.date;
-    setSelectedDate(date);
-    const request = ++dayRequest.current;
-    if (date >= todayDate) return;
-    try {
-      const loaded = await getDaySummaryAction(date);
-      if (request === dayRequest.current) setPastSummary(loaded);
-    } catch {
-      if (request !== dayRequest.current) return;
-      setSelectedDate(shown);
-      setStatusMessage("Failed to load that day");
-    }
-  }
 
   const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -277,14 +222,13 @@ export function FoodClient({
 
   async function handleLogMeal(e: React.FormEvent) {
     e.preventDefault();
-    if (!mealName.trim()) return;
+    if (!mealHasValues) return;
 
     setBusy(true);
     setFormError("");
     try {
       const res = await logMealAction({
         date: todayDate,
-        name: mealName.trim(),
         calories: parseInt(mealCalories, 10) || 0,
         protein: parseFloat(mealProtein) || 0,
         carbs: parseFloat(mealCarbs) || 0,
@@ -294,15 +238,13 @@ export function FoodClient({
       if (res.success && res.meal) {
         const meal = res.meal as MealData;
         applyMeal(meal, 1);
-        rememberFoods([meal]);
-        setMealName("");
         setMealCalories("");
         setMealProtein("");
         setMealCarbs("");
         setMealFat("");
         setIsMealModalOpen(false);
         showToast({
-          message: `Added "${meal.name}" (${meal.calories} kcal)`,
+          message: `Added meal (${meal.calories} kcal)`,
           type: "success",
           onUndo: () => void undoLogged([meal]),
         });
@@ -312,109 +254,6 @@ export function FoodClient({
     } finally {
       setBusy(false);
     }
-  }
-
-  /** Remembers newly logged names so the "Past foods" sheet offers them next time. */
-  function rememberFoods(logged: MealData[]) {
-    setPastFoods((prev) => {
-      const names = new Set(logged.map((m) => m.name.toLowerCase()));
-      const fresh = logged.map(({ name, calories, protein, carbs, fat, isEstimated }) => ({
-        name, calories, protein, carbs, fat, isEstimated: Boolean(isEstimated),
-      }));
-      return [...fresh, ...prev.filter((f) => !names.has(f.name.toLowerCase()))];
-    });
-  }
-
-  /** Takes a food off the list (its days keep it); Undo puts back exactly the meals it hid, in the same place. */
-  function handleForgetPastFood(food: PastFood) {
-    const index = pastFoods.findIndex((f) => f.name === food.name);
-    setPastFoods((prev) => prev.filter((f) => f.name !== food.name));
-    const hidden = forgetPastFoodAction({ name: food.name }).then(
-      (r) => r.ids,
-      () => null,
-    );
-    const putBack = () =>
-      setPastFoods((prev) => (prev.some((f) => f.name.toLowerCase() === food.name.toLowerCase()) ? prev : [...prev.slice(0, index), food, ...prev.slice(index)]));
-    showToast({
-      message: `Removed "${food.name}"`,
-      onUndo: async () => {
-        const ids = await hidden;
-        if (!ids) return; // the failure path below puts it back
-        putBack();
-        const restored = await restorePastFoodAction({ ids }).then(
-          () => true,
-          () => false,
-        );
-        if (restored) return;
-        setPastFoods((prev) => prev.filter((f) => f.name !== food.name));
-        showToast({ message: "Failed to restore past food", type: "warning" });
-      },
-    });
-    void hidden.then((ids) => {
-      if (ids) return;
-      putBack();
-      showToast({ message: "Failed to remove past food", type: "warning" });
-    });
-  }
-
-  async function handleLogPastFood(food: PastFood) {
-    setBusy(true);
-    try {
-      const res = await logMealAction({
-        date: todayDate,
-        name: food.name,
-        calories: food.calories,
-        protein: parseFloat(food.protein) || 0,
-        carbs: parseFloat(food.carbs) || 0,
-        fat: parseFloat(food.fat) || 0,
-        isEstimated: food.isEstimated,
-      });
-      const meal = res.meal as MealData;
-      applyMeal(meal, 1);
-      showToast({
-        message: `Added "${meal.name}" (${meal.calories} kcal)`,
-        type: "success",
-        onUndo: () => void undoLogged([meal]),
-      });
-    } catch {
-      setStatusMessage("Failed to add meal");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
-  function handleDeleteMeal(meal: MealData) {
-    applyMeal(meal, -1);
-    const deleted = deleteMealAction(meal.id).then(
-      () => true,
-      () => false,
-    );
-    showToast({
-      message: `Removed "${meal.name}"`,
-      onUndo: async () => {
-        if (!(await deleted)) return; // the failure path below puts it back
-        const res = await restoreMealAction({
-          id: meal.id,
-          createdAt: meal.createdAt,
-          forgotten: meal.forgotten,
-          date: meal.date,
-          name: meal.name,
-          calories: meal.calories,
-          protein: parseFloat(meal.protein),
-          carbs: parseFloat(meal.carbs),
-          fat: parseFloat(meal.fat),
-          isEstimated: meal.isEstimated,
-        }).catch(() => null);
-        if (res?.success) applyMeal(meal, 1);
-        else showToast({ message: "Failed to restore meal", type: "warning" });
-      },
-    });
-    void deleted.then((ok) => {
-      if (ok) return;
-      applyMeal(meal, 1);
-      showToast({ message: "Failed to remove meal", type: "warning" });
-    });
   }
 
   const setMetric = (key: "waterMl" | "steps", value: number) =>
@@ -685,6 +524,9 @@ export function FoodClient({
   const refile = (from: string, to: string, only?: string[]) =>
     setShoppingList((prev) => prev.map((i) => (i.category === from && (!only || only.includes(i.id)) ? { ...i, category: to } : i)));
 
+  const refileUnit = (from: string, to: string, only?: string[]) =>
+    setShoppingList((prev) => prev.map((i) => (i.unit === from && (!only || only.includes(i.id)) ? { ...i, unit: to } : i)));
+
   function handleToggleShopping(item: ShoppingItemData) {
     const next = !item.isBought;
     const setBought = (isBought: boolean) =>
@@ -788,7 +630,6 @@ export function FoodClient({
       setChatMessages((prev) => [...prev, { role: "model", text: res.reply, meals }]);
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) {
-        rememberFoods(meals);
         showToast({
           message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
           type: "success",
@@ -818,11 +659,19 @@ export function FoodClient({
   const pct = (value: number, target: number) => (target > 0 ? Math.min(100, Math.round((value / target) * 100)) : value > 0 ? 100 : 0);
   const waterPct = pct(day.metrics.waterMl, goals.waterMl);
   const stepsPct = pct(day.metrics.steps, goals.steps);
+  // Mean of the logged days of the last 7; today comes from the live total, so a tap shows at once.
+  const weekAverage = (key: "waterMl" | "steps") => {
+    const logged = [...weekMetrics.filter((m) => m.date !== todayDate).map((m) => m[key]), day.metrics[key]].filter((v) => v > 0);
+    return logged.length ? Math.round(logged.reduce((a, b) => a + b, 0) / logged.length) : null;
+  };
+  const average = (key: "waterMl" | "steps", unit: string) => {
+    const v = weekAverage(key);
+    return `7-day average · ${v === null ? "—" : `${v}${unit}`}`;
+  };
   // Walking order, unknown categories after the user's own, "other" last.
   const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
     (c) => shoppingList.some((i) => i.category === c),
   );
-  const [shownMeals, moreMeals] = useMore(day.meals);
   const [isShopFolded, toggleShop] = useFolded("shopping");
   const allShopping = shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping));
 
@@ -834,139 +683,79 @@ export function FoodClient({
           value={activeTab}
           options={[
             { value: "daily", label: "Today" },
-            { value: "water", label: "Water" },
-            { value: "weight", label: "Weight" },
-            { value: "steps", label: "Steps" },
             { value: "shopping", label: "Shopping", short: "Shop" },
             ...(isClaudeEnabled() ? [{ value: "chat" as const, label: "Assistant", short: "AI" }] : []),
           ]}
-          onChange={openTab}
+          onChange={setActiveTab}
         />
       </Toolbar>
 
-      {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} list={waterList} setList={setWaterList} />}
-      {activeTab === "weight" && <WeightPanel onStats={setWeightAnalytics} list={weightList} setList={setWeightList} />}
-      {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} list={stepsList} setList={setStepsList} />}
-
       {activeTab === "daily" && (
-        <>
-          <Toolbar dash className="day-toolbar">
-            <DayStepper
-              value={selectedDate}
-              today={todayDate}
-              max={todayDate}
-              label={selectedDate === todayDate ? "Today" : dayLabel(selectedDate)}
-              onChange={goToDay}
-            />
-          </Toolbar>
-          <Dashboard>
-            <DashboardMain>
-              <Card
-                id="macros-title"
-                title="Nutrition"
-                end={!isPast && <EditButton label="Edit nutrition goals" onClick={openGoals} />}
-              >
-                <div className="macro-grid">
-                  {macros.map((m) => (
-                    <div key={m.label} className="macro-card">
-                      <span className="macro-title">{m.label}</span>
-                      <span className="macro-numbers">
-                        <AnimatedNumber value={m.value} from={m.value} />
-                        <span className="macro-target">
-                          / {m.target}
-                          {m.unit}
-                        </span>
+        <Dashboard>
+          <DashboardMain>
+            <Card
+              id="macros-title"
+              title="Nutrition"
+              below
+              actions={
+                <>
+                  <TintButton onClick={openGoals}>Edit goals</TintButton>
+                  <AddButton onClick={() => (setFormError(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                </>
+              }
+            >
+              <div className="macro-grid">
+                {macros.map((m) => (
+                  <div key={m.label} className="macro-card">
+                    <span className="macro-title">{m.label}</span>
+                    <span className="macro-numbers">
+                      <AnimatedNumber value={m.value} from={m.value} />
+                      <span className="macro-target">
+                        / {m.target}
+                        {m.unit}
                       </span>
-                      <ProgressBar percent={pct(m.value, m.target)} over={m.value > m.target} />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card
-                id="meals-title"
-                title="Meals"
-                count={day.meals.length}
-                sub={formatDMY(day.date)}
-                below
-                actions={
-                  !isPast && (
-                    <>
-                      <TintButton onClick={() => setIsPastOpen(true)}>Past foods</TintButton>
-                      <AddButton onClick={() => (setFormError(""), setIsMealModalOpen(true))}>Add meal</AddButton>
-                    </>
-                  )
-                }
-              >
-                {isPast && <ReadonlyNote>Past days are read-only</ReadonlyNote>}
-
-                <ListBox wash className="entries">
-                  {day.meals.length === 0 ? (
-                    <EmptyNote>{isPast ? "No meals were logged this day." : "No meals logged today."}</EmptyNote>
-                  ) : (
-                    <>
-                      {shownMeals.map((meal) => (
-                        <div key={meal.id} className="entry-row">
-                          <div>
-                            <div className="entry-main">
-                              <strong>{meal.name}</strong>
-                              {meal.isEstimated && <Badge kind="carried">AI estimate</Badge>}
-                            </div>
-                            <MealMacros m={meal} />
-                          </div>
-                          {!isPast && <DeleteButton label={`Delete meal ${meal.name}`} onClick={() => handleDeleteMeal(meal)} />}
-                        </div>
-                      ))}
-                      {moreMeals}
-                    </>
-                  )}
-                </ListBox>
-              </Card>
-            </DashboardMain>
-
-            <DashboardAside>
-              <Card
-                id="water-title"
-                title="Water"
-                icon={<DropIcon size={18} />}
-                end={!isPast && <EditButton label="Edit water and goal" onClick={() => openMetricEdit("water")} />}
-              >
-                <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
-                <ProgressBar percent={waterPct} />
-                {!isPast && (
-                  <div className="tap-buttons">
-                    <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
-                      +250 ml
-                    </button>
-                    <button type="button" className="secondary tap-btn" onClick={() => addWater(500)}>
-                      +500 ml
-                    </button>
+                    </span>
+                    <ProgressBar percent={pct(m.value, m.target)} over={m.value > m.target} />
                   </div>
-                )}
-              </Card>
+                ))}
+              </div>
+            </Card>
 
-              <Card id="weight-trend-title" title="Weight" icon={<ScaleIcon size={18} />}>
-                <BigNumber
-                  value={shownWeight === null ? "—" : Math.round(shownWeight * 100) / 100}
-                  of={`kg${weightAnalytics.sevenDayAverage ? ", 7-day average" : ""}`}
-                />
-                {weightAnalytics.sinceLastWeek !== null && (
-                  <p className="card-sub muted number-tabular">{signedKg(weightAnalytics.sinceLastWeek)} since last week</p>
-                )}
-              </Card>
+            <WeightCard today={todayDate} initial={initialWeights} />
+          </DashboardMain>
 
-              <Card
-                id="steps-title"
-                title="Steps"
-                icon={<FootstepsIcon size={18} />}
-                end={!isPast && <EditButton label="Edit steps and goal" onClick={() => openMetricEdit("steps")} />}
-              >
-                <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />
-                <ProgressBar percent={stepsPct} />
-              </Card>
-            </DashboardAside>
-          </Dashboard>
-        </>
+          <DashboardAside>
+            <Card
+              id="water-title"
+              title="Water"
+              icon={<DropIcon size={18} />}
+              end={<EditButton label="Edit water and goal" onClick={() => openMetricEdit("water")} />}
+            >
+              <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
+              <ProgressBar percent={waterPct} />
+              <p className="muted metric-avg number-tabular">{average("waterMl", " ml")}</p>
+              <div className="tap-buttons">
+                <button type="button" className="secondary tap-btn" onClick={() => addWater(250)}>
+                  +250 ml
+                </button>
+                <button type="button" className="secondary tap-btn" onClick={() => addWater(500)}>
+                  +500 ml
+                </button>
+              </div>
+            </Card>
+
+            <Card
+              id="steps-title"
+              title="Steps"
+              icon={<FootstepsIcon size={18} />}
+              end={<EditButton label="Edit steps and goal" onClick={() => openMetricEdit("steps")} />}
+            >
+              <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />
+              <ProgressBar percent={stepsPct} />
+              <p className="muted metric-avg number-tabular">{average("steps", "")}</p>
+            </Card>
+          </DashboardAside>
+        </Dashboard>
       )}
 
       {activeTab === "shopping" && (
@@ -1001,7 +790,7 @@ export function FoodClient({
                         label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
                       />
                       <span>
-                        {item.name} · {Number(item.amount)} {item.unit}
+                        {item.name} <span className="shopping-qty">· {Number(item.amount)} {item.unit}</span>
                       </span>
                     </div>
                     <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
@@ -1012,6 +801,7 @@ export function FoodClient({
           </Card>
 
           <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
+          <CategoriesCard api={shoppingUnitsApi} categories={units} onChange={setUnits} onRefile={refileUnit} />
         </Dashboard>
       )}
 
@@ -1064,9 +854,8 @@ export function FoodClient({
         onSubmit={handleLogMeal}
         error={formError}
         busy={busy}
-        canSubmit={!!mealName.trim()}
+        canSubmit={mealHasValues}
       >
-        <Field label="Name" type="text" disabled={busy} value={mealName} onChange={(e) => setMealName(e.target.value)} required />
         <FieldPair>
           <Field
             label="Calories (kcal)"
@@ -1138,42 +927,12 @@ export function FoodClient({
             disabled={busy}
             value={shopUnit}
             onChange={(e) => setShopUnit(e.target.value)}
-            // An older item with a typed-in unit keeps it as an option.
-            options={(UNITS.includes(shopUnit) ? UNITS : [shopUnit, ...UNITS]).map((u) => ({ value: u, label: u }))}
+            // An item whose unit the list lacks keeps it as an option.
+            options={[...new Set(["pcs", ...units, shopUnit])].map((u) => ({ value: u, label: u }))}
           />
         </FieldPair>
         <CategoryField categories={categories} value={shopCategory} onChange={setShopCategory} disabled={busy} />
       </FormModal>
-
-      <Modal isOpen={isPastOpen} onClose={() => setIsPastOpen(false)} title="Past foods">
-        <div className="past-foods">
-          <ListBox wash className="entries">
-            {pastFoods.length === 0 ? (
-              <EmptyNote>Nothing logged yet.</EmptyNote>
-            ) : (
-              pastFoods.map((f) => (
-                <div key={f.name} className="entry-row">
-                  <div>
-                    <strong>{f.name}</strong>
-                    <MealMacros m={f} />
-                  </div>
-                  <div className="row-actions">
-                    <IconButton
-                      edit
-                      icon={<PlusIcon size={17} />}
-                      disabled={busy}
-                      onClick={() => handleLogPastFood(f)}
-                      label={`Log ${f.name}, ${f.calories} kcal`}
-                      title="Log"
-                    />
-                    <DeleteButton label={`Delete past food ${f.name}`} onClick={() => handleForgetPastFood(f)} />
-                  </div>
-                </div>
-              ))
-            )}
-          </ListBox>
-        </div>
-      </Modal>
 
       <FormModal
         isOpen={metricOpen}

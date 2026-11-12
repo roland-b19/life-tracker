@@ -31,7 +31,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill, the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12) (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
+- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill (it also fades out when it returns to 0%), the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12) (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
 - **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
 - **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
@@ -41,7 +41,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 **Look**
 - **Dark only.** The app has one dark appearance and no light theme. This deliberately departs from the HIG's "follow the system appearance"; the user chose it.
 - **Subtle colour.** Fills are low-alpha tints of their own colour (`--tint-subtle`, `--success-subtle`, ...), never solid bright blocks. A tinted button is tint text on `--tint-subtle`.
-- **One accent.** The steel blue `--tint` is the only accent, and status colours mean status only. Two exceptions are data the user asked to colour: the Wishlist price ranges (low grey, medium `--warning`, high `--danger`, as `-subtle` badges) and the muscle map's groups (`app/gym/muscle-groups.ts`), shown on the model and as a dot on each group chip. The chip itself stays neutral and turns `--tint-subtle` when selected. A muscle group named in a list row is a neutral `badge-rest`.
+- **One accent.** The steel blue `--tint` is the only accent, and status colours mean status only. Two exceptions are data the user asked to colour: the Wishlist price ranges (low grey, medium `--warning`, high `--danger`, as `-subtle` badges) and the muscle map's groups (`app/gym/muscle-groups.ts`), shown on the model and as a dot on each group chip. The chip itself stays neutral and turns `--tint-subtle` when selected. A muscle group named in a list row is a neutral `badge-rest`. There are 14 groups (Back and Abs are one group each).
 - **Subtle but legible.** The `-subtle` fills (.22–.24 alpha) were raised because fainter ones blended into the dark theme. Never go lower.
 - **Highlights are grey.** Every hover, focus or open fill change is a subtle grey step, applied at once. The row wash is neutral grey (white at .03), not a variation of the accent. The user first asked for accent-coloured rows, then for grey highlights everywhere.
 - **Hover is a subtle derivative of the element's own colour.**
@@ -88,14 +88,14 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - An empty list keeps one row's height (`--row-h`). One exception: a Gym exercise's set list collapses to nothing until its first set, since the target line above already says what to log.
   - Cards never jump.
 - **One line where it fits.** On a wide card a Wishlist row is one line: name, price, range, link, actions. On a phone it wraps to name, then price and range, then the link on its own line, with the actions in their own column. Tags and link start on the left. Price badges share one column width on every row, on a phone too (see the next rules).
-- **A total sits next to its title**, muted and tabular: `Items 12`, `Tasks 4`, `Meals 3`, `Shopping list 7`, `Categories 5`, `History 20`. A list still loading shows no total yet.
+- **A total sits next to its title**, muted and tabular: `Items 12`, `Tasks 4`, `Meals 3`, `Shopping list 7`, `Categories 5`. A list still loading shows no total yet.
 - **Counts and totals follow the filter.** The count next to the title and the summary amount always show the active filter, not the whole list.
 - **Never repeat what every row says.** A tag that would be identical on every visible row is hidden: the range badge appears only in the All tab.
 - **Tags line up in columns.** On a wide row each tag kind has its own shared column, so tags line up under one another.
   - Price and range badges stretch to their column's width, so all have the same width, with centred text.
   - The link starts on the left.
 - **Value first, details muted.** The main value comes first. Dates and other secondary data are muted (`--secondary`), with a clear gap: a muted detail after its value on the same line is 1.25rem away, baseline-aligned (`.weight-main`).
-- **Full-width selectors.** A `Segmented` control spans the full card width, with centred labels. The one exception is the muscle map's Front/Back switch: a 10rem control laid over the 3D model.
+- **Full-width selectors.** A `Segmented` control spans the full card width, with centred labels. The one exception is the muscle map's Front/Back switch: it sits first in the strip under the model, then the Move button (2.75rem, touch only), then Go back (6.5rem), all at the same height.
 - **One card level.** Never nest a card in a card. Only the outer box is a `.surface` and gets the entrance; inner groups are plain bands or rows. Gym Training days are the exception: seven selectable `--surface-solid` cards inside the split card.
 - **The list goes first.** The list the user works in is the main (first) column; a card that supports it (a summary, or the Categories that manage its groups) goes in the aside (second column); on a phone, where the columns stack, a summary card goes above the list (`summary-first`). Categories are added, renamed and deleted in their own card, never inside the list they group.
 - **No sticky panels.** Cards and panels scroll with the page. Only the sidebar and tab bar are fixed.
@@ -147,7 +147,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Undo puts the screen back first and writes after, like the delete. The exception is a log entry or list item the server re-inserts under its old id and time (meals, gym sets, weigh-ins): it comes back when the server answers. Pages that refetch after a write (Tasks, Gym days) write the old values first and show them with the refresh.
   - Every Undo has a failure path: if writing the old values back fails, the screen shows what the database holds and a warning says `Failed to undo`, `Failed to undo the edit` or `Failed to restore item`.
   - A new server action behind an Undo ships an authorization test (owner allowed, other user denied, anonymous denied) and a test that the restored row equals the original.
-  - Date entry for Water, Weight and Steps is a `DayField` selector (Today default, Yesterday, other day), not the date picker; Past foods opens in a sheet that scrolls inside itself; Shopping lists every item (no More).
+  - Health is Today only (since 2026-11-12): Water, Weight and Steps are edited for today through their card's Edit; there is no date entry, no history list, no Past foods and no meals list. Shopping lists every item (no More).
 - **Optimistic and honest.**
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
@@ -165,7 +165,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **An empty set counts as complete:** 0 of 0 shows 100%.
 - **A fraction is plain text** with the real numbers: "X of Y".
 - **Macro cards keep a fixed layout.** The target sits on its own row under the number (`/ 3350 kcal`), so a change never moves a line break or the card.
-- **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; "Log set" is the next row at full width; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row.
+- **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; the four columns are equal; "Log set" is the last control of an exercise (after the True failure, Partial reps and Good form switches) at full width; one exercise is one item of a wash list (alternating bands, list gaps, no extra space between exercises) and starts collapsed; its name is the fold button, the shared arrow right after the name, while the muscle tag always sits at the right edge (Exercise progress, History and Training days fold too); the bottom actions (Finish workout, Exit, Cancel) are one centred column as wide as the widest; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row.
 - **Muscle map move button (touch only).** Always grey, 2.75rem square (a faint lighter fill while held, never tinted; override the global button `min-height`). Press and hold it and slide the same finger to turn the model; a drag on the model itself scrolls the page (`touch-action: pan-y` on the canvas AND its wrapper, since the effective value is the intersection of the ancestors; OrbitControls off on a coarse pointer). The Tasks dashboard sits above its list on a phone (`summary-first`) and its empty Progress card keeps the ring's height, so changing day never moves the page.
 - **Stat tiles.** A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
 - **Bar charts (`BarChart` in `charts.tsx`):**
@@ -190,7 +190,7 @@ Both live in `app/components/animated-number.tsx`, which jumps straight to the v
 - No CSS `transition`, `animation` or `@keyframes`; no view or page transitions; no smooth scrolling.
 - No JS-driven motion either, apart from the two exceptions above: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart or camera tween, no other counting numbers (WAAPI, `requestAnimationFrame` and timers included).
 - Elements appear, disappear and change instantly: rows, modals, toasts, hover and press states, selected tabs, chart values, page changes.
-- Hover fills and the `:active` press scale (`--press`) still apply, but at once, with no transition.
+- Hover fills still apply, at once, with no transition. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12).
 - Feedback comes from the toast and its Undo, not from motion.
 - `prefers-reduced-motion` needs no handling beyond the two exceptions, which already honour it. If a new feature seems to need an animation, show the end state instead and tell the user.
 
@@ -275,7 +275,6 @@ Each of these was tried or proposed and the user removed it.
 - Example or help notes, credits, and a "Life tracker" title on each page. The sign-in card has no "Local development session..." line either.
 - A floating action button, or a command menu (⌘K) with shortcut hints. The add button sits in the card's title row.
 - Hiding content on a phone. The aside cards stack under the main column, so phone and desktop have the same features.
-- A greeting or suggested prompts in the Food Assistant chat. It starts empty, and its only control is the input. The "Past foods" `btn-sm tint` sits in the Meals card head, next to "Add meal".
 
 **Features**
 - A "buy" button and the green "bought" animation.
@@ -305,7 +304,7 @@ Each of these was tried or proposed and the user removed it.
 - [ ] A new server action has an authorization test (owner allowed, other user denied).
 
 **Accessibility**
-- [ ] Every hover rule is inside `@media (hover: hover)`. `:active` presses with `scale(var(--press))`.
+- [ ] Every hover rule is inside `@media (hover: hover)`. A press changes nothing (no scale).
 - [ ] Focus ring: 2px tint, offset 2px, keyboard only. Targets are at least 44pt (`::before` with `inset: min(0px, (100% - 44px) / 2)` on small controls; picker grids excepted).
 - [ ] `aria-label` on icon buttons, `aria-labelledby` on sections, `role=tablist` on segmented controls.
 - [ ] Works with reduced transparency and increased contrast.

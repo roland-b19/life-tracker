@@ -103,9 +103,9 @@ export const authOptions: NextAuthOptions = {
   providers,
   // Our own page also shows the AccessDenied result, instead of NextAuth's default error page.
   pages: { signIn: "/signin", error: "/signin" },
-  // Azure: 4 hours. Free variant: 30 days for one personal user; the allowlist is rechecked on every session read.
+  // Azure: 4 hours. Free variant: 180 days for one personal user; the allowlist is rechecked on every session read.
   session: useGitHub
-    ? { strategy: "jwt", maxAge: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 }
+    ? { strategy: "jwt", maxAge: 180 * 24 * 60 * 60, updateAge: 24 * 60 * 60 }
     : { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 15 * 60 },
   cookies: isProduction
     ? {

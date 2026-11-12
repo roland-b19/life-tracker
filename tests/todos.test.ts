@@ -27,7 +27,6 @@ import {
   createTodo,
   deleteTodo,
   getDailyTodos,
-  getTodoHistory,
   toggleTodo,
   updateTodo,
 } from "@/lib/todos";
@@ -288,20 +287,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     expect(res.stats.percentage).toBe(67);
   });
 
-  it("keeps a per-day history of finished tasks, owner only", async () => {
-    const day = "2026-11-04";
-    const a = await createTodo(userA, { space: "personal", title: "A", dueDate: day, isRecurring: false, recurrencePattern: "none" });
-    await createTodo(userA, { space: "personal", title: "B", dueDate: day, isRecurring: false, recurrencePattern: "none" });
-    await toggleTodo(userA, { id: a.id, isCompleted: true});
-
-    expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: day, isRecurring: false, total: 2, done: 1 });
-    expect(await getTodoHistory(userA, "business")).toEqual([]);
-    expect(await getTodoHistory(userB, "personal")).toEqual([]);
-
-    await deleteTodo(userA, a.id);
-    expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: day, isRecurring: false, total: 1, done: 0 });
-  });
-
   describe("Server Actions authorization & validation guards", () => {
     it("rejects unauthenticated requests", async () => {
       authState.id = "";
@@ -538,8 +523,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await deleteTodoAction(habit.id)).deleted).toBe(true);
       expect(await rows(habit.id)).toBe(0); // nothing of the task is left
       expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1", [userA])).rows[0].n).toBe(1);
-      // The chart keeps the day: 2 daily tasks counted when ticked, 1 left after the delete.
-      expect(await getTodoHistory(userA, "personal")).toContainEqual({ date: today, isRecurring: true, total: 1, done: 0 });
 
       // Undo while another task has its title is refused; otherwise it gives the row back.
       const again = await createTodoAction({ space: "personal", title: "stretch", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
@@ -740,7 +723,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   });
 
   describe("loadTodosViewAction (the page's single read)", () => {
-    it("returns both spaces and history for the owner only, always for today", async () => {
+    it("returns both spaces for the owner only, always for today", async () => {
       const today = toISODate();
       await createTodo(userA, { space: "personal", title: "Mine", dueDate: today, isRecurring: false, recurrencePattern: "none" });
       await createTodo(userA, { space: "personal", title: "Habit", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
@@ -751,7 +734,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const view = await loadTodosViewAction();
       expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
       expect(view.daily[1].todos).toEqual([]);
-      expect(Array.isArray(view.history[0])).toBe(true);
 
       authState.id = userB;
       expect((await loadTodosViewAction()).daily[0].todos).toEqual([]);

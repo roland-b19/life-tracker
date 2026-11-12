@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
 import { getExercises, getUserSplitWithDays } from "@/lib/gym";
+import { getShoppingCategories } from "@/lib/food";
 
 const DAYS = 730; // about two years of history for one user
 
@@ -32,6 +33,9 @@ beforeAll(async () => {
   auth.id = userId;
   await getUserSplitWithDays(userId); // creates the routine
   await getExercises(userId);
+  // A first visit seeds the shopping categories and units once; the guard measures every visit after it.
+  await getShoppingCategories(userId);
+  await getShoppingCategories(userId, "unit");
   const d = sql.raw(String(DAYS));
   const day = sql`(current_date - g)`;
   await db.execute(sql`INSERT INTO weight_entries (user_id, date, kilograms) SELECT ${userId}, ${day}, 85 FROM generate_series(0, ${d}) g`);
@@ -43,7 +47,6 @@ beforeAll(async () => {
     await db.execute(sql`INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, is_completed, created_at)
       SELECT ${userId}, ${space}, 'Task ' || g || '-' || t, false, 'none', ${day}, true, ${day}
       FROM generate_series(0, ${d}) g, generate_series(1, 2) t`);
-    await db.execute(sql`INSERT INTO todo_day_stats (user_id, space, is_recurring, date, total, done) SELECT ${userId}, ${space}, false, ${day}, 2, 2 FROM generate_series(0, ${d}) g`);
   }
   await db.execute(sql`INSERT INTO workout_sessions (user_id, date, duration_minutes, is_deload, created_at)
     SELECT ${userId}, ${day}, 60, false, ${day} FROM generate_series(1, ${d}) g WHERE g % 2 = 0`);
@@ -70,7 +73,8 @@ afterAll(async () => {
 describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [
     ["/gym", () => import("../app/gym/page"), 12, 300_000],
-    ["/food", () => import("../app/food/page"), 12, 10_000],
+    // Weight sends at most 365 weigh-ins for its chart (the database keeps all), so the page is bounded by that, not by the history.
+    ["/food", () => import("../app/food/page"), 12, 40_000],
     ["/todos", () => import("../app/todos/page"), 11, 20_000],
     ["/wishlist", () => import("../app/wishlist/page"), 3, 1_000],
   ];

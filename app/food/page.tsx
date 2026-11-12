@@ -4,12 +4,12 @@ import { authOptions } from "@/auth";
 import {
   getDailyFoodSummary,
   getNutritionTargets,
-  getPastFoods,
+  getDailyMetricsHistory,
   getShoppingCategories,
   getShoppingList,
-  getWeightAnalytics,
 } from "@/lib/food";
-import { toISODate } from "@/lib/format-date";
+import { addDays, toISODate } from "@/lib/format-date";
+import { listWeightEntries } from "@/server/weight";
 import { FoodClient } from "./food-client";
 
 export default async function FoodPage() {
@@ -21,13 +21,14 @@ export default async function FoodPage() {
   const userId = session.user.id;
   const today = toISODate();
 
-  const [targets, summary, weightAnalytics, shoppingList, shoppingCategories, pastFoods] = await Promise.all([
+  const [targets, summary, weights, weekMetrics, shoppingList, shoppingCategories, shoppingUnits] = await Promise.all([
     getNutritionTargets(userId),
     getDailyFoodSummary(userId, today),
-    getWeightAnalytics(userId, today),
+    listWeightEntries(userId, addDays(today, -364)), // the page shows a year; the database keeps every weigh-in
+    getDailyMetricsHistory(userId, today),
     getShoppingList(userId),
     getShoppingCategories(userId),
-    getPastFoods(userId),
+    getShoppingCategories(userId, "unit"),
   ]);
 
   return (
@@ -36,10 +37,11 @@ export default async function FoodPage() {
       todayDate={today}
       targets={(({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }) => ({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }))(targets)}
       initialSummary={summary}
-      weightAnalytics={weightAnalytics}
+      initialWeights={weights}
+      weekMetrics={weekMetrics}
       initialShoppingList={shoppingList}
       shoppingCategories={shoppingCategories}
-      pastFoods={pastFoods.map(({ name, calories, protein, carbs, fat, isEstimated }) => ({ name, calories, protein, carbs, fat, isEstimated }))}
+      shoppingUnits={shoppingUnits}
     />
   );
 }

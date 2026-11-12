@@ -6,12 +6,13 @@ import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort, useMore } from "../components/lists";
-import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle, Toolbar } from "../components/blocks";
+import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle } from "../components/blocks";
 import { ChevronRightIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { useToast } from "../components/toast";
+import { useFolded } from "../components/categories-card";
 import { MuscleExplorer } from "./muscle-map";
+import type { MuscleGroup } from "./muscle-groups";
 import { ProgressPanel } from "./progress-panel";
-import { Segmented } from "../components/segmented";
 import { clearWorkoutTime, formatClock, saveWorkoutTime, useWorkoutTimer, workoutMinutes } from "./workout-timer";
 import {
   cancelSessionAction,
@@ -73,9 +74,9 @@ interface SplitDay {
 }
 
 interface DeloadInfo {
-  weeksSinceLastDeload: number;
   currentCycleWeek: number;
   isDeloadDue: boolean;
+  inDeloadWeek: boolean;
   lastDeloadDate: string | null;
 }
 
@@ -89,6 +90,7 @@ interface WorkoutSetData {
   extraKg: string;
   isFailure: boolean;
   isPartial: boolean;
+  isGoodForm: boolean;
   flagAnomaly: boolean;
   anomalyReason?: string | null;
   notes?: string | null;
@@ -151,16 +153,18 @@ export function GymClient({
   // A workout left without finishing (Exit, or a reload): its sets stay saved and Resume brings it back.
   const [paused, setPaused] = useState<ActiveSessionData | null>(openSession);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [view, setView] = useState<"workout" | "progress">("workout");
   const [sessionNotes, setSessionNotes] = useState("");
   const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
-  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue);
+  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false);
+  // Exercises opened in the workout; they start collapsed and are not kept between workouts.
+  const [openEx, setOpenEx] = useState<string[]>([]);
   const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
   const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
   useEffect(() => {
     live.current = activeSession ?? paused;
   });
+  const [isFolded, toggleFolded] = useFolded("gym");
   const [shownHistory, moreHistory] = useMore(history);
   // The Progress tab draws from what the page already holds (history plus the workout in hand): no load, no skeleton.
   const progress = useMemo(
@@ -180,6 +184,7 @@ export function GymClient({
         extraKg: string;
         isFailure: boolean;
         isPartial: boolean;
+        isGoodForm: boolean;
         notes: string;
       }
     >
@@ -196,7 +201,8 @@ export function GymClient({
   >("barbell");
 
   const currentDay = split?.days.find((d) => d.id === selectedDayId);
-  const [shownExercises, moreExercises] = useMore(currentDay?.exercises ?? []);
+  // The muscles the day on screen trains: the muscle map starts with them picked (it compares by content, so a new array each render is fine).
+  const dayGroups = [...new Set(currentDay?.exercises.map((e) => e.muscleGroup))] as MuscleGroup[];
 
   // Routine editor
   const [draft, setDraft] = useState<DayDraft | null>(null);
@@ -366,6 +372,7 @@ export function GymClient({
       extraKg: "0",
       isFailure: true,
       isPartial: false,
+      isGoodForm: true,
       notes: "",
     };
 
@@ -392,6 +399,7 @@ export function GymClient({
         extraKg: extraNum,
         isFailure: state.isFailure,
         isPartial: state.isPartial,
+        isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
         minTargetReps: exercise.minReps,
         maxTargetReps: exercise.maxReps,
@@ -408,6 +416,7 @@ export function GymClient({
           extraKg: res.set.extraKg,
           isFailure: res.set.isFailure,
           isPartial: res.set.isPartial,
+          isGoodForm: res.set.isGoodForm,
           flagAnomaly: res.set.flagAnomaly,
           anomalyReason: res.set.anomalyReason,
           notes: res.set.notes,
@@ -468,6 +477,7 @@ export function GymClient({
           extraKg: Number(set.extraKg),
           isFailure: set.isFailure,
           isPartial: set.isPartial,
+          isGoodForm: set.isGoodForm,
           notes: set.notes || undefined,
           minTargetReps: exercise.minReps,
           maxTargetReps: exercise.maxReps,
@@ -553,6 +563,7 @@ export function GymClient({
                 extraKg: Number(x.extraKg),
                 isFailure: x.isFailure,
                 isPartial: x.isPartial,
+                isGoodForm: x.isGoodForm,
                 flagAnomaly: x.flagAnomaly,
                 anomalyReason: x.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
                 notes: x.notes,
@@ -659,10 +670,10 @@ export function GymClient({
       <Banner
         id="deload-title"
         className="deload-card"
-        title={deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
+        title={deload.inDeloadWeek ? "Deload week" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
         sub={
-          deload.isDeloadDue
-            ? "Deload sessions are excluded from PRs."
+          deload.inDeloadWeek || deload.isDeloadDue
+            ? "A deload week stays out of the Exercise progress chart."
             : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
       >
@@ -674,7 +685,7 @@ export function GymClient({
         <Card
           id="active-session-title"
           title={activeSession.splitDayName || "Workout session"}
-          sub={`${formatDMY(activeSession.date)} ${activeSession.isDeload ? "· Deload" : ""}`}
+          sub={activeSession.isDeload ? "Deload" : undefined}
           actions={
             <>
               <span className={`session-timer number-tabular${timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
@@ -684,7 +695,7 @@ export function GymClient({
             </>
           }
         >
-          <div>
+          <ListBox wash className="entries">
             {currentDay?.exercises.map((exercise) => {
               const exerciseSets = activeSession.sets.filter(
                 (s) => s.exerciseId === exercise.exerciseId,
@@ -701,17 +712,27 @@ export function GymClient({
                 extraKg: "0",
                 isFailure: true,
                 isPartial: false,
+                isGoodForm: true,
                 notes: "",
               };
+              const folded = !openEx.includes(exercise.exerciseId);
               const patch = (change: Partial<typeof currentState>) =>
                 setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...currentState, ...change } }));
 
               return (
-                <div key={exercise.id} className="workout-exercise-card">
+                <div key={exercise.id} className="entry-row workout-exercise-card">
                   <div className="exercise-header">
                     <div>
                       <h3 className="exercise-title">
-                        {exercise.exerciseName}
+                        <button
+                          type="button"
+                          className="group-toggle"
+                          aria-expanded={!folded}
+                          onClick={() => setOpenEx((o) => (o.includes(exercise.exerciseId) ? o.filter((x) => x !== exercise.exerciseId) : [...o, exercise.exerciseId]))}
+                        >
+                          {exercise.exerciseName}
+                          <ChevronRightIcon size={14} />
+                        </button>
                       </h3>
                       <span className="muted exercise-meta">
                         Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
@@ -720,128 +741,129 @@ export function GymClient({
                     <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
                   </div>
 
-                  {/* The same exercise the last time this day was trained: the numbers to beat */}
-                  {(() => {
-                    const last = history.find(
-                      (h) =>
-                        h.dayId === activeSession.splitDayId &&
-                        !h.isDeload &&
-                        h.date < activeSession.date &&
-                        h.exercises.some((e) => e.id === exercise.exerciseId),
-                    );
-                    const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
-                    if (!last) return null;
-                    return (
-                      <div className="last-time">
-                        <span className="muted">Last time · {formatDMY(last.date)}</span>
-                        {sets.map((set, i) => (
-                          <span key={i} className="number-tabular">
-                            {setText(set)}
-                          </span>
+                  {!folded && (
+                    <>
+                    {/* The same exercise the last time this day was trained: the numbers to beat */}
+                    {(() => {
+                      const last = history.find(
+                        (h) =>
+                          h.dayId === activeSession.splitDayId &&
+                          h.date < activeSession.date &&
+                          h.exercises.some((e) => e.id === exercise.exerciseId),
+                      );
+                      const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
+                      if (!last) return null;
+                      return (
+                        <div className="last-time">
+                          <span className="muted">Last time · {formatDMY(last.date)}</span>
+                          {sets.map((set, i) => (
+                            <span key={i} className="number-tabular">
+                              {setText(set)}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Previous logged sets */}
+                    {exerciseSets.length > 0 && (
+                      <ListBox wash className="entries set-list">
+                        {exerciseSets.map((s) => (
+                          <div key={s.id} className="entry-row">
+                            <span>
+                              <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
+                              {s.loadValue} {s.loadType}
+                              {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
+                              {s.isPartial ? " (partials)" : ""}
+                              {s.isGoodForm ? "" : " (poor form)"}
+                              {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
+                            </span>
+                            <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s, exercise)} />
+                          </div>
                         ))}
-                      </div>
-                    );
-                  })()}
+                      </ListBox>
+                    )}
 
-                  {/* Previous logged sets */}
-                  <ListBox wash className="entries set-list">
-                    {exerciseSets.map((s) => (
-                      <div key={s.id} className="entry-row">
-                        <span>
-                          <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
-                          {s.loadValue} {s.loadType}
-                          {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
-                          {s.isPartial ? " (partials)" : ""}
-                          {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
-                        </span>
-                        <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s, exercise)} />
-                      </div>
-                    ))}
-                  </ListBox>
+                    {/* Set input row */}
+                    <div className="set-input-grid">
+                      <Field
+                        label="Reps"
+                        type="number"
+                        min="1"
+                        max="200"
+                        inputMode="numeric"
+                        disabled={busy}
+                        value={currentState.reps}
+                        onChange={(e) => patch({ reps: e.target.value })}
+                      />
+                      <SelectField
+                        label="Unit"
+                        disabled={busy}
+                        value={currentState.loadType}
+                        onChange={(e) => patch({ loadType: e.target.value as "kg" | "plates" | "bodyweight" })}
+                        options={[
+                          { value: "kg", label: "kg" },
+                          { value: "plates", label: "Plates" },
+                          { value: "bodyweight", label: "BW" },
+                        ]}
+                      />
+                      <Field
+                        label="Value"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        inputMode="decimal"
+                        disabled={busy}
+                        value={currentState.loadValue}
+                        onChange={(e) => patch({ loadValue: e.target.value })}
+                      />
+                      <Field
+                        label="Extra"
+                        title="Extra weight in kg"
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        inputMode="decimal"
+                        disabled={busy}
+                        value={currentState.extraKg}
+                        onChange={(e) => patch({ extraKg: e.target.value })}
+                      />
+                    </div>
 
-                  {/* Set input row */}
-                  <div className="set-input-grid">
-                    <Field
-                      label="Reps"
-                      type="number"
-                      min="1"
-                      max="200"
-                      inputMode="numeric"
-                      disabled={busy}
-                      value={currentState.reps}
-                      onChange={(e) => patch({ reps: e.target.value })}
-                    />
-                    <SelectField
-                      label="Unit"
-                      disabled={busy}
-                      value={currentState.loadType}
-                      onChange={(e) => patch({ loadType: e.target.value as "kg" | "plates" | "bodyweight" })}
-                      options={[
-                        { value: "kg", label: "kg" },
-                        { value: "plates", label: "Plates" },
-                        { value: "bodyweight", label: "BW" },
-                      ]}
-                    />
-                    <Field
-                      label="Value"
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      inputMode="decimal"
-                      disabled={busy}
-                      value={currentState.loadValue}
-                      onChange={(e) => patch({ loadValue: e.target.value })}
-                    />
-                    <Field
-                      label="Extra"
-                      title="Extra weight in kg"
-                      type="number"
-                      step="0.25"
-                      min="0"
-                      inputMode="decimal"
-                      disabled={busy}
-                      value={currentState.extraKg}
-                      onChange={(e) => patch({ extraKg: e.target.value })}
-                    />
+                    <div className="toggle-row">
+                      <Toggle label="True failure (0 RIR)" checked={currentState.isFailure} disabled={busy} onChange={(e) => patch({ isFailure: e.target.checked })} />
+                      <Toggle label="Partial reps at end" checked={currentState.isPartial} disabled={busy} onChange={(e) => patch({ isPartial: e.target.checked })} />
+                      <Toggle label="Good form" checked={currentState.isGoodForm} disabled={busy} onChange={(e) => patch({ isGoodForm: e.target.checked })} />
+                    </div>
+
                     <button
                       type="button"
+                      className="log-set"
                       disabled={busy || !(parseInt(currentState.reps, 10) > 0)}
                       onClick={() => handleLogSet(exercise)}
                     >
                       <PlusIcon size={14} />
                       Log set
                     </button>
-                  </div>
-
-                  <div className="toggle-row">
-                    <Toggle label="True failure (0 RIR)" checked={currentState.isFailure} disabled={busy} onChange={(e) => patch({ isFailure: e.target.checked })} />
-                    <Toggle label="Partial reps at end" checked={currentState.isPartial} disabled={busy} onChange={(e) => patch({ isPartial: e.target.checked })} />
-                  </div>
+                    </>
+                  )}
                 </div>
               );
             })}
-          </div>
+          </ListBox>
 
           <div className="session-footer">
-            <div className="form-row">
-              <Field
-                label="Session notes (optional)"
-                labelClassName="grow-2"
-                type="text"
-                disabled={busy}
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-              />
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={handleFinishSession}
-              >
+            <Field
+              label="Session notes (optional)"
+              type="text"
+              disabled={busy}
+              value={sessionNotes}
+              onChange={(e) => setSessionNotes(e.target.value)}
+            />
+            <div className="session-actions">
+              <button type="button" className="secondary" disabled={busy} onClick={handleFinishSession}>
                 Finish workout
               </button>
-            </div>
-            <div className="session-exit">
               {confirmCancel ? (
                 <>
                   <span className="muted">Delete this workout and its sets?</span>
@@ -872,190 +894,173 @@ export function GymClient({
               label="Workout in progress"
               className="resume-bar"
               title="Workout in progress"
-              sub={`${paused.splitDayName || "Workout"} · ${formatDMY(paused.date)} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
+              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
             >
               <TintButton onClick={handleResumeSession}>Resume</TintButton>
             </Banner>
           )}
-          <Toolbar>
-            <Segmented
-              label="Gym view"
-              value={view}
-              options={[
-                { value: "workout", label: "Workout" },
-                { value: "progress", label: "Progress" },
-              ]}
-              onChange={setView}
-            />
-          </Toolbar>
-          {view === "progress" ? (
-            <ProgressPanel sets={progress} days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
-          ) : (
-            <>
-              <MuscleExplorer
-                planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
-              />
-              <Dashboard>
-                <DashboardMain>
-                  {currentDay && (
-                    <Card
-                      id="preview-title"
-                      title={currentDay.isRest ? "Rest day" : currentDay.name}
-                      sub={DAY_NAMES[currentDay.dayOfWeek]}
-                      below
-                      actions={
-                        <>
-                          <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${currentDay.name}`} onClick={() => openEditor(currentDay)}>
-                            Edit
-                          </TintButton>
-                          {!currentDay.isRest && (
-                            <TintButton
-                              aria-label={`Start ${currentDay.name}`}
-                              disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
-                              onClick={() => void handleStartSession(currentDay)}
-                            >
-                              Start
-                            </TintButton>
-                          )}
-                        </>
-                      }
-                    >
-                      {!currentDay.isRest && (
-                        <ListBox wash className="entries">
-                          {currentDay.exercises.length > 0 ? (
-                            <>
-                              {shownExercises.map((ex, idx) => (
-                                <div key={ex.id} className="entry-row">
-                                  <div className="entry-main">
-                                    <strong>
-                                      {idx + 1}. {ex.exerciseName}
-                                    </strong>
-                                    <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
-                                  </div>
-                                  <span className="muted number-tabular entry-side">
-                                    {ex.targetSets} × {ex.minReps} – {ex.maxReps}
-                                  </span>
-                                </div>
-                              ))}
-                              {moreExercises}
-                            </>
-                          ) : (
-                            <EmptyNote>No exercises yet.</EmptyNote>
-                          )}
-                        </ListBox>
-                      )}
-                    </Card>
-                  )}
-                </DashboardMain>
-
-                <DashboardAside>
-                  <Card id="split-title" title="Training days">
-                    <ListBox className="split-day-list">
-                      {split?.days.map((day) => {
-                        const isToday = day.dayOfWeek === todayDayOfWeek;
-                        const isSelected = day.id === selectedDayId;
-                        return (
-                          <div
-                            key={day.id}
-                            className={`split-day-card${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
+          <Dashboard>
+            <DashboardMain>
+              <Card id="split-title" title="Training days" fold={{ folded: isFolded("split"), onToggle: () => toggleFolded("split") }}>
+                <ListBox className="split-day-list">
+                  {split?.days.map((day) => {
+                    const isToday = day.dayOfWeek === todayDayOfWeek;
+                    const isSelected = day.id === selectedDayId;
+                    return (
+                      <div
+                        key={day.id}
+                        className={`split-day-card${isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          className="split-day-select"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelectedDayId(day.id)}
+                        >
+                          <span className="split-day-title">
+                            <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
+                            {isToday && <Badge kind="info">Today</Badge>}
+                            {day.isRest ? (
+                              <Badge kind="rest">Rest</Badge>
+                            ) : (
+                              <Badge kind="info" className="number-tabular">{day.exercises.length}</Badge>
+                            )}
+                          </span>
+                          <span className="muted split-day-sub">{day.name}</span>
+                        </button>
+                        {!day.isRest && day.exercises.length > 0 && (
+                          <TintButton
+                            aria-label={`Start ${day.name}`}
+                            disabled={busy || Boolean(paused)}
+                            onClick={() => {
+                              setSelectedDayId(day.id);
+                              void handleStartSession(day);
+                            }}
                           >
-                            <button
-                              type="button"
-                              className="split-day-select"
-                              aria-pressed={isSelected}
-                              onClick={() => setSelectedDayId(day.id)}
-                            >
-                              <span className="split-day-title">
-                                <strong>{DAY_NAMES[day.dayOfWeek]}</strong>
-                                {isToday && <Badge kind="info">Today</Badge>}
-                                {day.isRest ? (
-                                  <Badge kind="rest">Rest</Badge>
-                                ) : (
-                                  <Badge kind="info" className="number-tabular">{day.exercises.length}</Badge>
-                                )}
-                              </span>
-                              <span className="muted split-day-sub">{day.name}</span>
-                            </button>
-                            {!day.isRest && day.exercises.length > 0 && (
-                              <TintButton
-                                aria-label={`Start ${day.name}`}
-                                disabled={busy || Boolean(paused)}
-                                onClick={() => {
-                                  setSelectedDayId(day.id);
-                                  void handleStartSession(day);
-                                }}
-                              >
-                                Start
-                              </TintButton>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </ListBox>
-                  </Card>
-                </DashboardAside>
-              </Dashboard>
-              <Card
-                id="history-title"
-                title="History"
-                className="gym-history"
-                end={
-                  <span className="muted number-tabular">
-                    {history.length} {history.length === 1 ? "workout" : "workouts"}
-                  </span>
-                }
-              >
-                <ListBox wash className="entries">
-                  {history.length > 0 ? (
-                    <>
-                      {shownHistory.map((h) => {
-                        const open = openHistoryId === h.id;
-                        return (
-                          <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
-                            <button
-                              type="button"
-                              className="history-toggle"
-                              aria-expanded={open}
-                              aria-controls={`history-${h.id}`}
-                              onClick={() => setOpenHistoryId(open ? null : h.id)}
-                            >
-                              <span className="history-entry-head">
-                                <strong>{h.dayName ?? "Workout"}</strong>
-                                {h.isDeload && <Badge kind="rest">Deload</Badge>}
-                                <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
-                                <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
-                              </span>
-                              <span className="muted number-tabular history-progress">
-                                {h.isDeload
-                                  ? "Deload week, not counted"
-                                  : h.progress !== null
-                                    ? `Weight ${kgDelta(h.progress)} vs the week before`
-                                    : "Nothing to compare with yet"}
-                              </span>
-                            </button>
-                            {open && (
-                              <div id={`history-${h.id}`} className="history-details">
-                                {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
-                                {h.exercises.map((ex) => (
-                                  <p key={ex.id} className="history-exercise">
-                                    <strong>{ex.name}</strong>
-                                    <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {moreHistory}
-                    </>
-                  ) : (
-                    <EmptyNote>No finished workouts yet.</EmptyNote>
-                  )}
+                            Start
+                          </TintButton>
+                        )}
+                      </div>
+                    );
+                  })}
                 </ListBox>
               </Card>
-            </>
-          )}
+            </DashboardMain>
+
+            {/* Training days is above everything that changes size, so picking a day never moves the buttons */}
+            <DashboardAside>
+              {split?.days
+                .filter((day) => day.id === selectedDayId)
+                .map((day) => (
+                  <Card
+                    key={day.id}
+                    id="preview-title"
+                    title={day.isRest ? "Rest day" : day.name}
+                    sub={DAY_NAMES[day.dayOfWeek]}
+                    below
+                    actions={
+                      <>
+                        <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${day.name}`} onClick={() => openEditor(day)}>
+                          Edit
+                        </TintButton>
+                        {!day.isRest && (
+                          <TintButton
+                            aria-label={`Start ${day.name}`}
+                            disabled={busy || Boolean(paused) || day.exercises.length === 0}
+                            onClick={() => void handleStartSession(day)}
+                          >
+                            Start
+                          </TintButton>
+                        )}
+                      </>
+                    }
+                  >
+                    {!day.isRest && (
+                      <ListBox wash className="entries">
+                        {day.exercises.length > 0 ? (
+                          day.exercises.map((ex, idx) => (
+                            <div key={ex.id} className="entry-row">
+                              <div className="entry-main entry-stack">
+                                <strong>
+                                  {idx + 1}. {ex.exerciseName}
+                                </strong>
+                                <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
+                              </div>
+                              <span className="muted number-tabular entry-side">
+                                {ex.targetSets} × {ex.minReps} – {ex.maxReps}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <EmptyNote>No exercises yet.</EmptyNote>
+                        )}
+                      </ListBox>
+                    )}
+                  </Card>
+                ))}
+            </DashboardAside>
+          </Dashboard>
+          <ProgressPanel sets={progress} />
+          <MuscleExplorer
+            dayGroups={dayGroups}
+            planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
+          />
+          <Card
+            id="history-title"
+            title="History"
+            className="gym-history"
+            fold={{ folded: isFolded("history"), onToggle: () => toggleFolded("history") }}
+            end={
+              <span className="muted number-tabular">
+                {history.length} {history.length === 1 ? "workout" : "workouts"}
+              </span>
+            }
+          >
+            <ListBox wash className="entries">
+              {history.length > 0 ? (
+                <>
+                  {shownHistory.map((h) => {
+                    const open = openHistoryId === h.id;
+                    return (
+                      <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
+                        <button
+                          type="button"
+                          className="history-toggle"
+                          aria-expanded={open}
+                          aria-controls={`history-${h.id}`}
+                          onClick={() => setOpenHistoryId(open ? null : h.id)}
+                        >
+                          <span className="history-entry-head">
+                            <strong>{h.dayName ?? "Workout"}</strong>
+                            {h.isDeload && <Badge kind="rest">Deload</Badge>}
+                            <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
+                            <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
+                          </span>
+                          <span className="muted number-tabular history-progress">
+                            {h.progress !== null ? `Weight ${kgDelta(h.progress)} vs the week before` : "Nothing to compare with yet"}
+                          </span>
+                        </button>
+                        {open && (
+                          <div id={`history-${h.id}`} className="history-details">
+                            {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
+                            {h.exercises.map((ex) => (
+                              <p key={ex.id} className="history-exercise">
+                                <strong>{ex.name}</strong>
+                                <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {moreHistory}
+                </>
+              ) : (
+                <EmptyNote>No finished workouts yet.</EmptyNote>
+              )}
+            </ListBox>
+          </Card>
         </>
       )}
 

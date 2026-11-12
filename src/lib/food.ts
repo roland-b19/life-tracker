@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   dailyMetrics,
@@ -7,12 +7,11 @@ import {
   recipes,
   shoppingCategories,
   shoppingItems,
-  weightEntries,
+  shoppingUnits,
 } from "@/db/schema";
 import {
   CreateShoppingItemInput,
   LogMealInput,
-  RestoreMealInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
@@ -23,7 +22,6 @@ import {
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
-import { weekStartOf, weightStats, type WeightStats } from "./weight-stats";
 
 
 export async function getNutritionTargets(userId: string) {
@@ -124,24 +122,7 @@ export async function logMeal(userId: string, input: LogMealInput) {
   return created;
 }
 
-/** Puts a deleted meal back as it was; an id that is already taken is left alone and returns null. */
-export async function restoreMeal(userId: string, input: RestoreMealInput) {
-  const [restored] = await db
-    .insert(meals)
-    .values({
-      ...input,
-      userId,
-      protein: input.protein.toFixed(1),
-      carbs: input.carbs.toFixed(1),
-      fat: input.fat.toFixed(1),
-      isEstimated: input.isEstimated ?? false,
-    })
-    .onConflictDoNothing()
-    .returning();
-  return restored ?? null;
-}
-
-/** Foods logged before, newest first, one entry per name: the "Past foods" sheet and the assistant's context. */
+/** Foods logged before, newest first, one entry per name: the assistant's context. */
 export async function getPastFoods(userId: string, limit = 40) {
   const latest = db
     .selectDistinctOn([sql`lower(${meals.name})`], {
@@ -158,22 +139,6 @@ export async function getPastFoods(userId: string, limit = 40) {
     .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt))
     .as("latest");
   return db.select().from(latest).orderBy(desc(latest.createdAt)).limit(limit);
-}
-
-/** Takes a food off the "Past foods" list without touching the days it was logged on; returns the meals it hid. */
-export async function forgetPastFood(userId: string, name: string) {
-  const hidden = await db
-    .update(meals)
-    .set({ forgotten: true })
-    .where(and(eq(meals.userId, userId), eq(meals.forgotten, false), sql`lower(${meals.name}) = lower(${name})`))
-    .returning({ id: meals.id });
-  return hidden.map((m) => m.id);
-}
-
-/** Undo of `forgetPastFood`: exactly the meals it hid come back. */
-export async function restorePastFood(userId: string, ids: string[]) {
-  if (ids.length === 0) return;
-  await db.update(meals).set({ forgotten: false }).where(and(eq(meals.userId, userId), inArray(meals.id, ids)));
 }
 
 /** `assertDay` throws for a day that can no longer change, so a delete never outlives the day its Undo is allowed on. */
@@ -207,6 +172,7 @@ export async function addWater(userId: string, date: string, amountMl: number) {
     })
     .returning();
 
+  await pruneMetrics(userId, date);
   return updated;
 }
 
@@ -217,6 +183,7 @@ export async function updateDailyWater(userId: string, date: string, waterMl: nu
     .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { waterMl: Math.max(0, waterMl) } })
     .returning();
 
+  await pruneMetrics(userId, date);
   return updated;
 }
 
@@ -237,78 +204,21 @@ export async function updateDailySteps(userId: string, date: string, steps: numb
     })
     .returning();
 
+  await pruneMetrics(userId, date);
   return updated;
 }
 
-export type MetricKind = "water" | "steps";
-const metricField = { water: "waterMl", steps: "steps" } as const;
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** Health keeps water and steps for the last 7 days only (the 7-day average): older rows go when a day is written. */
+const pruneMetrics = (userId: string, date: string) =>
+  db.delete(dailyMetrics).where(and(eq(dailyMetrics.userId, userId), lt(dailyMetrics.date, addDays(date, -6))));
 
-/** Days with water or steps logged, newest first. */
-export async function getDailyMetricsHistory(userId: string) {
+/** The days with water or steps logged in the last 7 days up to `today`, newest first. */
+export async function getDailyMetricsHistory(userId: string, today: string) {
   return db
     .select({ date: dailyMetrics.date, waterMl: dailyMetrics.waterMl, steps: dailyMetrics.steps })
     .from(dailyMetrics)
-    .where(and(eq(dailyMetrics.userId, userId), sql`(${dailyMetrics.waterMl} > 0 OR ${dailyMetrics.steps} > 0)`))
+    .where(and(eq(dailyMetrics.userId, userId), gte(dailyMetrics.date, addDays(today, -6)), lte(dailyMetrics.date, today)))
     .orderBy(desc(dailyMetrics.date));
-}
-
-async function writeMetric(tx: Tx | typeof db, userId: string, date: string, kind: MetricKind, value: number) {
-  const field = metricField[kind];
-  await tx
-    .insert(dailyMetrics)
-    .values({ userId, date, [field]: value })
-    .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { [field]: value } });
-}
-
-/**
- * Sets a day's water or steps. With `previousDate` the value moves there from that day (an edit).
- * Returns false, writing nothing, when the target day already has a value of its own.
- */
-export async function saveDailyMetric(
-  userId: string,
-  input: { kind: MetricKind; date: string; value: number; previousDate?: string },
-) {
-  const { kind, date, value, previousDate } = input;
-  return db.transaction(async (tx) => {
-    if (previousDate !== date) {
-      // shortcut: a day with no row yet is not locked, so two tabs adding the same day at once both win; fine for one user.
-      const [row] = await tx
-        .select({ waterMl: dailyMetrics.waterMl, steps: dailyMetrics.steps })
-        .from(dailyMetrics)
-        .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, date)))
-        .for("update");
-      if (row && row[metricField[kind]] > 0) return false;
-      if (previousDate) await writeMetric(tx, userId, previousDate, kind, 0);
-    }
-    await writeMetric(tx, userId, date, kind, value);
-    return true;
-  });
-}
-
-export const clearDailyMetric = (userId: string, kind: MetricKind, date: string) =>
-  writeMetric(db, userId, date, kind, 0);
-
-/** Weight stats for the Health page; `today` is the user's calendar day. */
-export async function getWeightAnalytics(userId: string, today: string): Promise<WeightStats> {
-  // Only this and last week plus the latest weigh-in are needed (see weightStats), not the whole history.
-  const since = addDays(weekStartOf(today), -7);
-  const entries = await db
-    .select({ date: weightEntries.date, kilograms: weightEntries.kilograms })
-    .from(weightEntries)
-    .where(
-      and(
-        eq(weightEntries.userId, userId),
-        or(
-          gte(weightEntries.date, since),
-          eq(weightEntries.date, sql`(select max(date) from weight_entries where user_id = ${userId})`),
-        ),
-      ),
-    );
-  return weightStats(
-    entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })),
-    today,
-  );
 }
 
 /**
@@ -332,6 +242,7 @@ export async function addShoppingItem(
   input: CreateShoppingItemInput,
 ) {
   await ensureShoppingCategory(userId, input.category);
+  await ensureShoppingCategory(userId, input.unit, "unit");
   const [same] = await db
     .select()
     .from(shoppingItems)
@@ -383,46 +294,70 @@ export async function updateShoppingItem(userId: string, input: UpdateShoppingIt
     })
     .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
     .returning();
-  if (updated) await ensureShoppingCategory(userId, input.category);
+  if (updated) {
+    await ensureShoppingCategory(userId, input.category);
+    await ensureShoppingCategory(userId, input.unit, "unit");
+  }
   return updated;
 }
 
-/** Store sections a new user starts with, in walking order. */
-const DEFAULT_SHOPPING_CATEGORIES = ["meat", "produce", "dairy", "bakery", "pantry"];
-const ownCategory = (userId: string, name: string) =>
-  and(eq(shoppingCategories.userId, userId), eq(shoppingCategories.name, name));
+/**
+ * A shopping item is filed by two lists the user manages: its category (store section) and its unit. Both work the
+ * same way, so the functions below take the `kind`; the "Category" in their names then means either list.
+ */
+const DIMS = {
+  category: {
+    table: shoppingCategories,
+    fallback: "other",
+    defaults: ["meat", "produce", "dairy", "bakery", "pantry"], // a new user's store sections, in walking order
+    set: (v: string) => ({ category: v }),
+    on: (v: string) => eq(shoppingItems.category, v),
+  },
+  unit: {
+    // shortcut: same columns as shopping_categories, so the one table type serves both; give them a shared type if a third list appears.
+    table: shoppingUnits as unknown as typeof shoppingCategories,
+    fallback: "pcs",
+    defaults: ["g", "kg", "ml", "l", "pack", "bottle", "can", "jar", "box", "bag", "bunch"],
+    set: (v: string) => ({ unit: v }),
+    on: (v: string) => eq(shoppingItems.unit, v),
+  },
+};
+export type ShoppingKind = keyof typeof DIMS;
 
-/** Adds a category at the end of the user's list unless it is there already or is the built-in "other". */
-async function ensureShoppingCategory(userId: string, name: string) {
-  if (name === "other") return;
+const ownCategory = (userId: string, name: string, kind: ShoppingKind) =>
+  and(eq(DIMS[kind].table.userId, userId), eq(DIMS[kind].table.name, name));
+
+/** Adds a name at the end of the user's list unless it is there already or is the built-in fallback ("other", "pcs"). */
+async function ensureShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category") {
+  const { table, fallback } = DIMS[kind];
+  if (name === fallback) return;
   await db
-    .insert(shoppingCategories)
+    .insert(table)
     .values({
       userId,
       name,
-      sortOrder: sql`(select coalesce(max(${shoppingCategories.sortOrder}), 0) + 1 from ${shoppingCategories} where ${shoppingCategories.userId} = ${userId})`,
+      sortOrder: sql`(select coalesce(max(${table.sortOrder}), 0) + 1 from ${table} where ${table.userId} = ${userId})`,
     })
     .onConflictDoNothing();
 }
 
-/** The user's categories in order, without "other". */
-export async function getShoppingCategories(userId: string): Promise<string[]> {
+/** The user's names in order, without the fallback. */
+export async function getShoppingCategories(userId: string, kind: ShoppingKind = "category"): Promise<string[]> {
+  const { table, fallback, defaults } = DIMS[kind];
   const list = () =>
     db
-      .select({ name: shoppingCategories.name })
-      .from(shoppingCategories)
-      .where(eq(shoppingCategories.userId, userId))
-      .orderBy(asc(shoppingCategories.sortOrder), asc(shoppingCategories.name));
+      .select({ name: table.name })
+      .from(table)
+      .where(eq(table.userId, userId))
+      .orderBy(asc(table.sortOrder), asc(table.name));
   let rows = await list();
   if (rows.length === 0) {
-    // shortcut: seeds whenever the list is empty, so deleting every category brings the defaults back; store a "seeded" flag if that annoys.
-    const used = await db
-      .selectDistinct({ category: shoppingItems.category })
-      .from(shoppingItems)
-      .where(eq(shoppingItems.userId, userId));
-    const names = [...new Set([...DEFAULT_SHOPPING_CATEGORIES, ...used.map((u) => u.category)])].filter((n) => n !== "other");
+    // shortcut: seeds whenever the list is empty, so deleting every name brings the defaults back; store a "seeded" flag if that annoys.
+    const column = kind === "unit" ? shoppingItems.unit : shoppingItems.category;
+    const used = await db.selectDistinct({ name: column }).from(shoppingItems).where(eq(shoppingItems.userId, userId));
+    const names = [...new Set([...defaults, ...used.map((u) => u.name)])].filter((n) => n !== fallback);
     await db
-      .insert(shoppingCategories)
+      .insert(table)
       .values(names.map((name, i) => ({ userId, name, sortOrder: i + 1 })))
       .onConflictDoNothing();
     rows = await list();
@@ -430,68 +365,70 @@ export async function getShoppingCategories(userId: string): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-/** Puts the user's categories in the given order, top first; names that are not theirs change nothing. */
-export async function reorderShoppingCategories(userId: string, names: string[]) {
+/** Puts the user's names in the given order, top first; names that are not theirs change nothing. */
+export async function reorderShoppingCategories(userId: string, names: string[], kind: ShoppingKind = "category") {
+  const { table } = DIMS[kind];
   await db.transaction(async (tx) => {
-    for (const [i, name] of names.entries()) await tx.update(shoppingCategories).set({ sortOrder: i + 1 }).where(ownCategory(userId, name));
+    for (const [i, name] of names.entries()) await tx.update(table).set({ sortOrder: i + 1 }).where(ownCategory(userId, name, kind));
   });
 }
 
-/** Returns false when the user already has a category with that name. */
-export async function addShoppingCategory(userId: string, name: string) {
-  const [existing] = await db.select().from(shoppingCategories).where(ownCategory(userId, name));
+/** Returns false when the user already has a name like that. */
+export async function addShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category") {
+  const [existing] = await db.select().from(DIMS[kind].table).where(ownCategory(userId, name, kind));
   if (existing) return false;
-  await ensureShoppingCategory(userId, name);
+  await ensureShoppingCategory(userId, name, kind);
   return true;
 }
 
-/** Re-files the user's items (history included) of one category to another; returns the ids moved. */
-async function moveShoppingItems(tx: Pick<typeof db, "update">, userId: string, from: string, to: string) {
+/** Re-files the user's items (history included) from one name to another; returns the ids moved. */
+async function moveShoppingItems(tx: Pick<typeof db, "update">, userId: string, from: string, to: string, kind: ShoppingKind) {
+  const d = DIMS[kind];
   const rows = await tx
     .update(shoppingItems)
-    .set({ category: to })
-    .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, from)))
+    .set(d.set(to))
+    .where(and(eq(shoppingItems.userId, userId), d.on(from)))
     .returning({ id: shoppingItems.id });
   return rows.map((r) => r.id);
 }
 
-/** Renames a category on all the user's items, history included; renaming onto an existing one merges the two. */
-export async function renameShoppingCategory(userId: string, from: string, to: string) {
+/** Renames on all the user's items, history included; renaming onto an existing name merges the two. */
+export async function renameShoppingCategory(userId: string, from: string, to: string, kind: ShoppingKind = "category") {
+  const { table } = DIMS[kind];
   return db.transaction(async (tx): Promise<CategoryChange | null> => {
-    const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, from)).returning();
+    const [old] = await tx.delete(table).where(ownCategory(userId, from, kind)).returning();
     if (!old) return null;
-    const created = await tx
-      .insert(shoppingCategories)
-      .values({ userId, name: to, sortOrder: old.sortOrder })
-      .onConflictDoNothing()
-      .returning();
-    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, from, to), merged: created.length === 0 };
+    const created = await tx.insert(table).values({ userId, name: to, sortOrder: old.sortOrder }).onConflictDoNothing().returning();
+    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, from, to, kind), merged: created.length === 0 };
   });
 }
 
-/** Deletes a category; its items, history included, move to "other". */
-export async function deleteShoppingCategory(userId: string, name: string) {
+/** Deletes a name; its items, history included, move to the fallback. */
+export async function deleteShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category") {
+  const { table, fallback } = DIMS[kind];
   return db.transaction(async (tx): Promise<CategoryChange | null> => {
-    const [old] = await tx.delete(shoppingCategories).where(ownCategory(userId, name)).returning();
+    const [old] = await tx.delete(table).where(ownCategory(userId, name, kind)).returning();
     if (!old) return null;
-    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, name, "other"), merged: false };
+    return { sortOrder: old.sortOrder, itemIds: await moveShoppingItems(tx, userId, name, fallback, kind), merged: false };
   });
 }
 
-/** Undoes a rename or delete (see `revertCategory`): the category returns and exactly the moved items are re-filed. */
+/** Undoes a rename or delete (see `revertCategory`): the name returns and exactly the moved items are re-filed. */
 export async function revertShoppingCategory(
   userId: string,
   input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean },
+  kind: ShoppingKind = "category",
 ) {
   const { name, current, sortOrder, itemIds, dropCurrent } = input;
+  const d = DIMS[kind];
   await db.transaction(async (tx) => {
-    await tx.insert(shoppingCategories).values({ userId, name, sortOrder }).onConflictDoNothing();
+    await tx.insert(d.table).values({ userId, name, sortOrder }).onConflictDoNothing();
     if (itemIds.length > 0)
       await tx
         .update(shoppingItems)
-        .set({ category: name })
-        .where(and(eq(shoppingItems.userId, userId), eq(shoppingItems.category, current), inArray(shoppingItems.id, itemIds)));
-    if (dropCurrent && current !== "other") await tx.delete(shoppingCategories).where(ownCategory(userId, current));
+        .set(d.set(name))
+        .where(and(eq(shoppingItems.userId, userId), d.on(current), inArray(shoppingItems.id, itemIds)));
+    if (dropCurrent && current !== d.fallback) await tx.delete(d.table).where(ownCategory(userId, current, kind));
   });
 }
 

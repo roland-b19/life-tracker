@@ -20,7 +20,8 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
-import { dayProgress, exerciseSeries, kgDelta, progressSets, weekStart, withProgress } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, kgDelta, progressSets, weekStart, weeksBetween, withProgress } from "@/lib/gym-progress";
+import { addDays, toISODate } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
@@ -251,6 +252,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       extraKg: 0,
       isFailure: true,
       isPartial: false,
+      isGoodForm: true,
       flagAnomaly: false,
       minTargetReps: 5,
       maxTargetReps: 8,
@@ -270,6 +272,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       extraKg: 0,
       isFailure: true,
       isPartial: false,
+      isGoodForm: true,
       flagAnomaly: false,
       minTargetReps: 5,
       maxTargetReps: 8,
@@ -297,6 +300,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       extraKg: 0,
       isFailure: true,
       isPartial: false,
+      isGoodForm: true,
       flagAnomaly: false,
     });
 
@@ -316,6 +320,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         extraKg: 0,
         isFailure: true,
         isPartial: false,
+        isGoodForm: true,
         flagAnomaly: false,
       }),
     ).rejects.toThrow("Workout session not found or unauthorized");
@@ -351,6 +356,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         extraKg: 0,
         isFailure: true,
         isPartial: false,
+        isGoodForm: true,
         flagAnomaly: false,
       }),
     ).rejects.toThrow("Exercise not found or unauthorized");
@@ -360,25 +366,36 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     await expect(deleteSetAction("not-a-uuid")).rejects.toThrow("Invalid id");
   });
 
-  it("tracks 5-week deload cycle and flags when deload is due", async () => {
-    // New user with no sessions -> cycle week 1, not due
-    const statusNew = await getDeloadStatus(userA);
-    expect(statusNew.currentCycleWeek).toBe(1);
-    expect(statusNew.isDeloadDue).toBe(false);
+  it("counts the 5-week deload cycle in calendar weeks: four normal weeks, then the deload week", async () => {
+    const weeksAgo = (n: number) => addDays(weekStart(toISODate()), -7 * n); // the Monday n weeks back
+    const status = async () => {
+      const s = await getDeloadStatus(userA);
+      return [s.currentCycleWeek, s.isDeloadDue, s.inDeloadWeek];
+    };
 
-    // User logged a deload session 5 weeks ago
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 36); // 36 days = 5 weeks + 1 day
-    const pastDateString = pastDate.toISOString().split("T")[0];
+    // No workout yet: week 1
+    expect(await status()).toEqual([1, false, false]);
 
-    await createWorkoutSession(userA, {
-      date: pastDateString,
-      isDeload: true,
-    });
+    // The first workout starts the cycle; week 5 is the deload week, due until one is logged
+    const first = await createWorkoutSession(userA, { date: weeksAgo(3), isDeload: false });
+    expect(await status()).toEqual([4, false, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(4)]);
+    expect(await status()).toEqual([5, true, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(12)]);
+    expect(await status()).toEqual([5, true, false]); // overdue stays due, never wraps back to week 1
 
-    const statusDue = await getDeloadStatus(userA);
-    expect(statusDue.isDeloadDue).toBe(true);
-    expect(statusDue.weeksSinceLastDeload).toBeGreaterThanOrEqual(5);
+    // A deload this week: it is the deload week, nothing is due, and the next cycle starts next Monday
+    const deload = await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
+    expect(await status()).toEqual([1, false, true]);
+    expect((await getDeloadStatus(userA)).lastDeloadDate).toBe(toISODate());
+
+    // The week after a deload is week 1; the deload comes due again five weeks after the last one, not four
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(1)]);
+    expect(await status()).toEqual([1, false, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(4)]);
+    expect(await status()).toEqual([4, false, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(5)]);
+    expect(await status()).toEqual([5, true, false]);
   });
 
   describe("Server Actions authorization & validation guards", () => {
@@ -430,6 +447,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         extraKg: 0,
         isFailure: true,
         isPartial: false,
+        isGoodForm: true,
         flagAnomaly: false,
       });
       expect(logRes.success).toBe(true);
@@ -527,7 +545,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const input = {
         date: "2026-11-03",
         isDeload: false,
-        sets: [{ exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: true, isPartial: false, flagAnomaly: false }],
+        sets: [{ exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       };
       await cancelSessionAction({ sessionId: id });
       const back = await restoreSessionAction(input);
@@ -552,13 +570,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         createdAt: before.session.createdAt,
         date: "2026-11-03",
         isDeload: false,
-        sets: [{ id: set.id, createdAt: set.createdAt, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: false, isPartial: false, flagAnomaly: false }],
+        sets: [{ id: set.id, createdAt: set.createdAt, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: false, isPartial: false, isGoodForm: false, flagAnomaly: false }],
       };
       const back = await restoreSessionAction(input);
       expect(back.details?.session.id).toBe(id);
       expect(back.details?.session.createdAt).toEqual(before.session.createdAt);
       expect(back.details?.sets[0].id).toBe(set.id);
       expect(back.details?.sets[0].createdAt).toEqual(set.createdAt);
+      expect(back.details?.sets[0].isGoodForm).toBe(false); // the form flag survives the Undo
       // Restoring twice, or into an id another user holds, writes nothing.
       expect((await restoreSessionAction(input)).success).toBe(false);
       authState.id = userB;
@@ -599,7 +618,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const res = await restoreSessionAction({
         date: "2026-11-03",
         isDeload: false,
-        sets: [{ exerciseId: custom.id, setOrder: 1, reps: 5, loadType: "kg", loadValue: 10, extraKg: 0, isFailure: true, isPartial: false, flagAnomaly: false }],
+        sets: [{ exerciseId: custom.id, setOrder: 1, reps: 5, loadType: "kg", loadValue: 10, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       });
       expect(res.success).toBe(false);
       expect(exerciseId).toBeTruthy();
@@ -664,28 +683,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(exerciseSeries(sets, "e1").map((p) => p.date)).toEqual(["2026-11-02", "2026-11-16"]);
     });
 
-    it("compares the week after a deload with the week before it", () => {
-      const sets = [
-        set("2026-11-02", 100, 10),
-        set("2026-11-09", 60, 10, { isDeload: true }),
-        set("2026-11-16", 110, 10), // +10 kg against 2 Nov, not against the deload
-      ];
+    it("counts a deload week in the day figures like any other week", () => {
+      const sets = [set("2026-11-02", 100, 10), set("2026-11-09", 60, 10, { isDeload: true }), set("2026-11-16", 110, 10)];
       const weeks = dayProgress(sets, "d");
-      expect(weeks.map((w) => w.week)).toEqual(["2026-11-02", "2026-11-16"]); // no deload point
-      expect(weeks[1].change).toBeCloseTo(10);
+      expect(weeks.map((w) => w.week)).toEqual(["2026-11-02", "2026-11-09", "2026-11-16"]);
+      expect(weeks.map((w) => w.change)).toEqual([null, -40, 50]);
     });
 
-    it("steps over several deload weeks in a row", () => {
-      const sets = [
-        set("2026-11-02", 100, 10),
-        set("2026-11-09", 60, 10, { isDeload: true }),
-        set("2026-11-16", 60, 10, { isDeload: true }),
-        set("2026-11-23", 120, 10),
-      ];
-      expect(dayProgress(sets, "d").at(-1)?.change).toBeCloseTo(20);
-    });
-
-    it("gives each past workout its week's kg change against the week before, none for a deload or a first week", () => {
+    it("gives each past workout its week's kg change against the week before, none for a first week or a session with no day", () => {
       const sets = [
         set("2026-11-02", 100, 10),
         set("2026-11-09", 60, 10, { isDeload: true }),
@@ -699,13 +704,20 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         sets,
       );
       expect(first.progress).toBeNull(); // nothing before it
-      expect(deload.progress).toBeNull();
-      expect(third.progress).toBeCloseTo(10);
+      expect(deload.progress).toBeCloseTo(-40); // a deload session is compared like any other
+      expect(third.progress).toBeCloseTo(50);
       expect(noDay.progress).toBeNull();
       expect(kgDelta(2.5)).toBe("+2.5 kg");
       expect(kgDelta(-1)).toBe("−1 kg");
       expect(kgDelta(0)).toBe("0 kg");
       expect(kgDelta(null)).toBe("—");
+    });
+
+    it("counts whole calendar weeks between dates, Monday to Sunday", () => {
+      expect(weeksBetween("2026-11-02", "2026-11-08")).toBe(0); // Monday to Sunday of one week
+      expect(weeksBetween("2026-11-08", "2026-11-09")).toBe(1); // Sunday to the next Monday
+      expect(weeksBetween("2026-11-16", "2026-11-02")).toBe(-2);
+      expect(weeksBetween("2026-03-25", "2026-04-02")).toBe(1); // across a clock change
     });
 
     it("averages the week-over-week kg change across exercises", () => {

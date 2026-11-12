@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "./db";
 import { weightEntries } from "@/db/schema";
 
-export async function listWeightEntries(userId: string) {
+/** Every weigh-in is kept forever; `since` only limits what a page reads. */
+export async function listWeightEntries(userId: string, since?: string) {
   return db
     .select({
       id: weightEntries.id,
@@ -10,7 +11,7 @@ export async function listWeightEntries(userId: string) {
       kilograms: weightEntries.kilograms,
     })
     .from(weightEntries)
-    .where(eq(weightEntries.userId, userId))
+    .where(since ? and(eq(weightEntries.userId, userId), gte(weightEntries.date, since)) : eq(weightEntries.userId, userId))
     .orderBy(desc(weightEntries.date));
 }
 

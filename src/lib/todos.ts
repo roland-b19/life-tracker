@@ -1,9 +1,9 @@
-import { and, asc, eq, gte, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
-import { pushSubscriptions, todoDayStats, todos } from "@/db/schema";
+import { pushSubscriptions, todos } from "@/db/schema";
 import { ensureCategory } from "./categories";
-import { addDays, APP_TZ, appDay, toISODate } from "./format-date";
+import { APP_TZ, appDay, toISODate } from "./format-date";
 import { compareTodos } from "./todo-order";
 import {
   CreateTodoInput,
@@ -129,51 +129,6 @@ export async function getDailyTodos(
   };
 }
 
-export interface TodoDayStat {
-  date: string;
-  isRecurring: boolean;
-  total: number;
-  done: number;
-}
-
-/** Freezes how many tasks of one kind (daily / one-off) existed and were done on `date`: the only trace of a day once its tasks are deleted. */
-async function recordDayStats(userId: string, space: TodoSpace, isRecurring: boolean, date: string): Promise<void> {
-  const [{ total, done }] = await db
-    .select({
-      total: sql<number>`count(*)::int`,
-      done: sql<number>`count(*) filter (where ${todos.isCompleted} and (not ${todos.isRecurring} or (${todos.completedAt} at time zone ${APP_TZ})::date = ${date}::date))::int`,
-    })
-    .from(todos)
-    .where(and(eq(todos.userId, userId), eq(todos.space, space), isRecurring ? repeatsOn(date) : and(eq(todos.isRecurring, false), eq(todos.dueDate, date))));
-  await db
-    .insert(todoDayStats)
-    .values({ userId, space, isRecurring, date, total, done })
-    .onConflictDoUpdate({
-      target: [todoDayStats.userId, todoDayStats.space, todoDayStats.isRecurring, todoDayStats.date],
-      set: { total, done },
-    });
-}
-
-export async function getTodoHistory(userId: string, space: TodoSpace, days = 90): Promise<TodoDayStat[]> {
-  return db
-    .select({
-      date: todoDayStats.date,
-      isRecurring: todoDayStats.isRecurring,
-      total: todoDayStats.total,
-      done: todoDayStats.done,
-    })
-    .from(todoDayStats)
-    .where(
-      and(
-        eq(todoDayStats.userId, userId),
-        eq(todoDayStats.space, space),
-        gte(todoDayStats.date, addDays(toISODate(), -days + 1)),
-        sql`${todoDayStats.total} > 0`,
-      ),
-    )
-    .orderBy(asc(todoDayStats.date));
-}
-
 /**
  * Whether the list a task would join already has another one with the same title (any case), in its own space:
  * a one-off task meets the one-off tasks of its day, a repeating (Daily) task the other Daily tasks.
@@ -234,7 +189,6 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
     .returning();
 
   await ensureCategory(userId, input.space, created.category);
-  await recordDayStats(userId, input.space, isRecurring, isRecurring ? toISODate() : input.dueDate);
 
   return { ...created, space: created.space as TodoSpace };
 }
@@ -266,7 +220,6 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): P
 
   const space = restored.space as TodoSpace;
   await ensureCategory(userId, space, restored.category);
-  await recordDayStats(userId, space, restored.isRecurring, restored.isRecurring ? toISODate() : restored.dueDate);
   return { ...restored, space };
 }
 
@@ -289,8 +242,6 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
     })
     .where(eq(todos.id, existing.id));
 
-  // A one-off task counts on its own day, whichever day it was ticked from.
-  await recordDayStats(userId, existing.space as TodoSpace, existing.isRecurring, existing.isRecurring ? toISODate() : existing.dueDate);
   return true;
 }
 
@@ -306,14 +257,12 @@ export async function updateTodo(userId: string, input: UpdateTodoInput): Promis
 }
 
 /**
- * Deletes a task for good: nothing of it stays but the day's counts in todo_day_stats, which the charts read.
- * Undo inserts it again from the screen's copy. Null when the task is not the user's.
+ * Deletes a task for good: nothing of it stays. Undo inserts it again from the screen's copy. Null when the task is not the user's.
  */
 export async function deleteTodo(userId: string, todoId: string): Promise<true | null> {
   const task = await findTodo(userId, todoId);
   if (!task) return null;
   await db.delete(todos).where(and(eq(todos.id, task.id), eq(todos.userId, userId)));
-  await recordDayStats(userId, task.space as TodoSpace, task.isRecurring, task.isRecurring ? toISODate() : task.dueDate);
   return true;
 }
 

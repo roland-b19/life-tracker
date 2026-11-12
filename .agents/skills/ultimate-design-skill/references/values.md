@@ -73,12 +73,11 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 | `--highlight-fill` | `rgba(255,255,255,.2)` | grey control hover |
 | `--tint-highlight` | `rgba(134,180,234,.34)` | tinted control hover |
 
-**Glass and press**
+**Glass**
 
 | Token | Value |
 |---|---|
 | `--glass-blur` | `blur(28px) saturate(160%)` |
-| `--press` | `0.92` (set per element by `app/providers.tsx`) |
 
 ## Global
 
@@ -156,18 +155,7 @@ Every number the Wishlist uses, read from `app/globals.css` and `app/components/
 
 ## Press
 
-`app/providers.tsx` sets `--press` on each pressable element on pointerover and focusin:
-
-```
-max(0.92, 1 - 8 / width)
-```
-
-That is about 4px a side, so a wide card barely moves and a small button presses visibly.
-
-- `--press` is measured for `.surface`, `.split-day-card`, `.macro-card`, `.routine-row`, `.side-user`, `.nav-link`, `.month-nav-btn`, buttons and fields.
-- Only these press: `:active` scale applies to buttons, `.nav-link`, `.delete-icon-btn` and `.picker-cell`; it applies and releases at once.
-- Cards and fields never press. The active segment and chart bars opt out with `transform: none`.
-- Tab-bar items take the same press scale as every button (`.tab-item` is in `LIFTS` in `providers.tsx`). Check on a real phone that the glyph is crisp again after release.
+None. A press changes nothing: no scale, no pulse, on buttons, tabs, the tab bar and the picker cells (the user's call, 2026-11-12). `--press` and its measuring in `app/providers.tsx` are gone.
 
 ## Buttons
 
@@ -201,7 +189,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 
 **`.delete-icon-btn`** (edit and delete)
 - 44×44, radius .85rem, tint colour on `--tint-subtle`.
-- Hover `--tint-highlight`. Presses with `scale(var(--press))`. Disabled opacity .35.
+- Hover `--tint-highlight`. Disabled opacity .35.
 - Icons are 17px; the header plus icon is 14px.
 
 **Spacing**
@@ -231,7 +219,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 - 19rem wide (max `100vw - 2rem`), padding .75rem, gap .5rem, radius 1.1rem, `--surface-modal`, `--edge` border.
 - Opens .6rem under its button, centred, at once.
 - The month button shows `--highlight` while open. Month button and day cells hover `--highlight` inside `@media (hover: hover)`.
-- Day cells press with `scale(var(--press))` and stay under 44pt on purpose (a dense grid).
+- Day cells stay under 44pt on purpose (a dense grid).
 - `.picker-grid` gap .15rem; days in 7 columns, months in 3 (gap .35rem).
 - Day cell (`.picker-cell`): min-height 2.35rem, fully round, .9375rem weight 500, transparent.
   - today: `--tint` text, weight 700;
@@ -470,7 +458,7 @@ The CSS hides the outline on `[data-pointer]`.
 **Tab bar (below 1024px)**
 - Fixed: left and right .75rem, bottom `.5rem + safe-area`, padding .25rem, radius 1.5rem.
 - Glass: `rgba(28,28,30,.72)`, `blur(28px) saturate(160%)`.
-- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; the press is `scale(var(--press))`. The selected item's highlight is the bar's own thumb (`.tabbar::before`, `--tint-subtle`, radius 1.25rem): it sits under the active tab and jumps to the new one; on a page with no tab (Settings) it is hidden. Tab items are a grid with a .25rem gap (`--tab-gap`).
+- The first 4 links plus More. Items are at least 3.25rem high, radius 1.25rem, .6875rem weight 600 labels, with 1.4rem icons; (no press; the old `scale(var(--press))`. The selected item's highlight is the bar's own thumb (`.tabbar::before`, `--tint-subtle`, radius 1.25rem): it sits under the active tab and jumps to the new one; on a page with no tab (Settings) it is hidden. Tab items are a grid with a .25rem gap (`--tab-gap`).
 - More opens a menu (`--surface-modal`, radius 1.25rem, bottom `5.25rem + safe-area`) over a scrim with an 8px blur. It opens and closes at once (Escape and a backdrop tap close it); so does the date picker pop-up. The menu is `role="dialog"` and its links set `aria-current="page"` like the sidebar and tab bar.
 
 **Sidebar (≥1024px)**

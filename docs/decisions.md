@@ -200,7 +200,7 @@ Decided by the user: real push notifications are not deleted but hidden behind `
 
 ### 2026-11-10: Release plan decisions (user)
 - Order: shared code, then the free variant (B), then Azure (A) close to the deadline. Deploy is the last step; nothing deploys until every gate in `docs/release-plan.md` section 6 passes.
-- B session lasts 30 days with the owner allowlist rechecked on every session read; A keeps 4 hours.
+- B session lasts 30 days (180 days since 2026-11-12) with the owner allowlist rechecked on every session read; A keeps 4 hours.
 - The user's real data is small and is not the local database; the source and format come when the import step is reached. The local database is not imported.
 - B uses a public Neon database: accepted risk (only the owner uses the app), mitigated by TLS, a long random password, a least-privilege role and the owner id only in secrets; to be entered in `docs/security/risk-register.md`. Azure keeps the private database.
 - Owner is the user's personal GitHub account. The repository stays private.
@@ -382,3 +382,50 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Gym Progress no longer loads anything: it is drawn from the workouts the page already holds plus the open or paused workout (`progressSets` in `src/lib/gym-progress.ts`). `getGymHistoryAction` and `getGymHistory` are removed, so `/gym` runs one query fewer and the Progress tab shows no skeleton. A workout left open from before the latest open one is not counted (the page holds only the latest).
 - Health's Water, Steps and Weight lists load once per visit and are kept by the page (`FoodClient` state), so reopening a tab is instant and a late Undo still lands in the list. Opening a tab sets its today row from the Today card. They are page state only: gone on reload, sign-out or another user, so no new storage. A fresh page load fetches them again.
 - The service worker shows a stored page only when it was stored on the same day (device clock, the response's `Date` header); an older one waits for the server, so a page of yesterday is never shown as today.
+
+## 2026-11-12 — Health is Today only, Tasks keep no history, Units, no press pulse (user)
+- Tasks: no history of any kind, like Wishlist; only the Progress tab stays. `todo_day_stats` and its code are removed (migration `0027_health_rework`). Supersedes the "only the per-day counts stay" part of the hard-delete decision above.
+- Health: the Water, Weight and Steps tabs, Past foods, the meals list and the day stepper are removed; Today shows Nutrition (Edit goals, Add meal), then Weight, Water, Steps, each in one container with Today, the 7-day average and Edit (Water also has quick add; Weight also the 7/30/90/180/365-day chart). Meals stay in the database (the Assistant and export read them).
+- Retention: water and steps keep the last 7 days (older rows are deleted by the migration and then on every write). Weight is kept forever, as are workouts (superseded 2026-11-12 below).
+- Categories cards fold with a plain arrow next to the count; the state is kept in the browser (`lt-folded`).
+- Shopping Units: a card under Categories with the same logic (add, rename, delete, reorder, Undo); "pcs" is the fixed fallback like "other" for categories; items keep their unit text, so renaming or deleting a unit re-files them.
+- No press scale (the "pulse") on any button or tab; hover rules stay. The Tasks progress ring fades out when it returns to 0%.
+
+## 2026-11-12 — Health and Shopping follow-ups (user)
+- The 7-day average sits 0.75rem below the value and 0.75rem above the buttons on Weight and Water (Steps: card padding below); the average itself is unchanged (mean of the days with an entry among the last 7, today from the live total).
+- Add meal has no Name field: nothing shows meal names any more. `logMealSchema.name` defaults to "Meal" (the column stays NOT NULL; the Assistant still sends its own name). Save needs at least one value above 0.
+- A shopping row's "· amount unit" never splits: it moves to the next line whole, with its dot.
+- Categories and Units cards show every row, with no More button (on every page that uses the card).
+
+## 2026-11-12 — Gym, retention and session (user)
+- Weight and every workout are kept forever, with no limit. The Weight page reads only the last 364 days (a bounded query); the text export holds all the data the user owns, every column of every table (`src/lib/export.ts`; the Claude token and push subscriptions stay out on purpose).
+- GitHub sign-in sessions last 180 days (was 30), refreshed daily; the owner allowlist is still rechecked on every session read. Azure stays 4 hours. Takes effect on the next deploy; existing cookies keep their old expiry until refreshed.
+- Gym layout: Training days comes first and its per-day previews sit in the aside in one stack (the tallest sets the height), so choosing a day never moves the page; the Muscle map card is below them; History folds like the Categories cards (`useFolded("gym")`). The paused-workout banner and the active-workout card show no date.
+- Muscle map: the day's muscles are selected (several at once); a tap on the model replaces the selection, Shift/Ctrl/Cmd or a chip adds or removes; Go back returns to the day's muscles; the move button sits beside Front/Back in a strip under the model, so the buttons never cover the body. The GLB is fetched and parsed once per page load (module-level promise, cloned per mount) and cached by the service worker (`/models/muscles.glb`). The map has 16 groups from about 100 named meshes; face, neck, hands, feet and deep core are not selectable (finer groups would change the exercise taxonomy, not done).
+- Deload cycle counts calendar weeks (Monday start): the first four weeks after the last deload (or the first session) are normal, the fifth is "due"; any session marked deload makes that whole week a deload week: it is skipped in Progress, History progress and "Last time". The old code counted time of day and wrapped with a modulo, which made the cycle four weeks long in practice.
+
+## 2026-11-12 — Gym workout form and layout (user)
+- The Gym Progress tab is removed: its Workout days chart is deleted, and Exercise progress is a card on the main Gym page below Training days. Only the selected day's preview is rendered, so the Muscle map has no void above it.
+- Muscle strip: Front/Back, Move, Go back, equal widths, one height, one gap.
+- Workout form: Reps, Unit, Value and Extra are four equal columns; each exercise folds with the shared arrow (state per page visit, not stored); "Log set" is the last control of an exercise, after the failure and partial switches; Finish workout, Exit and Cancel are one centred column as wide as the widest of them; one 0.75rem rhythm inside an exercise, 1.5rem between exercises.
+
+## 2026-11-12 — Gym fourth round: exercise rows, Good form, deload scope, muscle groups (user)
+- A deload week only affects the Exercise progress chart. It no longer hides sessions from Last time, the History progress line or Training days (this replaces the "left out of Last time, History progress" part of the calendar-week decision above; the cycle itself is unchanged).
+- In a started workout one exercise is one item of a wash list (`ListBox wash`): alternating bands, the list's own gaps, no extra spacing between exercises. The fold arrow is a column of its own at the end of the header, centred on the whole title block (name and target line), not on the last line of the title.
+- Every set has a **Good form** switch (default on, next to True failure and Partial reps). Stored as `workout_sets.is_good_form boolean NOT NULL DEFAULT true`; existing sets read as good form. A set logged without it shows "(poor form)". Same privacy class as the other gym flags: never logged, never sent to an AI provider.
+- Training days folds with the shared arrow (state kept in `localStorage`, key `split`).
+- Muscle map: a tap on empty space changes nothing (it used to clear the selection and show everything); the strip is the Move button (2.75rem, touch only) first, Front/Back taking the free space, and Go back at a fixed 6.5rem, all one height.
+- Muscle groups: lats, upper back and lower back are one group **Back** (`back`); abs and obliques are one group **Obliques** (`obliques`). Migration `0028_good_form_back_obliques` adds the column and rewrites `exercises.muscle_group`; the user runs it on Neon before merging.
+
+## 2026-11-12 — Gym fifth round: Abs, strip order, equal spacing, collapsed exercises (user)
+- The merged group is named **Abs** (key `abs`, same meshes: abs and obliques), not Obliques; this replaces the name in the fourth round. Migration `0028` is renamed `0028_good_form_back_abs` and edited in place (it was never run on Neon): it maps `obliques` and `abs` to `abs`. The local dev and test databases were converted by hand.
+- The muscle strip order is Front/Back, the Move button (touch only, 2.75rem), Go back (6.5rem).
+- Every card on the Gym page keeps the same gap from the next (1.25rem, 1.5rem on desktop): the resume banner used 1rem.
+- In a started workout every exercise starts collapsed (state per page visit, not stored). The fold arrow sits right after the exercise name, inside the title; the muscle tag is always at the right edge (the card's column is full width, so it never moves with the title).
+- Exercise progress folds with the shared arrow (key `progress`, kept in `localStorage`).
+- In the Training days preview (a day's exercise list) the muscle tag is always on the line below the name. In a started workout the tag is at the right edge whether the exercise is collapsed or open.
+- In a started workout the muscle tag sits flush against the right edge of its row (it goes out over the row's inner padding), not in line with the Pause button.
+- In a started workout a long exercise name wraps and the fold arrow follows its last word (the title button is inline), so it is never at the far end of the block.
+
+## 2026-11-12 — Starting over on production (user)
+- The user wants the production account emptied after the health/gym rework is deployed, then re-imported. Done by `scripts/wipe-my-data.cjs`, which the user runs from their Mac (an agent never runs anything against the live database): dry run by default, one transaction, keeps the sign-in account. Order: backup, migrations 0027 and 0028 on Neon, merge (deploy), wipe, import.

@@ -15,18 +15,31 @@ import {
 } from "./muscle-groups";
 
 interface MapApi {
-  setSelected(g: MuscleGroup | null): void;
+  setSelected(g: MuscleGroup[]): void;
   setView(v: "front" | "back"): void;
   rotateBy(dx: number, dy: number): void;
 }
 
-/** Interactive 3D muscle model. Click a muscle to select its group; the chips next to it do the same without WebGL. */
+type GltfScene = import("three").Group;
+// The model is parsed once per visit: opening the tab again (or the page) reuses the geometry instead of loading it again.
+// The service worker (public/sw.js) keeps the file itself on the device. A failed load is not kept, so the next try retries.
+let modelPromise: Promise<GltfScene> | null = null;
+async function loadModel(): Promise<GltfScene> {
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+  return (await new GLTFLoader().loadAsync("/models/muscles.glb")).scene;
+}
+
+/** Interactive 3D muscle model. Click a muscle to select its group (Shift or Ctrl adds more); the chips next to it do the same without WebGL. */
 function MuscleMap({
   selected,
   onSelect,
+  onGoBack,
+  canGoBack,
 }: {
-  selected: MuscleGroup | null;
-  onSelect: (g: MuscleGroup | null) => void;
+  selected: MuscleGroup[];
+  onSelect: (g: MuscleGroup, additive: boolean) => void;
+  onGoBack: () => void;
+  canGoBack: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<MapApi | null>(null);
@@ -54,8 +67,6 @@ function MuscleMap({
     (async () => {
       try {
         const THREE = await import("three");
-        const { GLTFLoader } =
-          await import("three/examples/jsm/loaders/GLTFLoader.js");
         const { OrbitControls } =
           await import("three/examples/jsm/controls/OrbitControls.js");
         const el = host.current;
@@ -89,14 +100,19 @@ function MuscleMap({
         applyPointer();
         touch.addEventListener("change", applyPointer);
 
-        const gltf = await new GLTFLoader().loadAsync("/models/muscles.glb");
+        modelPromise ??= loadModel().catch((e) => {
+          modelPromise = null;
+          throw e;
+        });
+        // A copy of the cached scene: the geometry is shared, the materials and the scene graph are this view's own.
+        const model = (await modelPromise).clone(true);
         if (disposed) {
           renderer.dispose();
           return;
         }
-        scene.add(gltf.scene);
+        scene.add(model);
 
-        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         const height = box.getSize(new THREE.Vector3()).y;
         const dist =
@@ -110,7 +126,7 @@ function MuscleMap({
           group: MuscleGroup | null;
           mat: InstanceType<typeof THREE.MeshStandardMaterial>;
         }[] = [];
-        gltf.scene.traverse((o) => {
+        model.traverse((o) => {
           const mesh = o as InstanceType<typeof THREE.Mesh>;
           if (!mesh.isMesh) return;
           const group = MESH_GROUP[mesh.name] ?? null;
@@ -124,13 +140,14 @@ function MuscleMap({
           parts.push({ mesh, group, mat });
         });
 
-        const paint = (sel: MuscleGroup | null) => {
+        const paint = (sel: MuscleGroup[]) => {
+          const some = sel.length > 0;
           for (const p of parts) {
-            const on = p.group !== null && (sel === null || p.group === sel);
+            const on = p.group !== null && (!some || sel.includes(p.group));
             p.mat.opacity =
-              p.group === null ? (sel ? 0.05 : 0.3) : on ? 1 : 0.12;
-            p.mat.emissive.set(on && sel ? GROUP_COLOR[p.group!] : "#000000");
-            p.mat.emissiveIntensity = on && sel ? 0.25 : 0;
+              p.group === null ? (some ? 0.05 : 0.3) : on ? 1 : 0.12;
+            p.mat.emissive.set(on && some ? GROUP_COLOR[p.group!] : "#000000");
+            p.mat.emissiveIntensity = on && some ? 0.25 : 0;
             p.mat.depthWrite = on;
           }
           render();
@@ -196,8 +213,8 @@ function MuscleMap({
             parts.filter((p) => p.group).map((p) => p.mesh),
             false,
           )[0];
-          const g = (hit && MESH_GROUP[hit.object.name]) || null;
-          onSelectRef.current(g && g === selectedRef.current ? null : g);
+          const g = hit && MESH_GROUP[hit.object.name];
+          if (g) onSelectRef.current(g, e.shiftKey || e.ctrlKey || e.metaKey); // empty space changes nothing
         };
         canvas.addEventListener("pointerdown", onDown);
         canvas.addEventListener("pointerup", onUp);
@@ -215,10 +232,7 @@ function MuscleMap({
           canvas.removeEventListener("pointerdown", onDown);
           canvas.removeEventListener("pointerup", onUp);
           controls.dispose();
-          for (const p of parts) {
-            p.mesh.geometry.dispose();
-            p.mat.dispose();
-          }
+          for (const p of parts) p.mat.dispose(); // the geometry stays: it is cached for the next view
           renderer.dispose();
           canvas.remove();
         };
@@ -248,8 +262,25 @@ function MuscleMap({
           3D view is not available here. Use the muscle buttons instead.
         </p>
       )}
-      {status === "ready" && (
-        <div className="muscle-views">
+      {/* Its own strip under the model, so the buttons never sit over the body */}
+      <div className="muscle-views">
+        {status === "ready" && (
+          <div className="muscle-side-switch">
+            <Segmented
+              label="Model side"
+              value={side}
+              options={[
+                { value: "front", label: "Front" },
+                { value: "back", label: "Back" },
+              ]}
+              onChange={(v) => {
+                setSide(v);
+                api.current?.setView(v);
+              }}
+            />
+          </div>
+        )}
+        {status === "ready" && (
           <button
             type="button"
             className={`muscle-move${holding ? " active" : ""}`}
@@ -277,20 +308,18 @@ function MuscleMap({
           >
             <ArrowsIcon size={18} />
           </button>
-          <Segmented
-            label="Model side"
-            value={side}
-            options={[
-              { value: "front", label: "Front" },
-              { value: "back", label: "Back" },
-            ]}
-            onChange={(v) => {
-              setSide(v);
-              api.current?.setView(v);
-            }}
-          />
-        </div>
-      )}
+        )}
+        {/* Always rendered so the strip never shifts; it shows once the picked muscles differ from the day's */}
+        <TintButton
+          className="muscle-back"
+          onClick={onGoBack}
+          style={{ visibility: canGoBack ? "visible" : "hidden" }}
+          aria-hidden={!canGoBack}
+          tabIndex={canGoBack ? 0 : -1}
+        >
+          Go back
+        </TintButton>
+      </div>
     </div>
   );
 }
@@ -307,10 +336,27 @@ export interface PlannedExercise {
   dayName: string;
 }
 
-/** 3D model + group chips; picking a group lists the exercises of the user's split that train it. */
-export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
-  const [selected, setSelectedNow] = useState<MuscleGroup | null>(null);
-  const setSelected = (g: MuscleGroup | null) => g !== selected && setSelectedNow(g);
+const sameGroups = (a: MuscleGroup[], b: MuscleGroup[]) => a.length === b.length && a.every((g) => b.includes(g));
+
+/** 3D model + group chips; the muscles picked list the exercises of the user's split that train them. The day on screen picks its own muscles to start with. */
+export function MuscleExplorer({
+  planned,
+  dayGroups,
+}: {
+  planned: PlannedExercise[];
+  dayGroups: MuscleGroup[];
+}) {
+  const [selected, setSelected] = useState<MuscleGroup[]>(dayGroups);
+  // Another training day on screen: its muscles are picked again (state adjusted while rendering, not in an effect).
+  const [seenDay, setSeenDay] = useState(dayGroups);
+  if (!sameGroups(seenDay, dayGroups)) {
+    setSeenDay(dayGroups);
+    setSelected(dayGroups);
+  }
+  const toggle = (g: MuscleGroup) => setSelected((s) => (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]));
+  // A tap picks one muscle (a second tap clears it); Shift, Ctrl or Cmd adds to the picked ones.
+  const pick = (g: MuscleGroup, additive: boolean) =>
+    setSelected((s) => (additive ? (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]) : sameGroups(s, [g]) ? [] : [g]));
   const setsOf = (g: MuscleGroup) =>
     planned
       .filter((e) => e.muscleGroup === g)
@@ -318,11 +364,12 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
   // One row per exercise even when it is on several days of the split.
   const list: (PlannedExercise & { days: string[] })[] = [];
   for (const e of planned) {
-    if (e.muscleGroup !== selected) continue;
+    if (!selected.includes(e.muscleGroup as MuscleGroup)) continue;
     const row = list.find((r) => r.exerciseId === e.exerciseId);
     if (row) row.days.push(e.dayName);
     else list.push({ ...e, days: [e.dayName] });
   }
+  const title = selected.length === 1 ? `${GROUP_LABEL[selected[0]]} workouts` : "Workouts for the picked muscles";
 
   return (
     <Card
@@ -332,18 +379,22 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
       end={
         // Always rendered so the card never shifts when it appears
         <TintButton
-          onClick={() => setSelected(null)}
-          style={{ visibility: selected ? "visible" : "hidden" }}
-          aria-hidden={!selected}
-          tabIndex={selected ? 0 : -1}
+          onClick={() => setSelected([])}
+          style={{ visibility: selected.length ? "visible" : "hidden" }}
+          aria-hidden={!selected.length}
+          tabIndex={selected.length ? 0 : -1}
         >
           Show all
         </TintButton>
       }
     >
-
       <div className="muscle-layout">
-        <MuscleMap selected={selected} onSelect={setSelected} />
+        <MuscleMap
+          selected={selected}
+          onSelect={pick}
+          onGoBack={() => setSelected(dayGroups)}
+          canGoBack={dayGroups.length > 0 && !sameGroups(selected, dayGroups)}
+        />
 
         <div className="muscle-side">
           <div className="muscle-chips" role="group" aria-label="Muscle group">
@@ -351,9 +402,9 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
               <button
                 key={g}
                 type="button"
-                className={`muscle-chip${selected === g ? " active" : ""}`}
-                aria-pressed={selected === g}
-                onClick={() => setSelected(selected === g ? null : g)}
+                className={`muscle-chip${selected.includes(g) ? " active" : ""}`}
+                aria-pressed={selected.includes(g)}
+                onClick={() => toggle(g)}
               >
                 <span
                   className="muscle-dot"
@@ -365,26 +416,25 @@ export function MuscleExplorer({ planned }: { planned: PlannedExercise[] }) {
             ))}
           </div>
 
-          {selected ? (
+          {selected.length ? (
             <div>
-            <GroupLabel>{GROUP_LABEL[selected]} workouts</GroupLabel>
-            <ListBox wash className="entries muscle-entries">
-              {list.length === 0 && (
-                <EmptyNote key={`empty-${selected}`}>No exercise in your split trains this muscle.</EmptyNote>
-              )}
-              {/* Keyed by the group so every switch mounts fresh rows. */}
-                            {list.map((e) => (
-                <div key={e.exerciseId} className="entry-row">
-                  <div>
-                    <strong>{e.exerciseName}</strong>
-                    <span className="muted muscle-day">{e.days.join(", ")}</span>
+              <GroupLabel>{title}</GroupLabel>
+              <ListBox wash className="entries muscle-entries">
+                {list.length === 0 && (
+                  <EmptyNote key="empty">No exercise in your split trains {selected.length === 1 ? "this muscle" : "these muscles"}.</EmptyNote>
+                )}
+                {list.map((e) => (
+                  <div key={e.exerciseId} className="entry-row">
+                    <div>
+                      <strong>{e.exerciseName}</strong>
+                      <span className="muted muscle-day">{e.days.join(", ")}</span>
+                    </div>
+                    <span className="muted number-tabular">
+                      {e.targetSets} × {e.minReps} – {e.maxReps}
+                    </span>
                   </div>
-                  <span className="muted number-tabular">
-                    {e.targetSets} × {e.minReps} – {e.maxReps}
-                  </span>
-                </div>
-              ))}
-            </ListBox>
+                ))}
+              </ListBox>
             </div>
           ) : (
             <div>

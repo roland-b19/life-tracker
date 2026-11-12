@@ -182,7 +182,7 @@ Nothing fades; the control and the rows change in the same render. The page keep
 
 ## Long lists (More)
 
-The Wishlist and the Tasks lists always show every item and have no More button. A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
+The Wishlist and the Tasks lists always show every item and have no More button, and neither do the Categories and Units cards (they always show every name). A list that can grow past 10 rows shows 10: `const [shown, more] = useMore(list)` at the top of the component (before any early return), map `shown`, and put `{more}` as the last child inside the `ListBox`. More is a `btn-sm tint more-btn`, centred, with its top gap measured from the highlight band and the same gap below; each press adds 10 rows. Counts, totals and charts keep using the whole list. A select with a fixed set of values (the shopping Unit) is a native `select`, never a text field with suggestions.
 
 ## Rules that are easy to break
 
@@ -199,7 +199,6 @@ The Wishlist and the Tasks lists always show every item and have no More button.
 **Optimistic updates and Undo**
 - Toasts and row exits never wait for the network.
 - Every failure path restores what the user sees and shows a `warning` toast naming what failed. Inside an open form, the failure goes to the form's `.error` instead and the form stays open.
-- A picker dialog that stays open while you use it (Food "Past foods") is the exception to closing: each row has a `PlusIcon` 17 `.delete-icon-btn.edit` titled "Log" (aria-label "Log {name}, {kcal} kcal"), and a logged row leaves the picker at once. Its toast has Undo too. When nothing is left it shows an `.empty-note`.
 - A chat message that fails to send is taken back: its bubble is removed, the text returns to the input, and a `warning` toast says `Failed to send message`. Never answer with a fake assistant message. Meals the Assistant logged show an Undo that removes them.
 - A dialog's content lives in its own state, separate from its open flag (`moving` + `moveOpen`, `catEdit` + `catOpen`), so closing never blanks the content mid-close.
 

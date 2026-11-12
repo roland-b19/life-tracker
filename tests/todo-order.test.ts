@@ -52,13 +52,19 @@ describe("Task order: only the user's own actions move a task", () => {
     await admin.end();
   });
 
+  // The order is read at millisecond precision: a person never creates or ticks two tasks in the same millisecond, a test can.
+  const apart = async <T,>(run: () => Promise<T>) => {
+    const result = await run();
+    await new Promise((resolve) => setTimeout(resolve, 3));
+    return result;
+  };
   const add = (title: string, over: Record<string, unknown> = {}) =>
-    createTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over });
+    apart(() => createTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over }));
   const daily = (title: string, space: "personal" | "business" = "personal", category = "other") =>
     add(title, { space, isRecurring: true, recurrencePattern: "daily", category });
   const titles = async (day = today, space: "personal" | "business" = "personal") =>
     (await getDailyTodos(user, space, day, today)).todos.map((t) => t.title);
-  const tick = (id: string, isCompleted: boolean) => toggleTodo(user, { id, isCompleted });
+  const tick = (id: string, isCompleted: boolean) => apart(() => toggleTodo(user, { id, isCompleted }));
 
   it("ticked goes to the top of the ticked, unticked to the bottom of the open, and nothing else moves", async () => {
     const a = await daily("A");

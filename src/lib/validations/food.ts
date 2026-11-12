@@ -3,23 +3,14 @@ import { isoDate } from "./common";
 
 export const logMealSchema = z.object({
   date: isoDate,
-  name: z.string().trim().min(1).max(120),
+  // The manual form has no name field (meals are not listed any more); the assistant still names its own.
+  name: z.string().trim().min(1).max(120).default("Meal"),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
   carbs: z.number().min(0).max(1000),
   fat: z.number().min(0).max(1000),
   isEstimated: z.boolean().default(false).optional(),
 });
-
-/** Undo of deleting a meal: the same meal back, same id, same time (so the day's order holds), still hidden from Past foods if it was. */
-export const restoreMealSchema = logMealSchema.extend({
-  id: z.string().uuid(),
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
-  forgotten: z.boolean().default(false),
-});
-
-export const forgetPastFoodSchema = z.object({ name: z.string().trim().min(1).max(120) });
-export const restorePastFoodSchema = z.object({ ids: z.array(z.string().uuid()).max(500) });
 
 export const updateMetricsSchema = z.object({
   date: isoDate,
@@ -28,17 +19,7 @@ export const updateMetricsSchema = z.object({
   notes: z.string().max(255).optional().nullable(),
 });
 
-export const day = isoDate;
-
-/** A day's water (ml) or steps; `previousDate` moves an existing value to `date`. */
-export const saveDailyMetricSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("water"), date: day, value: z.number().int().min(1).max(20000), previousDate: day.optional() }),
-  z.object({ kind: z.literal("steps"), date: day, value: z.number().int().min(1).max(200000), previousDate: day.optional() }),
-]);
-
 export { metricDayEditable } from "../rules";
-
-export const clearDailyMetricSchema = z.object({ kind: z.enum(["water", "steps"]), date: day });
 
 export const updateNutritionTargetsSchema = z.object({
   calories: z.number().int().min(500).max(10000),
@@ -66,22 +47,34 @@ export const updateShoppingItemSchema = createShoppingItemSchema.extend({
   checkedAt: z.coerce.date().nullable().optional(),
 });
 
-/** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
-const managedCategorySchema = shoppingCategorySchema.refine((c) => c !== "other", "\"other\" is built in.");
-export const shoppingCategoryNameSchema = z.object({ name: managedCategorySchema });
-export const reorderShoppingCategoriesSchema = z.object({
-  names: z.array(managedCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique."),
-});
-export const renameShoppingCategorySchema = z.object({ from: managedCategorySchema, to: managedCategorySchema });
+/** The two lists of names the user manages on the shopping list; "other" and "pcs" are their built-in fallbacks. */
+const shoppingKindSchema = z.enum(["category", "unit"]).default("category");
+const FALLBACK = { category: "other", unit: "pcs" } as const;
 
-/** Undo of a category rename or delete: what the change reported, sent back as it was. */
-export const revertShoppingCategorySchema = z.object({
-  name: managedCategorySchema,
-  current: shoppingCategorySchema,
-  sortOrder: z.number().int(),
-  itemIds: z.array(z.string().uuid()).max(5000),
-  dropCurrent: z.boolean(),
-});
+/** A name the user manages: not the built-in fallback, and short enough for the column it ends up in (units: 30). */
+const managed = <T extends { kind: "category" | "unit" }>(v: T, names: string[]) =>
+  names.every((n) => n !== FALLBACK[v.kind] && (v.kind === "category" || n.length <= 30));
+const builtIn = "\"other\" and \"pcs\" are built in, and a unit has at most 30 characters.";
+
+export const shoppingCategoryNameSchema = z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }).refine((v) => managed(v, [v.name]), builtIn);
+export const reorderShoppingCategoriesSchema = z
+  .object({ kind: shoppingKindSchema, names: z.array(shoppingCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique.") })
+  .refine((v) => managed(v, v.names), builtIn);
+export const renameShoppingCategorySchema = z
+  .object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema })
+  .refine((v) => managed(v, [v.from, v.to]), builtIn);
+
+/** Undo of a rename or delete: what the change reported, sent back as it was. */
+export const revertShoppingCategorySchema = z
+  .object({
+    kind: shoppingKindSchema,
+    name: shoppingCategorySchema,
+    current: shoppingCategorySchema,
+    sortOrder: z.number().int(),
+    itemIds: z.array(z.string().uuid()).max(5000),
+    dropCurrent: z.boolean(),
+  })
+  .refine((v) => managed(v, [v.name]), builtIn);
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
@@ -91,7 +84,6 @@ export const toggleShoppingItemSchema = z.object({
 });
 
 export type LogMealInput = z.infer<typeof logMealSchema>;
-export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

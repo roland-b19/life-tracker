@@ -20,7 +20,7 @@ export default async function GymPage() {
 
   const userId = session.user.id;
   const openSince = addDays(toISODate(), -2);
-  // Same year of sets the Progress tab draws from, so a workout's figures match its Workout days chart.
+  // Same year of sets the Exercise progress card draws from, so a workout's figures match its Exercise progress chart.
   const since = addDays(toISODate(), -370);
   const [split, exercises, deload, open, workouts] = await Promise.all([
     getUserSplitWithDays(userId),
@@ -55,6 +55,7 @@ export default async function GymPage() {
             extraKg: s.extraKg,
             isFailure: s.isFailure,
             isPartial: s.isPartial,
+            isGoodForm: s.isGoodForm,
             flagAnomaly: s.flagAnomaly,
             anomalyReason: s.anomalyReason,
             notes: s.notes,

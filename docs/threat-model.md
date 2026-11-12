@@ -13,9 +13,9 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 ## 2. Assets
 | ID | Asset | Sensitivity | Where stored | Impact if exposed, altered, lost |
 |---|---|---|---|---|
-| A1 | Body weight and steps history (since 2026-11-08 the Steps and Water tabs read and edit the per-day history through owner-scoped server actions, each with an owner/other user/anonymous test) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
-| A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
-| A3 | Food logs, meal plan, recipes, shopping list and its categories (cleared items kept so Undo can restore them) | personal | database; also read and written by the in-app assistant | low to medium privacy harm |
+| A1 | Body weight (kept until the owner deletes it) and steps and water (last 7 days) (since 2026-11-12 the Health Today page reads and edits them through owner-scoped server actions, each with an owner/other user/anonymous test; older rows are pruned) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
+| A2 | Gym logs (exercises, loads, notes, pain and form flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
+| A3 | Food logs, meal plan, recipes, shopping list and its categories and units (cleared items kept so Undo can restore them) | personal | database; also read and written by the in-app assistant | low to medium privacy harm |
 | A4 | Personal expenses (removed 2026-11-10: module and tables deleted) | - | - | - |
 | A5 | Family-business income and expenses (removed 2026-11-10: tables deleted) | - | - | - |
 | A6 | To-do tasks, the days they were ticked, and reminders (personal and business) | personal | database, queue | low |

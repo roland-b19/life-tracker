@@ -5,13 +5,17 @@ import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderC
 import type { CategoryScope } from "@/lib/validations/categories";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
-import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace, useMore } from "./lists";
+import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
 export interface CategoriesApi {
   /** Keeps this list's heading id apart from the other lists on the page. */
   id: string;
+  /** What the card is about, in the card title, buttons and toasts: "category" (default) or "unit". */
+  noun?: string;
+  /** The built-in fallback name that cannot be added, renamed or deleted ("other"; "pcs" for units). */
+  builtIn?: string;
   add: (name: string) => Promise<{ success: boolean }>;
   rename: (from: string, to: string) => Promise<{ success: boolean; change?: Change | null }>;
   remove: (name: string) => Promise<{ success: boolean; change?: Change | null }>;
@@ -51,12 +55,15 @@ interface Change {
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
 export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }: Props) {
   const { showToast } = useToast();
+  const noun = api.noun ?? "category";
+  const builtIn = api.builtIn ?? "other";
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [shown, more] = useMore(categories);
+  // Folded or open stays as the user left it, across pages and reloads.
+  const [isFolded, toggleFolded] = useFolded("categories");
 
   const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
   const reorder = (update: string[]) => {
@@ -73,7 +80,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
     const res = await api.reorder(next).catch(() => null);
     if (!res?.success) {
       reorder(previous);
-      showToast({ message: "Failed to move category", type: "warning" });
+      showToast({ message: `Failed to move ${noun}`, type: "warning" });
       return;
     }
     showToast({
@@ -111,7 +118,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
     const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
     onSynced?.();
     if (!back?.success) {
-      onChange((prev) => (current === "other" ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
+      onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
       onRefile(name, current, change.itemIds);
       showToast({ message: "Failed to undo", type: "warning" });
     }
@@ -122,7 +129,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
-    if (to === "other") return setError('Please pick a name other than "other".');
+    if (to === builtIn) return setError(`Please pick a name other than "${builtIn}".`);
     setError("");
     setBusy(true);
     try {
@@ -141,8 +148,8 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
               showToast({ message: "Failed to undo", type: "warning" });
               return;
             }
-            // Items filed under it since go to Other, like any delete.
-            onRefile(to, "other");
+            // Items filed under it since go to the fallback, like any delete.
+            onRefile(to, builtIn);
           },
         });
       } else {
@@ -177,15 +184,15 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
     const res = await api.remove(cat).catch(() => null);
     if (!res?.success || !res.change) {
       onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
-      showToast({ message: "Failed to remove category", type: "warning" });
+      showToast({ message: `Failed to remove ${noun}`, type: "warning" });
       return;
     }
     const change = res.change;
-    onRefile(cat, "other");
+    onRefile(cat, builtIn);
     onSynced?.();
     showToast({
-      message: `Removed "${cat}"; its items are in Other`,
-      onUndo: () => revert(cat, "other", change, false, at),
+      message: `Removed "${cat}"; its items are in ${categoryLabel(builtIn)}`,
+      onUndo: () => revert(cat, builtIn, change, false, at),
     });
   }
 
@@ -194,36 +201,36 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
       <Card
         ref={card}
         id={`categories-title-${api.id}`}
-        title="Categories"
+        title={noun === "unit" ? "Units" : "Categories"}
         count={categories.length}
-        actions={<AddButton onClick={() => openForm(null)}>Add category</AddButton>}
+        fold={{ folded: isFolded(api.id), onToggle: () => toggleFolded(api.id) }}
+        actions={<AddButton onClick={() => openForm(null)}>Add {noun}</AddButton>}
       >
         <ListBox wash className="entries">
-          {categories.length === 0 && <EmptyNote>No categories yet.</EmptyNote>}
-          {shown.map((cat, i) => (
+          {categories.length === 0 && <EmptyNote>No {noun === "unit" ? "units" : "categories"} yet.</EmptyNote>}
+          {categories.map((cat, i) => (
             <div key={cat} className="entry-row" data-sort>
               <DragHandle
                 label={`Drag ${cat} to reorder`}
                 {...dragRow}
                 onKeyDown={(e) => {
                   const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
-                  if (to < 0 || to >= shown.length) return;
+                  if (to < 0 || to >= categories.length) return;
                   e.preventDefault();
                   move(i, to);
                 }}
               />
-              <span className="category-name">{cat}</span>
-              <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit category ${cat}`} deleteLabel={`Delete category ${cat}`} />
+              <span className={`category-name${noun === "unit" ? " raw" : ""}`}>{cat}</span>
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
-          {more}
         </ListBox>
       </Card>
 
       <FormModal
         isOpen={open}
         onClose={() => setOpen(false)}
-        title={from ? "Edit category" : "New category"}
+        title={from ? `Edit ${noun}` : `New ${noun}`}
         onSubmit={submit}
         error={error}
         busy={busy}

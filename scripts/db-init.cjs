@@ -134,6 +134,7 @@ async function main() {
       "extra_kg" numeric(5, 2) DEFAULT '0' NOT NULL,
       "is_failure" boolean DEFAULT true NOT NULL,
       "is_partial" boolean DEFAULT false NOT NULL,
+      "is_good_form" boolean DEFAULT true NOT NULL,
       "flag_anomaly" boolean DEFAULT false NOT NULL,
       "anomaly_reason" varchar(50),
       "notes" varchar(255),
@@ -254,6 +255,12 @@ async function main() {
       "sort_order" integer DEFAULT 0 NOT NULL,
       CONSTRAINT "shopping_categories_user_id_name_pk" PRIMARY KEY("user_id","name")
     );
+    CREATE TABLE IF NOT EXISTS "shopping_units" (
+      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+      "name" varchar(30) NOT NULL,
+      "sort_order" integer DEFAULT 0 NOT NULL,
+      CONSTRAINT "shopping_units_user_id_name_pk" PRIMARY KEY("user_id","name")
+    );
     CREATE TABLE IF NOT EXISTS "item_categories" (
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
       "scope" varchar(20) NOT NULL,
@@ -276,19 +283,11 @@ async function main() {
       "created_at" timestamp with time zone DEFAULT now() NOT NULL
     );
     ALTER TABLE "shopping_items" ADD COLUMN IF NOT EXISTS "checked_at" timestamp with time zone;
+    ALTER TABLE "workout_sets" ADD COLUMN IF NOT EXISTS "is_good_form" boolean DEFAULT true NOT NULL;
+    UPDATE "exercises" SET "muscle_group" = 'back' WHERE "muscle_group" IN ('lats', 'upper-back', 'lower-back');
+    UPDATE "exercises" SET "muscle_group" = 'abs' WHERE "muscle_group" = 'obliques';
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "placed_at" timestamp with time zone DEFAULT now() NOT NULL;
-    CREATE TABLE IF NOT EXISTS "todo_day_stats" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
-      "space" varchar(20) NOT NULL,
-      "is_recurring" boolean NOT NULL,
-      "date" date NOT NULL,
-      "total" integer NOT NULL,
-      "done" integer NOT NULL,
-      CONSTRAINT "todo_day_stats_unique" UNIQUE("user_id","space","is_recurring","date"),
-      CONSTRAINT "todo_day_stats_range" CHECK ("done" >= 0 AND "done" <= "total")
-    );
     CREATE TABLE IF NOT EXISTS "push_subscriptions" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -340,9 +339,9 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "recipe_ingredients" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_categories" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_units" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "item_categories" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "claude_connections" TO life_tracker_app;

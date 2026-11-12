@@ -2,11 +2,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
-import { BarChart, ProgressRing } from "../components/charts";
+import { ProgressRing } from "../components/charts";
 import { useToast } from "../components/toast";
 import { isPushEnabled } from "@/lib/features";
 import {
@@ -19,34 +19,16 @@ import {
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
-import type { TodoDayStat, TodoItem } from "@/lib/todos";
+import type { TodoItem } from "@/lib/todos";
 import type { TodoSpace } from "@/lib/validations/todos";
-import { dayLabel, toISODate } from "@/lib/format-date";
 import { blockPlacements, compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
-type Period = "7" | "30" | "90";
-type Metric = "rate" | "done";
-
-const PERIODS: { value: Period; label: string }[] = [
-  { value: "7", label: "7D" },
-  { value: "30", label: "30D" },
-  { value: "90", label: "90D" },
-];
-const METRICS: { value: Metric; label: string }[] = [
-  // Bar height: share of that day's tasks completed, or how many were completed.
-  { value: "rate", label: "Rate" },
-  { value: "done", label: "Count" },
-];
-// Sparse day labels so 30 and 90 bars stay readable.
-const LABEL_EVERY: Record<Period, number> = { "7": 1, "30": 5, "90": 15 };
-
 interface TodosClientProps {
   userName: string;
   todayDate: string;
   initialPersonalTodos: TodoItem[];
   initialBusinessTodos: TodoItem[];
-  initialHistory: Record<TodoSpace, TodoDayStat[]>;
   initialCategories: Record<TodoSpace, string[]>;
 }
 
@@ -55,15 +37,11 @@ export function TodosClient({
   todayDate,
   initialPersonalTodos,
   initialBusinessTodos,
-  initialHistory,
   initialCategories,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [tab, setTab] = useState<TaskTab>("daily");
-  const [period, setPeriod] = useState<Period>("7");
-  const [metric, setMetric] = useState<Metric>("rate");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [history, setHistory] = useState(initialHistory);
   const [categories, setCategories] = useState(initialCategories);
 
   const { showToast } = useToast();
@@ -123,40 +101,12 @@ export function TodosClient({
     return t.isRecurring === (latest.current.tab === "daily");
   };
 
-  const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
   // Progress counts the list on screen (`view`), so it never shows the last day's numbers while the next one loads.
   // A day with no tasks shows only a note, no ring.
   const progressTodos = visibleFor(view.space, listDaily);
   const doneCount = progressTodos.filter((t) => t.isCompleted).length;
   const totalCount = progressTodos.length;
   const percentage = Math.round((doneCount / (totalCount || 1)) * 100);
-
-  // History for the chosen period; days without a snapshot are shown as empty.
-  const span = Number(period);
-  const today = new Date(`${todayDate}T00:00:00`);
-  const days = Array.from({ length: span }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (span - 1 - i));
-    const iso = toISODate(d);
-    return { iso, day: d.getDate(), stat: byDate.get(iso) };
-  });
-  const tracked = days.filter((d) => d.stat);
-  const avg = tracked.length
-    ? Math.round(tracked.reduce((n, d) => n + (d.stat!.done / d.stat!.total) * 100, 0) / tracked.length)
-    : 0;
-  const perfectDays = tracked.filter((d) => d.stat!.done === d.stat!.total).length;
-  const doneTotal = tracked.reduce((n, d) => n + d.stat!.done, 0);
-  // An even top keeps the axis's middle number whole.
-  const maxDone = 2 * Math.ceil(Math.max(1, ...tracked.map((d) => d.stat!.done)) / 2);
-  const every = LABEL_EVERY[period];
-  const bars = days.map((d, i) => ({
-    label: (span - 1 - i) % every === 0 ? String(d.day) : "",
-    value: d.stat ? (metric === "rate" ? (d.stat.done / d.stat.total) * 100 : d.stat.done) : 0,
-    empty: !d.stat,
-    highlight: d.iso === todayDate,
-    tip: d.stat && (metric === "rate" ? `${Math.round((d.stat.done / d.stat.total) * 100)}%` : `${d.stat.done} done`),
-    title: d.stat ? `${dayLabel(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${dayLabel(d.iso)}: no record`,
-  }));
 
   // Check push notification availability on mount
   useEffect(() => {
@@ -172,14 +122,13 @@ export function TodosClient({
     }
   }, []);
 
-  // Loads both spaces (and their history) and swaps them in with one state update, so the list never flashes empty.
+  // Loads both spaces and swaps them in with one state update, so the list never flashes empty.
   const loadDay = async () => {
     const id = ++requestId.current;
     try {
       const view = await loadTodosViewAction();
       if (id === requestId.current) {
         setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
-        setHistory({ personal: view.history[0] ?? [], business: view.history[1] ?? [] });
       }
     } catch {
       showToast({ message: "Failed to load tasks", type: "warning" });
@@ -444,7 +393,6 @@ export function TodosClient({
             id="tasks-title"
             title={isDaily ? "Daily tasks" : "Tasks"}
             count={listTodos.length}
-            below
             actions={<AddButton onClick={() => openForm()}>Add task</AddButton>}
           >
             <ListBox wash className="todo-list">
@@ -527,26 +475,6 @@ export function TodosClient({
             )}
           </Card>
 
-          <Card id="history-title" title={`Last ${span} days`}>
-            <ChartControls>
-              <Segmented label="Period" value={period} options={PERIODS} onChange={setPeriod} />
-              <Segmented label="Show" value={metric} options={METRICS} onChange={setMetric} />
-            </ChartControls>
-            <StatRow
-              stats={[
-                { value: tracked.length ? `${Math.round(avg)}%` : "—", label: "Average" },
-                { value: Math.round(perfectDays), label: "Perfect days" },
-                { value: Math.round(doneTotal), label: "Tasks done" },
-              ]}
-            />
-            <BarChart
-              key={`${period}-${metric}-${space}-${tab}`}
-              data={bars}
-              max={metric === "rate" ? 100 : maxDone}
-              format={metric === "rate" ? (v) => `${v}%` : String}
-              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%.`}
-            />
-          </Card>
           {/* Last in the aside: it appears once the service worker is ready, so nothing sits below it to shift. */}
           {pushSupported && !pushSubscribed && (
             <Card className="push-toggle-card" label="Task reminders">

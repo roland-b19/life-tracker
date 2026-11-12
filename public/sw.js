@@ -1,6 +1,7 @@
 // Life Tracker Service Worker
 // Two caches, both only for a fast start:
-// - content-hashed static bundles (/_next/static/*), cache first;
+// - content-hashed static bundles (/_next/static/*) and the 5.6 MB muscle model, cache first (the model keeps its URL:
+//   when the file changes, bump CACHE so devices fetch it again);
 // - the signed-in pages (HTML), stale while revalidate: opening the app shows the last seen page at once and the
 //   server's answer replaces it in the background (only a page stored today: an older one waits for the server).
 //   Server actions and /api/* are never cached.
@@ -43,7 +44,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(page(event, url));
     return;
   }
-  if (!url.pathname.startsWith("/_next/static/")) return;
+  if (!url.pathname.startsWith("/_next/static/") && url.pathname !== "/models/muscles.glb") return;
 
   event.respondWith(
     caches.match(request).then(

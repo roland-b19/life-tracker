@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Card, ChartControls } from "../components/blocks";
+import { ChartControls } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { Segmented } from "../components/segmented";
 import { addDays, toISODate } from "@/lib/format-date";
 
-/** The simple line chart under a Trend card (Water, Weight, Steps): `days` are the periods offered, the window ends today. */
+/** The simple line chart of a card (Weight): `days` are the periods offered, the window ends today. */
 export function TrendChart({
-  id,
   noun,
   days,
   entries,
 }: {
-  id: string;
   noun: string;
   days: readonly number[];
   entries: { date: string; value: number }[];
@@ -27,11 +25,11 @@ export function TrendChart({
     return { label: date.slice(5).split("-").reverse().join("."), value: byDate.get(date) ?? null };
   });
   return (
-    <Card id={id} title="Chart">
+    <>
       <ChartControls>
         <Segmented label="Chart period" value={range} options={days.map((d) => ({ value: String(d), label: `${d}D` }))} onChange={setRange} />
       </ChartControls>
       <LineChart points={points} summary={`${noun} over the last ${range} days`} />
-    </Card>
+    </>
   );
 }

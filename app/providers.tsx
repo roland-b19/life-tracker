@@ -18,20 +18,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const blockPinch = (e: Event) => e.preventDefault();
     document.addEventListener("gesturestart", blockPinch);
 
-    // A scale shrinks wide things more pixels than narrow ones and CSS cannot read an element's width,
-    // so every pressable element gets its own --press (4px a side) before it moves.
-    const LIFTS = ".surface, .split-day-card, .macro-card, .routine-row, .side-user, .nav-link, .tab-item, .month-nav-btn, button, input, select, textarea";
-    const size = (e: Event) => {
-      let el = e.target instanceof Element ? e.target.closest<HTMLElement>(LIFTS) : null;
-      for (; el; el = el.parentElement?.closest<HTMLElement>(LIFTS) ?? null) {
-        const w = el.offsetWidth;
-        if (!w) continue;
-        el.style.setProperty("--press", String(Math.max(0.92, 1 - 8 / w)));
-      }
-    };
-    document.addEventListener("pointerover", size);
-    document.addEventListener("focusin", size);
-
     // Most writes no longer re-render the page (the client keeps its own state), but back/forward replays the cached,
     // pre-write page. After any server action ran, a back/forward therefore reloads once instead of showing old data.
     // Tabs open from the browser's cache (`staleTimes`), so a write also refreshes that cache in the background once the
@@ -75,8 +61,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       sw?.removeEventListener("message", onSw);
       for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, touch, { capture: true });
       document.removeEventListener("gesturestart", blockPinch);
-      document.removeEventListener("pointerover", size);
-      document.removeEventListener("focusin", size);
     };
   }, [router]);
 
