@@ -286,16 +286,13 @@ export function HealthSkeleton({ claude = false }: { claude?: boolean }) {
 
 export function GymSkeleton() {
   return (
-    <Loading
-      toolbar={
-        <Toolbar>
-          <SegmentedBone count={2} />
-        </Toolbar>
-      }
-    >
+    <Loading>
       <Banner id="deload-title" className="deload-card" title={<Inline width="7rem" />} sub={<><Inline width="6rem" /> <Inline width="4rem" /></>}>
         <Toggle label="Deload session" checked={false} disabled readOnly />
       </Banner>
+      <Toolbar>
+        <SegmentedBone count={2} />
+      </Toolbar>
       <Card id="muscle-title" title="Muscle map" className="muscle-card" busy end={<Action width="6rem" />}>
         <div className="muscle-layout">
           <div className="muscle-stage skeleton" />

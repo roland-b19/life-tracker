@@ -138,10 +138,10 @@ export function WeightPanel({ onStats }: { onStats: (stats: WeightStats) => void
     );
     showToast({
       message: `Removed ${Number(target.kilograms)} kg (${formatDMY(target.date)})`,
-      // A new id, so the row is put back as the server returns it.
+      // The same id goes back, so it is the same row (shortcut: its created-at is the restore time; nothing shows it).
       onUndo: async () => {
         if (!(await deleted)) return putBack(target); // the delete never happened
-        const back = await send("POST", "/api/weight", { date: target.date, kilograms: Number(target.kilograms) }).catch(() => null);
+        const back = await send("POST", "/api/weight", { id: target.id, date: target.date, kilograms: Number(target.kilograms) }).catch(() => null);
         if (!back?.ok) return showToast({ message: "Failed to restore weigh-in", type: "warning" });
         putBack(((await back.json()) as { entry: WeightEntry }).entry);
       },

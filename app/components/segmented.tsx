@@ -32,6 +32,15 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
           type="button"
           role="tab"
           aria-selected={value === o.value}
+          tabIndex={value === o.value ? 0 : -1}
+          onKeyDown={(e) => {
+            const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+            if (!step) return;
+            e.preventDefault();
+            const next = options[(options.findIndex((x) => x.value === o.value) + step + options.length) % options.length];
+            onChange(next.value);
+            (e.currentTarget.parentElement?.children[options.indexOf(next)] as HTMLElement | undefined)?.focus();
+          }}
           className={value === o.value ? "active" : ""}
           aria-label={o.short ? o.label : undefined}
           onClick={() => {

@@ -1038,6 +1038,9 @@ textarea:focus-visible {
   margin: 1.25rem 0 0;
 }
 .signin-form .error { margin: 0; }
+/* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
+.signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
+.dash-hero-text > .muted { font-size: 0.875rem; }
 button.signin-continue:disabled {
   opacity: 1;
   cursor: progress;
@@ -1270,6 +1273,10 @@ button.signin-continue:disabled {
   touch-action: none;
 }
 
+.modal-card:focus {
+  outline: none; /* the dialog takes focus when it opens (Modal); there is nothing to point at */
+}
+
 .modal-card {
   width: 100%;
   max-width: 34rem;
@@ -1465,9 +1472,11 @@ button.signin-continue:disabled {
 
 /* Small secondary action used inside lists and card headers */
 /* Compact controls keep their look but get a 44pt hit area (HIG); dense picker grids are left out so taps never land on a neighbour. */
+.segmented button,
 :is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn) {
   position: relative;
 }
+.segmented button::before,
 :is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn)::before {
   content: "";
   position: absolute;
@@ -2684,7 +2693,7 @@ button.bars-col:focus-visible {
   text-transform: inherit;
   cursor: pointer;
 }
-.group-toggle::before { content: ""; position: absolute; inset: -0.75rem -0.5rem; }
+.group-toggle::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) -0.5rem; }
 /* A 50-char category name with no spaces wraps instead of widening the page. */
 .group-toggle { max-width: 100%; text-align: start; overflow-wrap: anywhere; }
 .group-toggle svg { flex-shrink: 0; }

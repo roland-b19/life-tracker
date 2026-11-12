@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate } from "./common";
+import { isoDate, uuid } from "./common";
 
 export const weightInput = z
   .object({
@@ -13,3 +13,6 @@ export const weightInput = z
       .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "Maximum two decimal places."),
   })
   .strict();
+
+/** A new weigh-in; Undo of a delete sends the old id so the same row comes back. */
+export const weightCreateInput = weightInput.extend({ id: uuid.optional() });

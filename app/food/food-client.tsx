@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
-import { dayLabel, formatDMY } from "@/lib/format-date";
+import { dayLabel, formatDMY, toISODate } from "@/lib/format-date";
 import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, DayStepper, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, ReadonlyNote, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -18,6 +18,7 @@ import {
   addShoppingCategoryAction,
   addShoppingItemAction,
   addWaterAction,
+  setWaterAction,
   clearBoughtItemsAction,
   deleteMealAction,
   forgetPastFoodAction,
@@ -150,7 +151,14 @@ export function FoodClient({
   shoppingCategories: initialCategories,
   pastFoods: initialPastFoods,
 }: FoodClientProps) {
-  // Writes always go to today; a past day is a read-only view loaded on demand.
+  // Writes always go to today. The page knows its day only from when it loaded, so resuming it after midnight reloads it.
+  useEffect(() => {
+    const onShow = () => {
+      if (!document.hidden && toISODate() !== todayDate) location.reload();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
+  }, [todayDate]);
   const [selectedDate, setSelectedDate] = useState(todayDate);
   const [pastSummary, setPastSummary] = useState<FoodClientProps["initialSummary"] | null>(null);
   const [summary, setSummary] = useState(initialSummary);
@@ -445,7 +453,7 @@ export function FoodClient({
     const goalChanged = goal !== previousGoal;
     if (!amountChanged && !goalChanged) return true;
     const write = (v: number) =>
-      metric === "water" ? addWaterAction(todayDate, v - summary.metrics.waterMl) : updateStepsAction(todayDate, v);
+      metric === "water" ? setWaterAction(todayDate, v) : updateStepsAction(todayDate, v);
     let saved = previous;
     if (amountChanged) {
       const res = await write(value).catch(() => null);
@@ -474,7 +482,7 @@ export function FoodClient({
         if (amountChanged) {
           const back =
             metric === "water"
-              ? await addWaterAction(todayDate, previous - value).catch(() => null)
+              ? await setWaterAction(todayDate, previous).catch(() => null)
               : await updateStepsAction(todayDate, previous).catch(() => null);
           if (back?.success && back.metrics) setMetric(key, back.metrics[key]);
           else {

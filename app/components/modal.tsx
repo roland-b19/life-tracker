@@ -37,6 +37,31 @@ export function Modal({
     if (!isOpen) return;
     window.addEventListener("keydown", handleKeyDown);
 
+    // Keyboard and screen-reader users stay inside the dialog: focus moves to it (the card, not a field: no form autofocuses),
+    // the page behind is inert, Tab wraps, and closing returns focus to the button that opened it.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const card = backdropRef.current?.querySelector<HTMLElement>(".modal-card");
+    card?.focus({ preventScroll: true });
+    const behind = [...document.body.children].filter(
+      (el) => !el.matches("script, .modal-scrim, .modal-backdrop, .toast-container") && !el.hasAttribute("inert"),
+    );
+    behind.forEach((el) => el.setAttribute("inert", ""));
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !card) return;
+      const stops = [...card.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter(
+        (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
+      );
+      if (!stops.length) return e.preventDefault();
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      const from = e.shiftKey && (document.activeElement === first || document.activeElement === card);
+      const past = !e.shiftKey && document.activeElement === last;
+      if (!from && !past) return;
+      e.preventDefault();
+      (from ? last : first).focus();
+    };
+    window.addEventListener("keydown", trap);
+
     // The page behind must not scroll. Not pinned with position:fixed on the body: on iOS that reflowed the whole
     // page as the form opened (jank) and left a bare black strip at the bottom. A touchmove lock (below) stops
     // the drags; overflow:hidden stops the wheel and keys.
@@ -111,6 +136,9 @@ export function Modal({
       document.removeEventListener("touchmove", lock);
       window.removeEventListener("scroll", pin);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", trap);
+      behind.forEach((el) => el.removeAttribute("inert"));
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);
       root.style.overflow = "";
@@ -137,6 +165,7 @@ export function Modal({
       <div
         className={className ? `modal-card ${className}` : "modal-card"}
         style={{ maxWidth }}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">

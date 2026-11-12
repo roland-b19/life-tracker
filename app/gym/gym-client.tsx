@@ -375,7 +375,7 @@ export function GymClient({
       const existingSetsForExercise = activeSession.sets.filter(
         (s) => s.exerciseId === exercise.exerciseId,
       );
-      const setOrder = existingSetsForExercise.length + 1;
+      const setOrder = Math.max(0, ...existingSetsForExercise.map((s) => s.setOrder)) + 1; // not the count: a deleted middle set would repeat a number
 
       const res = await logSetAction({
         sessionId: activeSession.id,
@@ -900,11 +900,12 @@ export function GymClient({
                       below
                       actions={
                         <>
-                          <TintButton icon={<PencilIcon size={14} />} onClick={() => openEditor(currentDay)}>
+                          <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${currentDay.name}`} onClick={() => openEditor(currentDay)}>
                             Edit
                           </TintButton>
                           {!currentDay.isRest && (
                             <TintButton
+                              aria-label={`Start ${currentDay.name}`}
                               disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
                               onClick={() => void handleStartSession(currentDay)}
                             >
@@ -972,6 +973,7 @@ export function GymClient({
                             </button>
                             {!day.isRest && day.exercises.length > 0 && (
                               <TintButton
+                                aria-label={`Start ${day.name}`}
                                 disabled={busy || Boolean(paused)}
                                 onClick={() => {
                                   setSelectedDayId(day.id);

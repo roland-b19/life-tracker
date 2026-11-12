@@ -14,11 +14,10 @@ export async function listWeightEntries(userId: string) {
     .orderBy(desc(weightEntries.date));
 }
 
-export async function createWeightEntry(userId: string, date: string, kilograms: number) {
-  const [entry] = await db
-    .insert(weightEntries)
-    .values({ userId, date, kilograms: kilograms.toFixed(2) })
-    .returning({
+/** With `id` (an Undo) a taken id or day gives back undefined instead of an error. */
+export async function createWeightEntry(userId: string, date: string, kilograms: number, id?: string) {
+  const insert = db.insert(weightEntries).values({ id, userId, date, kilograms: kilograms.toFixed(2) });
+  const [entry] = await (id ? insert.onConflictDoNothing() : insert).returning({
       id: weightEntries.id,
       date: weightEntries.date,
       kilograms: weightEntries.kilograms,

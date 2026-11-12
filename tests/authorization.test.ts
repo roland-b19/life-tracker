@@ -95,6 +95,24 @@ describe("weight authorization", () => {
     expect(anonymousResponse.status).toBe(401);
   });
 
+  it("restores a deleted weigh-in under its old id, and never over another user's row", async () => {
+    const ownerId = authState.id;
+    const created = await POST(request("POST", `${appOrigin}/api/weight`, { date: "2026-01-03", kilograms: 82 }));
+    const { entry } = (await created.json()) as { entry: { id: string } };
+    await DELETE(request("DELETE", `${appOrigin}/api/weight/${entry.id}`, {}), { params: Promise.resolve({ id: entry.id }) });
+    const restored = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 82 }));
+    expect(restored.status).toBe(201);
+    expect(((await restored.json()) as { entry: { id: string } }).entry.id).toBe(entry.id);
+    const again = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-04", kilograms: 82 }));
+    expect(again.status).toBe(409); // the id is taken
+    authState.id = await seedUser(`c-${randomUUID()}`);
+    const claimed = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 90 }));
+    expect(claimed.status).toBe(409); // another user's id cannot be claimed
+    authState.id = "";
+    expect((await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 82 }))).status).toBe(401);
+    authState.id = ownerId;
+  });
+
   it("does not expose another user's rows or allow their deletion", async () => {
     const ownerId = authState.id;
     const ownerResponse = await POST(

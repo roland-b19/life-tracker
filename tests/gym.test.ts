@@ -501,6 +501,16 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       return { id: session.id, exerciseId: exercise.id };
     }
 
+    it("finishes a workout for the owner only", async () => {
+      const { id } = await finished(userA, "2026-11-03", null);
+      authState.id = userB;
+      expect((await finishSessionAction({ sessionId: id, durationMinutes: 40 })).session).toBeUndefined();
+      authState.id = "";
+      await expect(finishSessionAction({ sessionId: id, durationMinutes: 40 })).rejects.toThrow("Authentication required.");
+      authState.id = userA;
+      expect((await finishSessionAction({ sessionId: id, durationMinutes: 40 })).session?.durationMinutes).toBe(40);
+    });
+
     it("reopens a finished workout for the owner only", async () => {
       const { id } = await finished(userA, "2026-11-03", 50);
       authState.id = userB;
