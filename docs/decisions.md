@@ -200,7 +200,7 @@ Decided by the user: real push notifications are not deleted but hidden behind `
 
 ### 2026-11-10: Release plan decisions (user)
 - Order: shared code, then the free variant (B), then Azure (A) close to the deadline. Deploy is the last step; nothing deploys until every gate in `docs/release-plan.md` section 6 passes.
-- B session lasts 30 days with the owner allowlist rechecked on every session read; A keeps 4 hours.
+- B session lasts 30 days (180 days since 2026-11-12) with the owner allowlist rechecked on every session read; A keeps 4 hours.
 - The user's real data is small and is not the local database; the source and format come when the import step is reached. The local database is not imported.
 - B uses a public Neon database: accepted risk (only the owner uses the app), mitigated by TLS, a long random password, a least-privilege role and the owner id only in secrets; to be entered in `docs/security/risk-register.md`. Azure keeps the private database.
 - Owner is the user's personal GitHub account. The repository stays private.
@@ -386,7 +386,7 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 ## 2026-11-12 — Health is Today only, Tasks keep no history, Units, no press pulse (user)
 - Tasks: no history of any kind, like Wishlist; only the Progress tab stays. `todo_day_stats` and its code are removed (migration `0027_health_rework`). Supersedes the "only the per-day counts stay" part of the hard-delete decision above.
 - Health: the Water, Weight and Steps tabs, Past foods, the meals list and the day stepper are removed; Today shows Nutrition (Edit goals, Add meal), then Weight, Water, Steps, each in one container with Today, the 7-day average and Edit (Water also has quick add; Weight also the 7/30/90/180/365-day chart). Meals stay in the database (the Assistant and export read them).
-- Retention: water and steps keep the last 7 days, weight the last 365; older rows are deleted by the migration and then on every write.
+- Retention: water and steps keep the last 7 days (older rows are deleted by the migration and then on every write). Weight is kept forever, as are workouts (superseded 2026-11-12 below).
 - Categories cards fold with a plain arrow next to the count; the state is kept in the browser (`lt-folded`).
 - Shopping Units: a card under Categories with the same logic (add, rename, delete, reorder, Undo); "pcs" is the fixed fallback like "other" for categories; items keep their unit text, so renaming or deleting a unit re-files them.
 - No press scale (the "pulse") on any button or tab; hover rules stay. The Tasks progress ring fades out when it returns to 0%.
@@ -396,3 +396,10 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Add meal has no Name field: nothing shows meal names any more. `logMealSchema.name` defaults to "Meal" (the column stays NOT NULL; the Assistant still sends its own name). Save needs at least one value above 0.
 - A shopping row's "· amount unit" never splits: it moves to the next line whole, with its dot.
 - Categories and Units cards show every row, with no More button (on every page that uses the card).
+
+## 2026-11-12 — Gym, retention and session (user)
+- Weight and every workout are kept forever, with no limit. The Weight page reads only the last 364 days (a bounded query); the text export holds all the data the user owns, every column of every table (`src/lib/export.ts`; the Claude token and push subscriptions stay out on purpose).
+- GitHub sign-in sessions last 180 days (was 30), refreshed daily; the owner allowlist is still rechecked on every session read. Azure stays 4 hours. Takes effect on the next deploy; existing cookies keep their old expiry until refreshed.
+- Gym layout: Training days comes first and its per-day previews sit in the aside in one stack (the tallest sets the height), so choosing a day never moves the page; the Muscle map card is below them; History folds like the Categories cards (`useFolded("gym")`). The paused-workout banner and the active-workout card show no date.
+- Muscle map: the day's muscles are selected (several at once); a tap on the model replaces the selection, Shift/Ctrl/Cmd or a chip adds or removes; Go back returns to the day's muscles; the move button sits beside Front/Back in a strip under the model, so the buttons never cover the body. The GLB is fetched and parsed once per page load (module-level promise, cloned per mount) and cached by the service worker (`/models/muscles.glb`). The map has 16 groups from about 100 named meshes; face, neck, hands, feet and deep core are not selectable (finer groups would change the exercise taxonomy, not done).
+- Deload cycle counts calendar weeks (Monday start): the first four weeks after the last deload (or the first session) are normal, the fifth is "due"; any session marked deload makes that whole week a deload week: it is skipped in Progress, History progress and "Last time". The old code counted time of day and wrapped with a modulo, which made the cycle four weeks long in practice.

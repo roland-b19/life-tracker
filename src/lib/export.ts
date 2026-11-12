@@ -10,7 +10,7 @@ const sections = (u: string): [string, SQL][] => [
     "Tasks",
     sql`SELECT space, title, CASE WHEN is_recurring THEN recurrence_pattern ELSE 'one-off' END AS repeats, due_date::text AS "first day",
                category, reminder_time::text AS reminder, is_completed AS done, completed_at::text AS "done at",
-               is_carried_over AS "carried over", created_at::text AS created
+               is_carried_over AS "carried over", created_at::text AS created, placed_at::text AS "placed at"
           FROM todos WHERE user_id = ${u}::uuid ORDER BY space, created_at`,
   ],
   ["Categories", sql`SELECT scope AS list, name, sort_order AS position FROM item_categories WHERE user_id = ${u}::uuid ORDER BY scope, sort_order`],
@@ -18,8 +18,8 @@ const sections = (u: string): [string, SQL][] => [
     "Wishlist",
     sql`SELECT name, estimated_price AS price, priority, category, url, created_at::text AS created FROM wishlist_items WHERE user_id = ${u}::uuid ORDER BY created_at DESC`,
   ],
-  ["Weight", sql`SELECT date::text AS day, kilograms FROM weight_entries WHERE user_id = ${u}::uuid ORDER BY date`],
-  ["Water and steps", sql`SELECT date::text AS day, water_ml AS "water (ml)", steps, notes FROM daily_metrics WHERE user_id = ${u}::uuid ORDER BY date`],
+  ["Weight", sql`SELECT date::text AS day, kilograms, created_at::text AS logged FROM weight_entries WHERE user_id = ${u}::uuid ORDER BY date`],
+  ["Water and steps", sql`SELECT date::text AS day, water_ml AS "water (ml)", steps, notes, created_at::text AS logged FROM daily_metrics WHERE user_id = ${u}::uuid ORDER BY date`],
   [
     "Meals",
     sql`SELECT date::text AS day, name, calories AS kcal, protein, carbs, fat, is_estimated AS estimated, forgotten, created_at::text AS logged
@@ -31,8 +31,8 @@ const sections = (u: string): [string, SQL][] => [
   ],
   [
     "Recipes",
-    sql`SELECT r.name, r.description, r.calories AS kcal, r.protein, r.carbs, r.fat,
-               (SELECT string_agg(i.amount || ' ' || i.unit || ' ' || i.name, ', ' ORDER BY i.name) FROM recipe_ingredients i WHERE i."recipeId" = r.id) AS ingredients
+    sql`SELECT r.name, r.description, r.calories AS kcal, r.protein, r.carbs, r.fat, r.is_estimated AS estimated, r.created_at::text AS created,
+               (SELECT string_agg(i.amount || ' ' || i.unit || ' ' || i.name || ' (' || i.category || ')', ', ' ORDER BY i.name) FROM recipe_ingredients i WHERE i."recipeId" = r.id) AS ingredients
           FROM recipes r WHERE r.user_id = ${u}::uuid ORDER BY r.created_at`,
   ],
   ["Shopping sections", sql`SELECT name, sort_order AS position FROM shopping_categories WHERE user_id = ${u}::uuid ORDER BY sort_order`],
@@ -42,18 +42,18 @@ const sections = (u: string): [string, SQL][] => [
     sql`SELECT name, amount, unit, category, is_bought AS bought, checked_at::text AS "checked at", cleared_at::text AS "cleared at", created_at::text AS created
           FROM shopping_items WHERE user_id = ${u}::uuid ORDER BY created_at`,
   ],
-  ["Exercises", sql`SELECT name, muscle_group AS muscle, equipment_type AS equipment, is_custom AS custom FROM exercises WHERE user_id = ${u}::uuid ORDER BY name`],
+  ["Exercises", sql`SELECT name, muscle_group AS muscle, equipment_type AS equipment, is_custom AS custom, created_at::text AS created FROM exercises WHERE user_id = ${u}::uuid ORDER BY name`],
   [
     "Training routine",
-    sql`SELECT s.name AS routine, d.day_of_week AS weekday, d.name AS day, d.is_rest AS rest, e.name AS exercise, x.target_sets AS sets, x.min_reps AS "min reps", x.max_reps AS "max reps"
+    sql`SELECT s.name AS routine, s.is_active AS active, d.day_of_week AS weekday, d.name AS day, d.is_rest AS rest, e.name AS exercise, x.target_sets AS sets, x.min_reps AS "min reps", x.max_reps AS "max reps"
           FROM workout_splits s JOIN workout_split_days d ON d.split_id = s.id
           LEFT JOIN workout_split_day_exercises x ON x.split_day_id = d.id LEFT JOIN exercises e ON e.id = x.exercise_id
          WHERE s.user_id = ${u}::uuid ORDER BY d.order_index, x.order_index`,
   ],
   [
     "Workout sets",
-    sql`SELECT w.date::text AS day, d.name AS "training day", w.is_deload AS deload, w.duration_minutes AS minutes, e.name AS exercise, t.set_order AS "set", t.reps,
-               t.load_type AS "load type", t.load_value AS "load", t.extra_kg AS "extra kg", t.is_failure AS failure, t.is_partial AS partial, t.notes
+    sql`SELECT w.date::text AS day, d.name AS "training day", w.is_deload AS deload, w.duration_minutes AS minutes, w.notes AS "workout notes", w.created_at::text AS started, e.name AS exercise, t.set_order AS "set", t.reps,
+               t.load_type AS "load type", t.load_value AS "load", t.extra_kg AS "extra kg", t.is_failure AS failure, t.is_partial AS partial, t.flag_anomaly AS anomaly, t.anomaly_reason AS "anomaly reason", t.notes, t.created_at::text AS logged
           FROM workout_sessions w LEFT JOIN workout_split_days d ON d.id = w.split_day_id
           LEFT JOIN workout_sets t ON t.session_id = w.id LEFT JOIN exercises e ON e.id = t.exercise_id
          WHERE w.user_id = ${u}::uuid ORDER BY w.date, t.set_order`,

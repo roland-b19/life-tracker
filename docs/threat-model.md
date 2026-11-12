@@ -13,7 +13,7 @@ Stack (chosen 2026-11-02, `docs/decisions.md`): Next.js + worker on Azure Contai
 ## 2. Assets
 | ID | Asset | Sensitivity | Where stored | Impact if exposed, altered, lost |
 |---|---|---|---|---|
-| A1 | Body weight (last 365 days) and steps and water (last 7 days) (since 2026-11-12 the Health Today page reads and edits them through owner-scoped server actions, each with an owner/other user/anonymous test; older rows are pruned) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
+| A1 | Body weight (kept until the owner deletes it) and steps and water (last 7 days) (since 2026-11-12 the Health Today page reads and edits them through owner-scoped server actions, each with an owner/other user/anonymous test; older rows are pruned) | regulated-adjacent (health data, GDPR Art. 9) | database | privacy harm; never leaves our system |
 | A2 | Gym logs (exercises, loads, notes, pain flags) | personal, pain/injury notes lean health | database | privacy harm; loss costs months of history |
 | A3 | Food logs, meal plan, recipes, shopping list and its categories and units (cleared items kept so Undo can restore them) | personal | database; also read and written by the in-app assistant | low to medium privacy harm |
 | A4 | Personal expenses (removed 2026-11-10: module and tables deleted) | - | - | - |

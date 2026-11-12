@@ -9,6 +9,5 @@ ALTER TABLE "shopping_units" ADD CONSTRAINT "shopping_units_user_id_users_id_fk"
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "shopping_units" TO life_tracker_app;--> statement-breakpoint
 -- Tasks keep no history any more.
 DROP TABLE "todo_day_stats" CASCADE;--> statement-breakpoint
--- Health keeps water and steps for the last 7 days and weight for the last 365 (days in Europe/Bucharest, like the app).
-DELETE FROM "daily_metrics" WHERE "date" < (now() AT TIME ZONE 'Europe/Bucharest')::date - 6;--> statement-breakpoint
-DELETE FROM "weight_entries" WHERE "date" < (now() AT TIME ZONE 'Europe/Bucharest')::date - 364;
+-- Health keeps water and steps for the last 7 days (days in Europe/Bucharest, like the app). Weight is kept forever.
+DELETE FROM "daily_metrics" WHERE "date" < (now() AT TIME ZONE 'Europe/Bucharest')::date - 6;

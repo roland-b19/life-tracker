@@ -17,11 +17,13 @@ import {
   SaveSplitDayInput,
 } from "./validations/gym";
 import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
+import { toISODate } from "./format-date";
+import { weeksBetween } from "./gym-progress";
 
 export interface DeloadStatus {
-  weeksSinceLastDeload: number;
-  currentCycleWeek: number; // 1 to 5
+  currentCycleWeek: number; // 1 to 5; week 5 is the deload week
   isDeloadDue: boolean;
+  inDeloadWeek: boolean; // a deload session is already logged this calendar week
   lastDeloadDate: string | null;
 }
 
@@ -416,51 +418,33 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
 }
 
 /**
- * 5-Week Deload Tracker
+ * 5-week deload cycle, in calendar weeks (Monday to Sunday, the same weeks the Progress tab skips): four normal weeks,
+ * then a deload week. The week with a deload session is the deload week; the week after it is week 1 of the next
+ * cycle, and a deload is due from week 5 on, until one is logged. With no deload yet, the first workout's week is week 1.
  */
 export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
-  const lastDeload = await db
+  const [last] = await db
     .select({ date: workoutSessions.date })
     .from(workoutSessions)
     .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.isDeload, true)))
     .orderBy(desc(workoutSessions.date))
     .limit(1);
+  const today = toISODate();
+  const [first] = last
+    ? []
+    : await db
+        .select({ date: workoutSessions.date })
+        .from(workoutSessions)
+        .where(eq(workoutSessions.userId, userId))
+        .orderBy(workoutSessions.date)
+        .limit(1);
 
-  let referenceDate: Date;
-  let lastDeloadDate: string | null = null;
+  const inDeloadWeek = !!last && weeksBetween(last.date, today) === 0;
+  // Weeks since week 1 of this cycle: week 1 is the week after the deload week, or the first workout's week.
+  const weeksPassed = Math.max(0, last ? weeksBetween(last.date, today) - 1 : first ? weeksBetween(first.date, today) : 0);
+  const currentCycleWeek = Math.min(weeksPassed, 4) + 1;
 
-  if (lastDeload.length > 0) {
-    lastDeloadDate = lastDeload[0].date;
-    referenceDate = new Date(lastDeloadDate);
-  } else {
-    // If no deload yet, find first workout session
-    const firstSession = await db
-      .select({ date: workoutSessions.date })
-      .from(workoutSessions)
-      .where(eq(workoutSessions.userId, userId))
-      .orderBy(workoutSessions.date)
-      .limit(1);
-
-    if (firstSession.length > 0) {
-      referenceDate = new Date(firstSession[0].date);
-    } else {
-      referenceDate = new Date(); // New user: week 1
-    }
-  }
-
-  const now = new Date();
-  const diffDays = Math.max(0, Math.floor((now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)));
-  const weeksPassed = Math.floor(diffDays / 7);
-
-  const currentCycleWeek = (weeksPassed % 5) + 1; // 1, 2, 3, 4, 5
-  const isDeloadDue = currentCycleWeek === 5 || weeksPassed >= 5;
-
-  return {
-    weeksSinceLastDeload: weeksPassed,
-    currentCycleWeek,
-    isDeloadDue,
-    lastDeloadDate,
-  };
+  return { currentCycleWeek, isDeloadDue: !inDeloadWeek && currentCycleWeek === 5, inDeloadWeek, lastDeloadDate: last?.date ?? null };
 }
 
 export interface HistorySession {

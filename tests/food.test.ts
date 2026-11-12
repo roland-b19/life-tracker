@@ -24,7 +24,7 @@ import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
 import { dailyMetrics, users, weightEntries } from "@/db/schema";
-import { createWeightEntry, updateWeightEntry } from "@/server/weight";
+import { createWeightEntry, listWeightEntries, updateWeightEntry } from "@/server/weight";
 import {
   addShoppingItem,
   addWater,
@@ -567,7 +567,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userA))).toHaveLength(3);
     });
 
-    it("keeps only the last 365 days of weigh-ins, per owner", async () => {
+    it("keeps every weigh-in forever, and a page read can be bounded", async () => {
       const today = toISODate();
       await db.insert(weightEntries).values([
         { userId: userA, date: addDays(today, -400), kilograms: "81.00" },
@@ -575,14 +575,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         { userId: userB, date: addDays(today, -400), kilograms: "70.00" },
       ]);
       const created = await createWeightEntry(userA, today, 79.5);
-      expect(created.date).toBe(today);
-      const kept = await db.select().from(weightEntries).where(eq(weightEntries.userId, userA));
-      expect(kept.map((w) => w.date).sort()).toEqual([addDays(today, -364), today]);
-      expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userB))).toHaveLength(1);
-
       await db.insert(weightEntries).values({ userId: userA, date: addDays(today, -500), kilograms: "90.00" });
       await updateWeightEntry(userA, created.id, today, 79.4);
-      expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userA))).toHaveLength(2);
+      expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userA))).toHaveLength(4);
+      expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userB))).toHaveLength(1);
+      expect((await listWeightEntries(userA)).map((w) => w.date)).toEqual([today, addDays(today, -364), addDays(today, -400), addDays(today, -500)]);
+      expect((await listWeightEntries(userA, addDays(today, -364))).map((w) => w.date)).toEqual([today, addDays(today, -364)]);
     });
   });
 });

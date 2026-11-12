@@ -784,7 +784,7 @@ main {
 .shopping-item-name > :first-child { flex-shrink: 0; }
 .shopping-item-name > span { min-width: 0; }
 /* The dot, amount and unit wrap to the next line together, never split */
-.shopping-qty { white-space: nowrap; }
+.shopping-qty { display: inline-block; white-space: nowrap; overflow-wrap: normal; }
 
 .shopping-item-name.bought {
   text-decoration: line-through;
@@ -2314,9 +2314,17 @@ button.bars-col:focus-visible {
 }
 .muscle-stage {
   position: relative;
-  height: 30rem;
+  height: 32rem;
   border-radius: 0.75rem;
   background: var(--highlight);
+  overflow: hidden;
+  /* Model on top, its own strip of buttons under it: the buttons never cover the body */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.muscle-canvas {
+  grid-area: 1 / 1;
+  min-height: 0;
   overflow: hidden;
 }
 .muscle-canvas,
@@ -2327,8 +2335,7 @@ button.bars-col:focus-visible {
   touch-action: none;
 }
 .muscle-note {
-  position: absolute;
-  inset: 0;
+  grid-area: 1 / 1;
   display: grid;
   place-items: center;
   margin: 0;
@@ -2338,16 +2345,18 @@ button.bars-col:focus-visible {
   font-size: 0.9rem;
 }
 .muscle-views {
-  position: absolute;
-  left: 0.6rem;
-  bottom: 0.6rem;
-  width: 10rem;
+  grid-row: 2;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
+  padding: 0 0.6rem 0.6rem;
 }
-.muscle-views > :last-child { align-self: stretch; }
+.muscle-side-switch {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 10rem;
+}
+.muscle-back { margin-left: auto; }
 /* Touch screens only: always grey. Hold it and slide the same finger to move the model; a drag on the model scrolls the page. */
 .muscle-move {
   display: none;
@@ -2437,7 +2446,8 @@ button.bars-col:focus-visible {
   margin: 0.75rem 0;
   font-size: 0.875rem;
 }
-.metric-avg:last-child { margin-bottom: 0; }
+/* Last in a card: its text sits as far from the card's bottom edge as the title (centred on the 44px Edit button) sits from the top */
+.metric-avg:last-child { margin-bottom: calc((2.75rem - 1.38rem) / 2); }
 .metric-big:has(+ .metric-avg) { margin-bottom: 0; }
 .metric-avg + .tap-buttons { margin-top: 0; }
 
@@ -2935,6 +2945,11 @@ button.bars-col:focus-visible {
 }
 /* Training days stand out from the card behind them */
 .split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
+
+/* Gym: every day's preview in one cell; the hidden ones keep the cell as tall as the longest */
+.preview-stack { display: grid; }
+.preview-stack > * { grid-area: 1 / 1; }
+.preview-hidden { visibility: hidden; }
 
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }

@@ -97,7 +97,7 @@ interface FoodClientProps {
       notes: string | null;
     };
   };
-  /** The last 365 days of weigh-ins. */
+  /** The last 365 days of weigh-ins (the database keeps all of them). */
   initialWeights: WeightEntry[];
   /** Water and steps of the last 7 days (today included), for the 7-day average. */
   weekMetrics: { date: string; waterMl: number; steps: number }[];

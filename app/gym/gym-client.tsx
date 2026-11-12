@@ -9,7 +9,9 @@ import { DeleteButton, DragHandle, ListBox, useDragSort, useMore } from "../comp
 import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle, Toolbar } from "../components/blocks";
 import { ChevronRightIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { useToast } from "../components/toast";
+import { useFolded } from "../components/categories-card";
 import { MuscleExplorer } from "./muscle-map";
+import type { MuscleGroup } from "./muscle-groups";
 import { ProgressPanel } from "./progress-panel";
 import { Segmented } from "../components/segmented";
 import { clearWorkoutTime, formatClock, saveWorkoutTime, useWorkoutTimer, workoutMinutes } from "./workout-timer";
@@ -73,9 +75,9 @@ interface SplitDay {
 }
 
 interface DeloadInfo {
-  weeksSinceLastDeload: number;
   currentCycleWeek: number;
   isDeloadDue: boolean;
+  inDeloadWeek: boolean;
   lastDeloadDate: string | null;
 }
 
@@ -154,13 +156,14 @@ export function GymClient({
   const [view, setView] = useState<"workout" | "progress">("workout");
   const [sessionNotes, setSessionNotes] = useState("");
   const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
-  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue);
+  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false);
   const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
   const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
   useEffect(() => {
     live.current = activeSession ?? paused;
   });
+  const [isFolded, toggleFolded] = useFolded("gym");
   const [shownHistory, moreHistory] = useMore(history);
   // The Progress tab draws from what the page already holds (history plus the workout in hand): no load, no skeleton.
   const progress = useMemo(
@@ -196,7 +199,8 @@ export function GymClient({
   >("barbell");
 
   const currentDay = split?.days.find((d) => d.id === selectedDayId);
-  const [shownExercises, moreExercises] = useMore(currentDay?.exercises ?? []);
+  // The muscles the day on screen trains: the muscle map starts with them picked (it compares by content, so a new array each render is fine).
+  const dayGroups = [...new Set(currentDay?.exercises.map((e) => e.muscleGroup))] as MuscleGroup[];
 
   // Routine editor
   const [draft, setDraft] = useState<DayDraft | null>(null);
@@ -659,10 +663,10 @@ export function GymClient({
       <Banner
         id="deload-title"
         className="deload-card"
-        title={deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
+        title={deload.inDeloadWeek ? "Deload week" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
         sub={
-          deload.isDeloadDue
-            ? "Deload sessions are excluded from PRs."
+          deload.inDeloadWeek || deload.isDeloadDue
+            ? "A deload week is not counted in progress."
             : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
       >
@@ -674,7 +678,7 @@ export function GymClient({
         <Card
           id="active-session-title"
           title={activeSession.splitDayName || "Workout session"}
-          sub={`${formatDMY(activeSession.date)} ${activeSession.isDeload ? "· Deload" : ""}`}
+          sub={activeSession.isDeload ? "Deload" : undefined}
           actions={
             <>
               <span className={`session-timer number-tabular${timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
@@ -725,7 +729,7 @@ export function GymClient({
                     const last = history.find(
                       (h) =>
                         h.dayId === activeSession.splitDayId &&
-                        !h.isDeload &&
+                        !h.deloadWeek &&
                         h.date < activeSession.date &&
                         h.exercises.some((e) => e.id === exercise.exerciseId),
                     );
@@ -872,7 +876,7 @@ export function GymClient({
               label="Workout in progress"
               className="resume-bar"
               title="Workout in progress"
-              sub={`${paused.splitDayName || "Workout"} · ${formatDMY(paused.date)} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
+              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
             >
               <TintButton onClick={handleResumeSession}>Resume</TintButton>
             </Banner>
@@ -892,63 +896,8 @@ export function GymClient({
             <ProgressPanel sets={progress} days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
           ) : (
             <>
-              <MuscleExplorer
-                planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
-              />
               <Dashboard>
                 <DashboardMain>
-                  {currentDay && (
-                    <Card
-                      id="preview-title"
-                      title={currentDay.isRest ? "Rest day" : currentDay.name}
-                      sub={DAY_NAMES[currentDay.dayOfWeek]}
-                      below
-                      actions={
-                        <>
-                          <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${currentDay.name}`} onClick={() => openEditor(currentDay)}>
-                            Edit
-                          </TintButton>
-                          {!currentDay.isRest && (
-                            <TintButton
-                              aria-label={`Start ${currentDay.name}`}
-                              disabled={busy || Boolean(paused) || currentDay.exercises.length === 0}
-                              onClick={() => void handleStartSession(currentDay)}
-                            >
-                              Start
-                            </TintButton>
-                          )}
-                        </>
-                      }
-                    >
-                      {!currentDay.isRest && (
-                        <ListBox wash className="entries">
-                          {currentDay.exercises.length > 0 ? (
-                            <>
-                              {shownExercises.map((ex, idx) => (
-                                <div key={ex.id} className="entry-row">
-                                  <div className="entry-main">
-                                    <strong>
-                                      {idx + 1}. {ex.exerciseName}
-                                    </strong>
-                                    <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
-                                  </div>
-                                  <span className="muted number-tabular entry-side">
-                                    {ex.targetSets} × {ex.minReps} – {ex.maxReps}
-                                  </span>
-                                </div>
-                              ))}
-                              {moreExercises}
-                            </>
-                          ) : (
-                            <EmptyNote>No exercises yet.</EmptyNote>
-                          )}
-                        </ListBox>
-                      )}
-                    </Card>
-                  )}
-                </DashboardMain>
-
-                <DashboardAside>
                   <Card id="split-title" title="Training days">
                     <ListBox className="split-day-list">
                       {split?.days.map((day) => {
@@ -993,12 +942,71 @@ export function GymClient({
                       })}
                     </ListBox>
                   </Card>
+                </DashboardMain>
+
+                {/* Every day's preview sits in one grid cell and only the picked one shows, so the cell is as tall as the longest and picking a day moves nothing */}
+                <DashboardAside>
+                  <div className="preview-stack">
+                    {split?.days.map((day) => (
+                      <div key={day.id} className={day.id === selectedDayId ? undefined : "preview-hidden"}>
+                        <Card
+                          id={day.id === selectedDayId ? "preview-title" : undefined}
+                          title={day.isRest ? "Rest day" : day.name}
+                          sub={DAY_NAMES[day.dayOfWeek]}
+                          below
+                          actions={
+                            <>
+                              <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${day.name}`} onClick={() => openEditor(day)}>
+                                Edit
+                              </TintButton>
+                              {!day.isRest && (
+                                <TintButton
+                                  aria-label={`Start ${day.name}`}
+                                  disabled={busy || Boolean(paused) || day.exercises.length === 0}
+                                  onClick={() => void handleStartSession(day)}
+                                >
+                                  Start
+                                </TintButton>
+                              )}
+                            </>
+                          }
+                        >
+                          {!day.isRest && (
+                            <ListBox wash className="entries">
+                              {day.exercises.length > 0 ? (
+                                day.exercises.map((ex, idx) => (
+                                  <div key={ex.id} className="entry-row">
+                                    <div className="entry-main">
+                                      <strong>
+                                        {idx + 1}. {ex.exerciseName}
+                                      </strong>
+                                      <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
+                                    </div>
+                                    <span className="muted number-tabular entry-side">
+                                      {ex.targetSets} × {ex.minReps} – {ex.maxReps}
+                                    </span>
+                                  </div>
+                                ))
+                              ) : (
+                                <EmptyNote>No exercises yet.</EmptyNote>
+                              )}
+                            </ListBox>
+                          )}
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
                 </DashboardAside>
               </Dashboard>
+              <MuscleExplorer
+                dayGroups={dayGroups}
+                planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
+              />
               <Card
                 id="history-title"
                 title="History"
                 className="gym-history"
+                fold={{ folded: isFolded("history"), onToggle: () => toggleFolded("history") }}
                 end={
                   <span className="muted number-tabular">
                     {history.length} {history.length === 1 ? "workout" : "workouts"}
@@ -1026,7 +1034,7 @@ export function GymClient({
                                 <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
                               </span>
                               <span className="muted number-tabular history-progress">
-                                {h.isDeload
+                                {h.deloadWeek
                                   ? "Deload week, not counted"
                                   : h.progress !== null
                                     ? `Weight ${kgDelta(h.progress)} vs the week before`

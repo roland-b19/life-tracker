@@ -16,7 +16,7 @@ async function send(method: string, url: string, body?: unknown) {
   return fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 }
 
-/** Health's weight: today's weigh-in, the 7-day average and the chart in one card. Only the last 365 days are kept. */
+/** Health's weight: today's weigh-in, the 7-day average and the chart in one card. The chart shows up to a year; every weigh-in is kept. */
 export function WeightCard({ today, initial }: { today: string; initial: WeightEntry[] }) {
   const [entries, setEntries] = useState(initial);
   const [open, setOpen] = useState(false);

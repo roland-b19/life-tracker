@@ -73,7 +73,7 @@ afterAll(async () => {
 describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [
     ["/gym", () => import("../app/gym/page"), 12, 300_000],
-    // Weight keeps (and sends) at most 365 weigh-ins for its chart, so the page is bounded by that, not by the history.
+    // Weight sends at most 365 weigh-ins for its chart (the database keeps all), so the page is bounded by that, not by the history.
     ["/food", () => import("../app/food/page"), 12, 40_000],
     ["/todos", () => import("../app/todos/page"), 11, 20_000],
     ["/wishlist", () => import("../app/wishlist/page"), 3, 1_000],

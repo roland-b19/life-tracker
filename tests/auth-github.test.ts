@@ -61,8 +61,8 @@ describe("GitHub sign-in with an owner allowlist", () => {
     expect((await session(undefined, undefined)).user.id).toBeUndefined();
   });
 
-  it("is a 30-day session, and Azure keeps 4 hours", async () => {
-    expect((await load()).authOptions.session!.maxAge).toBe(30 * 24 * 60 * 60);
+  it("is a 180-day session, and Azure keeps 4 hours", async () => {
+    expect((await load()).authOptions.session!.maxAge).toBe(180 * 24 * 60 * 60);
     env.AUTH_PROVIDER = "azure-ad";
     env.AUTH_ISSUER = "https://issuer.example.com";
     env.AUTH_AZURE_TENANT_ID = "t";

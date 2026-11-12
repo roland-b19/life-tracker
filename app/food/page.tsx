@@ -24,7 +24,7 @@ export default async function FoodPage() {
   const [targets, summary, weights, weekMetrics, shoppingList, shoppingCategories, shoppingUnits] = await Promise.all([
     getNutritionTargets(userId),
     getDailyFoodSummary(userId, today),
-    listWeightEntries(userId),
+    listWeightEntries(userId, addDays(today, -364)), // the page shows a year; the database keeps every weigh-in
     getDailyMetricsHistory(userId, today),
     getShoppingList(userId),
     getShoppingCategories(userId),
@@ -37,7 +37,7 @@ export default async function FoodPage() {
       todayDate={today}
       targets={(({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }) => ({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }))(targets)}
       initialSummary={summary}
-      initialWeights={weights.filter((w) => w.date >= addDays(today, -364))}
+      initialWeights={weights}
       weekMetrics={weekMetrics}
       initialShoppingList={shoppingList}
       shoppingCategories={shoppingCategories}
