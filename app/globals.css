@@ -655,7 +655,6 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 0.75rem;
 }
 
 .exercise-context-box {
@@ -671,9 +670,8 @@ main {
 
 .set-input-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) repeat(2, minmax(0, 1fr)); /* Reps, Unit, Value, Extra on one row */
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* Reps, Unit, Value, Extra: one row, equal widths */
   gap: 0.5rem;
-  margin-top: 0.85rem;
   align-items: end;
 }
 
@@ -2347,23 +2345,18 @@ button.bars-col:focus-visible {
 .muscle-views {
   grid-row: 2;
   display: flex;
-  align-items: center;
+  align-items: stretch; /* Move and Go back take the Front/Back switch's height */
   gap: 0.75rem;
   padding: 0 0.6rem 0.6rem;
 }
-.muscle-side-switch {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 10rem;
-}
-.muscle-back { margin-left: auto; }
+/* Front/Back, Move and Go back share the strip in equal parts with one gap */
+.muscle-views > * { flex: 1 1 0; min-width: 0; }
+.muscle-views > .muscle-back { height: auto; min-height: 0; padding-inline: 0; border-width: 0; } /* no padding, so the three parts come out the same width */
 /* Touch screens only: always grey. Hold it and slide the same finger to move the model; a drag on the model scrolls the page. */
 .muscle-move {
   display: none;
   position: relative;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 0; /* the global button min-height would stretch it taller than wide */
+  min-height: 0;
   padding: 0;
   place-items: center;
   border-radius: 0.85rem;
@@ -2474,21 +2467,25 @@ button.bars-col:focus-visible {
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
-.set-list { margin: 0.25rem 0 0.5rem; }
-.set-list:empty { margin: 0; }
 .set-flag { margin-left: 0.5rem; }
 .toggle-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1.25rem;
-  margin-top: 0.5rem;
 }
 .session-footer {
-  margin-top: 0.25rem;
+  display: grid;
+  gap: 1rem;
   padding-top: 1rem;
 }
-.session-footer .form-row { flex-wrap: wrap; align-items: end; }
-.grow-2 { flex: 2 1 15rem; }
+/* Finish, Exit and Cancel: one centred column as wide as the widest button, not the card */
+.session-actions {
+  display: grid;
+  grid-template-columns: max-content;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.session-actions > span { width: 0; min-width: 100%; text-align: center; } /* the question wraps inside the buttons' width */
 
 /* Gym: training days */
 .split-day-list {
@@ -2782,9 +2779,9 @@ button.bars-col:focus-visible {
   font-size: 0.8125rem;
 }
 
-/* Gym progress: a control after a select or date field gets the same gap as inside a form; titles share one head height */
-.gym-progress .surface > :is(label, .field) + * { margin-top: 1rem; }
-.gym-progress .section-head { min-height: 1.75rem; }
+/* Gym progress: a control after a select field gets the same gap as inside a form */
+.gym-progress { margin-block: 1.25rem; } /* the page stacks its cards on this one gap */
+.gym-progress > :is(label, .field) + * { margin-top: 1rem; }
 
 /* A form field that is not a <label> (it holds a popover), laid out like one. */
 .field {
@@ -2912,6 +2909,8 @@ button.bars-col:focus-visible {
   padding: 1rem var(--band-out);
   border-radius: 0.75rem;
   background-color: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 0.75rem; /* header, last time, sets, fields, switches and Log set: one gap */
 }
 /* Logged sets: each band spans the column the exercise title and the inputs use, so nothing touches the
    exercise band's edge; the set's text is inset inside its own band instead. */
@@ -2926,16 +2925,7 @@ button.bars-col:focus-visible {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
-/* Gym: leaving or cancelling a workout, and the bar that brings an unfinished one back */
-.session-exit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem 0.75rem;
-  margin-top: 1rem;
-}
-.session-exit > span { margin-right: auto; }
+/* Gym: the bar that brings an unfinished workout back */
 .resume-bar {
   display: flex;
   align-items: center;
@@ -2945,11 +2935,6 @@ button.bars-col:focus-visible {
 }
 /* Training days stand out from the card behind them */
 .split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
-
-/* Gym: every day's preview in one cell; the hidden ones keep the cell as tall as the longest */
-.preview-stack { display: grid; }
-.preview-stack > * { grid-area: 1 / 1; }
-.preview-hidden { visibility: hidden; }
 
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }
@@ -3001,12 +2986,11 @@ button.bars-col:focus-visible {
 .last-time {
   display: grid;
   gap: 0.15rem;
-  margin: 0 0 0.5rem;
   font-size: 0.875rem;
 }
-/* The set being logged: labels and values centred on their fields, Log set on a row of its own at full width.
+/* The set being logged: labels and values centred on their fields; Log set comes last, at full width.
    The fields sit on a grey fill so they stand out from the card's band. */
-.set-input-grid > button { grid-column: 1 / -1; }
+.log-set { width: 100%; }
 .set-input-grid label { text-align: center; }
 .set-input-grid :is(input, select) {
   padding-inline: 0.25rem;

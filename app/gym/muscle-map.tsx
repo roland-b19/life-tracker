@@ -265,6 +265,22 @@ function MuscleMap({
       {/* Its own strip under the model, so the buttons never sit over the body */}
       <div className="muscle-views">
         {status === "ready" && (
+          <div className="muscle-side-switch">
+            <Segmented
+              label="Model side"
+              value={side}
+              options={[
+                { value: "front", label: "Front" },
+                { value: "back", label: "Back" },
+              ]}
+              onChange={(v) => {
+                setSide(v);
+                api.current?.setView(v);
+              }}
+            />
+          </div>
+        )}
+        {status === "ready" && (
           <button
             type="button"
             className={`muscle-move${holding ? " active" : ""}`}
@@ -292,22 +308,6 @@ function MuscleMap({
           >
             <ArrowsIcon size={18} />
           </button>
-        )}
-        {status === "ready" && (
-          <div className="muscle-side-switch">
-            <Segmented
-              label="Model side"
-              value={side}
-              options={[
-                { value: "front", label: "Front" },
-                { value: "back", label: "Back" },
-              ]}
-              onChange={(v) => {
-                setSide(v);
-                api.current?.setView(v);
-              }}
-            />
-          </div>
         )}
         {/* Always rendered so the strip never shifts; it shows once the picked muscles differ from the day's */}
         <TintButton
