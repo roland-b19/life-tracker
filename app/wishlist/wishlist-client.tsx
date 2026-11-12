@@ -14,7 +14,7 @@ import {
   updateWishlistItemAction,
 } from "@/app/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
-import { Priority, priorityForPrice } from "@/lib/validations/wishlist";
+import { type Priority, priorityForPrice } from "@/lib/rules";
 
 interface WishlistClientProps {
   userName: string;

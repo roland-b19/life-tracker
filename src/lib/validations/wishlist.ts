@@ -21,12 +21,7 @@ export const restoreWishlistItemSchema = createWishlistItemSchema.extend({
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
-export type Priority = "low" | "medium" | "high";
-
-/** Priority is derived from the price: under 250 low, under 750 medium, otherwise high. */
-export function priorityForPrice(price: number): Priority {
-  return price < 250 ? "low" : price < 750 ? "medium" : "high";
-}
+export { priorityForPrice, type Priority } from "../rules";
 
 export type CreateWishlistItemInput = z.input<typeof createWishlistItemSchema>;
 export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;
