@@ -317,6 +317,9 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Correction: the 3D muscle map uses `three` 0.187.0 (pinned in `package.json`), not 0.180.0 as the 2026-11-05 entry says.
 - The live database may lack migrations 0021 to 0023; the user applies them with `npm run db:migrate` (see README). An agent never runs it.
 
+## 2026-11-12: Subtle motion removed again (user)
+- The motion added in PR #92 was reverted at the user's request after trying it. The house style is again "no animations" (the Tasks progress ring, the Wishlist total count-up and the Nutrition numbers stay). The audit fixes of PR #91 are untouched.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
