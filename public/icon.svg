@@ -2,5 +2,5 @@
   <rect width="512" height="512" rx="112" fill="#1b1e22"/>
   <circle cx="256" cy="256" r="130" fill="none" stroke="#86b4ea" stroke-opacity=".22" stroke-width="40"/>
   <circle cx="256" cy="256" r="130" fill="none" stroke="#86b4ea" stroke-width="40" stroke-linecap="round" stroke-dasharray="612.6 816.8" transform="rotate(-90 256 256)"/>
-  <path d="M198 262l40 40 80-88" fill="none" stroke="#86b4ea" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M197.4 276.3L235.7 314.6L312.4 230.3" fill="none" stroke="#86b4ea" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
