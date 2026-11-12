@@ -296,13 +296,18 @@ export function TodosClient({
               ++requestId.current;
               drop(saved);
               putBack({ ...before, id: saved.id });
-              const undone = await updateTodoAction({
-                id: saved.id,
-                title: before.title,
-                reminderTime: before.reminderTime,
-                category: before.category,
-                day: date,
-              }).catch(() => null);
+              // A day that was over is a one-day task of its own: Undo joins it back into the task instead of editing again.
+              const join = res.todo?.join;
+              const undone = await (join
+                ? revertMoveTodoAction(snapshot(before), saved.id, join)
+                : updateTodoAction({
+                    id: saved.id,
+                    title: before.title,
+                    reminderTime: before.reminderTime,
+                    category: before.category,
+                    day: date,
+                  })
+              ).catch(() => null);
               if (!undone || !("success" in undone) || !undone.success) {
                 drop({ ...before, id: saved.id });
                 putBack(saved);
@@ -427,13 +432,14 @@ export function TodosClient({
       return;
     }
     const createdId = res.todo && res.todo.id !== before.id ? res.todo.id : undefined;
+    const join = res.todo?.join;
     showToast({
       message: `Moved "${after.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
       type: "success",
       onUndo: async () => {
         ++requestId.current;
         if (shows(before)) putBack(before);
-        const back = await revertMoveTodoAction(snapshot(before), createdId).catch(() => null);
+        const back = await revertMoveTodoAction(snapshot(before), createdId, join).catch(() => null);
         if (!back?.success) {
           if (shows(before)) drop(before);
           showToast({ message: back && "error" in back ? back.error : "Failed to undo the move", type: "warning" });
@@ -449,8 +455,9 @@ export function TodosClient({
   const handleDeleteTodo = (target: TodoItem) => {
     ++requestId.current;
     drop(target);
+    let join: Awaited<ReturnType<typeof deleteTodoAction>>["join"];
     const deleted = deleteTodoAction(target.id, date).then(
-      (res) => res.success,
+      (res) => ((join = res.join), res.success),
       () => false,
     );
     showToast({
@@ -460,7 +467,7 @@ export function TodosClient({
         // Only onto the list it was on, if that is still the one on screen.
         if (shows(target)) putBack(target);
         if (!(await deleted)) return; // the delete never happened
-        const back = await restoreTodoAction(snapshot(target)).catch(() => null);
+        const back = await restoreTodoAction(snapshot(target), join).catch(() => null);
         if (!back?.success) {
           if (shows(target)) drop(target);
           showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });

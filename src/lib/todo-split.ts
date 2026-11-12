@@ -1,5 +1,6 @@
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/server/db";
+import { addDays } from "./format-date";
 import { todoCompletions, todos } from "@/db/schema";
 
 type Tx = Pick<typeof db, "insert" | "update" | "delete" | "select">;
@@ -28,4 +29,37 @@ export async function splitTodo(
   if (ticked.length) await tx.insert(todoCompletions).values(ticked.map((t) => ({ todoId: next.id, date: t.date })));
   await endTodo(tx, task.userId, id, day);
   return next;
+}
+
+/** What an Undo needs to join a past day back into its task: the copy that took over from the next day, the end date the task had, and the day. */
+export interface Rejoin {
+  laterId?: string;
+  endedOn: string | null;
+  day: string;
+}
+
+/**
+ * Changes one past day of a repeating task and nothing after it: the task ends on `day`, a copy (all ticks, so streaks
+ * carry on) takes over from the next day, and with `changes` a one-day task holds `day` itself. Returns that one-day
+ * task and what Undo needs. A task that starts on `day` has nothing before it, so it is deleted instead of ended.
+ */
+export async function isolateDay(
+  tx: Tx,
+  task: Todo,
+  day: string,
+  changes?: Partial<Pick<Todo, "title" | "reminderTime" | "category">>,
+): Promise<{ middle?: Todo; join: Rejoin }> {
+  const { id, ...copy } = task;
+  const next = addDays(day, 1);
+  const ticked = await tx.select().from(todoCompletions).where(eq(todoCompletions.todoId, id));
+  const born = async (values: typeof copy) => {
+    const [row] = await tx.insert(todos).values(values).returning();
+    if (ticked.length) await tx.insert(todoCompletions).values(ticked.map((t) => ({ todoId: row.id, date: t.date })));
+    return row;
+  };
+  const later = !task.endedOn || task.endedOn > next ? await born({ ...copy, dueDate: next }) : undefined;
+  const middle = changes ? await born({ ...copy, ...changes, dueDate: day, endedOn: next }) : undefined;
+  if (task.dueDate < day) await endTodo(tx, task.userId, id, day);
+  else await tx.delete(todos).where(and(eq(todos.id, id), eq(todos.userId, task.userId)));
+  return { middle, join: { laterId: later?.id, endedOn: task.endedOn, day } };
 }

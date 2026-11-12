@@ -3,6 +3,8 @@
 // the default file `.local/personal-data.json` is gitignored. Gym needs no import (opening Gym creates the routine).
 // Usage: DATABASE_URL_MIGRATE=<owner url> node scripts/import-personal.cjs [--dry-run] [--file <path>] [--subject <github id>]
 // Idempotent: an item or task whose name already exists for the user (any case) is skipped, nothing is deleted.
+// A daily task that was deleted (it has an end day) counts as missing: it comes back as a new row from today, and the past days
+// keep the old row as it was, so a task deleted by mistake returns without touching history.
 // Categories are optional: "categories": {"wishlist": [...], "personal": [...], "business": [...]} lists them in order,
 // a wishlist entry is [name, price, category?] and a task is "title" or ["title", "category"]. A category set on an existing
 // item only replaces "other", so a category you chose in the app is never overwritten.
@@ -84,12 +86,12 @@ async function main() {
           const { rowCount } = await db.query(
             `INSERT INTO todos (user_id, space, title, is_recurring, recurrence_pattern, due_date, category, created_at)
              SELECT $1::uuid, $2::varchar, $3::varchar, $4::boolean, $5::varchar, $6::date, $8::varchar, now() - make_interval(secs => $7::int)
-             WHERE NOT EXISTS (SELECT 1 FROM todos WHERE user_id = $1::uuid AND space = $2::varchar AND lower(title) = lower($3::varchar) AND is_recurring = $4::boolean)`,
+             WHERE NOT EXISTS (SELECT 1 FROM todos WHERE user_id = $1::uuid AND space = $2::varchar AND lower(title) = lower($3::varchar) AND is_recurring = $4::boolean AND ended_on IS NULL)`,
             [userId, space, title, daily, daily ? "daily" : "none", today, i, c],
           );
           if (!rowCount && c !== "other")
             await db.query(
-              `UPDATE todos SET category = $4::varchar WHERE user_id = $1::uuid AND space = $2::varchar AND lower(title) = lower($3::varchar) AND is_recurring AND category = 'other'`,
+              `UPDATE todos SET category = $4::varchar WHERE user_id = $1::uuid AND space = $2::varchar AND lower(title) = lower($3::varchar) AND is_recurring AND ended_on IS NULL AND category = 'other'`,
               [userId, space, title, c],
             );
           n += rowCount;

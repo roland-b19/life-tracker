@@ -1,3 +1,6 @@
-import { PageSkeleton } from "../components/blocks";
+import { isClaudeEnabled } from "@/lib/features";
+import { HealthSkeleton } from "../components/skeletons";
 
-export default PageSkeleton;
+export default function Loading() {
+  return <HealthSkeleton claude={isClaudeEnabled()} />;
+}
