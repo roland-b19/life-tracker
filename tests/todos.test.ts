@@ -565,11 +565,12 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userB;
       expect((await createTodoAction(task)).success).toBe(true);
       authState.id = userA;
-      // A repeating task meets the repeating tasks, and the one-off lists of the days it is due.
+      // A repeating task meets only the repeating tasks, never the one-off lists.
       const habit = { ...task, title: "Stretch", isRecurring: true, recurrencePattern: "daily" };
       expect((await createTodoAction(habit)).success).toBe(true);
       expect((await createTodoAction(habit)).success).toBe(false);
-      expect((await createTodoAction({ ...task, title: "stretch" })).success).toBe(false);
+      expect((await createTodoAction({ ...habit, title: "STRETCH" })).success).toBe(false);
+      expect((await createTodoAction({ ...task, title: "stretch" })).success).toBe(true);
       authState.id = "";
       await expect(createTodoAction(task)).rejects.toThrow("Authentication required");
     });
@@ -729,7 +730,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         success: false,
         error: '"Call mom" is already on this list.',
       });
-      expect((await moveTodoAction({ id: later.id, recurrencePattern: "daily", dueDate: today })).success).toBe(false);
       expect((await moveTodoAction({ id: later.id, recurrencePattern: "none", dueDate: addDays(today, 2) })).success).toBe(true);
     });
   });
@@ -823,6 +823,73 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await titles(addDays(today, 3))).toEqual(["Floss"]);
       expect(await titles(yesterday)).toEqual(["Late"]); // reading today did not carry it over
       expect(habit.id && late.id).toBeTruthy();
+    });
+
+    it("keeps Today and Daily apart: a same-named task in the other one never blocks, in either space", async () => {
+      const today = toISODate();
+      const tomorrow = addDays(today, 1);
+      for (const space of ["personal", "business"] as const) {
+        const make = (title: string, dueDate: string, daily = false) =>
+          createTodo(userA, { space, title, dueDate, isRecurring: daily, recurrencePattern: daily ? "daily" : "none" });
+        const habit = await make("Stretch", today, true);
+        // Create, rename and move a one-off with the Daily's name: all fine.
+        const oneOff = await make("Stretch", today);
+        const other = await make("Read", today);
+        expect((await moveTodoAction({ id: oneOff.id, recurrencePattern: "none", dueDate: addDays(today, 2) })).success).toBe(true);
+        expect((await updateTodoAction({ id: other.id, title: "stretch" })).success).toBe(true);
+        expect((await moveTodoAction({ id: other.id, recurrencePattern: "none", dueDate: tomorrow })).success).toBe(true);
+        // A Daily created or renamed onto a one-off's name is fine too.
+        expect((await createTodoAction({ space, title: "Read", dueDate: today, isRecurring: true, recurrencePattern: "daily" })).success).toBe(true);
+        expect((await updateTodoAction({ id: habit.id, title: "stretch " })).success).toBe(true);
+      }
+    });
+
+    it("lets Today and Daily switch only when the target list has no task with that name", async () => {
+      const today = toISODate();
+      const make = (title: string, daily = false) =>
+        createTodo(userA, { space: "personal", title, dueDate: today, isRecurring: daily, recurrencePattern: daily ? "daily" : "none" });
+      const oneOff = await make("Floss");
+      const habit = await make("Floss", true);
+      // One-off to Daily is blocked by the Daily of that name, and the Daily to Today by the one-off of that name.
+      expect(await moveTodoAction({ id: oneOff.id, recurrencePattern: "daily", dueDate: today })).toEqual({
+        success: false,
+        error: '"Floss" is already on this list.',
+      });
+      expect((await moveTodoAction({ id: habit.id, recurrencePattern: "none", dueDate: today })).success).toBe(false);
+      // Not blocked on another day (the one-off lists differ), nor once the name is free.
+      expect((await moveTodoAction({ id: habit.id, recurrencePattern: "none", dueDate: addDays(today, 1) })).success).toBe(true);
+      expect((await moveTodoAction({ id: oneOff.id, recurrencePattern: "daily", dueDate: today })).success).toBe(true);
+    });
+
+    it("keeps all four lists apart: personal and business, Today and Daily", async () => {
+      const today = toISODate();
+      const spaces = ["personal", "business"] as const;
+      for (const space of spaces) {
+        for (const isRecurring of [false, true]) {
+          const res = await createTodoAction({ space, title: "Plan", dueDate: today, isRecurring, recurrencePattern: isRecurring ? "daily" : "none" });
+          expect(res.success).toBe(true);
+        }
+      }
+      for (const space of spaces) {
+        const { todos } = await getDailyTodos(userA, space, today, today);
+        expect(todos.map((t) => t.isRecurring).sort()).toEqual([false, true]);
+      }
+      // Moving the business one-off away leaves the other three exactly as they were.
+      const business = (await getDailyTodos(userA, "business", today, today)).todos.find((t) => !t.isRecurring)!;
+      expect((await moveTodoAction({ id: business.id, recurrencePattern: "none", dueDate: addDays(today, 1) })).success).toBe(true);
+      expect((await getDailyTodos(userA, "business", today, today)).todos.map((t) => t.isRecurring)).toEqual([true]);
+      expect((await getDailyTodos(userA, "personal", today, today)).todos).toHaveLength(2);
+    });
+
+    it("carries an overdue task onto a today whose Daily list has the same name", async () => {
+      const today = toISODate();
+      const yesterday = addDays(today, -1);
+      const old = await createTodo(userA, { space: "personal", title: "Water plants", dueDate: yesterday, isRecurring: false, recurrencePattern: "none" });
+      await admin.query("UPDATE todos SET created_at = now() - interval '1 day' WHERE id = $1", [old.id]);
+      await createTodo(userA, { space: "personal", title: "water plants", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
+      const rows = (await getDailyTodos(userA, "personal", today, today)).todos;
+      expect(rows.map((t) => t.isRecurring).sort()).toEqual([false, true]);
+      expect(rows.some((t) => t.id === old.id)).toBe(true);
     });
 
     it("deletes a daily task from a day that is over on that day only", async () => {

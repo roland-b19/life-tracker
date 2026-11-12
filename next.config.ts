@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.*.*"],
   // Hides the floating Next.js dev-tools "N" button.
   devIndicators: false,
+  // Visited and prefetched tabs open from the browser's cache without waiting for the server (the default for pages is 0).
+  // `app/providers.tsx` refreshes the cache after a write, so a tab never shows what it showed before the write.
+  experimental: { staleTimes: { dynamic: 120, static: 300 } },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

@@ -1216,32 +1216,11 @@ button.signin-continue:disabled {
   border-radius: 0.5rem;
 }
 
-.skeleton-text {
-  height: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.skeleton-card {
-  height: 6rem;
-  border-radius: 1rem;
-}
-
 .skeleton-row {
   height: 2.75rem;
   margin-bottom: 0.5rem;
 }
 
-/* A stand-in for one line of text: as tall as a 1.5 line of its font (the body's line height), inset so it reads as a bar. */
-.bone-line {
-  display: block;
-  height: 1em;
-  margin-block: 0.25em;
-  border-radius: 0.4rem;
-}
-
-/* The segmented shell of a loading page: no thumb, no pressed look. */
-.segmented.loading::before { display: none; }
-.segmented.loading button { cursor: default; }
 
 /* ==========================================================================
    Precision Details: Blurred Modal Popups (Centered on Desktop & Mobile)

@@ -1,8 +1,15 @@
 // Life Tracker Service Worker
-// Caches only content-hashed static bundles (/_next/static/*) so the app opens fast.
-// HTML pages, server actions and /api/* are never cached: they hold personal data and must stay live.
+// Two caches, both only for a fast start:
+// - content-hashed static bundles (/_next/static/*), cache first;
+// - the signed-in pages (HTML), stale while revalidate: opening the app shows the last seen page at once and the
+//   server's answer replaces it in the background. Server actions and /api/* are never cached.
+// The pages cache holds personal data on this device until Sign out (and the sign-in screen) delete it.
 
 const CACHE = "life-tracker-v3";
+const PAGES = "life-tracker-pages-v1";
+const SIGNED_IN = /^\/(gym|food|todos|wishlist|settings)(\/|$)/;
+// url -> promise of "the server's page differs from the one shown". Answered when the page asks (see the message handler).
+const pending = new Map();
 // Registered as /sw.js?dev by the dev server: Turbopack dev chunks keep their URL when their content changes.
 const DEV = new URL(self.location.href).searchParams.has("dev");
 
@@ -15,7 +22,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => DEV || k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => DEV || (k !== CACHE && k !== PAGES)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -24,7 +31,18 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  if (DEV || request.method !== "GET" || !url.pathname.startsWith("/_next/static/")) return;
+  if (DEV || request.method !== "GET") return;
+
+  // The root only redirects to Health; doing it here lets the start from the Home Screen reach the cached page.
+  if (request.mode === "navigate" && url.pathname === "/") {
+    event.respondWith(Response.redirect(new URL("/food", url.origin).href, 307));
+    return;
+  }
+  if (request.mode === "navigate" && SIGNED_IN.test(url.pathname)) {
+    event.respondWith(page(event, url));
+    return;
+  }
+  if (!url.pathname.startsWith("/_next/static/")) return;
 
   event.respondWith(
     caches.match(request).then(
@@ -39,6 +57,39 @@ self.addEventListener("fetch", (event) => {
         }),
     ),
   );
+});
+
+async function page(event, url) {
+  const key = url.origin + url.pathname + url.search;
+  const cache = await caches.open(PAGES);
+  const cached = await cache.match(key);
+  const shown = cached?.clone().text();
+  const fetched = fetch(event.request);
+  const changed = fetched
+    .then(async (response) => {
+      // A redirect (session gone, sign-in) or an error is never stored, and it removes what was stored.
+      if (!response.ok || response.redirected) {
+        await cache.delete(key);
+        return !!cached;
+      }
+      const [read, store] = [response.clone(), response.clone()];
+      const html = await read.text();
+      await cache.put(key, store);
+      return !!cached && html !== (await shown);
+    })
+    .catch(() => false);
+  event.waitUntil(changed);
+  if (!cached) return fetched;
+  pending.set(key, changed);
+  return cached;
+}
+
+// A page served from the cache asks once whether the server's page differs; the answer is one message.
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "stale-check") return;
+  const url = new URL(event.data.url);
+  const changed = pending.get(url.origin + url.pathname + url.search);
+  if (changed) event.waitUntil(changed.then((c) => c && event.source.postMessage({ type: "stale" })));
 });
 
 // Web Push: show notification

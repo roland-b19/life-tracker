@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { isClaudeEnabled } from "@/lib/features";
 import { exportDataAction } from "@/app/actions/export";
+import { clearPageCache } from "./page-cache";
 
 interface NavigationProps {
   userName: string;
@@ -113,6 +114,7 @@ export function Navigation({ userName }: NavigationProps) {
       showToast({ message: "Failed to sign out", type: "warning" });
       return;
     }
+    await clearPageCache();
     router.push("/signin");
     router.refresh();
   };
@@ -159,6 +161,7 @@ export function Navigation({ userName }: NavigationProps) {
             <NextLink
               key={link.href}
               href={link.href}
+              prefetch
               className={`nav-link ${link.isActive ? "active" : ""}`}
               aria-current={link.isActive ? "page" : undefined}
             >
@@ -225,6 +228,7 @@ export function Navigation({ userName }: NavigationProps) {
           <NextLink
             key={link.href}
             href={link.href}
+            prefetch
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
             onClick={() => go(link.href)}

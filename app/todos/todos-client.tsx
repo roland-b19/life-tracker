@@ -680,8 +680,7 @@ export function TodosClient({
               data={bars}
               max={metric === "rate" ? 100 : maxDone}
               format={metric === "rate" ? (v) => `${v}%` : String}
-              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%.${isDaily ? " Choose a day to open it." : ""}`}
-              onSelect={isDaily ? (i) => goTo(days[i].iso) : undefined}
+              summary={`${metric === "rate" ? "Completion rate" : "Tasks done"} per day over the last ${span} days, average ${avg}%.`}
             />
           </Card>
           {/* Last in the aside: it appears once the service worker is ready, so nothing sits below it to shift. */}
