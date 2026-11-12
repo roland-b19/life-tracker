@@ -22,7 +22,8 @@ import {
   updateTodoAction,
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
-import { PLAN_AHEAD_DAYS, TodoSpace } from "@/lib/validations/todos";
+import { PLAN_AHEAD_DAYS } from "@/lib/rules";
+import type { TodoSpace } from "@/lib/validations/todos";
 import { addDays, dayLabel, toISODate } from "@/lib/format-date";
 import { streakOn } from "@/lib/streak";
 import { compareTodos } from "@/lib/todo-order";

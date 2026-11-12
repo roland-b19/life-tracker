@@ -34,8 +34,7 @@ export const restoreTodoSchema = createTodoSchema.extend({
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
-/** How far ahead one-off tasks can be planned. */
-export const PLAN_AHEAD_DAYS = 7;
+export { PLAN_AHEAD_DAYS } from "../rules";
 
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),

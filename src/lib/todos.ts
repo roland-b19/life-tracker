@@ -133,12 +133,23 @@ export async function getDailyTodos(
   // 2. Fetch all tasks relevant for targetDate:
   // - one-off tasks with dueDate = targetDate
   // - repeating tasks due that day
-  const rows = await db
-    .select()
-    .from(todos)
-    .where(and(eq(todos.userId, userId), eq(todos.space, space), dueOn(targetDate)));
-
-  const done = await doneDatesOf(rows.filter((r) => r.isRecurring).map((r) => r.id), addDays(targetDate, -DONE_DATES_WINDOW_DAYS));
+  const dueToday = and(eq(todos.userId, userId), eq(todos.space, space), dueOn(targetDate));
+  // The ticked days are read in the same round trip as the tasks (by sub-select) instead of after them.
+  const [rows, doneRows] = await Promise.all([
+    db.select().from(todos).where(dueToday),
+    db
+      .select()
+      .from(todoCompletions)
+      .where(
+        and(
+          inArray(todoCompletions.todoId, db.select({ id: todos.id }).from(todos).where(and(dueToday, eq(todos.isRecurring, true)))),
+          gte(todoCompletions.date, addDays(targetDate, -DONE_DATES_WINDOW_DAYS)),
+        ),
+      )
+      .orderBy(asc(todoCompletions.date)),
+  ]);
+  const done = new Map<string, string[]>();
+  for (const r of doneRows) done.set(r.todoId, [...(done.get(r.todoId) ?? []), r.date]);
   const items: TodoItem[] = rows.map((r) => {
     const doneDates = done.get(r.id) ?? [];
     const isCompleted = r.isRecurring ? doneDates.includes(targetDate) : r.isCompleted;

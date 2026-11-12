@@ -98,6 +98,15 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(tue?.exercises.length).toBe(0);
   });
 
+  it("a first visit loading the split and the exercise list together seeds every default exactly once", async () => {
+    const [split, list] = await Promise.all([getUserSplitWithDays(userA), getExercises(userA)]);
+    expect(split?.days).toHaveLength(7);
+    const names = list.filter((e) => e.userId === null).map((e) => e.name);
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
+    expect(await getExercises(userA)).toHaveLength(list.length);
+  });
+
   it("enforces multi-user isolation on custom exercises", async () => {
     const custom = await createCustomExercise(userA, {
       name: "B-Stance Hip Thrust",

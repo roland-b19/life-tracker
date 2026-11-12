@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { toISODate } from "@/lib/format-date";
 import { isoDate } from "@/lib/validations/common";
@@ -9,14 +8,6 @@ import { requireUser } from "@/server/auth";
 import { assertClaudeEnabled } from "@/lib/features";
 import { sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { getDailyFoodSummary } from "@/lib/food";
-
-function safeRevalidate(path: string) {
-  try {
-    revalidatePath(path);
-  } catch {
-    // No-op in test runner
-  }
-}
 
 const chatInputSchema = z.object({
   message: z.string().trim().min(1).max(1000),
@@ -34,7 +25,6 @@ export async function sendFoodChatMessageAction(input: z.input<typeof chatInputS
 
   // Only the last 10 turns go to the model: enough for follow-ups, bounded in size.
   const result = await sendFoodChatMessage(userId, message, history.slice(-10), { date, time });
-  if (result.meals.length) safeRevalidate("/food");
 
   return {
     reply: result.reply,

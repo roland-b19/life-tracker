@@ -6,7 +6,7 @@ import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { ListBox, RowActions, useMore } from "../components/lists";
 import { TrendChart } from "./trend-chart";
-import { metricDayEditable } from "@/lib/validations/food";
+import { metricDayEditable } from "@/lib/rules";
 import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction } from "@/app/actions/food";
 
 type Kind = "water" | "steps";

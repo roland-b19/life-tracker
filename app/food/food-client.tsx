@@ -145,7 +145,7 @@ export function FoodClient({
   todayDate,
   targets,
   initialSummary,
-  weightAnalytics,
+  weightAnalytics: initialWeight,
   initialShoppingList,
   shoppingCategories: initialCategories,
   pastFoods: initialPastFoods,
@@ -174,6 +174,7 @@ export function FoodClient({
   const latestGoals = useRef(targets);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
+  const [weightAnalytics, setWeightAnalytics] = useState(initialWeight);
   const [pastFoods, setPastFoods] = useState(initialPastFoods);
   const [isPastOpen, setIsPastOpen] = useState(false);
 
@@ -826,7 +827,7 @@ export function FoodClient({
       </Toolbar>
 
       {activeTab === "water" && <MetricPanel kind="water" onToday={(v) => setMetric("waterMl", v)} />}
-      {activeTab === "weight" && <WeightPanel />}
+      {activeTab === "weight" && <WeightPanel onStats={setWeightAnalytics} />}
       {activeTab === "steps" && <MetricPanel kind="steps" onToday={(v) => setMetric("steps", v)} />}
 
       {activeTab === "daily" && (

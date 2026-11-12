@@ -64,11 +64,18 @@ export async function updateNutritionTargets(
 }
 
 export async function getDailyFoodSummary(userId: string, date: string) {
-  const dayMeals = await db
-    .select()
-    .from(meals)
-    .where(and(eq(meals.userId, userId), eq(meals.date, date)))
-    .orderBy(meals.createdAt);
+  const [dayMeals, [metrics]] = await Promise.all([
+    db
+      .select()
+      .from(meals)
+      .where(and(eq(meals.userId, userId), eq(meals.date, date)))
+      .orderBy(meals.createdAt),
+    db
+      .select()
+      .from(dailyMetrics)
+      .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, date)))
+      .limit(1),
+  ]);
 
   let totalCalories = 0;
   let totalProtein = 0;
@@ -81,12 +88,6 @@ export async function getDailyFoodSummary(userId: string, date: string) {
     totalCarbs += parseFloat(m.carbs) || 0;
     totalFat += parseFloat(m.fat) || 0;
   }
-
-  const [metrics] = await db
-    .select()
-    .from(dailyMetrics)
-    .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, date)))
-    .limit(1);
 
   return {
     date,

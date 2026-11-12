@@ -296,6 +296,15 @@ Every action that modifies something shows an Undo button in its toast and resto
 
 Water, Steps, and meal logging now reject any other date in the server action (`assertWritableDay`), not only in the UI; history and charts still read every date. Recurring tasks follow the same 7-day planning window as one-off tasks. Reason: the stress test showed the actions accepted any date when called directly.
 
+## 2026-11-12 — Performance: when a write re-renders the page
+
+- A server action revalidates its page only when the page's props drive the view (gym start, cancel, restore, finish, reopen, split and custom exercise). Water, steps, meals, shopping, metrics and gym set edits do not: the client keeps its own state and a revalidation returns the whole page (102 KB for a water tap).
+- Back/forward reloads once after any server action ran in the tab (`app/providers.tsx`), because the router replays the pre-write page. `staleTimes` stays 0 so link taps never show stale data.
+- Each tab has `loading.tsx`; a `layout.tsx` above it (`require-session`) redirects anonymous visitors, so they still get a 307 and not a 200 with a meta refresh.
+- Constants shared by client and server live in `src/lib/rules.ts` (no zod), so client components do not pull zod into the browser.
+- Pool settings stay as they are (`DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`): a longer idle timeout would keep sockets that a frozen serverless function finds dead, and this cannot be tested against Neon from here. Revisit only with a real measurement on Vercel.
+- No index was added: nothing was slow at stress scale (408 wishlist items, 41 daily tasks).
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

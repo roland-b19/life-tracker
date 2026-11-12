@@ -42,7 +42,16 @@ export const DEFAULT_EXERCISES = [
   { name: "Hanging leg raise", muscleGroup: "abs", equipmentType: "bodyweight" },
 ] as const;
 
-export async function ensureDefaultExercises(): Promise<Map<string, string>> {
+let seeding: Promise<Map<string, string>> | null = null;
+
+/** Concurrent callers (the page loads the split and the exercise list together) share one seeding run, so a first visit never inserts the defaults twice. */
+export function ensureDefaultExercises(): Promise<Map<string, string>> {
+  return (seeding ??= seedDefaultExercises().finally(() => {
+    seeding = null;
+  }));
+}
+
+async function seedDefaultExercises(): Promise<Map<string, string>> {
   const existing = await db
     .select({ id: exercises.id, name: exercises.name })
     .from(exercises)
