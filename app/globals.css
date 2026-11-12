@@ -2470,6 +2470,9 @@ button.bars-col:focus-visible {
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
+/* A long name wraps and the arrow stays right after its last word, not at the end of the block */
+.exercise-title .group-toggle { display: inline; text-align: start; }
+.exercise-title .group-toggle svg { display: inline-block; margin-left: 0.3rem; vertical-align: -0.1em; }
 .set-flag { margin-left: 0.5rem; }
 .toggle-row {
   display: flex;

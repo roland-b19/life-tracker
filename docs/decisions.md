@@ -425,3 +425,4 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Exercise progress folds with the shared arrow (key `progress`, kept in `localStorage`).
 - In the Training days preview (a day's exercise list) the muscle tag is always on the line below the name. In a started workout the tag is at the right edge whether the exercise is collapsed or open.
 - In a started workout the muscle tag sits flush against the right edge of its row (it goes out over the row's inner padding), not in line with the Pause button.
+- In a started workout a long exercise name wraps and the fold arrow follows its last word (the title button is inline), so it is never at the far end of the block.
