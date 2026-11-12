@@ -103,7 +103,6 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/wipe-my-data.cjs --subject <your GitHub numeric id>; unset DATABASE_URL_MIGRATE
   ```
   Then the same command with `--confirm-delete-everything` added.
-- **Bring back a daily task deleted by mistake:** `import-personal.cjs` treats a daily task that was deleted (it has an end day) as missing and adds it again from today; past days keep the old row as it was. Nothing else is touched.
 - **Test data (45 days back and, for tasks, 7 days ahead, on every page):** `scripts/test-data.cjs` adds clearly marked rows ("TEST") and never changes or deletes an existing row. It records the exact ids in `.local/test-data-<subject>.json`, so `--remove` deletes precisely those and nothing else. Run `--dry-run` first. Health and Gym get past days and today only (the app does not log the future); tasks get both directions.
   ```bash
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/test-data.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE
