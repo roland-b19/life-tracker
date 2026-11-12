@@ -46,6 +46,8 @@ interface Change {
   merged: boolean;
   /** Tasks a delete split in two; Undo sends them back to join the halves again. */
   splits?: { from: string; to: string; day: string; endedOn: string | null }[];
+  /** Where the server had put repeating tasks before filing them on top of the new category; sent back so Undo restores them. */
+  before?: { id: string; placedAt: string }[];
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */

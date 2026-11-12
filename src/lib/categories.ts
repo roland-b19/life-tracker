@@ -1,28 +1,41 @@
 import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { itemCategories, todoCompletions, todos, wishlistItems } from "@/db/schema";
+import { itemCategories, todoCompletions, todoDayMarks, todos, wishlistItems } from "@/db/schema";
 import { toISODate } from "./format-date";
 import { splitTodo } from "./todo-split";
 import type { CategoryScope } from "./validations/categories";
+import { blockPlacements } from "./todo-order";
 
 const own = (userId: string, scope: CategoryScope, name: string) =>
   and(eq(itemCategories.userId, userId), eq(itemCategories.scope, scope), eq(itemCategories.name, name));
 
+/**
+ * Re-filed repeating tasks land on top of their new category as one block, in the order they had (only the daily
+ * list shows categories, so one-off tasks keep their place). Returns the new placement of a task and the old ones,
+ * which Undo puts back.
+ */
+function liftedPlacement(rows: { id: string; placedAt: Date }[]) {
+  const placed = blockPlacements(rows);
+  return {
+    place: (t: { id: string }) => placed.get(t.id)!,
+    before: rows.map((r) => ({ id: r.id, placedAt: r.placedAt.toISOString() })),
+  };
+}
+
 /** Re-files every item of the user's list from one category to another, history included. */
-async function moveItems(tx: Pick<typeof db, "update">, userId: string, scope: CategoryScope, from: string, to: string) {
-  const rows =
-    scope === "wishlist"
-      ? await tx
-          .update(wishlistItems)
-          .set({ category: to })
-          .where(and(eq(wishlistItems.userId, userId), eq(wishlistItems.category, from)))
-          .returning({ id: wishlistItems.id })
-      : await tx
-          .update(todos)
-          .set({ category: to })
-          .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, from)))
-          .returning({ id: todos.id });
-  return rows.map((r) => r.id);
+async function moveItems(tx: Pick<typeof db, "update" | "select">, userId: string, scope: CategoryScope, from: string, to: string) {
+  if (scope === "wishlist") {
+    const rows = await tx
+      .update(wishlistItems)
+      .set({ category: to })
+      .where(and(eq(wishlistItems.userId, userId), eq(wishlistItems.category, from)))
+      .returning({ id: wishlistItems.id });
+    return { itemIds: rows.map((r) => r.id), before: [] };
+  }
+  const rows = await tx.select().from(todos).where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, from)));
+  const { before, place } = liftedPlacement(rows.filter((t) => t.isRecurring));
+  for (const t of rows) await tx.update(todos).set(t.isRecurring ? { category: to, placedAt: place(t) } : { category: to }).where(eq(todos.id, t.id));
+  return { itemIds: rows.map((r) => r.id), before };
 }
 
 /**
@@ -38,18 +51,19 @@ async function refileFromToday(tx: Parameters<Parameters<typeof db.transaction>[
     .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
   const itemIds: string[] = [];
   const splits: NonNullable<CategoryChange["splits"]> = [];
-  for (const t of rows) {
-    if (t.isRecurring ? t.endedOn && t.endedOn <= today : t.dueDate < today) continue; // only on days that are over
+  const live = rows.filter((t) => !(t.isRecurring ? t.endedOn && t.endedOn <= today : t.dueDate < today)); // only on days that are over
+  const { before, place } = liftedPlacement(live.filter((t) => t.isRecurring));
+  for (const t of live) {
     if (t.isRecurring && t.dueDate < today) {
-      const next = await splitTodo(tx, t, today, { category: "other" });
+      const next = await splitTodo(tx, t, today, { category: "other", placedAt: place(t) });
       splits.push({ from: t.id, to: next.id, day: today, endedOn: t.endedOn });
       itemIds.push(next.id);
     } else {
-      await tx.update(todos).set({ category: "other" }).where(eq(todos.id, t.id));
+      await tx.update(todos).set(t.isRecurring ? { category: "other", placedAt: place(t) } : { category: "other" }).where(eq(todos.id, t.id));
       itemIds.push(t.id);
     }
   }
-  return { itemIds, splits };
+  return { itemIds, splits, before };
 }
 
 /** Adds a category at the end of the list unless it is there already or is the built-in "other". */
@@ -94,6 +108,8 @@ export interface CategoryChange {
   merged: boolean;
   /** Repeating tasks a delete split in two (the old half ended on `day`, the new half is in `itemIds`); Undo joins them again. */
   splits?: { from: string; to: string; day: string; endedOn: string | null }[];
+  /** The places the repeating tasks had before they were put on top of their new category; Undo puts them back. */
+  before?: { id: string; placedAt: string }[];
 }
 
 /** Renames a category on all the list's items; renaming onto an existing one merges the two. */
@@ -106,7 +122,7 @@ export async function renameCategory(userId: string, scope: CategoryScope, from:
       .values({ userId, scope, name: to, sortOrder: old.sortOrder })
       .onConflictDoNothing()
       .returning();
-    return { sortOrder: old.sortOrder, itemIds: await moveItems(tx, userId, scope, from, to), merged: created.length === 0, splits: [] };
+    return { sortOrder: old.sortOrder, ...(await moveItems(tx, userId, scope, from, to)), merged: created.length === 0, splits: [] };
   });
 }
 
@@ -117,7 +133,7 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
     if (!old) return null;
     const moved =
       scope === "wishlist"
-        ? { itemIds: await moveItems(tx, userId, scope, name, "other"), splits: [] }
+        ? { ...(await moveItems(tx, userId, scope, name, "other")), splits: [] }
         : await refileFromToday(tx, userId, scope, name);
     return { sortOrder: old.sortOrder, merged: false, ...moved };
   });
@@ -131,9 +147,9 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
 export async function revertCategory(
   userId: string,
   scope: CategoryScope,
-  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; splits?: CategoryChange["splits"] },
+  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; splits?: CategoryChange["splits"]; before?: { id: string; placedAt: string }[] },
 ) {
-  const { name, current, sortOrder, dropCurrent, splits = [] } = input;
+  const { name, current, sortOrder, dropCurrent, splits = [], before = [] } = input;
   await db.transaction(async (tx) => {
     await tx.insert(itemCategories).values({ userId, scope, name, sortOrder }).onConflictDoNothing();
     // A task the delete split is joined again: its ticks from the split day on go back to the old half, which runs on
@@ -146,6 +162,8 @@ export async function revertCategory(
       if (!moved || (moved.endedOn ?? null) !== (sp.endedOn ?? null) || !orig || orig.endedOn !== sp.day) continue;
       const ticks = await tx.select().from(todoCompletions).where(and(eq(todoCompletions.todoId, moved.id), gte(todoCompletions.date, sp.day)));
       if (ticks.length) await tx.insert(todoCompletions).values(ticks.map((t) => ({ todoId: orig.id, date: t.date }))).onConflictDoNothing();
+      const marks = await tx.select().from(todoDayMarks).where(and(eq(todoDayMarks.todoId, moved.id), gte(todoDayMarks.date, sp.day)));
+      if (marks.length) await tx.insert(todoDayMarks).values(marks.map((m) => ({ todoId: orig.id, date: m.date, at: m.at }))).onConflictDoUpdate({ target: [todoDayMarks.todoId, todoDayMarks.date], set: { at: sql`excluded.at` } });
       await tx.update(todos).set({ endedOn: sp.endedOn }).where(eq(todos.id, orig.id));
       await tx.delete(todos).where(eq(todos.id, moved.id));
       joined.add(moved.id);
@@ -162,6 +180,9 @@ export async function revertCategory(
           .update(todos)
           .set({ category: name })
           .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, current), inArray(todos.id, itemIds)));
+      for (const b of before)
+        if (itemIds.includes(b.id))
+          await tx.update(todos).set({ placedAt: new Date(b.placedAt) }).where(and(eq(todos.id, b.id), eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
     }
     if (dropCurrent && current !== "other") await tx.delete(itemCategories).where(own(userId, scope, current));
   });

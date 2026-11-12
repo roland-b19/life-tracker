@@ -279,10 +279,17 @@ async function main() {
     ALTER TABLE "shopping_items" ADD COLUMN IF NOT EXISTS "checked_at" timestamp with time zone;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "ended_on" date;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
+    ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "placed_at" timestamp with time zone DEFAULT now() NOT NULL;
     CREATE TABLE IF NOT EXISTS "todo_completions" (
       "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
       "date" date NOT NULL,
       CONSTRAINT "todo_completions_todo_id_date_pk" PRIMARY KEY("todo_id","date")
+    );
+    CREATE TABLE IF NOT EXISTS "todo_day_marks" (
+      "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
+      "date" date NOT NULL,
+      "at" timestamp with time zone NOT NULL,
+      CONSTRAINT "todo_day_marks_todo_id_date_pk" PRIMARY KEY("todo_id","date")
     );
     CREATE TABLE IF NOT EXISTS "todo_day_stats" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -350,6 +357,7 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, DELETE ON TABLE "todo_completions" TO life_tracker_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todo_day_marks" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "claude_connections" TO life_tracker_app;
