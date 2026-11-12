@@ -285,7 +285,7 @@ async function main() {
     ALTER TABLE "shopping_items" ADD COLUMN IF NOT EXISTS "checked_at" timestamp with time zone;
     ALTER TABLE "workout_sets" ADD COLUMN IF NOT EXISTS "is_good_form" boolean DEFAULT true NOT NULL;
     UPDATE "exercises" SET "muscle_group" = 'back' WHERE "muscle_group" IN ('lats', 'upper-back', 'lower-back');
-    UPDATE "exercises" SET "muscle_group" = 'obliques' WHERE "muscle_group" = 'abs';
+    UPDATE "exercises" SET "muscle_group" = 'abs' WHERE "muscle_group" = 'obliques';
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'other' NOT NULL;
     ALTER TABLE "todos" ADD COLUMN IF NOT EXISTS "placed_at" timestamp with time zone DEFAULT now() NOT NULL;
     CREATE TABLE IF NOT EXISTS "push_subscriptions" (

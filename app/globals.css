@@ -646,10 +646,10 @@ main {
   background: var(--tint-subtle);
 }
 
-/* The title block, its muscle badge and the fold arrow: the arrow is a column of its own, centred on the whole block */
+/* The title block (name, then the fold arrow right after it) and the muscle tag, which stays at the right edge */
 .exercise-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
 }
@@ -2903,6 +2903,7 @@ button.bars-col:focus-visible {
    stack inside it with one gap. Logged sets are bands of their own inside the column the title uses. */
 .workout-exercise-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* full width, so the muscle tag keeps the right edge whatever the title says */
   align-items: stretch;
   gap: 0.75rem;
   padding-block: 0.75rem;
@@ -2923,7 +2924,7 @@ button.bars-col:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem; /* the gap every Gym card keeps from the next */
 }
 /* Training days stand out from the card behind them */
 .split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
@@ -2932,7 +2933,7 @@ button.bars-col:focus-visible {
 .session-timer { font-size: 1.25rem; font-weight: 600; }
 .session-timer.paused { opacity: 0.5; }
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
-@media (min-width: 992px) { .gym-history { margin-top: 1.5rem; } }
+@media (min-width: 992px) { .deload-card, .gym-history, .gym-progress, .muscle-card, .resume-bar { margin-block: 1.5rem; } .deload-card, .resume-bar { margin-top: 0; } .gym-history { margin-bottom: 0; } }
 .history-entry { display: block; padding-block: 0.25rem; }
 /* The open workout is a tinted fill, so it stands out from the banded rows around it. */
 .history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }

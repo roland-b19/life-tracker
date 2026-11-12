@@ -7,7 +7,7 @@ export const MUSCLE_GROUP_LABEL = {
   forearms: "Forearms",
   traps: "Traps",
   back: "Back",
-  obliques: "Obliques",
+  abs: "Abs",
   glutes: "Glutes",
   quads: "Quads",
   hamstrings: "Hamstrings",

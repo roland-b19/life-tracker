@@ -17,7 +17,7 @@ export const GROUP_COLOR: Record<MuscleGroup, string> = {
   forearms: "#7c6fd6",
   traps: "#5b9bd5",
   back: "#3f6fc4",
-  obliques: "#7bd96a",
+  abs: "#7bd96a",
   glutes: "#ffb27a",
   quads: "#ff7a45",
   hamstrings: "#c9603c",
@@ -70,7 +70,7 @@ const MESHES: Record<MuscleGroup, string[]> = {
     "intertransversarii",
     "quadratus-lumborum",
   ],
-  obliques: ["external-oblique", "internal-oblique", "rectus-abdominis", "pyramidalis", "linea-alba", "transversus-abdominis"],
+  abs: ["external-oblique", "internal-oblique", "rectus-abdominis", "pyramidalis", "linea-alba", "transversus-abdominis"],
   glutes: [
     "gluteus-maximus",
     "gluteus-medius",

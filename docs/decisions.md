@@ -416,3 +416,10 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Training days folds with the shared arrow (state kept in `localStorage`, key `split`).
 - Muscle map: a tap on empty space changes nothing (it used to clear the selection and show everything); the strip is the Move button (2.75rem, touch only) first, Front/Back taking the free space, and Go back at a fixed 6.5rem, all one height.
 - Muscle groups: lats, upper back and lower back are one group **Back** (`back`); abs and obliques are one group **Obliques** (`obliques`). Migration `0028_good_form_back_obliques` adds the column and rewrites `exercises.muscle_group`; the user runs it on Neon before merging.
+
+## 2026-11-12 — Gym fifth round: Abs, strip order, equal spacing, collapsed exercises (user)
+- The merged group is named **Abs** (key `abs`, same meshes: abs and obliques), not Obliques; this replaces the name in the fourth round. Migration `0028` is renamed `0028_good_form_back_abs` and edited in place (it was never run on Neon): it maps `obliques` and `abs` to `abs`. The local dev and test databases were converted by hand.
+- The muscle strip order is Front/Back, the Move button (touch only, 2.75rem), Go back (6.5rem).
+- Every card on the Gym page keeps the same gap from the next (1.25rem, 1.5rem on desktop): the resume banner used 1rem.
+- In a started workout every exercise starts collapsed (state per page visit, not stored). The fold arrow sits right after the exercise name, inside the title; the muscle tag is always at the right edge (the card's column is full width, so it never moves with the title).
+- Exercise progress folds with the shared arrow (key `progress`, kept in `localStorage`).

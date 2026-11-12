@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, SelectField } from "../components/blocks";
 import { LineChart } from "../components/charts";
+import { useFolded } from "../components/categories-card";
 import { Segmented } from "../components/segmented";
 import { addDays, toISODate } from "@/lib/format-date";
 import { exerciseSeries } from "@/lib/gym-progress";
@@ -17,6 +18,7 @@ export function ProgressPanel({ sets }: { sets: HistorySet[] }) {
   const today = toISODate();
   const [exerciseId, setExerciseId] = useState("");
   const [range, setRange] = useState<Range>("90");
+  const [isFolded, toggleFolded] = useFolded("gym");
 
   const exercises = useMemo(() => {
     const names = new Map<string, string>();
@@ -37,7 +39,7 @@ export function ProgressPanel({ sets }: { sets: HistorySet[] }) {
   const series = exerciseSeries(sets, chosen).filter((p) => p.date >= since);
 
   return (
-    <Card id="ex-progress-title" title="Exercise progress" className="gym-progress">
+    <Card id="ex-progress-title" title="Exercise progress" className="gym-progress" fold={{ folded: isFolded("progress"), onToggle: () => toggleFolded("progress") }}>
       <SelectField
         label="Exercise"
         value={chosen}

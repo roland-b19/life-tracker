@@ -38,8 +38,8 @@ export const DEFAULT_EXERCISES = [
   { name: "Incline curl", muscleGroup: "biceps", equipmentType: "dumbbell" },
   { name: "Dumbbell curl", muscleGroup: "biceps", equipmentType: "dumbbell" },
   // Abs
-  { name: "Cable crunch", muscleGroup: "obliques", equipmentType: "cable" },
-  { name: "Hanging leg raise", muscleGroup: "obliques", equipmentType: "bodyweight" },
+  { name: "Cable crunch", muscleGroup: "abs", equipmentType: "cable" },
+  { name: "Hanging leg raise", muscleGroup: "abs", equipmentType: "bodyweight" },
 ] as const;
 
 let seeding: Promise<Map<string, string>> | null = null;

@@ -157,8 +157,8 @@ export function GymClient({
   const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false);
-  // Exercises folded away in the open workout; not kept between workouts.
-  const [foldedEx, setFoldedEx] = useState<string[]>([]);
+  // Exercises opened in the workout; they start collapsed and are not kept between workouts.
+  const [openEx, setOpenEx] = useState<string[]>([]);
   const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
   const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
   useEffect(() => {
@@ -715,7 +715,7 @@ export function GymClient({
                 isGoodForm: true,
                 notes: "",
               };
-              const folded = foldedEx.includes(exercise.exerciseId);
+              const folded = !openEx.includes(exercise.exerciseId);
               const patch = (change: Partial<typeof currentState>) =>
                 setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...currentState, ...change } }));
 
@@ -723,21 +723,22 @@ export function GymClient({
                 <div key={exercise.id} className="entry-row workout-exercise-card">
                   <div className="exercise-header">
                     <div>
-                      <h3 className="exercise-title">{exercise.exerciseName}</h3>
+                      <h3 className="exercise-title">
+                        <button
+                          type="button"
+                          className="group-toggle"
+                          aria-expanded={!folded}
+                          onClick={() => setOpenEx((o) => (o.includes(exercise.exerciseId) ? o.filter((x) => x !== exercise.exerciseId) : [...o, exercise.exerciseId]))}
+                        >
+                          {exercise.exerciseName}
+                          <ChevronRightIcon size={14} />
+                        </button>
+                      </h3>
                       <span className="muted exercise-meta">
                         Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
                       </span>
                     </div>
                     <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
-                    <button
-                      type="button"
-                      className="group-toggle"
-                      aria-expanded={!folded}
-                      aria-label={`Show ${exercise.exerciseName}`}
-                      onClick={() => setFoldedEx((f) => (f.includes(exercise.exerciseId) ? f.filter((x) => x !== exercise.exerciseId) : [...f, exercise.exerciseId]))}
-                    >
-                      <ChevronRightIcon size={14} />
-                    </button>
                   </div>
 
                   {!folded && (
