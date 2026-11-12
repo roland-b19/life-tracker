@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 import { addDays, formatDMY } from "@/lib/format-date";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, LockIcon, PlusIcon } from "./icons";
@@ -18,8 +19,19 @@ const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boo
 
 /** A signed-in page: the navigation, then the page's cards. */
 export function Page({ userName, children }: { userName: string; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  // Enter effects (globals.css, main[data-live]) start at the first interaction, so loads and streamed skeleton swaps never animate.
+  useEffect(() => {
+    const live = () => ref.current?.setAttribute("data-live", "");
+    addEventListener("pointerdown", live, { once: true });
+    addEventListener("keydown", live, { once: true });
+    return () => {
+      removeEventListener("pointerdown", live);
+      removeEventListener("keydown", live);
+    };
+  }, []);
   return (
-    <main>
+    <main ref={ref}>
       <Navigation userName={userName} />
       {children}
     </main>

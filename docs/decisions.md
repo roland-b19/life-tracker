@@ -323,3 +323,10 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
+
+## 2026-11-12: Subtle motion (user)
+- Supersedes the 2026-11-11 no-animations decision. The app may now use subtle, simple motion, CSS only, no libraries.
+- The set: button press eases (`--press`); segmented pill and nav tab indicator slide; category fold chevron rotates; modal enters (scrim fades, card fades and rises 4px from 0.98), close instant; toast enters (fades and rises 4px), dismiss instant; new rows, tab-change cards and the check tick fade, rise or pop in via `@starting-style`, scoped under `main[data-live]`.
+- Kept as before: Tasks progress ring, Wishlist total count-up, Nutrition numbers.
+- Tokens in `app/globals.css` `:root`: `--motion-fast` 120ms, `--motion-base` 180ms, `--motion-slow` 240ms, `--ease-out` cubic-bezier(0.2, 0, 0, 1), `--rise` 4px, `--pop` 0.96.
+- Hard limits: only `transform` and `opacity`; 120-240 ms, ease-out; no loops; no exit animations; off under `prefers-reduced-motion`; no hover transitions outside `@media (hover: hover)`; no animation on page load. Details: `.agents/skills/ultimate-design-skill/SKILL.md` section 3.

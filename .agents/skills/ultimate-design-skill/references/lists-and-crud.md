@@ -2,7 +2,7 @@
 
 Copy this pattern for every list page (`app/wishlist/wishlist-client.tsx`). Other pages follow it: Food categories and weight, Tasks, Gym days and routine, Settings.
 
-**There is no motion anywhere** (decision 2026-11-11), except the Tasks progress ring and the Wishlist total count-up (`animated-number.tsx`). Rows, modals and toasts appear, change and disappear instantly. Never add a CSS `transition`, `animation` or `@keyframes`, a view transition, smooth scrolling, a WAAPI/rAF tween or another counting number.
+**Motion is subtle and limited** (decision 2026-11-12): new rows fade and rise, and modals and toasts enter with a short fade; the exact set and hard limits are in `SKILL.md` section 3. Removal is instant. Do not add motion outside that set.
 
 ## Contents
 - The parts
