@@ -305,6 +305,12 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Pool settings stay as they are (`DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`): a longer idle timeout would keep sockets that a frozen serverless function finds dead, and this cannot be tested against Neon from here. Revisit only with a real measurement on Vercel.
 - No index was added: nothing was slow at stress scale (408 wishlist items, 41 daily tasks).
 
+## 2026-11-12: Past days are frozen for good, skeletons per container, export, data safety (user)
+- Deleting or editing a task in the past never changes the days after it; only an edit made today or later affects the days from that day on. Undo restores the split exactly (`rejoinSchema`, `restoreTodoAction`, `revertMoveTodoAction`).
+- Every page loads with one skeleton per container (`app/components/skeletons.tsx`): the real card, title and labels with only the data as grey bars, sized against the real cards at phone and desktop widths. No single big box per page.
+- More tab and desktop sidebar get "Export data": all of the signed-in user's data as a `.txt`, built by the server (`src/lib/export.ts`), without the Claude token and push subscriptions.
+- Before any change to the live database the user takes a full copy with `scripts/backup-now.sh`. The import brings back a deleted daily task as a new row from today and keeps history. Test data is additive and marked, and `--remove` deletes exactly the recorded ids. No agent ever runs these against the live database.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

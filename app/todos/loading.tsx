@@ -1,3 +1,3 @@
-import { PageSkeleton } from "../components/blocks";
+import { TasksSkeleton } from "../components/skeletons";
 
-export default PageSkeleton;
+export default TasksSkeleton;

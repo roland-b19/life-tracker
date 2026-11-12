@@ -34,6 +34,9 @@ export const restoreTodoSchema = createTodoSchema.extend({
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
+/** What Undo sends back after a change to one past day (see isolateDay): checked here, the id is still only ever used on the user's own rows. */
+export const rejoinSchema = z.object({ laterId: z.string().uuid().optional(), endedOn: isoDate.nullable(), day: isoDate });
+
 export { PLAN_AHEAD_DAYS } from "../rules";
 
 export const toggleTodoSchema = z.object({

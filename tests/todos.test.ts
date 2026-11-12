@@ -342,11 +342,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
 
     // User B tries to delete
     const deleteByB = await deleteTodo(userB, task.id);
-    expect(deleteByB).toBe(false);
+    expect(deleteByB).toBeNull();
 
     // User A can successfully delete
     const deleteByA = await deleteTodo(userA, task.id);
-    expect(deleteByA).toBe(true);
+    expect(deleteByA).toEqual({});
   });
 
   it("calculates daily completion stats accurately", async () => {
@@ -825,16 +825,18 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(habit.id && late.id).toBeTruthy();
     });
 
-    it("deletes a daily task from the day given on, keeping the days before it", async () => {
+    it("deletes a daily task from a day that is over on that day only", async () => {
       const today = toISODate();
+      const yesterday = addDays(today, -1);
       const habit = await createTodo(userA, { space: "personal", title: "Walk", dueDate: addDays(today, -3), isRecurring: true, recurrencePattern: "daily" });
-      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: addDays(today, -1) });
-      expect(await deleteTodo(userB, habit.id, addDays(today, -1))).toBe(false);
-      expect(await deleteTodo(userA, habit.id, addDays(today, -1))).toBe(true);
-      const ids = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.id);
-      expect(await ids(addDays(today, -2))).toEqual([habit.id]);
-      expect(await ids(addDays(today, -1))).toEqual([]);
-      expect(await ids(today)).toEqual([]);
+      await toggleTodo(userA, { id: habit.id, isCompleted: true, currentDate: yesterday });
+      expect(await deleteTodo(userB, habit.id, yesterday)).toBeNull();
+      expect(await deleteTodo(userA, habit.id, yesterday)).toMatchObject({ join: { endedOn: null, day: yesterday } });
+      const titles = async (day: string) => (await getDailyTodos(userA, "personal", day, today)).todos.map((t) => t.title);
+      expect(await titles(addDays(today, -2))).toEqual(["Walk"]);
+      expect(await titles(yesterday)).toEqual([]);
+      expect(await titles(today)).toEqual(["Walk"]);
+      expect(await titles(addDays(today, 3))).toEqual(["Walk"]);
     });
 
     it("lists future planned days for the owner only", async () => {
@@ -881,7 +883,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("deletes a daily task from the day on screen on, keeping the days before it", async () => {
       const task = await daily("Stretch", addDays(today, -4));
       await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, -1) });
-      expect(await deleteTodo(userA, task.id, today)).toBe(true);
+      expect(await deleteTodo(userA, task.id, today)).toEqual({});
       expect(await titlesOn(addDays(today, -1))).toEqual(["Stretch"]);
       expect(await titlesOn(today)).toEqual([]);
       expect(await titlesOn(addDays(today, 3))).toEqual([]);
@@ -899,6 +901,102 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(res.success && res.todo?.id).not.toBe(task.id);
       expect(await titlesOn(addDays(today, -2))).toEqual(["Floss"]);
       expect(await titlesOn(yesterday)).toEqual(["Floss well"]);
+      expect(await titlesOn(today)).toEqual(["Floss"]); // a day that is over changes that day only
+    });
+
+    describe("a day that is over", () => {
+      const yesterday = addDays(today, -1);
+      const ticks = async (id: string) => (await admin.query("SELECT date::text FROM todo_completions WHERE todo_id = $1 ORDER BY date", [id])).rows.map((r) => r.date);
+
+      it("edits only that day, keeps the ticks and the streak, and Undo joins it back", async () => {
+        const task = await daily("Walk", addDays(today, -5));
+        for (const d of [-2, -1, 0]) await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, d) });
+        const before = (await getDailyTodos(userA, "personal", yesterday, today)).todos[0];
+        const res = await updateTodoAction({ id: task.id, title: "Walk far", day: yesterday });
+        if (!res.success || !res.todo) throw new Error("not saved");
+        expect(res.todo.join?.laterId).toBeTruthy();
+        expect(await titlesOn(addDays(today, -2))).toEqual(["Walk"]);
+        expect(await titlesOn(yesterday)).toEqual(["Walk far"]);
+        expect(await titlesOn(today)).toEqual(["Walk"]);
+        expect(await titlesOn(addDays(today, 2))).toEqual(["Walk"]);
+        const [now] = (await getDailyTodos(userA, "personal", today, today)).todos;
+        expect(now).toMatchObject({ isCompleted: true, streak: 3 });
+
+        authState.id = userB;
+        const snap = { ...before, reminderTime: null };
+        expect((await revertMoveTodoAction(snap, res.todo.id, res.todo.join)).success).toBe(false);
+        authState.id = userA;
+        expect(await titlesOn(yesterday)).toEqual(["Walk far"]); // user B changed nothing of A's
+        expect((await revertMoveTodoAction(snap, res.todo.id, res.todo.join)).success).toBe(true);
+        for (const d of [-2, -1, 0, 1, 5]) expect(await titlesOn(addDays(today, d))).toEqual(["Walk"]);
+        const rows = (await admin.query("SELECT id, ended_on FROM todos WHERE user_id = $1 AND title like 'Walk%'", [userA])).rows;
+        expect(rows).toEqual([{ id: task.id, ended_on: null }]);
+        expect(await ticks(task.id)).toEqual([-2, -1, 0].map((d) => addDays(today, d)));
+      });
+
+      it("deletes only that day, and Undo brings the same task back with its ticks", async () => {
+        const task = await daily("Stretch", addDays(today, -4));
+        for (const d of [-3, -1]) await toggleTodo(userA, { id: task.id, isCompleted: true, currentDate: addDays(today, d) });
+        const before = (await getDailyTodos(userA, "personal", yesterday, today)).todos[0];
+        const res = await deleteTodoAction(task.id, yesterday);
+        expect(res.deleted).toBe(true);
+        expect(await titlesOn(addDays(today, -2))).toEqual(["Stretch"]);
+        expect(await titlesOn(yesterday)).toEqual([]);
+        expect(await titlesOn(today)).toEqual(["Stretch"]);
+        expect(await titlesOn(addDays(today, 4))).toEqual(["Stretch"]);
+
+        authState.id = userB;
+        expect((await restoreTodoAction({ ...before, reminderTime: null }, res.join)).success).toBe(false);
+        authState.id = userA;
+        expect(await titlesOn(yesterday)).toEqual([]);
+        expect(await titlesOn(today)).toEqual(["Stretch"]);
+        expect((await restoreTodoAction({ ...before, reminderTime: null }, res.join)).success).toBe(true);
+        for (const d of [-3, -1, 0, 3]) expect(await titlesOn(addDays(today, d))).toEqual(["Stretch"]);
+        expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1 AND title = 'Stretch'", [userA])).rows[0].n).toBe(1);
+        expect(await ticks(task.id)).toEqual([-3, -1].map((d) => addDays(today, d)));
+      });
+
+      it("deletes the first day of a daily task, and keeps its end date through Undo", async () => {
+        const task = await daily("Journal", yesterday);
+        const before = (await getDailyTodos(userA, "personal", yesterday, today)).todos[0];
+        const res = await deleteTodoAction(task.id, yesterday);
+        expect(await titlesOn(yesterday)).toEqual([]);
+        expect(await titlesOn(today)).toEqual(["Journal"]);
+        await restoreTodoAction({ ...before, reminderTime: null }, res.join);
+        expect(await titlesOn(yesterday)).toEqual(["Journal"]);
+        expect(await titlesOn(today)).toEqual(["Journal"]);
+
+        // A task that already ends today has no later copy, and Undo gives it that end back.
+        const old = await daily("Old half", addDays(today, -3));
+        await updateTodo(userA, { id: old.id, title: "New half", reminderTime: null }, today); // old half ends today
+        const snap = { ...(await getDailyTodos(userA, "personal", yesterday, today)).todos.find((t) => t.id === old.id)!, reminderTime: null };
+        const gone = await deleteTodoAction(old.id, yesterday);
+        expect(gone.join).toMatchObject({ endedOn: today, laterId: undefined });
+        await restoreTodoAction(snap, gone.join);
+        expect(await titlesOn(yesterday)).toContain("Old half");
+        expect(await titlesOn(today)).toEqual(["New half", "Journal"]);
+      });
+
+      it("moves only that day to a one-off task, and Undo puts the day back", async () => {
+        const task = await daily("Plan", addDays(today, -3));
+        const before = (await getDailyTodos(userA, "personal", yesterday, today)).todos[0];
+        const res = await moveTodoAction({ id: task.id, recurrencePattern: "none", dueDate: addDays(today, 2), from: yesterday, title: "Plan trip" });
+        if (!res.success || !res.todo) throw new Error("not moved");
+        expect(await titlesOn(yesterday)).toEqual([]);
+        expect(await titlesOn(today)).toEqual(["Plan"]);
+        expect(await titlesOn(addDays(today, 2))).toEqual(["Plan trip", "Plan"]);
+        const back = await revertMoveTodoAction({ ...before, reminderTime: null }, res.todo.id, res.todo.join);
+        expect(back.success).toBe(true);
+        for (const d of [-1, 0, 2]) expect(await titlesOn(addDays(today, d))).toEqual(["Plan"]);
+      });
+
+      it("still ends a daily task from today on, keeping the days before", async () => {
+        const task = await daily("Today on", addDays(today, -2));
+        expect((await deleteTodoAction(task.id, today)).deleted).toBe(true);
+        expect(await titlesOn(yesterday)).toEqual(["Today on"]);
+        expect(await titlesOn(today)).toEqual([]);
+        expect(await titlesOn(addDays(today, 3))).toEqual([]);
+      });
     });
 
     it("moves a daily task to one day with the edits, and the days before keep the daily one", async () => {
