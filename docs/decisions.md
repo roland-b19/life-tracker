@@ -300,14 +300,14 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 
 - A server action revalidates its page only when the page's props drive the view (gym start, cancel, restore, finish, reopen, split and custom exercise). Water, steps, meals, shopping, metrics and gym set edits do not: the client keeps its own state and a revalidation returns the whole page (102 KB for a water tap).
 - Back/forward reloads once after any server action ran in the tab (`app/providers.tsx`), because the router replays the pre-write page. `staleTimes` stays 0 so link taps never show stale data.
-- Each tab has `loading.tsx`; a `layout.tsx` above it (`require-session`) redirects anonymous visitors, so they still get a 307 and not a 200 with a meta refresh.
+- ~~Each tab has `loading.tsx`~~ Removed on 2026-11-12 (see "No page skeletons on navigation" below). The `layout.tsx` above each tab (`require-session`) stays and redirects anonymous visitors with a 307.
 - Constants shared by client and server live in `src/lib/rules.ts` (no zod), so client components do not pull zod into the browser.
 - Pool settings stay as they are (`DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`): a longer idle timeout would keep sockets that a frozen serverless function finds dead, and this cannot be tested against Neon from here. Revisit only with a real measurement on Vercel.
 - No index was added: nothing was slow at stress scale (408 wishlist items, 41 daily tasks).
 
 ## 2026-11-12: Past days are frozen for good, skeletons per container, export, data safety (user)
 - Deleting or editing a task in the past never changes the days after it; only an edit made today or later affects the days from that day on. Undo restores the split exactly (`rejoinSchema`, `restoreTodoAction`, `revertMoveTodoAction`).
-- Every page loads with one skeleton per container (`app/components/skeletons.tsx`): the real card, title and labels with only the data as grey bars, sized against the real cards at phone and desktop widths. No single big box per page.
+- ~~Every page loads with one skeleton per container~~ Removed again, see "No page skeletons on navigation" below.
 - More tab and desktop sidebar get "Export data": all of the signed-in user's data as a `.txt`, built by the server (`src/lib/export.ts`), without the Claude token and push subscriptions.
 - Before any change to the live database the user takes a full copy with `scripts/backup-now.sh`. The import brings back a deleted daily task as a new row from today and keeps history. Test data is additive and marked, and `--remove` deletes exactly the recorded ids. No agent ever runs these against the live database.
 
@@ -332,3 +332,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
+
+## 2026-11-12: No page skeletons on navigation (user)
+- Measured on a local production build: the server answers a page in 7-20 ms, yet the data appeared ~315 ms after every tab tap, on every page. Cause: the `loading.tsx` skeleton shows at once and React then holds the real content back ~300 ms (its Suspense reveal throttle), even when the data is already there. With the skeletons removed the data showed in 17-25 ms.
+- All five `loading.tsx` files and `app/components/skeletons.tsx` are deleted. A tab tap now waits for the server with the old page still on screen; on Vercel + Neon after idle that can be a moment with no feedback. Revisit only with a measurement on the deploy.
+- Panels that load their own data on the client keep the small `.skeleton-row` list placeholder.
