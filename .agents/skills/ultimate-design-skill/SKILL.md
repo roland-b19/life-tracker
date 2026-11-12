@@ -31,7 +31,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **Subtle motion only** (the user's call, 2026-11-12, superseding 2026-11-11): CSS-only enter, press and slide motion with hard limits, plus the existing count-ups and the Tasks progress ring. See section 3. Everything else changes instantly.
+- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill, the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12) (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
 - **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
 - **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
@@ -153,7 +153,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Nothing waits on the network: the row leaves at once and the toast shows at once. Quick taps (tick, +250 ml) update the screen at once too.
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
 - **Instant.**
-  - Page and tab changes, view switches, deletes and Undo show at once. Only the subtle motion of section 3 runs, on enter, press and slide; nothing loops or exits.
+  - Page and tab changes, view switches, adds, deletes and Undo show at once. Nothing animates.
 - **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
 - **Streaks** are green (success colour) with a fire icon, in the row. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
@@ -180,28 +180,21 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Selection is a fill, never a border.** A selected card or chip gets `--tint-subtle` (split day cards, muscle chips). A selected toggle (a picker day, a `.weekday-btn`, the `Segmented` thumb) is solid `--tint` with `--on-tint` text. No coloured outline or left stripe, and "today" gets no extra border.
 - **Small controls still have 44pt targets.** Compact buttons keep their look and get an invisible `::before` with `inset: min(0px, (100% - 44px) / 2)`. Dense picker grids and the muscle-map group chips are the exceptions, so a tap never lands on a neighbour.
 
-## 3. Motion
+## 3. No animations or transitions
 
-The user's call (2026-11-12, superseding the 2026-11-11 no-animations rule): the app has **subtle, simple motion**, CSS only, no libraries. The set:
+The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**, with exactly two exceptions the user brought back (same day):
 
-- Button press: `--press` scale eases (`transition` on transform, `--motion-fast`).
-- Segmented control pill and nav tab indicator slide (transform, `--motion-base`).
-- Category fold chevron rotates (transform, `--motion-fast`).
-- Modal enter: scrim fades, card fades and rises 4px from scale 0.98 (`--motion-base` / `--motion-slow`). Close is instant.
-- Toast enter: fades and rises 4px (`--motion-base`). Dismiss is instant.
-- New rows (`.entry-row`, `.todo-row`, `.item-row`), cards appearing on a tab change, and the check tick fade and rise or pop in via `@starting-style`. These are scoped under `main[data-live]`, which `Page` (`app/components/blocks.tsx`) sets on the first pointerdown or keydown, so page loads and streamed skeleton swaps never animate. Sortable `[data-sort]` rows only fade (drag-sort owns their transform).
-- Kept as before: the Tasks progress ring, the Wishlist total count-up and the Nutrition numbers (`app/components/animated-number.tsx`, already reduced-motion aware).
+- the Tasks Progress ring (`ProgressRing` in `app/components/charts.tsx`): the fill and the percentage ease from 0 to the value in 900 ms (`useAnimatedNumber(p, 0, 900)`);
+- the Wishlist estimated total (`AnimatedNumber` in `app/wishlist/wishlist-client.tsx`): it counts up from 0 on entry and eases between values.
 
-Tokens live in `app/globals.css` `:root`: `--motion-fast: 120ms`, `--motion-base: 180ms`, `--motion-slow: 240ms`, `--ease-out: cubic-bezier(0.2, 0, 0, 1)`, `--rise: 4px`, `--pop: 0.96`.
+Both live in `app/components/animated-number.tsx`, which jumps straight to the value under `prefers-reduced-motion`. Nothing else uses it: the Tasks stat tiles, every other number, chart and list stay instant. Do not add a third animation without the user asking for it.
 
-Hard limits:
-
-- Only `transform` and `opacity` are animated, so there is no layout shift.
-- Durations 120-240 ms, ease-out. No loops. No exit animations.
-- Everything off under `prefers-reduced-motion: reduce` (one block at the end of `globals.css`).
-- No hover transitions. Any `:hover` stays inside `@media (hover: hover)`.
-- No animation on page load.
-- Anything outside this set needs the user's OK first: layout or height tweens, exit animations, loops, JS tweens (WAAPI, `requestAnimationFrame`, timers), hover transitions, drag-sort glide, chart or camera tweens. If a new feature seems to need more, show the end state and tell the user.
+- No CSS `transition`, `animation` or `@keyframes`; no view or page transitions; no smooth scrolling.
+- No JS-driven motion either, apart from the two exceptions above: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart or camera tween, no other counting numbers (WAAPI, `requestAnimationFrame` and timers included).
+- Elements appear, disappear and change instantly: rows, modals, toasts, hover and press states, selected tabs, chart values, page changes.
+- Hover fills and the `:active` press scale (`--press`) still apply, but at once, with no transition.
+- Feedback comes from the toast and its Undo, not from motion.
+- `prefers-reduced-motion` needs no handling beyond the two exceptions, which already honour it. If a new feature seems to need an animation, show the end state instead and tell the user.
 
 ## 4. Building a list page: the Wishlist recipe
 
@@ -275,7 +268,7 @@ Each of these was tried or proposed and the user removed it.
 - Visible borders and separator lines between rows.
 - A blue page background (light blue, dark steel blue, Storm's blue-tinted greys). The user wanted the base black and grey (Graphite); blue is only the accent.
 - A gradient mask over a list, or a shimmer. The `.skeleton` placeholder while data loads is static.
-- **Any motion outside section 3** (layout or height tweens, exit animations, loops, JS tweens, hover transitions, chart or camera tweens). The subtle set in section 3 is allowed; anything beyond it needs the user's OK.
+- **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera) other than the Tasks progress ring, the Wishlist total count-up and the Nutrition number count-up. All the rest was removed on 2026-11-11.
 
 **Layout and content**
 - Scaling the page behind a modal. Blur it only.
@@ -309,7 +302,7 @@ Each of these was tried or proposed and the user removed it.
 - [ ] The empty note keeps one row's height. No layout shift when controls appear.
 
 **Behaviour**
-- [ ] Motion stays inside section 3: only `transform` and `opacity`, 120-240 ms, no loops, no exit animation, no hover transition, nothing on page load, all off under `prefers-reduced-motion`.
+- [ ] No `transition`, `animation`, `@keyframes`, view transition, smooth scroll or JS tween anywhere, except the Tasks progress ring and the Wishlist total (`animated-number.tsx`).
 - [ ] Every action that modifies something has an Undo button in its toast, and Undo restores the previous state. Server failures restore the screen and show a warning.
 - [ ] A new server action has an authorization test (owner allowed, other user denied).
 

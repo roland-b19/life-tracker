@@ -317,16 +317,12 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Correction: the 3D muscle map uses `three` 0.187.0 (pinned in `package.json`), not 0.180.0 as the 2026-11-05 entry says.
 - The live database may lack migrations 0021 to 0023; the user applies them with `npm run db:migrate` (see README). An agent never runs it.
 
+## 2026-11-12: Subtle motion removed again (user)
+- The motion added in PR #92 was reverted at the user's request after trying it. The house style is again "no animations" (the Tasks progress ring, the Wishlist total count-up and the Nutrition numbers stay). The audit fixes of PR #91 are untouched.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
-
-## 2026-11-12: Subtle motion (user)
-- Supersedes the 2026-11-11 no-animations decision. The app may now use subtle, simple motion, CSS only, no libraries.
-- The set: button press eases (`--press`); segmented pill and nav tab indicator slide; category fold chevron rotates; modal enters (scrim fades, card fades and rises 4px from 0.98), close instant; toast enters (fades and rises 4px), dismiss instant; new rows, tab-change cards and the check tick fade, rise or pop in via `@starting-style`, scoped under `main[data-live]`.
-- Kept as before: Tasks progress ring, Wishlist total count-up, Nutrition numbers.
-- Tokens in `app/globals.css` `:root`: `--motion-fast` 120ms, `--motion-base` 180ms, `--motion-slow` 240ms, `--ease-out` cubic-bezier(0.2, 0, 0, 1), `--rise` 4px, `--pop` 0.96.
-- Hard limits: only `transform` and `opacity`; 120-240 ms, ease-out; no loops; no exit animations; off under `prefers-reduced-motion`; no hover transitions outside `@media (hover: hover)`; no animation on page load. Details: `.agents/skills/ultimate-design-skill/SKILL.md` section 3.
