@@ -47,10 +47,12 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: "price-asc", label: "Price ↑" },
   { value: "price-desc", label: "Price ↓" },
 ];
+// Equal prices (or equal times) keep a fixed order, so an item moves only when it is acted on.
+const newest = (a: WishlistItemData, b: WishlistItemData) => +new Date(b.createdAt) - +new Date(a.createdAt) || a.id.localeCompare(b.id);
 const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number> = {
-  newest: (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
-  "price-asc": (a, b) => Number(a.estimatedPrice) - Number(b.estimatedPrice),
-  "price-desc": (a, b) => Number(b.estimatedPrice) - Number(a.estimatedPrice),
+  newest,
+  "price-asc": (a, b) => Number(a.estimatedPrice) - Number(b.estimatedPrice) || newest(a, b),
+  "price-desc": (a, b) => Number(b.estimatedPrice) - Number(a.estimatedPrice) || newest(a, b),
 };
 
 // Whole lei with the thousands separator, no decimals (the user's call): 1.234 RON.

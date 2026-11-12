@@ -2025,6 +2025,9 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-size: 0.9375rem;
   font-weight: 700;
 }
+.streak.pending {
+  color: var(--secondary);
+}
 
 .segmented + .empty-note {
   padding-bottom: 0.5rem;

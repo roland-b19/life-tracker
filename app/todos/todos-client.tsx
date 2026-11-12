@@ -26,7 +26,7 @@ import { PLAN_AHEAD_DAYS } from "@/lib/rules";
 import type { TodoSpace } from "@/lib/validations/todos";
 import { addDays, dayLabel, toISODate } from "@/lib/format-date";
 import { streakOn } from "@/lib/streak";
-import { compareTodos } from "@/lib/todo-order";
+import { blockPlacements, compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
 type Period = "7" | "30" | "90";
@@ -410,8 +410,8 @@ export function TodosClient({
   };
 
   // What the server needs to put a task back as it was.
-  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, completedAt }: TodoItem) => ({
-    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, completedAt,
+  const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt }: TodoItem) => ({
+    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt, markDay: date,
   });
 
   // Moving always takes the row out of this list; Undo puts the task back as it was, edits included (a new task a move created is deleted).
@@ -594,8 +594,9 @@ export function TodosClient({
                         )}
                       </div>
 
-                      {listDaily && task.streak > 0 && (
-                        <span className="streak number-tabular" title={`${task.streak}-day streak`}>
+                      {/* Green once the task is done that day, grey while it is not; never on the days ahead. */}
+                      {listDaily && view.date <= todayDate && task.streak > 0 && (
+                        <span className={`streak number-tabular${task.isCompleted ? "" : " pending"}`} title={`${task.streak}-day streak`}>
                           <FlameIcon size={15} />
                           {task.streak}
                         </span>
@@ -632,10 +633,15 @@ export function TodosClient({
               onRefile={(from, to, only) => {
                 // Days that are over keep their categories, so only today and the days ahead change on screen; the server decides the rest.
                 if (view.date >= todayDate)
-                  setTodosMap((prev) => ({
-                    ...prev,
-                    [view.space]: prev[view.space].map((t) => (t.category === from && (!only || only.includes(t.id)) ? { ...t, category: to } : t)),
-                  }));
+                  setTodosMap((prev) => {
+                    // As the server files them: repeating tasks land on top of the new category as one block, in the order they had.
+                    const moving = (t: TodoItem) => t.category === from && (!only || only.includes(t.id));
+                    const placed = blockPlacements(prev[view.space].filter((t) => moving(t) && t.isRecurring));
+                    const refiled = prev[view.space]
+                      .map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt }))
+                      .sort(compareTodos);
+                    return { ...prev, [view.space]: refiled };
+                  });
               }}
               // Read the tasks again once the server has saved (or undone) the change: a delete splits a repeating task into new rows.
               onSynced={() => void loadDay()}

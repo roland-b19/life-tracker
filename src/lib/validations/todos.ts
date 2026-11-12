@@ -32,6 +32,8 @@ export const restoreTodoSchema = createTodoSchema.extend({
   // shortcut: a repeating task ticked on more than 20 years of days cannot be restored, raise the cap if that ever matters.
   doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+  placedAt: z.coerce.date().optional(), // its place in the list, so Undo keeps the order
+  markDay: isoDate.optional(), // the day on screen: a repeating task's completedAt belongs to that day
 });
 
 /** What Undo sends back after a change to one past day (see isolateDay): checked here, the id is still only ever used on the user's own rows. */

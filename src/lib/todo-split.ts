@@ -1,7 +1,7 @@
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/server/db";
 import { addDays } from "./format-date";
-import { todoCompletions, todos } from "@/db/schema";
+import { todoCompletions, todoDayMarks, todos } from "@/db/schema";
 
 type Tx = Pick<typeof db, "insert" | "update" | "delete" | "select">;
 type Todo = typeof todos.$inferSelect;
@@ -10,23 +10,31 @@ type Todo = typeof todos.$inferSelect;
 export async function endTodo(tx: Tx, userId: string, todoId: string, day: string): Promise<void> {
   await tx.update(todos).set({ endedOn: day }).where(and(eq(todos.id, todoId), eq(todos.userId, userId)));
   await tx.delete(todoCompletions).where(and(eq(todoCompletions.todoId, todoId), gte(todoCompletions.date, day)));
+  // The order marks stay: they are never read for a day the task has left, and Undo then finds them again.
+}
+
+/** Gives a copy of a repeating task the ticked days and the per-day order marks of the original. */
+async function copyDays(tx: Tx, fromId: string, toId: string): Promise<void> {
+  const ticked = await tx.select().from(todoCompletions).where(eq(todoCompletions.todoId, fromId));
+  if (ticked.length) await tx.insert(todoCompletions).values(ticked.map((t) => ({ todoId: toId, date: t.date })));
+  const marks = await tx.select().from(todoDayMarks).where(eq(todoDayMarks.todoId, fromId));
+  if (marks.length) await tx.insert(todoDayMarks).values(marks.map((m) => ({ todoId: toId, date: m.date, at: m.at })));
 }
 
 /**
  * Changes a repeating task from `day` on without touching the days before: the old task ends on `day` and a copy
- * with the changes starts there (same order in the list, same ticked days, so the streak carries on). Returns the copy.
+ * with the changes starts there (same place in the list, same ticked days and order marks, so the streak carries on). Returns the copy.
  * shortcut: the two halves are not linked, so deleting the old one does not delete a later copy; add a column if that matters.
  */
 export async function splitTodo(
   tx: Tx,
   task: Todo,
   day: string,
-  changes: Partial<Pick<Todo, "title" | "reminderTime" | "category">>,
+  changes: Partial<Pick<Todo, "title" | "reminderTime" | "category" | "placedAt">>,
 ): Promise<Todo> {
   const { id, ...copy } = task;
   const [next] = await tx.insert(todos).values({ ...copy, ...changes, dueDate: day }).returning();
-  const ticked = await tx.select().from(todoCompletions).where(eq(todoCompletions.todoId, id));
-  if (ticked.length) await tx.insert(todoCompletions).values(ticked.map((t) => ({ todoId: next.id, date: t.date })));
+  await copyDays(tx, id, next.id);
   await endTodo(tx, task.userId, id, day);
   return next;
 }
@@ -51,10 +59,9 @@ export async function isolateDay(
 ): Promise<{ middle?: Todo; join: Rejoin }> {
   const { id, ...copy } = task;
   const next = addDays(day, 1);
-  const ticked = await tx.select().from(todoCompletions).where(eq(todoCompletions.todoId, id));
   const born = async (values: typeof copy) => {
     const [row] = await tx.insert(todos).values(values).returning();
-    if (ticked.length) await tx.insert(todoCompletions).values(ticked.map((t) => ({ todoId: row.id, date: t.date })));
+    await copyDays(tx, id, row.id);
     return row;
   };
   const later = !task.endedOn || task.endedOn > next ? await born({ ...copy, dueDate: next }) : undefined;

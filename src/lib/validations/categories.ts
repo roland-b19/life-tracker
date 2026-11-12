@@ -25,6 +25,7 @@ export const revertCategorySchema = z.object({
   sortOrder: z.number().int(),
   itemIds: z.array(z.string().uuid()).max(5000),
   dropCurrent: z.boolean(),
+  before: z.array(z.object({ id: z.string().uuid(), placedAt: z.iso.datetime() })).max(5000).default([]),
   splits: z.array(z.object({ from: z.string().uuid(), to: z.string().uuid(), day: isoDate, endedOn: isoDate.nullable() })).max(5000).default([]),
 });
 
