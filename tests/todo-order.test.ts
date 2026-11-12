@@ -22,7 +22,7 @@ vi.mock("@/server/auth", () => ({
 
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
-import { createTodo, deleteTodo, getDailyTodos, moveTodo, restoreTodo, toggleTodo } from "@/lib/todos";
+import { createTodo, deleteTodo, getDailyTodos, restoreTodo, toggleTodo } from "@/lib/todos";
 import { deleteCategory } from "@/lib/categories";
 import { addDays, toISODate } from "@/lib/format-date";
 
@@ -111,26 +111,6 @@ describe("Task order: only the user's own actions move a task", () => {
     expect((await getDailyTodos(user, "business", today, today)).todos.find((t) => t.id === biz.id)?.isCompleted).toBe(false);
   });
 
-  it("a task moved to Today or Daily goes above everything, carried-over tasks included, both ways", async () => {
-    const old = await add("Old", { dueDate: yesterday });
-    await admin.query("UPDATE todos SET created_at = $1 WHERE id = $2", [new Date(Date.now() - 2 * 86_400_000), old.id]);
-    const fresh = await add("Fresh");
-    const d = await daily("D");
-    expect(await titles()).toEqual(expect.arrayContaining(["Old", "Fresh", "D"]));
-    expect((await getDailyTodos(user, "personal", today, today)).todos.find((t) => t.title === "Old")?.isCarriedOver).toBe(true);
-    // Daily -> Today: on top, above the carried one.
-    await moveTodo(user, { id: d.id, recurrencePattern: "none", dueDate: today });
-    expect((await titles())[0]).toBe("D");
-    // Today -> Daily: on top of its list.
-    await moveTodo(user, { id: fresh.id, recurrencePattern: "daily", dueDate: today });
-    expect((await titles())[0]).toBe("Fresh");
-    const dailyTitles = (await getDailyTodos(user, "personal", today, today)).todos.filter((t) => t.isRecurring).map((t) => t.title);
-    expect(dailyTitles).toEqual(["Fresh"]);
-    // Another move later puts that one on top again, above the earlier move.
-    await moveTodo(user, { id: old.id, recurrencePattern: "none", dueDate: today });
-    expect((await titles())[0]).toBe("Old");
-  });
-
   it("carried-over tasks land on top when carried; later additions sit above them", async () => {
     const o1 = await add("Old1", { dueDate: yesterday });
     await admin.query("UPDATE todos SET created_at = $1 WHERE id = $2", [new Date(Date.now() - 2 * 86_400_000), o1.id]);
@@ -161,7 +141,7 @@ describe("Task order: only the user's own actions move a task", () => {
     expect(await inCategory("other")).toEqual(["y3", "y1", "x2", "x1", "y2"]); // reading again moves nothing
   });
 
-  it("Undo of a delete and a move brings the task back in the same place", async () => {
+  it("Undo of a delete brings the task back in the same place", async () => {
     const a = await daily("A");
     const b = await daily("B");
     await daily("C");

@@ -67,7 +67,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Buttons are rounded squares**, never circles or pills (the toast close was squared for this). The signed-off exceptions are round by nature, not buttons in a row: the modal's close (a small grey circle, the "more subtle x" the user asked for), the task check circle, the date picker's day cells and the muscle-map group chips.
 - **Monospace everywhere** (`ui-monospace, "SF Mono", ...`), with the slashed zero kept on purpose. Numbers are tabular.
 - **No placeholders** in fields. Labels say everything.
-- **No example notes, no credits, no "Life tracker" title on pages.** The app name appears only in the navigation (the sidebar brand, the More menu, the fallback title of an unknown route) and on the sign-in brand line. The one allowed help line is a `.muted.move-hint` at the top of a dialog, stating a consequence the user cannot see: Move task (only for a daily task: its streak starts over), Edit category (its items move along, an existing name merges the two).
+- **No example notes, no credits, no "Life tracker" title on pages.** The app name appears only in the navigation (the sidebar brand, the More menu, the fallback title of an unknown route) and on the sign-in brand line. The one allowed help line is a `.muted.move-hint` at the top of a dialog, stating a consequence the user cannot see: Edit category (its items move along, an existing name merges the two).
 - **Icons are inline stroke SVGs** with round caps. No emoji. Icons never tremble: no transform on hover.
 
 **Layout**
@@ -130,15 +130,14 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Warning toasts are only for actions without an open form: list actions and quick taps (+250 ml). Water and steps keep their form open while saving, like every form.
   - A one-off action outside a form (enabling task reminders) reports through a toast too: `Reminders enabled`, `Failed to enable reminders (notifications are blocked)`. Never a status line of text under a card.
   - A failed first load of a page's data is a warning toast too: `Failed to load tasks`, `Failed to load weigh-ins`. No inline error text on the page. The one exception is the muscle map's stage, which would otherwise be blank: `Loading model...` while the model loads, and `3D view is not available here. Use the muscle buttons instead.` if WebGL or the model fails.
-- **Date pickers have limits.** Future days only where the user can plan ahead (tasks: up to 7 days), never on logs such as weight. Pass `marked` so days with planned items show a dot: only future days with one-off items, (the Daily tab has no date picker at all).
+- **Date pickers have limits.** None on Tasks (neither tab has a date picker or a day stepper), and never on logs such as weight.
 
 **Behaviour**
-- **Undo on every action that modifies something.** The toast of a create, edit, delete, toggle, move, clear, quick tap or setting shows an Undo button, and Undo restores the previous state:
+- **Undo on every action that modifies something.** The toast of a create, edit, delete, toggle, clear, quick tap or setting shows an Undo button, and Undo restores the previous state:
   - create → delete it (`Added "X"`);
   - delete → restore it with the same data, id and timestamps (`Removed "X"`); nothing about the row may differ afterwards (completion time, bought state, flags, order);
   - edit → write the old values back (`Saved "X"`);
   - toggle → toggle back: ticking a task or a shopping item, reopening a task;
-  - move → move back: a task to another day, into or out of Daily (`Moved "X" to Tomorrow`);
   - quick tap and set value → the previous amount (`Added 250 ml`, `Water set to 2000 ml`, `"X" is now 2 kg`, `Saved nutrition goals`);
   - clear → bring them back (`Cleared 3 bought items`);
   - category delete or rename → a real revert: the items that moved go back to their old category (a category deleted with items has them restored to it; a rename that merged two categories un-merges);
@@ -156,11 +155,11 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Page and tab changes, view switches, adds, deletes and Undo show at once. Nothing animates.
 - **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
-- **Streaks** are green (success colour) with a fire icon, in the row, when the task is ticked on the day on screen; unticked they are grey (`.streak.pending`, `--secondary`); on days after today they are not shown at all. Row order: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete).
+- **Streaks** are green (success colour) with a fire icon, in the row, when the task is ticked today; unticked they are grey (`.streak.pending`, `--secondary`). Row order: check circle (Tasks), name, streak, then the icon buttons (Edit, Delete everywhere).
 - **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (`< 250` low, `250-750` medium, `750+` high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
 - **Everything the user created is editable.** Every row the user made has Edit and Delete: items, tasks, categories, shopping items, water, steps, weights, split days. Log entries the user did not ask to edit (meals, logged sets) are delete-only: log again to correct.
-- **Past days are frozen, yesterday has a grace day.** On the Tasks Today tab, only today, yesterday and the days ahead can be changed: yesterday's tasks can still be ticked, edited, moved or deleted (one day to catch up on what was forgotten), older days cannot, and a `.readonly-note` with `LockIcon` 13 says "Days before yesterday are read-only". Add is only on today and later. The Daily tab has no day stepper: it is always today's list, and an edit, delete or category change applies to the task itself (its history stays for streaks and charts). Water and Steps accept a new entry for today or yesterday only (their older history is read-only; chart and History still show it). Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
+- **Tasks have no date logic.** Neither tab has a day stepper or date picker, and a task is only ever added for today. The Daily tab is today's list; the Today tab is today's one-off tasks, and an unfinished one from an earlier day carries over to today (the only date logic, done on the server). There is no Move (daily to today or back): delete and add again. An edit, delete or category change applies to the task itself (its history stays for streaks and charts). Water and Steps accept a new entry for today or yesterday only (their older history is read-only; chart and History still show it). Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
 - **Charts and numbers are drawn at once** at their value: bars, `ProgressRing`, stat tiles and macro numbers never grow, count up or ease.
 - **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
@@ -217,7 +216,7 @@ Both live in `app/components/animated-number.tsx`, which jumps straight to the v
 - **Row markup:** `div.entry-row` containing:
   - the name (`strong`);
   - meta badges;
-  - `.item-actions` with two `.delete-icon-btn` (`PencilIcon` 17, `TrashIcon` 17), with `aria-label` "Edit X"/"Delete X" and `title` "Edit"/"Delete". A task row puts a Move button first (`MoveIcon` 17, `aria-label` "Move X", `title` "Move"). Reorder buttons use `ArrowUpIcon` / `ArrowDownIcon` 17 ("Move X up" / "Move X down"), never text arrows.
+  - `.item-actions` with two `.delete-icon-btn` (`PencilIcon` 17, `TrashIcon` 17), with `aria-label` "Edit X"/"Delete X" and `title` "Edit"/"Delete". Reorder buttons use `ArrowUpIcon` / `ArrowDownIcon` 17 ("Move X up" / "Move X down"), never text arrows.
   - A card-level Edit in a section head is the icon-only `.delete-icon-btn.edit` (`PencilIcon` 17, `aria-label` naming the target: "Edit nutrition goals", "Edit water and goal") when it stands alone (Health Nutrition, Water and Steps). Beside another header button it is a `btn-sm tint` with `PencilIcon` 14 and "Edit", so the pair splits `1fr 1fr` like the Wishlist's sort and Add (Gym day card). The Gym day card keeps its `btn-sm tint` Edit on a rest day, where Start is hidden, so the header keeps one shape between days.
 - **Header add button:** `button.btn-sm.tint` with `<PlusIcon size={14} />` and the label "Add item".
 - **Navigation entry:** a new page adds itself to `navLinks` and its title to `getPageTitle()` in `app/components/navigation.tsx`, with an inline 24×24 stroke icon (strokeWidth 2, round caps and joins). The first four links are tabs on a phone; the rest go to More. A route without a title shows "Life Tracker".
@@ -255,7 +254,7 @@ Both live in `app/components/animated-number.tsx`, which jumps straight to the v
 - An add button names its object: "Add item", "Add task", never a bare "Add".
 - No two controls show the same label. If a tab already says "Today", the date selector shows the date. A select next to an "Add exercise" button is labelled "Exercise".
 - Show only what carries information. A week view shows day names, not dates.
-- An empty note says exactly what is empty in the view shown: "Nothing planned for today.", "Nothing was planned for this day." (a past day), "Nothing planned for this day." (a future one), "No daily tasks yet." (today), "No daily tasks for this day." (another day). Every empty day shows its note, so the list never collapses.
+- An empty note says exactly what is empty in the view shown: "Nothing planned for today." (Today tab), "No daily tasks yet." (Daily tab). An empty list always shows its note, so it never collapses.
 - Long names wrap onto as many lines as they need. They are never cut off in a row.
 
 ## 6. Rejected: never do these again

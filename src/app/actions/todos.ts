@@ -1,15 +1,12 @@
 "use server";
 
-import { z } from "zod";
 import { assertPushEnabled } from "@/lib/features";
 import { requireUser } from "@/server/auth";
 import {
   createTodoSchema,
   deleteTodoSchema,
   isoDate,
-  moveTodoSchema,
   restoreTodoSchema,
-  PLAN_AHEAD_DAYS,
   pushSubscriptionSchema,
   TodoSpace,
   todoSpaceSchema,
@@ -22,36 +19,28 @@ import {
   deleteTodo,
   findTodo,
   getDailyTodos,
-  getPlannedDays,
   getTodoHistory,
   hasDuplicateTodo,
-  moveTodo,
   removePushSubscription,
   restoreTodo,
-  revertMoveTodo,
   savePushSubscription,
   toggleTodo,
   updateTodo,
 } from "@/lib/todos";
 
-// One-off tasks go on today up to a week ahead, or yesterday (a day of slack either side covers the user's timezone).
-// A repeating task keeps its first day for good, so Undo (`startedBefore`) may bring one back from long ago; a new or moved one must start in the window too.
+// Tasks live on today. A day of slack either side covers the user's timezone and a page left open past midnight.
+function assertToday(day: string) {
+  const today = toISODate();
+  if (day < addDays(today, -1) || day > addDays(today, 1)) throw new Error("Tasks can only be added or changed for today.");
+}
+
+// A repeating task keeps its first day for good, so Undo (`startedBefore`) may bring one back from long ago.
 function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, startedBefore = false) {
-  const today = toISODate();
-  if (!(startedBefore && task.isRecurring) && (task.dueDate < addDays(today, -1) || task.dueDate > addDays(today, PLAN_AHEAD_DAYS + 1))) {
-    throw new Error(`Tasks can be planned up to ${PLAN_AHEAD_DAYS} days ahead.`);
-  }
+  if (!(startedBefore && task.isRecurring)) assertToday(task.dueDate);
 }
 
-/** The day a change to `task` is made on: a one-off task's own day, today for a daily one. */
-const changeDay = (task: { isRecurring: boolean; dueDate: string }) => (task.isRecurring ? toISODate() : task.dueDate);
-
-/** Today and a week ahead can be changed, and yesterday for a day of grace; earlier days are as they were. */
-function assertChangeable(day: string) {
-  const today = toISODate();
-  if (day < addDays(today, -1)) throw new Error("Days before yesterday cannot be changed.");
-  if (day > addDays(today, PLAN_AHEAD_DAYS + 1)) throw new Error(`Tasks can be planned up to ${PLAN_AHEAD_DAYS} days ahead.`);
-}
+/** A change to a one-off task is made on its own day, to a daily one on today. */
+const assertChangeable = (task: { isRecurring: boolean; dueDate: string }) => assertToday(task.isRecurring ? toISODate() : task.dueDate);
 
 const duplicate = (title: string) => ({ success: false as const, error: `"${title}" is already on this list.` });
 
@@ -74,23 +63,11 @@ export async function restoreTodoAction(rawInput: unknown) {
   return { success: todo !== null, todo };
 }
 
-/** Undo of a move: `createdId` is the task a move created in place of an ended daily one. */
-export async function revertMoveTodoAction(rawInput: unknown, createdId?: string) {
-  const userId = await requireUser();
-  const parsed = restoreTodoSchema.parse(rawInput);
-  const created = createdId ? z.string().uuid().parse(createdId) : undefined;
-  assertPlannable(parsed, true);
-  const except = [parsed.id, ...(created ? [created] : [])];
-  if (await hasDuplicateTodo(userId, parsed, except)) return duplicate(parsed.title);
-  const todo = await revertMoveTodo(userId, parsed, created);
-  return { success: todo !== null, todo };
-}
-
 export async function toggleTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = toggleTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
-  if (task) assertChangeable(changeDay(task));
+  if (task) assertChangeable(task);
   // A daily task is ticked for today only (the server's today, whatever day the screen shows), and only while it runs.
   const today = toISODate();
   if (task?.isRecurring && (today < task.dueDate || (task.endedOn && today >= task.endedOn))) {
@@ -105,23 +82,9 @@ export async function updateTodoAction(rawInput: unknown) {
   const parsed = updateTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
   if (!task) return { success: false, todo: null };
-  assertChangeable(changeDay(task));
+  assertChangeable(task);
   if (await hasDuplicateTodo(userId, { ...task, title: parsed.title }, task.id)) return duplicate(parsed.title);
   const todo = await updateTodo(userId, parsed);
-  return { success: todo !== null, todo };
-}
-
-export async function moveTodoAction(rawInput: unknown) {
-  const userId = await requireUser();
-  const parsed = moveTodoSchema.parse(rawInput);
-  const isRecurring = parsed.recurrencePattern !== "none";
-  assertPlannable({ isRecurring, dueDate: parsed.dueDate });
-  const task = await findTodo(userId, parsed.id);
-  if (task) assertChangeable(changeDay(task));
-  if (task && (await hasDuplicateTodo(userId, { ...task, title: parsed.title ?? task.title, isRecurring, dueDate: parsed.dueDate }, task.id))) {
-    return duplicate(parsed.title ?? task.title);
-  }
-  const todo = await moveTodo(userId, parsed);
   return { success: todo !== null, todo };
 }
 
@@ -131,7 +94,7 @@ export async function deleteTodoAction(todoId: string) {
   const parsed = deleteTodoSchema.parse({ id: todoId });
   const task = await findTodo(userId, parsed.id);
   if (!task) return { success: true, deleted: false };
-  assertChangeable(changeDay(task));
+  assertChangeable(task);
   const result = await deleteTodo(userId, parsed.id);
   return { success: true, deleted: result !== null };
 }
@@ -143,27 +106,17 @@ export async function getDailyTodosAction(space: TodoSpace, date: string) {
 }
 
 /**
- * Everything the Tasks page shows for one day, in one round trip: Next runs server actions one at a time,
- * so eight separate calls per day change cost eight sessions, eight network trips and eight waits in a row.
+ * Everything the Tasks page shows for today, in one round trip: Next runs server actions one at a time,
+ * so separate calls would cost a session, a network trip and a wait each, in a row.
  */
-export async function loadTodosViewAction(date: string) {
+export async function loadTodosViewAction() {
   const userId = await requireUser();
-  const day = isoDate.parse(date);
-  const plannedSince = addDays(toISODate(), -1);
   const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-  const [daily, history, planned] = await Promise.all([
-    both((space) => getDailyTodos(userId, space, day)),
+  const [daily, history] = await Promise.all([
+    both((space) => getDailyTodos(userId, space, toISODate())),
     both((space) => getTodoHistory(userId, space)),
-    both((space) => getPlannedDays(userId, space, plannedSince)),
   ]);
-  return { success: true, daily, history, planned };
-}
-
-export async function getPlannedDaysAction(space: TodoSpace) {
-  const userId = await requireUser();
-  const parsed = todoSpaceSchema.parse(space);
-  // A day back covers the user's timezone; the calendar only marks days after its own today.
-  return { success: true, days: await getPlannedDays(userId, parsed, addDays(toISODate(), -1)) };
+  return { success: true, daily, history };
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {

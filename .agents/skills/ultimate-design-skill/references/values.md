@@ -213,7 +213,7 @@ That is about 4px a side, so a wide card barely moves and a small button presses
 
 **`.streak`**
 - A 44px slot, success colour, weight 700, .9375rem, with a fire icon.
-- Order in the row: check circle (Tasks), name, streak, then the icon buttons (Tasks: Move, Edit, Delete; elsewhere Edit, Delete). Move is `MoveIcon` 17 in a `.delete-icon-btn.edit`.
+- Order in the row: check circle (Tasks), name, streak, then the icon buttons (Edit, Delete everywhere).
 
 ## Fields
 
@@ -347,7 +347,6 @@ The CSS hides the outline on `[data-pointer]`.
 - Check circle (`.todo-checkbox-btn`, every list row that ticks off: Tasks and Shopping): 1.45rem, round, 1.5px `--secondary` border; checked is solid `--tint` with `--on-tint` `CheckIcon` 12 (stroke 3). Its target is `::after { inset: -.7rem }`. A read-only circle (`.static`) has no target, and an unchecked one is at opacity .5.
 - `.todo-title`: .95rem weight 500, wraps; done is line-through in secondary.
 - `.readonly-note`: .8125rem secondary with `LockIcon` 13, gap .4rem, margin-bottom .25rem.
-- Move task options: full-width `.secondary` buttons in a grid, gap .5rem.
 - Food Assistant chat: `.chat-log` is a `--surface-secondary` box (padding 1rem, radius .9rem, max-height 26rem, scrolls inside, collapses when empty). Bubbles: padding .65rem .9rem, .9375rem, line-height 1.4, radius 1.1rem with a .3rem tail corner; the assistant's on `--surface`, the user's on solid `--tint` with `--on-tint` text. The typing bubble is italic secondary. A logged meal is a `.chat-tool` tag (tint on `--tint-subtle`, radius .5rem, .8125rem). `.chat-form`: the input and Send in a row, gap .75rem, margin-top 1rem.
 
 ## Empty note

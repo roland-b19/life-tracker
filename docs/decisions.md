@@ -365,3 +365,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - `todo_day_marks` (decision of 2026-11-12 above, migration 0024) is dropped: the order key of a repeating task is `todos.completed_at`, valid only on the day it was set. Migration `0025_todo_daily_today` backfills it from the marks and drops the table; the user runs it after the deploy.
 - The server ticks a repeating task for its own "today", whatever day the page sent, so a page left open past midnight cannot tick yesterday.
 
+
+## 2026-11-12 — No date logic on the Tasks page, no Move (user)
+- Neither Tasks tab has a day stepper or date picker. Tasks are added only for today; the only date logic is the carry-over of unfinished one-off tasks to today (done on the server). Charts read their days from the database.
+- The Move feature is removed (daily to today, between days, the Day select in the edit form). To change a task's kind, delete it and add it again.
+- The server refuses to add or change a task for a day beyond today ±1 (a day of slack for the timezone and a page left open past midnight). One-off tasks planned earlier for a later day stay in the database and show up on their day.

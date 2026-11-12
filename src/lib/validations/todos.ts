@@ -35,8 +35,6 @@ export const restoreTodoSchema = createTodoSchema.extend({
   placedAt: z.coerce.date().optional(), // its place in the list, so Undo keeps the order
 });
 
-export { PLAN_AHEAD_DAYS } from "../rules";
-
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
@@ -48,17 +46,6 @@ export const updateTodoSchema = z.object({
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
   // Left out by the one-off form, which has no category: then the task keeps its own.
-  category: categorySchema.optional(),
-});
-
-/** Moves a task to `dueDate` as a one-off task ("none"), or makes it a repeating one. */
-export const moveTodoSchema = z.object({
-  id: z.string().uuid(),
-  recurrencePattern: recurrencePatternSchema,
-  dueDate: isoDate,
-  // The edits made in the same step.
-  title: createTodoSchema.shape.title.optional(),
-  reminderTime: createTodoSchema.shape.reminderTime,
   category: categorySchema.optional(),
 });
 
@@ -77,6 +64,5 @@ export type CreateTodoInput = Omit<z.infer<typeof createTodoSchema>, "category">
 export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
-export type MoveTodoInput = z.infer<typeof moveTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 

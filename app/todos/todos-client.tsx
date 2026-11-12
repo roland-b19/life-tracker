@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, DateField, DayStepper, EmptyNote, Field, FormModal, Page, SelectField, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { FlameIcon, BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -14,17 +14,14 @@ import {
   deletePushSubscriptionAction,
   deleteTodoAction,
   loadTodosViewAction,
-  moveTodoAction,
   restoreTodoAction,
-  revertMoveTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
 } from "@/app/actions/todos";
 import type { TodoDayStat, TodoItem } from "@/lib/todos";
-import { PLAN_AHEAD_DAYS } from "@/lib/rules";
 import type { TodoSpace } from "@/lib/validations/todos";
-import { addDays, dayLabel, toISODate } from "@/lib/format-date";
+import { dayLabel, toISODate } from "@/lib/format-date";
 import { streakOn } from "@/lib/streak";
 import { blockPlacements, compareTodos } from "@/lib/todo-order";
 
@@ -51,7 +48,6 @@ interface TodosClientProps {
   initialPersonalTodos: TodoItem[];
   initialBusinessTodos: TodoItem[];
   initialHistory: Record<TodoSpace, TodoDayStat[]>;
-  initialPlanned: Record<TodoSpace, string[]>;
   initialCategories: Record<TodoSpace, string[]>;
 }
 
@@ -61,25 +57,21 @@ export function TodosClient({
   initialPersonalTodos,
   initialBusinessTodos,
   initialHistory,
-  initialPlanned,
   initialCategories,
 }: TodosClientProps) {
   const [space, setSpace] = useState<TodoSpace>("personal");
-  const [date, setDate] = useState(todayDate);
   const [tab, setTab] = useState<TaskTab>("daily");
   const [period, setPeriod] = useState<Period>("7");
   const [metric, setMetric] = useState<Metric>("rate");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [history, setHistory] = useState(initialHistory);
-  const [planned, setPlanned] = useState(initialPlanned);
   const [categories, setCategories] = useState(initialCategories);
 
   const { showToast } = useToast();
-  // The list shows this view, which follows the controls once the day's tasks have loaded.
+  // The list shows this view, which follows the controls once the tasks have loaded.
   const [view, setView] = useState({
     space: "personal" as TodoSpace,
     tab: "daily" as TaskTab,
-    date: todayDate,
   });
   const viewId = useRef(0);
   // The page position when a switch started: the list changes a render after the controls, so put the page back then too.
@@ -98,16 +90,13 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
-  // Editing can also move the task: "keep" leaves it where it is.
-  const [whenInput, setWhenInput] = useState<"keep" | "today" | "tomorrow" | "pick" | "daily">("keep");
-  const [pickDate, setPickDate] = useState(todayDate);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
   // Flows that finish seconds later (Undo, a refresh) read the controls as they are then.
-  const latest = useRef({ date, tab });
+  const latest = useRef({ tab });
   useEffect(() => {
-    latest.current = { date, tab };
+    latest.current = { tab };
   });
 
   // Push notifications state
@@ -120,32 +109,25 @@ export function TodosClient({
   const loading = useRef<Promise<void>>(Promise.resolve());
 
   const isDaily = tab === "daily";
-  // One-off tasks can be planned a week ahead; the daily list is always today's and has no day to pick.
-  const maxDate = addDays(todayDate, PLAN_AHEAD_DAYS);
-  const tomorrow = addDays(todayDate, 1);
-  // A repeating task's dueDate is its first day: it is not on the days before it.
-  const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
-    todosMap[s].filter((t) => t.isRecurring === daily && (!t.isRecurring || t.dueDate <= day));
+  // Every list is today's: tasks are added for today only, and unfinished ones carry over.
+  const visibleFor = (s: TodoSpace, daily: boolean) => todosMap[s].filter((t) => t.isRecurring === daily);
   const listDaily = view.tab === "daily";
   // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
   const listTodos = (() => {
-    const list = visibleFor(view.space, listDaily, view.date);
+    const list = visibleFor(view.space, listDaily);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
   const [isFolded, toggleFolded] = useFolded("todos");
   const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
-    const { date: day, tab: tb } = latest.current;
-    if (t.isRecurring !== (tb === "daily")) return false;
-    return t.isRecurring ? t.dueDate <= day : t.dueDate === day;
+    return t.isRecurring === (latest.current.tab === "daily");
   };
-  const whenLabel = (day: string) => (day === todayDate ? "Today" : day === tomorrow ? "Tomorrow" : dayLabel(day));
 
   const byDate = new Map(history[space].filter((h) => h.isRecurring === isDaily).map((h) => [h.date, h]));
   // Progress counts the list on screen (`view`), so it never shows the last day's numbers while the next one loads.
   // A day with no tasks shows only a note, no ring.
-  const progressTodos = visibleFor(view.space, listDaily, view.date);
+  const progressTodos = visibleFor(view.space, listDaily);
   const doneCount = progressTodos.filter((t) => t.isCompleted).length;
   const totalCount = progressTodos.length;
   const percentage = Math.round((doneCount / (totalCount || 1)) * 100);
@@ -172,7 +154,7 @@ export function TodosClient({
     label: (span - 1 - i) % every === 0 ? String(d.day) : "",
     value: d.stat ? (metric === "rate" ? (d.stat.done / d.stat.total) * 100 : d.stat.done) : 0,
     empty: !d.stat,
-    highlight: d.iso === date,
+    highlight: d.iso === todayDate,
     tip: d.stat && (metric === "rate" ? `${Math.round((d.stat.done / d.stat.total) * 100)}%` : `${d.stat.done} done`),
     title: d.stat ? `${dayLabel(d.iso)}: ${d.stat.done} of ${d.stat.total} done` : `${dayLabel(d.iso)}: no record`,
   }));
@@ -192,40 +174,31 @@ export function TodosClient({
   }, []);
 
   // Loads both spaces (and their history) and swaps them in with one state update, so the list never flashes empty.
-  const loadDay = async (at: { date: string } = latest.current) => {
+  const loadDay = async () => {
     const id = ++requestId.current;
     try {
-      const view = await loadTodosViewAction(at.date);
+      const view = await loadTodosViewAction();
       if (id === requestId.current) {
         setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
         setHistory({ personal: view.history[0] ?? [], business: view.history[1] ?? [] });
-        setPlanned({ personal: view.planned[0], business: view.planned[1] });
       }
     } catch {
       showToast({ message: "Failed to load tasks", type: "warning" });
     }
   };
 
-  // The controls switch at once; the list follows once the new day has loaded.
-  const switchView = (next: { space?: TodoSpace; tab?: TaskTab; date?: string }) => {
-    const target = { space, tab, date, ...next };
-    if (target.space === space && target.tab === tab && target.date === date) return;
+  // The controls switch at once; the list follows a render later.
+  const switchView = (next: { space?: TodoSpace; tab?: TaskTab }) => {
+    const target = { space, tab, ...next };
+    if (target.space === space && target.tab === tab) return;
     scrolled.current = window.scrollY;
     setSpace(target.space);
     setTab(target.tab);
-    setDate(target.date);
     const n = ++viewId.current;
-    const settled = target.date !== date ? (loading.current = loadDay(target)) : loading.current;
-    void settled.then(() => {
+    void loading.current.then(() => {
       if (n === viewId.current) setView(target);
     });
   };
-
-  const goTo = (next: string) => switchView({ date: next });
-
-
-  // The daily list is always today's; the Today tab keeps the day picked on it (never one before today).
-  const changeTab = (next: TaskTab) => switchView({ tab: next, date: next === "daily" || date < todayDate ? todayDate : date });
 
   const openForm = (todo?: TodoItem) => {
     setTitleError(null);
@@ -233,8 +206,6 @@ export function TodosClient({
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
     setCategoryInput(todo?.category ?? "other");
-    setWhenInput("keep");
-    setPickDate(todo && !todo.isRecurring ? todo.dueDate : todayDate);
     setIsTaskModalOpen(true);
   };
 
@@ -242,13 +213,6 @@ export function TodosClient({
     setIsTaskModalOpen(false);
     setTitleInput("");
     setReminderTimeInput("");
-  };
-
-  // Where the edit form sends the task; null when it stays.
-  const moveTarget = (task: TodoItem) => {
-    if (whenInput === "daily") return { pattern: "daily", day: todayDate };
-    const day = whenInput === "today" ? todayDate : whenInput === "tomorrow" ? tomorrow : whenInput === "pick" ? pickDate : null;
-    return day && (task.isRecurring || day !== task.dueDate) ? { pattern: "none", day } : null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -262,16 +226,9 @@ export function TodosClient({
     try {
       if (editing) {
         const before = editing;
-        const target = moveTarget(before);
-        // Only a daily task (or one that becomes daily) has a category to pick; a one-off keeps the one it has.
-        const category = before.isRecurring || target?.pattern === "daily" ? categoryInput : before.category;
+        // Only a daily task has a category to pick; a one-off keeps the one it has.
+        const category = before.isRecurring ? categoryInput : before.category;
         const after = { ...before, title, reminderTime, category };
-        if (target) {
-          // The edits travel with the move, so the server changes the task once.
-          closeForm();
-          await moveTask(before, after, target.pattern, target.day);
-          return;
-        }
         const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
         if ("error" in res) return setTitleError(res.error);
         if (res.success) {
@@ -306,8 +263,7 @@ export function TodosClient({
           title,
           isRecurring: isDaily,
           recurrencePattern,
-          // A daily task starts on the day it is added, whichever day is on screen.
-          dueDate: isDaily ? todayDate : date,
+          dueDate: todayDate,
           reminderTime,
           category: isDaily ? categoryInput : "other",
         });
@@ -362,7 +318,7 @@ export function TodosClient({
   // `day` is the day it was ticked on, which may no longer be the one on screen when Undo comes.
   const toggle = async (todo: TodoItem, next: boolean, day: string, withUndo: boolean) => {
     ++requestId.current;
-    if (latest.current.date === day) setCompleted(todo, next, day);
+    setCompleted(todo, next, day);
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
@@ -378,7 +334,7 @@ export function TodosClient({
     await loadDay();
   };
 
-  const handleToggleTodo = (todo: TodoItem) => toggle(todo, !todo.isCompleted, date, true);
+  const handleToggleTodo = (todo: TodoItem) => toggle(todo, !todo.isCompleted, todayDate, true);
 
   // Back in the list where the server would sort it.
   const putBack = (task: TodoItem) =>
@@ -395,41 +351,6 @@ export function TodosClient({
   const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt }: TodoItem) => ({
     id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt,
   });
-
-  // Moving always takes the row out of this list; Undo puts the task back as it was, edits included (a new task a move created is deleted).
-  const moveTask = async (before: TodoItem, after: TodoItem, recurrencePattern: string, day: string) => {
-    ++requestId.current;
-    drop(before);
-    const res = await moveTodoAction({
-      id: before.id,
-      recurrencePattern,
-      dueDate: day,
-      title: after.title,
-      reminderTime: after.reminderTime,
-      category: after.category,
-    }).catch(() => null);
-    if (!res?.success) {
-      if (shows(after)) putBack(after); // unless the list on screen changed meanwhile
-      showToast({ message: res && "error" in res ? res.error : "Failed to move task", type: "warning" });
-      return;
-    }
-    const createdId = res.todo && res.todo.id !== before.id ? res.todo.id : undefined;
-    showToast({
-      message: `Moved "${after.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
-      type: "success",
-      onUndo: async () => {
-        ++requestId.current;
-        if (shows(before)) putBack(before);
-        const back = await revertMoveTodoAction(snapshot(before), createdId).catch(() => null);
-        if (!back?.success) {
-          if (shows(before)) drop(before);
-          showToast({ message: back && "error" in back ? back.error : "Failed to undo the move", type: "warning" });
-        }
-        await loadDay();
-      },
-    });
-    await loadDay();
-  };
 
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
   // Undo restores the same task, streak included.
@@ -522,20 +443,9 @@ export function TodosClient({
               { value: "daily", label: "Daily" },
               { value: "one-day", label: "Today" },
             ]}
-            onChange={changeTab}
+            onChange={(next) => switchView({ tab: next })}
           />
         </ToolbarGroup>
-        {!isDaily && (
-          <DayStepper
-            value={date}
-            today={todayDate}
-            max={maxDate}
-            min={todayDate}
-            marked={planned[space].filter((d) => d > todayDate)}
-            label={dayLabel(date)}
-            onChange={goTo}
-          />
-        )}
       </Toolbar>
 
       <Dashboard className="todos-grid">
@@ -586,7 +496,7 @@ export function TodosClient({
                 />
               ) : (
                 <EmptyNote>
-                  {listDaily ? "No daily tasks yet." : view.date === todayDate ? "Nothing planned for today." : "Nothing planned for this day."}
+                  {listDaily ? "No daily tasks yet." : "Nothing planned for today."}
                 </EmptyNote>
               )}
             </ListBox>
@@ -619,7 +529,7 @@ export function TodosClient({
           <Card id="progress-title" title="Progress">
             {!totalCount ? (
               <EmptyNote>
-                No tasks for {dayLabel(view.date, "long")}.
+                No tasks for today.
               </EmptyNote>
             ) : (
               <div className="dash-hero">
@@ -629,7 +539,7 @@ export function TodosClient({
                     {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
                     {doneCount} of {totalCount} done
                   </span>
-                  <span className="muted">{view.date === todayDate ? "Today" : dayLabel(view.date, "long")}</span>
+                  <span className="muted">Today</span>
                 </div>
               </div>
             )}
@@ -648,7 +558,7 @@ export function TodosClient({
               ]}
             />
             <BarChart
-              key={`${period}-${metric}-${space}-${tab}-${date}`}
+              key={`${period}-${metric}-${space}-${tab}`}
               data={bars}
               max={metric === "rate" ? 100 : maxDone}
               format={metric === "rate" ? (v) => `${v}%` : String}
@@ -691,36 +601,7 @@ export function TodosClient({
           aria-invalid={titleError ? true : undefined}
           aria-describedby={titleError ? "task-title-error" : undefined}
         />
-        {editing && (
-          <>
-            <SelectField
-              label="Day"
-              disabled={saving}
-              value={whenInput}
-              onChange={(e) => setWhenInput(e.target.value as typeof whenInput)}
-              options={[
-                { value: "keep", label: editing.isRecurring ? "Daily" : whenLabel(editing.dueDate) },
-                ...(editing.isRecurring || editing.dueDate !== todayDate ? [{ value: "today", label: "Today" }] : []),
-                ...(editing.isRecurring || editing.dueDate !== tomorrow ? [{ value: "tomorrow", label: "Tomorrow" }] : []),
-                { value: "pick", label: "Another day…" },
-                ...(!editing.isRecurring ? [{ value: "daily", label: "Daily" }] : []),
-              ]}
-            />
-            {whenInput === "pick" && (
-              <DateField
-                id="task-pick-date"
-                value={pickDate}
-                today={todayDate}
-                min={todayDate}
-                max={maxDate}
-                text={dayLabel(pickDate)}
-                disabled={saving}
-                onChange={setPickDate}
-              />
-            )}
-          </>
-        )}
-        {(editing ? editing.isRecurring || whenInput === "daily" : isDaily) && (
+        {(editing ? editing.isRecurring : isDaily) && (
           <CategoryField categories={categories[editing?.space ?? space]} value={categoryInput} onChange={setCategoryInput} disabled={saving} />
         )}
         {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}

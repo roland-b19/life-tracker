@@ -8,7 +8,6 @@ import { streakOn } from "./streak";
 import { compareTodos } from "./todo-order";
 import {
   CreateTodoInput,
-  MoveTodoInput,
   PushSubscriptionInput,
   RestoreTodoInput,
   restoreTodoSchema,
@@ -417,120 +416,6 @@ export async function updateTodo(userId: string, input: UpdateTodoInput): Promis
 
 /** Whether a task is a repeating one that was already part of days before today. */
 const hasPast = (task: { isRecurring: boolean; dueDate: string }) => task.isRecurring && task.dueDate < toISODate();
-
-/**
- * Moves a task to another day, or turns it into a repeating task or back into a one-off one, with any edits made in the
- * same step. It starts fresh there: not done, not carried over, no streak. A repeating task with days before today
- * that becomes a one-off ends today and a new one-off task takes its place, so those days keep it. Null when the task is not the user's.
- */
-export async function moveTodo(userId: string, input: MoveTodoInput): Promise<TodoItem | null> {
-  const [before] = await db
-    .select()
-    .from(todos)
-    .where(and(eq(todos.id, input.id), eq(todos.userId, userId)));
-  if (!before) return null;
-
-  const isRecurring = input.recurrencePattern !== "none";
-  const space = before.space as TodoSpace;
-  const today = toISODate();
-  const next = {
-    title: input.title ?? before.title,
-    reminderTime: input.reminderTime === undefined ? before.reminderTime : input.reminderTime,
-    category: input.category ?? before.category,
-  };
-  if (!isRecurring && before.isRecurring && hasPast(before)) {
-    await endTodo(userId, before.id, today);
-    const created = await createTodo(userId, {
-      space,
-      isRecurring: false,
-      recurrencePattern: "none",
-      dueDate: input.dueDate,
-      ...next,
-    });
-    await recordDayStats(userId, space, today);
-    return created;
-  }
-  const [moved] = await db
-    .update(todos)
-    .set({
-      ...next,
-      isRecurring,
-      recurrencePattern: input.recurrencePattern,
-      dueDate: input.dueDate,
-      isCompleted: false,
-      completedAt: null,
-      isCarriedOver: false,
-      placedAt: new Date(), // a moved task lands on top of its new list
-    })
-    .where(and(eq(todos.id, before.id), eq(todos.userId, userId)))
-    .returning();
-  await db.delete(todoCompletions).where(eq(todoCompletions.todoId, before.id));
-  await ensureCategory(userId, space, next.category);
-
-  // The day it left and the day it joined both count again.
-  for (const day of new Set([before.isRecurring ? today : before.dueDate, isRecurring ? today : input.dueDate])) {
-    await recordDayStats(userId, space, day);
-  }
-  return { ...moved, space, streak: 0, doneDates: [] };
-}
-
-/**
- * Undoes a move: the task goes back to the state it was in (ticked days included), and the task the move created
- * in its place, if any, is deleted. Null when the snapshot cannot be put back.
- */
-export async function revertMoveTodo(
-  userId: string,
-  rawInput: RestoreTodoInput,
-  createdId?: string,
-): Promise<TodoItem | null> {
-  const input = restoreTodoSchema.parse(rawInput);
-  const created = createdId && createdId !== input.id ? await findTodo(userId, createdId) : undefined;
-  const existing = await findTodo(userId, input.id);
-  if (!existing && !created) return restoreTodo(userId, input);
-  if (created) await db.delete(todos).where(and(eq(todos.id, created.id), eq(todos.userId, userId)));
-  if (!existing) return restoreTodo(userId, input);
-
-  const [back] = await db
-    .update(todos)
-    .set({
-      space: input.space,
-      title: input.title,
-      isRecurring: input.isRecurring,
-      recurrencePattern: patternFor(input.isRecurring, input.recurrencePattern),
-      dueDate: input.dueDate,
-      reminderTime: input.reminderTime ?? null,
-      isCompleted: input.isCompleted,
-      completedAt: input.completedAt ?? (input.isCompleted ? new Date() : null),
-      isCarriedOver: input.isCarriedOver,
-      category: input.category,
-      placedAt: input.placedAt ?? input.createdAt,
-      endedOn: null,
-    })
-    .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
-    .returning();
-  // The snapshot holds only the last DONE_DATES_WINDOW_DAYS of ticks, so older ones are left alone.
-  await db
-    .delete(todoCompletions)
-    .where(and(eq(todoCompletions.todoId, input.id), gte(todoCompletions.date, addDays(toISODate(), -DONE_DATES_WINDOW_DAYS))));
-  const doneDates = input.isRecurring ? [...new Set(input.doneDates)].sort() : [];
-  if (doneDates.length) await db.insert(todoCompletions).values(doneDates.map((date) => ({ todoId: input.id, date }))).onConflictDoNothing();
-  await ensureCategory(userId, input.space, back.category);
-  // Every day the move or its undo touched counts again.
-  const today = toISODate();
-  const days = new Set([today, input.dueDate, existing.dueDate, ...(created ? [created.dueDate] : [])]);
-  for (const day of days) await recordDayStats(userId, input.space, day);
-  return { ...back, space: input.space, streak: input.isRecurring ? streakOn(new Set(doneDates), today) : 0, doneDates };
-}
-
-/** Days after `after` that have one-off tasks planned, for the calendar's dots. */
-export async function getPlannedDays(userId: string, space: TodoSpace, after: string): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ day: todos.dueDate })
-    .from(todos)
-    .where(and(eq(todos.userId, userId), eq(todos.space, space), eq(todos.isRecurring, false), gt(todos.dueDate, after)))
-    .orderBy(asc(todos.dueDate));
-  return rows.map((r) => r.day);
-}
 
 /**
  * Deletes a task. A repeating task with days before today only ends today (endTodo), so those days keep it
