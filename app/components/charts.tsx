@@ -32,6 +32,8 @@ export function ProgressRing({
           strokeWidth={stroke}
           strokeDasharray={c}
           strokeDashoffset={c * (1 - shown / 100)}
+          // The round cap leaves a dot of about 3% even at 0, so the last blue fades out over those few percent instead of vanishing.
+          opacity={Math.min(1, shown / 3)}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>

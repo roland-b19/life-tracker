@@ -382,3 +382,11 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Gym Progress no longer loads anything: it is drawn from the workouts the page already holds plus the open or paused workout (`progressSets` in `src/lib/gym-progress.ts`). `getGymHistoryAction` and `getGymHistory` are removed, so `/gym` runs one query fewer and the Progress tab shows no skeleton. A workout left open from before the latest open one is not counted (the page holds only the latest).
 - Health's Water, Steps and Weight lists load once per visit and are kept by the page (`FoodClient` state), so reopening a tab is instant and a late Undo still lands in the list. Opening a tab sets its today row from the Today card. They are page state only: gone on reload, sign-out or another user, so no new storage. A fresh page load fetches them again.
 - The service worker shows a stored page only when it was stored on the same day (device clock, the response's `Date` header); an older one waits for the server, so a page of yesterday is never shown as today.
+
+## 2026-11-12 — Health is Today only, Tasks keep no history, Units, no press pulse (user)
+- Tasks: no history of any kind, like Wishlist; only the Progress tab stays. `todo_day_stats` and its code are removed (migration `0027_health_rework`). Supersedes the "only the per-day counts stay" part of the hard-delete decision above.
+- Health: the Water, Weight and Steps tabs, Past foods, the meals list and the day stepper are removed; Today shows Nutrition (Edit goals, Add meal), then Weight, Water, Steps, each in one container with Today, the 7-day average and Edit (Water also has quick add; Weight also the 7/30/90/180/365-day chart). Meals stay in the database (the Assistant and export read them).
+- Retention: water and steps keep the last 7 days, weight the last 365; older rows are deleted by the migration and then on every write.
+- Categories cards fold with a plain arrow next to the count; the state is kept in the browser (`lt-folded`).
+- Shopping Units: a card under Categories with the same logic (add, rename, delete, reorder, Undo); "pcs" is the fixed fallback like "other" for categories; items keep their unit text, so renaming or deleting a unit re-files them.
+- No press scale (the "pulse") on any button or tab; hover rules stay. The Tasks progress ring fades out when it returns to 0%.

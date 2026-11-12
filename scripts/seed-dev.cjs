@@ -177,23 +177,12 @@ async function seedTasks(db, userId) {
   for (const space of ["personal", "business"]) {
     for (const [i, c] of TASK_CATEGORIES[space].entries())
       await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [userId, space, c, i + 1]);
-    const stats = new Map(); // "day|recurring" -> { total, done }
-    const tally = (day, recurring, done) => {
-      const key = `${day}|${recurring}`;
-      const s = stats.get(key) ?? { total: 0, done: 0 };
-      s.total++;
-      if (done) s.done++;
-      stats.set(key, s);
-    };
-
     for (const habit of HABITS[space]) {
       await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
       count++;
       for (let day = start; day <= today; day = addDays(day, 1)) {
         const due = habit.pattern === "daily" || habit.pattern.slice(5).split(",").includes(String(weekday(day)));
         if (!due) continue;
-        const done = day < today && random() < habit.odds;
-        if (day < today) tally(day, true, done);
       }
     }
 
@@ -207,18 +196,7 @@ async function seedTasks(db, userId) {
         const done = i > 1 || (i === 1 && k < n - 1) || (i === 0 && k === 0);
         await insert(space, titles[t++ % titles.length], false, "none", day, done);
         count++;
-        if (i > 0) tally(day, false, done);
       }
-    }
-
-    // The frozen per-day totals the Progress chart reads.
-    for (const [key, s] of stats) {
-      const [day, recurring] = key.split("|");
-      await db.query(
-        `INSERT INTO todo_day_stats (user_id, space, is_recurring, date, total, done) VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (user_id, space, is_recurring, date) DO UPDATE SET total = EXCLUDED.total, done = EXCLUDED.done`,
-        [userId, space, recurring === "true", day, s.total, s.done],
-      );
     }
   }
   return `tasks: ${count}`;
@@ -240,13 +218,6 @@ async function seedFixtureDay(db, userId) {
   await add("Tue 10.11 daily, mind", true, "2026-11-03", { category: "mind" });
   await add("Tue 10.11 one-off, done", false, FIXTURE_DAY, { done: true });
   await add("Tue 10.11 one-off, open", false, FIXTURE_DAY);
-  // The frozen totals the Progress chart reads: 3 daily (2 done) and 2 one-offs (1 done) on top of what is there.
-  for (const [recurring, total, done] of [[true, 3, 2], [false, 2, 1]])
-    await db.query(
-      `INSERT INTO todo_day_stats (user_id, space, is_recurring, date, total, done) VALUES ($1, 'personal', $2, $3, $4, $5)
-       ON CONFLICT (user_id, space, is_recurring, date) DO UPDATE SET total = todo_day_stats.total + EXCLUDED.total, done = todo_day_stats.done + EXCLUDED.done`,
-      [userId, recurring, FIXTURE_DAY, total, done],
-    );
   return `fixture day: 5 tasks on ${FIXTURE_DAY}`;
 }
 

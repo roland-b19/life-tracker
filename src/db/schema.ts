@@ -279,6 +279,19 @@ export const shoppingCategories = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.name] })],
 );
 
+/** The user's shopping units (g, kg, pack ...), in display order; "pcs" is built in and never stored. */
+export const shoppingUnits = pgTable(
+  "shopping_units",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 30 }).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.name] })],
+);
+
 /** The user's own categories for a list ("wishlist", "personal" or "business" daily tasks), in display order; "other" is built in and never stored. */
 export const itemCategories = pgTable(
   "item_categories",
@@ -318,26 +331,6 @@ export const todos = pgTable(
     category: varchar("category", { length: 50 }).default("other").notNull(),
   },
   (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
-);
-
-// One frozen row per user, space, kind and day: how many tasks existed and how many were done.
-export const todoDayStats = pgTable(
-  "todo_day_stats",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    space: varchar("space", { length: 20 }).notNull(),
-    isRecurring: boolean("is_recurring").notNull(),
-    date: date("date").notNull(),
-    total: integer("total").notNull(),
-    done: integer("done").notNull(),
-  },
-  (table) => [
-    unique("todo_day_stats_unique").on(table.userId, table.space, table.isRecurring, table.date),
-    check("todo_day_stats_range", sql`${table.done} >= 0 AND ${table.done} <= ${table.total}`),
-  ],
 );
 
 export const pushSubscriptions = pgTable(

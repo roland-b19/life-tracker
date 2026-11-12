@@ -19,7 +19,6 @@ import {
   deleteTodo,
   findTodo,
   getDailyTodos,
-  getTodoHistory,
   hasDuplicateTodo,
   removePushSubscription,
   restoreTodo,
@@ -109,11 +108,8 @@ export async function getDailyTodosAction(space: TodoSpace, date: string) {
 export async function loadTodosViewAction() {
   const userId = await requireUser();
   const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-  const [daily, history] = await Promise.all([
-    both((space) => getDailyTodos(userId, space, toISODate())),
-    both((space) => getTodoHistory(userId, space)),
-  ]);
-  return { success: true, daily, history };
+  const daily = await both((space) => getDailyTodos(userId, space, toISODate()));
+  return { success: true, daily };
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {

@@ -22,7 +22,7 @@
   --separator: #38383a;
   --card-border: #48484a;
   /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
-     High contrast (below) brings the outline back. --press is rewritten per element by app/providers.tsx. */
+     High contrast (below) brings the outline back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
   --edge: transparent;
   --glass-blur: blur(28px) saturate(160%);
   /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
@@ -30,7 +30,6 @@
   --highlight: rgba(255, 255, 255, 0.05);
   --highlight-fill: rgba(255, 255, 255, 0.2);
   --tint-highlight: rgba(134, 180, 234, 0.34);
-  --press: 0.92;
   color-scheme: dark;
 }
 
@@ -332,10 +331,6 @@ button.nav-link:disabled {
   }
 }
 
-.nav-link:active {
-  transform: scale(var(--press));
-}
-
 .nav-link.active {
   background: var(--tint-subtle);
   color: var(--tint);
@@ -399,10 +394,6 @@ button.nav-link:disabled {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The press pulse is the Segmented tab's: the item shrinks by 4px a side (--press) and springs back. */
-.tab-item:active {
-  transform: scale(var(--press));
-}
 .tab-item svg {
   width: 1.4rem;
   height: 1.4rem;
@@ -777,6 +768,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem; /* long text wraps before it reaches the row buttons */
   padding: 0.65rem 0;
 }
 
@@ -785,10 +777,12 @@ main {
   align-items: center;
   gap: 0.75rem;
   font-size: 0.95rem;
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere; /* a 90-char name with no spaces wraps instead of widening the page */
 }
 .shopping-item-name > :first-child { flex-shrink: 0; }
+.shopping-item-name > span { min-width: 0; }
 
 .shopping-item-name.bought {
   text-decoration: line-through;
@@ -923,10 +917,6 @@ button {
   justify-content: center;
   gap: 0.5rem;
   border-radius: 0.85rem;
-}
-
-button:active:not(:disabled) {
-  transform: scale(var(--press));
 }
 
 button:disabled {
@@ -1082,10 +1072,6 @@ button.signin-continue:disabled {
   flex: none;
   width: 44px;
   height: 44px;
-}
-
-.delete-icon-btn:active {
-  transform: scale(var(--press));
 }
 
 /* To-Do & Habits Module Styles (Apple HIG) */
@@ -1527,10 +1513,6 @@ button.btn-sm.tint {
   }
 }
 
-.segmented button.active:active {
-  transform: none;
-}
-
 /* Five or more tabs need the room on a phone */
 .segmented.dense button {
   padding-inline: 0.1rem;
@@ -1743,10 +1725,6 @@ main > .error {
   border-radius: 0.8rem;
 }
 
-
-.picker-cell:active:not(:disabled) {
-  transform: scale(var(--press));
-}
 
 .picker-cell.today {
   color: var(--tint);
@@ -2161,10 +2139,6 @@ button.bars-col {
   button.bars-col:hover .bars-bar {
     opacity: 0.9;
   }
-}
-
-button.bars-col:active:not(:disabled) {
-  transform: none;
 }
 
 button.bars-col:focus-visible {
@@ -2605,6 +2579,7 @@ button.bars-col:focus-visible {
 }
 .head-actions + .empty-note { margin-top: 1rem; }
 
+.category-name.raw { text-transform: none; }
 .category-name { text-transform: capitalize; flex: 1; min-width: 0; margin-inline: 0.5rem; overflow-wrap: anywhere; }
 /* A dragged category row follows the pointer above the others, on a solid ground. */
 .entry-row.dragging { position: relative; z-index: 2; box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35); }

@@ -1,6 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
+import { addDays, toISODate } from "@/lib/format-date";
 import { db } from "./db";
 import { weightEntries } from "@/db/schema";
+
+/** Health keeps the last 365 days of weigh-ins only: older ones go when one is written. */
+const pruneWeights = (userId: string) =>
+  db.delete(weightEntries).where(and(eq(weightEntries.userId, userId), lt(weightEntries.date, addDays(toISODate(), -364))));
 
 export async function listWeightEntries(userId: string) {
   return db
@@ -22,6 +27,7 @@ export async function createWeightEntry(userId: string, date: string, kilograms:
       date: weightEntries.date,
       kilograms: weightEntries.kilograms,
     });
+  await pruneWeights(userId);
   return entry;
 }
 
@@ -43,5 +49,6 @@ export async function updateWeightEntry(userId: string, id: string, date: string
       date: weightEntries.date,
       kilograms: weightEntries.kilograms,
     });
+  await pruneWeights(userId);
   return entry;
 }

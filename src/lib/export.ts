@@ -13,10 +13,6 @@ const sections = (u: string): [string, SQL][] => [
                is_carried_over AS "carried over", created_at::text AS created
           FROM todos WHERE user_id = ${u}::uuid ORDER BY space, created_at`,
   ],
-  [
-    "Daily task totals (Progress chart)",
-    sql`SELECT space, date::text AS day, CASE WHEN is_recurring THEN 'daily' ELSE 'one-off' END AS kind, total, done FROM todo_day_stats WHERE user_id = ${u}::uuid ORDER BY date, space`,
-  ],
   ["Categories", sql`SELECT scope AS list, name, sort_order AS position FROM item_categories WHERE user_id = ${u}::uuid ORDER BY scope, sort_order`],
   [
     "Wishlist",
@@ -40,6 +36,7 @@ const sections = (u: string): [string, SQL][] => [
           FROM recipes r WHERE r.user_id = ${u}::uuid ORDER BY r.created_at`,
   ],
   ["Shopping sections", sql`SELECT name, sort_order AS position FROM shopping_categories WHERE user_id = ${u}::uuid ORDER BY sort_order`],
+  ["Shopping units", sql`SELECT name, sort_order AS position FROM shopping_units WHERE user_id = ${u}::uuid ORDER BY sort_order`],
   [
     "Shopping list",
     sql`SELECT name, amount, unit, category, is_bought AS bought, checked_at::text AS "checked at", cleared_at::text AS "cleared at", created_at::text AS created

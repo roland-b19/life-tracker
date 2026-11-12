@@ -28,7 +28,6 @@ const addDays = (iso, n) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-const weekday = (iso) => ((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7) + 1; // 1 = Monday, as the app
 const label = (n) => (n === 0 ? "today" : n < 0 ? `${-n} days ago` : `in ${n} days`);
 const PAST = 45; // days of history
 const AHEAD = 7; // the planner's limit
@@ -44,20 +43,14 @@ async function removeAll(db, userId) {
     const { rowCount } = await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND id = ANY($2::uuid[])`, [userId, rec[table] ?? []]);
     gone.push(`${table} ${rowCount}`);
   }
-  for (const s of rec.stats ?? []) {
-    const q = s.before
-      ? ["UPDATE todo_day_stats SET total = $5, done = $6 WHERE user_id = $1 AND space = $2 AND is_recurring = $3 AND date = $4", [userId, s.space, s.recurring, s.date, s.before.total, s.before.done]]
-      : ["DELETE FROM todo_day_stats WHERE user_id = $1 AND space = $2 AND is_recurring = $3 AND date = $4", [userId, s.space, s.recurring, s.date]];
-    await db.query(...q);
-  }
   for (const [scope, name] of rec.categories ?? []) await db.query("DELETE FROM item_categories WHERE user_id = $1 AND scope = $2 AND name = $3", [userId, scope, name]);
-  console.log(`removed: ${gone.join(", ")}, ${(rec.stats ?? []).length} day totals reset, ${(rec.categories ?? []).length} categories`);
+  console.log(`removed: ${gone.join(", ")}, ${(rec.categories ?? []).length} categories`);
   return rec;
 }
 
 async function addAll(db, userId) {
   if (fs.existsSync(idsFile)) throw new Error(`${idsFile} exists: the test data is already there. Run with --remove first.`);
-  const rec = Object.fromEntries([...TABLES.map((t) => [t, []]), ["stats", []], ["categories", []]]);
+  const rec = Object.fromEntries([...TABLES.map((t) => [t, []]), ["categories", []]]);
   const insert = async (table, sql, params) => {
     const { rows } = await db.query(`${sql} RETURNING id`, params);
     if (rows[0]) rec[table].push(rows[0].id);
@@ -77,14 +70,6 @@ async function addAll(db, userId) {
     }
 
   // Tasks: a one-off per day and space (past ones done, yesterday's left open), and daily or weekday habits that started 3 days ago.
-  const stats = new Map(); // "space|recurring|day" -> { total, done }
-  const tally = (space, recurring, day, done) => {
-    const key = `${space}|${recurring}|${day}`;
-    const s = stats.get(key) ?? { total: 0, done: 0 };
-    s.total++;
-    if (done) s.done++;
-    stats.set(key, s);
-  };
   const addTodo = (space, title, recurring, pattern, due, done, category = "test") =>
     insert(
       "todos",
@@ -99,7 +84,6 @@ async function addAll(db, userId) {
       for (let k = 0; k < count; k++) {
         const done = n < -1 || (n === -1 && k === 0) || (n === 0 && k === 0 && space === "personal");
         await addTodo(space, `TEST ${space} task ${label(n)}${count > 1 ? ` (${k + 1})` : ""}`, false, "none", day, done, k % 2 ? "test two" : "test");
-        if (n < 0) tally(space, false, day, done);
       }
   }
   // The same name in all four lists (personal/business x Today/Daily): none may block another, and each can be moved on its own.
@@ -108,7 +92,7 @@ async function addAll(db, userId) {
     await addTodo(space, "TEST same name", false, "none", today, false);
     await addTodo(space, "TEST same name", false, "none", addDays(today, 2), false);
   } // ...and the Daily one of each space is in the habits below
-  // Habits (the app only knows "daily" and "none", so no weekday patterns). Each past day only feeds the frozen per-day totals; a habit's ticks are random but repeatable.
+  // Habits (the app only knows "daily" and "none", so no weekday patterns).
   const habits = [
     ["personal", "TEST daily habit", "daily", startAll],
     ["personal", "TEST second habit", "daily", startAll],
@@ -117,29 +101,7 @@ async function addAll(db, userId) {
     ["business", "TEST daily review", "daily", startAll],
     ["business", "TEST standup", "daily", startAll],
   ];
-  for (const [h, [space, title, pattern, first]] of habits.entries()) {
-    await addTodo(space, title, true, pattern, first, false);
-    for (const n of OFFSETS.filter((o) => o <= -1)) {
-      const day = addDays(today, n);
-      if (day < first) continue;
-      if (pattern !== "daily" && !pattern.slice(5).split(",").includes(String(weekday(day)))) continue;
-      const done = (h === 0 && n >= -12) || pick(n, h, 70);
-      tally(space, true, day, done);
-    }
-  }
-  // The frozen per-day totals the Progress chart reads; an existing day is added to, and its old numbers are kept for --remove.
-  for (const [key, s] of stats) {
-    const [space, recurring, day] = key.split("|");
-    const rc = recurring === "true";
-    const { rows } = await db.query("SELECT total, done FROM todo_day_stats WHERE user_id = $1 AND space = $2 AND is_recurring = $3 AND date = $4", [userId, space, rc, day]);
-    await db.query(
-      `INSERT INTO todo_day_stats (user_id, space, is_recurring, date, total, done) VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (user_id, space, is_recurring, date) DO UPDATE SET total = todo_day_stats.total + EXCLUDED.total, done = todo_day_stats.done + EXCLUDED.done`,
-      [userId, space, rc, day, s.total, s.done],
-    );
-    rec.stats.push({ space, recurring: rc, date: day, before: rows[0] ?? null });
-  }
-
+  for (const [space, title, pattern, first] of habits) await addTodo(space, title, true, pattern, first, false);
   // Health: past days and today. An existing weigh-in or water/steps day is never touched (ON CONFLICT DO NOTHING records nothing).
   for (const n of OFFSETS.filter((o) => o <= 0)) {
     const day = addDays(today, n);
@@ -175,7 +137,7 @@ async function addAll(db, userId) {
       await db.query("INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value, extra_kg, created_at) VALUES ($1, $2, $3, $4, $5, 'kg', $6, 0, $7::date + time '18:30')", [id, userId, d.exercise, set, 12 - set * 2, 30 + Math.round((PAST + n) / 6) * 2.5, day]);
     sessions++;
   }
-  console.log(`added: ${TABLES.map((t) => `${t} ${rec[t].length}`).join(", ")}, ${rec.stats.length} day totals, ${rec.categories.length} categories${sessions ? "" : " (no Gym workouts: open Gym once first)"}`);
+  console.log(`added: ${TABLES.map((t) => `${t} ${rec[t].length}`).join(", ")}, ${rec.categories.length} categories${sessions ? "" : " (no Gym workouts: open Gym once first)"}`);
   return rec;
 }
 

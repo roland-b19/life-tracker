@@ -97,6 +97,7 @@ export function Card({
   end,
   label,
   busy,
+  fold,
   className,
   ref,
   children,
@@ -112,6 +113,8 @@ export function Card({
   label?: string;
   /** The card is loading. */
   busy?: boolean;
+  /** A small arrow after the count that folds the card's body away; the head stays. */
+  fold?: { folded: boolean; onToggle: () => void };
   className?: string;
   ref?: Ref<HTMLElement>;
   children?: ReactNode;
@@ -124,6 +127,14 @@ export function Card({
         <>
           {" "}
           <span className="muted number-tabular">{count}</span>
+        </>
+      )}
+      {fold && (
+        <>
+          {" "}
+          <button type="button" className="group-toggle" aria-expanded={!fold.folded} aria-label={`Show ${typeof title === "string" ? title.toLowerCase() : "the list"}`} onClick={fold.onToggle}>
+            <ChevronRightIcon size={14} />
+          </button>
         </>
       )}
     </h2>
@@ -144,7 +155,7 @@ export function Card({
           {end}
         </div>
       )}
-      {children}
+      {!fold?.folded && children}
     </section>
   );
 }
