@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { CenterCard, Field } from "../components/blocks";
+import { clearPageCache } from "../components/page-cache";
 
 const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github: "GitHub" };
 
@@ -13,6 +14,8 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
   const [name, setName] = useState("owner");
   const [error, setError] = useState(denied ? "This account is not allowed to use this app." : "");
   const [busy, setBusy] = useState(false);
+  // Whoever signs in next never sees pages kept for the previous session.
+  useEffect(() => void clearPageCache(), []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

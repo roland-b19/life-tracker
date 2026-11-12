@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { isClaudeEnabled } from "@/lib/features";
 import { exportDataAction } from "@/app/actions/export";
+import { clearPageCache } from "./page-cache";
 
 interface NavigationProps {
   userName: string;
@@ -113,6 +114,7 @@ export function Navigation({ userName }: NavigationProps) {
       showToast({ message: "Failed to sign out", type: "warning" });
       return;
     }
+    await clearPageCache();
     router.push("/signin");
     router.refresh();
   };

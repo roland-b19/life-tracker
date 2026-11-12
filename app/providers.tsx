@@ -47,6 +47,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }
       return realFetch(input, init);
     };
+    // The service worker opens the app from the last seen page (public/sw.js) and tells us when the server's page differs.
+    // Reload for it, but only if nothing was touched yet and not twice in a row (a page that never settles would loop).
+    let touched = false;
+    const touch = () => (touched = true);
+    const onSw = (e: MessageEvent) => {
+      if (e.data?.type !== "stale" || touched) return;
+      try {
+        const last = Number(sessionStorage.getItem("sw-reload") ?? 0);
+        if (Date.now() - last < 30_000) return;
+        sessionStorage.setItem("sw-reload", String(Date.now()));
+      } catch {}
+      window.location.reload();
+    };
+    const sw = navigator.serviceWorker;
+    for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, touch, { once: true, capture: true });
+    sw?.addEventListener("message", onSw);
+    sw?.controller?.postMessage({ type: "stale-check", url: window.location.href });
     const onPop = () => {
       if (wrote) window.location.reload();
     };
@@ -55,6 +72,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       clearTimeout(refreshTimer);
       window.fetch = realFetch;
       window.removeEventListener("popstate", onPop);
+      sw?.removeEventListener("message", onSw);
+      for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, touch, { capture: true });
       document.removeEventListener("gesturestart", blockPinch);
       document.removeEventListener("pointerover", size);
       document.removeEventListener("focusin", size);
