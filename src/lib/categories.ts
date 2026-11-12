@@ -1,8 +1,6 @@
-import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { itemCategories, todoCompletions, todoDayMarks, todos, wishlistItems } from "@/db/schema";
-import { toISODate } from "./format-date";
-import { splitTodo } from "./todo-split";
+import { itemCategories, todos, wishlistItems } from "@/db/schema";
 import type { CategoryScope } from "./validations/categories";
 import { blockPlacements } from "./todo-order";
 
@@ -36,34 +34,6 @@ async function moveItems(tx: Pick<typeof db, "update" | "select">, userId: strin
   const { before, place } = liftedPlacement(rows.filter((t) => t.isRecurring));
   for (const t of rows) await tx.update(todos).set(t.isRecurring ? { category: to, placedAt: place(t) } : { category: to }).where(eq(todos.id, t.id));
   return { itemIds: rows.map((r) => r.id), before };
-}
-
-/**
- * Takes a deleted category off the tasks of today and the days ahead (they go to "other"); the days before keep it.
- * A repeating task that already ran before today is split, so the new half starts today in "other". Returns the
- * ids of the tasks now in "other" and the splits, so Undo can join the halves again.
- */
-async function refileFromToday(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string, scope: CategoryScope, name: string) {
-  const today = toISODate();
-  const rows = await tx
-    .select()
-    .from(todos)
-    .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
-  const itemIds: string[] = [];
-  const splits: NonNullable<CategoryChange["splits"]> = [];
-  const live = rows.filter((t) => !(t.isRecurring ? t.endedOn && t.endedOn <= today : t.dueDate < today)); // only on days that are over
-  const { before, place } = liftedPlacement(live.filter((t) => t.isRecurring));
-  for (const t of live) {
-    if (t.isRecurring && t.dueDate < today) {
-      const next = await splitTodo(tx, t, today, { category: "other", placedAt: place(t) });
-      splits.push({ from: t.id, to: next.id, day: today, endedOn: t.endedOn });
-      itemIds.push(next.id);
-    } else {
-      await tx.update(todos).set(t.isRecurring ? { category: "other", placedAt: place(t) } : { category: "other" }).where(eq(todos.id, t.id));
-      itemIds.push(t.id);
-    }
-  }
-  return { itemIds, splits, before };
 }
 
 /** Adds a category at the end of the list unless it is there already or is the built-in "other". */
@@ -106,8 +76,6 @@ export interface CategoryChange {
   itemIds: string[];
   /** The rename landed on a category that already existed, so Undo must not delete it. */
   merged: boolean;
-  /** Repeating tasks a delete split in two (the old half ended on `day`, the new half is in `itemIds`); Undo joins them again. */
-  splits?: { from: string; to: string; day: string; endedOn: string | null }[];
   /** The places the repeating tasks had before they were put on top of their new category; Undo puts them back. */
   before?: { id: string; placedAt: string }[];
 }
@@ -122,20 +90,16 @@ export async function renameCategory(userId: string, scope: CategoryScope, from:
       .values({ userId, scope, name: to, sortOrder: old.sortOrder })
       .onConflictDoNothing()
       .returning();
-    return { sortOrder: old.sortOrder, ...(await moveItems(tx, userId, scope, from, to)), merged: created.length === 0, splits: [] };
+    return { sortOrder: old.sortOrder, ...(await moveItems(tx, userId, scope, from, to)), merged: created.length === 0 };
   });
 }
 
-/** Deletes a category; its items move to "other" (a task keeps it on the days that are over). */
+/** Deletes a category; its items move to "other". */
 export async function deleteCategory(userId: string, scope: CategoryScope, name: string) {
   return db.transaction(async (tx): Promise<CategoryChange | null> => {
     const [old] = await tx.delete(itemCategories).where(own(userId, scope, name)).returning();
     if (!old) return null;
-    const moved =
-      scope === "wishlist"
-        ? { ...(await moveItems(tx, userId, scope, name, "other")), splits: [] }
-        : await refileFromToday(tx, userId, scope, name);
-    return { sortOrder: old.sortOrder, merged: false, ...moved };
+    return { sortOrder: old.sortOrder, merged: false, ...(await moveItems(tx, userId, scope, name, "other")) };
   });
 }
 
@@ -147,28 +111,11 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
 export async function revertCategory(
   userId: string,
   scope: CategoryScope,
-  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; splits?: CategoryChange["splits"]; before?: { id: string; placedAt: string }[] },
+  input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; before?: { id: string; placedAt: string }[] },
 ) {
-  const { name, current, sortOrder, dropCurrent, splits = [], before = [] } = input;
+  const { name, current, sortOrder, dropCurrent, itemIds, before = [] } = input;
   await db.transaction(async (tx) => {
     await tx.insert(itemCategories).values({ userId, scope, name, sortOrder }).onConflictDoNothing();
-    // A task the delete split is joined again: its ticks from the split day on go back to the old half, which runs on
-    // as before, and the new half goes. Halves the user has changed since stay as they are and are only re-filed.
-    const joined = new Set<string>();
-    for (const sp of scope === "wishlist" ? [] : splits) {
-      const half = and(eq(todos.userId, userId), eq(todos.space, scope));
-      const [moved] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.to), eq(todos.category, current)));
-      const [orig] = await tx.select().from(todos).where(and(half, eq(todos.id, sp.from)));
-      if (!moved || (moved.endedOn ?? null) !== (sp.endedOn ?? null) || !orig || orig.endedOn !== sp.day) continue;
-      const ticks = await tx.select().from(todoCompletions).where(and(eq(todoCompletions.todoId, moved.id), gte(todoCompletions.date, sp.day)));
-      if (ticks.length) await tx.insert(todoCompletions).values(ticks.map((t) => ({ todoId: orig.id, date: t.date }))).onConflictDoNothing();
-      const marks = await tx.select().from(todoDayMarks).where(and(eq(todoDayMarks.todoId, moved.id), gte(todoDayMarks.date, sp.day)));
-      if (marks.length) await tx.insert(todoDayMarks).values(marks.map((m) => ({ todoId: orig.id, date: m.date, at: m.at }))).onConflictDoUpdate({ target: [todoDayMarks.todoId, todoDayMarks.date], set: { at: sql`excluded.at` } });
-      await tx.update(todos).set({ endedOn: sp.endedOn }).where(eq(todos.id, orig.id));
-      await tx.delete(todos).where(eq(todos.id, moved.id));
-      joined.add(moved.id);
-    }
-    const itemIds = input.itemIds.filter((id) => !joined.has(id));
     if (itemIds.length > 0) {
       if (scope === "wishlist")
         await tx

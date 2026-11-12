@@ -73,7 +73,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     await expect(addCategoryAction({ scope: "personal", name: "other" })).rejects.toThrow();
   });
 
-  it("deleting a task category leaves the days that are over with it, and refiles today and later", async () => {
+  it("deleting a task category refiles all its tasks to other", async () => {
     authState.id = userA;
     const today = toISODate();
     const day = (n: number) => addDays(today, n);
@@ -83,15 +83,13 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const catOn = async (d: string, title: string) => (await getDailyTodos(userA, "personal", d, today)).todos.find((t) => t.title === title)?.category;
 
     await deleteCategoryAction({ scope: "personal", name: "gym" });
-    expect(await catOn(day(-2), "Lift")).toBe("gym");
-    expect(await catOn(day(-1), "Old one")).toBe("gym");
     expect(await catOn(today, "Lift")).toBe("other");
-    expect(await catOn(day(2), "Lift")).toBe("other");
-    expect(old.category).toBe("gym");
+    expect(await catOn(day(-1), "Old one")).toBe("other");
+    expect(old.category).toBe("gym"); // the row returned at creation, before the delete
     expect((await getCategories(userA, ["personal"])).personal).not.toContain("gym");
   });
 
-  it("Undo of a task category delete brings every row back exactly as it was, split tasks included", async () => {
+  it("Undo of a task category delete brings every row back exactly as it was", async () => {
     authState.id = userA;
     const today = toISODate();
     const day = (n: number) => addDays(today, n);
@@ -106,7 +104,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const before = await state();
 
     const del = await deleteCategoryAction({ scope: "personal", name: "undo-cat" });
-    expect((await state()).rows.length).toBe(before.rows.length + 1); // "Undo run" was split in two
+    expect((await state()).rows.length).toBe(before.rows.length); // refiled in place, never split
     await revertCategoryAction({ scope: "personal", name: "undo-cat", current: "other", dropCurrent: false, ...del.change! });
 
     const after = await state();

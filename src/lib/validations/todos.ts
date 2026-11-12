@@ -33,11 +33,7 @@ export const restoreTodoSchema = createTodoSchema.extend({
   doneDates: z.array(isoDate).max(7500).default([]),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
   placedAt: z.coerce.date().optional(), // its place in the list, so Undo keeps the order
-  markDay: isoDate.optional(), // the day on screen: a repeating task's completedAt belongs to that day
 });
-
-/** What Undo sends back after a change to one past day (see isolateDay): checked here, the id is still only ever used on the user's own rows. */
-export const rejoinSchema = z.object({ laterId: z.string().uuid().optional(), endedOn: isoDate.nullable(), day: isoDate });
 
 export { PLAN_AHEAD_DAYS } from "../rules";
 
@@ -49,8 +45,6 @@ export const toggleTodoSchema = z.object({
 
 export const updateTodoSchema = z.object({
   id: z.string().uuid(),
-  // The day on screen: a repeating task is edited from that day on, the days before keep it as it was.
-  day: isoDate.optional(),
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
   // Left out by the one-off form, which has no category: then the task keeps its own.
@@ -62,17 +56,13 @@ export const moveTodoSchema = z.object({
   id: z.string().uuid(),
   recurrencePattern: recurrencePatternSchema,
   dueDate: isoDate,
-  // The day on screen (a repeating task leaves it from that day on) and the edits made in the same step.
-  from: isoDate.optional(),
+  // The edits made in the same step.
   title: createTodoSchema.shape.title.optional(),
   reminderTime: createTodoSchema.shape.reminderTime,
   category: categorySchema.optional(),
 });
 
-export const deleteTodoSchema = z.object({
-  id: z.string().uuid(),
-  day: isoDate.optional(),
-});
+export const deleteTodoSchema = z.object({ id: z.string().uuid() });
 
 export const pushSubscriptionSchema = z.object({
   // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.

@@ -285,12 +285,6 @@ async function main() {
       "date" date NOT NULL,
       CONSTRAINT "todo_completions_todo_id_date_pk" PRIMARY KEY("todo_id","date")
     );
-    CREATE TABLE IF NOT EXISTS "todo_day_marks" (
-      "todo_id" uuid NOT NULL REFERENCES "todos"("id") ON DELETE cascade,
-      "date" date NOT NULL,
-      "at" timestamp with time zone NOT NULL,
-      CONSTRAINT "todo_day_marks_todo_id_date_pk" PRIMARY KEY("todo_id","date")
-    );
     CREATE TABLE IF NOT EXISTS "todo_day_stats" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
       "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE cascade,
@@ -357,7 +351,6 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todos" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE ON TABLE "todo_day_stats" TO life_tracker_app;
     GRANT SELECT, INSERT, DELETE ON TABLE "todo_completions" TO life_tracker_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "todo_day_marks" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "push_subscriptions" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "wishlist_items" TO life_tracker_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "claude_connections" TO life_tracker_app;

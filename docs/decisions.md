@@ -357,3 +357,11 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Undo of a task delete and a move carries `placedAt` and `markDay` (the day on screen) and restores the day mark.
 - Streak display: green when the task is ticked on the day shown, grey when not, hidden on days after today.
 - Wishlist sort ties (equal price) fall back to newest first, then id, so equal items never swap places.
+
+## 2026-11-12 — Daily is a single list for today only
+
+- Daily (Personal and Business) has no date picker and no past or future view: it shows today's list, the same tasks every day. History stays in `todo_completions` (streaks) and `todo_day_stats` (charts).
+- Edit changes the task in place (no split in two rows). Delete ends a task that started before today (`ended_on` = today, today's and later ticks dropped; Undo restores it), or deletes it outright if it started today. Category delete and rename re-file the tasks in place.
+- `todo_day_marks` (decision of 2026-11-12 above, migration 0024) is dropped: the order key of a repeating task is `todos.completed_at`, valid only on the day it was set. Migration `0025_todo_daily_today` backfills it from the marks and drops the table; the user runs it after the deploy.
+- The server ticks a repeating task for its own "today", whatever day the page sent, so a page left open past midnight cannot tick yesterday.
+

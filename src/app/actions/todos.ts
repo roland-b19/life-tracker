@@ -10,7 +10,6 @@ import {
   moveTodoSchema,
   restoreTodoSchema,
   PLAN_AHEAD_DAYS,
-  rejoinSchema,
   pushSubscriptionSchema,
   TodoSpace,
   todoSpaceSchema,
@@ -44,9 +43,8 @@ function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, start
   }
 }
 
-/** The day a change to `task` is made on: a one-off task's own day, the day on screen for a repeating one. */
-const changeDay = (task: { isRecurring: boolean; dueDate: string }, screenDay?: string) =>
-  task.isRecurring ? (screenDay ?? toISODate()) : task.dueDate;
+/** The day a change to `task` is made on: a one-off task's own day, today for a daily one. */
+const changeDay = (task: { isRecurring: boolean; dueDate: string }) => (task.isRecurring ? toISODate() : task.dueDate);
 
 /** Today and a week ahead can be changed, and yesterday for a day of grace; earlier days are as they were. */
 function assertChangeable(day: string) {
@@ -66,27 +64,25 @@ export async function createTodoAction(rawInput: unknown) {
   return { success: true as const, todo };
 }
 
-/** Undo of a delete; `join` is what a delete from a day that was over gave back, so only that day returns. */
-export async function restoreTodoAction(rawInput: unknown, rawJoin?: unknown) {
+/** Undo of a delete. */
+export async function restoreTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
-  const join = rawJoin ? rejoinSchema.parse(rawJoin) : undefined;
   assertPlannable(parsed, true);
-  if (await hasDuplicateTodo(userId, parsed, join?.laterId ? [parsed.id, join.laterId] : parsed.id)) return duplicate(parsed.title);
-  const todo = await restoreTodo(userId, parsed, join);
+  if (await hasDuplicateTodo(userId, parsed, parsed.id)) return duplicate(parsed.title);
+  const todo = await restoreTodo(userId, parsed);
   return { success: todo !== null, todo };
 }
 
 /** Undo of a move: `createdId` is the task a move created in place of an ended daily one. */
-export async function revertMoveTodoAction(rawInput: unknown, createdId?: string, rawJoin?: unknown) {
+export async function revertMoveTodoAction(rawInput: unknown, createdId?: string) {
   const userId = await requireUser();
   const parsed = restoreTodoSchema.parse(rawInput);
   const created = createdId ? z.string().uuid().parse(createdId) : undefined;
-  const join = rawJoin ? rejoinSchema.parse(rawJoin) : undefined;
   assertPlannable(parsed, true);
-  const except = [parsed.id, ...(created ? [created] : []), ...(join?.laterId ? [join.laterId] : [])];
+  const except = [parsed.id, ...(created ? [created] : [])];
   if (await hasDuplicateTodo(userId, parsed, except)) return duplicate(parsed.title);
-  const todo = await revertMoveTodo(userId, parsed, created, join);
+  const todo = await revertMoveTodo(userId, parsed, created);
   return { success: todo !== null, todo };
 }
 
@@ -94,18 +90,13 @@ export async function toggleTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = toggleTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
-  if (task) assertChangeable(changeDay(task, parsed.currentDate));
-  // A repeating task is ticked only on a day it is due: from its first day, before its end, not ahead of tomorrow
-  // (a day of slack covers the user's timezone).
-  if (
-    task?.isRecurring &&
-    (parsed.currentDate > addDays(toISODate(), 1) ||
-      parsed.currentDate < task.dueDate ||
-      (task.endedOn && parsed.currentDate >= task.endedOn))
-  ) {
-    throw new Error("This task is not due on that day.");
+  if (task) assertChangeable(changeDay(task));
+  // A daily task is ticked for today only (the server's today, whatever day the screen shows), and only while it runs.
+  const today = toISODate();
+  if (task?.isRecurring && (today < task.dueDate || (task.endedOn && today >= task.endedOn))) {
+    throw new Error("This task is not due today.");
   }
-  const updated = await toggleTodo(userId, parsed);
+  const updated = await toggleTodo(userId, task?.isRecurring ? { ...parsed, currentDate: today } : parsed);
   return { success: true, updated };
 }
 
@@ -114,10 +105,9 @@ export async function updateTodoAction(rawInput: unknown) {
   const parsed = updateTodoSchema.parse(rawInput);
   const task = await findTodo(userId, parsed.id);
   if (!task) return { success: false, todo: null };
-  const day = changeDay(task, parsed.day);
-  assertChangeable(day);
+  assertChangeable(changeDay(task));
   if (await hasDuplicateTodo(userId, { ...task, title: parsed.title }, task.id)) return duplicate(parsed.title);
-  const todo = await updateTodo(userId, parsed, day);
+  const todo = await updateTodo(userId, parsed);
   return { success: todo !== null, todo };
 }
 
@@ -127,24 +117,23 @@ export async function moveTodoAction(rawInput: unknown) {
   const isRecurring = parsed.recurrencePattern !== "none";
   assertPlannable({ isRecurring, dueDate: parsed.dueDate });
   const task = await findTodo(userId, parsed.id);
-  if (task) assertChangeable(changeDay(task, parsed.from));
+  if (task) assertChangeable(changeDay(task));
   if (task && (await hasDuplicateTodo(userId, { ...task, title: parsed.title ?? task.title, isRecurring, dueDate: parsed.dueDate }, task.id))) {
     return duplicate(parsed.title ?? task.title);
   }
-  const todo = await moveTodo(userId, parsed, task && changeDay(task, parsed.from));
+  const todo = await moveTodo(userId, parsed);
   return { success: todo !== null, todo };
 }
 
-/** `day` is the day on screen: a repeating task is deleted from that day on, the days before keep it. */
-export async function deleteTodoAction(todoId: string, day?: string) {
+/** A daily task is deleted from today on, the days before keep it. */
+export async function deleteTodoAction(todoId: string) {
   const userId = await requireUser();
-  const parsed = deleteTodoSchema.parse({ id: todoId, day });
+  const parsed = deleteTodoSchema.parse({ id: todoId });
   const task = await findTodo(userId, parsed.id);
   if (!task) return { success: true, deleted: false };
-  const from = changeDay(task, parsed.day);
-  assertChangeable(from);
-  const result = await deleteTodo(userId, parsed.id, from);
-  return { success: true, deleted: result !== null, join: result?.join };
+  assertChangeable(changeDay(task));
+  const result = await deleteTodo(userId, parsed.id);
+  return { success: true, deleted: result !== null };
 }
 
 export async function getDailyTodosAction(space: TodoSpace, date: string) {

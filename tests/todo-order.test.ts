@@ -72,7 +72,7 @@ describe("Task order: only the user's own actions move a task", () => {
     expect(await titles()).toEqual(["C", "A", "B"]); // A: bottom of the open ones
     await tick(a.id, today, true);
     expect(await titles()).toEqual(["C", "A", "B"]); // A: top of the ticked ones
-    // The same on the next day (it reads its own marks, not today's) and a day later still.
+    // Another day reads no tick of today: all open, newest first.
     expect(await titles(tomorrow)).toEqual(["C", "B", "A"]);
     expect(await titles(addDays(today, 3))).toEqual(["C", "B", "A"]);
   });
@@ -83,22 +83,19 @@ describe("Task order: only the user's own actions move a task", () => {
     await tick(a.id, today, true);
     await tick(a.id, today, false);
     expect(await titles()).toEqual(["B", "A"]);
-    await admin.query("UPDATE todo_day_marks SET date = date"); // no-op: reading again changes nothing
     expect(await titles()).toEqual(["B", "A"]);
     expect(await titles()).toEqual(["B", "A"]);
   });
 
-  it("a tick on one day never touches the order of another day", async () => {
-    const a = await daily("A");
-    const b = await daily("B");
+  it("a tick today never touches the order of another day", async () => {
+    await daily("A");
+    await daily("B");
+    const c = await daily("C");
     await admin.query("UPDATE todos SET due_date = $1", [addDays(today, -3)]); // running since before yesterday
-    await tick(b.id, yesterday, true);
-    await tick(a.id, today, true);
-    expect(await titles(yesterday)).toEqual(["A", "B"]); // B ticked yesterday goes down; A open stays up
-    expect(await titles(today)).toEqual(["B", "A"]);
-    await tick(a.id, today, false);
-    expect(await titles(yesterday)).toEqual(["A", "B"]);
-    expect(await titles(tomorrow)).toEqual(["B", "A"]);
+    await tick(c.id, today, true);
+    expect(await titles(today)).toEqual(["B", "A", "C"]);
+    expect(await titles(yesterday)).toEqual(["C", "B", "A"]);
+    expect(await titles(tomorrow)).toEqual(["C", "B", "A"]);
   });
 
   it("personal and business share nothing, not even a name", async () => {
@@ -109,7 +106,7 @@ describe("Task order: only the user's own actions move a task", () => {
     await tick(p.id, today, true);
     expect(await titles(today, "business")).toEqual(["B2", "Same"]);
     expect(await titles(today, "personal")).toEqual(["P2", "Same"]);
-    await deleteTodo(user, p.id, today);
+    await deleteTodo(user, p.id);
     expect(await titles(today, "business")).toEqual(["B2", "Same"]);
     expect((await getDailyTodos(user, "business", today, today)).todos.find((t) => t.id === biz.id)?.isCompleted).toBe(false);
   });
@@ -122,15 +119,15 @@ describe("Task order: only the user's own actions move a task", () => {
     expect(await titles()).toEqual(expect.arrayContaining(["Old", "Fresh", "D"]));
     expect((await getDailyTodos(user, "personal", today, today)).todos.find((t) => t.title === "Old")?.isCarriedOver).toBe(true);
     // Daily -> Today: on top, above the carried one.
-    await moveTodo(user, { id: d.id, recurrencePattern: "none", dueDate: today }, today);
+    await moveTodo(user, { id: d.id, recurrencePattern: "none", dueDate: today });
     expect((await titles())[0]).toBe("D");
     // Today -> Daily: on top of its list.
-    await moveTodo(user, { id: fresh.id, recurrencePattern: "daily", dueDate: today }, today);
+    await moveTodo(user, { id: fresh.id, recurrencePattern: "daily", dueDate: today });
     expect((await titles())[0]).toBe("Fresh");
     const dailyTitles = (await getDailyTodos(user, "personal", today, today)).todos.filter((t) => t.isRecurring).map((t) => t.title);
     expect(dailyTitles).toEqual(["Fresh"]);
     // Another move later puts that one on top again, above the earlier move.
-    await moveTodo(user, { id: old.id, recurrencePattern: "none", dueDate: today }, today);
+    await moveTodo(user, { id: old.id, recurrencePattern: "none", dueDate: today });
     expect((await titles())[0]).toBe("Old");
   });
 
@@ -172,9 +169,8 @@ describe("Task order: only the user's own actions move a task", () => {
     await tick(a.id, today, true);
     const before = await titles();
     const snap = (await getDailyTodos(user, "personal", today, today)).todos.find((t) => t.id === b.id)!;
-    const gone = await deleteTodo(user, b.id, today);
-    expect(gone).not.toBeNull();
-    await restoreTodo(user, { ...snap, recurrencePattern: "daily", markDay: today }, gone?.join);
+    expect(await deleteTodo(user, b.id)).toBe(true);
+    await restoreTodo(user, { ...snap, recurrencePattern: "daily" });
     expect(await titles()).toEqual(before);
   });
 });

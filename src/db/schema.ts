@@ -309,7 +309,7 @@ export const todos = pgTable(
     dueDate: date("due_date").notNull(),
     reminderTime: varchar("reminder_time", { length: 10 }), // e.g. "09:00"
     isCompleted: boolean("is_completed").default(false).notNull(),
-    // One-off tasks: when the box last changed (ticked or unticked). Repeating tasks keep this per day in todo_day_marks.
+    // When the box last changed (ticked or unticked). A repeating task's counts only on the day it happened: each day orders its own list.
     completedAt: timestamp("completed_at", { withTimezone: true }),
     isCarriedOver: boolean("is_carried_over").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -330,19 +330,6 @@ export const todoCompletions = pgTable(
       .notNull()
       .references(() => todos.id, { onDelete: "cascade" }),
     date: date("date").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.todoId, table.date] })],
-);
-
-// When the box of a repeating task last changed (ticked or unticked) on one day, so each day orders its own list.
-export const todoDayMarks = pgTable(
-  "todo_day_marks",
-  {
-    todoId: uuid("todo_id")
-      .notNull()
-      .references(() => todos.id, { onDelete: "cascade" }),
-    date: date("date").notNull(),
-    at: timestamp("at", { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.todoId, table.date] })],
 );

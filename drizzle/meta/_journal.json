@@ -176,6 +176,13 @@
       "when": 1794502400074,
       "tag": "0024_todo_order",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794506101121,
+      "tag": "0025_todo_daily_today",
+      "breakpoints": true
     }
   ]
 }

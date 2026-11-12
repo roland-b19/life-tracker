@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, DateField, DayStepper, EmptyNote, Field, FormModal, Page, ReadonlyNote, SelectField, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, Card, ChartControls, Checkbox, Dashboard, DashboardAside, DashboardMain, DateField, DayStepper, EmptyNote, Field, FormModal, Page, SelectField, StatRow, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { FlameIcon, BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -120,21 +120,13 @@ export function TodosClient({
   const loading = useRef<Promise<void>>(Promise.resolve());
 
   const isDaily = tab === "daily";
-  // Both lists look a week ahead: one-off tasks to plan them, daily ones to see what is coming.
+  // One-off tasks can be planned a week ahead; the daily list is always today's and has no day to pick.
   const maxDate = addDays(todayDate, PLAN_AHEAD_DAYS);
   const tomorrow = addDays(todayDate, 1);
-  // Days before today are only looked at, except yesterday: one day of grace to tick, edit or delete what was forgotten.
-  const yesterday = addDays(todayDate, -1);
-  const isPast = date < todayDate;
-  const editable = !isPast;
   // A repeating task's dueDate is its first day: it is not on the days before it.
   const visibleFor = (s: TodoSpace, daily: boolean, day: string) =>
     todosMap[s].filter((t) => t.isRecurring === daily && (!t.isRecurring || t.dueDate <= day));
   const listDaily = view.tab === "daily";
-  const listPast = view.date < todayDate;
-  const listEditable = view.date >= yesterday;
-  // A daily task is ticked on its day or later, never ahead of time.
-  const listTickable = listEditable && !(listDaily && view.date > todayDate);
   // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
   const listTodos = (() => {
     const list = visibleFor(view.space, listDaily, view.date);
@@ -232,9 +224,8 @@ export function TodosClient({
   const goTo = (next: string) => switchView({ date: next });
 
 
-  // Undone tasks carry over to today, so the Today tab never shows a past day.
-  const changeTab = (next: TaskTab) =>
-    switchView({ tab: next, date: next === "daily" || date >= todayDate ? date : todayDate });
+  // The daily list is always today's; the Today tab keeps the day picked on it (never one before today).
+  const changeTab = (next: TaskTab) => switchView({ tab: next, date: next === "daily" || date < todayDate ? todayDate : date });
 
   const openForm = (todo?: TodoItem) => {
     setTitleError(null);
@@ -281,37 +272,28 @@ export function TodosClient({
           await moveTask(before, after, target.pattern, target.day);
           return;
         }
-        const res = await updateTodoAction({ id: before.id, title, reminderTime, category, day: date });
+        const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
         if ("error" in res) return setTitleError(res.error);
         if (res.success) {
-          // A daily task edited from a later day is a new task from that day on: it has a new id.
-          const saved = { ...after, id: res.todo?.id ?? before.id };
           ++requestId.current;
           drop(before);
-          putBack(saved);
+          putBack(after);
           showToast({
             message: `Saved "${title}"`,
             type: "success",
             onUndo: async () => {
               ++requestId.current;
-              // A split or a day that was over made a new task: Undo joins it back into the old one (its id) instead of editing again.
-              const join = res.todo?.join;
-              const restored = join ? before : { ...before, id: saved.id };
-              drop(saved);
-              putBack(restored);
-              const undone = await (join
-                ? revertMoveTodoAction(snapshot(before), saved.id, join)
-                : updateTodoAction({
-                    id: saved.id,
-                    title: before.title,
-                    reminderTime: before.reminderTime,
-                    category: before.category,
-                    day: date,
-                  })
-              ).catch(() => null);
+              drop(after);
+              putBack(before);
+              const undone = await updateTodoAction({
+                id: before.id,
+                title: before.title,
+                reminderTime: before.reminderTime,
+                category: before.category,
+              }).catch(() => null);
               if (!undone || !("success" in undone) || !undone.success) {
-                drop(restored);
-                putBack(saved);
+                drop(before);
+                putBack(after);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
               }
               await loadDay();
@@ -340,7 +322,7 @@ export function TodosClient({
             onUndo: async () => {
               ++requestId.current;
               drop(created);
-              const gone = await deleteTodoAction(created.id, created.dueDate).then(
+              const gone = await deleteTodoAction(created.id).then(
                 (r) => r.success,
                 () => false,
               );
@@ -411,7 +393,7 @@ export function TodosClient({
 
   // What the server needs to put a task back as it was.
   const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt }: TodoItem) => ({
-    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt, markDay: date,
+    id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, doneDates, createdAt, placedAt, completedAt,
   });
 
   // Moving always takes the row out of this list; Undo puts the task back as it was, edits included (a new task a move created is deleted).
@@ -422,7 +404,6 @@ export function TodosClient({
       id: before.id,
       recurrencePattern,
       dueDate: day,
-      from: date,
       title: after.title,
       reminderTime: after.reminderTime,
       category: after.category,
@@ -433,14 +414,13 @@ export function TodosClient({
       return;
     }
     const createdId = res.todo && res.todo.id !== before.id ? res.todo.id : undefined;
-    const join = res.todo?.join;
     showToast({
       message: `Moved "${after.title}" to ${recurrencePattern === "none" ? whenLabel(day) : "Daily"}`,
       type: "success",
       onUndo: async () => {
         ++requestId.current;
         if (shows(before)) putBack(before);
-        const back = await revertMoveTodoAction(snapshot(before), createdId, join).catch(() => null);
+        const back = await revertMoveTodoAction(snapshot(before), createdId).catch(() => null);
         if (!back?.success) {
           if (shows(before)) drop(before);
           showToast({ message: back && "error" in back ? back.error : "Failed to undo the move", type: "warning" });
@@ -456,9 +436,8 @@ export function TodosClient({
   const handleDeleteTodo = (target: TodoItem) => {
     ++requestId.current;
     drop(target);
-    let join: Awaited<ReturnType<typeof deleteTodoAction>>["join"];
-    const deleted = deleteTodoAction(target.id, date).then(
-      (res) => ((join = res.join), res.success),
+    const deleted = deleteTodoAction(target.id).then(
+      (res) => res.success,
       () => false,
     );
     showToast({
@@ -468,7 +447,7 @@ export function TodosClient({
         // Only onto the list it was on, if that is still the one on screen.
         if (shows(target)) putBack(target);
         if (!(await deleted)) return; // the delete never happened
-        const back = await restoreTodoAction(snapshot(target), join).catch(() => null);
+        const back = await restoreTodoAction(snapshot(target)).catch(() => null);
         if (!back?.success) {
           if (shows(target)) drop(target);
           showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
@@ -546,15 +525,17 @@ export function TodosClient({
             onChange={changeTab}
           />
         </ToolbarGroup>
-        <DayStepper
-          value={date}
-          today={todayDate}
-          max={maxDate}
-          min={isDaily ? undefined : todayDate}
-          marked={isDaily ? undefined : planned[space].filter((d) => d > todayDate)}
-          label={dayLabel(date)}
-          onChange={goTo}
-        />
+        {!isDaily && (
+          <DayStepper
+            value={date}
+            today={todayDate}
+            max={maxDate}
+            min={todayDate}
+            marked={planned[space].filter((d) => d > todayDate)}
+            label={dayLabel(date)}
+            onChange={goTo}
+          />
+        )}
       </Toolbar>
 
       <Dashboard className="todos-grid">
@@ -564,11 +545,8 @@ export function TodosClient({
             title={isDaily ? "Daily tasks" : "Tasks"}
             count={listTodos.length}
             below
-            actions={editable && <AddButton onClick={() => openForm()}>Add task</AddButton>}
+            actions={<AddButton onClick={() => openForm()}>Add task</AddButton>}
           >
-            {date < yesterday && <ReadonlyNote>Days before yesterday are read-only</ReadonlyNote>}
-            {isDaily && date > todayDate && <ReadonlyNote>Daily tasks are ticked on the day</ReadonlyNote>}
-
             <ListBox wash className="todo-list">
               {listTodos.length > 0 ? (
                 <GroupedList
@@ -580,7 +558,7 @@ export function TodosClient({
                     <div className="todo-row">
                       <Checkbox
                         checked={task.isCompleted}
-                        onChange={listTickable ? () => handleToggleTodo(task) : undefined}
+                        onChange={() => handleToggleTodo(task)}
                         label={`Mark ${task.title} as ${task.isCompleted ? "incomplete" : "complete"}`}
                       />
 
@@ -594,31 +572,21 @@ export function TodosClient({
                         )}
                       </div>
 
-                      {/* Green once the task is done that day, grey while it is not; never on the days ahead. */}
-                      {listDaily && view.date <= todayDate && task.streak > 0 && (
+                      {/* Green once the task is done today, grey while it is not. */}
+                      {listDaily && task.streak > 0 && (
                         <span className={`streak number-tabular${task.isCompleted ? "" : " pending"}`} title={`${task.streak}-day streak`}>
                           <FlameIcon size={15} />
                           {task.streak}
                         </span>
                       )}
 
-                      {listEditable && (
-                        <RowActions bare onEdit={() => openForm(task)} onDelete={() => handleDeleteTodo(task)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
-                      )}
+                      <RowActions bare onEdit={() => openForm(task)} onDelete={() => handleDeleteTodo(task)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
                     </div>
                   )}
                 />
               ) : (
                 <EmptyNote>
-                  {view.date === todayDate
-                    ? listDaily
-                      ? "No daily tasks yet."
-                      : "Nothing planned for today."
-                    : listDaily
-                      ? "No daily tasks for this day."
-                      : listPast
-                        ? "Nothing was planned for this day."
-                        : "Nothing planned for this day."}
+                  {listDaily ? "No daily tasks yet." : view.date === todayDate ? "Nothing planned for today." : "Nothing planned for this day."}
                 </EmptyNote>
               )}
             </ListBox>
@@ -631,19 +599,17 @@ export function TodosClient({
               categories={categories[view.space]}
               onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
               onRefile={(from, to, only) => {
-                // Days that are over keep their categories, so only today and the days ahead change on screen; the server decides the rest.
-                if (view.date >= todayDate)
-                  setTodosMap((prev) => {
-                    // As the server files them: repeating tasks land on top of the new category as one block, in the order they had.
-                    const moving = (t: TodoItem) => t.category === from && (!only || only.includes(t.id));
-                    const placed = blockPlacements(prev[view.space].filter((t) => moving(t) && t.isRecurring));
-                    const refiled = prev[view.space]
-                      .map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt }))
-                      .sort(compareTodos);
-                    return { ...prev, [view.space]: refiled };
-                  });
+                setTodosMap((prev) => {
+                  // As the server files them: repeating tasks land on top of the new category as one block, in the order they had.
+                  const moving = (t: TodoItem) => t.category === from && (!only || only.includes(t.id));
+                  const placed = blockPlacements(prev[view.space].filter((t) => moving(t) && t.isRecurring));
+                  const refiled = prev[view.space]
+                    .map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt }))
+                    .sort(compareTodos);
+                  return { ...prev, [view.space]: refiled };
+                });
               }}
-              // Read the tasks again once the server has saved (or undone) the change: a delete splits a repeating task into new rows.
+              // Read the tasks again once the server has saved (or undone) the change.
               onSynced={() => void loadDay()}
             />
           )}
@@ -653,7 +619,7 @@ export function TodosClient({
           <Card id="progress-title" title="Progress">
             {!totalCount ? (
               <EmptyNote>
-                {listPast ? "No record" : "No tasks"} for {dayLabel(view.date, "long")}.
+                No tasks for {dayLabel(view.date, "long")}.
               </EmptyNote>
             ) : (
               <div className="dash-hero">

@@ -1,12 +1,11 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
-import { pushSubscriptions, todoCompletions, todoDayMarks, todoDayStats, todos } from "@/db/schema";
+import { pushSubscriptions, todoCompletions, todoDayStats, todos } from "@/db/schema";
 import { ensureCategory } from "./categories";
-import { addDays, APP_TZ, toISODate } from "./format-date";
+import { addDays, APP_TZ, appDay, toISODate } from "./format-date";
 import { streakOn } from "./streak";
 import { compareTodos } from "./todo-order";
-import { endTodo, isolateDay, type Rejoin, splitTodo } from "./todo-split";
 import {
   CreateTodoInput,
   MoveTodoInput,
@@ -72,6 +71,12 @@ const dueOn = (day: string, t: DueColumns = todos) => or(and(eq(t.isRecurring, f
 
 /** A repeating task without a usable pattern repeats every day. */
 const patternFor = (isRecurring: boolean, pattern: string) => (!isRecurring ? "none" : pattern === "none" ? "daily" : pattern);
+
+/** Ends a repeating task on `day`: it leaves that day and the days ahead (their ticks go too), the days before keep it. */
+async function endTodo(userId: string, todoId: string, day: string): Promise<void> {
+  await db.update(todos).set({ endedOn: day }).where(and(eq(todos.id, todoId), eq(todos.userId, userId)));
+  await db.delete(todoCompletions).where(and(eq(todoCompletions.todoId, todoId), gte(todoCompletions.date, day)));
+}
 
 /** Days of tick history a screen loads per repeating task; the streak and Undo cannot see further back. */
 // shortcut: a streak longer than this reads as this many days, raise it if a streak ever gets there.
@@ -140,12 +145,7 @@ export async function getDailyTodos(
   const dueToday = and(eq(todos.userId, userId), eq(todos.space, space), dueOn(targetDate));
   // The ticked days are read in the same round trip as the tasks (by sub-select) instead of after them.
   const [joined, doneRows] = await Promise.all([
-    // With the day's order mark of a repeating task (when its box last changed that day), so every day orders its own list.
-    db
-      .select({ todo: todos, markedAt: todoDayMarks.at })
-      .from(todos)
-      .leftJoin(todoDayMarks, and(eq(todoDayMarks.todoId, todos.id), eq(todoDayMarks.date, targetDate)))
-      .where(dueToday),
+    db.select().from(todos).where(dueToday),
     db
       .select()
       .from(todoCompletions)
@@ -157,7 +157,7 @@ export async function getDailyTodos(
       )
       .orderBy(asc(todoCompletions.date)),
   ]);
-  const rows = joined.map((j) => ({ ...j.todo, markedAt: j.markedAt }));
+  const rows = joined;
   const done = new Map<string, string[]>();
   for (const r of doneRows) done.set(r.todoId, [...(done.get(r.todoId) ?? []), r.date]);
   const items: TodoItem[] = rows.map((r) => {
@@ -174,8 +174,8 @@ export async function getDailyTodos(
       reminderTime: r.reminderTime,
       // A repeating task is done on the days it was ticked.
       isCompleted,
-      // A task unticked on this day stays at the bottom of the open ones, for good.
-      completedAt: r.isRecurring ? r.markedAt : r.completedAt,
+      // A repeating task's box change only orders the day it happened on; a task unticked that day stays at the bottom of the open ones.
+      completedAt: r.isRecurring && r.completedAt && appDay(r.completedAt) !== targetDate ? null : r.completedAt,
       isCarriedOver: r.isCarriedOver,
       category: r.category,
       placedAt: r.placedAt,
@@ -319,26 +319,11 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
   return { ...created, space: created.space as TodoSpace, streak: 0, doneDates: [] };
 }
 
-/** Undo of a change to one past day (isolateDay): the task gets its old end date back and the copy that took over is removed. */
-async function rejoin(userId: string, todoId: string, join?: Rejoin): Promise<void> {
-  if (!join) return;
-  await db.update(todos).set({ endedOn: join.endedOn }).where(and(eq(todos.id, todoId), eq(todos.userId, userId)));
-  if (join.laterId && join.laterId !== todoId) await db.delete(todos).where(and(eq(todos.id, join.laterId), eq(todos.userId, userId)));
-  await recordDayStats(userId, (await findTodo(userId, todoId))?.space as TodoSpace, join.day);
-}
-
-/** A repeating task's order mark for the day on screen, from the snapshot Undo sends back. */
-async function restoreMark(todoId: string, input: ReturnType<typeof restoreTodoSchema.parse>): Promise<void> {
-  if (!input.isRecurring || !input.completedAt || !input.markDay) return;
-  const at = input.completedAt;
-  await db.insert(todoDayMarks).values({ todoId, date: input.markDay, at }).onConflictDoUpdate({ target: [todoDayMarks.todoId, todoDayMarks.date], set: { at } });
-}
-
 /**
  * Puts a deleted task back as it was, ticked days included: a repeating task that was only ended
  * starts again, anything else is inserted again. An id that is already taken is left alone and returns null.
  */
-export async function restoreTodo(userId: string, rawInput: RestoreTodoInput, join?: Rejoin): Promise<TodoItem | null> {
+export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): Promise<TodoItem | null> {
   const input = restoreTodoSchema.parse(rawInput);
   const [ended] = await db
     .update(todos)
@@ -359,7 +344,7 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput, jo
           dueDate: input.dueDate,
           reminderTime: input.reminderTime ?? null,
           isCompleted: input.isCompleted,
-          completedAt: input.isCompleted ? input.completedAt ?? new Date() : null,
+          completedAt: input.completedAt ?? (input.isCompleted ? new Date() : null),
           isCarriedOver: input.isCarriedOver,
           category: input.category,
           createdAt: input.createdAt,
@@ -369,8 +354,6 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput, jo
         .returning();
   if (!restored) return null;
 
-  await rejoin(userId, restored.id, join);
-  await restoreMark(restored.id, input);
   await ensureCategory(userId, restored.space as TodoSpace, restored.category);
   const doneDates = input.isRecurring ? [...new Set(input.doneDates)].sort() : [];
   if (doneDates.length) {
@@ -393,7 +376,7 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
   }
 
   if (existing.isRecurring) {
-    // Any day can be ticked or unticked, past ones too; the streak is counted from the ticked days.
+    // The streak is counted from the ticked days.
     const day = { todoId: existing.id, date: input.currentDate };
     if (input.isCompleted) {
       await db.insert(todoCompletions).values(day).onConflictDoNothing();
@@ -402,9 +385,8 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
         .delete(todoCompletions)
         .where(and(eq(todoCompletions.todoId, day.todoId), eq(todoCompletions.date, day.date)));
     }
-    // The box changed on this day only: it orders this day's list and no other.
-    const at = new Date();
-    await db.insert(todoDayMarks).values({ ...day, at }).onConflictDoUpdate({ target: [todoDayMarks.todoId, todoDayMarks.date], set: { at } });
+    // The box changed now: it orders today's list (the mark is ignored on any other day).
+    await db.update(todos).set({ completedAt: new Date() }).where(eq(todos.id, existing.id));
   } else {
     // One-off task
     await db
@@ -421,40 +403,27 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
   return true;
 }
 
-/**
- * Edits a task. A repeating task with days before `day` (default today) is edited from `day` on and keeps those days
- * as they were (splitTodo), so the task now on `day` can be a new one. A repeating task edited on a day that is over
- * changes that day only (isolateDay; `join` is what Undo needs). Null when the task is not the user's.
- */
-export async function updateTodo(userId: string, input: UpdateTodoInput, day = toISODate()): Promise<(TodoItem & { join?: Rejoin }) | null> {
+/** Edits a task in place: a repeating task keeps its streak and history. Null when the task is not the user's. */
+export async function updateTodo(userId: string, input: UpdateTodoInput): Promise<TodoItem | null> {
   const task = await findTodo(userId, input.id);
   if (!task) return null;
   const changes = { title: input.title, reminderTime: input.reminderTime ?? null, ...(input.category && { category: input.category }) };
-  const over = task.isRecurring && day < toISODate();
-  const isolated = over ? await db.transaction((tx) => isolateDay(tx, task, day, changes)) : undefined;
-  const split = !isolated && hasPast(task, day);
-  const row =
-    isolated?.middle ??
-    (split
-      ? await db.transaction((tx) => splitTodo(tx, task, day, changes))
-      : (await db.update(todos).set(changes).where(eq(todos.id, task.id)).returning())[0]);
+  const [row] = await db.update(todos).set(changes).where(eq(todos.id, task.id)).returning();
   const space = row.space as TodoSpace;
   if (input.category) await ensureCategory(userId, space, input.category);
   const doneDates = row.isRecurring ? (await doneDatesOf([row.id])).get(row.id) ?? [] : [];
-  return { ...row, space, streak: row.isRecurring ? streakOn(new Set(doneDates), day) : 0, doneDates, join: isolated?.join ?? (split ? { endedOn: task.endedOn, day } : undefined) };
+  return { ...row, space, streak: row.isRecurring ? streakOn(new Set(doneDates), toISODate()) : 0, doneDates };
 }
 
-/** Whether a task is a repeating one that was already part of days before `day`. */
-const hasPast = (task: { isRecurring: boolean; dueDate: string }, day: string) => task.isRecurring && task.dueDate < day;
+/** Whether a task is a repeating one that was already part of days before today. */
+const hasPast = (task: { isRecurring: boolean; dueDate: string }) => task.isRecurring && task.dueDate < toISODate();
 
 /**
  * Moves a task to another day, or turns it into a repeating task or back into a one-off one, with any edits made in the
- * same step. It starts fresh there: not done, not carried over, no streak. A repeating task with days before `from`
- * (the day on screen, default today) that becomes a one-off ends on `from` and a new one-off task takes its place,
- * so those days keep it; from a day that is over, only that day leaves the repeating task (isolateDay, `join` is what
- * Undo needs). Null when the task is not the user's.
+ * same step. It starts fresh there: not done, not carried over, no streak. A repeating task with days before today
+ * that becomes a one-off ends today and a new one-off task takes its place, so those days keep it. Null when the task is not the user's.
  */
-export async function moveTodo(userId: string, input: MoveTodoInput, from = toISODate()): Promise<(TodoItem & { join?: Rejoin }) | null> {
+export async function moveTodo(userId: string, input: MoveTodoInput): Promise<TodoItem | null> {
   const [before] = await db
     .select()
     .from(todos)
@@ -469,9 +438,8 @@ export async function moveTodo(userId: string, input: MoveTodoInput, from = toIS
     reminderTime: input.reminderTime === undefined ? before.reminderTime : input.reminderTime,
     category: input.category ?? before.category,
   };
-  if (!isRecurring && before.isRecurring && (hasPast(before, from) || from < today)) {
-    const join = from < today ? (await db.transaction((tx) => isolateDay(tx, before, from))).join : undefined;
-    if (!join) await endTodo(db, userId, before.id, from);
+  if (!isRecurring && before.isRecurring && hasPast(before)) {
+    await endTodo(userId, before.id, today);
     const created = await createTodo(userId, {
       space,
       isRecurring: false,
@@ -479,8 +447,8 @@ export async function moveTodo(userId: string, input: MoveTodoInput, from = toIS
       dueDate: input.dueDate,
       ...next,
     });
-    await recordDayStats(userId, space, from);
-    return { ...created, join };
+    await recordDayStats(userId, space, today);
+    return created;
   }
   const [moved] = await db
     .update(todos)
@@ -497,8 +465,6 @@ export async function moveTodo(userId: string, input: MoveTodoInput, from = toIS
     .where(and(eq(todos.id, before.id), eq(todos.userId, userId)))
     .returning();
   await db.delete(todoCompletions).where(eq(todoCompletions.todoId, before.id));
-  // A task that starts a new run starts without order marks; one that leaves the daily list keeps them for Undo.
-  if (isRecurring) await db.delete(todoDayMarks).where(eq(todoDayMarks.todoId, before.id));
   await ensureCategory(userId, space, next.category);
 
   // The day it left and the day it joined both count again.
@@ -516,14 +482,13 @@ export async function revertMoveTodo(
   userId: string,
   rawInput: RestoreTodoInput,
   createdId?: string,
-  join?: Rejoin,
 ): Promise<TodoItem | null> {
   const input = restoreTodoSchema.parse(rawInput);
   const created = createdId && createdId !== input.id ? await findTodo(userId, createdId) : undefined;
   const existing = await findTodo(userId, input.id);
-  if (!existing && !created) return restoreTodo(userId, input, join);
+  if (!existing && !created) return restoreTodo(userId, input);
   if (created) await db.delete(todos).where(and(eq(todos.id, created.id), eq(todos.userId, userId)));
-  if (!existing) return restoreTodo(userId, input, join);
+  if (!existing) return restoreTodo(userId, input);
 
   const [back] = await db
     .update(todos)
@@ -535,16 +500,14 @@ export async function revertMoveTodo(
       dueDate: input.dueDate,
       reminderTime: input.reminderTime ?? null,
       isCompleted: input.isCompleted,
-      completedAt: input.isCompleted ? input.completedAt ?? new Date() : null,
+      completedAt: input.completedAt ?? (input.isCompleted ? new Date() : null),
       isCarriedOver: input.isCarriedOver,
       category: input.category,
       placedAt: input.placedAt ?? input.createdAt,
-      endedOn: join ? join.endedOn : null,
+      endedOn: null,
     })
     .where(and(eq(todos.id, input.id), eq(todos.userId, userId)))
     .returning();
-  await rejoin(userId, input.id, join);
-  await restoreMark(input.id, input);
   // The snapshot holds only the last DONE_DATES_WINDOW_DAYS of ticks, so older ones are left alone.
   await db
     .delete(todoCompletions)
@@ -570,25 +533,16 @@ export async function getPlannedDays(userId: string, space: TodoSpace, after: st
 }
 
 /**
- * Deletes a task. A repeating task with days before `from` (default today) only ends on `from` (endTodo),
- * so those days keep it. From a day that is over only that day goes (isolateDay): `join` is what Undo needs.
- * Null when the task is not the user's.
+ * Deletes a task. A repeating task with days before today only ends today (endTodo), so those days keep it
+ * (its history and the charts stay). Null when the task is not the user's.
  */
-export async function deleteTodo(userId: string, todoId: string, from = toISODate()): Promise<{ join?: Rejoin } | null> {
+export async function deleteTodo(userId: string, todoId: string): Promise<true | null> {
   const task = await findTodo(userId, todoId);
   if (!task) return null;
-  const space = task.space as TodoSpace;
-  let join: Rejoin | undefined;
-
-  if (task.isRecurring && from < toISODate()) {
-    join = (await db.transaction((tx) => isolateDay(tx, task, from))).join;
-  } else if (hasPast(task, from)) {
-    await endTodo(db, userId, task.id, from);
-  } else {
-    await db.delete(todos).where(and(eq(todos.id, task.id), eq(todos.userId, userId)));
-  }
-  await recordDayStats(userId, space, task.isRecurring ? from : task.dueDate);
-  return { join };
+  if (hasPast(task)) await endTodo(userId, task.id, toISODate());
+  else await db.delete(todos).where(and(eq(todos.id, task.id), eq(todos.userId, userId)));
+  await recordDayStats(userId, task.space as TodoSpace, task.isRecurring ? toISODate() : task.dueDate);
+  return true;
 }
 
 export async function savePushSubscription(

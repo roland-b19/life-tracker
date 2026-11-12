@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-12 by Claude (PR #95 Tasks order independence merged and deployed to Production 2026-11-12, migration 0024 run on Neon by the user; new app icon in PR #96, not merged; PR #94 merged and deployed to Production 2026-11-12; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
+_Last updated: 2026-11-12 by Claude (PR #95 Tasks order independence merged and deployed to Production 2026-11-12, migration 0024 run on Neon by the user; new app icon PRs #96 and #97 merged and deployed 2026-11-12; Daily today-only in progress on `feat/daily-today-only`; PR #94 merged and deployed to Production 2026-11-12; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
 
 ## Phase
 
@@ -51,6 +51,10 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 Categories (branch `feat/categories`, not merged): every Wishlist item has a category, and so does every daily task in Personal and Business. Categories are the user's own (add, rename, delete in a Categories card; "other" is built-in; deleting moves items to Other; renaming onto an existing name merges). The Wishlist All tab and the daily task list show category titles with their items beneath; the price tabs stay flat. New table `item_categories` and a `category` column on `todos` and `wishlist_items`: **migration `0021_item_categories` must be run on Neon (from the user's Mac, owner URL in a hidden prompt) before this code is merged**. No default categories ship in code; the importer (`scripts/import-personal.cjs`) takes an optional `categories` list and a category per item from `.local/personal-data.json`. Not deployed.
 
 ## Current focus
+
+**Daily is today only** (branch `feat/daily-today-only`, PR open, not merged, not deployed): the Daily tabs (Personal and Business) are one list with no day stepper; it is always today's list and the same tasks every day until the user edits them. An edit changes the task in place (streak and id kept); a delete ends it from today on (history, streak and charts keep every past day; a task created today is deleted outright); deleting a category re-files the tasks in place. The Today tab keeps its day stepper. Table `todo_day_marks` is not needed any more: its per-day order job moved to `todos.completed_at` (counts only on the day it was set). Migration `0025_todo_daily_today` backfills `completed_at` and drops `todo_day_marks`; it is destructive, so the user runs it AFTER the code is deployed (the old code still reads the table). Tests: 219. Not checked: a real phone, the migration on Neon.
+
+Earlier focus:
 
 **Instant feel** (branch `perf/instant-feel`, PR open, not merged, not deployed; full numbers and reasons in `docs/performance-report.md`): food and gym set writes no longer re-render the page (a water tap went from 112-135 ms and 102 KB to 15 ms and 284 B); every tab has a `loading.tsx` skeleton with a layout above it that keeps the real 307 for anonymous visitors; back/forward reloads once after any write so it never shows pre-write data; fewer sequential round trips (gym page 13 to 11 queries, 167 to 127 ms with one connection); zod out of the browser bundle (about 110 KB raw less on food, todos, wishlist). No migration, no new dependency, no Neon/Vercel setting changed. Pool settings left as they are (see `docs/decisions.md`).
 
