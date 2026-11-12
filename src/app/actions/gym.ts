@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import { uuid } from "@/lib/validations/common";
-import { addDays, toISODate } from "@/lib/format-date";
 import {
   cancelSessionSchema,
   createCustomExerciseSchema,
@@ -20,7 +19,6 @@ import {
   deleteCustomExercise,
   deleteWorkoutSet,
   finishWorkoutSession,
-  getGymHistory,
   logWorkoutSet,
   reopenWorkoutSession,
   restoreWorkoutSession,
@@ -113,10 +111,4 @@ export async function deleteCustomExerciseAction(exerciseId: string) {
   const deleted = await deleteCustomExercise(userId, uuid.parse(exerciseId));
   if (deleted) safeRevalidate("/gym");
   return { success: deleted };
-}
-
-/** The user's sets from the last year, for the Progress view. */
-export async function getGymHistoryAction() {
-  const userId = await requireUser();
-  return { success: true, sets: await getGymHistory(userId, addDays(toISODate(), -370)) };
 }

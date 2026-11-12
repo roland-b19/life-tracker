@@ -534,34 +534,3 @@ export interface HistorySet {
   /** loadValue plus the extra kg, as one number. */
   load: number;
 }
-
-/**
- * Every set the user logged since `since` (a date), oldest first: what the progress charts and the logged-days
- * calendar are drawn from. Capped, so a huge history cannot make the page slow.
- */
-export async function getGymHistory(userId: string, since: string): Promise<HistorySet[]> {
-  const rows = await db
-    .select({
-      date: workoutSessions.date,
-      sessionId: workoutSessions.id,
-      isDeload: workoutSessions.isDeload,
-      dayId: workoutSessions.splitDayId,
-      dayName: workoutSplitDays.name,
-      exerciseId: workoutSets.exerciseId,
-      exerciseName: exercises.name,
-      setOrder: workoutSets.setOrder,
-      reps: workoutSets.reps,
-      loadType: workoutSets.loadType,
-      loadValue: workoutSets.loadValue,
-      extraKg: workoutSets.extraKg,
-    })
-    .from(workoutSets)
-    .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
-    .innerJoin(exercises, eq(workoutSets.exerciseId, exercises.id))
-    .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
-    .where(and(eq(workoutSets.userId, userId), eq(workoutSessions.userId, userId), gte(workoutSessions.date, since)))
-    // Newest first so the cap drops the oldest sets, then flip back to chronological.
-    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), desc(workoutSets.setOrder))
-    .limit(8000);
-  return rows.reverse().map(({ loadValue, extraKg, ...r }) => ({ ...r, load: Number(loadValue) + Number(extraKg) }));
-}

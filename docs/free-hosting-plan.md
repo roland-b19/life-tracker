@@ -58,7 +58,7 @@ Rule: measure first, change one thing, measure again. Nothing here is started.
 
 **Database**
 - Indexes: only unique constraints exist today (`user_id, date` on weight, metrics, todo stats). Add `(user_id, ...)` indexes where `EXPLAIN` shows a scan on a table that will grow: workout sets, meals, todos, todo completions. Skip the rest.
-- `getWorkoutHistory`: bounded by date or paged; `getGymHistory` keeps its 370-day window; `getDailyMetricsHistory` and the weight analytics bounded or aggregated in SQL.
+- `getWorkoutHistory`: bounded by date or paged; the Progress view reads the same 370 days from `getWorkoutHistory` (`getGymHistory` removed 2026-11-12); `getDailyMetricsHistory` and the weight analytics bounded or aggregated in SQL.
 - Aggregate in SQL where the browser computes from thousands of rows, so less data leaves the database (Neon egress is 5 GB a month).
 - Drop tables that are never read or written (Money, `api_tokens`, `claude_connections`, `push_subscriptions`) in one migration after the Azure variant is confirmed not to need them. Dropping is irreversible: take a dump first.
 - Connection pool for serverless: `max` 1-2 per instance, a short `idleTimeoutMillis`, an `error` handler on the pool, Neon's pooled (`-pooler`) host. Neon suspends the compute and cuts idle connections, so a stale pooled connection must not crash a request. Needs a test against Neon.

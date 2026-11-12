@@ -20,7 +20,7 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
-import { dayProgress, exerciseSeries, kgDelta, weekStart, withProgress } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, kgDelta, progressSets, weekStart, withProgress } from "@/lib/gym-progress";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
@@ -43,7 +43,6 @@ import {
   deleteCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
-  getGymHistoryAction,
   logSetAction,
   reopenSessionAction,
   restoreSessionAction,
@@ -620,21 +619,21 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
   });
 
-  describe("getGymHistoryAction (Progress view)", () => {
-    it("returns the owner's sets only, and denies anonymous", async () => {
-      authState.id = userA;
-      const [exercise] = await getExercises(userA);
-      const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
-      await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
-
-      const own = await getGymHistoryAction();
-      expect(own.sets).toHaveLength(1);
-      expect(own.sets[0]).toMatchObject({ date: "2026-11-03", reps: 8, load: 40 });
-
-      authState.id = userB;
-      expect((await getGymHistoryAction()).sets).toHaveLength(0);
-      authState.id = "";
-      await expect(getGymHistoryAction()).rejects.toThrow("Authentication required.");
+  describe("progressSets (Progress view, drawn from the page's own data)", () => {
+    it("joins finished and open workouts, oldest first, with names, loads and the deload flag", () => {
+      const history: HistorySession[] = [
+        { id: "s2", date: "2026-11-05", durationMinutes: 50, isDeload: true, dayId: "d", dayName: "Push",
+          exercises: [{ id: "e1", name: "Bench", sets: [{ reps: 6, loadType: "kg", load: 45 }] }] },
+        { id: "s1", date: "2026-11-03", durationMinutes: 55, isDeload: false, dayId: "d", dayName: "Push",
+          exercises: [{ id: "e1", name: "Bench", sets: [{ reps: 8, loadType: "kg", load: 40 }, { reps: 7, loadType: "kg", load: 40 }] }] },
+      ];
+      const open = { id: "s3", date: "2026-11-07", isDeload: false, splitDayId: "d", splitDayName: "Push",
+        sets: [{ exerciseId: "e2", setOrder: 1, reps: 10, loadType: "bodyweight_plus", loadValue: "0", extraKg: "12.5" }] };
+      const sets = progressSets(history, open, new Map([["e2", "Dips"]]));
+      expect(sets.map((s) => [s.date, s.setOrder, s.load])).toEqual([["2026-11-03", 1, 40], ["2026-11-03", 2, 40], ["2026-11-05", 1, 45], ["2026-11-07", 1, 12.5]]);
+      expect(sets[2].isDeload).toBe(true);
+      expect(sets[3]).toMatchObject({ sessionId: "s3", exerciseName: "Dips", dayName: "Push", reps: 10 });
+      expect(progressSets([], null, new Map())).toEqual([]);
     });
   });
 

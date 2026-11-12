@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Card, ChartCaption, ChartControls, ChartNote, Dashboard, EmptyNote, SelectField, SkeletonRows, StatRow } from "../components/blocks";
+import { useMemo, useState } from "react";
+import { Card, ChartCaption, ChartControls, ChartNote, Dashboard, EmptyNote, SelectField, StatRow } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { Segmented } from "../components/segmented";
-import { useToast } from "../components/toast";
-import { getGymHistoryAction } from "@/app/actions/gym";
 import { addDays, toISODate } from "@/lib/format-date";
 import { dayProgress, exerciseSeries, kgDelta } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
@@ -16,41 +14,18 @@ const RANGES: { value: Range; label: string }[] = (["30", "90", "180", "360"] as
 const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
 const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
 
-export function ProgressPanel({ days }: { days: { id: string; name: string }[] }) {
-  const { showToast } = useToast();
+export function ProgressPanel({ sets, days }: { sets: HistorySet[]; days: { id: string; name: string }[] }) {
   const today = toISODate();
-  const [sets, setSets] = useState<HistorySet[] | null>(null);
   const [exerciseId, setExerciseId] = useState("");
   const [range, setRange] = useState<Range>("90");
   const [dayId, setDayId] = useState(days[0]?.id ?? "");
 
-  useEffect(() => {
-    let active = true;
-    getGymHistoryAction()
-      .then((res) => active && setSets(res.sets))
-      .catch(() => {
-        if (!active) return;
-        setSets([]);
-        showToast({ message: "Failed to load progress", type: "warning" });
-      });
-    return () => {
-      active = false;
-    };
-  }, [showToast]);
-
   const exercises = useMemo(() => {
     const names = new Map<string, string>();
-    for (const s of sets ?? []) names.set(s.exerciseId, s.exerciseName);
+    for (const s of sets) names.set(s.exerciseId, s.exerciseName);
     return [...names].sort((a, b) => a[1].localeCompare(b[1]));
   }, [sets]);
 
-  if (!sets) {
-    return (
-      <Card busy label="Loading progress">
-        <SkeletonRows />
-      </Card>
-    );
-  }
   if (!sets.length) {
     return (
       <Card label="Progress">

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
 import { AddButton, Card, Dashboard, DashboardAside, DashboardMain, DayField, EmptyNote, Field, FormModal, SkeletonRows, StatRow } from "../components/blocks";
 import { useToast } from "../components/toast";
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
@@ -11,7 +11,7 @@ import { clearDailyMetricAction, listDailyMetricsAction, saveDailyMetricAction }
 
 type Kind = "water" | "steps";
 // `id` is local: a day's value can move to another day, and its row should move with it.
-type Entry = { id: string; date: string; value: number };
+export type Entry = { id: string; date: string; value: number };
 
 const KINDS = {
   water: { title: "Water", unit: "ml", field: "waterMl", max: 20000, label: "Water (ml)", noun: "water" },
@@ -25,33 +25,51 @@ const sortNewestFirst = (list: Entry[]) => [...list].sort((a, b) => b.date.local
 let seq = 0;
 const nextId = () => `m${++seq}`;
 
-/** History and trend of one daily metric; `onToday` keeps the Today tab's card in step. */
-export function MetricPanel({ kind, onToday }: { kind: Kind; onToday: (value: number) => void }) {
+/** The list with `date` set to `value` (0 removes it); the same list when nothing changes. */
+export function withDay(list: Entry[], date: string, value: number) {
+  const old = list.find((e) => e.date === date);
+  if ((old?.value ?? 0) === value) return list;
+  const rest = list.filter((e) => e.date !== date);
+  return value > 0 ? [...rest, { id: old?.id ?? nextId(), date, value }] : rest;
+}
+
+/**
+ * History and trend of one daily metric; `onToday` keeps the Today tab's card in step. The list lives with the page
+ * (`list`, null until loaded), so reopening the tab shows it at once and a late Undo still lands in it.
+ */
+export function MetricPanel({ kind, onToday, list, setList }: {
+  kind: Kind;
+  onToday: (value: number) => void;
+  list: Entry[] | null;
+  setList: Dispatch<SetStateAction<Entry[] | null>>;
+}) {
   const k = KINDS[kind];
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const entries = list ?? [];
+  const setEntries = (next: (current: Entry[]) => Entry[]) => setList((current) => next(current ?? []));
   const [editing, setEditing] = useState<Entry | null>(null);
   const [date, setDate] = useState(today);
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(list === null);
   const [saving, setSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { showToast } = useToast();
 
   useEffect(() => {
+    if (!loading) return;
     let active = true;
     listDailyMetricsAction()
       .then((rows) => {
         if (!active) return;
-        setEntries(rows.filter((r) => r[k.field] > 0).map((r) => ({ id: nextId(), date: r.date, value: r[k.field] })));
+        setList(rows.filter((r) => r[k.field] > 0).map((r) => ({ id: nextId(), date: r.date, value: r[k.field] })));
       })
       .catch(() => active && showToast({ message: `Failed to load ${k.noun}`, type: "warning" }))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [k, showToast]);
+  }, [k, showToast, loading, setList]);
 
   // The Today card shows today's value: whatever lands on or leaves today goes there too.
   const touchToday = (from: string | undefined, to: Entry | null) => {

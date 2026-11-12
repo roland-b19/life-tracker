@@ -1,10 +1,10 @@
 "use client";
 
 import { formatDMY, toISODate } from "@/lib/format-date";
-import { kgDelta, type HistoryEntry } from "@/lib/gym-progress";
+import { kgDelta, progressSets, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort, useMore } from "../components/lists";
 import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle, Toolbar } from "../components/blocks";
 import { ChevronRightIcon, PencilIcon, PlusIcon } from "../components/icons";
@@ -162,6 +162,11 @@ export function GymClient({
     live.current = activeSession ?? paused;
   });
   const [shownHistory, moreHistory] = useMore(history);
+  // The Progress tab draws from what the page already holds (history plus the workout in hand): no load, no skeleton.
+  const progress = useMemo(
+    () => progressSets(history, activeSession ?? paused, new Map(exercises.map((e) => [e.id, e.name]))),
+    [history, activeSession, paused, exercises],
+  );
   const [openHistoryId, setOpenHistoryId] = useState<string | null>(null);
 
   // Per-exercise quick log input state
@@ -884,7 +889,7 @@ export function GymClient({
             />
           </Toolbar>
           {view === "progress" ? (
-            <ProgressPanel days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
+            <ProgressPanel sets={progress} days={(split?.days ?? []).filter((d) => !d.isRest).map((d) => ({ id: d.id, name: d.name }))} />
           ) : (
             <>
               <MuscleExplorer
