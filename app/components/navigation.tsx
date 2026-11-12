@@ -159,6 +159,7 @@ export function Navigation({ userName }: NavigationProps) {
             <NextLink
               key={link.href}
               href={link.href}
+              prefetch
               className={`nav-link ${link.isActive ? "active" : ""}`}
               aria-current={link.isActive ? "page" : undefined}
             >
@@ -225,6 +226,7 @@ export function Navigation({ userName }: NavigationProps) {
           <NextLink
             key={link.href}
             href={link.href}
+            prefetch
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
             onClick={() => go(link.href)}
