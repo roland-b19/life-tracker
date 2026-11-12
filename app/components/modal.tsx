@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
@@ -22,19 +22,20 @@ export function Modal({
   maxWidth = "36rem",
   className,
 }: ModalProps) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    [onClose],
-  );
+  // The parent re-renders on every keystroke and hands over a new onClose each time; the effect below must not re-run
+  // for that, or it would give focus back to the opener (the keyboard closes after one character).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
     window.addEventListener("keydown", handleKeyDown);
 
     // Keyboard and screen-reader users stay inside the dialog: focus moves to it (the card, not a field: no form autofocuses),
@@ -144,7 +145,7 @@ export function Modal({
       root.style.overflow = "";
       window.scrollTo(0, scrollY);
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

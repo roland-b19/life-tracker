@@ -320,6 +320,12 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 ## 2026-11-12: Subtle motion removed again (user)
 - The motion added in PR #92 was reverted at the user's request after trying it. The house style is again "no animations" (the Tasks progress ring, the Wishlist total count-up and the Nutrition numbers stay). The audit fixes of PR #91 are untouched.
 
+## 2026-11-12: Today and Daily are independent lists (user)
+- A task is a duplicate only of a same-named task of its own kind in its own space: one-offs compare with the one-offs of the same day, Daily tasks with the other active Daily tasks. Moving a task between Today and Daily is allowed unless the target list already has that name. The overdue carry-over compares with one-offs only. Personal/business x Today/Daily are four separate lists.
+- The "last x days" chart on Tasks is not clickable.
+- Cause of the one-character typing bug: the modal's focus effect depended on `onClose`, which changes on every keystroke. Fixed with a ref; do not put callbacks back in that effect's dependencies.
+- Not changed: categories stay one list per space, shared by Today and Daily.
+
 ## Open
 
 - Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.

@@ -96,7 +96,7 @@ export async function getDailyTodos(
   // 1. Rollover: carry unfinished one-off tasks from past dates to today.
   // Never when reading a past day (it shows that day as it was), and never into a future day being planned:
   // an overdue task belongs to today, not to whatever day is on screen. One that today already has
-  // (same title) stays on its own day, so the rollover never makes a duplicate.
+  // (same title, one-off; a daily task of that name is another list) stays on its own day, so the rollover never makes a duplicate.
   // A task added to a day that was already over (dev builds) stays on that day.
   // shortcut: two overdue tasks with one title both roll over together, dedupe them here if that shows up.
   if (targetDate >= today) await db
@@ -123,7 +123,7 @@ export async function getDailyTodos(
                 eq(other.userId, userId),
                 eq(other.space, space),
                 sql`lower(${other.title}) = lower(${todos.title})`,
-                dueOn(today, other),
+                and(eq(other.isRecurring, false), eq(other.dueDate, today)),
               ),
             ),
         ),
@@ -244,9 +244,9 @@ export async function getTodoHistory(userId: string, space: TodoSpace, days = 90
 }
 
 /**
- * Whether the list a task would join already has another one with the same title (any case):
- * a one-off task meets what is due that day, a repeating task meets the other repeating tasks
- * and the one-off tasks on its first day. `exceptId` is the task itself (rename, move, restore).
+ * Whether the list a task would join already has another one with the same title (any case), in its own space:
+ * a one-off task meets the one-off tasks of its day, a repeating (Daily) task the other Daily tasks.
+ * `exceptId` is the task itself (rename, move, restore).
  * shortcut: two adds racing can both pass, add a unique index if that ever matters.
  */
 export async function hasDuplicateTodo(
@@ -263,12 +263,10 @@ export async function hasDuplicateTodo(
         eq(todos.space, task.space),
         sql`lower(${todos.title}) = lower(${task.title})`,
         exceptId ? notInArray(todos.id, [exceptId].flat()) : undefined,
+        // Daily and Today never meet: a daily task only meets the other daily ones, a one-off only the one-offs of its day.
         task.isRecurring
-          ? or(
-              and(eq(todos.isRecurring, true), or(isNull(todos.endedOn), gt(todos.endedOn, toISODate()))),
-              and(eq(todos.isRecurring, false), eq(todos.dueDate, task.dueDate)),
-            )
-          : dueOn(task.dueDate),
+          ? and(eq(todos.isRecurring, true), or(isNull(todos.endedOn), gt(todos.endedOn, toISODate())))
+          : and(eq(todos.isRecurring, false), eq(todos.dueDate, task.dueDate)),
       ),
     )
     .limit(1);
