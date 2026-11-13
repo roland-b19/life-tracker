@@ -34,7 +34,7 @@ runtime evidence.
   DNS; worker identity with roles scoped to the one queue (no `listKeys`); VAPID
   private key in Key Vault. Checked by `tests/infra-contract.test.ts`.
 - [x] Observability: action group with e-mail, alert rules for web 5xx, replica
-  restarts, queue backlog and worker failures, four saved Log Analytics queries.
+  restarts, and queue backlog, four saved Log Analytics queries.
 - [x] CI builds, scans (Trivy) and audits the worker image and its own dependencies.
 
 ## Phase 2B: evidence required after explicit approval
