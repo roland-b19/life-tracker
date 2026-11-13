@@ -76,6 +76,19 @@ jobs:
           vuln-type: os,library
           severity: HIGH,CRITICAL
           exit-code: "1"
+      - name: Build reminder worker image
+        run: docker build --platform linux/amd64 -t life-tracker-worker:ci worker
+      - name: Scan reminder worker container
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: life-tracker-worker:ci
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Worker dependency audit
+        working-directory: worker
+        run: npm audit --audit-level=high --omit=optional
       - name: Validate Bicep
         # Bicep comes with the runner image; `az bicep install` downloads it from GitHub Releases.
         run: bicep build infra/main.bicep --stdout >/dev/null

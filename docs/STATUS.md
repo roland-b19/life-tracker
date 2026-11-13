@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-12 by Claude (Health and Tasks rework PR #99 merged 2026-11-12 (Vercel deploy started; migrations 0027 and 0028 run on Neon by the user), the account wipe and the re-import are next; PR #98 tasks hard delete, no streaks, cache pass merged and deployed 2026-11-12, migrations 0025 and 0026 run on Neon by the user; PR #95 Tasks order independence merged and deployed to Production 2026-11-12, migration 0024 run on Neon by the user; new app icon PRs #96 and #97 merged and deployed 2026-11-12; Daily today-only in progress on `feat/daily-today-only`; PR #94 merged and deployed to Production 2026-11-12; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
+_Last updated: 2026-11-13 by Claude (Azure reminder worker, queue, alerts and presentation docs on branch `feat/azure-queue`, not merged; earlier: Health and Tasks rework PR #99 merged 2026-11-12 (Vercel deploy started; migrations 0027 and 0028 run on Neon by the user), the account wipe and the re-import are next; PR #98 tasks hard delete, no streaks, cache pass merged and deployed 2026-11-12, migrations 0025 and 0026 run on Neon by the user; PR #95 Tasks order independence merged and deployed to Production 2026-11-12, migration 0024 run on Neon by the user; new app icon PRs #96 and #97 merged and deployed 2026-11-12; Daily today-only in progress on `feat/daily-today-only`; PR #94 merged and deployed to Production 2026-11-12; earlier: PRs #88 performance pass and #90 skeletons, past days, export merged)_
 
 ## Phase
 
@@ -51,6 +51,8 @@ Gym history, timer, Undo and deload skipping (same branch): the Workout tab has 
 Categories (branch `feat/categories`, not merged): every Wishlist item has a category, and so does every daily task in Personal and Business. Categories are the user's own (add, rename, delete in a Categories card; "other" is built-in; deleting moves items to Other; renaming onto an existing name merges). The Wishlist All tab and the daily task list show category titles with their items beneath; the price tabs stay flat. New table `item_categories` and a `category` column on `todos` and `wishlist_items`: **migration `0021_item_categories` must be run on Neon (from the user's Mac, owner URL in a hidden prompt) before this code is merged**. No default categories ship in code; the importer (`scripts/import-personal.cjs`) takes an optional `categories` list and a category per item from `.local/personal-data.json`. Not deployed.
 
 ## Current focus
+
+**Azure reminder pipeline and grading evidence** (branch `feat/azure-queue`, 2026-11-13, not merged, nothing deployed, personal deploy untouched): `worker/` (own package.json, lockfile, Dockerfile; two scheduled Container Apps jobs: enqueue and send), private key-less Storage Queue, worker identity with queue-scoped roles, VAPID secret in Key Vault, action group + 4 alert rules + 4 saved queries, deploy script and CI steps for the worker, contract and worker tests, docs and `docs/presentation.md`. Shared code touched: only an optional `ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY` in `Dockerfile` (empty default), extra CI steps, tests and docs. No `app/` or `src/` change, no migration, no root package change. Verified offline only (Bicep build, tests, local worker run against Postgres); live Azure behaviour is unverified until the user approves a rehearsal. Decisions: `docs/decisions.md` 2026-11-13.
 
 **Go-live order (user decision 2026-11-12):** backup, run migrations 0027 and 0028 on Neon (owner URL), merge the PR (Vercel deploys), run `scripts/wipe-my-data.cjs` (dry run, then `--confirm-delete-everything`), then import the personal data again. Do not open Gym between the deploy and the wipe.
 
@@ -177,6 +179,8 @@ Gates that need a deployed environment and stay open: `EXPLAIN (ANALYZE)` and co
 0. The user reviews and merges the no-motion/Undo PR (nothing was deployed; Vercel untouched).
 1. The user answers the pending 3c decisions (see Current focus) and merges the 3c PR.
 2. Variant B (`docs/release-plan.md` section 4): rehearsal on a Neon branch, then go-live and one week of watching usage. Then Azure A (section 5). Nothing deploys and no Azure resource is created without the user's explicit OK.
+
+3. Azure (after the PR is merged): the user approves a rehearsal (credit check, VAPID keys generated outside chat, a second Entra test account), then `scripts/azure-preflight.sh`, `azure-deploy.sh`, the checks in `docs/security/azure-hardening.md` Phase 2B, a demo run from `docs/presentation.md`, and `azure-teardown.sh`. Claude on Azure stays off.
 
 ## Open questions
 

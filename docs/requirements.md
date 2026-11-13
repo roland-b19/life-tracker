@@ -6,14 +6,25 @@ Source: pasted by the user from the Azure course description (2026-11-02). Origi
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| 1 | At least one **compute** resource on Azure | open |
-| 2 | At least one **database or object storage** | open |
-| 3 | App is **secured**: e.g. the database is not exposed to the internet | open |
-| 4 | **Authentication and authorization** (mandatory) | open |
-| 5 | Ideally a **message queue** (inter-service communication or email notifications) | open |
-| 6 | Real functionality: not "Hello World", not rocket science | open |
-| 7 | Deployments are **scripted** (az CLI / ARM templates / Terraform; tool to be discussed in later lectures and labs) | open |
-| 8 | Backend and database in the cloud, secured (a mobile client is allowed, but it is not required) | open |
+| 1 | At least one **compute** resource on Azure | designed, tested offline (Container Apps app + 2 jobs); live run open |
+| 2 | At least one **database or object storage** | designed, tested offline (PostgreSQL Flexible Server, Storage Queue, ACR); live run open |
+| 3 | App is **secured**: e.g. the database is not exposed to the internet | designed, tested offline (private endpoints, no public data plane, Key Vault); live check open |
+| 4 | **Authentication and authorization** (mandatory) | implemented (Entra login, owner-scoped data, authorization tests); live Entra check open |
+| 5 | Ideally a **message queue** (inter-service communication or email notifications) | implemented and tested offline (Storage Queue, enqueue and send jobs); live run open |
+| 6 | Real functionality: not "Hello World", not rocket science | done (the app) |
+| 7 | Deployments are **scripted** (az CLI / ARM templates / Terraform; tool to be discussed in later lectures and labs) | done (Bicep, preflight, what-if, deploy, teardown scripts) |
+| 8 | Backend and database in the cloud, secured (a mobile client is allowed, but it is not required) | designed, tested offline; live run open |
+
+## Grading rubric
+
+Source: slide "Notare" sent by the user (2026-11-13). The slide's percentages add up to 90, kept as given. Every Azure iteration is judged against this, so each line has a deliverable.
+
+| Weight | Item | What we show |
+|--------|------|--------------|
+| 30% | Presentation: specification, design, implementation | `docs/spec.md`-level story, architecture diagram, live demo of the deployed app (see `docs/presentation.md`) |
+| 40% | Fundamental services | **Compute** (Container Apps app + jobs), **Storage** (PostgreSQL Flexible Server, Storage Queue, ACR), **Networking** (VNet, private endpoints, private DNS, no public data plane), **Security** (Entra login + authorization, Key Vault, managed identity, no secrets in images) |
+| 10% | Observability | Log Analytics with diagnostics on every resource, alert rules with an e-mail action group, saved queries; shown live |
+| 10% | Deployment | Bicep + `scripts/azure-*.sh`: preflight, what-if, deploy, migrate, teardown; cost gate before each run |
 
 Notes from the course:
 - Older projects or projects from other courses may be reused, adapted to run in the cloud.

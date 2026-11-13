@@ -73,6 +73,8 @@ Scripts in [`scripts/`](scripts/) deploy and remove the Azure environment; they 
 
 The infrastructure is [`infra/main.bicep`](infra/main.bicep). Everything is ephemeral: deploy, verify, tear down.
 
+Reminders on Azure are sent by two scheduled jobs from the isolated [`worker/`](worker/) (own `package.json`, image and lockfile): one puts ids of due reminders on a private Storage Queue, the other sends them as web push. The deploy script needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` in your shell (generate them yourself, for example `npx web-push generate-vapid-keys`, and never paste them into chat or commit them); the public key is also baked into the web image as a build argument. The personal deploy does not use any of this. Plan and evidence for the course: [`docs/presentation.md`](docs/presentation.md).
+
 ## Personal deploy (variant B): runbook
 
 Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database and GitHub sign-in. Environment variables are set in Vercel (Production only, Sensitive); never in the repo.

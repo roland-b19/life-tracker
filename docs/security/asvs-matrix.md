@@ -29,3 +29,4 @@ The Trivy, SBOM and gitleaks actions run in GitHub CI, where their advisory
 databases and container tooling can be downloaded. They are not treated as
 locally verified controls when the machine is offline; a failed or unavailable
 scanner is not silently bypassed.
+| Queue (V13.4 / V8.x / A01) | Reminder queue and worker | designed, tested offline | Storage account with public access, shared keys and anonymous blobs off, reachable only through a private endpoint; the worker uses a managed identity with queue-scoped roles; messages carry ids only and are parsed strictly; the worker rechecks task and owner before sending (`tests/worker.test.ts`, `tests/infra-contract.test.ts`); live behaviour waits for an approved rehearsal |

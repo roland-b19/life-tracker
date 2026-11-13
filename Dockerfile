@@ -11,6 +11,7 @@ COPY . .
 # Feature flags are inlined at build time; scripts/azure-deploy.sh passes true once the CLI and the queue are in place.
 ARG NEXT_PUBLIC_CLAUDE_ENABLED=false
 ARG NEXT_PUBLIC_PUSH_ENABLED=false
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=
 RUN AUTH_DEV=false \
   NEXTAUTH_SECRET=build-only-placeholder \
   NEXTAUTH_URL=http://localhost:3000 \
