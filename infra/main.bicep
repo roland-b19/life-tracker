@@ -1079,14 +1079,15 @@ resource queueBacklogAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if (!e
   location: 'global'
   tags: tags
   properties: {
-    description: 'More than 20 reminders have waited in the queue for 15 minutes: the send job is not keeping up or is failing.'
+    description: 'More than 20 reminders have waited in the queue for an hour: the send job is not keeping up or is failing.'
     severity: 2
     enabled: true
     scopes: [
       queueService.id
     ]
     evaluationFrequency: 'PT5M'
-    windowSize: 'PT15M'
+    // Azure only offers hourly windows for QueueMessageCount (the metric is sampled hourly).
+    windowSize: 'PT1H'
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
       allOf: [
@@ -1110,7 +1111,7 @@ resource queueBacklogAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if (!e
 }
 
 // The worker logs "<job> failed: <message>" and exits non-zero (worker/clients.mjs), so a failed run is searchable by that line.
-resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = if (!empty(budgetContactEmail)) {
+resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = if (!empty(budgetContactEmail)) {
   name: '${suffix}-worker-failed'
   location: location
   tags: tags
@@ -1119,6 +1120,8 @@ resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2022-06-15' 
     description: 'A reminder job (enqueue or send) logged a failure in the last 10 minutes.'
     severity: 2
     enabled: true
+    // ContainerAppConsoleLogs_CL does not exist in a fresh workspace until the first log line arrives, so validating the query at deploy time fails.
+    skipQueryValidation: true
     scopes: [
       logAnalytics.id
     ]
