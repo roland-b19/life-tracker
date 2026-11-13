@@ -188,7 +188,9 @@ See "Open" in `docs/decisions.md`.
 
 ## Deployed Azure resources
 
-None for Life Tracker. All resources deployed for Iteration 2 testing were
+**2026-11-13: the `stage` rehearsal is deployed** in resource group `life-tracker-stage` (`italynorth`), web app, enqueue and send jobs, PostgreSQL, Key Vault, ACR, queue, Log Analytics, 3 metric alerts. It costs credit until `./scripts/azure-teardown.sh stage DELETE` runs (also deletes the budget). Verified live: Bicep deploys, migrations succeed, enqueue and send run every minute and succeed, Key Vault and ACR refuse a public caller (403), the storage queue is blocked by network rules, shared-key access is off. Not yet verified: sign-in, second-account denial, a real reminder round-trip.
+
+Earlier (2026-11-08): all resources deployed for Iteration 2 testing were
 synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscription's
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 
