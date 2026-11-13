@@ -25,7 +25,7 @@ done
 az bicep build --file infra/main.bicep --stdout >/dev/null
 az account show --output none
 
-for required_var in DB_ADMIN_PASSWORD DATABASE_URL NEXTAUTH_SECRET AUTH_AZURE_CLIENT_SECRET AUTH_AZURE_TENANT_ID AUTH_AZURE_CLIENT_ID AUTH_ISSUER NEXTAUTH_URL; do
+for required_var in DB_ADMIN_PASSWORD DATABASE_URL NEXTAUTH_SECRET AUTH_AZURE_CLIENT_SECRET AUTH_AZURE_TENANT_ID AUTH_AZURE_CLIENT_ID AUTH_ISSUER NEXTAUTH_URL VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT; do
   if [[ -z "${!required_var:-}" ]]; then
     echo "Missing required deployment environment variable: $required_var" >&2
     exit 1
@@ -43,6 +43,9 @@ run_suffix=$(date +%s | tail -c 5)
 kv_name="lt${environment}${loc_suffix}kv${run_suffix}"
 acr_login_server="${acr_name}.azurecr.io"
 acr_image="$acr_login_server/life-tracker"
+acr_worker_image="$acr_login_server/life-tracker-worker"
+# What-if never pulls an image, and the worker image does not exist yet (ACR is created below): its digest is only known after the push.
+placeholder_digest="sha256:$(printf '0%.0s' {1..64})"
 
 echo "Ensuring resource group exists with required tags: $resource_group"
 az group create \
@@ -70,7 +73,11 @@ az deployment group what-if \
     authIssuer="$AUTH_ISSUER" \
     postgresSku="$postgres_sku" \
     registryName="$acr_name" \
-    keyVaultName="$kv_name"
+    keyVaultName="$kv_name" \
+    workerImageDigest="$placeholder_digest" \
+    vapidPublicKey="$VAPID_PUBLIC_KEY" \
+    vapidSubject="$VAPID_SUBJECT" \
+    vapidPrivateKey="$VAPID_PRIVATE_KEY"
 
 if [[ "${CONFIRM_DEPLOY:-}" != "YES" ]]; then
   echo "What-if preview complete. Set CONFIRM_DEPLOY=YES to proceed with live deployment."
@@ -114,7 +121,11 @@ echo "Tagging and pushing image $acr_image@$image_digest"
 if docker image inspect "$image_digest" >/dev/null 2>&1; then
   docker tag "$image_digest" "$acr_image:deploy"
 else
-  docker build --platform linux/amd64 -t "$acr_image:deploy" .
+  # Azure turns the web push feature on: the public VAPID key is inlined into the page at build time (a local image passed by digest must be built the same way).
+  docker build --platform linux/amd64 \
+    --build-arg NEXT_PUBLIC_PUSH_ENABLED=true \
+    --build-arg NEXT_PUBLIC_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
+    -t "$acr_image:deploy" .
 fi
 docker push "$acr_image:deploy"
 pushed_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_image:deploy" | cut -d@ -f2)
@@ -126,6 +137,18 @@ if [[ "$pushed_digest" != "$image_digest" ]]; then
   echo "Run: ./scripts/azure-teardown.sh $environment DELETE" >&2
   exit 1
 fi
+
+# The reminder worker is a separate image built from worker/ (its own dependencies); its digest comes from the push.
+echo "Building and pushing the reminder worker image"
+docker build --platform linux/amd64 -t "$acr_worker_image:deploy" worker
+docker push "$acr_worker_image:deploy"
+worker_image_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$acr_worker_image:deploy" | cut -d@ -f2)
+if [[ ! "$worker_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "FATAL: unexpected worker image digest: $worker_image_digest" >&2
+  echo "Run: ./scripts/azure-teardown.sh $environment DELETE" >&2
+  exit 1
+fi
+echo "Worker image pushed with digest: $worker_image_digest"
 
 echo "Deploying infrastructure to $resource_group..."
 if ! az deployment group create \
@@ -148,6 +171,10 @@ if ! az deployment group create \
     postgresSku="$postgres_sku" \
     registryName="$acr_name" \
     keyVaultName="$kv_name" \
+    workerImageDigest="$worker_image_digest" \
+    vapidPublicKey="$VAPID_PUBLIC_KEY" \
+    vapidSubject="$VAPID_SUBJECT" \
+    vapidPrivateKey="$VAPID_PRIVATE_KEY" \
   --output none; then
   echo "Deployment failed! Run teardown immediately to prevent stray resources:" >&2
   echo "./scripts/azure-teardown.sh $environment DELETE" >&2
@@ -158,7 +185,7 @@ echo "Deployment succeeded. Non-secret outputs:"
 deployment_outputs=$(az deployment group show \
   --name main \
   --resource-group "$resource_group" \
-  --query "{resourceGroup:properties.outputs.resourceGroupName.value, appUrl:properties.outputs.containerAppUrl.value, postgresServer:properties.outputs.postgresServerName.value, acrLoginServer:properties.outputs.acrLoginServer.value}" \
+  --query "{resourceGroup:properties.outputs.resourceGroupName.value, appUrl:properties.outputs.containerAppUrl.value, postgresServer:properties.outputs.postgresServerName.value, acrLoginServer:properties.outputs.acrLoginServer.value, queueAccount:properties.outputs.queueAccountName.value, workerJobs:properties.outputs.workerJobNames.value}" \
   -o json)
 echo "$deployment_outputs"
 
@@ -274,4 +301,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Update NEXTAUTH_URL in .env.azure to: $app_url"
 echo "  2. Run end-to-end smoke tests (health, Entra login, authorization)"
-echo "  3. Run teardown after validation: ./scripts/azure-teardown.sh $environment DELETE"
+echo "  3. Check the reminder pipeline: add a task with a reminder a few minutes ahead, enable reminders in the app, then"
+echo "     az containerapp job execution list --name life-tracker-$environment-enqueue --resource-group $resource_group -o table"
+echo "     az containerapp job execution list --name life-tracker-$environment-send --resource-group $resource_group -o table"
+echo "  4. Run teardown after validation: ./scripts/azure-teardown.sh $environment DELETE"

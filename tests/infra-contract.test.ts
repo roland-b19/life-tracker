@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const bicep = readFileSync("infra/main.bicep", "utf8");
 const deployScript = readFileSync("scripts/azure-deploy.sh", "utf8");
+const dockerfile = readFileSync("Dockerfile", "utf8");
+const rootPackage = readFileSync("package.json", "utf8");
 
 describe("Azure infrastructure contract", () => {
   it("uses a private-access ACR SKU and disables admin access", () => {
@@ -67,5 +69,72 @@ describe("Azure infrastructure contract", () => {
     expect(bicep).toContain("resource registryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'");
     expect(bicep).toContain("resource budget 'Microsoft.Consumption/budgets@2023-05-01'");
     expect(bicep).toContain("output acrLoginServer string = registry.properties.loginServer");
+  });
+});
+
+describe("Azure reminder pipeline contract", () => {
+  it("keeps the queue storage account off the public internet and key-less", () => {
+    expect(bicep).toContain("resource storage 'Microsoft.Storage/storageAccounts@2023-05-01'");
+    expect(bicep).toContain("allowSharedKeyAccess: false");
+    expect(bicep).toContain("allowBlobPublicAccess: false");
+    expect(bicep).toContain("publicNetworkAccess: 'Disabled'");
+    expect(bicep).toContain("defaultAction: 'Deny'");
+    expect(bicep).toContain("minimumTlsVersion: 'TLS1_2'");
+    expect(bicep).toContain("groupIds: [\n            'queue'");
+    expect(bicep).toContain("privatelink.queue.${az.environment().suffixes.storage}");
+    expect(bicep).toContain("storagePrivateDnsGroup");
+  });
+
+  it("gives the worker its own identity with queue roles on the queue only, and no storage key", () => {
+    expect(bicep).toContain("resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31'");
+    expect(bicep).toContain("c6a89b2d-59bc-44d0-9896-0f6e12d7b80a"); // Storage Queue Data Message Sender
+    expect(bicep).toContain("8a0f0c08-91a1-4084-bc3d-661d67233fed"); // Storage Queue Data Message Processor
+    expect(bicep.match(/scope: reminderQueue/g)).toHaveLength(2);
+    expect(bicep).not.toContain("storage.listKeys");
+  });
+
+  it("runs the enqueue and send jobs from the worker image, by digest, with secrets from Key Vault", () => {
+    expect(bicep).toContain("param workerImageDigest string");
+    expect(bicep).toContain("life-tracker-worker@${workerImageDigest}");
+    expect(bicep).toContain("resource enqueueJob 'Microsoft.App/jobs@2023-05-01'");
+    expect(bicep).toContain("resource sendJob 'Microsoft.App/jobs@2023-05-01'");
+    expect(bicep.match(/triggerType: 'Schedule'/g)).toHaveLength(2);
+    expect(bicep).toContain("'enqueue.mjs'");
+    expect(bicep).toContain("'send.mjs'");
+    expect(bicep).toContain("secretRef: 'vapid-private-key'");
+    expect(bicep).toContain("name: 'vapid-private-key'");
+    expect(bicep).toMatch(/@secure\(\)\n@minLength\(1\)\n@description\('VAPID private key[^\n]*\nparam vapidPrivateKey string/);
+    // The web app never touches the queue or the push key.
+    const webApp = bicep.slice(bicep.indexOf("resource containerApp "), bicep.indexOf("resource keyVaultSecretsUserRole"));
+    expect(webApp).not.toMatch(/QUEUE_|VAPID/);
+  });
+
+  it("monitors the app and the pipeline: alerts to an action group, saved queries, queue diagnostics", () => {
+    for (const resource of [
+      "resource alertGroup 'Microsoft.Insights/actionGroups@2023-01-01'",
+      "resource webServerErrorsAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
+      "resource webRestartsAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
+      "resource queueBacklogAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
+      "resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2022-06-15'",
+      "resource queueDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'",
+    ]) {
+      expect(bicep).toContain(resource);
+    }
+    expect(bicep.match(/Microsoft\.OperationalInsights\/workspaces\/savedSearches@2020-08-01/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("deploys the worker and the push flag from the script, without printing secrets", () => {
+    expect(deployScript).toContain("VAPID_PRIVATE_KEY");
+    expect(deployScript).toContain('docker build --platform linux/amd64 -t "$acr_worker_image:deploy" worker');
+    expect(deployScript).toContain('workerImageDigest="$worker_image_digest"');
+    expect(deployScript).toContain("--build-arg NEXT_PUBLIC_PUSH_ENABLED=true");
+    expect(deployScript).not.toMatch(/echo[^\n]*VAPID_PRIVATE_KEY/);
+    expect(dockerfile).toContain("ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=");
+    expect(dockerfile).toContain("ARG NEXT_PUBLIC_PUSH_ENABLED=false"); // off unless the Azure deploy asks for it
+  });
+
+  it("keeps the worker's dependencies out of the web app (and so out of the Vercel build)", () => {
+    for (const dependency of ["web-push", "@azure/storage-queue", "@azure/identity"]) expect(rootPackage).not.toContain(dependency);
+    expect(readFileSync("worker/package.json", "utf8")).toContain("@azure/storage-queue");
   });
 });

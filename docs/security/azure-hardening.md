@@ -29,6 +29,14 @@ runtime evidence.
   preview and multi-stage approvals; teardown is idempotent, waits for deletion
   and verifies the resource group is absent.
 
+- [x] Reminder queue: storage account with public network access, shared-key access
+  and anonymous blobs disabled; private endpoint for the `queue` group with private
+  DNS; worker identity with roles scoped to the one queue (no `listKeys`); VAPID
+  private key in Key Vault. Checked by `tests/infra-contract.test.ts`.
+- [x] Observability: action group with e-mail, alert rules for web 5xx, replica
+  restarts, queue backlog and worker failures, four saved Log Analytics queries.
+- [x] CI builds, scans (Trivy) and audits the worker image and its own dependencies.
+
 ## Phase 2B: evidence required after explicit approval
 
 - [ ] `az deployment group what-if` reviewed against the final deployment
@@ -45,3 +53,10 @@ runtime evidence.
 - [x] The failed first deployment was torn down and the resource group absence
   was verified. Pre-existing subscription resources are not project-owned and
   are not deleted.
+- [ ] The queue is unreachable from the internet and a message round-trip works
+  through the private endpoint (enqueue job writes, send job reads, deletes).
+- [ ] Both jobs start every minute, read the VAPID secret through their identity and
+  finish without the `enqueue failed:` or `send failed:` log line.
+- [ ] A test notification reaches a real device; a second Entra account is denied
+  another user's task.
+- [ ] Alert rules and saved queries exist and the e-mail action group received a test.
