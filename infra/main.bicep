@@ -1110,45 +1110,6 @@ resource queueBacklogAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if (!e
   }
 }
 
-// The worker logs "<job> failed: <message>" and exits non-zero (worker/clients.mjs), so a failed run is searchable by that line.
-resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = if (!empty(budgetContactEmail)) {
-  name: '${suffix}-worker-failed'
-  location: location
-  tags: tags
-  properties: {
-    displayName: '${suffix} reminder worker failed'
-    description: 'A reminder job (enqueue or send) logged a failure in the last 10 minutes.'
-    severity: 2
-    enabled: true
-    // ContainerAppConsoleLogs_CL does not exist in a fresh workspace until the first log line arrives, so validating the query at deploy time fails.
-    skipQueryValidation: true
-    scopes: [
-      logAnalytics.id
-    ]
-    evaluationFrequency: 'PT5M'
-    windowSize: 'PT10M'
-    criteria: {
-      allOf: [
-        {
-          query: 'ContainerAppConsoleLogs_CL | where Log_s matches regex "(enqueue|send) failed:"'
-          timeAggregation: 'Count'
-          operator: 'GreaterThan'
-          threshold: 0
-          failingPeriods: {
-            numberOfEvaluationPeriods: 1
-            minFailingPeriodsToAlert: 1
-          }
-        }
-      ]
-    }
-    actions: {
-      actionGroups: [
-        alertGroup.id
-      ]
-    }
-  }
-}
-
 resource webErrorsQuery 'Microsoft.OperationalInsights/workspaces/savedSearches@2020-08-01' = {
   parent: logAnalytics
   name: 'life-tracker-web-errors'

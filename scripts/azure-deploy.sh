@@ -151,7 +151,9 @@ fi
 echo "Worker image pushed with digest: $worker_image_digest"
 
 echo "Deploying infrastructure to $resource_group..."
-if ! az deployment group create \
+# A fresh role assignment (AcrPull for the worker jobs) needs a minute to propagate; the deployment is idempotent, so one retry settles it.
+deploy_infra() {
+az deployment group create \
   --name main \
   --resource-group "$resource_group" \
   --template-file infra/main.bicep \
@@ -175,7 +177,21 @@ if ! az deployment group create \
     vapidPublicKey="$VAPID_PUBLIC_KEY" \
     vapidSubject="$VAPID_SUBJECT" \
     vapidPrivateKey="$VAPID_PRIVATE_KEY" \
-  --output none; then
+  --output none
+}
+
+deployed=false
+for attempt in 1 2; do
+  if deploy_infra; then
+    deployed=true
+    break
+  fi
+  if [[ "$attempt" == "1" ]]; then
+    echo "First deployment attempt failed, retrying in 90 seconds (role assignments propagate slowly)..." >&2
+    sleep 90
+  fi
+done
+if [[ "$deployed" != "true" ]]; then
   echo "Deployment failed! Run teardown immediately to prevent stray resources:" >&2
   echo "./scripts/azure-teardown.sh $environment DELETE" >&2
   exit 1

@@ -18,7 +18,7 @@ Life Tracker is a personal tracker: tasks with reminders, wishlist, health (weig
    └─ job send    (every minute) ◄─ same queue ──► web push service ──► the user's device
  Key Vault (private endpoint): database URL, auth secrets, VAPID private key
  ACR Premium (private endpoint): images pulled by digest
- Log Analytics: diagnostics, 4 alert rules → e-mail, 4 saved queries
+ Log Analytics: diagnostics, 3 alert rules → e-mail, 4 saved queries
 ```
 
 Design choices worth saying out loud:
@@ -42,7 +42,7 @@ Show: `infra/main.bicep` (one template, tagged resources), `worker/` (small, iso
 
 ## 5. Observability (10%)
 
-Log Analytics with diagnostic settings on PostgreSQL, Key Vault, ACR, Container Apps and the queue; an action group (e-mail to the budget contact); alert rules for web 5xx, replica restarts, queue backlog and worker failures; four saved queries (web errors, reminder runs, queue activity, vault access). Demo: run a saved query, then trigger a rule with a deliberately bad request.
+Log Analytics with diagnostic settings on PostgreSQL, Key Vault, ACR, Container Apps and the queue; an action group (e-mail to the budget contact); alert rules for web 5xx, replica restarts, and queue backlog; four saved queries (web errors, reminder runs and failures, queue activity, vault access). Demo: run a saved query, then trigger a rule with a deliberately bad request.
 
 ## 6. Deployment (10%)
 

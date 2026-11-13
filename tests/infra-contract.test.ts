@@ -115,7 +115,6 @@ describe("Azure reminder pipeline contract", () => {
       "resource webServerErrorsAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
       "resource webRestartsAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
       "resource queueBacklogAlert 'Microsoft.Insights/metricAlerts@2018-03-01'",
-      "resource workerFailureAlert 'Microsoft.Insights/scheduledQueryRules@2023-12-01'",
       "resource queueDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'",
     ]) {
       expect(bicep).toContain(resource);
