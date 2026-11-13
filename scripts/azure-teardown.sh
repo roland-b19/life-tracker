@@ -15,13 +15,15 @@ if [[ "$confirmation" != "DELETE" ]]; then
 fi
 
 resource_group="life-tracker-$environment"
-if ! az group show --name "$resource_group" --output none 2>/dev/null; then
+if az group show --name "$resource_group" --output none 2>/dev/null; then
+  az group delete --name "$resource_group" --yes --no-wait
+  az group wait --name "$resource_group" --deleted --timeout 1800
+else
   echo "Resource group is already absent: $resource_group"
-  exit 0
 fi
 
-az group delete --name "$resource_group" --yes --no-wait
-az group wait --name "$resource_group" --deleted --timeout 1800
+# The budget is subscription-scoped, so deleting the group leaves it behind.
+az consumption budget delete --budget-name "$resource_group-budget" 2>/dev/null || true
 
 if az group show --name "$resource_group" --output none 2>/dev/null; then
   echo "Resource group still exists after teardown: $resource_group" >&2
