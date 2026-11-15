@@ -1,7 +1,7 @@
 "use client";
 
-import { formatDMY, toISODate } from "@/lib/format-date";
-import { kgDelta, progressSets, type HistoryEntry } from "@/lib/gym-progress";
+import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { kgDelta, progressSets, weekStart, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import {
   logSetAction,
   reopenSessionAction,
   restoreSessionAction,
+  saveDeloadWeeksAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
@@ -78,6 +79,8 @@ interface DeloadInfo {
   isDeloadDue: boolean;
   inDeloadWeek: boolean;
   lastDeloadDate: string | null;
+  deloadWeeks: string[];
+  nextDeloadWeek: string | null;
 }
 
 interface WorkoutSetData {
@@ -157,6 +160,9 @@ export function GymClient({
   const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false);
+  // Deload weeks: the list being edited (Sundays), null while the dialog is closed.
+  const [deloadDraft, setDeloadDraft] = useState<string[] | null>(null);
+  const [deloadError, setDeloadError] = useState("");
   // Exercises opened in the workout; they start collapsed and are not kept between workouts.
   const [openEx, setOpenEx] = useState<string[]>([]);
   const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
@@ -664,6 +670,38 @@ export function GymClient({
     }
   }
 
+  /** The weeks the dialog lists: this week and the next twelve, plus any marked week outside them. */
+  function deloadChoices(): string[] {
+    const first = weekStart(toISODate());
+    const ahead = Array.from({ length: 13 }, (_, i) => addDays(first, i * 7));
+    return [...new Set([...deload.deloadWeeks, ...ahead])].sort();
+  }
+
+  async function saveDeloadWeeks(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deloadDraft) return;
+    setBusy(true);
+    setDeloadError("");
+    const before = deload.deloadWeeks;
+    try {
+      const res = await saveDeloadWeeksAction({ weeks: deloadDraft });
+      if (!res.success) throw new Error();
+      setDeloadDraft(null);
+      showToast({
+        message: "Saved deload weeks",
+        type: "success",
+        onUndo: async () => {
+          const back = await saveDeloadWeeksAction({ weeks: before }).catch(() => null);
+          if (!back?.success) showToast({ message: "Failed to undo the edit", type: "warning" });
+        },
+      });
+    } catch {
+      setDeloadError("Failed to save deload weeks");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Page userName={userName}>
       {/* Deload Status Card */}
@@ -674,11 +712,37 @@ export function GymClient({
         sub={
           deload.inDeloadWeek || deload.isDeloadDue
             ? "A deload week stays out of the Exercise progress chart."
-            : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
+            : deload.nextDeloadWeek
+              ? `Deload starts ${formatDMY(deload.nextDeloadWeek)}.`
+              : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
       >
-        <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => setIsDeloadMode(e.target.checked)} />
+        <span className="deload-actions">
+          <TintButton icon={<PencilIcon size={14} />} disabled={busy} onClick={() => { setDeloadError(""); setDeloadDraft(deload.deloadWeeks); }}>
+            Edit
+          </TintButton>
+          <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => setIsDeloadMode(e.target.checked)} />
+        </span>
       </Banner>
+      <FormModal
+        isOpen={deloadDraft !== null}
+        onClose={() => setDeloadDraft(null)}
+        title="Deload weeks"
+        onSubmit={saveDeloadWeeks}
+        error={deloadError}
+        busy={busy}
+      >
+        <p className="muted move-hint">Weeks run Sunday to Saturday. The week after a deload week starts the next 5-week cycle.</p>
+        {deloadChoices().map((w) => (
+          <Toggle
+            key={w}
+            label={`${formatDMY(w)} - ${formatDMY(addDays(w, 6))}${w === weekStart(toISODate()) ? " (this week)" : ""}`}
+            checked={deloadDraft?.includes(w) ?? false}
+            disabled={busy}
+            onChange={(e) => setDeloadDraft((d) => (e.target.checked ? [...(d ?? []), w] : (d ?? []).filter((x) => x !== w)))}
+          />
+        ))}
+      </FormModal>
 
       {/* Active Workout Session Logger */}
       {activeSession ? (
@@ -743,14 +807,10 @@ export function GymClient({
 
                   {!folded && (
                     <>
-                    {/* The same exercise the last time this day was trained: the numbers to beat */}
+                    {/* The same exercise the last time it was trained (this day first, any day otherwise): the numbers to beat */}
                     {(() => {
-                      const last = history.find(
-                        (h) =>
-                          h.dayId === activeSession.splitDayId &&
-                          h.date < activeSession.date &&
-                          h.exercises.some((e) => e.id === exercise.exerciseId),
-                      );
+                      const past = history.filter((h) => h.date < activeSession.date && h.exercises.some((e) => e.id === exercise.exerciseId));
+                      const last = past.find((h) => h.dayId === activeSession.splitDayId) ?? past[0];
                       const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
                       if (!last) return null;
                       return (

@@ -1,19 +1,18 @@
 import { addDays } from "./format-date";
 import type { HistorySession, HistorySet } from "./gym";
 
-/** Monday of the week a date falls in. */
+/** Sunday of the week a date falls in: the user's week runs Sunday to Saturday. */
 export function weekStart(date: string): string {
-  const monday0 = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
-  return addDays(date, -monday0);
+  return addDays(date, -new Date(`${date}T00:00:00Z`).getUTCDay());
 }
 
-/** Whole calendar weeks (Monday to Monday) from one date's week to another's: negative when `to` is earlier. */
+/** Whole calendar weeks (Sunday to Sunday) from one date's week to another's: negative when `to` is earlier. */
 export function weeksBetween(from: string, to: string): number {
-  const monday = (d: string) => Date.parse(`${weekStart(d)}T00:00:00Z`);
-  return Math.round((monday(to) - monday(from)) / (7 * 86_400_000));
+  const sunday = (d: string) => Date.parse(`${weekStart(d)}T00:00:00Z`);
+  return Math.round((sunday(to) - sunday(from)) / (7 * 86_400_000));
 }
 
-/** Mondays of the weeks that hold a deload session: easier training, so the whole week stays out of the Exercise progress chart (and nothing else). */
+/** Sundays of the weeks that hold a deload session: easier training, so the whole week stays out of the Exercise progress chart (and nothing else). */
 function deloadWeeks(sets: HistorySet[]) {
   return new Set(sets.filter((s) => s.isDeload).map((s) => weekStart(s.date)));
 }

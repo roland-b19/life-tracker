@@ -36,6 +36,13 @@ export const finishSessionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+/** The whole list of deload weeks, each the Sunday that starts the week (Sunday to Saturday). */
+export const saveDeloadWeeksSchema = z.object({
+  weeks: z
+    .array(isoDate.refine((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 0, "A deload week starts on a Sunday"))
+    .max(200),
+});
+
 export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
 
 /** Undo of cancelling a workout: the session as it was, with all its sets (same ids and times). */
