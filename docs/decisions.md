@@ -455,3 +455,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 ## 2026-11-15 — Deload session is only that session; select-all hardened (user)
 - Ticking "Deload session" marks only that workout: Progress skips that session's sets, not its week, and a flagged session no longer makes its week a deload week for the cycle. Only the weeks chosen in the Deload weeks dialog (`deload_weeks`) are deload weeks; choosing a week still flags the sessions in it. No migration.
 - Select-all on double-tap compares only the field (a form moves when the keyboard opens, so the second tap can land elsewhere) and re-applies the full selection for 800 ms after the second tap, because iOS sets its word selection late.
+
+## 2026-11-15 — Audit fixes 3: minor cleanup (user)
+- A link is only opened or shown as a host when it has no credentials in it; the heuristic for bare domains stays a short list of file endings, not a TLD list (`shortcut:` comment in `src/lib/link.ts`).
+- Text fields that must not be empty also refuse zero-width-only values (`visible`).
+- Delete of an already-deleted task is reported ("was already removed") and its Undo does nothing; an edit of one says it was removed elsewhere.

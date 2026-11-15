@@ -82,6 +82,7 @@ export function TodosClient({
 
   // Bumped by every load and by every change made on screen, so an older refresh never lands over a newer state.
   const requestId = useRef(0);
+  const submitting = useRef(false);
   // The load a day switch started; a later switch that needs no load of its own waits for it.
   const loading = useRef<Promise<void>>(Promise.resolve());
 
@@ -166,7 +167,8 @@ export function TodosClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = titleInput.trim();
-    if (!title || saving) return;
+    if (!title || saving || submitting.current) return;
+    submitting.current = true; // state is stale within one tick, so a fast double tap would save twice
     const reminderTime = reminderTimeInput.trim() || null;
     const recurrencePattern = (editing ? editing.isRecurring : isDaily) ? "daily" : "none";
     setTitleError(null);
@@ -179,7 +181,8 @@ export function TodosClient({
         const after = { ...before, title, reminderTime, category };
         const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
         if ("error" in res) return setTitleError(res.error);
-        if (res.success) {
+        if (!res.success) showToast({ message: `"${before.title}" was removed elsewhere`, type: "warning" });
+        else {
           ++requestId.current;
           drop(before);
           putBack(after);
@@ -244,6 +247,7 @@ export function TodosClient({
     } catch {
       setTitleError("Failed to save task"); // the form stays open
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -296,14 +300,16 @@ export function TodosClient({
   const handleDeleteTodo = (target: TodoItem) => {
     ++requestId.current;
     drop(target);
+    // true: removed now; false: the call failed; "gone": it was already deleted elsewhere, so there is nothing to undo.
     const deleted = deleteTodoAction(target.id).then(
-      (res) => res.success,
+      (res) => (res.success ? (res.deleted ? true : ("gone" as const)) : false),
       () => false,
     );
     showToast({
       message: `Removed "${target.title}"`,
       onUndo: async () => {
         ++requestId.current;
+        if ((await deleted) === "gone") return; // deleted elsewhere: Undo must not bring it back
         // Only onto the list it was on, if that is still the one on screen.
         if (shows(target)) putBack(target);
         if (!(await deleted)) return; // the delete never happened
@@ -316,6 +322,7 @@ export function TodosClient({
       },
     });
     void deleted.then((ok) => {
+      if (ok === "gone") showToast({ message: `"${target.title}" was already removed`, type: "warning" });
       if (ok) return void loadDay();
       if (shows(target)) putBack(target);
       showToast({ message: "Failed to remove task", type: "warning" });

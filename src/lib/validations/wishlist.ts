@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
+import { visible } from "./common";
 
 export const createWishlistItemSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(120, "Name cannot exceed 120 chars"),
+  // trim() leaves zero-width characters, so a name of only those would look empty on screen.
+  name: z.string().trim().min(1, "Name is required").max(120, "Name cannot exceed 120 chars").refine(visible, "Name is required"),
   // Free text on purpose: a store name is as valid as a URL.
   url: z.string().trim().max(500, "Link cannot exceed 500 chars").optional().nullable(),
   estimatedPrice: z
