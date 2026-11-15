@@ -9,11 +9,21 @@ export function weeksBetween(from: string, to: string): number {
   return Math.round((sunday(to) - sunday(from)) / (7 * 86_400_000));
 }
 
-/** An exercise's heaviest load of each training day. Sets of deload sessions are left out (only that session, not its week): only this chart ignores them. */
+/** The load a set counts as: plates and kg are different units, so extra kg is only added to a kg or bodyweight set. */
+export const setLoad = (loadType: string, value: number | string, extra: number | string) =>
+  loadType === "plates" ? Number(value) : Number(value) + Number(extra);
+
+/** The unit an exercise is shown in: the one of its latest set, so a change of unit never plots plates against kg. */
+export function exerciseUnit(sets: HistorySet[], exerciseId: string) {
+  return [...sets].reverse().find((s) => s.exerciseId === exerciseId && !s.isDeload)?.loadType ?? "kg"; // sets arrive oldest first
+}
+
+/** An exercise's heaviest load of each training day, in its current unit. Sets of deload sessions are left out (only that session, not its week): only this chart ignores them. */
 export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
+  const unit = exerciseUnit(sets, exerciseId);
   const byDate = new Map<string, { date: string; weight: number }>();
   for (const s of sets) {
-    if (s.exerciseId !== exerciseId || s.isDeload) continue;
+    if (s.exerciseId !== exerciseId || s.isDeload || s.loadType !== unit) continue;
     const best = byDate.get(s.date) ?? { date: s.date, weight: 0 };
     best.weight = Math.max(best.weight, s.load);
     byDate.set(s.date, best);
@@ -26,12 +36,12 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 /**
  * How a workout day progressed week over week: for each week, the average over the day's exercises of the change in
  * their best weight (kg) from the week before. An exercise only counts in a week when it was also done the week
- * before. Deload weeks count like any other week.
+ * before. Deload weeks count like any other week. Plates are not kg, so plate sets are left out.
  */
 export function dayProgress(sets: HistorySet[], dayId: string) {
   const perExercise = new Map<string, Map<string, number>>();
   for (const s of sets) {
-    if (s.dayId !== dayId) continue;
+    if (s.dayId !== dayId || s.loadType === "plates") continue;
     const weeks = perExercise.get(s.exerciseId) ?? new Map();
     const w = weekStart(s.date);
     weeks.set(w, Math.max(weeks.get(w) ?? 0, s.load));
@@ -75,7 +85,7 @@ export function progressSets(history: HistorySession[], open: OpenWorkout | null
     for (const x of open.sets) {
       const { exerciseId, setOrder, reps, loadType } = x;
       const exerciseName = names.get(exerciseId) ?? "Exercise";
-      sets.push({ date, sessionId, isDeload, dayId, dayName, exerciseId, exerciseName, setOrder, reps, loadType, load: Number(x.loadValue) + Number(x.extraKg) });
+      sets.push({ date, sessionId, isDeload, dayId, dayName, exerciseId, exerciseName, setOrder, reps, loadType, load: setLoad(loadType, x.loadValue, x.extraKg) });
     }
   }
   return sets.sort((a, b) => a.date.localeCompare(b.date));

@@ -73,7 +73,7 @@ export function LineChart({
   summary,
   height = 140,
 }: {
-  points: { label: string; value: number | null }[];
+  points: { label: string; value: number | null; at?: number }[];
   summary: string;
   height?: number;
 }) {
@@ -84,7 +84,11 @@ export function LineChart({
   const lo = values.length ? Math.min(...values) : 0;
   const hi = values.length ? Math.max(...values) : 0;
   const span = hi - lo || 1;
-  const x = (i: number) => pad + (i / (points.length - 1)) * (w - 2 * pad);
+  // With a position per point (a day number), the gaps between points are drawn as long as they are; without, they are evenly spaced.
+  const placed = points.every((p) => p.at !== undefined);
+  const first = points[0].at ?? 0;
+  const run = (points[points.length - 1].at ?? 0) - first || 1;
+  const x = (i: number) => pad + ((placed ? ((points[i].at ?? 0) - first) / run : i / (points.length - 1)) * (w - 2 * pad));
   const y = (v: number) => (hi === lo ? height / 2 : pad + (1 - (v - lo) / span) * (height - 2 * pad));
   const known = points.flatMap((p, i) => (p.value === null ? [] : [{ x: x(i), y: y(p.value) }]));
   // One entry has nothing to connect to, so it is drawn across the whole plot.

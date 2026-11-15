@@ -1,4 +1,4 @@
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -67,6 +67,10 @@ async function seedDefaultExercises(): Promise<Map<string, string>> {
   return nameToId;
 }
 
+/** Serialises one kind of write per user until the transaction ends (Postgres advisory lock, no migration needed). */
+export const lockUser = (tx: Pick<typeof db, "execute">, scope: string, userId: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`${scope}:${userId}`}))`);
+
 export async function ensureUserDefaultSplit(userId: string): Promise<string> {
   const existingSplits = await db
     .select({ id: workoutSplits.id })
@@ -79,129 +83,136 @@ export async function ensureUserDefaultSplit(userId: string): Promise<string> {
   }
 
   const exerciseMap = await ensureDefaultExercises();
+  // One transaction under a per-user lock: a half-built split never shows, and two first visits at once build one.
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "split", userId);
+    const [again] = await tx.select({ id: workoutSplits.id }).from(workoutSplits).where(eq(workoutSplits.userId, userId)).limit(1);
+    if (again) return again.id;
 
-  // Create the default Upper / Lower 5-Day split
-  const [split] = await db
-    .insert(workoutSplits)
-    .values({
-      userId,
-      name: "Upper / Lower 5-Day",
-      isActive: true,
-    })
-    .returning({ id: workoutSplits.id });
-
-  // 7 days specification
-  const daysSpec = [
-    {
-      dayOfWeek: 0,
-      name: "Upper (chest)",
-      isRest: false,
-      exercises: [
-        { name: "Incline barbell press", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Cable fly (push down)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Weighted pull-ups", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
-        { name: "Chest-supported row", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Bayesian curl (high)", targetSets: 2, minReps: 5, maxReps: 8 },
-      ],
-    },
-    {
-      dayOfWeek: 1,
-      name: "Legs (hamstrings)",
-      isRest: false,
-      exercises: [
-        { name: "Seated/lying hamstring curl", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Barbell squat / Leg press", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "RDL (Romanian Deadlift)", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Leg extension", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Abductors (outside)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Standing calf raise", targetSets: 2, minReps: 8, maxReps: 10 },
-      ],
-    },
-    {
-      dayOfWeek: 2,
-      name: "Rest",
-      isRest: true,
-      exercises: [],
-    },
-    {
-      dayOfWeek: 3,
-      name: "Upper (back)",
-      isRest: false,
-      exercises: [
-        { name: "Incline barbell press", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Cable fly (push down)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Weighted pull-ups", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
-        { name: "Chest-supported row", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Bayesian curl (high)", targetSets: 2, minReps: 8, maxReps: 10 },
-      ],
-    },
-    {
-      dayOfWeek: 4,
-      name: "Legs (quads)",
-      isRest: false,
-      exercises: [
-        { name: "Seated/lying hamstring curl", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Barbell squat / Leg press", targetSets: 2, minReps: 5, maxReps: 8 },
-        { name: "Hip thrust", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Leg extension", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Adductors (inside)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Standing calf raise", targetSets: 2, minReps: 8, maxReps: 10 },
-      ],
-    },
-    {
-      dayOfWeek: 5,
-      name: "Arms",
-      isRest: false,
-      exercises: [
-        { name: "Incline curl", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Dumbbell curl", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Cable pushdown (low)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Overhead press", targetSets: 2, minReps: 8, maxReps: 10 },
-        { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
-      ],
-    },
-    {
-      dayOfWeek: 6,
-      name: "Rest",
-      isRest: true,
-      exercises: [],
-    },
-  ];
-
-  for (let i = 0; i < daysSpec.length; i++) {
-    const day = daysSpec[i];
-    const [splitDay] = await db
-      .insert(workoutSplitDays)
+    // Create the default Upper / Lower 5-Day split
+    const [split] = await tx
+      .insert(workoutSplits)
       .values({
-        splitId: split.id,
         userId,
-        dayOfWeek: day.dayOfWeek,
-        name: day.name,
-        isRest: day.isRest,
-        orderIndex: i,
+        name: "Upper / Lower 5-Day",
+        isActive: true,
       })
-      .returning({ id: workoutSplitDays.id });
+      .returning({ id: workoutSplits.id });
 
-    for (let j = 0; j < day.exercises.length; j++) {
-      const ex = day.exercises[j];
-      const exId = exerciseMap.get(ex.name);
-      if (exId) {
-        await db.insert(workoutSplitDayExercises).values({
-          splitDayId: splitDay.id,
-          exerciseId: exId,
-          orderIndex: j,
-          targetSets: ex.targetSets,
-          minReps: ex.minReps,
-          maxReps: ex.maxReps,
-        });
+    // 7 days specification
+    const daysSpec = [
+      {
+        dayOfWeek: 0,
+        name: "Upper (chest)",
+        isRest: false,
+        exercises: [
+          { name: "Incline barbell press", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Cable fly (push down)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Weighted pull-ups", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
+          { name: "Chest-supported row", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Bayesian curl (high)", targetSets: 2, minReps: 5, maxReps: 8 },
+        ],
+      },
+      {
+        dayOfWeek: 1,
+        name: "Legs (hamstrings)",
+        isRest: false,
+        exercises: [
+          { name: "Seated/lying hamstring curl", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Barbell squat / Leg press", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "RDL (Romanian Deadlift)", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Leg extension", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Abductors (outside)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Standing calf raise", targetSets: 2, minReps: 8, maxReps: 10 },
+        ],
+      },
+      {
+        dayOfWeek: 2,
+        name: "Rest",
+        isRest: true,
+        exercises: [],
+      },
+      {
+        dayOfWeek: 3,
+        name: "Upper (back)",
+        isRest: false,
+        exercises: [
+          { name: "Incline barbell press", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Cable fly (push down)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Weighted pull-ups", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
+          { name: "Chest-supported row", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Bayesian curl (high)", targetSets: 2, minReps: 8, maxReps: 10 },
+        ],
+      },
+      {
+        dayOfWeek: 4,
+        name: "Legs (quads)",
+        isRest: false,
+        exercises: [
+          { name: "Seated/lying hamstring curl", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Barbell squat / Leg press", targetSets: 2, minReps: 5, maxReps: 8 },
+          { name: "Hip thrust", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Leg extension", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Adductors (inside)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Standing calf raise", targetSets: 2, minReps: 8, maxReps: 10 },
+        ],
+      },
+      {
+        dayOfWeek: 5,
+        name: "Arms",
+        isRest: false,
+        exercises: [
+          { name: "Incline curl", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Dumbbell curl", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Cable pushdown (low)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Cable overhead extension (high)", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Overhead press", targetSets: 2, minReps: 8, maxReps: 10 },
+          { name: "Lateral raise (high)", targetSets: 2, minReps: 8, maxReps: 12 },
+        ],
+      },
+      {
+        dayOfWeek: 6,
+        name: "Rest",
+        isRest: true,
+        exercises: [],
+      },
+    ];
+
+    for (let i = 0; i < daysSpec.length; i++) {
+      const day = daysSpec[i];
+      const [splitDay] = await tx
+        .insert(workoutSplitDays)
+        .values({
+          splitId: split.id,
+          userId,
+          dayOfWeek: day.dayOfWeek,
+          name: day.name,
+          isRest: day.isRest,
+          orderIndex: i,
+        })
+        .returning({ id: workoutSplitDays.id });
+
+      for (let j = 0; j < day.exercises.length; j++) {
+        const ex = day.exercises[j];
+        const exId = exerciseMap.get(ex.name);
+        if (exId) {
+          await tx.insert(workoutSplitDayExercises).values({
+            splitDayId: splitDay.id,
+            exerciseId: exId,
+            orderIndex: j,
+            targetSets: ex.targetSets,
+            minReps: ex.minReps,
+            maxReps: ex.maxReps,
+          });
+        }
       }
     }
-  }
 
-  return split.id;
+
+    return split.id;
+  });
 }

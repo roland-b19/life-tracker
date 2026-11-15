@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -11,15 +11,23 @@ import {
 } from "@/db/schema";
 import {
   CreateCustomExerciseInput,
+  CustomExerciseWithIdInput,
   CreateSessionInput,
   FinishSessionInput,
   LogSetInput,
   RestoreSessionInput,
   SaveSplitDayInput,
 } from "./validations/gym";
-import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
+import { setLoad } from "./gym-progress";
+import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit, lockUser } from "./gym-seed";
 import { addDays, toISODate } from "./format-date";
 import { weekStart, weeksBetween } from "./gym-progress";
+
+/** An expected refusal (a rule of the page, not a bug): the action shows its message instead of failing. */
+export class GymRefusal extends Error {}
+
+/** How many days back a workout without a duration still counts as open (the page's Resume banner uses the same). */
+export const OPEN_WINDOW_DAYS = 2;
 
 export interface DeloadStatus {
   /** x in "Week x of N": 1 to cycleLength, counted from the week after the last deload. */
@@ -59,17 +67,51 @@ export async function createCustomExercise(
   userId: string,
   input: CreateCustomExerciseInput,
 ) {
-  const [created] = await db
-    .insert(exercises)
-    .values({
-      userId,
-      name: input.name,
-      muscleGroup: input.muscleGroup,
-      equipmentType: input.equipmentType,
-      isCustom: true,
-    })
-    .returning();
-  return created;
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId);
+    // Case-insensitive, against the defaults and the user's own, so the picker never lists two of the same name.
+    if (await nameTaken(tx, userId, input.name)) throw new GymRefusal(`"${input.name}" already exists.`);
+    const [created] = await tx
+      .insert(exercises)
+      .values({ userId, name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType, isCustom: true })
+      .returning();
+    return created;
+  });
+}
+
+/** One name per user across the defaults and their own, ignoring case; `except` is the exercise being edited. */
+async function nameTaken(tx: Pick<typeof db, "select">, userId: string, name: string, except?: string) {
+  const [same] = await tx
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(and(sql`lower(${exercises.name}) = lower(${name})`, or(isNull(exercises.userId), eq(exercises.userId, userId)), except ? ne(exercises.id, except) : undefined))
+    .limit(1);
+  return Boolean(same);
+}
+
+/** Edit of the user's own custom exercise (also the Undo of an edit); null when it is not theirs. */
+export async function updateCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId);
+    if (await nameTaken(tx, userId, input.name, input.id)) throw new GymRefusal(`"${input.name}" already exists.`);
+    const [row] = await tx
+      .update(exercises)
+      .set({ name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType })
+      .where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)))
+      .returning();
+    return row ?? null;
+  });
+}
+
+/** Undo of deleting a custom exercise: the same row comes back under its old id (a repeated Undo is a no-op). */
+export async function restoreCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId);
+    if (await nameTaken(tx, userId, input.name, input.id)) throw new GymRefusal(`"${input.name}" already exists.`);
+    await tx.insert(exercises).values({ ...input, userId, isCustom: true }).onConflictDoNothing();
+    const [row] = await tx.select().from(exercises).where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)));
+    return row ?? null;
+  });
 }
 
 /**
@@ -192,6 +234,7 @@ export async function createWorkoutSession(
   userId: string,
   input: CreateSessionInput,
 ) {
+  const today = toISODate();
   if (input.splitDayId) {
     const [day] = await db
       .select({ id: workoutSplitDays.id })
@@ -199,18 +242,20 @@ export async function createWorkoutSession(
       .where(and(eq(workoutSplitDays.id, input.splitDayId), eq(workoutSplitDays.userId, userId)));
     if (!day) throw new Error("Split day not found or unauthorized");
   }
-  const [session] = await db
-    .insert(workoutSessions)
-    .values({
-      userId,
-      date: input.date,
-      splitDayId: input.splitDayId ?? null,
-      isDeload: input.isDeload,
-      notes: input.notes ?? null,
-    })
-    .returning();
-
-  return session;
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // two Start taps (or two tabs) at once must not both pass the check below
+    const [open] = await tx
+      .select({ id: workoutSessions.id })
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), gte(workoutSessions.date, addDays(today, -OPEN_WINDOW_DAYS))))
+      .limit(1);
+    if (open) throw new GymRefusal("A workout is already open. Resume or finish it first.");
+    const [session] = await tx
+      .insert(workoutSessions)
+      .values({ userId, date: input.date, splitDayId: input.splitDayId ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .returning();
+    return session;
+  });
 }
 
 /**
@@ -220,25 +265,25 @@ export async function finishWorkoutSession(
   userId: string,
   input: FinishSessionInput,
 ) {
+  const mine = and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId));
   const [updated] = await db
     .update(workoutSessions)
-    .set({
-      durationMinutes: input.durationMinutes ?? null,
-      notes: input.notes ?? null,
-    })
-    .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
+    .set({ durationMinutes: input.durationMinutes, notes: input.notes ?? null })
+    .where(and(mine, isNull(workoutSessions.durationMinutes)))
     .returning();
-
-  return updated;
+  if (updated) return updated;
+  // A repeated Finish (a second tab, a double tap) keeps the first duration; undefined when the workout is not the user's.
+  const [done] = await db.select().from(workoutSessions).where(mine);
+  return done;
 }
 
 /**
- * Open a finished workout again (Undo of Finish): the duration goes back to null. Owner only.
+ * Open a finished workout again (Undo of Finish): the duration goes back to null, its notes stay. Owner only.
  */
 export async function reopenWorkoutSession(userId: string, sessionId: string) {
   const [reopened] = await db
     .update(workoutSessions)
-    .set({ durationMinutes: null, notes: null })
+    .set({ durationMinutes: null })
     .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
     .returning({ id: workoutSessions.id });
   return reopened;
@@ -264,6 +309,12 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
           .from(workoutSplitDays)
           .where(and(eq(workoutSplitDays.id, input.splitDayId), eq(workoutSplitDays.userId, userId)))
       : [];
+    // A set id that is taken would fail the whole insert with a database error: refuse it as a normal "could not restore".
+    const setIds = input.sets.flatMap((s) => (s.id ? [s.id] : []));
+    if (setIds.length) {
+      const [taken] = await tx.select({ id: workoutSets.id }).from(workoutSets).where(inArray(workoutSets.id, setIds)).limit(1);
+      if (taken) return null;
+    }
     const [session] = await tx
       .insert(workoutSessions)
       .values({ ...(input.id && { id: input.id }), ...(input.createdAt && { createdAt: input.createdAt }), userId, date: input.date, splitDayId: day?.id ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
@@ -324,8 +375,13 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
   // The session and exercise checks are independent, so they share one round trip.
   const [session, [exercise]] = await Promise.all([
     db
-      .select({ id: workoutSessions.id })
+      // The day's target for this exercise comes from the database, never from the request: a client cannot switch the flag off.
+      .select({ id: workoutSessions.id, minReps: workoutSplitDayExercises.minReps })
       .from(workoutSessions)
+      .leftJoin(
+        workoutSplitDayExercises,
+        and(eq(workoutSplitDayExercises.splitDayId, workoutSessions.splitDayId), eq(workoutSplitDayExercises.exerciseId, input.exerciseId)),
+      )
       .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
       .limit(1),
     db
@@ -337,15 +393,9 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
   if (!exercise) throw new Error("Exercise not found or unauthorized");
 
   // Automatic anomaly check: if reps < target min reps
-  let flagAnomaly = input.flagAnomaly;
-  let anomalyReason = input.anomalyReason;
-
-  if (input.minTargetReps && input.reps < input.minTargetReps) {
-    flagAnomaly = true;
-    if (!anomalyReason) {
-      anomalyReason = "too_heavy";
-    }
-  }
+  const below = session[0].minReps !== null && input.reps < session[0].minReps;
+  const flagAnomaly = input.flagAnomaly || below;
+  const anomalyReason = input.anomalyReason ?? (below ? "too_heavy" : null);
 
   const [createdSet] = await db
     .insert(workoutSets)
@@ -364,7 +414,7 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
       isPartial: input.isPartial,
       isGoodForm: input.isGoodForm,
       flagAnomaly,
-      anomalyReason: anomalyReason ?? null,
+      anomalyReason,
       notes: input.notes ?? null,
     })
     .onConflictDoNothing() // an Undo id that is taken (by anyone) writes nothing
@@ -478,23 +528,17 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
 }
 
 /**
- * Sets the last and the next deload week (Sundays). Both become deload weeks and their workouts are marked deload;
- * every other deload week after `last` is dropped and its workouts cleared, so the Progress chart and History follow
- * the plan. Weeks before `last` are history and stay. Undo is this call with the previous pair.
+ * Sets the last and the next deload week (Sundays). Both become deload weeks; every other deload week after `last` is
+ * dropped. Only the plan changes: a workout is a deload workout when it was started as one (decision 2026-11-16), so
+ * choosing a week never rewrites workouts already logged. Weeks before `last` are history and stay. Undo is this call
+ * with the previous pair.
  */
 export async function saveDeloadWeeks(userId: string, { last, next }: { last: string | null; next: string | null }) {
   const keep = [...new Set([last, next].filter((w): w is string => !!w))];
   const removed = [...(await deloadWeekSet(userId))].filter((w) => !keep.includes(w) && (!last || w > last));
-  const inWeek = (w: string) => and(eq(workoutSessions.userId, userId), gte(workoutSessions.date, w), lt(workoutSessions.date, addDays(w, 7)));
   await db.transaction(async (tx) => {
-    if (removed.length) {
-      await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, removed)));
-      for (const w of removed) await tx.update(workoutSessions).set({ isDeload: false }).where(inWeek(w));
-    }
-    for (const w of keep) {
-      await tx.insert(deloadWeeks).values({ userId, weekStart: w }).onConflictDoNothing();
-      await tx.update(workoutSessions).set({ isDeload: true }).where(inWeek(w));
-    }
+    if (removed.length) await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, removed)));
+    for (const w of keep) await tx.insert(deloadWeeks).values({ userId, weekStart: w }).onConflictDoNothing();
   });
   return { last, next };
 }
@@ -551,7 +595,7 @@ export async function getWorkoutHistory(userId: string, openSince: string, since
     sessions.set(r.id, s);
     let ex = s.exercises.find((e) => e.id === r.exerciseId);
     if (!ex) s.exercises.push((ex = { id: r.exerciseId, name: r.exerciseName, sets: [] }));
-    ex.sets.push({ reps: r.reps, loadType: r.loadType, load: Number(r.loadValue) + Number(r.extraKg) });
+    ex.sets.push({ reps: r.reps, loadType: r.loadType, load: setLoad(r.loadType, r.loadValue, r.extraKg) });
   }
   return [...sessions.values()];
 }

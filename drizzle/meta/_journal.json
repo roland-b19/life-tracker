@@ -218,6 +218,13 @@
       "when": 1794780930134,
       "tag": "0030_exercise_default_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794782851525,
+      "tag": "0031_gym_audit_constraints",
+      "breakpoints": true
     }
   ]
 }

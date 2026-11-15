@@ -55,7 +55,11 @@ export const exercises = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   // The shared defaults (no owner) are seeded on demand: two requests at once must not both insert them.
-  (table) => [uniqueIndex("exercises_default_name_uniq").on(table.name).where(sql`${table.userId} is null`)],
+  (table) => [
+    uniqueIndex("exercises_default_name_uniq").on(table.name).where(sql`${table.userId} is null`),
+    // One name per user, ignoring case: the picker never lists two of the same name, even when two requests race.
+    uniqueIndex("exercises_user_name_uniq").on(table.userId, sql`lower(${table.name})`).where(sql`${table.userId} is not null`),
+  ],
 );
 
 export const workoutSplits = pgTable(
@@ -106,6 +110,8 @@ export const workoutSplitDayExercises = pgTable(
     minReps: integer("min_reps").default(5).notNull(),
     maxReps: integer("max_reps").default(8).notNull(),
   },
+  // An exercise appears once in a day; this index also serves the lookup by day.
+  (table) => [unique("workout_split_day_exercises_day_exercise_unique").on(table.splitDayId, table.exerciseId)],
 );
 
 export const workoutSessions = pgTable(
@@ -122,7 +128,11 @@ export const workoutSessions = pgTable(
     notes: varchar("notes", { length: 500 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("workout_sessions_user_date_idx").on(table.userId, table.date)],
+  (table) => [
+    index("workout_sessions_user_date_idx").on(table.userId, table.date),
+    // One open workout (no duration yet) per user, even when two requests race.
+    uniqueIndex("workout_sessions_one_open_uniq").on(table.userId).where(sql`${table.durationMinutes} is null`),
+  ],
 );
 
 /** Weeks the user marked as deload (the Sunday that starts each): a plan that does not need a workout yet. */
@@ -166,6 +176,7 @@ export const workoutSets = pgTable(
   (table) => [
     index("workout_sets_session_idx").on(table.sessionId),
     index("workout_sets_user_idx").on(table.userId),
+    index("workout_sets_user_exercise_idx").on(table.userId, table.exerciseId, table.createdAt),
     check("workout_sets_reps_positive", sql`${table.reps} > 0`),
     check("workout_sets_load_non_negative", sql`${table.loadValue} >= 0`),
     check("workout_sets_extra_kg_non_negative", sql`${table.extraKg} >= 0`),

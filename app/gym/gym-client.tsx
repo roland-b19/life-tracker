@@ -4,14 +4,15 @@ import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { kgDelta, progressSets, weekStart, type HistoryEntry } from "@/lib/gym-progress";
 import { showDecimal } from "@/lib/decimal-input";
 import { visible } from "@/lib/validations/common";
-import type { RestoreSessionInput } from "@/lib/validations/gym";
+import { GYM_LIMITS, type RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort, useMore } from "../components/lists";
-import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle } from "../components/blocks";
+import { Banner, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, ErrorText, Field, FieldPair, FormActions, FormModal, Label, Page, SelectField, TintButton, Toggle } from "../components/blocks";
 import { ChevronRightIcon, PencilIcon, PlusIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { useFolded } from "../components/categories-card";
+import { CustomExercises, type CustomExercise } from "./custom-exercises";
 import { MuscleExplorer } from "./muscle-map";
 import type { MuscleGroup } from "./muscle-groups";
 import { ProgressPanel } from "./progress-panel";
@@ -122,6 +123,7 @@ interface GymClientProps {
   deload: DeloadInfo;
   history: HistoryEntry[];
   exercises: LibraryExercise[];
+  customExercises: CustomExercise[];
   openSession: ActiveSessionData | null;
 }
 
@@ -136,12 +138,40 @@ function setText(x: { reps: number; loadType: string; load: number }) {
   return `${x.reps} × ${w}`;
 }
 
+const ANOMALY_LABEL: Record<string, string> = { too_heavy: "Too heavy", form: "Form", pain: "Pain", other: "Other" };
+const UNIT_LABEL: Record<string, string> = { kg: "kg", plates: "plates", bodyweight: "BW" };
+
+/** A fresh set form: reps start at the day's minimum; the load is left empty, never a made-up 40 kg. */
+function emptyInput(e: ExerciseItem) {
+  return {
+    reps: String(e.minReps),
+    loadType: (e.equipmentType === "cable" ? "plates" : e.equipmentType === "bodyweight" ? "bodyweight" : "kg") as "kg" | "plates" | "bodyweight",
+    loadValue: "",
+    extraKg: "0",
+    isFailure: true,
+    isPartial: false,
+    isGoodForm: true,
+    notes: "",
+  };
+}
+
+/** What stops a set from being logged, in the form's words ("" when nothing does); the limits are the server's. */
+function inputProblem(i: ReturnType<typeof emptyInput>) {
+  const reps = Number(i.reps), load = Number(i.loadValue || 0), extra = Number(i.extraKg || 0);
+  if (i.reps && (!Number.isInteger(reps) || reps < 1 || reps > GYM_LIMITS.reps)) return `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}.`;
+  if (load < 0 || load > GYM_LIMITS.load) return `Value can be at most ${GYM_LIMITS.load}.`;
+  if (extra < 0 || extra > GYM_LIMITS.extra) return `Extra can be at most ${GYM_LIMITS.extra} kg.`;
+  return "";
+}
+const canLog = (i: ReturnType<typeof emptyInput>) => Number(i.reps) > 0 && (i.loadType === "bodyweight" || Number(i.loadValue) > 0) && !inputProblem(i);
+
 export function GymClient({
   userName,
   split: serverSplit,
   deload,
   history,
   exercises,
+  customExercises,
   openSession,
 }: GymClientProps) {
   const { showToast } = useToast();
@@ -374,7 +404,7 @@ export function GymClient({
           },
         });
       } else {
-        setStatusMessage("Failed to start workout");
+        setStatusMessage(("error" in res && res.error) || "Failed to start workout");
       }
     } catch {
       setStatusMessage("Failed to start workout");
@@ -385,22 +415,12 @@ export function GymClient({
 
   async function handleLogSet(exercise: ExerciseItem) {
     if (!activeSession) return;
-    const state = inputStates[exercise.exerciseId] || {
-      reps: String(exercise.minReps),
-      loadType: exercise.equipmentType === "cable" ? "plates" : exercise.equipmentType === "bodyweight" ? "bodyweight" : "kg",
-      loadValue: "40",
-      extraKg: "0",
-      isFailure: true,
-      isPartial: false,
-      isGoodForm: true,
-      notes: "",
-    };
+    const state = inputStates[exercise.exerciseId] || emptyInput(exercise);
+    if (!canLog(state)) return; // the button stays disabled until the set is complete
 
-    const repsNum = parseInt(state.reps, 10);
-    const loadNum = parseFloat(state.loadValue) || 0;
-    const extraNum = parseFloat(state.extraKg) || 0;
-
-    if (isNaN(repsNum) || repsNum <= 0) return; // the button stays disabled until reps are filled
+    const repsNum = Number(state.reps);
+    const loadNum = Number(state.loadValue || 0);
+    const extraNum = Number(state.extraKg || 0);
 
     setBusy(true);
     try {
@@ -421,8 +441,6 @@ export function GymClient({
         isPartial: state.isPartial,
         isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
-        minTargetReps: exercise.minReps,
-        maxTargetReps: exercise.maxReps,
       });
 
       if (res.success && res.set) {
@@ -456,7 +474,7 @@ export function GymClient({
           },
         });
       } else {
-        setStatusMessage("Failed to add set");
+        setStatusMessage(res.error ?? "Failed to add set");
       }
     } catch {
       setStatusMessage("Failed to add set");
@@ -473,11 +491,11 @@ export function GymClient({
   };
 
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
-  function handleDeleteSet(set: LoggedSet, exercise: ExerciseItem) {
+  function handleDeleteSet(set: LoggedSet) {
     if (!activeSession) return;
     const sessionId = activeSession.id;
     const deleted = deleteSetAction(set.id).then(
-      () => true,
+      (r) => r.success,
       () => false,
     );
     dropSet(set.id);
@@ -498,9 +516,9 @@ export function GymClient({
           isFailure: set.isFailure,
           isPartial: set.isPartial,
           isGoodForm: set.isGoodForm,
+          flagAnomaly: set.flagAnomaly,
+          anomalyReason: set.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
           notes: set.notes || undefined,
-          minTargetReps: exercise.minReps,
-          maxTargetReps: exercise.maxReps,
         }).catch(() => null);
         if (res?.success && res.set) putBackSet(set);
         else showToast({ message: "Failed to restore set", type: "warning" });
@@ -543,6 +561,7 @@ export function GymClient({
         return;
       }
       saveWorkoutTime(restored.id, snap.seconds); // before the workout shows, so the timer picks it up
+      if (restored.splitDayId && split?.days.some((d) => d.id === restored.splitDayId)) setSelectedDayId(restored.splitDayId);
       setTimerPaused(false);
       setSessionNotes(snap.notes);
       setActiveSession(restored);
@@ -618,11 +637,15 @@ export function GymClient({
     const minutes = workoutMinutes(snap.seconds);
     setBusy(true);
     try {
-      await finishSessionAction({
+      const done = await finishSessionAction({
         sessionId: activeSession.id,
         durationMinutes: minutes,
         notes: sessionNotes || undefined,
       });
+      if (!done.success) {
+        setStatusMessage(done.error);
+        return;
+      }
       clearWorkoutTime(snap.session.id);
       setActiveSession(null);
       setSessionNotes("");
@@ -680,6 +703,8 @@ export function GymClient({
             setDraft((d) => d && { ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) });
           },
         });
+      } else {
+        setDraftError(res.error);
       }
     } catch {
       setDraftError("Failed to create exercise");
@@ -800,21 +825,8 @@ export function GymClient({
               const exerciseSets = activeSession.sets.filter(
                 (s) => s.exerciseId === exercise.exerciseId,
               );
-              const currentState = inputStates[exercise.exerciseId] || {
-                reps: String(exercise.minReps),
-                loadType:
-                  exercise.equipmentType === "cable"
-                    ? "plates"
-                    : exercise.equipmentType === "bodyweight"
-                    ? "bodyweight"
-                    : "kg",
-                loadValue: "40",
-                extraKg: "0",
-                isFailure: true,
-                isPartial: false,
-                isGoodForm: true,
-                notes: "",
-              };
+              const currentState = inputStates[exercise.exerciseId] || emptyInput(exercise);
+              const problem = inputProblem(currentState);
               const folded = !openEx.includes(exercise.exerciseId);
               const patch = (change: Partial<typeof currentState>) =>
                 setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...currentState, ...change } }));
@@ -867,13 +879,13 @@ export function GymClient({
                           <div key={s.id} className="entry-row">
                             <span>
                               <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
-                              {showDecimal(String(s.loadValue))} {s.loadType}
+                              {showDecimal(String(s.loadValue))} {UNIT_LABEL[s.loadType] ?? s.loadType}
                               {Number(s.extraKg) > 0 ? ` + ${showDecimal(String(s.extraKg))} kg` : ""}
                               {s.isPartial ? " (partials)" : ""}
                               {s.isGoodForm ? "" : " (poor form)"}
-                              {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
+                              {s.flagAnomaly && <Badge kind="danger" className="set-flag">{(s.anomalyReason && ANOMALY_LABEL[s.anomalyReason]) || "Anomaly"}</Badge>}
                             </span>
-                            <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s, exercise)} />
+                            <DeleteButton label={`Delete set ${s.setOrder} of ${exercise.exerciseName}`} onClick={() => handleDeleteSet(s)} />
                           </div>
                         ))}
                       </ListBox>
@@ -931,10 +943,11 @@ export function GymClient({
                       <Toggle label="Good form" checked={currentState.isGoodForm} disabled={busy} onChange={(e) => patch({ isGoodForm: e.target.checked })} />
                     </div>
 
+                    {problem && <ErrorText>{problem}</ErrorText>}
                     <button
                       type="button"
                       className="log-set"
-                      disabled={busy || !(parseInt(currentState.reps, 10) > 0)}
+                      disabled={busy || !canLog(currentState)}
                       onClick={() => handleLogSet(exercise)}
                     >
                       <PlusIcon size={14} />
@@ -951,6 +964,7 @@ export function GymClient({
             <Field
               label="Session notes (optional)"
               type="text"
+              maxLength={GYM_LIMITS.notes}
               disabled={busy}
               value={sessionNotes}
               onChange={(e) => setSessionNotes(e.target.value)}
@@ -1100,6 +1114,7 @@ export function GymClient({
             dayGroups={dayGroups}
             planned={(split?.days ?? []).flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))}
           />
+          <CustomExercises exercises={customExercises} fold={{ folded: isFolded("custom"), onToggle: () => toggleFolded("custom") }} />
           <Card
             id="history-title"
             title="History"
