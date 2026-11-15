@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toISODate } from "@/lib/format-date";
+import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
 
 afterEach(() => vi.useRealTimers());
 
@@ -26,5 +27,19 @@ describe("toISODate() is the Europe/Bucharest calendar day", () => {
 
   it("keeps the local calendar date of an explicit Date", () => {
     expect(toISODate(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+  });
+});
+
+describe("cleanNumberInput", () => {
+  it("takes a comma or a dot as the decimal separator and keeps only one", () => {
+    expect(cleanNumberInput("72,5", false)).toBe("72.5");
+    expect(cleanNumberInput("72.5.1", false)).toBe("72.51");
+    expect(cleanNumberInput("7a2,,5", false)).toBe("72.5");
+    expect(cleanNumberInput("-3-4", false)).toBe("-34");
+    expect(showDecimal("72.5")).toBe("72,5");
+  });
+  it("keeps only digits in a whole-number field", () => {
+    expect(cleanNumberInput("1,5", true)).toBe("15");
+    expect(cleanNumberInput("-2", true)).toBe("2");
   });
 });

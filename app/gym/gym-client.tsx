@@ -1,7 +1,7 @@
 "use client";
 
-import { formatDMY, toISODate } from "@/lib/format-date";
-import { kgDelta, progressSets, type HistoryEntry } from "@/lib/gym-progress";
+import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { kgDelta, progressSets, weekStart, type HistoryEntry } from "@/lib/gym-progress";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import {
   logSetAction,
   reopenSessionAction,
   restoreSessionAction,
+  saveDeloadWeeksAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
@@ -74,10 +75,12 @@ interface SplitDay {
 }
 
 interface DeloadInfo {
-  currentCycleWeek: number;
+  cycleWeek: number;
+  cycleLength: number;
   isDeloadDue: boolean;
   inDeloadWeek: boolean;
-  lastDeloadDate: string | null;
+  lastDeloadWeek: string | null;
+  nextDeloadWeek: string | null;
 }
 
 interface WorkoutSetData {
@@ -157,6 +160,9 @@ export function GymClient({
   const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false);
+  // Last and next deload week being edited (Sundays, "" for none), null while the dialog is closed.
+  const [deloadDraft, setDeloadDraft] = useState<{ last: string; next: string } | null>(null);
+  const [deloadError, setDeloadError] = useState("");
   // Exercises opened in the workout; they start collapsed and are not kept between workouts.
   const [openEx, setOpenEx] = useState<string[]>([]);
   const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
@@ -664,21 +670,97 @@ export function GymClient({
     }
   }
 
+  /** The 10 weeks a deload select lists, from this week forward (step 1) or back (step -1), plus the week already chosen if it is outside them. */
+  function deloadOptions(step: 1 | -1, current: string, none: string) {
+    const first = weekStart(toISODate());
+    const weeks = Array.from({ length: 10 }, (_, i) => addDays(first, 7 * step * i));
+    if (current && !weeks.includes(current)) weeks.push(current);
+    weeks.sort();
+    return [{ value: "", label: none }, ...weeks.map((w) => ({ value: w, label: `${formatDMY(w)} - ${formatDMY(addDays(w, 6))}${w === first ? " (this week)" : ""}` }))];
+  }
+
+  async function saveDeloadWeeks(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deloadDraft) return;
+    if (deloadDraft.last && deloadDraft.next && deloadDraft.next <= deloadDraft.last) {
+      setDeloadError("The next deload must come after the last one");
+      return;
+    }
+    setBusy(true);
+    setDeloadError("");
+    const before = { last: deload.lastDeloadWeek, next: deload.nextDeloadWeek };
+    try {
+      const res = await saveDeloadWeeksAction({ last: deloadDraft.last || null, next: deloadDraft.next || null });
+      if (!res.success) throw new Error();
+      setDeloadDraft(null);
+      showToast({
+        message: "Saved deload weeks",
+        type: "success",
+        onUndo: async () => {
+          const back = await saveDeloadWeeksAction(before).catch(() => null);
+          if (!back?.success) showToast({ message: "Failed to undo the edit", type: "warning" });
+        },
+      });
+    } catch {
+      setDeloadError("Failed to save deload weeks");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Page userName={userName}>
       {/* Deload Status Card */}
       <Banner
         id="deload-title"
         className="deload-card"
-        title={deload.inDeloadWeek ? "Deload week" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.currentCycleWeek} of 5`}
+        title={deload.inDeloadWeek ? "Deload week chosen" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.cycleWeek} of ${deload.cycleLength}`}
         sub={
           deload.inDeloadWeek || deload.isDeloadDue
             ? "A deload week stays out of the Exercise progress chart."
-            : `${5 - deload.currentCycleWeek} ${5 - deload.currentCycleWeek === 1 ? "week" : "weeks"} until deload.`
+            : deload.nextDeloadWeek
+              ? `Deload starts ${formatDMY(deload.nextDeloadWeek)}.`
+              : `${deload.cycleLength + 1 - deload.cycleWeek} ${deload.cycleLength + 1 - deload.cycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
       >
-        <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => setIsDeloadMode(e.target.checked)} />
+        <span className="deload-actions">
+          <TintButton
+            icon={<PencilIcon size={14} />}
+            disabled={busy}
+            onClick={() => {
+              setDeloadError("");
+              setDeloadDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
+            }}
+          >
+            Edit
+          </TintButton>
+          <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => setIsDeloadMode(e.target.checked)} />
+        </span>
       </Banner>
+      <FormModal
+        isOpen={deloadDraft !== null}
+        onClose={() => setDeloadDraft(null)}
+        title="Deload weeks"
+        onSubmit={saveDeloadWeeks}
+        error={deloadError}
+        busy={busy}
+      >
+        <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
+        <SelectField
+          label="Last deload"
+          disabled={busy}
+          value={deloadDraft?.last ?? ""}
+          options={deloadOptions(-1, deloadDraft?.last ?? "", "Not set")}
+          onChange={(e) => setDeloadDraft((d) => d && { ...d, last: e.target.value })}
+        />
+        <SelectField
+          label="Next deload"
+          disabled={busy}
+          value={deloadDraft?.next ?? ""}
+          options={deloadOptions(1, deloadDraft?.next ?? "", "Not chosen")}
+          onChange={(e) => setDeloadDraft((d) => d && { ...d, next: e.target.value })}
+        />
+      </FormModal>
 
       {/* Active Workout Session Logger */}
       {activeSession ? (
@@ -737,34 +819,29 @@ export function GymClient({
                       <span className="muted exercise-meta">
                         Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
                       </span>
+                      {/* The same exercise the last time it was trained (this day first, any day otherwise): the numbers to beat */}
+                      {(() => {
+                        const past = history.filter((h) => h.date < activeSession.date && h.exercises.some((e) => e.id === exercise.exerciseId));
+                        const last = past.find((h) => h.dayId === activeSession.splitDayId) ?? past[0];
+                        const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
+                        if (!last) return null;
+                        return (
+                          <div className="last-time">
+                            <span className="muted">Last time · {formatDMY(last.date)}</span>
+                            {sets.map((set, i) => (
+                              <span key={i} className="number-tabular">
+                                {setText(set)}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
                   </div>
 
                   {!folded && (
                     <>
-                    {/* The same exercise the last time this day was trained: the numbers to beat */}
-                    {(() => {
-                      const last = history.find(
-                        (h) =>
-                          h.dayId === activeSession.splitDayId &&
-                          h.date < activeSession.date &&
-                          h.exercises.some((e) => e.id === exercise.exerciseId),
-                      );
-                      const sets = last?.exercises.find((e) => e.id === exercise.exerciseId)?.sets ?? [];
-                      if (!last) return null;
-                      return (
-                        <div className="last-time">
-                          <span className="muted">Last time · {formatDMY(last.date)}</span>
-                          {sets.map((set, i) => (
-                            <span key={i} className="number-tabular">
-                              {setText(set)}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
-
                     {/* Previous logged sets */}
                     {exerciseSets.length > 0 && (
                       <ListBox wash className="entries set-list">

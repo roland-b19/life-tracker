@@ -10,6 +10,7 @@ import {
   finishSessionSchema,
   logSetSchema,
   restoreSessionSchema,
+  saveDeloadWeeksSchema,
   saveSplitDaySchema,
 } from "@/lib/validations/gym";
 import {
@@ -22,6 +23,7 @@ import {
   logWorkoutSet,
   reopenWorkoutSession,
   restoreWorkoutSession,
+  saveDeloadWeeks,
   saveSplitDay,
 } from "@/lib/gym";
 
@@ -111,4 +113,12 @@ export async function deleteCustomExerciseAction(exerciseId: string) {
   const deleted = await deleteCustomExercise(userId, uuid.parse(exerciseId));
   if (deleted) safeRevalidate("/gym");
   return { success: deleted };
+}
+
+/** Sets the last and next deload week; Undo sends the previous pair through the same action. */
+export async function saveDeloadWeeksAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const saved = await saveDeloadWeeks(userId, saveDeloadWeeksSchema.parse(rawInput));
+  safeRevalidate("/gym");
+  return { success: true, ...saved };
 }

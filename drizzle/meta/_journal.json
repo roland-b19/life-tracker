@@ -204,6 +204,13 @@
       "when": 1794680115769,
       "tag": "0028_good_form_back_abs",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794735707084,
+      "tag": "0029_deload_weeks",
+      "breakpoints": true
     }
   ]
 }
