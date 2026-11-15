@@ -39,7 +39,8 @@ describe("cleanNumberInput", () => {
     expect(showDecimal("72.5")).toBe("72,5");
   });
   it("keeps only digits in a whole-number field", () => {
-    expect(cleanNumberInput("1,5", true)).toBe("15");
+    expect(cleanNumberInput("1,5", true)).toBe("1");
+    expect(cleanNumberInput("250.5", true)).toBe("250");
     expect(cleanNumberInput("-2", true)).toBe("2");
   });
 });

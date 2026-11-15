@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
+import { MAX_WATER_ML } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -119,7 +120,7 @@ const NUTRITION_GOALS = [
 ] as const;
 type NutritionGoal = (typeof NUTRITION_GOALS)[number]["key"];
 // The most one day's total can hold: the same limits as setWaterAction and updateStepsAction.
-const METRIC_MAX = { water: 20000, steps: 200000 };
+const METRIC_MAX = { water: MAX_WATER_ML, steps: 200000 };
 const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: 100000 } };
 
 export function FoodClient({
@@ -266,7 +267,10 @@ export function FoodClient({
     setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, [key]: value } }));
 
   // A tap adds at once and shows its toast; a refused save takes the amount back off.
-  function addWater(delta: number) {
+  function addWater(tap: number) {
+    // A day holds at most MAX_WATER_ML: the amount sent is the amount added, so Undo takes back exactly that.
+    const delta = Math.min(tap, MAX_WATER_ML - summary.metrics.waterMl);
+    if (delta <= 0) return showToast({ message: `Water is already at the ${MAX_WATER_ML} ml limit`, type: "warning" });
     const bump = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
     bump(delta);
     let undone = false;
@@ -465,7 +469,7 @@ export function FoodClient({
                   isBought: before.isBought,
                   checkedAt: before.checkedAt,
                 }).catch(() => null);
-                if (!back?.item) {
+                if (!back?.success) {
                   upsertShop(item);
                   return showToast({ message: "Failed to undo the edit", type: "warning" });
                 }
@@ -509,6 +513,7 @@ export function FoodClient({
     setBusy(true);
     try {
       const res = await updateShoppingItemAction({ ...input, itemId: before.id });
+      if (!res.success) return setFormError(res.error);
       const item = res.item as ShoppingItemData;
       replaceShop(item);
       setIsShopModalOpen(false);
@@ -519,7 +524,7 @@ export function FoodClient({
         onUndo: async () => {
           replaceShop(before);
           const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
-          if (!back?.item) {
+          if (!back?.success) {
             replaceShop(item);
             showToast({ message: "Failed to undo the edit", type: "warning" });
           }
@@ -577,9 +582,12 @@ export function FoodClient({
       message: `Removed "${item.name}"`,
       onUndo: async () => {
         if (!(await deleted)) return; // the failure path below puts it back
-        const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
-        if (!back?.success) return setStatusMessage("Failed to restore item");
         upsertShop(item);
+        const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
+        if (!back?.success) {
+          dropShop(item.id);
+          setStatusMessage("Failed to restore item");
+        }
       },
     });
     void deleted.then((ok) => {
@@ -594,7 +602,7 @@ export function FoodClient({
     const cleared = shoppingList.filter((i) => i.isBought);
     if (!cleared.length) return;
     const ids = new Set(cleared.map((c) => c.id));
-    const done = clearBoughtItemsAction().then(
+    const done = clearBoughtItemsAction({ itemIds: [...ids] }).then(
       () => true,
       () => false,
     );

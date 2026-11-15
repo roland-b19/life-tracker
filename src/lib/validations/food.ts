@@ -36,7 +36,7 @@ export const shoppingCategorySchema = z.string().trim().toLowerCase().min(1).max
 export const createShoppingItemSchema = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
   amount: z.number().min(0.01).max(1000).default(1),
-  unit: z.string().trim().max(30).default("pcs"),
+  unit: z.string().trim().toLowerCase().min(1).max(30).default("pcs"),
   category: shoppingCategorySchema.default("other"),
 });
 
@@ -75,6 +75,9 @@ export const revertShoppingCategorySchema = z
     dropCurrent: z.boolean(),
   })
   .refine((v) => managed(v, [v.name]), builtIn);
+
+/** One day of water holds at most this much; quick taps and totals stop here. */
+export const MAX_WATER_ML = 20000;
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 

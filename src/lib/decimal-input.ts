@@ -1,6 +1,6 @@
-/** What a number field keeps from typed text: digits, one decimal separator (a comma counts as a dot), and for decimals a leading minus. */
+/** What a number field keeps from typed text: digits, one decimal separator (a comma counts as a dot), and for decimals a leading minus. A whole-number field drops everything from the separator on ("250.5" is 250, not 2505). */
 export function cleanNumberInput(text: string, integer: boolean): string {
-  if (integer) return text.replace(/[^0-9]/g, "");
+  if (integer) return text.split(/[.,]/)[0].replace(/[^0-9]/g, "");
   const t = text.replace(",", ".").replace(/[^0-9.-]/g, "");
   const dot = t.indexOf(".");
   const unsigned = (dot < 0 ? t : t.slice(0, dot + 1) + t.slice(dot + 1).replace(/\./g, "")).replace(/(?!^)-/g, "");
