@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth";
 import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
+  MAX_WATER_ML,
   metricDayEditable,
   createShoppingItemSchema,
   logMealSchema,
@@ -23,6 +24,7 @@ import {
   deleteMeal,
   deleteShoppingCategory,
   deleteShoppingItem,
+  hasDuplicateShoppingItem,
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
@@ -56,7 +58,7 @@ export async function deleteMealAction(mealId: string) {
 
 export async function addWaterAction(date: string, amountMl: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(amountMl) || Math.abs(amountMl) > 20000) {
+  if (!Number.isInteger(amountMl) || Math.abs(amountMl) > MAX_WATER_ML) {
     throw new Error("Invalid water parameters");
   }
   assertWritableDay(isoDate.parse(date));
@@ -67,7 +69,7 @@ export async function addWaterAction(date: string, amountMl: number) {
 /** Sets the day's water to an exact amount, so an edit from a stale screen cannot add onto a newer total. */
 export async function setWaterAction(date: string, waterMl: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(waterMl) || waterMl < 0 || waterMl > 20000) {
+  if (!Number.isInteger(waterMl) || waterMl < 0 || waterMl > MAX_WATER_ML) {
     throw new Error("Invalid water parameters");
   }
   assertWritableDay(isoDate.parse(date));
@@ -105,18 +107,22 @@ export async function toggleShoppingItemAction(itemId: string, isBought: boolean
     throw new Error("Invalid parameters");
   }
   const item = await toggleShoppingItem(userId, uuid.parse(itemId), isBought);
+  if (!item) throw new Error("Item not found");
   return { success: true, item };
 }
 
 export async function deleteShoppingItemAction(itemId: string) {
   const userId = await requireUser();
   const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
+  if (!deleted) throw new Error("Item not found");
   return { success: true, deleted };
 }
 
-export async function clearBoughtItemsAction() {
+/** Clears the bought items the screen shows (their ids), not every bought item the server holds. */
+export async function clearBoughtItemsAction(rawInput: unknown) {
   const userId = await requireUser();
-  const deleted = await clearBoughtShoppingItems(userId);
+  const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
+  const deleted = await clearBoughtShoppingItems(userId, itemIds);
   return { success: true, deletedCount: deleted.length };
 }
 
@@ -124,15 +130,20 @@ export async function restoreShoppingItemsAction(rawInput: unknown) {
   const userId = await requireUser();
   const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
   const items = await restoreShoppingItems(userId, itemIds);
+  if (items.length === 0) throw new Error("Item not found");
   return { success: true, items };
 }
 
 export async function updateShoppingItemAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = updateShoppingItemSchema.parse(rawInput);
+  // Refusals come back as data: Next hides a thrown message from the browser in production.
+  if (await hasDuplicateShoppingItem(userId, parsed)) {
+    return { success: false as const, error: `"${parsed.name}" is already on the list with this unit.` };
+  }
   const item = await updateShoppingItem(userId, parsed);
-  if (!item) throw new Error("Item not found");
-  return { success: true, item };
+  if (!item) return { success: false as const, error: "This item is no longer on the list." };
+  return { success: true as const, item };
 }
 
 export async function addShoppingCategoryAction(rawInput: unknown) {

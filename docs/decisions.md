@@ -480,3 +480,5 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 ## 2026-11-15 — Forms audit defaults (user: "all 4 PRs")
 
 The user did not answer the nine owner questions one by one, so the recommended defaults apply: water capped at 20000 ml a day (quick taps clamp to it); a whole-number field given "250.5" truncates to 250; a shopping amount of 0 is refused with a message; "Clear bought" clears only the items on screen, with an exact Undo; future dates are refused on dated entries; Wishlist refuses a case-insensitive duplicate name; displayed decimals use a comma everywhere; the Assistant stays food-only. Not done, a new feature for a later iteration: Delete for weigh-ins and meals.
+
+- **Shopping edit onto an existing name+unit** (PR 2): refused with an inline message, because the add form merges such items and an edit must not create the pair the add form prevents. The refusal is returned as data, since production hides a thrown message.

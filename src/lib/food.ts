@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   dailyMetrics,
@@ -12,6 +12,7 @@ import {
 import {
   CreateShoppingItemInput,
   LogMealInput,
+  MAX_WATER_ML,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
@@ -161,13 +162,13 @@ export async function addWater(userId: string, date: string, amountMl: number) {
     .values({
       userId,
       date,
-      waterMl: Math.max(0, amountMl),
+      waterMl: Math.min(MAX_WATER_ML, Math.max(0, amountMl)),
       steps: 0,
     })
     .onConflictDoUpdate({
       target: [dailyMetrics.userId, dailyMetrics.date],
       set: {
-        waterMl: sql`GREATEST(0, ${dailyMetrics.waterMl} + ${amountMl})`,
+        waterMl: sql`LEAST(${MAX_WATER_ML}, GREATEST(0, ${dailyMetrics.waterMl} + ${amountMl}))`,
       },
     })
     .returning();
@@ -279,6 +280,23 @@ export async function addShoppingItem(
     .returning();
 
   return item;
+}
+
+/** Whether another item on the list already has this name and unit (any case): the add form merges those, so an edit must not make two. */
+export async function hasDuplicateShoppingItem(userId: string, input: { itemId: string; name: string; unit: string }) {
+  const [row] = await db
+    .select({ id: shoppingItems.id })
+    .from(shoppingItems)
+    .where(
+      and(
+        onList(userId),
+        ne(shoppingItems.id, input.itemId),
+        sql`lower(${shoppingItems.name}) = lower(${input.name})`,
+        sql`lower(${shoppingItems.unit}) = lower(${input.unit})`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
@@ -440,7 +458,7 @@ export async function toggleShoppingItem(
   const [updated] = await db
     .update(shoppingItems)
     .set({ isBought, checkedAt: new Date() })
-    .where(and(eq(shoppingItems.id, itemId), eq(shoppingItems.userId, userId)))
+    .where(and(eq(shoppingItems.id, itemId), onList(userId)))
     .returning();
 
   return updated;
@@ -457,12 +475,12 @@ export async function deleteShoppingItem(userId: string, itemId: string) {
   return deleted;
 }
 
-/** Takes bought items off the list; they stay in the table so Undo can restore them. */
-export async function clearBoughtShoppingItems(userId: string) {
+/** Takes the given bought items off the list (only those: the screen may show fewer than the server holds); they stay in the table so Undo can restore them. */
+export async function clearBoughtShoppingItems(userId: string, itemIds: string[]) {
   return db
     .update(shoppingItems)
     .set({ clearedAt: new Date() })
-    .where(and(onList(userId), eq(shoppingItems.isBought, true)))
+    .where(and(onList(userId), eq(shoppingItems.isBought, true), inArray(shoppingItems.id, itemIds)))
     .returning();
 }
 
