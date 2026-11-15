@@ -167,6 +167,14 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect((await getCategories(userA, ["wishlist"])).wishlist).toEqual(expect.arrayContaining(["books", "games"]));
   });
 
+  it("refuses a rename to the same name, and a revert never deletes the category it puts back", async () => {
+    authState.id = userA;
+    await addCategoryAction({ scope: "wishlist", name: "keepme" });
+    await expect(renameCategoryAction({ scope: "wishlist", from: "keepme", to: "keepme" })).rejects.toThrow();
+    await revertCategoryAction({ scope: "wishlist", name: "keepme", current: "keepme", sortOrder: 1, itemIds: [], dropCurrent: true });
+    expect((await getCategories(userA, ["wishlist"])).wishlist).toContain("keepme");
+  });
+
   it("reorders the owner's categories; another user or an anonymous caller changes nothing", async () => {
     authState.id = userA;
     for (const name of ["first", "second", "third"]) await addCategoryAction({ scope: "personal", name });

@@ -157,6 +157,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         const updated = res.item as WishlistItemData;
         const before = items.find((i) => i.id === editingId);
         replace(updated);
+        keepCategory(updated.category);
         showToast({
           message: `Saved "${updated.name}"`,
           type: "success",
@@ -168,7 +169,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               if (!back?.success) {
                 replace(updated);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
-              }
+              } else keepCategory(before.category);
             },
           }),
         });
@@ -180,6 +181,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         }
         const added = res.item as WishlistItemData;
         setItems((prev) => [added, ...prev]);
+        keepCategory(added.category);
         showToast({
           message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
           type: "success",
@@ -204,6 +206,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   // A category was renamed or deleted: its items follow. The stored category is the only thing that changes.
   const refile = (from: string, to: string, only?: string[]) =>
     setItems((prev) => prev.map((i) => (i.category === from && (!only || only.includes(i.id)) ? { ...i, category: to } : i)));
+
+  // The server files a saved item under its category and creates the category if it is gone (an Undo after the category was deleted): the card shows it too.
+  const keepCategory = (c: string) => setCategories((prev) => (c === "other" || prev.includes(c) ? prev : [...prev, c]));
 
   const putBack = (item: WishlistItemData) =>
     setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
@@ -230,7 +235,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         if (!back?.success) {
           dropRow(target.id);
           showToast({ message: "Failed to restore item", type: "warning" });
-        }
+        } else keepCategory(target.category);
       },
     });
     if (!(await deleted)) {
@@ -288,7 +293,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
               )}
             </ListBox>
           </Card>
-          <CategoriesCard api={scopedCategories("wishlist")} categories={categories} onChange={setCategories} onRefile={refile} />
+          <CategoriesCard api={scopedCategories("wishlist")} categories={categories} onChange={setCategories} onRefile={refile} idsIn={(c) => items.filter((i) => i.category === c).map((i) => i.id)} />
         </DashboardMain>
 
         <DashboardAside summaryFirst>

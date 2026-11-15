@@ -183,6 +183,7 @@ export function TodosClient({
           ++requestId.current;
           drop(before);
           putBack(after);
+          keepCategory(after);
           showToast({
             message: `Saved "${title}"`,
             type: "success",
@@ -200,7 +201,7 @@ export function TodosClient({
                 drop(before);
                 putBack(after);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
-              }
+              } else keepCategory(before);
               await loadDay();
             },
           });
@@ -220,6 +221,7 @@ export function TodosClient({
           const created = res.todo;
           ++requestId.current;
           if (shows(created)) putBack(created);
+          keepCategory(created);
           showToast({
             message: `Added "${title}"`,
             type: "success",
@@ -282,6 +284,10 @@ export function TodosClient({
       [task.space]: prev[task.space].some((t) => t.id === task.id) ? prev[task.space] : [...prev[task.space], task].sort(compareTodos),
     }));
 
+  // The server files a saved task under its category and creates the category if it is gone (an Undo after the category was deleted): the card shows it too.
+  const keepCategory = ({ space, category }: TodoItem) =>
+    setCategories((prev) => (category === "other" || prev[space].includes(category) ? prev : { ...prev, [space]: [...prev[space], category] }));
+
   const drop = (task: TodoItem) => {
     setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
   };
@@ -311,7 +317,7 @@ export function TodosClient({
         if (!back?.success) {
           if (shows(target)) drop(target);
           showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
-        }
+        } else keepCategory(target);
         await loadDay();
       },
     });
@@ -449,6 +455,7 @@ export function TodosClient({
                   return { ...prev, [view.space]: refiled };
                 });
               }}
+              idsIn={(c) => todosMap[view.space].filter((t) => t.category === c).map((t) => t.id)}
               // Read the tasks again once the server has saved (or undone) the change.
               onSynced={() => void loadDay()}
             />

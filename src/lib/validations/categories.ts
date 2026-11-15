@@ -10,11 +10,9 @@ export const categorySchema = z.string().trim().toLowerCase().min(1).max(50);
 const managedCategorySchema = categorySchema.refine((c) => c !== "other", '"other" is built in.');
 
 export const categoryNameSchema = z.object({ scope: categoryScopeSchema, name: managedCategorySchema });
-export const renameCategorySchema = z.object({
-  scope: categoryScopeSchema,
-  from: managedCategorySchema,
-  to: managedCategorySchema,
-});
+export const renameCategorySchema = z
+  .object({ scope: categoryScopeSchema, from: managedCategorySchema, to: managedCategorySchema })
+  .refine((r) => r.from !== r.to, { message: "That is already its name.", path: ["to"] });
 
 /** Undo of a rename or delete: what the change reported, sent back as it was. */
 export const revertCategorySchema = z.object({
