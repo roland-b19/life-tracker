@@ -509,6 +509,7 @@ The user did not answer the nine owner questions one by one, so the recommended 
 ## 2026-11-16 — GymClient split and `undoWith`
 
 - `GymClient` is split along its seams (workout hook, active workout, exercise logger, training days, day editor, deload card, history card, types). The page keeps one `busy` flag and passes it down, so every control still waits for the same write.
-- **`undoWith(showToast, write, failed)`** (`app/components/toast.tsx`) is the shared Undo that writes the old state back and shows a warning when the write throws or answers without success. Applied only in Gym's day editor and deload dialog for now; the other pages keep their own Undo code until the user asks for the sweep.
+- **`undoWith(showToast, write, failed)`** (`app/components/toast.tsx`) is the shared Undo that writes the old state back and shows a warning when the write throws or answers without success. Used by Gym's day editor, deload dialog and custom exercise edit.
+- **The sweep (same day):** about 25 other hand-written Undos were read; none changed except the custom exercise edit. They are not a plain write-back: each also reverts local screen state when the write fails (shopping, wishlist, todos, food goals/water, categories, weight), orders itself after a pending delete (`await deleted`), or calls REST and reads `{ok}` (weight). Forcing them into `undoWith` needs an `onFail` option and would not be shorter or safer, so they stay as they are. Use `undoWith` for any new Undo that is only "write the old state back".
 - Two small differences: the day editor's "New exercise" form starts empty each time the editor opens, and the day-save Undo uses the day as it was when the editor opened.
 

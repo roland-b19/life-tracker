@@ -5,7 +5,7 @@ import { visible } from "@/lib/validations/common";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel } from "@/lib/gym-muscles";
 import { Badge, Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { deleteCustomExerciseAction, restoreCustomExerciseAction, updateCustomExerciseAction } from "@/app/actions/gym";
 
 export interface CustomExercise {
@@ -52,10 +52,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
       showToast({
         message: `Saved "${name}"`,
         type: "success",
-        onUndo: async () => {
-          const back = await updateCustomExerciseAction({ ...before }).catch(() => null);
-          if (!back?.success) showToast({ message: "Failed to undo the edit", type: "warning" });
-        },
+        onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), "Failed to undo the edit"),
       });
     } catch {
       setError("Failed to save exercise");

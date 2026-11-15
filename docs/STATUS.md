@@ -15,7 +15,7 @@ The history that used to fill this file (every phase, the verification table, th
 
 Branch `refactor/gym-split` (PR open; merge on the user's word). The Gym audit PR (#117) is merged; migrations 0030 and 0031 are files the user runs from their Mac.
 - `app/gym/gym-client.tsx` (1346 lines) is now a 93-line composition. The pieces: `use-workout.ts` (the workout in hand), `active-workout.tsx`, `exercise-logger.tsx`, `training-days.tsx`, `day-editor.tsx`, `deload-card.tsx`, `history-card.tsx`, `types.ts`. No behaviour change.
-- New helper `undoWith(showToast, write, failed)` in `app/components/toast.tsx`: an Undo that writes the old state back and warns when the write fails. Used by the day editor and the deload dialog.
+- New helper `undoWith(showToast, write, failed)` in `app/components/toast.tsx`: an Undo that writes the old state back and warns when the write fails. Used by the day editor, the deload dialog and the custom exercise edit.
 - Checked in a browser (375px and desktop): day edit and Undo, start, log set, delete set and Undo, Exit and Resume, Finish, history open, deload edit and Undo, modal focus returns to its button. Not checked: Cancel workout and its Undo, a custom exercise created inside the day editor, a real phone, the Three.js model.
 
 ## Application features (local)
@@ -34,7 +34,7 @@ Branch `refactor/gym-split` (PR open; merge on the user's word). The Gym audit P
 ## Next
 
 1. The user runs migration 0030, then 0031 (duplicate checks first) from their Mac.
-2. Optional: use `undoWith` on the other pages (about 25 hand-written Undos); only on the user's word.
+2. `undoWith` sweep done (see decisions, 2026-11-16): it fits only the plain write-back Undos; the rest keep their own code on purpose.
 3. The Categories card is cramped at about 800px; PR #104 (`fix/azure-migrate`) is still open and untouched.
 4. Azure A (`docs/release-plan.md` section 5) after a week of watching variant B. Nothing deploys and no Azure resource is created without the user's explicit OK.
 
