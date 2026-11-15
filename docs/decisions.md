@@ -455,3 +455,9 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 ## 2026-11-15 — Deload session is only that session; select-all hardened (user)
 - Ticking "Deload session" marks only that workout: Progress skips that session's sets, not its week, and a flagged session no longer makes its week a deload week for the cycle. Only the weeks chosen in the Deload weeks dialog (`deload_weeks`) are deload weeks; choosing a week still flags the sessions in it. No migration.
 - Select-all on double-tap compares only the field (a form moves when the keyboard opens, so the second tap can land elsewhere) and re-applies the full selection for 800 ms after the second tap, because iOS sets its word selection late.
+
+## 2026-11-15 — Audit fixes 1: Tasks and Wishlist (user)
+- A one-off task created for a day already over is put on today (a repeating one keeps its first day): an open one-off task from a past day is neither shown nor carried over, so keeping the old day only lost the task.
+- Undo of a tick or reopen sends the previous `completedAt` (nullable), so the order is restored exactly; a plain tick still stamps now. Times sent back by the screen (`completedAt`, `placedAt`, `createdAt`) and the first day of a restored daily task may be at most a minute (a day for the date) ahead of the server.
+- A new task's `placedAt` comes from the app clock, like the carry-over's, not the database default, so two clocks never order a new task under a carried one.
+- Wishlist price is whole numbers typed as digits only; the form shows its own message for each limit (name 120, link 500, price 10,000,000) and never raw server JSON.
