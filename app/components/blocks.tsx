@@ -3,12 +3,9 @@
 import { useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
-import { addDays, formatDMY } from "@/lib/format-date";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, LockIcon, PlusIcon } from "./icons";
-import { DatePicker } from "./date-picker";
+import { CheckIcon, ChevronRightIcon, PlusIcon } from "./icons";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
-import { Segmented } from "./segmented";
 
 /*
  * The structures every page is made of, in one place. A page picks and fills them; it never writes their markup,
@@ -203,11 +200,6 @@ export function ErrorText({ id, children }: { id?: string; children: ReactNode }
   );
 }
 
-/** A grey explanation inside a form. */
-export function Hint({ children }: { children: ReactNode }) {
-  return <p className="muted move-hint">{children}</p>;
-}
-
 /** The segmented control above a chart (the period). */
 export function ChartControls({ children }: { children: ReactNode }) {
   return <div className="chart-controls">{children}</div>;
@@ -228,44 +220,9 @@ export function GroupLabel({ children }: { children: ReactNode }) {
   return <h3 className="group-label">{children}</h3>;
 }
 
-/** A grey line with a lock: what the card will not let you do now. */
-export function ReadonlyNote({ children }: { children: ReactNode }) {
-  return (
-    <p className="readonly-note">
-      <LockIcon size={13} /> {children}
-    </p>
-  );
-}
-
 /** What a list shows when it has nothing to list. */
 export function EmptyNote({ className, children }: { className?: string; children: ReactNode }) {
   return <p className={cx("empty-note", className)}>{children}</p>;
-}
-
-/** Stand-in rows while a list loads. */
-export function SkeletonRows({ count = 2 }: { count?: number }) {
-  return (
-    <div className="entries">
-      {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="skeleton skeleton-row" />
-      ))}
-    </div>
-  );
-}
-
-/** A row of figures: each a big value over a label. */
-export function StatRow({ stats }: { stats: { value: ReactNode; label: string }[] }) {
-  return (
-    <div className="stat-row">
-      {stats.map((s) => (
-        <div key={s.label} className="stat-tile">
-          {/* The "—" placeholder and a number are different elements, so a number never gets painted over the dash's leftover pixels. */}
-          <strong key={typeof s.value === "string" ? "text" : "number"} className="number-tabular">{s.value}</strong>
-          <span>{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /** A big figure with what it is out of (`of`), as on a goal card. */
@@ -370,54 +327,6 @@ export function Field({ label, labelClassName, type, onChange, value, ...input }
         }}
       />
     </Label>
-  );
-}
-
-/**
- * A captioned date picker. Not a <label>: a click inside the open calendar would re-trigger the button. `text` is
- * what the button reads (the date written out).
- */
-/** Today or yesterday as a segmented control, for entries that can only be logged for those two days; an older day an entry already has stays a third option. */
-export function DayField({ value, today, onChange }: { value: string; today: string; onChange: (date: string) => void }) {
-  const yesterday = addDays(today, -1);
-  const options = [
-    { value: today, label: "Today" },
-    { value: yesterday, label: "Yesterday" },
-    ...(value < yesterday ? [{ value, label: formatDMY(value) }] : []),
-  ];
-  return (
-    <div className="field">
-      <span>Day</span>
-      <Segmented label="Day" value={value} options={options} onChange={onChange} />
-    </div>
-  );
-}
-
-export function DateField({
-  id,
-  value,
-  today,
-  min,
-  max,
-  text,
-  disabled,
-  onChange,
-}: {
-  /** Ties the caption to the button. */
-  id: string;
-  value: string;
-  today: string;
-  min?: string;
-  max: string;
-  text: string;
-  disabled?: boolean;
-  onChange: (date: string) => void;
-}) {
-  return (
-    <div className="field">
-      <span id={id}>Date</span>
-      <DatePicker mode="day" className="date-field" value={value} today={today} min={min} max={max} label={text} labelledBy={id} disabled={disabled} onChange={onChange} />
-    </div>
   );
 }
 
@@ -581,50 +490,5 @@ export function FormModal({
         <FormActions onCancel={onClose} busy={busy} canSubmit={canSubmit} submitLabel={submitLabel} />
       </form>
     </Modal>
-  );
-}
-
-/**
- * Yesterday, a date picker and tomorrow. The arrows stop at `max` and, when set, at `min`.
- */
-export function DayStepper({
-  value,
-  today,
-  min,
-  max,
-  marked,
-  label,
-  onChange,
-}: {
-  value: string;
-  today: string;
-  min?: string;
-  max: string;
-  marked?: string[];
-  label: string;
-  onChange: (date: string) => void;
-}) {
-  return (
-    <div className="month-selector" role="group" aria-label="Day">
-      <button
-        type="button"
-        className="month-nav-btn"
-        onClick={() => onChange(addDays(value, -1))}
-        disabled={min !== undefined && value <= min}
-        aria-label="Previous day"
-      >
-        <ChevronLeftIcon size={17} />
-      </button>
-      <DatePicker mode="day" value={value} today={today} min={min} max={max} marked={marked} label={label} onChange={onChange} />
-      <button
-        type="button"
-        className="month-nav-btn"
-        onClick={() => onChange(addDays(value, 1))}
-        disabled={value >= max}
-        aria-label="Next day"
-      >
-        <ChevronRightIcon size={17} />
-      </button>
-    </div>
   );
 }

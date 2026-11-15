@@ -4,10 +4,6 @@ export function formatDMY(iso: string): string {
   return `${d}.${m}.${y}`;
 }
 
-/** "2026-11-04" -> "Wed 04.11.2026". */
-export const dayLabel = (iso: string, weekday: "short" | "long" = "short") =>
-  `${new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday })} ${formatDMY(iso)}`;
-
 // "Today" is the user's calendar day, not the server's: Vercel and the Azure container run in UTC.
 export const APP_TZ = "Europe/Bucharest";
 const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ });

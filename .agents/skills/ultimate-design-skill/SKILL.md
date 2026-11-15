@@ -21,7 +21,6 @@ It sits on top of the `apple-design` skill (HIG rules, accessibility) and below 
    - `Segmented` (`segmented.tsx`);
    - icons (`icons.tsx`);
    - charts (`charts.tsx`);
-   - the date picker;
    - `Navigation`.
 5. Finish with the checklist at the end, and check the screen in a real browser at 375px and desktop width.
 
@@ -31,7 +30,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 - **Colour:** moody black and grey (Graphite) with a calm blue accent (Storm). Colours are subtle.
 - **Depth:** nothing has a border or a shadow. Depth comes only from the surface fill and the glass blur.
-- **No motion, with two exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill (it also fades out when it returns to 0%), the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12) (the user's call, 2026-11-11, later the same day). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
+- **No motion, with three exceptions:** there are no animations or transitions anywhere (the user's call, 2026-11-11) except the Tasks progress ring fill (it also fades out when it returns to 0%), the Wishlist estimated-total count-up and the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12). Everything else appears, changes and disappears instantly: rows, modals, toasts, charts, other numbers, hover and press states, page changes.
 - **Feedback:** every change is shown at once and every change can be undone: each toast of an action that modifies something has an Undo button.
 - **Stability:** nothing shifts, nothing gets stuck, nothing lags.
 - **Consistency:** every page uses the same parts with the same numbers. "Consistency across all pages" is a requirement, not a nicety.
@@ -130,7 +129,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - Warning toasts are only for actions without an open form: list actions and quick taps (+250 ml). Water and steps keep their form open while saving, like every form.
   - A one-off action outside a form (enabling task reminders) reports through a toast too: `Reminders enabled`, `Failed to enable reminders (notifications are blocked)`. Never a status line of text under a card.
   - A failed first load of a page's data is a warning toast too: `Failed to load tasks`, `Failed to load weigh-ins`. No inline error text on the page. The one exception is the muscle map's stage, which would otherwise be blank: `Loading model...` while the model loads, and `3D view is not available here. Use the muscle buttons instead.` if WebGL or the model fails.
-- **Date pickers have limits.** None on Tasks (neither tab has a date picker or a day stepper), and never on logs such as weight.
+- **No date picker.** The app has none (the unused house picker was deleted, 2026-11-15): a day is chosen with a segmented control or arrows, and a log never takes a future day.
 
 **Behaviour**
 - **Undo on every action that modifies something.** The toast of a create, edit, delete, toggle, clear, quick tap or setting shows an Undo button, and Undo restores the previous state:
@@ -153,7 +152,7 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
   - If the server fails, the screen is put back to match the database and a warning toast says what failed.
 - **Instant.**
   - Page and tab changes, view switches, adds, deletes and Undo show at once. Nothing animates.
-- **Dates:** d.m.y everywhere. Always use the house date picker, never the native one. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
+- **Dates:** d.m.y everywhere. A time of day (a task reminder) is the one native field: `<input type="time">`, labelled "Reminder (optional)".
 - **Links in data open.** A URL or domain becomes an external link showing the host + " ↗"; anything else is plain secondary text.
 - **Derive, don't ask.** A value that follows from data the user already entered is computed and gets no picker. The Wishlist range comes from the price (`< 250` low, `250-750` medium, `750+` high); there is no manual priority.
 - **Newest first by default.** A list starts sorted by creation time, latest on top. Other orders (price) are options in the sort select. Tasks are the exception: open tasks first, then done ones, the most recently completed on top.
@@ -161,18 +160,12 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 - **Tasks have no date logic.** Neither tab has a day stepper or date picker, and a task is only ever added for today. The Daily tab is today's list; the Today tab is today's one-off tasks, and an unfinished one from an earlier day carries over to today (the only date logic, done on the server). There is no Move (daily to today or back): delete and add again. An edit, delete or category change applies to the task itself; a delete removes it for good (only the per-day counts for the charts stay, `todo_day_stats`), and Undo puts it back from the screen's copy. There are no streaks: a daily task is ticked for today only, so every day starts open. Water and Steps accept a new entry for today or yesterday only (their older history is read-only; chart and History still show it). Health's Today tab has a day stepper under the section tabs (full width, past and today only); a past day hides every add, edit, delete and tap button and says "Past days are read-only". Its writes, and the Assistant's, always go to today.
 - **Unrelated controls stay still.** An action on a row never animates anything else. For example, the date arrows do not move when a task is ticked.
 - **Charts and numbers are drawn at once** at their value: bars, `ProgressRing`, stat tiles and macro numbers never grow, count up or ease.
-- **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `BarChart` with a period selector), not only numbers.
+- **Show progress visually.** Wherever something is tracked over time, the page gets a dashboard card (`ProgressRing` and/or `LineChart` with a period selector), not only numbers.
 - **An empty set counts as complete:** 0 of 0 shows 100%.
 - **A fraction is plain text** with the real numbers: "X of Y".
 - **Macro cards keep a fixed layout.** The target sits on its own row under the number (`/ 3350 kcal`), so a change never moves a line break or the card.
 - **Gym set form.** Reps, Unit, Value and Extra sit on one row (4 columns, values centred, labels short because a phone is narrow), on a grey `--surface-secondary` fill; the four columns are equal; "Log set" is the last control of an exercise (after the True failure, Partial reps and Good form switches) at full width; one exercise is one item of a wash list (alternating bands, list gaps, no extra space between exercises) and starts collapsed; its name is the fold button, the shared arrow right after the name, while the muscle tag always sits at the right edge (Exercise progress, History and Training days fold too); the bottom actions (Finish workout, Exit, Cancel) are one centred column as wide as the widest; the target line has no RIR text (the "True failure (0 RIR)" checkbox stays); "Last time" lists its sets one per row.
 - **Muscle map move button (touch only).** Always grey, 2.75rem square (a faint lighter fill while held, never tinted; override the global button `min-height`). Press and hold it and slide the same finger to turn the model; a drag on the model itself scrolls the page (`touch-action: pan-y` on the canvas AND its wrapper, since the effective value is the intersection of the ancestors; OrbitControls off on a coarse pointer). The Tasks dashboard sits above its list on a phone (`summary-first`) and its empty Progress card keeps the ring's height, so changing day never moves the page.
-- **Stat tiles.** A tile with no value yet shows an em dash `—`. A unit sits beside its number in the tile (`2775 ml`, a `.macro-target`), never in the caption below it. Tiles sit in one `.stat-row` that wraps: equal widths, and in a narrow card the last tile takes a full row. Several badges side by side go in a `.badge-group`.
-- **Bar charts (`BarChart` in `charts.tsx`):**
-  - when the chart covers days, tapping a bar opens that day (bars are buttons through `onSelect`);
-  - have a labelled value axis (0, half, max);
-  - show the exact value on bar hover (`title`, or a `data-tip` bubble when bars are buttons);
-  - pick their period with a `Segmented` (7D/30D/90D; weight also 180D/360D).
 - **`LineChart`** (weight, water and steps trends) is a line only, with no dots (the user's call). Its axis shows the first label, `lo – hi` and the last label.
 - **`HBars`** is a plain list: label, track, value as text. No role, because the values are already readable.
 - **Selection is a fill, never a border.** A selected card or chip gets `--tint-subtle` (split day cards, muscle chips). A selected toggle (a picker day, a `.weekday-btn`, the `Segmented` thumb) is solid `--tint` with `--on-tint` text. No coloured outline or left stripe, and "today" gets no extra border.
@@ -180,19 +173,21 @@ Professional, minimalist and dynamic: it should feel like a native Apple app on 
 
 ## 3. No animations or transitions
 
-The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**, with exactly two exceptions the user brought back (same day):
+The user's call (2026-11-11), superseding every earlier motion rule: **nothing in the app animates**, with exactly three exceptions the user brought back:
 
 - the Tasks Progress ring (`ProgressRing` in `app/components/charts.tsx`): the fill and the percentage ease from 0 to the value in 900 ms (`useAnimatedNumber(p, 0, 900)`);
 - the Wishlist estimated total (`AnimatedNumber` in `app/wishlist/wishlist-client.tsx`): it counts up from 0 on entry and eases between values.
 
-Both live in `app/components/animated-number.tsx`, which jumps straight to the value under `prefers-reduced-motion`. Nothing else uses it: the Tasks stat tiles, every other number, chart and list stay instant. Do not add a third animation without the user asking for it.
+- the Nutrition numbers (macro totals and goals count up on change, the user's call of 2026-11-12).
+
+All live in `app/components/animated-number.tsx`, which jumps straight to the value under `prefers-reduced-motion`. Nothing else uses it: the Tasks stat tiles, every other number, chart and list stay instant. Do not add a third animation without the user asking for it.
 
 - No CSS `transition`, `animation` or `@keyframes`; no view or page transitions; no smooth scrolling.
-- No JS-driven motion either, apart from the two exceptions above: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart or camera tween, no other counting numbers (WAAPI, `requestAnimationFrame` and timers included).
+- No JS-driven motion either, apart from the three exceptions above: no list enter, leave, move or fade, no height tweens, no modal or toast fade, no drag-sort glide, no chart or camera tween, no other counting numbers (WAAPI, `requestAnimationFrame` and timers included).
 - Elements appear, disappear and change instantly: rows, modals, toasts, hover and press states, selected tabs, chart values, page changes.
 - Hover fills still apply, at once, with no transition. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12).
 - Feedback comes from the toast and its Undo, not from motion.
-- `prefers-reduced-motion` needs no handling beyond the two exceptions, which already honour it. If a new feature seems to need an animation, show the end state instead and tell the user.
+- `prefers-reduced-motion` needs no handling beyond the three exceptions, which already honour it. If a new feature seems to need an animation, show the end state instead and tell the user.
 
 ## 4. Building a list page: the Wishlist recipe
 
@@ -248,7 +243,7 @@ Both live in `app/components/animated-number.tsx`, which jumps straight to the v
 - Money uses `ro-RO` formatting (thousands dot) with no decimals on the Wishlist (whole lei, the user's call), then a muted "RON".
 - A busy label ends in three dots: "Saving...", "Signing in...".
 - All UI text is English, the Food Assistant included ("Send", "Sending...", "Calculating macros..."). Only the AI's replies follow the language the user writes in.
-- `BarChart` and `LineChart` carry a text summary for screen readers (`role="img"`, or `group` for button bars, with an `aria-label`). `HBars` needs none: its values are text.
+- `LineChart` carries a text summary for screen readers (`role="img"` with an `aria-label`). `HBars` needs none: its values are text.
 - Segmented labels must fit in monospace on a phone. Shorten them ("Rate"/"Count") rather than letting them overflow. When the full label matters on a wide screen, give the option a `short` label: it replaces the long one below a 29rem control width, and the long one stays as the `aria-label`.
 - An add button names its object: "Add item", "Add task", never a bare "Add".
 - No two controls show the same label. If a tab already says "Today", the date selector shows the date. A select next to an "Add exercise" button is labelled "Exercise".
@@ -265,7 +260,7 @@ Each of these was tried or proposed and the user removed it.
 - Box shadows of any kind, including toasts, modals and cards.
 - Visible borders and separator lines between rows.
 - A blue page background (light blue, dark steel blue, Storm's blue-tinted greys). The user wanted the base black and grey (Graphite); blue is only the accent.
-- A gradient mask over a list, or a shimmer. The `.skeleton` placeholder while data loads is static.
+- A gradient mask over a list, or a shimmer.
 - **Any animation or transition** (rows, modals, toasts, charts, numbers, page changes, hover, camera) other than the Tasks progress ring, the Wishlist total count-up and the Nutrition number count-up. All the rest was removed on 2026-11-11.
 
 **Layout and content**
@@ -293,7 +288,7 @@ Each of these was tried or proposed and the user removed it.
 
 **Look**
 - [ ] Only house parts and house classes. No new colours, radii, shadows or borders. Selection is a `--tint-subtle` fill, never a border.
-- [ ] Monospace, tabular numbers, no placeholders, d.m.y dates via the date picker.
+- [ ] Monospace, tabular numbers, no placeholders, d.m.y dates.
 - [ ] Header controls are equal width. The total sits next to the title. The add button has a 14px plus.
 - [ ] Rows are bands with no hover. Trailing buttons are 44×44, with an inset equal to the band-to-card gap.
 - [ ] The empty note keeps one row's height. No layout shift when controls appear.

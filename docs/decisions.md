@@ -484,3 +484,5 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **Shopping edit onto an existing name+unit** (PR 2): refused with an inline message, because the add form merges such items and an edit must not create the pair the add form prevents. The refusal is returned as data, since production hides a thrown message.
 
 - **Steps limit** (PR 3): 200000 for the log and for the goal (the goal said 100000 before, so a logged day could not be reached by its own goal). **Weigh-ins cannot be in the future** (PR 3): the shared weight schema refuses it for POST and PATCH, as the form's date selector already did.
+
+- **Dead code removed** (PR 4): the house date picker and day stepper are gone because no page uses them (days are chosen with a segmented control or arrows); `getDailyTodosAction` is gone because an unused server action is still a public endpoint. Animation exceptions are three (Tasks ring, Wishlist total, Nutrition numbers) in AGENTS.md and the design skill.

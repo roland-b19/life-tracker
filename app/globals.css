@@ -130,24 +130,16 @@ main {
 
 h1,
 h2,
-h3,
-.card-title,
-.metric-label {
+h3 {
   line-height: 1.2;
   letter-spacing: -0.015em;
   text-wrap: balance;
 }
 
 /* Tabular Numbers: Ensure numbers and counters never jitter/jiggle */
-.metric-value,
-.stat-value,
 .number-tabular,
-.food-macro-val,
-.calendar-day-header,
-.gym-set-row input,
 .todo-title,
-.badge-carried,
-.wishlist-price {
+.badge-carried {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
@@ -231,20 +223,10 @@ h3 {
   .summary-first { order: -1; }
 }
 
-.topbar,
-.form-row,
 .entry-row {
   display: flex;
   align-items: center;
   gap: 1rem;
-}
-
-.topbar {
-  justify-content: space-between;
-}
-
-.topbar {
-  margin-bottom: 2rem;
 }
 
 /* ==========================================================================
@@ -605,11 +587,6 @@ main {
   color: #c7c7cc;
 }
 
-.badge-success {
-  background: var(--success-subtle);
-  color: var(--success);
-}
-
 .badge-reminder {
   background: var(--tint-subtle);
   color: var(--tint);
@@ -627,13 +604,6 @@ main {
 
 .deload-card > div:first-child { flex: 1 1 11rem; }
 .deload-actions { display: flex; align-items: center; gap: 0.75rem; }
-
-.split-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 0.85rem;
-  margin-top: 1rem;
-}
 
 .split-day-card {
   padding: 1rem 1.25rem;
@@ -660,17 +630,6 @@ main {
 
 /* The tag goes out over the row's inner padding, so it sits against the row's right edge */
 .exercise-header > .badge { margin-right: calc(-1 * var(--band-out)); }
-
-.exercise-context-box {
-  background: var(--surface-secondary);
-  border-radius: 0.65rem;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.875rem;
-  margin-bottom: 0.9rem;
-  display: grid;
-  gap: 0.35rem;
-  border: 1px solid var(--edge);
-}
 
 .set-input-grid {
   display: grid;
@@ -809,8 +768,7 @@ main {
 }
 
 @media (min-width: 768px) {
-  .surface,
-  .todo-hero-card {
+  .surface {
     --card-pad: 1.6rem;
     padding: 1.6rem;
   }
@@ -826,12 +784,6 @@ main {
   select.sort-select:hover:not(:disabled) {
     background-color: var(--highlight-fill);
   }
-}
-
-.form-row {
-  align-items: end;
-  flex-wrap: wrap;
-  margin-top: 1rem;
 }
 
 label {
@@ -994,17 +946,6 @@ textarea:focus-visible {
 .entry-row > div { min-width: 0; overflow-wrap: anywhere; }
 
 /* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
-.past-foods { margin-top: -0.85rem; }
-.past-foods .entries { margin-top: 0; }
-@media (max-width: 640px) {
-  .past-foods { margin-top: -0.75rem; }
-}
-
-.entry-value {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
 /* Sign-in: one card in the middle of the screen, built from the same parts as every page card */
 .signin-page {
   min-height: 85vh;
@@ -1039,29 +980,6 @@ button.signin-continue:disabled {
   cursor: progress;
 }
 
-.month-selector {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-}
-
-.month-nav-btn {
-  padding: 0;
-  background: var(--surface-secondary);
-  border: 1px solid var(--edge);
-  color: var(--text);
-  border-radius: 0.7rem;
-  width: 2.25rem;
-  height: 2.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: bold;
-}
-
 /* Icon-only row actions (edit, delete): same tinted fill and size as the tinted text buttons */
 .delete-icon-btn {
   background: var(--tint-subtle);
@@ -1079,28 +997,6 @@ button.signin-continue:disabled {
 }
 
 /* To-Do & Habits Module Styles (Apple HIG) */
-.todo-hero-card {
-  background: var(--surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--edge);
-  border-radius: 1.15rem;
-  padding: 1.35rem;
-}
-
-.todo-stats-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.todo-stats-rate {
-  font-size: 2rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
 
 .todo-stats-fraction {
   font-size: 0.95rem;
@@ -1113,14 +1009,6 @@ button.signin-continue:disabled {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 0;
-}
-
-.todo-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-  min-width: 0;
 }
 
 .todo-checkbox-btn {
@@ -1193,23 +1081,6 @@ button.signin-continue:disabled {
 /* ==========================================================================
    Precision Details: Skeleton Loaders (No crude spinners)
    ========================================================================== */
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.09) 37%,
-    rgba(255, 255, 255, 0.04) 63%
-  );
-  background-size: 400% 100%;
-  border-radius: 0.5rem;
-}
-
-.skeleton-row {
-  height: 2.75rem;
-  margin-bottom: 0.5rem;
-}
-
 
 /* ==========================================================================
    Precision Details: Blurred Modal Popups (Centered on Desktop & Mobile)
@@ -1439,13 +1310,13 @@ button.signin-continue:disabled {
    ========================================================================== */
 
 /* Small secondary action used inside lists and card headers */
-/* Compact controls keep their look but get a 44pt hit area (HIG); dense picker grids are left out so taps never land on a neighbour. */
+/* Compact controls keep their look but get a 44pt hit area (HIG). */
 .segmented button,
-:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn) {
+:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .tap-btn) {
   position: relative;
 }
 .segmented button::before,
-:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .month-nav-btn, .tap-btn)::before {
+:is(button.btn-sm, .toast-action-btn, .toast-close-btn, .tap-btn)::before {
   content: "";
   position: absolute;
   inset: min(0px, (100% - 44px) / 2);
@@ -1554,10 +1425,6 @@ main > .error {
   margin: 0 0 1.25rem;
 }
 
-.toolbar-end {
-  justify-content: flex-end;
-}
-
 .toolbar .segmented {
   flex: 1;
 }
@@ -1566,7 +1433,7 @@ main > .error {
 .toolbar.dash {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.25rem; /* the space Health puts between its section tabs and its day stepper */
+  gap: 1.25rem;
 }
 
 .toolbar-group {
@@ -1577,22 +1444,6 @@ main > .error {
 
 .toolbar-group .segmented {
   flex: 1;
-}
-
-/* The stepper in a toolbar wears the segmented control's container, so both sit at the same height */
-.toolbar.dash .month-selector {
-  margin: 0;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: var(--surface-secondary);
-  border: 1px solid var(--edge);
-  border-radius: 0.95rem;
-}
-
-.toolbar.dash .month-nav-btn {
-  border-color: transparent;
-  background: transparent;
-  border-radius: 0.7rem;
 }
 
 /* Chart options (period, metric) side by side above a chart */
@@ -1611,152 +1462,6 @@ main > .error {
     grid-template-columns: 1.6fr 1fr;
     gap: 1.5rem;
   }
-}
-
-/* Health's day stepper has the row to itself, as wide as the section tabs above it */
-.toolbar.dash.day-toolbar {
-  grid-template-columns: 1fr;
-}
-
-/* Date or month stepper: arrows at the ends, the label in the middle (tappable to jump back) */
-.month-label-btn {
-  min-height: 2.25rem;
-  padding: 0.25rem 0.75rem;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.month-label-btn:disabled {
-  opacity: 1;
-  cursor: default;
-}
-
-.month-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* The stepper's label opens a calendar popover below it (app/components/date-picker.tsx) */
-.toolbar {
-  position: relative;
-  z-index: 20; /* the popover floats over the cards below */
-}
-
-.picker {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-
-.picker > .month-label-btn {
-  border-radius: 0.7rem;
-  cursor: pointer;
-}
-
-.picker > .month-label-btn[aria-expanded="true"] {
-  background: var(--highlight);
-}
-
-.picker-pop {
-  position: absolute;
-  top: calc(100% + 0.6rem);
-  left: 50%;
-  translate: -50% 0;
-  width: 19rem;
-  max-width: calc(100vw - 2rem);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--surface-modal);
-  border: 1px solid var(--edge);
-  border-radius: 1.1rem;
-  transform-origin: top center;
-}
-
-.picker-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.9375rem;
-}
-
-.picker-head .month-nav-btn {
-  border-color: transparent;
-  background: transparent;
-}
-
-.picker-grid {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.picker-grid.days {
-  grid-template-columns: repeat(7, 1fr);
-}
-
-.picker-grid.months {
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.35rem;
-}
-
-.picker-weekdays span {
-  text-align: center;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--secondary);
-}
-
-.picker-cell {
-  min-height: 2.35rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.picker-grid.months .picker-cell {
-  min-height: 2.75rem;
-  border-radius: 0.8rem;
-}
-
-
-.picker-cell.today {
-  color: var(--tint);
-  font-weight: 700;
-}
-
-.picker-cell[aria-pressed="true"] {
-  background: var(--tint);
-  color: var(--on-tint);
-  font-weight: 700;
-}
-
-.picker-cell:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.picker-today {
-  align-self: center;
-}
-
-.readonly-note {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.25rem;
-  font-size: 0.8125rem;
-  color: var(--secondary);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -1978,7 +1683,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   padding: 0.5rem 0;
 }
 
-
 /* The title and its tags (carried over, reminder) share a line, wrapping only when it is full */
 .todo-main {
   flex: 1;
@@ -2050,129 +1754,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-}
-
-/* Value axis on the left, day labels under the plot */
-.bars {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 0.45rem;
-}
-
-.bars-axis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-end;
-  font-size: 0.6875rem;
-  line-height: 1;
-  color: var(--secondary);
-}
-/* Each number sits on its gridline */
-.bars-axis span:first-child { translate: 0 -50%; }
-.bars-axis span:last-child { translate: 0 50%; }
-
-.bars-labels { grid-column: 2; }
-
-.bars-plot {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--gap, 4px);
-  border-bottom: 1px solid var(--separator);
-  background: repeating-linear-gradient(
-    to top,
-    transparent 0,
-    transparent calc(50% - 1px),
-    var(--separator) calc(50% - 1px),
-    var(--separator) 50%
-  );
-}
-
-.bars-col {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-}
-
-/* Hover (or keyboard focus) shows the bar's value above the chart */
-.bars-col[data-tip] { position: relative; }
-.bars-col[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: 50%;
-  translate: calc(var(--at, 0.5) * -100%) 0; /* slides from left- to right-aligned across the chart, so it never leaves it */
-  z-index: 2;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--edge);
-  border-radius: 0.6rem;
-  background: var(--surface-modal);
-  color: var(--text);
-  font-size: 0.75rem;
-  line-height: 1.35;
-  white-space: pre;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-  opacity: 0;
-}
-.bars-col[data-tip]:focus-visible::after { opacity: 1; }
-@media (hover: hover) {
-  .bars-col[data-tip]:hover::after { opacity: 1; }
-}
-
-button.bars-col {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 4px 4px 0 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.bars-bar {
-  width: 100%;
-  border-radius: 4px 4px 0 0;
-  background: var(--tint);
-  opacity: 0.55;
-  transform-origin: bottom;
-}
-
-@media (hover: hover) {
-  button.bars-col:hover .bars-bar {
-    opacity: 0.9;
-  }
-}
-
-button.bars-col:focus-visible {
-  outline: 2px solid var(--tint);
-  outline-offset: 2px;
-}
-
-.bars-bar.hl {
-  opacity: 1;
-}
-
-.bars-bar.empty {
-  background: var(--separator);
-  opacity: 1;
-}
-
-.bars-labels {
-  display: flex;
-  gap: var(--gap, 4px);
-  margin-top: 0.35rem;
-  font-size: 0.6875rem;
-  color: var(--secondary);
-}
-
-.bars-labels span {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  justify-content: center;
-  white-space: nowrap;
 }
 
 .hbars {
@@ -2258,36 +1839,6 @@ button.bars-col:focus-visible {
   color: var(--secondary);
 }
 
-/* Stat tiles shown above charts: equal widths, and in a narrow card the last one wraps to a full-width row. */
-.stat-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.stat-row > .stat-tile {
-  flex: 1 1 5.5rem;
-}
-
-.stat-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.85rem;
-  background: var(--surface-secondary);
-}
-
-.stat-tile strong {
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-
-.stat-tile span {
-  font-size: 0.75rem;
-  color: var(--secondary);
-}
 
 /* Ring (or donut) centred in its card, caption centred below */
 .dash-hero {
@@ -2454,7 +2005,6 @@ button.bars-col:focus-visible {
   margin: 0.2rem 0 0;
   font-size: 0.875rem;
 }
-
 
 .entry-main {
   display: flex;
@@ -2724,37 +2274,7 @@ button.bars-col:focus-visible {
 }
 .chat-form input { flex: 1; min-width: 0; }
 
-/* A day with something planned: a small dot under the number. */
-.picker-cell.marked {
-  position: relative;
-}
-
-.picker-cell.marked::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 0.3rem;
-  width: 0.25rem;
-  height: 0.25rem;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.8;
-}
-
-/* Move sheet: one full-width choice per row. */
-/* Inside a form sheet the calendar opens in place: the card clips anything floating out of it. */
-.modal-card .picker {
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.modal-card .picker-pop {
-  position: static;
-  translate: none;
-}
-
+/* A grey explanation inside a form. */
 .move-hint {
   margin: 0 0 0.25rem;
   font-size: 0.875rem;
@@ -2765,14 +2285,6 @@ button.bars-col:focus-visible {
   opacity: 0.5;
 }
 
-/* Weigh-ins: the weight leads, the date follows a little apart and quieter. */
-.weight-main {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap; /* the date drops under the value on a 320px phone instead of widening the row */
-  gap: 0 1.25rem;
-  min-width: 0;
-}
 
 /* Takes the line chart's place at its height (140px plot + axis line), so changing the period never resizes the card. */
 .chart-note {
@@ -2801,28 +2313,6 @@ button.bars-col:focus-visible {
   font-size: 0.9rem;
 }
 
-/* A date trigger that looks like the text fields around it. */
-.field .picker {
-  align-items: stretch;
-}
-
-.date-field {
-  width: 100%;
-  min-height: 2.75rem;
-  padding: 0.65rem 0.95rem;
-  text-align: left;
-  justify-content: flex-start;
-  font-weight: 400;
-  color: var(--text);
-  background: rgba(28, 28, 30, 0.85);
-  border: 1px solid var(--edge);
-  border-radius: 0.85rem;
-}
-.date-field:disabled { opacity: 1; cursor: default; } /* while saving it looks like the inputs beside it */
-/* Like a field: no ring, the fill deepens when open or focused. */
-.date-field[aria-expanded="true"],
-.date-field:focus-visible { outline: none; background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 8%); }
-
 /* ==========================================================================
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
@@ -2831,11 +2321,7 @@ button.bars-col:focus-visible {
    With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
   button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
-  .month-nav-btn:hover:not(:disabled) { background: var(--highlight-fill); }
-  .picker > .month-label-btn:hover,
-  .picker-cell:hover:not(:disabled) { background: var(--highlight); }
   .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
-  .date-field:hover:not(:disabled, [aria-expanded="true"]) { background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%); }
   button.secondary:hover:not(:disabled),
   button.btn-sm:not(.tint):hover:not(:disabled) {
     background: var(--highlight-fill);
@@ -2897,9 +2383,6 @@ button.bars-col:focus-visible {
   background-color: rgba(255, 255, 255, 0.03);
 }
 
-
-/* Two badges side by side in a section head; they wrap under each other on a narrow card. */
-.badge-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 
 /* A long list's More button sits centred under its last row (useMore) */
 /* Measured from the last row's highlight band: one card padding above (the list gap is 0.25rem) and one below

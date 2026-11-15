@@ -211,7 +211,7 @@ None. A press changes nothing: no scale, no pulse, on buttons, tabs, the tab bar
   - SVG chevron, stroke `#a1a9b2`, width 1.8;
   - placed at `right 1rem center`, size .75rem;
   - padding-right 2.6rem.
-- `label`: grid, gap .35rem, weight 600, .9rem. `.field` has the same layout for the date picker; `.date-field` looks like an input: the same 5% hover and 8% fill when open or focused, and no focus ring. A `fieldset` legend (the Tasks weekday picker) uses the same type: weight 600, .9rem, primary colour, never a lighter secondary caption.
+- `label`: grid, gap .35rem, weight 600, .9rem.  A `fieldset` legend (the Tasks weekday picker) uses the same type: weight 600, .9rem, primary colour, never a lighter secondary caption.
 - Checkbox (form options only, never a list row): 1.25rem, `accent-color: var(--tint)`.
 - No placeholders.
 
@@ -338,7 +338,6 @@ The CSS hides the outline on `[data-pointer]`.
 - `.empty-note`: centred, secondary colour, .9375rem, padding `1.5rem 0` outside a list; right after a segmented control, padding-bottom .5rem.
 - Inside a list: `display: grid; place-items: center; min-height: var(--row-h, 3.75rem); padding: .5rem 0`.
 - One `<p className="empty-note">` in place of the rows.
-- Loading list: a plain `<div className="entries">` with two `.skeleton.skeleton-row` (2.75rem high, margin-bottom .5rem, radius .5rem; a static gradient of white .04/.09/.04 at 400% width, no shimmer), replaced by the `ListBox` list once loaded. The title's total stays hidden until then.
 
 ## Wishlist row columns
 
@@ -429,14 +428,12 @@ The CSS hides the outline on `[data-pointer]`.
 - Bar tips (`data-tip`) show on hover or focus and are left- or right-aligned across the chart, so they never leave it.
 - `ProgressRing` is drawn at its share at once. It is 132px with a 12px stroke: `--separator` track, `--tint` fill with round caps, centre text 1.75rem weight 800, letter-spacing -.02em.
 - `.dash-hero`: a centred column, gap 1rem, padding-block .25rem: the ring with its caption below.
-- `.stat-row`: 3 equal columns (`.two`: 2), gap .75rem, margin-bottom 1.25rem. `.stat-tile`: padding .75rem .9rem, radius .85rem, `--surface-secondary`, gap .15rem; the number 1.35rem weight 700, the caption .75rem secondary.
 - `.chart-controls`: the chart's `Segmented` groups side by side (`flex: 1` each), gap .75rem, margin-bottom .75rem.
 - `.move-hint`: the one help line in a dialog, `.muted`, .875rem, margin 0 0 .25rem.
 - `.toolbar.dash`: one column, gap .75rem (1.6fr 1fr, gap 1.5rem from 992px); a `.toolbar-group` holds segmented controls at `flex: 1`, gap .75rem.
 - Bar gap by count: 4px, 2px above 20 bars, 1px above 45.
 - Bar height: at least 2%; an empty bar is a 3px stub.
 - Bar tip bubble: padding .4rem .6rem, radius .6rem, .75rem text, line-height 1.35, `--surface-modal`, `white-space: pre` (tip on one line, title on the next).
-- `BarChart` has `role="img"` (or `group` when bars are buttons) and an `aria-label` summary.
 - `LineChart`: `role="img"` with an `aria-label`; dots r 3.5 with an SVG `<title>` `label: value`; axis first label, `lo – hi`, last label. With fewer than 2 points it renders nothing and a `.chart-note` (muted .875rem, centred, `min-height: calc(140px + 1.375rem)`, the chart's height) takes its place: "Not enough weigh-ins in the last 30 days."
 - `HBars`: a `<ul>` of label (wraps, never cut off), track and text value. The track is `--separator` and fully rounded. No role.
 - Numbers are plain text: a stat tile shows its value at once (a tile with no value yet shows `—`).

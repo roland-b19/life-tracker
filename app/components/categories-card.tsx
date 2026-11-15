@@ -172,7 +172,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
       }
       setOpen(false);
     } catch {
-      setError("Failed to save category");
+      setError(`Failed to save ${noun}`);
     } finally {
       setBusy(false);
     }
