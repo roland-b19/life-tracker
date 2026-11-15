@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { BigNumber, Card, Field, FormModal } from "../components/blocks";
 import { ScaleIcon } from "../components/icons";
-import { EditButton } from "../components/lists";
+import { EditButton, RowActions } from "../components/lists";
 import { useToast } from "../components/toast";
 import { showDecimal } from "@/lib/decimal-input";
 import { toISODate } from "@/lib/format-date";
@@ -40,6 +40,28 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
     setError("");
     setKilograms(entries.find((e) => e.date === day)?.kilograms ?? "");
     setOpen(true);
+  }
+
+  /** The weigh-in leaves the screen at once; Undo posts it again under its old id, so the same row comes back. */
+  async function handleDelete(entry: WeightEntry) {
+    setEntries((list) => list.filter((e) => e.id !== entry.id));
+    const response = await send("DELETE", `/api/weight/${entry.id}`).catch(() => null);
+    // A 404 means another device already deleted it: the screen is right as it is.
+    if (!response || (!response.ok && response.status !== 404)) {
+      upsert(entry);
+      showToast({ message: "Failed to remove weight", type: "warning" });
+      return;
+    }
+    const kg = showDecimal(String(twoDecimals(Number(entry.kilograms))));
+    showToast({
+      message: `Removed ${kg} kg`,
+      type: "success",
+      onUndo: async () => {
+        const back = await send("POST", "/api/weight", { id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) }).catch(() => null);
+        if (back?.ok) upsert(entry);
+        else showToast({ message: "Failed to restore weight", type: "warning" });
+      },
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -109,7 +131,13 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
 
   return (
     <>
-      <Card id="weight-title" title="Weight" icon={<ScaleIcon size={18} />} end={<EditButton label="Edit today's weight" onClick={openForm} />}>
+      <Card id="weight-title" title="Weight" icon={<ScaleIcon size={18} />} end={
+          current ? (
+            <RowActions onEdit={openForm} onDelete={() => void handleDelete(current)} editLabel="Edit today's weight" deleteLabel="Delete today's weight" />
+          ) : (
+            <EditButton label="Edit today's weight" onClick={openForm} />
+          )
+        }>
         <BigNumber value={current ? showDecimal(String(twoDecimals(Number(current.kilograms)))) : "—"} of="kg today" />
         <p className="muted metric-avg number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${showDecimal(String(stats.sevenDayAverage))} kg`}</p>
         <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />

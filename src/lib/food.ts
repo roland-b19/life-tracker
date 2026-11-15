@@ -13,6 +13,7 @@ import {
   CreateShoppingItemInput,
   LogMealInput,
   MAX_WATER_ML,
+  RestoreMealInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
@@ -121,6 +122,27 @@ export async function logMeal(userId: string, input: LogMealInput) {
     .returning();
 
   return created;
+}
+
+/** Undo of a delete: the meal comes back under its old id and time. A taken id gives back undefined. */
+export async function restoreMeal(userId: string, input: RestoreMealInput) {
+  const [restored] = await db
+    .insert(meals)
+    .values({
+      id: input.id,
+      userId,
+      date: input.date,
+      name: input.name,
+      calories: input.calories,
+      protein: input.protein.toFixed(1),
+      carbs: input.carbs.toFixed(1),
+      fat: input.fat.toFixed(1),
+      isEstimated: input.isEstimated ?? false,
+      createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return restored;
 }
 
 /** Foods logged before, newest first, one entry per name: the assistant's context. */

@@ -12,7 +12,7 @@ import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
-import { EditButton, ListBox, RowActions } from "../components/lists";
+import { DeleteButton, EditButton, ListBox, RowActions } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
   addShoppingCategoryAction,
@@ -21,6 +21,7 @@ import {
   setWaterAction,
   clearBoughtItemsAction,
   deleteMealAction,
+  restoreMealAction,
   deleteShoppingCategoryAction,
   deleteShoppingItemAction,
   logMealAction,
@@ -222,6 +223,36 @@ export function FoodClient({
       showToast({ message: "Failed to undo", type: "warning" });
     }
     return new Set(logged.filter((_, i) => results[i]).map((m) => m.id));
+  }
+
+  /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
+  async function handleDeleteMeal(meal: MealData) {
+    applyMeal(meal, -1);
+    const gone = await deleteMealAction(meal.id).then((r) => r.success, () => false);
+    if (!gone) {
+      applyMeal(meal, 1);
+      showToast({ message: "Failed to remove meal", type: "warning" });
+      return;
+    }
+    showToast({
+      message: `Removed "${meal.name}"`,
+      type: "success",
+      onUndo: async () => {
+        const back = await restoreMealAction({
+          id: meal.id,
+          date: meal.date,
+          name: meal.name,
+          calories: meal.calories,
+          protein: parseFloat(meal.protein),
+          carbs: parseFloat(meal.carbs),
+          fat: parseFloat(meal.fat),
+          isEstimated: meal.isEstimated ?? false,
+          createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
+        }).then((r) => r.success, () => false);
+        if (back) applyMeal(meal, 1);
+        else showToast({ message: "Failed to restore meal", type: "warning" });
+      },
+    });
   }
 
   async function handleLogMeal(e: React.FormEvent) {
@@ -746,6 +777,23 @@ export function FoodClient({
                   </div>
                 ))}
               </div>
+            </Card>
+
+            <Card id="meals-title" title="Meals" count={summary.meals.length}>
+              <ListBox wash className="entries">
+                {summary.meals.length === 0 && <EmptyNote>No meals logged today.</EmptyNote>}
+                {summary.meals.map((meal) => (
+                  <div key={meal.id} className="entry-row">
+                    <span>
+                      {visible(meal.name) ? meal.name : "Meal"}{" "}
+                      <span className="muted number-tabular">
+                        · {meal.calories} kcal · P {Number(meal.protein)} · C {Number(meal.carbs)} · F {Number(meal.fat)}
+                      </span>
+                    </span>
+                    <DeleteButton label={`Delete ${meal.name}`} onClick={() => void handleDeleteMeal(meal)} />
+                  </div>
+                ))}
+              </ListBox>
             </Card>
 
             <WeightCard today={todayDate} initial={initialWeights} />

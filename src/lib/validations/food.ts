@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate, visible } from "./common";
+import { isoDate, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
 export const MAX_WATER_ML = 20000;
@@ -16,6 +16,9 @@ export const logMealSchema = z.object({
   fat: z.number().min(0).max(1000),
   isEstimated: z.boolean().default(false).optional(),
 });
+
+/** Undo of a delete: the same meal, under its old id and time. */
+export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
 export { metricDayEditable } from "../rules";
 
@@ -76,6 +79,7 @@ export const revertShoppingCategorySchema = z
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
+export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
 export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
