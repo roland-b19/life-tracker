@@ -65,7 +65,7 @@ When you start: read the files under "Read first", then `git log --oneline -15`,
 
 The app must feel like Apple software. Before designing or building any UI, UX copy, icon, chart, notification or widget, read the `apple-design` skill (`.agents/skills/apple-design/SKILL.md`) and the references it routes to. Use system components, system colors and text styles before custom ones. The skill's accessibility checklist is part of "done" for every screen.
 
-The house style on top of the HIG is the `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/SKILL.md`): every value, the add/edit/delete + Undo pattern and rejected idea from the Wishlist page (the app has no animations or transitions, except the Tasks progress ring and the Wishlist total count-up), which the user signed off as the reference. Read it before any UI change and follow its checklist; every page must match the Wishlist.
+The house style on top of the HIG is the `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/SKILL.md`): every value, the add/edit/delete + Undo pattern and rejected idea from the Wishlist page (the app has no animations or transitions, except the Tasks progress ring, the Wishlist total count-up and the Nutrition count-up), which the user signed off as the reference. Read it before any UI change and follow its checklist; every page must match the Wishlist.
 
 ## Security: secure-development skill
 

@@ -17,13 +17,6 @@ export const logMealSchema = z.object({
   isEstimated: z.boolean().default(false).optional(),
 });
 
-export const updateMetricsSchema = z.object({
-  date: isoDate,
-  waterMl: z.number().int().min(0).max(20000).optional(),
-  steps: z.number().int().min(0).max(MAX_STEPS).optional(),
-  notes: z.string().max(255).optional().nullable(),
-});
-
 export { metricDayEditable } from "../rules";
 
 export const updateNutritionTargetsSchema = z.object({
@@ -82,11 +75,6 @@ export const revertShoppingCategorySchema = z
   .refine((v) => managed(v, [v.name]), builtIn);
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
-
-export const toggleShoppingItemSchema = z.object({
-  itemId: z.string().uuid(),
-  isBought: z.boolean(),
-});
 
 export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;

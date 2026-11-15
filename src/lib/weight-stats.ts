@@ -18,9 +18,6 @@ const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 /** The Sunday that starts the week of an ISO date. */
 export const weekStartOf = (iso: string) => addDays(iso, -day(iso).getUTCDay());
 
-/** "+0.5 kg", "-1.2 kg", "0 kg" */
-export const signedKg = (n: number) => `${n > 0 ? "+" : ""}${n} kg`;
-
 export function weightStats(entries: { date: string; kilograms: number }[], today: string): WeightStats {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
   const byWeek = new Map<string, number[]>();

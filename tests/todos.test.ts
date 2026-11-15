@@ -34,7 +34,6 @@ import {
   createTodoAction,
   deletePushSubscriptionAction,
   deleteTodoAction,
-  getDailyTodosAction,
   loadTodosViewAction,
   restoreTodoAction,
   savePushSubscriptionAction,
@@ -333,8 +332,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       });
       expect(toggleRes.success).toBe(true);
 
-      const listRes = await getDailyTodosAction("personal", today);
-      expect(listRes.success).toBe(true);
+      const listRes = await getDailyTodos(userA, "personal", today);
       expect(listRes.todos).toHaveLength(1);
       expect(listRes.todos[0].isCompleted).toBe(true);
 
@@ -461,8 +459,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("refuses bad input and changes on days a task cannot change", async () => {
       authState.id = userA;
       const today = toISODate();
-      await expect(getDailyTodosAction("other" as never, today)).rejects.toThrow();
-      await expect(getDailyTodosAction("personal", "today")).rejects.toThrow();
 
       const habit = await createTodoAction({
         space: "personal", title: "Walk", dueDate: today, isRecurring: true, recurrencePattern: "daily",

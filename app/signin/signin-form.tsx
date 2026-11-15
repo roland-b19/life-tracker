@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { CenterCard, Field } from "../components/blocks";
+import { CenterCard, ErrorText, Field } from "../components/blocks";
 import { clearPageCache } from "../components/page-cache";
 
 const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github: "GitHub" };
@@ -39,11 +39,7 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
     <CenterCard id="signin-title" title="Welcome back" pulse>
       {provider !== "dev" ? (
         <div className="form-stack signin-form">
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <ErrorText>{error}</ErrorText>}
           <button
             type="button"
             disabled={busy}
@@ -71,11 +67,7 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
             required
             autoFocus
           />
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <ErrorText>{error}</ErrorText>}
           {/* Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look */}
           <button type="submit" disabled={busy} className="signin-continue">
             {busy ? "Signing in..." : "Continue"}

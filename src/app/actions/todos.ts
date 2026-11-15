@@ -5,11 +5,9 @@ import { requireUser } from "@/server/auth";
 import {
   createTodoSchema,
   deleteTodoSchema,
-  isoDate,
   restoreTodoSchema,
   pushSubscriptionSchema,
   TodoSpace,
-  todoSpaceSchema,
   toggleTodoSchema,
   updateTodoSchema,
 } from "@/lib/validations/todos";
@@ -98,12 +96,6 @@ export async function deleteTodoAction(todoId: string) {
   assertChangeable(task);
   const result = await deleteTodo(userId, parsed.id);
   return { success: true, deleted: result !== null };
-}
-
-export async function getDailyTodosAction(space: TodoSpace, date: string) {
-  const userId = await requireUser();
-  const result = await getDailyTodos(userId, todoSpaceSchema.parse(space), isoDate.parse(date));
-  return { success: true, ...result };
 }
 
 /**

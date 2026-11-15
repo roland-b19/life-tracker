@@ -1,6 +1,5 @@
 "use client";
 
-import { type CSSProperties } from "react";
 import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
@@ -38,83 +37,6 @@ export function ProgressRing({
         />
       </svg>
       <span className="ring-text number-tabular">{Math.round(shown)}%</span>
-    </div>
-  );
-}
-
-export interface BarDatum {
-  label: string;
-  /** Bar height as a share of `max`. */
-  value: number;
-  /** Tooltip / screen reader text. */
-  title: string;
-  /** The value as the hover tip shows it, above `title` (e.g. "50%"). */
-  tip?: string;
-  highlight?: boolean;
-  empty?: boolean;
-}
-
-export function BarChart({
-  data,
-  max = 100,
-  height = 140,
-  summary,
-  format = String,
-  onSelect,
-}: {
-  data: BarDatum[];
-  max?: number;
-  height?: number;
-  summary: string;
-  /** Labels the value axis (0, half of max, max). */
-  format?: (value: number) => string;
-  /** Makes every bar a button (e.g. open that day). */
-  onSelect?: (index: number) => void;
-}) {
-  const gap = data.length > 45 ? 1 : data.length > 20 ? 2 : 4;
-  const style = { "--gap": `${gap}px` } as CSSProperties;
-  return (
-    <div className="bars" role={onSelect ? "group" : "img"} aria-label={summary} style={style}>
-      <div className="bars-axis number-tabular" aria-hidden="true" style={{ height }}>
-        {[max, max / 2, 0].map((v) => (
-          <span key={v}>{format(v)}</span>
-        ))}
-      </div>
-      <div className="bars-plot" style={{ height }}>
-        {data.map((d, i) => {
-          const bar = (
-            <div
-              className={`bars-bar${d.highlight ? " hl" : ""}${d.empty ? " empty" : ""}`}
-              style={{
-                height: d.empty ? 3 : `${Math.max(2, Math.min(100, (d.value / max) * 100))}%`,
-              }}
-            />
-          );
-          return onSelect ? (
-            <button
-              key={i}
-              type="button"
-              className="bars-col"
-              aria-label={d.title}
-              data-tip={`${d.tip ? `${d.tip}\n` : ""}${d.title}`}
-              style={{ "--at": i / Math.max(1, data.length - 1) } as CSSProperties}
-              aria-pressed={d.highlight}
-              onClick={() => onSelect(i)}
-            >
-              {bar}
-            </button>
-          ) : (
-            <div key={i} className="bars-col" title={d.title}>
-              {bar}
-            </div>
-          );
-        })}
-      </div>
-      <div className="bars-labels" aria-hidden="true">
-        {data.map((d, i) => (
-          <span key={i}>{d.label}</span>
-        ))}
-      </div>
     </div>
   );
 }
