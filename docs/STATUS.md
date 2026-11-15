@@ -9,7 +9,7 @@ The history that used to fill this file (every phase, the verification table, th
 - `main` holds everything through the four forms-audit PRs (#112 to #115). The Tier 1 to 3 iterations, the Wishlist-style UI for every page and the Azure reminder pipeline (PRs #101 to #103) are merged.
 - The personal deploy (variant B, Vercel + Neon) is live and holds the user's real data; its runbook is in `README.md`. Nothing is deployed to Azure (see below).
 - Browser check of PR #116 (375px and desktop): Meals add/delete/Undo, today's weigh-in delete/Undo and the Shopping tab work. Not checked: a past day (read-only), older weigh-ins.
-- PR #116 (delete meals and weigh-ins, migration 0030) is merged. Open: #104 (`fix/azure-migrate`, untouched).
+- PR #116 (delete meals and weigh-ins, migration 0030) is merged. #104 (`fix/azure-migrate`) was closed on 2026-11-16 (Azure is on hold); its branch stays on the remote.
 
 ## Current focus
 
@@ -35,7 +35,7 @@ The Gym audit (#117), the GymClient split (#118) and the `undoWith` sweep (#119)
 
 1. Migrations 0030 and 0031 are applied on the live database (the user checked it, 2026-11-16).
 2. `undoWith` sweep done (see decisions, 2026-11-16): it fits only the plain write-back Undos; the rest keep their own code on purpose.
-3. The Categories card is cramped at about 800px; PR #104 (`fix/azure-migrate`) is still open and untouched.
+3. The Categories card is cramped at about 800px.
 4. Azure A (`docs/release-plan.md` section 5) after a week of watching variant B. Nothing deploys and no Azure resource is created without the user's explicit OK.
 
 ## Open questions
