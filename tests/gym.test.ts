@@ -387,17 +387,20 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(12)]);
     expect(await status()).toEqual([5, 5, true, false]);
 
-    // A deload logged this week is the deload week; nothing is due
-    const deload = await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
-    expect(await status()).toEqual([1, 5, false, true]);
-    expect((await getDeloadStatus(userA)).lastDeloadWeek).toBe(weeksAgo(0));
+    // A deload session alone does not make its week a deload week
+    await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
+    expect(await status()).toEqual([5, 5, true, false]);
+    expect((await getDeloadStatus(userA)).lastDeloadWeek).toBeNull();
 
-    // The week after it is week 1; a deload is due again five normal weeks later
-    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(1)]);
+    // A chosen deload week is one: nothing is due, the week after it is week 1, five normal weeks later it is due again
+    const thisWeek = weekStart(toISODate());
+    await saveDeloadWeeksAction({ last: thisWeek, next: null });
+    expect(await status()).toEqual([1, 5, false, true]);
+    await saveDeloadWeeksAction({ last: addDays(thisWeek, -7), next: null });
     expect(await status()).toEqual([1, 5, false, false]);
-    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(5)]);
+    await saveDeloadWeeksAction({ last: addDays(thisWeek, -35), next: null });
     expect(await status()).toEqual([5, 5, false, false]);
-    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(6)]);
+    await saveDeloadWeeksAction({ last: addDays(thisWeek, -42), next: null });
     expect(await status()).toEqual([5, 5, true, false]);
   });
 
@@ -743,14 +746,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-02", weight: 50 }]);
     });
 
-    it("skips the whole deload week, whatever day or exercise the deload was", () => {
+    it("skips only the deload session's sets, not the rest of its week", () => {
       const sets = [
         set("2026-11-02", 50, 8),
-        set("2026-11-09", 30, 8, { isDeload: true, exerciseId: "e2" }), // deload on Monday, other exercise
-        set("2026-11-12", 45, 8), // a normal-looking set in the same week
+        set("2026-11-09", 30, 8, { isDeload: true }), // the deload session
+        set("2026-11-12", 45, 8), // a normal session in the same week still counts
         set("2026-11-16", 55, 8),
       ];
-      expect(exerciseSeries(sets, "e1").map((p) => p.date)).toEqual(["2026-11-02", "2026-11-16"]);
+      expect(exerciseSeries(sets, "e1").map((p) => p.date)).toEqual(["2026-11-02", "2026-11-12", "2026-11-16"]);
     });
 
     it("counts a deload week in the day figures like any other week", () => {
