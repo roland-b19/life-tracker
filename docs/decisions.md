@@ -446,3 +446,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Deload weeks are editable: any week, past or future, can be marked or unmarked. The effective set is the rows of `deload_weeks(user_id, week_start)` plus the weeks of sessions flagged `is_deload`; marking or unmarking also sets or clears the flag on that week's sessions. The cycle restarts after the latest deload week. Undo re-saves the previous list.
 - "Last time" in a started workout takes the latest earlier session that trained the exercise, preferring the same split day, on any day otherwise.
 - Number fields are text inputs with `inputMode` (numeric for whole numbers, decimal otherwise): the user types a comma, the value is stored with a dot. Min, max and step are enforced by the server's zod schemas, not by the browser.
+
+## 2026-11-15 — Deload by last and next week, select-all (user)
+- The deload is set with two fields, last deload and next deload (a Sunday week each, 10 weeks offered). "Week x of N" is derived from them: the week after the last deload is week 1, N = weeks between the two minus one. Default N is 5 (it was "4 normal weeks, then deload"). Saving stores both weeks in `deload_weeks` and flags their sessions; the chosen week shows "Deload week chosen" with "Deload session" ticked by default, and a ticked session stays out of Progress. No migration.
+- A started workout shows the last session's numbers on every exercise, always visible in the exercise header.
+- A double-tap or double-click in an input or textarea selects everything in it (checkbox, radio and range excluded), because the browser's word selection stops at punctuation. Not yet verified on a real iPhone.

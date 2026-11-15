@@ -64,6 +64,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
+  // A double-tap or double-click in a field selects everything in it. The browser's own double-tap selects one word and
+  // stops at spaces, commas and other punctuation, so a value like "1,5 kg" could never be selected whole.
+  useEffect(() => {
+    let tap: { el: EventTarget | null; t: number; x: number; y: number } = { el: null, t: 0, x: 0, y: 0 };
+    const onUp = (e: PointerEvent) => {
+      const el = e.target;
+      if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) || ["checkbox", "radio", "range"].includes((el as HTMLInputElement).type)) return;
+      const again = tap.el === el && e.timeStamp - tap.t < 400 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 24;
+      tap = again ? { el: null, t: 0, x: 0, y: 0 } : { el, t: e.timeStamp, x: e.clientX, y: e.clientY };
+      if (!again) return;
+      // The browser sets its own word selection after the second tap; select again right after it.
+      for (const delay of [0, 80]) setTimeout(() => { el.select(); try { el.setSelectionRange(0, el.value.length); } catch {} }, delay);
+    };
+    document.addEventListener("pointerup", onUp);
+    return () => document.removeEventListener("pointerup", onUp);
+  }, []);
+
   return (
     <SessionProvider>
       <ToastProvider>{children}</ToastProvider>

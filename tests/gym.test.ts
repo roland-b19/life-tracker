@@ -367,79 +367,104 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     await expect(deleteSetAction("not-a-uuid")).rejects.toThrow("Invalid id");
   });
 
-  it("counts the 5-week deload cycle in calendar weeks: four normal weeks, then the deload week", async () => {
+  it("counts Week x of N from the last and the next deload week", async () => {
     const weeksAgo = (n: number) => addDays(weekStart(toISODate()), -7 * n); // the Sunday n weeks back
     const status = async () => {
       const s = await getDeloadStatus(userA);
-      return [s.currentCycleWeek, s.isDeloadDue, s.inDeloadWeek];
+      return [s.cycleWeek, s.cycleLength, s.isDeloadDue, s.inDeloadWeek];
     };
 
-    // No workout yet: week 1
-    expect(await status()).toEqual([1, false, false]);
+    // No workout yet: week 1 of the default 5
+    expect(await status()).toEqual([1, 5, false, false]);
 
-    // The first workout starts the cycle; week 5 is the deload week, due until one is logged
+    // The first workout starts the cycle; the deload is due once week 5 is over, and stays due (never wraps)
     const first = await createWorkoutSession(userA, { date: weeksAgo(3), isDeload: false });
-    expect(await status()).toEqual([4, false, false]);
+    expect(await status()).toEqual([4, 5, false, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(4)]);
-    expect(await status()).toEqual([5, true, false]);
+    expect(await status()).toEqual([5, 5, false, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(5)]);
+    expect(await status()).toEqual([5, 5, true, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(12)]);
-    expect(await status()).toEqual([5, true, false]); // overdue stays due, never wraps back to week 1
+    expect(await status()).toEqual([5, 5, true, false]);
 
-    // A deload this week: it is the deload week, nothing is due, and the next cycle starts next Sunday
+    // A deload logged this week is the deload week; nothing is due
     const deload = await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
-    expect(await status()).toEqual([1, false, true]);
-    expect((await getDeloadStatus(userA)).lastDeloadDate).toBe(toISODate());
+    expect(await status()).toEqual([1, 5, false, true]);
+    expect((await getDeloadStatus(userA)).lastDeloadWeek).toBe(weeksAgo(0));
 
-    // The week after a deload is week 1; the deload comes due again five weeks after the last one, not four
+    // The week after it is week 1; a deload is due again five normal weeks later
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(1)]);
-    expect(await status()).toEqual([1, false, false]);
-    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(4)]);
-    expect(await status()).toEqual([4, false, false]);
+    expect(await status()).toEqual([1, 5, false, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(5)]);
-    expect(await status()).toEqual([5, true, false]);
+    expect(await status()).toEqual([5, 5, false, false]);
+    await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(6)]);
+    expect(await status()).toEqual([5, 5, true, false]);
   });
 
-  it("lets the user choose deload weeks: a marked week counts like a logged one, and Undo restores the set", async () => {
-    const sunday = weekStart(toISODate());
-    const nextWeek = addDays(sunday, 7);
-    await createWorkoutSession(userA, { date: addDays(sunday, -14), isDeload: false });
-    const inWeek = await createWorkoutSession(userA, { date: addDays(sunday, 3), isDeload: false });
+  it("derives Week x of N from a chosen last and next deload, and the chosen week is the deload week", async () => {
+    const thisWeek = weekStart(toISODate());
+    const at = (n: number) => addDays(thisWeek, 7 * n); // the Sunday n weeks from this one
+    const status = async () => {
+      const s = await getDeloadStatus(userA);
+      return [s.cycleWeek, s.cycleLength, s.isDeloadDue, s.inDeloadWeek];
+    };
 
-    // Marking this week makes it the deload week and flags that week's workouts, so the Progress chart skips them
-    await saveDeloadWeeksAction({ weeks: [sunday] });
-    let s = await getDeloadStatus(userA);
-    expect(s).toMatchObject({ inDeloadWeek: true, isDeloadDue: false, deloadWeeks: [sunday], nextDeloadWeek: null });
-    expect((await admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [inWeek.id])).rows[0].is_deload).toBe(true);
-
-    // A week ahead: not in it yet, nothing is due, and the card can say when it starts
-    await saveDeloadWeeksAction({ weeks: [nextWeek] });
-    s = await getDeloadStatus(userA);
-    expect(s).toMatchObject({ inDeloadWeek: false, isDeloadDue: false, nextDeloadWeek: nextWeek, deloadWeeks: [nextWeek] });
-    expect((await admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [inWeek.id])).rows[0].is_deload).toBe(false);
-
-    // Undo is the same action with the old list
-    await saveDeloadWeeksAction({ weeks: [sunday] });
-    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
-
-    // Clearing every deload week goes back to counting from the first workout
-    await saveDeloadWeeksAction({ weeks: [] });
-    expect(await getDeloadStatus(userA)).toMatchObject({ deloadWeeks: [], inDeloadWeek: false, currentCycleWeek: 3 });
+    // Last deload 2 weeks ago, next in 4 weeks: five normal weeks between them, this is the 2nd
+    await saveDeloadWeeksAction({ last: at(-2), next: at(4) });
+    expect(await status()).toEqual([2, 5, false, false]);
+    // Another length: last 2 weeks ago, next in 1 week: two normal weeks between them, this is the 2nd
+    await saveDeloadWeeksAction({ last: at(-2), next: at(1) });
+    expect(await status()).toEqual([2, 2, false, false]);
+    // The next week is this one: "Deload week chosen"
+    await saveDeloadWeeksAction({ last: at(-5), next: at(0) });
+    expect(await getDeloadStatus(userA)).toMatchObject({ inDeloadWeek: true, isDeloadDue: false, lastDeloadWeek: at(0), nextDeloadWeek: null });
+    // Only a next week: counted back from it with the default 5
+    await saveDeloadWeeksAction({ last: null, next: at(2) });
+    expect(await status()).toEqual([4, 5, false, false]);
   });
 
-  it("refuses a deload week that does not start on a Sunday", async () => {
-    await expect(saveDeloadWeeksAction({ weeks: [addDays(weekStart(toISODate()), 1)] })).rejects.toThrow();
+  it("chooses the last and next deload week: both flag their workouts, the rest after the last are dropped, Undo restores", async () => {
+    const thisWeek = weekStart(toISODate());
+    const at = (n: number) => addDays(thisWeek, 7 * n);
+    const inWeek = (n: number) => admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [sessions[n].id]).then((r) => r.rows[0].is_deload);
+    const sessions = [
+      await createWorkoutSession(userA, { date: addDays(at(-6), 2), isDeload: false }),
+      await createWorkoutSession(userA, { date: addDays(at(-1), 2), isDeload: false }),
+    ];
+
+    await saveDeloadWeeksAction({ last: at(-1), next: at(4) });
+    expect(await inWeek(1)).toBe(true);
+    const before = await getDeloadStatus(userA);
+
+    // A new last (earlier) and next: the old last week stops being a deload week and its workout counts again
+    await saveDeloadWeeksAction({ last: at(-6), next: at(3) });
+    expect(await inWeek(0)).toBe(true);
+    expect(await inWeek(1)).toBe(false);
+    expect(await getDeloadStatus(userA)).toMatchObject({ lastDeloadWeek: at(-6), nextDeloadWeek: at(3) });
+
+    // Undo is the same action with the previous pair
+    await saveDeloadWeeksAction({ last: before.lastDeloadWeek, next: before.nextDeloadWeek });
+    expect(await getDeloadStatus(userA)).toMatchObject({ lastDeloadWeek: at(-1), nextDeloadWeek: at(4) });
+    expect(await inWeek(1)).toBe(true);
+  });
+
+  it("refuses a deload week that does not start on a Sunday or a next deload that is not after the last", async () => {
+    const thisWeek = weekStart(toISODate());
+    await expect(saveDeloadWeeksAction({ last: addDays(thisWeek, 1), next: null })).rejects.toThrow();
+    await expect(saveDeloadWeeksAction({ last: addDays(thisWeek, 7), next: thisWeek })).rejects.toThrow();
+    await expect(saveDeloadWeeksAction({ last: thisWeek, next: thisWeek })).rejects.toThrow();
   });
 
   it("keeps deload weeks per user and refuses anonymous callers", async () => {
     const sunday = weekStart(toISODate());
-    await saveDeloadWeeksAction({ weeks: [sunday] });
-    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
-    expect((await getDeloadStatus(userB)).deloadWeeks).toEqual([]);
+    await saveDeloadWeeksAction({ last: sunday, next: null });
+    expect((await getDeloadStatus(userA)).lastDeloadWeek).toBe(sunday);
+    expect((await getDeloadStatus(userB)).lastDeloadWeek).toBeNull();
     authState.id = userB;
-    await saveDeloadWeeksAction({ weeks: [] }); // B's own list, A's stays
+    await saveDeloadWeeksAction({ last: null, next: null }); // B's own weeks, A's stay
     authState.id = "";
-    await expect(saveDeloadWeeksAction({ weeks: [sunday] })).rejects.toThrow("Authentication required.");
-    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
+    await expect(saveDeloadWeeksAction({ last: sunday, next: null })).rejects.toThrow("Authentication required.");
+    expect((await getDeloadStatus(userA)).lastDeloadWeek).toBe(sunday);
   });
 
   describe("Server Actions authorization & validation guards", () => {

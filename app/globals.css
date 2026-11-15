@@ -2991,6 +2991,7 @@ button.bars-col:focus-visible {
 .last-time {
   display: grid;
   gap: 0.15rem;
+  margin-top: 0.25rem;
   font-size: 0.875rem;
 }
 /* The set being logged: labels and values centred on their fields; Log set comes last, at full width.
