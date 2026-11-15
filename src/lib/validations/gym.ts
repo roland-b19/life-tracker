@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate } from "./common";
+import { isoDate, visible } from "./common";
 import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
 
 export const logSetSchema = z.object({
@@ -57,14 +57,14 @@ export const restoreSessionSchema = z.object({
 });
 
 export const createCustomExerciseSchema = z.object({
-  name: z.string().trim().min(2).max(120),
+  name: z.string().trim().min(2).max(120).refine(visible, "Name is required"),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
 
 export const saveSplitDaySchema = z.object({
   id: z.string().uuid(),
-  name: z.string().trim().min(1).max(100),
+  name: z.string().trim().min(1).max(100).refine(visible, "Name is required"),
   isRest: z.boolean(),
   exercises: z
     .array(

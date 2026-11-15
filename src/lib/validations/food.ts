@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { isoDate } from "./common";
+import { isoDate, visible } from "./common";
 
 export const logMealSchema = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
-  name: z.string().trim().min(1).max(120).default("Meal"),
+  name: z.string().trim().min(1).max(120).refine(visible, "Name is required").default("Meal"),
   calories: z.number().int().min(0).max(10000),
   protein: z.number().min(0).max(1000),
   carbs: z.number().min(0).max(1000),
@@ -31,10 +31,10 @@ export const updateNutritionTargetsSchema = z.object({
 });
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
-export const shoppingCategorySchema = z.string().trim().toLowerCase().min(1).max(50);
+export const shoppingCategorySchema = z.string().trim().toLowerCase().min(1).max(50).refine(visible, "Name is required");
 
 export const createShoppingItemSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
   amount: z.number().min(0.01).max(1000).default(1),
   unit: z.string().trim().max(30).default("pcs"),
   category: shoppingCategorySchema.default("other"),

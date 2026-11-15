@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { toISODate } from "@/lib/format-date";
+import { visible } from "@/lib/validations/common";
 import { AddButton, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -117,6 +118,8 @@ const NUTRITION_GOALS = [
   { key: "fatGrams", label: "Fat (g)", min: 0, max: 400 },
 ] as const;
 type NutritionGoal = (typeof NUTRITION_GOALS)[number]["key"];
+// The most one day's total can hold: the same limits as setWaterAction and updateStepsAction.
+const METRIC_MAX = { water: 20000, steps: 200000 };
 const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: 100000 } };
 
 export function FoodClient({
@@ -223,17 +226,20 @@ export function FoodClient({
   async function handleLogMeal(e: React.FormEvent) {
     e.preventDefault();
     if (!mealHasValues) return;
+    const entered = {
+      calories: parseInt(mealCalories, 10) || 0,
+      protein: parseFloat(mealProtein) || 0,
+      carbs: parseFloat(mealCarbs) || 0,
+      fat: parseFloat(mealFat) || 0,
+    };
+    // Same limits as logMealSchema, so the server never has to refuse with a message the screen cannot show.
+    if (entered.calories > 10000) return setFormError("Calories must be 10000 or less.");
+    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setFormError("Protein, carbs and fat must each be 1000 g or less.");
 
     setBusy(true);
     setFormError("");
     try {
-      const res = await logMealAction({
-        date: todayDate,
-        calories: parseInt(mealCalories, 10) || 0,
-        protein: parseFloat(mealProtein) || 0,
-        carbs: parseFloat(mealCarbs) || 0,
-        fat: parseFloat(mealFat) || 0,
-      });
+      const res = await logMealAction({ date: todayDate, ...entered });
 
       if (res.success && res.meal) {
         const meal = res.meal as MealData;
@@ -364,6 +370,7 @@ export function FoodClient({
     const range = METRIC_GOAL[metricEdit];
     if (busy) return;
     if (!Number.isInteger(value) || value < 0) return setFormError("Please enter a whole number.");
+    if (value > METRIC_MAX[metricEdit]) return setFormError(`The total must be ${METRIC_MAX[metricEdit]} or less.`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setFormError(`The goal must be between ${range.min} and ${range.max}.`);
     setBusy(true);
@@ -482,11 +489,16 @@ export function FoodClient({
     e.preventDefault();
     const input = {
       name: shopName.trim(),
-      amount: parseFloat(shopAmount) || 1,
+      amount: shopAmount.trim() === "" ? 1 : parseFloat(shopAmount),
       unit: shopUnit.trim() || "pcs",
       category: shopCategory.trim().toLowerCase() || "other",
     };
-    if (!input.name) return;
+    if (!visible(input.name)) return;
+    // Same limits as createShoppingItemSchema, so a refusal always has a message on screen.
+    if (input.name.length > 120) return setFormError("The name must be 120 characters or less.");
+    if (!(input.amount >= 0.01 && input.amount <= 1000)) return setFormError("The amount must be between 0.01 and 1000.");
+    if (input.unit.length > 30) return setFormError("The unit must be 30 characters or less.");
+    if (input.category.length > 50) return setFormError("The category must be 50 characters or less.");
     setFormError("");
 
     if (!editingShop) {
@@ -908,15 +920,16 @@ export function FoodClient({
         onSubmit={handleShopSubmit}
         error={formError}
         busy={busy}
-        canSubmit={!!shopName.trim()}
+        canSubmit={visible(shopName)}
       >
-        <Field label="Name" type="text" disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
+        <Field label="Name" type="text" maxLength={120} disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
         <FieldPair>
           <Field
             label="Amount"
             type="number"
-            step="0.5"
-            min="0.5"
+            step="any"
+            min="0.01"
+            max="1000"
             inputMode="decimal"
             disabled={busy}
             value={shopAmount}
