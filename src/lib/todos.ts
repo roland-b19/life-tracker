@@ -1,4 +1,4 @@
-import { and, eq, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, exists, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/server/db";
 import { pushSubscriptions, todos } from "@/db/schema";
@@ -70,40 +70,41 @@ export async function getDailyTodos(
   // 1. Rollover: carry unfinished one-off tasks from past dates to today.
   // Never when reading a past day (it shows that day as it was), and never into a future day being planned:
   // an overdue task belongs to today, not to whatever day is on screen. One that today already has
-  // (same title, one-off; a daily task of that name is another list) stays on its own day, so the rollover never makes a duplicate.
+  // (same title, one-off; a daily task of that name is another list) is dropped, since today's copy replaces it:
+  // left behind, it would jump onto the next day once today's copy is ticked.
   // A task added to a day that was already over (dev builds) stays on that day.
   // shortcut: two overdue tasks with one title both roll over together, dedupe them here if that shows up.
-  if (targetDate >= today) await db
-    .update(todos)
-    .set({
-      dueDate: today,
-      isCarriedOver: true,
-      placedAt: new Date(), // carried tasks land on top; whatever is added or moved later goes above them
-    })
-    .where(
-      and(
-        eq(todos.userId, userId),
-        eq(todos.space, space),
-        eq(todos.isRecurring, false),
-        eq(todos.isCompleted, false),
-        lt(todos.dueDate, today),
-        // Midnight in the app's timezone (the same one toISODate uses), not the database session's (UTC).
-        sql`${todos.createdAt} < ((${todos.dueDate} + 1)::timestamp at time zone ${APP_TZ})`,
-        notExists(
-          db
-            .select({ id: other.id })
-            .from(other)
-            .where(
-              and(
-                eq(other.userId, userId),
-                eq(other.space, space),
-                sql`lower(${other.title}) = lower(${todos.title})`,
-                and(eq(other.isRecurring, false), eq(other.dueDate, today)),
-              ),
-            ),
-        ),
-      ),
+  if (targetDate >= today) {
+    const overdue = and(
+      eq(todos.userId, userId),
+      eq(todos.space, space),
+      eq(todos.isRecurring, false),
+      eq(todos.isCompleted, false),
+      lt(todos.dueDate, today),
+      // Midnight in the app's timezone (the same one toISODate uses), not the database session's (UTC).
+      sql`${todos.createdAt} < ((${todos.dueDate} + 1)::timestamp at time zone ${APP_TZ})`,
     );
+    const todayHasIt = db
+      .select({ id: other.id })
+      .from(other)
+      .where(
+        and(
+          eq(other.userId, userId),
+          eq(other.space, space),
+          sql`lower(${other.title}) = lower(${todos.title})`,
+          and(eq(other.isRecurring, false), eq(other.dueDate, today)),
+        ),
+      );
+    await db.delete(todos).where(and(overdue, exists(todayHasIt)));
+    await db
+      .update(todos)
+      .set({
+        dueDate: today,
+        isCarriedOver: true,
+        placedAt: new Date(), // carried tasks land on top; whatever is added or moved later goes above them
+      })
+      .where(and(overdue, notExists(todayHasIt)));
+  }
 
   // 2. Fetch all tasks relevant for targetDate: one-off tasks with dueDate = targetDate, and repeating tasks due that day.
   const rows = await db.select().from(todos).where(and(eq(todos.userId, userId), eq(todos.space, space), dueOn(targetDate)));

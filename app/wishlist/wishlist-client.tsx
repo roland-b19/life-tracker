@@ -88,6 +88,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("other");
   const [busy, setBusy] = useState(false);
+  const [priceTouched, setPriceTouched] = useState(false);
   const submitting = useRef(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -114,6 +115,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     setEditingId(item?.id ?? null);
     setName(item?.name ?? "");
     setEstimatedPrice(item ? String(Math.round(Number(item.estimatedPrice))) : "");
+    setPriceTouched(false);
     setUrl(item?.url ?? "");
     setCategory(item?.category ?? "other");
     setIsModalOpen(true);
@@ -148,9 +150,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       return;
     }
 
-    // The form shows a whole price; saving an edit without touching it keeps the stored cents (99.90 must not become 100).
+    // The form shows a whole price; saving an edit without touching the price keeps the stored cents (99.90 must not become 100).
+    // Once the user types a price, that whole number is what gets saved, even the rounded one.
     const stored = editingId ? items.find((i) => i.id === editingId) : undefined;
-    const keepsCents = !!stored && parsedPrice === Math.round(Number(stored.estimatedPrice));
+    const keepsCents = !!stored && !priceTouched;
     const input = {
       name: name.trim(),
       estimatedPrice: keepsCents ? Number(stored!.estimatedPrice) : parsedPrice,
@@ -335,7 +338,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           type="text"
           inputMode="numeric"
           value={estimatedPrice}
-          onChange={(e) => setEstimatedPrice(e.target.value)}
+          onChange={(e) => { setEstimatedPrice(e.target.value); setPriceTouched(true); }}
           disabled={busy}
           required
           className="number-tabular"

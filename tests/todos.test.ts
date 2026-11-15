@@ -618,7 +618,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(order).toEqual(["D", "C", "B", "A"]);
     });
 
-    it("does not carry an overdue task onto a today that already has it", async () => {
+    it("drops an overdue task when today already has one with that name, so it never comes back", async () => {
       const today = toISODate();
       const yesterday = addDays(today, -1);
       const make = (title: string, dueDate: string) =>
@@ -629,7 +629,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const fresh = await make("water plants", today);
       const ids = (await getDailyTodos(userA, "personal", today, today)).todos.map((t) => t.id).sort();
       expect(ids).toEqual([other.id, fresh.id].sort());
-      expect((await getDailyTodos(userA, "personal", yesterday, today)).todos.map((t) => t.id)).toEqual([old.id]);
+      expect((await getDailyTodos(userA, "personal", yesterday, today)).todos).toEqual([]);
+      // Ticking today's copy and waiting a day must not bring the old one back.
+      await toggleTodo(userA, { id: fresh.id, isCompleted: true });
+      const tomorrow = addDays(today, 1);
+      expect((await getDailyTodos(userA, "personal", tomorrow, tomorrow)).todos.map((t) => t.title)).toEqual(["Post letter"]);
     });
 
     it("shows a daily task from its first day on, and keeps a task added to a past day there", async () => {

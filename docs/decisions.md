@@ -471,3 +471,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - Undo of a tick or reopen sends the previous `completedAt` (nullable), so the order is restored exactly; a plain tick still stamps now. Times sent back by the screen (`completedAt`, `placedAt`, `createdAt`) and the first day of a restored daily task may be at most a minute (a day for the date) ahead of the server.
 - A new task's `placedAt` comes from the app clock, like the carry-over's, not the database default, so two clocks never order a new task under a carried one.
 - Wishlist price is whole numbers typed as digits only; the form shows its own message for each limit (name 120, link 500, price 10,000,000) and never raw server JSON.
+
+## 2026-11-15 — Audit decisions T-6 and W-5 (user)
+
+- **T-6:** when the carry-over finds an overdue one-off task and today already has a one-off with the same name, the overdue one is deleted (it was only left behind before, and came back the next day once today's copy was ticked). Chosen over auto-ticking it (false history) and over doing nothing.
+- **W-5:** Wishlist prices are whole RON (shown and typed). Old items with cents keep them until the user types a price; the personal import rounds. The server still accepts cents (Undo restores the stored value).
