@@ -54,7 +54,8 @@ async function main() {
 
     // The list shows newest first, so the first entry gets the newest created_at (one second apart; now() is constant inside a transaction).
     let added = 0;
-    for (const [i, [name, price, category]] of data.wishlist.entries()) {
+    for (const [i, [name, rawPrice, category]] of data.wishlist.entries()) {
+      const price = Math.round(rawPrice); // the app's prices are whole RON
       if (name.length > 120 || !(price > 0)) throw new Error(`Bad wishlist entry: ${name}`);
       const c = cat(category);
       await ensureCategory("wishlist", c);
