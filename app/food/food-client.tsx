@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
-import { MAX_WATER_ML } from "@/lib/validations/food";
+import { MAX_STEPS, MAX_WATER_ML } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SelectField, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -120,8 +120,8 @@ const NUTRITION_GOALS = [
 ] as const;
 type NutritionGoal = (typeof NUTRITION_GOALS)[number]["key"];
 // The most one day's total can hold: the same limits as setWaterAction and updateStepsAction.
-const METRIC_MAX = { water: MAX_WATER_ML, steps: 200000 };
-const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: 100000 } };
+const METRIC_MAX = { water: MAX_WATER_ML, steps: MAX_STEPS };
+const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: MAX_STEPS } };
 
 export function FoodClient({
   userName,
@@ -335,17 +335,24 @@ export function FoodClient({
           : `${name} goal set to ${goal}${unit}`,
       type: "success",
       onUndo: async () => {
-        if (amountChanged) setMetric(key, previous);
+        // Water undoes by the difference, so a tap made since the edit stays; steps have no add, so they go back to the exact value.
+        const diff = previous - saved;
+        const shift = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
+        if (amountChanged) {
+          if (metric === "water") shift(diff);
+          else setMetric(key, previous);
+        }
         if (goalChanged) putGoals({ [key]: previousGoal });
         let failed = false;
         if (amountChanged) {
           const back =
             metric === "water"
-              ? await setWaterAction(todayDate, previous).catch(() => null)
+              ? await addWaterAction(todayDate, diff).catch(() => null)
               : await updateStepsAction(todayDate, previous).catch(() => null);
           if (back?.success && back.metrics) setMetric(key, back.metrics[key]);
           else {
-            setMetric(key, saved);
+            if (metric === "water") shift(-diff);
+            else setMetric(key, saved);
             failed = true;
           }
         }
@@ -969,7 +976,7 @@ export function FoodClient({
           type="number"
           inputMode="numeric"
           min="0"
-          max={metricEdit === "water" ? 20000 : 200000}
+          max={METRIC_MAX[metricEdit]}
           step="1"
           required
           disabled={busy}

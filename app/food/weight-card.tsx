@@ -5,6 +5,8 @@ import { BigNumber, Card, Field, FormModal } from "../components/blocks";
 import { ScaleIcon } from "../components/icons";
 import { EditButton } from "../components/lists";
 import { useToast } from "../components/toast";
+import { showDecimal } from "@/lib/decimal-input";
+import { toISODate } from "@/lib/format-date";
 import { weightStats } from "@/lib/weight-stats";
 import { TrendChart } from "./trend-chart";
 
@@ -17,7 +19,9 @@ async function send(method: string, url: string, body?: unknown) {
 }
 
 /** Health's weight: today's weigh-in, the 7-day average and the chart in one card. The chart shows up to a year; every weigh-in is kept. */
-export function WeightCard({ today, initial }: { today: string; initial: WeightEntry[] }) {
+export function WeightCard({ today: initialToday, initial }: { today: string; initial: WeightEntry[] }) {
+  // The page may have been open since yesterday: opening the form reads the day again.
+  const [today, setToday] = useState(initialToday);
   const [entries, setEntries] = useState(initial);
   const [open, setOpen] = useState(false);
   const [kilograms, setKilograms] = useState("");
@@ -27,11 +31,14 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
 
   const current = entries.find((e) => e.date === today) ?? null;
   const stats = weightStats(entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })), today);
-  const replace = (to: WeightEntry) => setEntries((list) => list.map((e) => (e.id === to.id ? to : e)));
+  const upsert = (to: WeightEntry) =>
+    setEntries((list) => (list.some((e) => e.id === to.id) ? list.map((e) => (e.id === to.id ? to : e)) : [...list, to]));
 
   function openForm() {
+    const day = toISODate();
+    setToday(day);
     setError("");
-    setKilograms(current?.kilograms ?? "");
+    setKilograms(entries.find((e) => e.date === day)?.kilograms ?? "");
     setOpen(true);
   }
 
@@ -42,20 +49,31 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     const kg = Number(kilograms);
     setSaving(true);
     try {
-      const response = current
+      let response = current
         ? await send("PATCH", `/api/weight/${current.id}`, { date: today, kilograms: kg })
         : await send("POST", "/api/weight", { date: today, kilograms: kg });
+      // The screen can be behind the database (another device): a weigh-in deleted there is created again,
+      // and one made there is found and changed instead of refused.
+      if (current && response.status === 404) response = await send("POST", "/api/weight", { date: today, kilograms: kg });
+      let existing: WeightEntry | undefined = current ?? undefined;
+      if (!current && response.status === 409) {
+        const list = await fetch("/api/weight").then((r) => (r.ok ? (r.json() as Promise<{ entries: WeightEntry[] }>) : null));
+        existing = list?.entries.find((e) => e.date === today);
+        if (existing) response = await send("PATCH", `/api/weight/${existing.id}`, { date: today, kilograms: kg });
+      }
       if (!response.ok) {
         setError(response.status === 400 ? "Please enter a valid weight." : "Failed to save weight");
         return;
       }
       const { entry } = (await response.json()) as { entry: WeightEntry };
-      const previous = current;
+      // The row that held today before this save: none when the save created it.
+      const previous = response.status === 201 ? null : (existing ?? null);
+      if (current && response.status === 201) setEntries((list) => list.filter((e) => e.id !== current.id)); // its row is gone from the database
       setOpen(false);
       if (!previous) {
-        setEntries((list) => [...list, entry]);
+        upsert(entry);
         showToast({
-          message: `Added ${kg} kg`,
+          message: `Added ${showDecimal(String(kg))} kg`,
           type: "success",
           onUndo: async () => {
             setEntries((list) => list.filter((e) => e.id !== entry.id));
@@ -68,16 +86,16 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
         });
         return;
       }
-      replace(entry);
+      upsert(entry);
       showToast({
-        message: `Weight set to ${kg} kg`,
+        message: `Weight set to ${showDecimal(String(kg))} kg`,
         type: "success",
         // Writes the old value back; if that fails the edit stays, so the screen matches the database.
         onUndo: async () => {
-          replace(previous);
+          upsert(previous);
           const back = await send("PATCH", `/api/weight/${entry.id}`, { date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
           if (!back?.ok) {
-            replace(entry);
+            upsert(entry);
             showToast({ message: "Failed to undo the edit", type: "warning" });
           }
         },
@@ -92,8 +110,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   return (
     <>
       <Card id="weight-title" title="Weight" icon={<ScaleIcon size={18} />} end={<EditButton label="Edit today's weight" onClick={openForm} />}>
-        <BigNumber value={current ? twoDecimals(Number(current.kilograms)) : "—"} of="kg today" />
-        <p className="muted metric-avg number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${stats.sevenDayAverage} kg`}</p>
+        <BigNumber value={current ? showDecimal(String(twoDecimals(Number(current.kilograms)))) : "—"} of="kg today" />
+        <p className="muted metric-avg number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${showDecimal(String(stats.sevenDayAverage))} kg`}</p>
         <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
       </Card>
 

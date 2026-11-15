@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth";
 import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
+  MAX_STEPS,
   MAX_WATER_ML,
   metricDayEditable,
   createShoppingItemSchema,
@@ -79,7 +80,7 @@ export async function setWaterAction(date: string, waterMl: number) {
 
 export async function updateStepsAction(date: string, steps: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(steps) || steps < 0 || steps > 200000) {
+  if (!Number.isInteger(steps) || steps < 0 || steps > MAX_STEPS) {
     throw new Error("Invalid steps parameter");
   }
   assertWritableDay(isoDate.parse(date));

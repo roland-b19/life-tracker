@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { isoDate, visible } from "./common";
 
+/** One day of water holds at most this much; quick taps and totals stop here. */
+export const MAX_WATER_ML = 20000;
+/** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
+export const MAX_STEPS = 200000;
+
 export const logMealSchema = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
@@ -15,7 +20,7 @@ export const logMealSchema = z.object({
 export const updateMetricsSchema = z.object({
   date: isoDate,
   waterMl: z.number().int().min(0).max(20000).optional(),
-  steps: z.number().int().min(0).max(100000).optional(),
+  steps: z.number().int().min(0).max(MAX_STEPS).optional(),
   notes: z.string().max(255).optional().nullable(),
 });
 
@@ -27,7 +32,7 @@ export const updateNutritionTargetsSchema = z.object({
   carbsGrams: z.number().int().min(0).max(1000),
   fatGrams: z.number().int().min(0).max(400),
   waterMl: z.number().int().min(500).max(15000),
-  steps: z.number().int().min(1000).max(100000),
+  steps: z.number().int().min(1000).max(MAX_STEPS),
 });
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
@@ -75,9 +80,6 @@ export const revertShoppingCategorySchema = z
     dropCurrent: z.boolean(),
   })
   .refine((v) => managed(v, [v.name]), builtIn);
-
-/** One day of water holds at most this much; quick taps and totals stop here. */
-export const MAX_WATER_ML = 20000;
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
