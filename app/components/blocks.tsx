@@ -1,6 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
+import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
 import { addDays, formatDMY } from "@/lib/format-date";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, LockIcon, PlusIcon } from "./icons";
 import { DatePicker } from "./date-picker";
@@ -340,11 +341,33 @@ export function Label({ text, className, children }: { text: ReactNode; classNam
   );
 }
 
-/** A captioned text input (any input attribute goes through). */
-export function Field({ label, labelClassName, ...input }: { label: ReactNode; labelClassName?: string } & InputHTMLAttributes<HTMLInputElement>) {
+/**
+ * A captioned text input (any input attribute goes through). A `type="number"` field is a text field that takes a
+ * decimal comma or dot (inputMode "numeric": whole numbers only): the browser's number input accepts no comma and
+ * lets iOS select only one word. `onChange` always gets a dot-decimal value; the field shows a comma.
+ */
+export function Field({ label, labelClassName, type, onChange, value, ...input }: { label: ReactNode; labelClassName?: string } & InputHTMLAttributes<HTMLInputElement>) {
+  if (type !== "number") {
+    return (
+      <Label text={label} className={labelClassName}>
+        <input type={type} onChange={onChange} value={value} {...input} />
+      </Label>
+    );
+  }
+  const integer = input.inputMode === "numeric";
   return (
     <Label text={label} className={labelClassName}>
-      <input {...input} />
+      <input
+        type="text"
+        inputMode={integer ? "numeric" : "decimal"}
+        autoComplete="off"
+        {...input}
+        value={value === undefined ? undefined : integer ? String(value) : showDecimal(String(value))}
+        onChange={(e) => {
+          e.target.value = cleanNumberInput(e.target.value, integer);
+          onChange?.(e);
+        }}
+      />
     </Label>
   );
 }

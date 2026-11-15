@@ -618,11 +618,15 @@ main {
 
 .deload-card {
   display: flex;
+  flex-wrap: wrap; /* on a phone the Edit button and the toggle drop under the title */
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.25rem;
 }
+
+.deload-card > div:first-child { flex: 1 1 11rem; }
+.deload-actions { display: flex; align-items: center; gap: 0.75rem; }
 
 .split-grid {
   display: grid;

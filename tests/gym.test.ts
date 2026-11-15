@@ -47,6 +47,7 @@ import {
   logSetAction,
   reopenSessionAction,
   restoreSessionAction,
+  saveDeloadWeeksAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
@@ -367,7 +368,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   });
 
   it("counts the 5-week deload cycle in calendar weeks: four normal weeks, then the deload week", async () => {
-    const weeksAgo = (n: number) => addDays(weekStart(toISODate()), -7 * n); // the Monday n weeks back
+    const weeksAgo = (n: number) => addDays(weekStart(toISODate()), -7 * n); // the Sunday n weeks back
     const status = async () => {
       const s = await getDeloadStatus(userA);
       return [s.currentCycleWeek, s.isDeloadDue, s.inDeloadWeek];
@@ -384,7 +385,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(12)]);
     expect(await status()).toEqual([5, true, false]); // overdue stays due, never wraps back to week 1
 
-    // A deload this week: it is the deload week, nothing is due, and the next cycle starts next Monday
+    // A deload this week: it is the deload week, nothing is due, and the next cycle starts next Sunday
     const deload = await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
     expect(await status()).toEqual([1, false, true]);
     expect((await getDeloadStatus(userA)).lastDeloadDate).toBe(toISODate());
@@ -396,6 +397,49 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([4, false, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [deload.id, weeksAgo(5)]);
     expect(await status()).toEqual([5, true, false]);
+  });
+
+  it("lets the user choose deload weeks: a marked week counts like a logged one, and Undo restores the set", async () => {
+    const sunday = weekStart(toISODate());
+    const nextWeek = addDays(sunday, 7);
+    await createWorkoutSession(userA, { date: addDays(sunday, -14), isDeload: false });
+    const inWeek = await createWorkoutSession(userA, { date: addDays(sunday, 3), isDeload: false });
+
+    // Marking this week makes it the deload week and flags that week's workouts, so the Progress chart skips them
+    await saveDeloadWeeksAction({ weeks: [sunday] });
+    let s = await getDeloadStatus(userA);
+    expect(s).toMatchObject({ inDeloadWeek: true, isDeloadDue: false, deloadWeeks: [sunday], nextDeloadWeek: null });
+    expect((await admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [inWeek.id])).rows[0].is_deload).toBe(true);
+
+    // A week ahead: not in it yet, nothing is due, and the card can say when it starts
+    await saveDeloadWeeksAction({ weeks: [nextWeek] });
+    s = await getDeloadStatus(userA);
+    expect(s).toMatchObject({ inDeloadWeek: false, isDeloadDue: false, nextDeloadWeek: nextWeek, deloadWeeks: [nextWeek] });
+    expect((await admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [inWeek.id])).rows[0].is_deload).toBe(false);
+
+    // Undo is the same action with the old list
+    await saveDeloadWeeksAction({ weeks: [sunday] });
+    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
+
+    // Clearing every deload week goes back to counting from the first workout
+    await saveDeloadWeeksAction({ weeks: [] });
+    expect(await getDeloadStatus(userA)).toMatchObject({ deloadWeeks: [], inDeloadWeek: false, currentCycleWeek: 3 });
+  });
+
+  it("refuses a deload week that does not start on a Sunday", async () => {
+    await expect(saveDeloadWeeksAction({ weeks: [addDays(weekStart(toISODate()), 1)] })).rejects.toThrow();
+  });
+
+  it("keeps deload weeks per user and refuses anonymous callers", async () => {
+    const sunday = weekStart(toISODate());
+    await saveDeloadWeeksAction({ weeks: [sunday] });
+    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
+    expect((await getDeloadStatus(userB)).deloadWeeks).toEqual([]);
+    authState.id = userB;
+    await saveDeloadWeeksAction({ weeks: [] }); // B's own list, A's stays
+    authState.id = "";
+    await expect(saveDeloadWeeksAction({ weeks: [sunday] })).rejects.toThrow("Authentication required.");
+    expect((await getDeloadStatus(userA)).deloadWeeks).toEqual([sunday]);
   });
 
   describe("Server Actions authorization & validation guards", () => {
@@ -662,10 +706,11 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       setOrder: 1, reps, loadType: "kg", load, ...over,
     });
 
-    it("finds the Monday of a week", () => {
-      expect(weekStart("2026-11-09")).toBe("2026-11-09"); // Monday
-      expect(weekStart("2026-11-15")).toBe("2026-11-09"); // Sunday
-      expect(weekStart("2026-11-08")).toBe("2026-11-02");
+    it("finds the Sunday of a week (the week runs Sunday to Saturday)", () => {
+      expect(weekStart("2026-11-08")).toBe("2026-11-08"); // Sunday
+      expect(weekStart("2026-11-14")).toBe("2026-11-08"); // Saturday
+      expect(weekStart("2026-11-15")).toBe("2026-11-15"); // the next Sunday
+      expect(weekStart("2026-11-07")).toBe("2026-11-01");
     });
 
     it("keeps the best of each day and skips deload", () => {
@@ -686,7 +731,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("counts a deload week in the day figures like any other week", () => {
       const sets = [set("2026-11-02", 100, 10), set("2026-11-09", 60, 10, { isDeload: true }), set("2026-11-16", 110, 10)];
       const weeks = dayProgress(sets, "d");
-      expect(weeks.map((w) => w.week)).toEqual(["2026-11-02", "2026-11-09", "2026-11-16"]);
+      expect(weeks.map((w) => w.week)).toEqual(["2026-11-01", "2026-11-08", "2026-11-15"]);
       expect(weeks.map((w) => w.change)).toEqual([null, -40, 50]);
     });
 
@@ -713,10 +758,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(kgDelta(null)).toBe("—");
     });
 
-    it("counts whole calendar weeks between dates, Monday to Sunday", () => {
-      expect(weeksBetween("2026-11-02", "2026-11-08")).toBe(0); // Monday to Sunday of one week
-      expect(weeksBetween("2026-11-08", "2026-11-09")).toBe(1); // Sunday to the next Monday
-      expect(weeksBetween("2026-11-16", "2026-11-02")).toBe(-2);
+    it("counts whole calendar weeks between dates, Sunday to Saturday", () => {
+      expect(weeksBetween("2026-11-08", "2026-11-14")).toBe(0); // Sunday to Saturday of one week
+      expect(weeksBetween("2026-11-14", "2026-11-15")).toBe(1); // Saturday to the next Sunday
+      expect(weeksBetween("2026-11-22", "2026-11-08")).toBe(-2);
       expect(weeksBetween("2026-03-25", "2026-04-02")).toBe(1); // across a clock change
     });
 
@@ -729,7 +774,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         set("2026-11-09", 30, 8, { exerciseId: "e3" }), // no previous week: not counted
       ];
       const [first, second] = dayProgress(sets, "d");
-      expect(first).toEqual({ week: "2026-11-02", change: null });
+      expect(first).toEqual({ week: "2026-11-01", change: null });
       expect(second.change).toBeCloseTo(5);
       expect(dayProgress(sets, "other")).toEqual([]);
     });

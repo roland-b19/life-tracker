@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-
 import { db } from "@/server/db";
 import {
   exercises,
+  deloadWeeks,
   workoutSplits,
   workoutSplitDays,
   workoutSplitDayExercises,
@@ -17,14 +18,18 @@ import {
   SaveSplitDayInput,
 } from "./validations/gym";
 import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit } from "./gym-seed";
-import { toISODate } from "./format-date";
-import { weeksBetween } from "./gym-progress";
+import { addDays, toISODate } from "./format-date";
+import { weekStart, weeksBetween } from "./gym-progress";
 
 export interface DeloadStatus {
   currentCycleWeek: number; // 1 to 5; week 5 is the deload week
   isDeloadDue: boolean;
-  inDeloadWeek: boolean; // a deload session is already logged this calendar week
+  inDeloadWeek: boolean; // this calendar week (Sunday to Saturday) is a deload week
   lastDeloadDate: string | null;
+  /** Every deload week, as the Sunday that starts it, oldest first: marked by the user or holding a deload session. */
+  deloadWeeks: string[];
+  /** The first deload week after this one, if one is already marked. */
+  nextDeloadWeek: string | null;
 }
 
 /**
@@ -419,19 +424,30 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
   };
 }
 
+/** Every deload week (the Sunday that starts it): the weeks the user marked plus the weeks holding a deload session. */
+async function deloadWeekSet(userId: string): Promise<Set<string>> {
+  const [marked, sessions] = await Promise.all([
+    db.select({ week: deloadWeeks.weekStart }).from(deloadWeeks).where(eq(deloadWeeks.userId, userId)),
+    db
+      .selectDistinct({ date: workoutSessions.date })
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.isDeload, true))),
+  ]);
+  return new Set([...marked.map((m) => m.week), ...sessions.map((s) => weekStart(s.date))]);
+}
+
 /**
- * 5-week deload cycle, in calendar weeks (Monday to Sunday, the same weeks the Progress tab skips): four normal weeks,
- * then a deload week. The week with a deload session is the deload week; the week after it is week 1 of the next
- * cycle, and a deload is due from week 5 on, until one is logged. With no deload yet, the first workout's week is week 1.
+ * 5-week deload cycle, in calendar weeks (Sunday to Saturday, the same weeks the Progress tab skips): four normal
+ * weeks, then a deload week. A deload week is one the user marked or one holding a deload session. The week after the
+ * latest deload week is week 1 of the next cycle, and a deload is due from week 5 on, until one is logged or marked.
+ * With no deload yet, the first workout's week is week 1.
  */
 export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
-  const [last] = await db
-    .select({ date: workoutSessions.date })
-    .from(workoutSessions)
-    .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.isDeload, true)))
-    .orderBy(desc(workoutSessions.date))
-    .limit(1);
+  const all = [...(await deloadWeekSet(userId))].sort();
   const today = toISODate();
+  const thisWeek = weekStart(today);
+  const last = all.filter((w) => w <= thisWeek).at(-1) ?? null;
+  const nextDeloadWeek = all.find((w) => w > thisWeek) ?? null;
   const [first] = last
     ? []
     : await db
@@ -441,12 +457,42 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
         .orderBy(workoutSessions.date)
         .limit(1);
 
-  const inDeloadWeek = !!last && weeksBetween(last.date, today) === 0;
+  const inDeloadWeek = last === thisWeek;
   // Weeks since week 1 of this cycle: week 1 is the week after the deload week, or the first workout's week.
-  const weeksPassed = Math.max(0, last ? weeksBetween(last.date, today) - 1 : first ? weeksBetween(first.date, today) : 0);
+  const weeksPassed = Math.max(0, last ? weeksBetween(last, today) - 1 : first ? weeksBetween(first.date, today) : 0);
   const currentCycleWeek = Math.min(weeksPassed, 4) + 1;
 
-  return { currentCycleWeek, isDeloadDue: !inDeloadWeek && currentCycleWeek === 5, inDeloadWeek, lastDeloadDate: last?.date ?? null };
+  return {
+    currentCycleWeek,
+    isDeloadDue: !inDeloadWeek && !nextDeloadWeek && currentCycleWeek === 5,
+    inDeloadWeek,
+    lastDeloadDate: last,
+    deloadWeeks: all,
+    nextDeloadWeek,
+  };
+}
+
+/**
+ * Replaces the user's deload weeks with `weeks` (Sundays). A week that becomes deload also marks its workouts as
+ * deload, and one that stops being deload clears them, so the Progress chart and History follow the plan.
+ */
+export async function saveDeloadWeeks(userId: string, weeks: string[]): Promise<string[]> {
+  const wanted = new Set(weeks);
+  const had = await deloadWeekSet(userId);
+  const added = [...wanted].filter((w) => !had.has(w));
+  const removed = [...had].filter((w) => !wanted.has(w));
+  const inWeek = (w: string) => and(eq(workoutSessions.userId, userId), gte(workoutSessions.date, w), lt(workoutSessions.date, addDays(w, 7)));
+  await db.transaction(async (tx) => {
+    if (removed.length) {
+      await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, removed)));
+      for (const w of removed) await tx.update(workoutSessions).set({ isDeload: false }).where(inWeek(w));
+    }
+    for (const w of added) {
+      await tx.insert(deloadWeeks).values({ userId, weekStart: w }).onConflictDoNothing();
+      await tx.update(workoutSessions).set({ isDeload: true }).where(inWeek(w));
+    }
+  });
+  return [...wanted].sort();
 }
 
 export interface HistorySession {

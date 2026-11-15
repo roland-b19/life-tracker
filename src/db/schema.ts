@@ -122,6 +122,18 @@ export const workoutSessions = pgTable(
   (table) => [index("workout_sessions_user_date_idx").on(table.userId, table.date)],
 );
 
+/** Weeks the user marked as deload (the Sunday that starts each): a plan that does not need a workout yet. */
+export const deloadWeeks = pgTable(
+  "deload_weeks",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.weekStart] })],
+);
+
 export const workoutSets = pgTable(
   "workout_sets",
   {
