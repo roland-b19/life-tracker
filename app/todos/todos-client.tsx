@@ -250,24 +250,25 @@ export function TodosClient({
     }
   };
 
-  const setCompleted = (task: TodoItem, isCompleted: boolean) =>
+  // `completedAt` is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
+  // Undo passes the time from before the change, so the task goes back to where it was; left out, it is now.
+  const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
     setTodosMap((prev) => ({
       ...prev,
-      // completedAt is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
-      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt: new Date() } : t)).sort(compareTodos),
+      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos),
     }));
 
-  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean) => {
+  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean, completedAt?: Date | null) => {
     ++requestId.current;
-    setCompleted(todo, next);
+    setCompleted(todo, next, completedAt);
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
-        onUndo: () => toggle(todo, !next, false),
+        onUndo: () => toggle(todo, !next, false, todo.completedAt),
       });
     }
     try {
-      await toggleTodoAction({ id: todo.id, isCompleted: next });
+      await toggleTodoAction({ id: todo.id, isCompleted: next, completedAt });
     } catch {
       showToast({ message: "Failed to update task", type: "warning" });
     }
@@ -338,14 +339,13 @@ export function TodosClient({
       }
 
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      let sub: PushSubscription | null = null;
-      if (vapidPublicKey) {
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidPublicKey });
-        const res = await savePushSubscriptionAction({ subscription: sub.toJSON() });
-        if (!res.success) throw new Error("not saved");
-      }
+      // Without a key no reminder could ever arrive, so never say they are on.
+      if (!vapidPublicKey) throw new Error("no push key");
+      const enabled = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidPublicKey });
+      const { endpoint, keys } = enabled.toJSON();
+      const res = await savePushSubscriptionAction({ endpoint, p256dhKey: keys?.p256dh, authKey: keys?.auth });
+      if (!res.success) throw new Error("not saved");
       setPushSubscribed(true);
-      const enabled = sub;
       showToast({
         message: "Reminders enabled",
         type: "success",
@@ -353,10 +353,8 @@ export function TodosClient({
         onUndo: async () => {
           setPushSubscribed(false);
           try {
-            if (enabled) {
-              await deletePushSubscriptionAction(enabled.endpoint);
-              await enabled.unsubscribe();
-            }
+            await deletePushSubscriptionAction(enabled.endpoint);
+            await enabled.unsubscribe();
           } catch {
             setPushSubscribed(true);
             showToast({ message: "Failed to turn reminders off", type: "warning" });

@@ -185,6 +185,7 @@ export async function createTodo(userId: string, input: CreateTodoInput): Promis
       isCompleted: false,
       isCarriedOver: false,
       category: input.category ?? "other",
+      placedAt: new Date(), // the app's clock, like the carry-over's: the database default could order a new task under a carried one
     })
     .returning();
 
@@ -238,7 +239,7 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
     .update(todos)
     .set({
       isCompleted: input.isCompleted,
-      completedAt: new Date(), // when the box last changed: orders the list
+      completedAt: input.completedAt === undefined ? new Date() : input.completedAt, // when the box last changed: orders the list
     })
     .where(eq(todos.id, existing.id));
 

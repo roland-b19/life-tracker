@@ -23,19 +23,24 @@ export const createTodoSchema = z.object({
 
 export { isoDate };
 
+// A time the screen sends back (Undo) can be a minute ahead of the server clock, never more: a year-2099 time would pin a task on top for good.
+const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future");
+
 /** Undo of a delete: the same row back, with its id. */
 export const restoreTodoSchema = createTodoSchema.extend({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
-  completedAt: z.coerce.date().nullable().optional(), // when the box last changed, so Undo keeps the list order
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
-  placedAt: z.coerce.date().optional(), // its place in the list, so Undo keeps the order
+  completedAt: notInFuture.nullable().optional(), // when the box last changed, so Undo keeps the list order
+  createdAt: notInFuture,
+  placedAt: notInFuture.optional(), // its place in the list, so Undo keeps the order
 });
 
 export const toggleTodoSchema = z.object({
   id: z.string().uuid(),
   isCompleted: z.boolean(),
+  // Undo of a tick: the time the box last changed before, so the task goes back to where it was. Left out, it is now.
+  completedAt: notInFuture.nullable().optional(),
 });
 
 export const updateTodoSchema = z.object({

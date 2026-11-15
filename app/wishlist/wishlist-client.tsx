@@ -126,13 +126,27 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     e.preventDefault();
     setErrorMsg("");
 
-    const parsedPrice = Number(estimatedPrice.trim()); // unlike parseFloat, rejects trailing junk and "1,5"
+    // Digits only: Number() alone would take "1e3", "0x10" and "+5".
+    const priceText = estimatedPrice.trim();
+    const parsedPrice = /^\d+$/.test(priceText) ? Number(priceText) : NaN;
     if (!name.trim()) {
       setErrorMsg("Please enter an item name.");
       return;
     }
+    if (name.trim().length > 120) {
+      setErrorMsg("The name cannot be longer than 120 characters.");
+      return;
+    }
     if (!Number.isInteger(parsedPrice) || parsedPrice <= 0) {
       setErrorMsg("Please enter a whole-number price greater than 0.");
+      return;
+    }
+    if (parsedPrice > 10_000_000) {
+      setErrorMsg("The price cannot be more than 10,000,000 RON.");
+      return;
+    }
+    if (url.trim().length > 500) {
+      setErrorMsg("The link cannot be longer than 500 characters.");
       return;
     }
 
@@ -197,7 +211,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       }
       setIsModalOpen(false);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to save item");
+      // A validation failure arrives as raw JSON: never show that to the user.
+      setErrorMsg(err instanceof Error && !/^[[{]/.test(err.message) ? err.message : "Failed to save item");
     } finally {
       setBusy(false);
     }
