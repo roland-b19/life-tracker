@@ -52,34 +52,16 @@ export function ensureDefaultExercises(): Promise<Map<string, string>> {
 }
 
 async function seedDefaultExercises(): Promise<Map<string, string>> {
-  const existing = await db
-    .select({ id: exercises.id, name: exercises.name })
-    .from(exercises)
-    .where(isNull(exercises.userId));
-
-  const nameToId = new Map<string, string>();
-  for (const row of existing) {
-    nameToId.set(row.name, row.id);
-  }
+  const defaults = () => db.select({ id: exercises.id, name: exercises.name }).from(exercises).where(isNull(exercises.userId));
+  const nameToId = new Map((await defaults()).map((row) => [row.name, row.id]));
 
   const toInsert = DEFAULT_EXERCISES.filter((ex) => !nameToId.has(ex.name));
   if (toInsert.length > 0) {
-    const inserted = await db
+    await db
       .insert(exercises)
-      .values(
-        toInsert.map((ex) => ({
-          name: ex.name,
-          muscleGroup: ex.muscleGroup,
-          equipmentType: ex.equipmentType,
-          isCustom: false,
-          userId: null,
-        })),
-      )
-      .returning({ id: exercises.id, name: exercises.name });
-
-    for (const row of inserted) {
-      nameToId.set(row.name, row.id);
-    }
+      .values(toInsert.map((ex) => ({ name: ex.name, muscleGroup: ex.muscleGroup, equipmentType: ex.equipmentType, isCustom: false, userId: null })))
+      .onConflictDoNothing(); // a seed running at the same moment may have inserted them
+    for (const row of await defaults()) nameToId.set(row.name, row.id);
   }
 
   return nameToId;

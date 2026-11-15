@@ -57,6 +57,7 @@ import {
   logMealAction,
   renameShoppingCategoryAction,
   reorderShoppingCategoriesAction,
+  restoreMealAction,
   restoreShoppingItemsAction,
   revertShoppingCategoryAction,
   updateShoppingItemAction,
@@ -173,6 +174,36 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     // User A can delete their own meal
     const deletedByA = await deleteMeal(userA, meal.id);
     expect(deletedByA?.id).toBe(meal.id);
+  });
+
+  it("deletes a meal and Undo brings the same row back: id, time, macros, estimate flag", async () => {
+    const today = toISODate();
+    const meal = await logMealAction({ date: today, name: "Salmon", calories: 500, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true }).then((r) => r.meal);
+    const [before] = (await getDailyFoodSummary(userA, today)).meals;
+    expect(before.id).toBe(meal.id);
+    const undo = { id: meal.id, date: today, name: meal.name, calories: meal.calories, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true, createdAt: meal.createdAt.toISOString() };
+    authState.id = userB;
+    expect((await deleteMealAction(meal.id)).deleted).toBeUndefined(); // another user's delete changes nothing
+    expect((await restoreMealAction(undo)).success).toBe(false); // the id is taken, so B cannot claim or overwrite it
+    expect((await getDailyFoodSummary(userA, today)).meals).toEqual([before]);
+    authState.id = userA;
+    expect((await deleteMealAction(meal.id)).deleted?.id).toBe(meal.id);
+    expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(0);
+    expect((await restoreMealAction(undo)).success).toBe(true);
+    expect((await getDailyFoodSummary(userA, today)).meals).toEqual([before]);
+    expect((await restoreMealAction(undo)).success).toBe(false); // a second Undo adds nothing
+    expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
+    await expect(restoreMealAction({ ...undo, date: addDays(today, -2) })).rejects.toThrow("Only today and yesterday can be changed.");
+    authState.id = "";
+    await expect(restoreMealAction(undo)).rejects.toThrow("Authentication required.");
+    await expect(deleteMealAction(meal.id)).rejects.toThrow("Authentication required.");
+  });
+
+  it("refuses a rename onto itself, and an Undo never deletes the name it puts back", async () => {
+    await addShoppingCategoryAction({ name: "snacks" });
+    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).rejects.toThrow("That is already its name.");
+    await revertShoppingCategoryAction({ name: "snacks", current: "snacks", sortOrder: 0, itemIds: [], dropCurrent: true });
+    expect(await getShoppingCategories(userA)).toContain("snacks"); // an Undo never deletes the name it puts back
   });
 
   it("lists past foods newest first, one per name, up to the limit", async () => {

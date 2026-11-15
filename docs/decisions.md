@@ -486,3 +486,12 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **Steps limit** (PR 3): 200000 for the log and for the goal (the goal said 100000 before, so a logged day could not be reached by its own goal). **Weigh-ins cannot be in the future** (PR 3): the shared weight schema refuses it for POST and PATCH, as the form's date selector already did.
 
 - **Dead code removed** (PR 4): the house date picker and day stepper are gone because no page uses them (days are chosen with a segmented control or arrows); `getDailyTodosAction` is gone because an unused server action is still a public endpoint. Animation exceptions are three (Tasks ring, Wishlist total, Nutrition numbers) in AGENTS.md and the design skill.
+
+## 2026-11-16 — Delete for meals and weigh-ins, Romanian Assistant, exercise uniqueness (user)
+
+- **Delete with Undo** for meals and today's weigh-in. Undo re-inserts under the old id and time (`restoreMealAction`, `POST /api/weight` with an optional `id`), so the restored row equals the original; a second Undo is a no-op. Only today and yesterday can be changed, like every other log. The weigh-in card shows only today's entry, so older weigh-ins get no delete there. A restored meal gets `forgotten = false` again (accepted edge case: the flag is only set by the Assistant's "forgot to log" path).
+- **The Assistant replies in Romanian**; code, docs and commits stay in English.
+- **Default exercises are unique by name** (partial unique index `exercises_default_name_uniq` where `user_id is null`, migration 0030) and seeding is idempotent (`onConflictDoNothing`), because two cold instances could both seed. The user runs the migration from their Mac after the duplicate check in its header; an agent never runs it against live.
+- **Shopping categories:** renaming onto the same name is refused, and a revert never drops the name it puts back (guard on the server in `revertShoppingCategory`; the Tasks and Wishlist revert already behaved that way, so their schema is unchanged).
+- **STATUS.md is a short live file** (state, focus, next, deployed, last session entries). The old content moved verbatim to `docs/STATUS-archive.md`.
+- **Gym audit (2026-11-16):** the ranked findings go to the user; none is implemented until they decide. `GymClient` is split only after those fixes.

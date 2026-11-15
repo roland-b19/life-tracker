@@ -4,7 +4,7 @@ interface Checkable {
   at: Date | string | null;
 }
 
-const time = (d: Date | string | null) => (d ? +new Date(d) : 0);
+export const time = (d: Date | string | null) => (d ? +new Date(d) : 0);
 
 /**
  * The order every checklist shares (Tasks, Shopping): unchecked rows first, then checked ones. A row just ticked

@@ -9,6 +9,7 @@ import {
   metricDayEditable,
   createShoppingItemSchema,
   logMealSchema,
+  restoreMealSchema,
   renameShoppingCategorySchema,
   reorderShoppingCategoriesSchema,
   shoppingCategoryNameSchema,
@@ -29,6 +30,7 @@ import {
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
+  restoreMeal,
   restoreShoppingItems,
   revertShoppingCategory,
   toggleShoppingItem,
@@ -55,6 +57,15 @@ export async function deleteMealAction(mealId: string) {
   const userId = await requireUser();
   const deleted = await deleteMeal(userId, uuid.parse(mealId), assertWritableDay);
   return { success: true, deleted };
+}
+
+/** Undo of a delete. */
+export async function restoreMealAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = restoreMealSchema.parse(rawInput);
+  assertWritableDay(parsed.date);
+  const meal = await restoreMeal(userId, parsed);
+  return { success: meal !== undefined, meal };
 }
 
 export async function addWaterAction(date: string, amountMl: number) {

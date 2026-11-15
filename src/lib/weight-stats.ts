@@ -1,4 +1,4 @@
-import { addDays } from "./format-date";
+import { addDays, weekStart as sundayOf } from "./format-date";
 
 export type WeightStats = {
   latestWeight: number | null;
@@ -13,20 +13,16 @@ export type WeightStats = {
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
-
-/** The Sunday that starts the week of an ISO date. */
-export const weekStartOf = (iso: string) => addDays(iso, -day(iso).getUTCDay());
 
 export function weightStats(entries: { date: string; kilograms: number }[], today: string): WeightStats {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
   const byWeek = new Map<string, number[]>();
   for (const e of sorted) {
-    const week = weekStartOf(e.date);
+    const week = sundayOf(e.date);
     byWeek.set(week, [...(byWeek.get(week) ?? []), e.kilograms]);
   }
   const weekAvg = (week: string) => mean(byWeek.get(week) ?? []);
-  const thisWeek = weekStartOf(today);
+  const thisWeek = sundayOf(today);
   const last = sorted.at(-1);
 
   const current = weekAvg(thisWeek);

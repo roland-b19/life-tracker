@@ -23,3 +23,8 @@ export function addDays(iso: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+/** The Sunday that starts the week of an ISO date: the user's week runs Sunday to Saturday. */
+export function weekStart(iso: string): string {
+  return addDays(iso, -new Date(`${iso.slice(0, 10)}T00:00:00Z`).getUTCDay());
+}

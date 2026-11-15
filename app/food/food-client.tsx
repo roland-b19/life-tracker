@@ -1,35 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { compareShopping } from "@/lib/check-order";
 import { toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
 import { MAX_STEPS, MAX_WATER_ML } from "@/lib/validations/food";
-import { AddButton, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SelectField, TintButton, Toolbar } from "../components/blocks";
+import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, TintButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon } from "../components/icons";
 import { useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
-import { EditButton, ListBox, RowActions } from "../components/lists";
-import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
+import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
+import { DeleteButton, EditButton, ListBox } from "../components/lists";
 import {
-  addShoppingCategoryAction,
-  addShoppingItemAction,
   addWaterAction,
   setWaterAction,
-  clearBoughtItemsAction,
   deleteMealAction,
-  deleteShoppingCategoryAction,
-  deleteShoppingItemAction,
+  restoreMealAction,
   logMealAction,
-  renameShoppingCategoryAction,
-  reorderShoppingCategoriesAction,
-  revertShoppingCategoryAction,
-  restoreShoppingItemsAction,
-  toggleShoppingItemAction,
-  updateShoppingItemAction,
   updateStepsAction,
   updateTargetsAction,
 } from "@/app/actions/food";
@@ -45,31 +34,6 @@ interface MealData {
   fat: string;
   isEstimated?: boolean;
   createdAt?: Date | string;
-}
-
-/** Health's shopping categories live in their own table; the shared Categories card saves through these. */
-const shoppingNames = (kind: "category" | "unit"): CategoriesApi => ({
-  id: kind === "unit" ? "units" : "shopping",
-  noun: kind,
-  builtIn: kind === "unit" ? "pcs" : "other",
-  add: (name) => addShoppingCategoryAction({ kind, name }),
-  rename: (from, to) => renameShoppingCategoryAction({ kind, from, to }),
-  remove: (name) => deleteShoppingCategoryAction({ kind, name }),
-  revert: (input) => revertShoppingCategoryAction({ kind, ...input }),
-  reorder: (names) => reorderShoppingCategoriesAction({ kind, names }),
-});
-const shoppingCategories = shoppingNames("category");
-const shoppingUnitsApi = shoppingNames("unit");
-
-interface ShoppingItemData {
-  id: string;
-  name: string;
-  amount: string;
-  unit: string;
-  category: string;
-  isBought: boolean;
-  /** When the box last changed; null if it never did. */
-  checkedAt: Date | string | null;
 }
 
 
@@ -144,13 +108,8 @@ export function FoodClient({
   }, [todayDate]);
   const [summary, setSummary] = useState(initialSummary);
   const day = summary;
-  const [shoppingList, setShoppingList] = useState(initialShoppingList);
   const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
-  const [isShopModalOpen, setIsShopModalOpen] = useState(false);
-  const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
-  const [categories, setCategories] = useState(initialCategories);
-  const [units, setUnits] = useState(initialUnits);
   // The open meal or shopping form's error; only one form is open at a time.
   const [formError, setFormError] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
@@ -181,12 +140,6 @@ export function FoodClient({
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
   const mealHasValues = [mealCalories, mealProtein, mealCarbs, mealFat].some((v) => Number(v) > 0);
-
-  // Shopping input state
-  const [shopName, setShopName] = useState("");
-  const [shopAmount, setShopAmount] = useState("1");
-  const [shopUnit, setShopUnit] = useState("pcs");
-  const [shopCategory, setShopCategory] = useState("other");
 
   const [busy, setBusy] = useState(false);
   const setStatusMessage = (message: string) => {
@@ -222,6 +175,36 @@ export function FoodClient({
       showToast({ message: "Failed to undo", type: "warning" });
     }
     return new Set(logged.filter((_, i) => results[i]).map((m) => m.id));
+  }
+
+  /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
+  async function handleDeleteMeal(meal: MealData) {
+    applyMeal(meal, -1);
+    const gone = await deleteMealAction(meal.id).then((r) => r.success, () => false);
+    if (!gone) {
+      applyMeal(meal, 1);
+      showToast({ message: "Failed to remove meal", type: "warning" });
+      return;
+    }
+    showToast({
+      message: `Removed "${meal.name}"`,
+      type: "success",
+      onUndo: async () => {
+        const back = await restoreMealAction({
+          id: meal.id,
+          date: meal.date,
+          name: meal.name,
+          calories: meal.calories,
+          protein: parseFloat(meal.protein),
+          carbs: parseFloat(meal.carbs),
+          fat: parseFloat(meal.fat),
+          isEstimated: meal.isEstimated ?? false,
+          createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
+        }).then((r) => r.success, () => false);
+        if (back) applyMeal(meal, 1);
+        else showToast({ message: "Failed to restore meal", type: "warning" });
+      },
+    });
   }
 
   async function handleLogMeal(e: React.FormEvent) {
@@ -424,217 +407,6 @@ export function FoodClient({
     });
   }
 
-  const toShopInput = (i: ShoppingItemData) => ({
-    name: i.name,
-    amount: Number(i.amount),
-    unit: i.unit,
-    category: i.category,
-  });
-
-  function openShopForm(item: ShoppingItemData | null) {
-    setFormError("");
-    setEditingShop(item);
-    setShopName(item?.name ?? "");
-    setShopAmount(item ? String(Number(item.amount)) : "1");
-    setShopUnit(item?.unit ?? "pcs");
-    setShopCategory(item?.category ?? "other");
-    setIsShopModalOpen(true);
-  }
-
-  const upsertShop = (item: ShoppingItemData) =>
-    setShoppingList((prev) => (prev.some((i) => i.id === item.id) ? prev.map((i) => (i.id === item.id ? item : i)) : [...prev, item]));
-  const dropShop = (id: string) => setShoppingList((prev) => prev.filter((i) => i.id !== id));
-
-  /** Adds an item; the server adds the amount to the same item when it is already on the list. */
-  async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
-    setBusy(true);
-    try {
-      const res = await addShoppingItemAction(input);
-      const item = res.item as ShoppingItemData;
-      const before = shoppingList.find((i) => i.id === item.id);
-      upsertShop(item);
-      showToast(
-        !before
-          ? {
-              message: `Added "${item.name}"`,
-              type: "success",
-              onUndo: async () => {
-                dropShop(item.id);
-                if (await deleteShoppingItemAction(item.id).then(() => true, () => false)) return;
-                upsertShop(item);
-                showToast({ message: "Failed to undo", type: "warning" });
-              },
-            }
-          : {
-              message: `"${item.name}" is now ${Number(item.amount)} ${item.unit}`,
-              type: "success",
-              onUndo: async () => {
-                upsertShop(before);
-                const back = await updateShoppingItemAction({
-                  ...toShopInput(before),
-                  itemId: before.id,
-                  isBought: before.isBought,
-                  checkedAt: before.checkedAt,
-                }).catch(() => null);
-                if (!back?.success) {
-                  upsertShop(item);
-                  return showToast({ message: "Failed to undo the edit", type: "warning" });
-                }
-              },
-            },
-      );
-      return true;
-    } catch {
-      setFormError("Failed to add item");
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Writes an edited item into the list; the bought state stays as it is on screen.
-  const replaceShop = (to: ShoppingItemData) =>
-    setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought, checkedAt: i.checkedAt } : i)));
-
-  async function handleShopSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const input = {
-      name: shopName.trim(),
-      amount: shopAmount.trim() === "" ? 1 : parseFloat(shopAmount),
-      unit: shopUnit.trim() || "pcs",
-      category: shopCategory.trim().toLowerCase() || "other",
-    };
-    if (!visible(input.name)) return;
-    // Same limits as createShoppingItemSchema, so a refusal always has a message on screen.
-    if (input.name.length > 120) return setFormError("The name must be 120 characters or less.");
-    if (!(input.amount >= 0.01 && input.amount <= 1000)) return setFormError("The amount must be between 0.01 and 1000.");
-    if (input.unit.length > 30) return setFormError("The unit must be 30 characters or less.");
-    if (input.category.length > 50) return setFormError("The category must be 50 characters or less.");
-    setFormError("");
-
-    if (!editingShop) {
-      if (await addShopping(input)) setIsShopModalOpen(false);
-      return;
-    }
-    const before = editingShop;
-    setBusy(true);
-    try {
-      const res = await updateShoppingItemAction({ ...input, itemId: before.id });
-      if (!res.success) return setFormError(res.error);
-      const item = res.item as ShoppingItemData;
-      replaceShop(item);
-      setIsShopModalOpen(false);
-      showToast({
-        message: `Saved "${item.name}"`,
-        type: "success",
-        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-        onUndo: async () => {
-          replaceShop(before);
-          const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
-          if (!back?.success) {
-            replaceShop(item);
-            showToast({ message: "Failed to undo the edit", type: "warning" });
-          }
-        },
-      });
-    } catch {
-      setFormError("Failed to save item");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** The shared Categories card re-files the items: a rename or delete moves them, Undo moves `only` back. */
-  const refile = (from: string, to: string, only?: string[]) =>
-    setShoppingList((prev) => prev.map((i) => (i.category === from && (!only || only.includes(i.id)) ? { ...i, category: to } : i)));
-
-  const refileUnit = (from: string, to: string, only?: string[]) =>
-    setShoppingList((prev) => prev.map((i) => (i.unit === from && (!only || only.includes(i.id)) ? { ...i, unit: to } : i)));
-
-  function handleToggleShopping(item: ShoppingItemData) {
-    const next = !item.isBought;
-    const setBought = (isBought: boolean) =>
-      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt: new Date() } : i)));
-    setBought(next);
-    const saved = toggleShoppingItemAction(item.id, next).then(
-      () => true,
-      () => false,
-    );
-    showToast({
-      message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
-      type: "success",
-      onUndo: async () => {
-        setBought(!next);
-        if (!(await saved)) return; // the failure path below put it back
-        if (await toggleShoppingItemAction(item.id, !next).then(() => true, () => false)) return;
-        setBought(next);
-        showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
-    });
-    void saved.then((ok) => {
-      if (ok) return;
-      setBought(!next);
-      setStatusMessage("Failed to update item");
-    });
-  }
-
-  function handleDeleteShoppingItem(item: ShoppingItemData) {
-    // The row leaves at once; the server delete runs alongside, so the tap never waits on the network.
-    dropShop(item.id);
-    const deleted = deleteShoppingItemAction(item.id).then(
-      () => true,
-      () => false,
-    );
-    showToast({
-      message: `Removed "${item.name}"`,
-      onUndo: async () => {
-        if (!(await deleted)) return; // the failure path below puts it back
-        upsertShop(item);
-        const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
-        if (!back?.success) {
-          dropShop(item.id);
-          setStatusMessage("Failed to restore item");
-        }
-      },
-    });
-    void deleted.then((ok) => {
-      if (ok) return;
-      upsertShop(item);
-      setStatusMessage("Failed to remove item");
-    });
-  }
-
-  // Like a delete: the rows leave and the toast shows at once; a failed clear puts them back.
-  function handleClearBought() {
-    const cleared = shoppingList.filter((i) => i.isBought);
-    if (!cleared.length) return;
-    const ids = new Set(cleared.map((c) => c.id));
-    const done = clearBoughtItemsAction({ itemIds: [...ids] }).then(
-      () => true,
-      () => false,
-    );
-    const drop = () => setShoppingList((prev) => prev.filter((i) => !ids.has(i.id)));
-    const putBack = () => setShoppingList((prev) => [...prev.filter((i) => !ids.has(i.id)), ...cleared]);
-    drop();
-    showToast({
-      message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
-      onUndo: async () => {
-        putBack();
-        if (!(await done)) return; // the clear never happened
-        const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
-        if (!back?.success) {
-          drop();
-          setStatusMessage("Failed to restore items");
-        }
-      },
-    });
-    void done.then((ok) => {
-      if (ok) return;
-      putBack();
-      setStatusMessage("Failed to clear bought items");
-    });
-  }
-
   async function handleSendChatMessage() {
     const text = chatInput.trim();
     if (!text || chatLoading) return;
@@ -695,12 +467,6 @@ export function FoodClient({
     const v = weekAverage(key);
     return `7-day average · ${v === null ? "—" : `${v}${unit}`}`;
   };
-  // Walking order, unknown categories after the user's own, "other" last.
-  const shopCategories = [...new Set([...categories, ...shoppingList.map((i) => i.category).filter((c) => c !== "other"), "other"])].filter(
-    (c) => shoppingList.some((i) => i.category === c),
-  );
-  const [isShopFolded, toggleShop] = useFolded("shopping");
-  const allShopping = shopCategories.flatMap((c) => shoppingList.filter((i) => i.category === c).sort(compareShopping));
 
   return (
     <Page userName={userName}>
@@ -748,6 +514,23 @@ export function FoodClient({
               </div>
             </Card>
 
+            <Card id="meals-title" title="Meals" count={summary.meals.length}>
+              <ListBox wash className="entries">
+                {summary.meals.length === 0 && <EmptyNote>No meals logged today.</EmptyNote>}
+                {summary.meals.map((meal) => (
+                  <div key={meal.id} className="entry-row">
+                    <span>
+                      {visible(meal.name) ? meal.name : "Meal"}{" "}
+                      <span className="muted number-tabular">
+                        · {meal.calories} kcal · P {Number(meal.protein)} · C {Number(meal.carbs)} · F {Number(meal.fat)}
+                      </span>
+                    </span>
+                    <DeleteButton label={`Delete ${meal.name}`} onClick={() => void handleDeleteMeal(meal)} />
+                  </div>
+                ))}
+              </ListBox>
+            </Card>
+
             <WeightCard today={todayDate} initial={initialWeights} />
           </DashboardMain>
 
@@ -785,52 +568,7 @@ export function FoodClient({
         </Dashboard>
       )}
 
-      {activeTab === "shopping" && (
-        <Dashboard>
-          <Card
-            id="shopping-title"
-            title="Shopping list"
-            count={shoppingList.length}
-            below
-            actions={
-              <>
-                <TintButton disabled={shoppingList.every((i) => !i.isBought)} onClick={handleClearBought}>
-                  Clear bought
-                </TintButton>
-                <AddButton onClick={() => openShopForm(null)}>Add item</AddButton>
-              </>
-            }
-          >
-            <ListBox className="shopping-groups">
-              {shoppingList.length === 0 && <EmptyNote>Your shopping list is empty.</EmptyNote>}
-              <GroupedList
-                items={allShopping}
-                wrap="shopping-group"
-                isFolded={isShopFolded}
-                onToggle={toggleShop}
-                row={(item) => (
-                  <div className="shopping-row">
-                    <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
-                      <Checkbox
-                        checked={item.isBought}
-                        onChange={() => handleToggleShopping(item)}
-                        label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
-                      />
-                      <span>
-                        {item.name} <span className="shopping-qty">· {Number(item.amount)} {item.unit}</span>
-                      </span>
-                    </div>
-                    <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
-                  </div>
-                )}
-              />
-            </ListBox>
-          </Card>
-
-          <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
-          <CategoriesCard api={shoppingUnitsApi} categories={units} onChange={setUnits} onRefile={refileUnit} />
-        </Dashboard>
-      )}
+      <ShoppingTab active={activeTab === "shopping"} initialItems={initialShoppingList} initialCategories={initialCategories} initialUnits={initialUnits} />
 
       {isClaudeEnabled() && activeTab === "chat" && (
         <Card id="chat-title" title="Food assistant">
@@ -926,40 +664,6 @@ export function FoodClient({
             className="number-tabular"
           />
         </FieldPair>
-      </FormModal>
-
-      <FormModal
-        isOpen={isShopModalOpen}
-        onClose={() => setIsShopModalOpen(false)}
-        title={editingShop ? "Edit shopping item" : "New shopping item"}
-        onSubmit={handleShopSubmit}
-        error={formError}
-        busy={busy}
-        canSubmit={visible(shopName)}
-      >
-        <Field label="Name" type="text" maxLength={120} disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
-        <FieldPair>
-          <Field
-            label="Amount"
-            type="number"
-            step="any"
-            min="0.01"
-            max="1000"
-            inputMode="decimal"
-            disabled={busy}
-            value={shopAmount}
-            onChange={(e) => setShopAmount(e.target.value)}
-          />
-          <SelectField
-            label="Unit"
-            disabled={busy}
-            value={shopUnit}
-            onChange={(e) => setShopUnit(e.target.value)}
-            // An item whose unit the list lacks keeps it as an option.
-            options={[...new Set(["pcs", ...units, shopUnit])].map((u) => ({ value: u, label: u }))}
-          />
-        </FieldPair>
-        <CategoryField categories={categories} value={shopCategory} onChange={setShopCategory} disabled={busy} />
       </FormModal>
 
       <FormModal

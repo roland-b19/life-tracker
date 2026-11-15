@@ -5,22 +5,12 @@ import { weightInput } from "@/lib/validations/weight";
 import { uuid } from "@/lib/validations/common";
 import { z } from "zod";
 import { logRequest } from "@/server/logger";
+import { genericError as apiError, isUniqueViolation } from "@/server/api-errors";
 import { isSameOrigin } from "@/server/same-origin";
 
 export const runtime = "nodejs";
 
-function genericError(request: Request, status: number) {
-  logRequest(request, "/api/weight/[id]", status);
-  const response = NextResponse.json({ error: "Request could not be completed." }, { status });
-  response.headers.set("Cache-Control", "no-store");
-  return response;
-}
-
-function isUniqueViolation(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
-  return candidate.code === "23505" || candidate.cause?.code === "23505";
-}
+const genericError = (request: Request, status: number) => apiError(request, "/api/weight/[id]", status);
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") {
