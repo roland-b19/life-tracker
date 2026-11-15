@@ -9,11 +9,11 @@ The history that used to fill this file (every phase, the verification table, th
 - `main` holds everything through the four forms-audit PRs (#112 to #115). The Tier 1 to 3 iterations, the Wishlist-style UI for every page and the Azure reminder pipeline (PRs #101 to #103) are merged.
 - The personal deploy (variant B, Vercel + Neon) is live and holds the user's real data; its runbook is in `README.md`. Nothing is deployed to Azure (see below).
 - Browser check of PR #116 (375px and desktop): Meals add/delete/Undo, today's weigh-in delete/Undo and the Shopping tab work. Not checked: a past day (read-only), older weigh-ins.
-- PR #116 (delete meals and weigh-ins, migration 0030) is merged. Open: #104 (`fix/azure-migrate`, untouched) and the Gym audit branch (below).
+- PR #116 (delete meals and weigh-ins, migration 0030) is merged. Open: #104 (`fix/azure-migrate`, untouched).
 
 ## Current focus
 
-Branch `refactor/gym-split` (PR open; merge on the user's word). The Gym audit PR (#117) is merged; migrations 0030 and 0031 are files the user runs from their Mac.
+The Gym audit (#117), the GymClient split (#118) and the `undoWith` sweep (#119) are merged into `main`. Migrations 0030 and 0031 are files the user still runs from their Mac; the code works before and after them.
 - `app/gym/gym-client.tsx` (1346 lines) is now a 93-line composition. The pieces: `use-workout.ts` (the workout in hand), `active-workout.tsx`, `exercise-logger.tsx`, `training-days.tsx`, `day-editor.tsx`, `deload-card.tsx`, `history-card.tsx`, `types.ts`. No behaviour change.
 - New helper `undoWith(showToast, write, failed)` in `app/components/toast.tsx`: an Undo that writes the old state back and warns when the write fails. Used by the day editor, the deload dialog and the custom exercise edit.
 - Checked in a browser (375px and desktop): day edit and Undo, start, log set, delete set and Undo, Exit and Resume, Finish, history open, deload edit and Undo, modal focus returns to its button. Not checked: Cancel workout and its Undo, a custom exercise created inside the day editor, a real phone, the Three.js model.
