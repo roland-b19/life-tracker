@@ -1,0 +1,113 @@
+"use client";
+
+import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { weekStart } from "@/lib/gym-progress";
+import { useState } from "react";
+import { Banner, FormModal, SelectField, TintButton, Toggle } from "../components/blocks";
+import { PencilIcon } from "../components/icons";
+import { undoWith, useToast } from "../components/toast";
+import type { DeloadInfo } from "./types";
+import { saveDeloadWeeksAction } from "@/app/actions/gym";
+
+/** The 10 weeks a deload select lists, from this week forward (step 1) or back (step -1), plus the week already chosen if it is outside them. */
+function deloadOptions(step: 1 | -1, current: string, none: string) {
+  const first = weekStart(toISODate());
+  const weeks = Array.from({ length: 10 }, (_, i) => addDays(first, 7 * step * i));
+  if (current && !weeks.includes(current)) weeks.push(current);
+  weeks.sort();
+  return [{ value: "", label: none }, ...weeks.map((w) => ({ value: w, label: `${formatDMY(w)} - ${formatDMY(addDays(w, 6))}${w === first ? " (this week)" : ""}` }))];
+}
+
+/** Where the deload cycle stands, the "Deload session" switch, and the dialog that sets the last and next deload week. */
+export function DeloadCard({
+  deload,
+  isDeloadMode,
+  onDeloadMode,
+  busy,
+  setBusy,
+}: {
+  deload: DeloadInfo;
+  isDeloadMode: boolean;
+  onDeloadMode: (on: boolean) => void;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
+}) {
+  const { showToast } = useToast();
+  // Last and next deload week being edited (Sundays, "" for none), null while the dialog is closed.
+  const [draft, setDraft] = useState<{ last: string; next: string } | null>(null);
+  const [error, setError] = useState("");
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft) return;
+    if (draft.last && draft.next && draft.next <= draft.last) {
+      setError("The next deload must come after the last one");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const before = { last: deload.lastDeloadWeek, next: deload.nextDeloadWeek };
+    try {
+      const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null });
+      if (!res.success) throw new Error();
+      setDraft(null);
+      showToast({
+        message: "Saved deload weeks",
+        type: "success",
+        onUndo: undoWith(showToast, () => saveDeloadWeeksAction(before), "Failed to undo the edit"),
+      });
+    } catch {
+      setError("Failed to save deload weeks");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Banner
+        id="deload-title"
+        className="deload-card"
+        title={deload.inDeloadWeek ? "Deload week chosen" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.cycleWeek} of ${deload.cycleLength}`}
+        sub={
+          deload.inDeloadWeek || deload.isDeloadDue
+            ? "A deload week stays out of the Exercise progress chart."
+            : deload.nextDeloadWeek
+              ? `Deload starts ${formatDMY(deload.nextDeloadWeek)}.`
+              : `${deload.cycleLength + 1 - deload.cycleWeek} ${deload.cycleLength + 1 - deload.cycleWeek === 1 ? "week" : "weeks"} until deload.`
+        }
+      >
+        <span className="deload-actions">
+          <TintButton
+            icon={<PencilIcon size={14} />}
+            disabled={busy}
+            onClick={() => {
+              setError("");
+              setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
+            }}
+          >
+            Edit
+          </TintButton>
+          <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
+        </span>
+      </Banner>
+      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={error} busy={busy}>
+        <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
+        <SelectField
+          label="Last deload"
+          disabled={busy}
+          value={draft?.last ?? ""}
+          options={deloadOptions(-1, draft?.last ?? "", "Not set")}
+          onChange={(e) => setDraft((d) => d && { ...d, last: e.target.value })}
+        />
+        <SelectField
+          label="Next deload"
+          disabled={busy}
+          value={draft?.next ?? ""}
+          options={deloadOptions(1, draft?.next ?? "", "Not chosen")}
+          onChange={(e) => setDraft((d) => d && { ...d, next: e.target.value })}
+        />
+      </FormModal>
+    </>
+  );
+}

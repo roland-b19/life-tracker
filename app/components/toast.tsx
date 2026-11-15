@@ -127,3 +127,15 @@ export function useToast() {
   }
   return context;
 }
+
+/** An Undo that writes the old state back: a write that throws or answers without success shows `failed` as a warning. */
+export function undoWith(
+  showToast: ToastContextValue["showToast"],
+  write: () => Promise<{ success?: boolean } | null | undefined>,
+  failed = "Failed to undo",
+) {
+  return async () => {
+    const back = await write().catch(() => null);
+    if (!back?.success) showToast({ message: failed, type: "warning" });
+  };
+}

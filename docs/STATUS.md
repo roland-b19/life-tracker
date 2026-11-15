@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-11-16 by Claude (Gym audit fixes, custom exercise rename/delete, migration 0031)._
+_Last updated: 2026-11-16 by Claude (GymClient split, undoWith helper)._
 
 The history that used to fill this file (every phase, the verification table, the long session log) is in `docs/STATUS-archive.md`. Decisions: `docs/decisions.md`.
 
@@ -13,12 +13,10 @@ The history that used to fill this file (every phase, the verification table, th
 
 ## Current focus
 
-Branch `fix/gym-audit` (Gym audit implemented; merge on the user's word, migrations 0030 and 0031 are files only, never run against live by an agent):
-- Every fixable finding of `docs/gym-audit-2026-11-16.md` is done except G-12 (revalidate in logSet/deleteSet) and G-15 (timer in localStorage), left on purpose (see `docs/decisions.md`).
-- Server: expected refusals are answers (`GymRefusal`), input limits in `GYM_LIMITS`, the default split is seeded under an advisory lock, one open workout per user, custom exercises can be renamed and deleted with Undo (`updateCustomExerciseAction`, `restoreCustomExerciseAction`).
-- UI: new "My exercises" card (`app/gym/custom-exercises.tsx`), plates and kg never mix in Progress, the chart axis follows real dates, the muscle map shows an "Other" bar, a modal closes only when the press began on its backdrop (global).
-- Migration `0031_gym_audit_constraints.sql` (unique custom exercise names, one routine row per day and exercise, one open workout, a set index): the user runs it after 0030, with the three duplicate checks from its header first. The code works before and after it.
-- Checked in a browser (375px and desktop): custom exercise create, rename, Undo, delete refusal, delete and Undo; modal backdrop drag. Not checked: real touch on a phone, Undo of Finish after a reload, arbitrary session dates, screen-reader order, a large history, the Three.js model, a past day and older weigh-ins on Health.
+Branch `refactor/gym-split` (PR open; merge on the user's word). The Gym audit PR (#117) is merged; migrations 0030 and 0031 are files the user runs from their Mac.
+- `app/gym/gym-client.tsx` (1346 lines) is now a 93-line composition. The pieces: `use-workout.ts` (the workout in hand), `active-workout.tsx`, `exercise-logger.tsx`, `training-days.tsx`, `day-editor.tsx`, `deload-card.tsx`, `history-card.tsx`, `types.ts`. No behaviour change.
+- New helper `undoWith(showToast, write, failed)` in `app/components/toast.tsx`: an Undo that writes the old state back and warns when the write fails. Used by the day editor and the deload dialog.
+- Checked in a browser (375px and desktop): day edit and Undo, start, log set, delete set and Undo, Exit and Resume, Finish, history open, deload edit and Undo, modal focus returns to its button. Not checked: Cancel workout and its Undo, a custom exercise created inside the day editor, a real phone, the Three.js model.
 
 ## Application features (local)
 
@@ -36,7 +34,7 @@ Branch `fix/gym-audit` (Gym audit implemented; merge on the user's word, migrati
 ## Next
 
 1. The user runs migration 0030, then 0031 (duplicate checks first) from their Mac.
-2. Split `GymClient` (about 1300 lines) into smaller files, and build the shared optimistic/Undo helper the audits asked for.
+2. Optional: use `undoWith` on the other pages (about 25 hand-written Undos); only on the user's word.
 3. The Categories card is cramped at about 800px; PR #104 (`fix/azure-migrate`) is still open and untouched.
 4. Azure A (`docs/release-plan.md` section 5) after a week of watching variant B. Nothing deploys and no Azure resource is created without the user's explicit OK.
 

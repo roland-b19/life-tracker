@@ -504,5 +504,11 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **Custom exercises** can be renamed (`updateCustomExerciseAction`, also the Undo of an edit) and deleted while no routine or workout uses them; Undo of a delete re-inserts the same row (`restoreCustomExerciseAction`). Names are unique per user, ignoring case.
 - **Migration 0031** (additive, a file the user runs from their Mac after 0030, duplicate checks first): unique custom names per user, unique exercise per routine day, at most one open workout per user, an index for the set history. The code guards the same rules, so it works before and after the migration.
 - **Modal backdrop:** a press that starts inside a modal and ends on the backdrop (selecting text in a field) no longer closes it, on every page.
-- **Next:** split `GymClient` and build the shared optimistic/Undo helper (as a separate step, no behaviour change).
+- **Next:** done on 2026-11-16 (see "GymClient split and `undoWith`" below).
+
+## 2026-11-16 — GymClient split and `undoWith`
+
+- `GymClient` is split along its seams (workout hook, active workout, exercise logger, training days, day editor, deload card, history card, types). The page keeps one `busy` flag and passes it down, so every control still waits for the same write.
+- **`undoWith(showToast, write, failed)`** (`app/components/toast.tsx`) is the shared Undo that writes the old state back and shows a warning when the write throws or answers without success. Applied only in Gym's day editor and deload dialog for now; the other pages keep their own Undo code until the user asks for the sweep.
+- Two small differences: the day editor's "New exercise" form starts empty each time the editor opens, and the day-save Undo uses the day as it was when the editor opened.
 
