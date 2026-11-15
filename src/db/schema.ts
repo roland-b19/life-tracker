@@ -9,6 +9,7 @@ import {
   primaryKey,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -53,6 +54,8 @@ export const exercises = pgTable(
     isCustom: boolean("is_custom").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+  // The shared defaults (no owner) are seeded on demand: two requests at once must not both insert them.
+  (table) => [uniqueIndex("exercises_default_name_uniq").on(table.name).where(sql`${table.userId} is null`)],
 );
 
 export const workoutSplits = pgTable(

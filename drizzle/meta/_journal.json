@@ -211,6 +211,13 @@
       "when": 1794735707084,
       "tag": "0029_deload_weeks",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794780930134,
+      "tag": "0030_exercise_default_unique",
+      "breakpoints": true
     }
   ]
 }
