@@ -404,6 +404,49 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await restoreTodoAction(old)).success).toBe(true);
     });
 
+    it("puts a one-off task added for a day already over on today, so it shows and carries over", async () => {
+      const today = toISODate();
+      const made = await createTodoAction({ space: "personal", title: "Late", dueDate: addDays(today, -1), isRecurring: false });
+      if (!made.success) throw new Error(made.error);
+      expect(made.todo.dueDate).toBe(today);
+      expect((await getDailyTodos(userA, "personal", today)).todos.map((t) => t.title)).toEqual(["Late"]);
+      // A repeating task keeps its first day.
+      const habit = await createTodoAction({ space: "personal", title: "Habit", dueDate: addDays(today, -1), isRecurring: true, recurrencePattern: "daily" });
+      if (!habit.success) throw new Error(habit.error);
+      expect(habit.todo.dueDate).toBe(addDays(today, -1));
+    });
+
+    it("refuses an Undo that dates a task in the future", async () => {
+      const today = toISODate();
+      const base = { space: "personal", title: "Back", dueDate: today, isRecurring: false, isCompleted: true, isCarriedOver: false, createdAt: new Date() };
+      const year2099 = new Date("2099-01-01T00:00:00Z");
+      await expect(restoreTodoAction({ ...base, id: randomUUID(), completedAt: year2099 })).rejects.toThrow();
+      await expect(restoreTodoAction({ ...base, id: randomUUID(), placedAt: year2099 })).rejects.toThrow();
+      await expect(restoreTodoAction({ ...base, id: randomUUID(), isRecurring: true, recurrencePattern: "daily", dueDate: "2099-01-01" })).rejects.toThrow("only be added or changed for today");
+    });
+
+    it("an Undo of a tick puts the task back where it was, owner only", async () => {
+      const today = toISODate();
+      const a = await createTodo(userA, { space: "personal", title: "A", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      const b = await createTodo(userA, { space: "personal", title: "B", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      await toggleTodoAction({ id: a.id, isCompleted: true });
+      await new Promise((r) => setTimeout(r, 10));
+      await toggleTodoAction({ id: b.id, isCompleted: true });
+      const titles = async () => (await getDailyTodos(userA, "personal", today)).todos.map((t) => t.title);
+      expect(await titles()).toEqual(["B", "A"]); // done, the latest on top
+      const [, tickedA] = (await getDailyTodos(userA, "personal", today)).todos;
+      // Reopen A, then Undo with the time it had: it is back under B, not on top.
+      await toggleTodoAction({ id: a.id, isCompleted: false });
+      await toggleTodoAction({ id: a.id, isCompleted: true, completedAt: tickedA.completedAt });
+      expect(await titles()).toEqual(["B", "A"]);
+      // Another user's call changes nothing; the time cannot be in the future.
+      authState.id = userB;
+      await toggleTodoAction({ id: a.id, isCompleted: false, completedAt: null });
+      authState.id = userA;
+      expect(await titles()).toEqual(["B", "A"]);
+      await expect(toggleTodoAction({ id: a.id, isCompleted: true, completedAt: new Date("2099-01-01") })).rejects.toThrow();
+    });
+
     it("rejects task titles that are only spaces", async () => {
       authState.id = userA;
       const today = toISODate();

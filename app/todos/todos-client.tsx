@@ -186,6 +186,7 @@ export function TodosClient({
           ++requestId.current;
           drop(before);
           putBack(after);
+          keepCategory(after);
           showToast({
             message: `Saved "${title}"`,
             type: "success",
@@ -203,7 +204,7 @@ export function TodosClient({
                 drop(before);
                 putBack(after);
                 showToast({ message: "Failed to undo the edit", type: "warning" });
-              }
+              } else keepCategory(before);
               await loadDay();
             },
           });
@@ -223,6 +224,7 @@ export function TodosClient({
           const created = res.todo;
           ++requestId.current;
           if (shows(created)) putBack(created);
+          keepCategory(created);
           showToast({
             message: `Added "${title}"`,
             type: "success",
@@ -252,24 +254,25 @@ export function TodosClient({
     }
   };
 
-  const setCompleted = (task: TodoItem, isCompleted: boolean) =>
+  // `completedAt` is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
+  // Undo passes the time from before the change, so the task goes back to where it was; left out, it is now.
+  const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
     setTodosMap((prev) => ({
       ...prev,
-      // completedAt is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
-      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt: new Date() } : t)).sort(compareTodos),
+      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos),
     }));
 
-  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean) => {
+  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean, completedAt?: Date | null) => {
     ++requestId.current;
-    setCompleted(todo, next);
+    setCompleted(todo, next, completedAt);
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
-        onUndo: () => toggle(todo, !next, false),
+        onUndo: () => toggle(todo, !next, false, todo.completedAt),
       });
     }
     try {
-      await toggleTodoAction({ id: todo.id, isCompleted: next });
+      await toggleTodoAction({ id: todo.id, isCompleted: next, completedAt });
     } catch {
       showToast({ message: "Failed to update task", type: "warning" });
     }
@@ -285,6 +288,10 @@ export function TodosClient({
       ...prev,
       [task.space]: prev[task.space].some((t) => t.id === task.id) ? prev[task.space] : [...prev[task.space], task].sort(compareTodos),
     }));
+
+  // The server files a saved task under its category and creates the category if it is gone (an Undo after the category was deleted): the card shows it too.
+  const keepCategory = ({ space, category }: TodoItem) =>
+    setCategories((prev) => (category === "other" || prev[space].includes(category) ? prev : { ...prev, [space]: [...prev[space], category] }));
 
   const drop = (task: TodoItem) => {
     setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
@@ -317,7 +324,7 @@ export function TodosClient({
         if (!back?.success) {
           if (shows(target)) drop(target);
           showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
-        }
+        } else keepCategory(target);
         await loadDay();
       },
     });
@@ -339,14 +346,13 @@ export function TodosClient({
       }
 
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      let sub: PushSubscription | null = null;
-      if (vapidPublicKey) {
-        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidPublicKey });
-        const res = await savePushSubscriptionAction({ subscription: sub.toJSON() });
-        if (!res.success) throw new Error("not saved");
-      }
+      // Without a key no reminder could ever arrive, so never say they are on.
+      if (!vapidPublicKey) throw new Error("no push key");
+      const enabled = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidPublicKey });
+      const { endpoint, keys } = enabled.toJSON();
+      const res = await savePushSubscriptionAction({ endpoint, p256dhKey: keys?.p256dh, authKey: keys?.auth });
+      if (!res.success) throw new Error("not saved");
       setPushSubscribed(true);
-      const enabled = sub;
       showToast({
         message: "Reminders enabled",
         type: "success",
@@ -354,10 +360,8 @@ export function TodosClient({
         onUndo: async () => {
           setPushSubscribed(false);
           try {
-            if (enabled) {
-              await deletePushSubscriptionAction(enabled.endpoint);
-              await enabled.unsubscribe();
-            }
+            await deletePushSubscriptionAction(enabled.endpoint);
+            await enabled.unsubscribe();
           } catch {
             setPushSubscribed(true);
             showToast({ message: "Failed to turn reminders off", type: "warning" });
@@ -456,6 +460,7 @@ export function TodosClient({
                   return { ...prev, [view.space]: refiled };
                 });
               }}
+              idsIn={(c) => todosMap[view.space].filter((t) => t.category === c).map((t) => t.id)}
               // Read the tasks again once the server has saved (or undone) the change.
               onSynced={() => void loadDay()}
             />

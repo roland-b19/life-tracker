@@ -41,6 +41,8 @@ interface Props {
   onRefile: (from: string, to: string, only?: string[]) => void;
   /** Called once the server has saved a change or an Undo, so a page that reads its items from the server reads them after it. */
   onSynced?: () => void;
+  /** The ids of the items on screen in a category. With it a delete moves the items at once, not after the server answers; a failed delete moves exactly those back. */
+  idsIn?: (category: string) => string[];
 }
 
 /** What a rename or delete reported moving, as the server sent it. */
@@ -53,7 +55,7 @@ interface Change {
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
-export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }: Props) {
+export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, idsIn }: Props) {
   const { showToast } = useToast();
   const noun = api.noun ?? "category";
   const builtIn = api.builtIn ?? "other";
@@ -176,14 +178,18 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced }
     }
   }
 
-  // The row leaves and the toast shows at once; a failed delete puts it back. Undo re-files exactly the items
+  // The row leaves, its items move to Other and the toast shows at once; a failed delete puts them back. Undo re-files exactly the items
   // that moved to Other.
   async function remove(cat: string) {
     const at = categories.indexOf(cat);
+    const moved = idsIn?.(cat);
     onChange((prev) => prev.filter((c) => c !== cat));
+    if (moved) onRefile(cat, builtIn, moved);
     const res = await api.remove(cat).catch(() => null);
     if (!res?.success || !res.change) {
       onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
+      if (moved) onRefile(builtIn, cat, moved);
+      onSynced?.();
       showToast({ message: `Failed to remove ${noun}`, type: "warning" });
       return;
     }
