@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { weekStartOf, weightStats } from "@/lib/weight-stats";
+import { weekStart as weekStartOf } from "@/lib/format-date";
+import { weightStats } from "@/lib/weight-stats";
 
 // 2026-11-08 is a Sunday.
 const e = (date: string, kilograms: number) => ({ date, kilograms });

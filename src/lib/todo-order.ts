@@ -1,4 +1,4 @@
-import { compareChecked } from "./check-order";
+import { compareChecked, time } from "./check-order";
 
 interface Orderable {
   id: string;
@@ -7,8 +7,6 @@ interface Orderable {
   placedAt: Date | string;
   createdAt: Date | string;
 }
-
-const time = (d: Date | string | null) => (d ? +new Date(d) : 0);
 
 /**
  * Where tasks re-filed into a category land: on top of it as one tight block (1 ms apart, so nothing else can fall

@@ -1,10 +1,7 @@
-import { addDays } from "./format-date";
+import { addDays, weekStart } from "./format-date";
 import type { HistorySession, HistorySet } from "./gym";
 
-/** Sunday of the week a date falls in: the user's week runs Sunday to Saturday. */
-export function weekStart(date: string): string {
-  return addDays(date, -new Date(`${date}T00:00:00Z`).getUTCDay());
-}
+export { weekStart };
 
 /** Whole calendar weeks (Sunday to Sunday) from one date's week to another's: negative when `to` is earlier. */
 export function weeksBetween(from: string, to: string): number {

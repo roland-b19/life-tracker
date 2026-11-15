@@ -3,25 +3,17 @@ import { z } from "zod";
 import { requireUser, UnauthorizedError } from "@/server/auth";
 import { createWeightEntry, listWeightEntries } from "@/server/weight";
 import { logRequest } from "@/server/logger";
+import { genericError as apiError, isUniqueViolation } from "@/server/api-errors";
 import { isSameOrigin } from "@/server/same-origin";
 import { weightCreateInput } from "@/lib/validations/weight";
 
 export const runtime = "nodejs";
 
+const genericError = (request: Request, status: number) => apiError(request, "/api/weight", status);
+
 function noStore(response: NextResponse) {
   response.headers.set("Cache-Control", "no-store");
   return response;
-}
-
-function genericError(request: Request, status: number) {
-  logRequest(request, "/api/weight", status);
-  return noStore(NextResponse.json({ error: "Request could not be completed." }, { status }));
-}
-
-function isUniqueViolation(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
-  return candidate.code === "23505" || candidate.cause?.code === "23505";
 }
 
 export async function GET(request: Request) {
