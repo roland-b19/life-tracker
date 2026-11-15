@@ -115,11 +115,10 @@ export async function deleteCustomExerciseAction(exerciseId: string) {
   return { success: deleted };
 }
 
-/** Replaces all deload weeks; Undo sends the previous list through the same action. */
+/** Sets the last and next deload week; Undo sends the previous pair through the same action. */
 export async function saveDeloadWeeksAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { weeks } = saveDeloadWeeksSchema.parse(rawInput);
-  const saved = await saveDeloadWeeks(userId, weeks);
+  const saved = await saveDeloadWeeks(userId, saveDeloadWeeksSchema.parse(rawInput));
   safeRevalidate("/gym");
-  return { success: true, weeks: saved };
+  return { success: true, ...saved };
 }
