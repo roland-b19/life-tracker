@@ -451,3 +451,7 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - The deload is set with two fields, last deload and next deload (a Sunday week each, 10 weeks offered). "Week x of N" is derived from them: the week after the last deload is week 1, N = weeks between the two minus one. Default N is 5 (it was "4 normal weeks, then deload"). Saving stores both weeks in `deload_weeks` and flags their sessions; the chosen week shows "Deload week chosen" with "Deload session" ticked by default, and a ticked session stays out of Progress. No migration.
 - A started workout shows the last session's numbers on every exercise, always visible in the exercise header.
 - A double-tap or double-click in an input or textarea selects everything in it (checkbox, radio and range excluded), because the browser's word selection stops at punctuation. Not yet verified on a real iPhone.
+
+## 2026-11-15 — Deload session is only that session; select-all hardened (user)
+- Ticking "Deload session" marks only that workout: Progress skips that session's sets, not its week, and a flagged session no longer makes its week a deload week for the cycle. Only the weeks chosen in the Deload weeks dialog (`deload_weeks`) are deload weeks; choosing a week still flags the sessions in it. No migration.
+- Select-all on double-tap compares only the field (a form moves when the keyboard opens, so the second tap can land elsewhere) and re-applies the full selection for 800 ms after the second tap, because iOS sets its word selection late.

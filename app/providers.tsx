@@ -66,19 +66,37 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   // A double-tap or double-click in a field selects everything in it. The browser's own double-tap selects one word and
   // stops at spaces, commas and other punctuation, so a value like "1,5 kg" could never be selected whole.
+  // Only the element is compared, not the position: a form that moves up when the keyboard opens shifts the field
+  // between the two taps. iOS sets its word selection a little after the second tap, so for a moment every selection
+  // change in that field is turned back into a full selection.
   useEffect(() => {
-    let tap: { el: EventTarget | null; t: number; x: number; y: number } = { el: null, t: 0, x: 0, y: 0 };
+    let tap: { el: EventTarget | null; t: number } = { el: null, t: 0 };
+    let hold: { el: HTMLInputElement | HTMLTextAreaElement; until: number } | null = null;
+    const selectAll = (el: HTMLInputElement | HTMLTextAreaElement) => {
+      if (el.selectionStart === 0 && el.selectionEnd === el.value.length) return;
+      el.select();
+      try {
+        el.setSelectionRange(0, el.value.length);
+      } catch {}
+    };
     const onUp = (e: PointerEvent) => {
       const el = e.target;
-      if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) || ["checkbox", "radio", "range"].includes((el as HTMLInputElement).type)) return;
-      const again = tap.el === el && e.timeStamp - tap.t < 400 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 24;
-      tap = again ? { el: null, t: 0, x: 0, y: 0 } : { el, t: e.timeStamp, x: e.clientX, y: e.clientY };
+      if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) || ["checkbox", "radio", "range", "button", "submit"].includes((el as HTMLInputElement).type)) return;
+      const again = tap.el === el && e.timeStamp - tap.t < 500;
+      tap = again ? { el: null, t: 0 } : { el, t: e.timeStamp };
       if (!again) return;
-      // The browser sets its own word selection after the second tap; select again right after it.
-      for (const delay of [0, 80]) setTimeout(() => { el.select(); try { el.setSelectionRange(0, el.value.length); } catch {} }, delay);
+      hold = { el, until: Date.now() + 800 };
+      for (const delay of [0, 60, 150, 300, 500]) setTimeout(() => selectAll(el), delay);
+    };
+    const onSelection = () => {
+      if (hold && Date.now() < hold.until && document.activeElement === hold.el) selectAll(hold.el);
     };
     document.addEventListener("pointerup", onUp);
-    return () => document.removeEventListener("pointerup", onUp);
+    document.addEventListener("selectionchange", onSelection);
+    return () => {
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("selectionchange", onSelection);
+    };
   }, []);
 
   return (

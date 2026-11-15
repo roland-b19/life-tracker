@@ -12,17 +12,11 @@ export function weeksBetween(from: string, to: string): number {
   return Math.round((sunday(to) - sunday(from)) / (7 * 86_400_000));
 }
 
-/** Sundays of the weeks that hold a deload session: easier training, so the whole week stays out of the Exercise progress chart (and nothing else). */
-function deloadWeeks(sets: HistorySet[]) {
-  return new Set(sets.filter((s) => s.isDeload).map((s) => weekStart(s.date)));
-}
-
-/** An exercise's heaviest load of each training day. Deload weeks are left out: only this chart ignores them. */
+/** An exercise's heaviest load of each training day. Sets of deload sessions are left out (only that session, not its week): only this chart ignores them. */
 export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
-  const skip = deloadWeeks(sets);
   const byDate = new Map<string, { date: string; weight: number }>();
   for (const s of sets) {
-    if (s.exerciseId !== exerciseId || skip.has(weekStart(s.date))) continue;
+    if (s.exerciseId !== exerciseId || s.isDeload) continue;
     const best = byDate.get(s.date) ?? { date: s.date, weight: 0 };
     best.weight = Math.max(best.weight, s.load);
     byDate.set(s.date, best);

@@ -428,16 +428,10 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
   };
 }
 
-/** Every deload week (the Sunday that starts it): the weeks the user marked plus the weeks holding a deload session. */
+/** Every deload week (the Sunday that starts it): the weeks the user chose. A single deload session does not make its week one. */
 async function deloadWeekSet(userId: string): Promise<Set<string>> {
-  const [marked, sessions] = await Promise.all([
-    db.select({ week: deloadWeeks.weekStart }).from(deloadWeeks).where(eq(deloadWeeks.userId, userId)),
-    db
-      .selectDistinct({ date: workoutSessions.date })
-      .from(workoutSessions)
-      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.isDeload, true))),
-  ]);
-  return new Set([...marked.map((m) => m.week), ...sessions.map((s) => weekStart(s.date))]);
+  const marked = await db.select({ week: deloadWeeks.weekStart }).from(deloadWeeks).where(eq(deloadWeeks.userId, userId));
+  return new Set(marked.map((m) => m.week));
 }
 
 const DEFAULT_CYCLE = 5;
@@ -445,7 +439,7 @@ const MAX_CYCLE = 9; // the Edit dialog offers 10 weeks, so a gap beyond that is
 
 /**
  * Deload cycle in calendar weeks (Sunday to Saturday, the same weeks the Progress tab skips). A deload week is one the
- * user chose or one holding a deload session. Week 1 is the week after the last deload (or the first workout's week);
+ * user chose. Week 1 is the week after the last deload (or the first workout's week);
  * the length N is the gap between the last deload and the chosen next one, else the gap between the last two deloads,
  * else 5. With no next deload chosen, a deload is due once week N is over.
  */
