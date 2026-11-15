@@ -33,9 +33,11 @@ function assertToday(day: string) {
   if (day < addDays(today, -1) || day > addDays(today, 1)) throw new Error("Tasks can only be added or changed for today.");
 }
 
-// A repeating task keeps its first day for good, so Undo (`startedBefore`) may bring one back from long ago.
+// A repeating task keeps its first day for good, so Undo (`startedBefore`) may bring one back from long ago, but never from a day not yet started.
 function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, startedBefore = false) {
-  if (!(startedBefore && task.isRecurring)) assertToday(task.dueDate);
+  if (startedBefore && task.isRecurring) {
+    if (task.dueDate > addDays(toISODate(), 1)) throw new Error("Tasks can only be added or changed for today.");
+  } else assertToday(task.dueDate);
 }
 
 /** A change to a one-off task is made on its own day, to a daily one on today. */
@@ -47,8 +49,11 @@ export async function createTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = createTodoSchema.parse(rawInput);
   assertPlannable(parsed);
-  if (await hasDuplicateTodo(userId, parsed)) return duplicate(parsed.title);
-  const todo = await createTodo(userId, parsed);
+  // A page left open past midnight still says yesterday: an open one-off task from a past day would never show or carry over, so it goes on today.
+  const today = toISODate();
+  const input = !parsed.isRecurring && parsed.dueDate < today ? { ...parsed, dueDate: today } : parsed;
+  if (await hasDuplicateTodo(userId, input)) return duplicate(input.title);
+  const todo = await createTodo(userId, input);
   return { success: true as const, todo };
 }
 
