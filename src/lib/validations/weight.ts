@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { toISODate } from "../format-date";
 import { isoDate, uuid } from "./common";
 
 export const weightInput = z
   .object({
-    date: isoDate,
+    // A weigh-in is a measurement: it cannot be in the future.
+    date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
     kilograms: z
       .number()
       .finite()

@@ -2,6 +2,7 @@
 
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { kgDelta, progressSets, weekStart, type HistoryEntry } from "@/lib/gym-progress";
+import { showDecimal } from "@/lib/decimal-input";
 import { visible } from "@/lib/validations/common";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
@@ -128,9 +129,10 @@ type LoggedSet = WorkoutSetData;
 
 /** "8 × 52.5 kg": one logged set as the user reads it (the extra kg is already in `load`). */
 function setText(x: { reps: number; loadType: string; load: number }) {
-  const l = Math.round(x.load * 100) / 100;
+  const n = Math.round(x.load * 100) / 100;
+  const l = showDecimal(String(n));
   const w =
-    x.loadType === "bodyweight" ? (l > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
+    x.loadType === "bodyweight" ? (n > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
   return `${x.reps} × ${w}`;
 }
 
@@ -865,8 +867,8 @@ export function GymClient({
                           <div key={s.id} className="entry-row">
                             <span>
                               <strong>Set {s.setOrder}:</strong> {s.reps} reps ×{" "}
-                              {s.loadValue} {s.loadType}
-                              {Number(s.extraKg) > 0 ? ` + ${s.extraKg} kg` : ""}
+                              {showDecimal(String(s.loadValue))} {s.loadType}
+                              {Number(s.extraKg) > 0 ? ` + ${showDecimal(String(s.extraKg))} kg` : ""}
                               {s.isPartial ? " (partials)" : ""}
                               {s.isGoodForm ? "" : " (poor form)"}
                               {s.flagAnomaly && <Badge kind="danger" className="set-flag">{s.anomalyReason || "Anomaly"}</Badge>}
@@ -1164,7 +1166,7 @@ export function GymClient({
         onSubmit={handleSaveDay}
         error={draftError}
         busy={busy}
-        canSubmit={visible(draft?.name ?? "")}
+        canSubmit={visible(draft?.name ?? "") && (!draft || draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
       >
         {draft && (
           <>

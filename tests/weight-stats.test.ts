@@ -51,4 +51,11 @@ describe("weightInput", () => {
     for (const kilograms of [78.4, 80.1, 72.35]) expect(weightInput.safeParse({ date: "2026-11-11", kilograms }).success).toBe(true);
     expect(weightInput.safeParse({ date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
   });
+
+  it("refuses a future day, accepts today", async () => {
+    const { weightInput } = await import("@/lib/validations/weight");
+    const { addDays, toISODate } = await import("@/lib/format-date");
+    expect(weightInput.safeParse({ date: toISODate(), kilograms: 80 }).success).toBe(true);
+    expect(weightInput.safeParse({ date: addDays(toISODate(), 1), kilograms: 80 }).success).toBe(false);
+  });
 });

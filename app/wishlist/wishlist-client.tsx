@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { linkOf } from "@/lib/link";
 import { AnimatedNumber } from "../components/animated-number";
@@ -89,7 +89,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [category, setCategory] = useState("other");
   const [busy, setBusy] = useState(false);
   const [priceTouched, setPriceTouched] = useState(false);
-  const submitting = useRef(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   // The range comes from the price, never from the stored column.
@@ -123,7 +122,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting.current) return; // state is stale within one tick, so a fast double tap would add the item twice
     setErrorMsg("");
 
     // Digits only: Number() alone would take "1e3", "0x10" and "+5".
@@ -161,7 +159,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       category,
     };
 
-    submitting.current = true;
     setBusy(true);
     try {
       if (editingId) {
@@ -216,7 +213,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       // The form checks every limit first; what is left is a refusal whose text the server hides in production.
       setErrorMsg("Failed to save item. Please try again.");
     } finally {
-      submitting.current = false;
       setBusy(false);
     }
   }

@@ -466,6 +466,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await addWaterAction(today, -1000)).metrics.waterMl).toBe(0);
       await addWaterAction(today, 500);
 
+      // The steps log and the steps goal share one limit.
+      expect((await updateStepsAction(today, 150000)).metrics.steps).toBe(150000);
+      await expect(updateStepsAction(today, 200001)).rejects.toThrow();
+
       // An impossible day and a malformed id are validation errors, not database errors.
       await expect(addWaterAction("2026-13-45", 250)).rejects.toThrow();
       await expect(updateStepsAction("2026-02-30", 1000)).rejects.toThrow();

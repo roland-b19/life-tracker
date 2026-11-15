@@ -82,7 +82,6 @@ export function TodosClient({
 
   // Bumped by every load and by every change made on screen, so an older refresh never lands over a newer state.
   const requestId = useRef(0);
-  const submitting = useRef(false);
   // The load a day switch started; a later switch that needs no load of its own waits for it.
   const loading = useRef<Promise<void>>(Promise.resolve());
 
@@ -167,8 +166,7 @@ export function TodosClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = titleInput.trim();
-    if (!title || saving || submitting.current) return;
-    submitting.current = true; // state is stale within one tick, so a fast double tap would save twice
+    if (!title || saving) return;
     const reminderTime = reminderTimeInput.trim() || null;
     const recurrencePattern = (editing ? editing.isRecurring : isDaily) ? "daily" : "none";
     setTitleError(null);
@@ -249,7 +247,6 @@ export function TodosClient({
     } catch {
       setTitleError("Failed to save task"); // the form stays open
     } finally {
-      submitting.current = false;
       setSaving(false);
     }
   };

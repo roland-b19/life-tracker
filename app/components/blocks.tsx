@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
 import { addDays, formatDMY } from "@/lib/format-date";
@@ -546,7 +547,7 @@ export function FormModal({
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => unknown;
   error?: string | null;
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
@@ -557,9 +558,22 @@ export function FormModal({
   className?: string;
   children: ReactNode;
 }) {
+  // State is stale within one tick, so a fast double tap would submit twice: the lock lives until the handler settles.
+  const locked = useRef(false);
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (locked.current) return e.preventDefault();
+    locked.current = true;
+    const unlock = () => (locked.current = false);
+    try {
+      Promise.resolve(onSubmit(e)).then(unlock, unlock);
+    } catch (error) {
+      unlock();
+      throw error;
+    }
+  };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth={maxWidth} className={className}>
-      <form onSubmit={onSubmit}>
+      <form onSubmit={submit}>
         <div className="form-stack">
           {children}
           {error && <ErrorText id={errorId}>{error}</ErrorText>}
