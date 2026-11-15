@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { isoDate } from "./common";
+import { isoDate, visible } from "./common";
 
 export const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task, "daily" for a repeating one.
@@ -8,7 +8,7 @@ export const recurrencePatternSchema = z.enum(["none", "daily"]);
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
-  title: z.string().trim().min(1, "Title is required").max(150),
+  title: z.string().trim().min(1, "Title is required").max(150).refine(visible, "Title is required"),
   isRecurring: z.boolean().default(false),
   recurrencePattern: recurrencePatternSchema.default("none"),
   dueDate: isoDate,

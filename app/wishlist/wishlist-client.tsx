@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { visible } from "@/lib/validations/common";
+import { linkOf } from "@/lib/link";
 import { AnimatedNumber } from "../components/animated-number";
 import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect } from "../components/blocks";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
@@ -59,12 +61,6 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
 const ron = new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 });
 const formatRon = (n: number) => ron.format(n);
 
-/** A typed URL opens as a link (shown as its host); anything else (a store name) is plain text. */
-function linkOf(value: string) {
-  const href = /^https?:\/\/\S+$/i.test(value) ? value : /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(value) ? `https://${value}` : null;
-  return { href, label: href ? `${value.replace(/^https?:\/\//i, "").split("/")[0]} ↗` : value };
-}
-
 function ItemLink({ value }: { value: string }) {
   const { href, label } = linkOf(value);
   return href ? (
@@ -92,6 +88,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("other");
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   // The range comes from the price, never from the stored column.
@@ -124,12 +121,13 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting.current) return; // state is stale within one tick, so a fast double tap would add the item twice
     setErrorMsg("");
 
     // Digits only: Number() alone would take "1e3", "0x10" and "+5".
     const priceText = estimatedPrice.trim();
     const parsedPrice = /^\d+$/.test(priceText) ? Number(priceText) : NaN;
-    if (!name.trim()) {
+    if (!visible(name)) {
       setErrorMsg("Please enter an item name.");
       return;
     }
@@ -160,6 +158,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       category,
     };
 
+    submitting.current = true;
     setBusy(true);
     try {
       if (editingId) {
@@ -214,6 +213,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       // A validation failure arrives as raw JSON: never show that to the user.
       setErrorMsg(err instanceof Error && !/^[[{]/.test(err.message) ? err.message : "Failed to save item");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
