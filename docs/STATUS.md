@@ -8,6 +8,7 @@ The history that used to fill this file (every phase, the verification table, th
 
 - `main` holds everything through the four forms-audit PRs (#112 to #115). The Tier 1 to 3 iterations, the Wishlist-style UI for every page and the Azure reminder pipeline (PRs #101 to #103) are merged.
 - The personal deploy (variant B, Vercel + Neon) is live and holds the user's real data; its runbook is in `README.md`. Nothing is deployed to Azure (see below).
+- Browser check of PR #116 (375px and desktop): Meals add/delete/Undo, today's weigh-in delete/Undo and the Shopping tab work. Not checked: a past day (read-only), older weigh-ins.
 - Open PRs: #104 (`fix/azure-migrate`, migration job identity, untouched) and the branch `feat/delete-weighins-meals` (below).
 
 ## Current focus
@@ -18,7 +19,7 @@ Branch `feat/delete-weighins-meals` (not merged; migration 0030 is a file only, 
 - Migration `0030_exercise_default_unique.sql`: unique index on default exercise names (`exercises_default_name_uniq`); seeding is idempotent. The user runs it from their Mac; the duplicate check to run first is in the file's header.
 - `FoodClient` lost its Shopping tab to `app/food/shopping-tab.tsx` (it stays mounted when another tab shows, so an edit in flight keeps its state).
 - The Assistant answers in Romanian (decision 2026-11-16).
-- A full Gym page audit (code and browser) was run; the ranked list is waiting for the user's decisions. Nothing from it is implemented.
+- A full Gym page audit (code and browser) was run; the ranked list is in `docs/gym-audit-2026-11-16.md` and waits for the user's decisions. Nothing from it is implemented.
 
 ## Application features (local)
 
@@ -35,7 +36,7 @@ Branch `feat/delete-weighins-meals` (not merged; migration 0030 is a file only, 
 
 ## Next
 
-1. The user decides which Gym audit findings to fix.
+1. The user decides which Gym audit findings to fix (`docs/gym-audit-2026-11-16.md`).
 2. The user runs migration 0030 (after the duplicate check), then merges the branch when they say so.
 3. `GymClient` (about 1300 lines) is still one file; split it after the Gym fixes, so the two do not collide.
 4. Azure A (`docs/release-plan.md` section 5) after a week of watching variant B. Nothing deploys and no Azure resource is created without the user's explicit OK.
