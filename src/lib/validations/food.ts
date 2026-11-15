@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categorySchema } from "./categories";
 import { isoDate, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
@@ -32,7 +33,7 @@ export const updateNutritionTargetsSchema = z.object({
 });
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
-export const shoppingCategorySchema = z.string().trim().toLowerCase().min(1).max(50).refine(visible, "Name is required");
+export const shoppingCategorySchema = categorySchema;
 
 export const createShoppingItemSchema = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
@@ -63,7 +64,8 @@ export const reorderShoppingCategoriesSchema = z
   .refine((v) => managed(v, v.names), builtIn);
 export const renameShoppingCategorySchema = z
   .object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema })
-  .refine((v) => managed(v, [v.from, v.to]), builtIn);
+  .refine((v) => managed(v, [v.from, v.to]), builtIn)
+  .refine((v) => v.from !== v.to, { message: "That is already its name.", path: ["to"] });
 
 /** Undo of a rename or delete: what the change reported, sent back as it was. */
 export const revertShoppingCategorySchema = z

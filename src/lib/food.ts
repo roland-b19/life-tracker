@@ -468,7 +468,7 @@ export async function revertShoppingCategory(
         .update(shoppingItems)
         .set(d.set(name))
         .where(and(eq(shoppingItems.userId, userId), d.on(current), inArray(shoppingItems.id, itemIds)));
-    if (dropCurrent && current !== d.fallback) await tx.delete(d.table).where(ownCategory(userId, current, kind));
+    if (dropCurrent && current !== d.fallback && current !== name) await tx.delete(d.table).where(ownCategory(userId, current, kind));
   });
 }
 

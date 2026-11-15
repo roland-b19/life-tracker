@@ -199,6 +199,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await expect(deleteMealAction(meal.id)).rejects.toThrow("Authentication required.");
   });
 
+  it("refuses a rename onto itself, and an Undo never deletes the name it puts back", async () => {
+    await addShoppingCategoryAction({ name: "snacks" });
+    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).rejects.toThrow("That is already its name.");
+    await revertShoppingCategoryAction({ name: "snacks", current: "snacks", sortOrder: 0, itemIds: [], dropCurrent: true });
+    expect(await getShoppingCategories(userA)).toContain("snacks"); // an Undo never deletes the name it puts back
+  });
+
   it("lists past foods newest first, one per name, up to the limit", async () => {
     for (let i = 0; i < 5; i++) await logMeal(userA, { date: "2026-10-31", name: `Food ${i}`, calories: 100, protein: 1, carbs: 1, fat: 1 });
     await logMeal(userA, { date: "2026-10-31", name: "FOOD 0", calories: 250, protein: 1, carbs: 1, fat: 1 }); // same name, other case, logged last
