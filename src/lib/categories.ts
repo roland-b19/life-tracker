@@ -131,7 +131,8 @@ export async function revertCategory(
         if (itemIds.includes(b.id))
           await tx.update(todos).set({ placedAt: new Date(b.placedAt) }).where(and(eq(todos.id, b.id), eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
     }
-    if (dropCurrent && current !== "other") await tx.delete(itemCategories).where(own(userId, scope, current));
+    // Never the category just put back: a revert that names the same category twice must not delete it.
+    if (dropCurrent && current !== "other" && current !== name) await tx.delete(itemCategories).where(own(userId, scope, current));
   });
 }
 
