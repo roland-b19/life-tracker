@@ -361,6 +361,7 @@ export function MuscleExplorer({
     planned
       .filter((e) => e.muscleGroup === g)
       .reduce((n, e) => n + e.targetSets, 0);
+  const otherSets = planned.filter((e) => !MUSCLE_GROUPS.includes(e.muscleGroup as MuscleGroup)).reduce((n, e) => n + e.targetSets, 0);
   // One row per exercise even when it is on several days of the split.
   const list: (PlannedExercise & { days: string[] })[] = [];
   for (const e of planned) {
@@ -440,11 +441,11 @@ export function MuscleExplorer({
             <div>
               <GroupLabel>Planned sets per week</GroupLabel>
               <HBars
-                rows={MUSCLE_GROUPS.filter((g) => setsOf(g) > 0).map((g) => ({
-                  label: GROUP_LABEL[g],
-                  value: setsOf(g),
-                  display: String(setsOf(g)),
-                }))}
+                rows={[
+                  ...MUSCLE_GROUPS.filter((g) => setsOf(g) > 0).map((g) => ({ label: GROUP_LABEL[g], value: setsOf(g), display: String(setsOf(g)) })),
+                  // A custom exercise filed under "Other" has no spot on the model, so its sets get their own bar.
+                  ...(otherSets > 0 ? [{ label: "Other", value: otherSets, display: String(otherSets) }] : []),
+                ]}
               />
             </div>
           )}

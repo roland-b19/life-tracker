@@ -30,6 +30,7 @@ export function Modal({
   });
 
   const backdropRef = useRef<HTMLDivElement>(null);
+  const pressedBackdrop = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -159,8 +160,10 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
+      // Closes only when the press began on the backdrop too: selecting text in a field and releasing outside must not close it.
+      onPointerDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && pressedBackdrop.current) onClose();
       }}
     >
       <div

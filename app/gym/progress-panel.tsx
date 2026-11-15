@@ -6,7 +6,7 @@ import { LineChart } from "../components/charts";
 import { useFolded } from "../components/categories-card";
 import { Segmented } from "../components/segmented";
 import { addDays, toISODate } from "@/lib/format-date";
-import { exerciseSeries } from "@/lib/gym-progress";
+import { exerciseSeries, exerciseUnit } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 
 type Range = "30" | "90" | "180" | "360";
@@ -50,11 +50,11 @@ export function ProgressPanel({ sets }: { sets: HistorySet[] }) {
         <Segmented label="Chart period" value={range} options={RANGES} onChange={setRange} />
       </ChartControls>
       <LineChart
-        points={series.map((p) => ({ label: dm(p.date), value: p.weight }))}
+        points={series.map((p) => ({ label: dm(p.date), value: p.weight, at: Date.parse(`${p.date}T00:00:00Z`) / 86_400_000 }))}
         summary={`Best weight per workout over the last ${range} days`}
       />
       {series.length < 2 && <ChartNote>Not enough workouts in the last {range} days.</ChartNote>}
-      {series.length > 0 && <ChartCaption>Heaviest load (kg or plates) of each workout; deload weeks are left out.</ChartCaption>}
+      {series.length > 0 && <ChartCaption>Heaviest load ({exerciseUnit(sets, chosen) === "plates" ? "plates" : "kg"}) of each workout; deload workouts are left out.</ChartCaption>}
     </Card>
   );
 }

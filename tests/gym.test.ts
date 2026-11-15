@@ -20,7 +20,7 @@ vi.mock("@/server/auth", () => ({
   }),
 }));
 
-import { dayProgress, exerciseSeries, kgDelta, progressSets, weekStart, weeksBetween, withProgress } from "@/lib/gym-progress";
+import { dayProgress, exerciseSeries, exerciseUnit, kgDelta, progressSets, setLoad, weekStart, weeksBetween, withProgress } from "@/lib/gym-progress";
 import { addDays, toISODate } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import { db } from "@/server/db";
@@ -30,6 +30,7 @@ import {
   createCustomExercise,
   createWorkoutSession,
   deleteWorkoutSet,
+  finishWorkoutSession,
   getDeloadStatus,
   getExercises,
   getOpenWorkoutSession,
@@ -42,6 +43,8 @@ import {
   cancelSessionAction,
   createCustomExerciseAction,
   deleteCustomExerciseAction,
+  restoreCustomExerciseAction,
+  updateCustomExerciseAction,
   deleteSetAction,
   finishSessionAction,
   logSetAction,
@@ -52,6 +55,7 @@ import {
   startSessionAction,
 } from "@/app/actions/gym";
 
+const TODAY = toISODate();
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
 async function seedUser(subject: string) {
@@ -63,6 +67,11 @@ async function seedUser(subject: string) {
 }
 
 describe("Gym module: Data Access, Logic & Authorization", () => {
+  /** A finished workout: a user holds at most one open one (a unique index), so the tests that only need history finish theirs. */
+  const done = async <T extends { id: string }>(session: T) => {
+    await finishWorkoutSession(userA, { sessionId: session.id, durationMinutes: 45 });
+    return session;
+  };
   let userA: string;
   let userB: string;
 
@@ -125,7 +134,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("undoes a custom exercise for its owner only, and never while a set uses it", async () => {
     const make = async (name: string) =>
-      (await createCustomExerciseAction({ name, muscleGroup: "quads", equipmentType: "barbell" })).exercise;
+      ((await createCustomExerciseAction({ name, muscleGroup: "quads", equipmentType: "barbell" })) as { exercise: { id: string } }).exercise;
     const fresh = await make("Undo Squat");
 
     authState.id = userB;
@@ -139,7 +148,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect((await getExercises(userA)).some((e) => e.id === fresh.id)).toBe(false);
 
     const used = await make("Used Squat");
-    const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
+    const { session } = (await startSessionAction({ date: TODAY, isDeload: false })) as { session: { id: string } };
     await logSetAction({ sessionId: session.id, exerciseId: used.id, setOrder: 1, reps: 5, loadType: "kg", loadValue: 50 });
     expect((await deleteCustomExerciseAction(used.id)).success).toBe(false);
     expect((await getExercises(userA)).some((e) => e.id === used.id)).toBe(true);
@@ -233,53 +242,109 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
   });
 
-  it("automatically flags '!!' anomaly when reps < minTargetReps", async () => {
-    const exercisesList = await getExercises(userA);
-    const press = exercisesList.find((e) => e.name === "Incline barbell press")!;
+  it("flags '!!' when reps are below the day's minimum, and a client cannot switch that off", async () => {
+    const split = await getUserSplitWithDays(userA);
+    const day = split!.days.find((d) => d.exercises.length)!;
+    const target = day.exercises[0];
+    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false, splitDayId: day.id });
+    const log = (setOrder: number, reps: number) =>
+      logWorkoutSet(userA, {
+        sessionId: session.id, exerciseId: target.exerciseId, setOrder, reps, loadType: "kg", loadValue: 60, extraKg: 0,
+        isFailure: false, isPartial: false, isGoodForm: true, flagAnomaly: false,
+      });
 
-    const session = await createWorkoutSession(userA, {
-      date: "2026-10-29",
-      isDeload: false,
+    const low = await log(1, target.minReps - 1);
+    expect(low.flagAnomaly).toBe(true);
+    expect(low.anomalyReason).toBe("too_heavy");
+
+    const ok = await log(2, target.minReps);
+    expect(ok.flagAnomaly).toBe(false);
+    expect(ok.anomalyReason).toBeNull();
+  });
+
+  it("a workout without a routine day never flags a low rep count", async () => {
+    const press = (await getExercises(userA)).find((e) => e.name === "Incline barbell press")!;
+    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    const set = await logWorkoutSet(userA, {
+      sessionId: session.id, exerciseId: press.id, setOrder: 1, reps: 1, loadType: "kg", loadValue: 60, extraKg: 0,
+      isFailure: false, isPartial: false, isGoodForm: true, flagAnomaly: false,
     });
+    expect(set.flagAnomaly).toBe(false);
+  });
 
-    // Target is 5-8 reps. User logs 3 reps -> automatic anomaly!
-    const set1 = await logWorkoutSet(userA, {
-      sessionId: session.id,
-      exerciseId: press.id,
-      setOrder: 1,
-      reps: 3,
-      loadType: "kg",
-      loadValue: 60,
-      extraKg: 0,
-      isFailure: true,
-      isPartial: false,
-      isGoodForm: true,
-      flagAnomaly: false,
-      minTargetReps: 5,
-      maxTargetReps: 8,
-    });
+  it("allows one open workout at a time, and one start at a time under a double tap", async () => {
+    const [a, b] = await Promise.all([
+      startSessionAction({ date: TODAY, isDeload: false }),
+      startSessionAction({ date: TODAY, isDeload: false }),
+    ]);
+    expect([a.success, b.success].sort()).toEqual([false, true]);
+    const refused = [a, b].find((r) => !r.success) as { error: string };
+    expect(refused.error).toMatch(/already open/i);
+  });
 
-    expect(set1.flagAnomaly).toBe(true);
-    expect(set1.anomalyReason).toBe("too_heavy");
+  it("edits and restores a custom exercise: owner only, no clash with another name, the restored row equals the original", async () => {
+    await getExercises(userA);
+    const input = { muscleGroup: "chest", equipmentType: "barbell" } as const;
+    const made = ((await createCustomExerciseAction({ ...input, name: "Edit Me" })) as { exercise: { id: string } }).exercise;
+    await createCustomExerciseAction({ ...input, name: "Taken" });
+    const edit = { id: made.id, name: "Edited", muscleGroup: "back", equipmentType: "cable" };
 
-    // Normal set with 7 reps within 5-8 target -> not an anomaly
-    const set2 = await logWorkoutSet(userA, {
-      sessionId: session.id,
-      exerciseId: press.id,
-      setOrder: 2,
-      reps: 7,
-      loadType: "kg",
-      loadValue: 50,
-      extraKg: 0,
-      isFailure: true,
-      isPartial: false,
-      isGoodForm: true,
-      flagAnomaly: false,
-      minTargetReps: 5,
-      maxTargetReps: 8,
-    });
+    authState.id = userB; // other user denied
+    expect((await updateCustomExerciseAction(edit)).success).toBe(false);
+    expect((await restoreCustomExerciseAction(edit)).success).toBe(false); // A's id is taken, so B gets nothing of A's
+    authState.id = "";
+    await expect(updateCustomExerciseAction(edit)).rejects.toThrow("Authentication required.");
+    await expect(restoreCustomExerciseAction(edit)).rejects.toThrow("Authentication required.");
 
-    expect(set2.flagAnomaly).toBe(false);
+    authState.id = userA;
+    expect((await updateCustomExerciseAction({ ...edit, name: "taken" })).success).toBe(false); // clashes with another name
+    expect((await updateCustomExerciseAction({ ...edit, name: "edit ME" })).success).toBe(true); // its own name, other case
+    expect((await updateCustomExerciseAction(edit)).success).toBe(true);
+    expect((await getExercises(userA)).find((e) => e.id === made.id)).toMatchObject({ name: "Edited", muscleGroup: "back", equipmentType: "cable", isCustom: true });
+    expect((await updateCustomExerciseAction({ ...edit, id: randomUUID() })).success).toBe(false); // not found
+
+    const [before] = (await getExercises(userA)).filter((e) => e.id === made.id);
+    expect((await deleteCustomExerciseAction(made.id)).success).toBe(true);
+    const back = { id: made.id, name: before.name, muscleGroup: before.muscleGroup, equipmentType: before.equipmentType } as const;
+    expect((await restoreCustomExerciseAction(back)).success).toBe(true);
+    expect((await restoreCustomExerciseAction(back)).success).toBe(true); // a repeated Undo changes nothing
+    const [after] = (await getExercises(userA)).filter((e) => e.id === made.id);
+    expect({ ...after, createdAt: 0 }).toEqual({ ...before, createdAt: 0 });
+  });
+
+  it("starts a workout only for today (a day of slack either side)", async () => {
+    expect((await startSessionAction({ date: addDays(TODAY, -5), isDeload: false })).success).toBe(false);
+    expect((await startSessionAction({ date: addDays(TODAY, 5), isDeload: false })).success).toBe(false);
+  });
+
+  it("refuses a custom exercise whose name exists, ignoring case, among the defaults and the user's own", async () => {
+    await getExercises(userA); // seeds the defaults
+    const input = { muscleGroup: "chest", equipmentType: "barbell" } as const;
+    expect((await createCustomExerciseAction({ ...input, name: "incline BARBELL press" })).success).toBe(false);
+    expect((await createCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+    const again = await createCustomExerciseAction({ ...input, name: "my press" });
+    expect(again).toMatchObject({ success: false, error: expect.stringContaining("already exists") });
+    // Another user may use the same name
+    authState.id = userB;
+    expect((await createCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+  });
+
+  it("two custom exercises with one name made at once: exactly one is created", async () => {
+    const input = { name: "Race Curl", muscleGroup: "biceps", equipmentType: "dumbbell" } as const;
+    const results = await Promise.all([createCustomExerciseAction(input), createCustomExerciseAction({ ...input, name: "race curl" })]);
+    expect(results.map((r) => r.success).sort()).toEqual([false, true]);
+  });
+
+  it("a repeated Finish keeps the first duration", async () => {
+    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    await finishSessionAction({ sessionId: session.id, durationMinutes: 50 });
+    const again = await finishSessionAction({ sessionId: session.id, durationMinutes: 70 });
+    expect(again).toMatchObject({ success: true, session: { durationMinutes: 50 } });
+  });
+
+  it("answers a Finish without minutes with a message, not an exception", async () => {
+    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    expect((await finishSessionAction({ sessionId: session.id })).success).toBe(false);
   });
 
   it("prevents cross-user session access and set manipulation", async () => {
@@ -378,7 +443,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([1, 5, false, false]);
 
     // The first workout starts the cycle; the deload is due once week 5 is over, and stays due (never wraps)
-    const first = await createWorkoutSession(userA, { date: weeksAgo(3), isDeload: false });
+    const first = await done(await createWorkoutSession(userA, { date: weeksAgo(3), isDeload: false }));
     expect(await status()).toEqual([4, 5, false, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(4)]);
     expect(await status()).toEqual([5, 5, false, false]);
@@ -388,7 +453,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([5, 5, true, false]);
 
     // A deload session alone does not make its week a deload week
-    await createWorkoutSession(userA, { date: toISODate(), isDeload: true });
+    await done(await createWorkoutSession(userA, { date: toISODate(), isDeload: true }));
     expect(await status()).toEqual([5, 5, true, false]);
     expect((await getDeloadStatus(userA)).lastDeloadWeek).toBeNull();
 
@@ -426,29 +491,29 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([4, 5, false, false]);
   });
 
-  it("chooses the last and next deload week: both flag their workouts, the rest after the last are dropped, Undo restores", async () => {
+  it("chooses the last and next deload week: the plan changes, logged workouts keep their own flag, Undo restores", async () => {
     const thisWeek = weekStart(toISODate());
     const at = (n: number) => addDays(thisWeek, 7 * n);
-    const inWeek = (n: number) => admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [sessions[n].id]).then((r) => r.rows[0].is_deload);
+    const flag = (n: number) => admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [sessions[n].id]).then((r) => r.rows[0].is_deload);
     const sessions = [
-      await createWorkoutSession(userA, { date: addDays(at(-6), 2), isDeload: false }),
-      await createWorkoutSession(userA, { date: addDays(at(-1), 2), isDeload: false }),
+      await done(await createWorkoutSession(userA, { date: addDays(at(-6), 2), isDeload: false })),
+      await done(await createWorkoutSession(userA, { date: addDays(at(-1), 2), isDeload: true })),
     ];
 
     await saveDeloadWeeksAction({ last: at(-1), next: at(4) });
-    expect(await inWeek(1)).toBe(true);
     const before = await getDeloadStatus(userA);
+    expect(before).toMatchObject({ lastDeloadWeek: at(-1), nextDeloadWeek: at(4) });
 
-    // A new last (earlier) and next: the old last week stops being a deload week and its workout counts again
+    // A new last (earlier) and next: the old last week stops being a deload week
     await saveDeloadWeeksAction({ last: at(-6), next: at(3) });
-    expect(await inWeek(0)).toBe(true);
-    expect(await inWeek(1)).toBe(false);
     expect(await getDeloadStatus(userA)).toMatchObject({ lastDeloadWeek: at(-6), nextDeloadWeek: at(3) });
+    // ...but a workout counts as deload only when it was started as one (decision 2026-11-16): none is rewritten
+    expect([await flag(0), await flag(1)]).toEqual([false, true]);
 
     // Undo is the same action with the previous pair
     await saveDeloadWeeksAction({ last: before.lastDeloadWeek, next: before.nextDeloadWeek });
     expect(await getDeloadStatus(userA)).toMatchObject({ lastDeloadWeek: at(-1), nextDeloadWeek: at(4) });
-    expect(await inWeek(1)).toBe(true);
+    expect([await flag(0), await flag(1)]).toEqual([false, true]);
   });
 
   it("refuses a deload week that does not start on a Sunday or a next deload that is not after the last", async () => {
@@ -474,7 +539,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("rejects unauthenticated requests", async () => {
       authState.id = ""; // Unauthenticated
       await expect(
-        startSessionAction({ date: "2026-11-03", isDeload: false }),
+        startSessionAction({ date: TODAY, isDeload: false }),
       ).rejects.toThrow("Authentication required.");
 
       await expect(
@@ -493,6 +558,30 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       );
     });
 
+    it("every other action refuses an anonymous caller", async () => {
+      authState.id = "";
+      const id = randomUUID();
+      const denied = (run: Promise<unknown>) => expect(run).rejects.toThrow("Authentication required.");
+      await denied(finishSessionAction({ sessionId: id, durationMinutes: 30 }));
+      await denied(cancelSessionAction({ sessionId: id }));
+      await denied(reopenSessionAction({ sessionId: id }));
+      await denied(restoreSessionAction({ date: TODAY, isDeload: false, sets: [] }));
+      await denied(saveSplitDayAction({ id, name: "x", isRest: true, exercises: [] }));
+      await denied(createCustomExerciseAction({ name: "Anon lift", muscleGroup: "chest", equipmentType: "barbell" }));
+      await denied(deleteCustomExerciseAction(id));
+      await denied(saveDeloadWeeksAction({ last: null, next: null }));
+    });
+
+    it("Undo of Cancel refuses a workout from long ago and a set id that is taken", async () => {
+      const [exercise] = await getExercises(userA);
+      const set = { exerciseId: exercise.id, setOrder: 1, reps: 5, loadType: "kg" as const, loadValue: 20, extraKg: 0, isFailure: false, isPartial: false, isGoodForm: true, flagAnomaly: false };
+      expect((await restoreSessionAction({ date: addDays(TODAY, -30), isDeload: false, sets: [] })).success).toBe(false);
+      const taken = await createWorkoutSession(userA, { date: addDays(TODAY, -10), isDeload: false });
+      const have = await logWorkoutSet(userA, { sessionId: taken.id, ...set });
+      // The same set id again: a normal "could not restore", not a database error
+      expect((await restoreSessionAction({ date: TODAY, isDeload: false, sets: [{ ...set, id: have.id }] })).success).toBe(false);
+    });
+
     it("executes server actions successfully for authenticated owner", async () => {
       authState.id = userA;
 
@@ -500,16 +589,16 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const exercise = exercisesList[0];
 
       // 1. Start session
-      const startRes = await startSessionAction({
-        date: "2026-11-03",
+      const startRes = (await startSessionAction({
+        date: TODAY,
         isDeload: false,
         notes: "Chest day action test",
-      });
+      })) as { success: true; session: { id: string } };
       expect(startRes.success).toBe(true);
       expect(startRes.session.id).toBeDefined();
 
       // 2. Log set
-      const logRes = await logSetAction({
+      const logRes = (await logSetAction({
         sessionId: startRes.session.id,
         exerciseId: exercise.id,
         setOrder: 1,
@@ -521,7 +610,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         isPartial: false,
         isGoodForm: true,
         flagAnomaly: false,
-      });
+      })) as { success: boolean; set: { id: string; reps: number } };
       expect(logRes.success).toBe(true);
       expect(logRes.set.reps).toBe(8);
 
@@ -542,7 +631,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     async function startWithSet(userId: string) {
       authState.id = userId;
       const [exercise] = await getExercises(userId);
-      const { session } = await startSessionAction({ date: "2026-11-03", isDeload: false });
+      const { session } = (await startSessionAction({ date: TODAY, isDeload: false })) as { session: { id: string } };
       await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
       return session.id;
     }
@@ -571,37 +660,38 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("finds only the owner's unfinished recent workout", async () => {
       const id = await startWithSet(userA);
-      const open = await getOpenWorkoutSession(userA, "2026-11-01");
+      const since = addDays(TODAY, -2);
+      const open = await getOpenWorkoutSession(userA, since);
       expect(open?.session.id).toBe(id);
       expect(open?.sets).toHaveLength(1);
-      expect(await getOpenWorkoutSession(userB, "2026-11-01")).toBeNull();
-      expect(await getOpenWorkoutSession(userA, "2026-11-04")).toBeNull(); // too old
+      expect(await getOpenWorkoutSession(userB, since)).toBeNull();
+      expect(await getOpenWorkoutSession(userA, addDays(TODAY, 1))).toBeNull(); // too old
       await finishSessionAction({ sessionId: id, durationMinutes: 50 });
-      expect(await getOpenWorkoutSession(userA, "2026-11-01")).toBeNull();
+      expect(await getOpenWorkoutSession(userA, since)).toBeNull();
     });
   });
   describe("Undo of Finish and Cancel, and the workout History", () => {
     async function finished(userId: string, date: string, minutes: number | null) {
       authState.id = userId;
       const [exercise] = await getExercises(userId);
-      const { session } = await startSessionAction({ date, isDeload: false });
+      const session = await createWorkoutSession(userId, { date, isDeload: false });
       await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
       if (minutes) await finishSessionAction({ sessionId: session.id, durationMinutes: minutes });
       return { id: session.id, exerciseId: exercise.id };
     }
 
     it("finishes a workout for the owner only", async () => {
-      const { id } = await finished(userA, "2026-11-03", null);
+      const { id } = await finished(userA, TODAY, null);
       authState.id = userB;
-      expect((await finishSessionAction({ sessionId: id, durationMinutes: 40 })).session).toBeUndefined();
+      expect((await finishSessionAction({ sessionId: id, durationMinutes: 40 })).success).toBe(false);
       authState.id = "";
       await expect(finishSessionAction({ sessionId: id, durationMinutes: 40 })).rejects.toThrow("Authentication required.");
       authState.id = userA;
-      expect((await finishSessionAction({ sessionId: id, durationMinutes: 40 })).session?.durationMinutes).toBe(40);
+      expect(await finishSessionAction({ sessionId: id, durationMinutes: 40 })).toMatchObject({ success: true, session: { durationMinutes: 40 } });
     });
 
     it("reopens a finished workout for the owner only", async () => {
-      const { id } = await finished(userA, "2026-11-03", 50);
+      const { id } = await finished(userA, TODAY, 50);
       authState.id = userB;
       expect((await reopenSessionAction({ sessionId: id })).success).toBe(false);
       authState.id = "";
@@ -613,9 +703,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
 
     it("restores a cancelled workout with its sets for the owner, as the caller's own", async () => {
-      const { id, exerciseId } = await finished(userA, "2026-11-03", null);
+      const { id, exerciseId } = await finished(userA, TODAY, null);
       const input = {
-        date: "2026-11-03",
+        date: TODAY,
         isDeload: false,
         sets: [{ exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       };
@@ -633,14 +723,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
 
     it("brings a cancelled workout back with the same ids and times, and refuses ids that are taken", async () => {
-      const { id, exerciseId } = await finished(userA, "2026-11-03", null);
+      const { id, exerciseId } = await finished(userA, TODAY, null);
       const before = (await getWorkoutSessionDetails(userA, id))!;
       const set = before.sets[0];
       await cancelSessionAction({ sessionId: id });
       const input = {
         id,
         createdAt: before.session.createdAt,
-        date: "2026-11-03",
+        date: TODAY,
         isDeload: false,
         sets: [{ id: set.id, createdAt: set.createdAt, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: false, isPartial: false, isGoodForm: false, flagAnomaly: false }],
       };
@@ -658,7 +748,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
 
     it("restores a deleted set under its own id and time, and an id that is taken writes nothing", async () => {
-      const { id, exerciseId } = await finished(userA, "2026-11-03", null);
+      const { id, exerciseId } = await finished(userA, TODAY, null);
       const set = (await getWorkoutSessionDetails(userA, id))!.sets[0];
       await deleteSetAction(set.id);
       const input = { id: set.id, createdAt: set.createdAt, sessionId: id, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40 };
@@ -670,25 +760,25 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       await expect(logSetAction(input)).rejects.toThrow(); // not their workout
     });
 
-    it("Undo of Finish clears the duration and the notes the Finish wrote", async () => {
-      const { id } = await finished(userA, "2026-11-03", null);
+    it("Undo of Finish clears the duration and keeps the notes", async () => {
+      const { id } = await finished(userA, TODAY, null);
       await finishSessionAction({ sessionId: id, durationMinutes: 50, notes: "felt strong" });
       expect((await getWorkoutSessionDetails(userA, id))?.session.notes).toBe("felt strong");
       await reopenSessionAction({ sessionId: id });
       const open = (await getWorkoutSessionDetails(userA, id))!.session;
       expect(open.durationMinutes).toBeNull();
-      expect(open.notes).toBeNull();
+      expect(open.notes).toBe("felt strong"); // the notes were typed before Finish, and Finish can be undone and repeated
     });
 
     it("does not link a restored workout to another user's day or exercise", async () => {
-      const { exerciseId } = await finished(userA, "2026-11-03", 50);
+      const { exerciseId } = await finished(userA, TODAY, 50);
       const dayA = (await getUserSplitWithDays(userA))!.days[0].id;
       authState.id = userB;
-      const withDay = await restoreSessionAction({ date: "2026-11-03", isDeload: false, splitDayId: dayA, sets: [] });
+      const withDay = await restoreSessionAction({ date: TODAY, isDeload: false, splitDayId: dayA, sets: [] });
       expect(withDay.details?.session.splitDayId).toBeNull();
       const custom = await createCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
       const res = await restoreSessionAction({
-        date: "2026-11-03",
+        date: TODAY,
         isDeload: false,
         sets: [{ exerciseId: custom.id, setOrder: 1, reps: 5, loadType: "kg", loadValue: 10, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       });
@@ -784,6 +874,22 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(kgDelta(-1)).toBe("−1 kg");
       expect(kgDelta(0)).toBe("0 kg");
       expect(kgDelta(null)).toBe("—");
+    });
+
+    it("never mixes plates and kg: extra kg is not added to plates, the chart follows the latest unit, day progress skips plates", () => {
+      expect(setLoad("kg", "40", "2.5")).toBe(42.5);
+      expect(setLoad("bodyweight", "0", "10")).toBe(10);
+      expect(setLoad("plates", "6", "2.5")).toBe(6);
+      const sets = [
+        set("2026-11-02", 60, 8), // kg
+        set("2026-11-09", 6, 8, { loadType: "plates" }),
+        set("2026-11-16", 7, 8, { loadType: "plates" }),
+      ];
+      expect(exerciseUnit(sets, "e1")).toBe("plates");
+      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-09", weight: 6 }, { date: "2026-11-16", weight: 7 }]);
+      expect(exerciseUnit([], "e1")).toBe("kg");
+      // The week-over-week change reads kg only, so 60 kg to 6 plates is no "−54 kg".
+      expect(dayProgress(sets, "d").map((w) => w.change)).toEqual([null]);
     });
 
     it("counts whole calendar weeks between dates, Sunday to Saturday", () => {

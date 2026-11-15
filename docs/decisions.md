@@ -495,3 +495,14 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **Shopping categories:** renaming onto the same name is refused, and a revert never drops the name it puts back (guard on the server in `revertShoppingCategory`; the Tasks and Wishlist revert already behaved that way, so their schema is unchanged).
 - **STATUS.md is a short live file** (state, focus, next, deployed, last session entries). The old content moved verbatim to `docs/STATUS-archive.md`.
 - **Gym audit (2026-11-16):** the ranked findings go to the user; none is implemented until they decide. `GymClient` is split only after those fixes.
+
+## 2026-11-16 — Gym audit outcome (user: "reparam tot ce este de reparat")
+
+- Everything fixable in `docs/gym-audit-2026-11-16.md` is implemented. A workout counts as a deload only when it was started as one (the earlier decision, now enforced everywhere).
+- **Left on purpose:** G-12 (no revalidate in `logSetAction`/`deleteSetAction`) because refetching the page on every set is the costliest call and the client keeps its own state; G-15 (workout timer kept in localStorage) because it would be per-device state the server cannot see, for a cosmetic gain.
+- **Plates and kg are never mixed:** a set's load adds the extra kg only for kg and bodyweight sets; a chart uses the unit of the exercise's latest set and the day-over-day progress skips plate sets.
+- **Custom exercises** can be renamed (`updateCustomExerciseAction`, also the Undo of an edit) and deleted while no routine or workout uses them; Undo of a delete re-inserts the same row (`restoreCustomExerciseAction`). Names are unique per user, ignoring case.
+- **Migration 0031** (additive, a file the user runs from their Mac after 0030, duplicate checks first): unique custom names per user, unique exercise per routine day, at most one open workout per user, an index for the set history. The code guards the same rules, so it works before and after the migration.
+- **Modal backdrop:** a press that starts inside a modal and ends on the backdrop (selecting text in a field) no longer closes it, on every page.
+- **Next:** split `GymClient` and build the shared optimistic/Undo helper (as a separate step, no behaviour change).
+

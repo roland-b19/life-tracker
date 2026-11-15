@@ -41,12 +41,14 @@ export default async function GymPage() {
       openSession={
         open && {
           id: open.session.id,
+          createdAt: open.session.createdAt,
           date: open.session.date,
           isDeload: open.session.isDeload,
           splitDayId: open.session.splitDayId,
           splitDayName: open.splitDayName ?? undefined,
           sets: open.sets.map((s) => ({
             id: s.id,
+            createdAt: s.createdAt,
             exerciseId: s.exerciseId,
             setOrder: s.setOrder,
             reps: s.reps,
@@ -63,6 +65,7 @@ export default async function GymPage() {
         }
       }
       exercises={exercises.map(({ id, name, muscleGroup, equipmentType }) => ({ id, name, muscleGroup, equipmentType }))}
+      customExercises={exercises.filter((e) => e.isCustom).map(({ id, name, muscleGroup, equipmentType }) => ({ id, name, muscleGroup, equipmentType }))}
     />
   );
 }
