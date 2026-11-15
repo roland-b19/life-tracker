@@ -212,9 +212,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         });
       }
       setIsModalOpen(false);
-    } catch (err) {
-      // A validation failure arrives as raw JSON: never show that to the user.
-      setErrorMsg(err instanceof Error && !/^[[{]/.test(err.message) ? err.message : "Failed to save item");
+    } catch {
+      // The form checks every limit first; what is left is a refusal whose text the server hides in production.
+      setErrorMsg("Failed to save item. Please try again.");
     } finally {
       submitting.current = false;
       setBusy(false);

@@ -2,6 +2,7 @@
 
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { kgDelta, progressSets, weekStart, type HistoryEntry } from "@/lib/gym-progress";
+import { visible } from "@/lib/validations/common";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -270,9 +271,20 @@ export function GymClient({
       minReps: Number(x.minReps),
       maxReps: Number(x.maxReps),
     }));
+    // Same limits as saveSplitDaySchema: sets 1-10, reps 1-100, whole numbers.
+    const whole = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max;
+    const wrong = rows.find((r) => !whole(r.targetSets, 10) || !whole(r.minReps, 100) || !whole(r.maxReps, 100));
+    if (wrong) {
+      setDraftError(`Please enter sets from 1 to 10 and reps from 1 to 100 for ${nameOf(wrong.exerciseId)}.`);
+      return;
+    }
     const bad = rows.find((r) => r.minReps > r.maxReps);
     if (bad) {
       setDraftError(`Please keep min reps at or below max reps for ${nameOf(bad.exerciseId)}.`);
+      return;
+    }
+    if (!visible(draft.name)) {
+      setDraftError("Please enter a name for the day.");
       return;
     }
     setDraftError("");
@@ -630,7 +642,11 @@ export function GymClient({
 
   async function handleCreateCustomExercise() {
     const name = customName.trim();
-    if (!name) return;
+    if (!visible(name)) return;
+    if (name.length < 2) {
+      setDraftError("The name must have at least 2 characters.");
+      return;
+    }
     if (exercises.some((e) => e.name.trim().toLowerCase() === name.toLowerCase())) {
       setDraftError(`"${name}" already exists.`);
       return;
@@ -1148,7 +1164,7 @@ export function GymClient({
         onSubmit={handleSaveDay}
         error={draftError}
         busy={busy}
-        canSubmit={!!draft?.name.trim()}
+        canSubmit={visible(draft?.name ?? "")}
       >
         {draft && (
           <>
@@ -1293,7 +1309,7 @@ export function GymClient({
                         compact
                         onCancel={() => setShowCustom(false)}
                         onSubmit={handleCreateCustomExercise}
-                        canSubmit={!busy && !!customName.trim()}
+                        canSubmit={!busy && visible(customName)}
                         submitLabel="Create and add"
                       />
                     </div>

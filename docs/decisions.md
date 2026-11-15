@@ -476,3 +476,7 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 
 - **T-6:** when the carry-over finds an overdue one-off task and today already has a one-off with the same name, the overdue one is deleted (it was only left behind before, and came back the next day once today's copy was ticked). Chosen over auto-ticking it (false history) and over doing nothing.
 - **W-5:** Wishlist prices are whole RON (shown and typed). Old items with cents keep them until the user types a price; the personal import rounds. The server still accepts cents (Undo restores the stored value).
+
+## 2026-11-15 — Forms audit defaults (user: "all 4 PRs")
+
+The user did not answer the nine owner questions one by one, so the recommended defaults apply: water capped at 20000 ml a day (quick taps clamp to it); a whole-number field given "250.5" truncates to 250; a shopping amount of 0 is refused with a message; "Clear bought" clears only the items on screen, with an exact Undo; future dates are refused on dated entries; Wishlist refuses a case-insensitive duplicate name; displayed decimals use a comma everywhere; the Assistant stays food-only. Not done, a new feature for a later iteration: Delete for weigh-ins and meals.
