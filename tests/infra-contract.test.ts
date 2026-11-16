@@ -144,6 +144,15 @@ describe("Azure reminder pipeline contract", () => {
     expect(migrateScript).toContain("userAssignedIdentities:");
   });
 
+  it("builds the Azure schema from the Drizzle migrations only, so it cannot drift from the code", () => {
+    const dbInit = readFileSync("scripts/db-init.cjs", "utf8");
+    expect(dbInit).toContain("drizzle-orm/node-postgres/migrator");
+    expect(dbInit).not.toMatch(/CREATE TABLE|GRANT SELECT/); // 2026-11-16: a hand-kept copy of the schema left the live Gym, Food and export pages broken
+    expect(dockerfile).toContain("COPY --chown=nextjs:nodejs drizzle ./drizzle");
+    expect(dockerfile).toContain("/app/node_modules/drizzle-orm ./node_modules/drizzle-orm");
+    expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("drizzle");
+  });
+
   it("keeps the database secrets of the migration job out of plain env values", () => {
     expect(migrateScript).toContain("secretRef: db-admin-password");
     expect(migrateScript).toContain("secretRef: database-url");

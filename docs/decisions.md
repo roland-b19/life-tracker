@@ -522,3 +522,7 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **Restore:** no second PostgreSQL server on Azure. Show the configured backup retention; the restore test stays on the personal deploy.
 - **5xx alert:** trigger it by stopping the web replica, not by adding a test endpoint that returns 500 (no demo-only code in the app).
 - **Claude Assistant:** stays off on Azure (`NEXT_PUBLIC_CLAUDE_ENABLED=false`), health data does not go to an AI provider.
+
+## 2026-11-16 — Azure schema comes only from the Drizzle migrations
+
+The first live run showed that `scripts/db-init.cjs` held a hand-kept copy of the schema that had drifted (Gym, Food and export broke). Decision: the Azure migration job applies the same Drizzle migrations as the personal deploy; `db-init.cjs` only creates the database and the app role. The image carries `drizzle/` and `drizzle-orm`. A contract test forbids `CREATE TABLE` in the script. A deployment with a wrong schema is torn down and redeployed, not patched, so no destructive reset option exists in the script.
