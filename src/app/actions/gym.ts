@@ -48,11 +48,11 @@ function check<T>(schema: ZodType<T>, raw: unknown): { ok: true; value: T } | { 
 }
 
 /** A rule of the page (a workout is already open, a name is taken) is an answer for the form, not a crash. */
-async function refusable<T extends object>(run: () => Promise<T>): Promise<T | { success: false; error: string }> {
+async function refusable<T extends object, R extends object = object>(run: () => Promise<T>, onRefusal?: R): Promise<T | ({ success: false; error: string } & R)> {
   try {
     return await run();
   } catch (e) {
-    if (e instanceof GymRefusal) return { success: false, error: e.message };
+    if (e instanceof GymRefusal) return { success: false, error: e.message, ...onRefusal } as { success: false; error: string } & R;
     throw e;
   }
 }
@@ -96,9 +96,11 @@ export async function cancelSessionAction(rawInput: unknown) {
 export async function reopenSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   const { sessionId } = cancelSessionSchema.parse(rawInput);
-  const reopened = await reopenWorkoutSession(userId, sessionId);
-  safeRevalidate("/gym");
-  return { success: Boolean(reopened) };
+  return refusable(async () => {
+    const reopened = await reopenWorkoutSession(userId, sessionId);
+    safeRevalidate("/gym");
+    return { success: Boolean(reopened) };
+  });
 }
 
 /** Undo of Cancel: the workout and its sets come back (open, with new ids). */
@@ -106,9 +108,11 @@ export async function restoreSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   const parsed = restoreSessionSchema.parse(rawInput);
   // A workout is cancelled the day it was made, so Undo never brings one back from long ago.
-  const details = nearToday(parsed.date, 7) ? await restoreWorkoutSession(userId, parsed) : null;
-  if (details) safeRevalidate("/gym");
-  return { success: Boolean(details), details };
+  return refusable(async () => {
+    const details = nearToday(parsed.date, 7) ? await restoreWorkoutSession(userId, parsed) : null;
+    if (details) safeRevalidate("/gym");
+    return { success: Boolean(details), details };
+  }, { details: null });
 }
 
 // No revalidate for set edits: the client keeps its own state, and refetching the page on every set is the costliest call.

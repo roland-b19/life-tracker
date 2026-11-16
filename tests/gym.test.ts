@@ -660,14 +660,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("finds only the owner's unfinished recent workout", async () => {
       const id = await startWithSet(userA);
-      const since = addDays(TODAY, -2);
-      const open = await getOpenWorkoutSession(userA, since);
+      const open = await getOpenWorkoutSession(userA);
       expect(open?.session.id).toBe(id);
       expect(open?.sets).toHaveLength(1);
-      expect(await getOpenWorkoutSession(userB, since)).toBeNull();
-      expect(await getOpenWorkoutSession(userA, addDays(TODAY, 1))).toBeNull(); // too old
+      expect(await getOpenWorkoutSession(userB)).toBeNull();
       await finishSessionAction({ sessionId: id, durationMinutes: 50 });
-      expect(await getOpenWorkoutSession(userA, since)).toBeNull();
+      expect(await getOpenWorkoutSession(userA)).toBeNull();
     });
   });
   describe("Undo of Finish and Cancel, and the workout History", () => {
@@ -696,10 +694,22 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await reopenSessionAction({ sessionId: id })).success).toBe(false);
       authState.id = "";
       await expect(reopenSessionAction({ sessionId: id })).rejects.toThrow("Authentication required.");
-      expect(await getOpenWorkoutSession(userA, "2026-11-01")).toBeNull(); // still finished
+      expect(await getOpenWorkoutSession(userA)).toBeNull(); // still finished
       authState.id = userA;
       expect((await reopenSessionAction({ sessionId: id })).success).toBe(true);
-      expect((await getOpenWorkoutSession(userA, "2026-11-01"))?.session.id).toBe(id);
+      expect((await getOpenWorkoutSession(userA))?.session.id).toBe(id);
+    });
+
+    it("keeps one open workout: an old one still counts, and Undo of Finish or Cancel cannot make a second", async () => {
+      const old = await finished(userA, addDays(TODAY, -30), null); // left open a month ago: still the open one
+      expect((await getOpenWorkoutSession(userA))?.session.id).toBe(old.id);
+      expect((await startSessionAction({ date: TODAY, isDeload: false })).success).toBe(false);
+      await finishSessionAction({ sessionId: old.id, durationMinutes: 45 });
+      const started = await startSessionAction({ date: TODAY, isDeload: false });
+      expect(started.success).toBe(true);
+      expect(await reopenSessionAction({ sessionId: old.id })).toMatchObject({ success: false, error: "A workout is already open. Resume or finish it first." });
+      expect(await getOpenWorkoutSession(userA)).toMatchObject({ session: { id: started.success ? started.session.id : "" } });
+      expect(await restoreSessionAction({ date: TODAY, isDeload: false, sets: [] })).toMatchObject({ success: false });
     });
 
     it("restores a cancelled workout with its sets for the owner, as the caller's own", async () => {
@@ -713,7 +723,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const back = await restoreSessionAction(input);
       expect(back.success).toBe(true);
       expect(back.details?.sets).toHaveLength(1);
-      expect((await getOpenWorkoutSession(userA, "2026-11-01"))?.session.id).toBe(back.details?.session.id);
+      expect((await getOpenWorkoutSession(userA))?.session.id).toBe(back.details?.session.id);
 
       authState.id = userB; // B restores under B: nothing of A's changes, and A's exercise stays out of reach
       const own = await restoreSessionAction({ ...input, sets: [] });
@@ -790,13 +800,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       await finished(userA, "2026-11-01", 40);
       await finished(userA, "2026-11-03", 55);
       const open = await finished(userA, "2026-11-08", null);
-      const list = await getWorkoutHistory(userA, "2026-11-07", "2026-01-01");
+      const list = await getWorkoutHistory(userA, "2026-01-01");
       expect(list.map((h) => h.date)).toEqual(["2026-11-03", "2026-11-01"]);
       expect(list[0]).toMatchObject({ durationMinutes: 55, isDeload: false });
       expect(list[0].exercises[0].sets).toEqual([{ reps: 8, loadType: "kg", load: 40 }]);
       expect(list.some((h) => h.id === open.id)).toBe(false);
-      expect((await getWorkoutHistory(userA, "2026-11-07", "2026-11-02")).map((h) => h.date)).toEqual(["2026-11-03"]);
-      expect(await getWorkoutHistory(userB, "2026-11-07", "2026-01-01")).toEqual([]);
+      expect((await getWorkoutHistory(userA, "2026-11-02")).map((h) => h.date)).toEqual(["2026-11-03"]);
+      expect(await getWorkoutHistory(userB, "2026-01-01")).toEqual([]);
     });
   });
 

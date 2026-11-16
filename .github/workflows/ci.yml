@@ -93,7 +93,7 @@ jobs:
         # Bicep comes with the runner image; `az bicep install` downloads it from GitHub Releases.
         run: bicep build infra/main.bicep --stdout >/dev/null
       - name: Validate Azure scripts
-        run: bash -n scripts/azure-preflight.sh scripts/azure-deploy.sh scripts/azure-teardown.sh
+        run: bash -n scripts/*.sh
       - name: Dependency audit
         run: npm audit --audit-level=high --omit=optional
       - name: Secret scan v2

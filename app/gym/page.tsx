@@ -19,15 +19,14 @@ export default async function GymPage() {
   }
 
   const userId = session.user.id;
-  const openSince = addDays(toISODate(), -2);
   // Same year of sets the Exercise progress card draws from, so a workout's figures match its Exercise progress chart.
   const since = addDays(toISODate(), -370);
   const [split, exercises, deload, open, workouts] = await Promise.all([
     getUserSplitWithDays(userId),
     getExercises(userId),
     getDeloadStatus(userId),
-    getOpenWorkoutSession(userId, openSince),
-    getWorkoutHistory(userId, openSince, since),
+    getOpenWorkoutSession(userId),
+    getWorkoutHistory(userId, since),
   ]);
   const names = new Map(exercises.map((e) => [e.id, e.name]));
   const history = withProgress(workouts, progressSets(workouts, open && { ...open.session, splitDayName: open.splitDayName, sets: open.sets }, names));

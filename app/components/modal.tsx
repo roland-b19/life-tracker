@@ -9,9 +9,6 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  maxWidth?: string;
-  /** Extra class on the card, e.g. the page's font. */
-  className?: string;
 }
 
 export function Modal({
@@ -19,8 +16,6 @@ export function Modal({
   onClose,
   title,
   children,
-  maxWidth = "36rem",
-  className,
 }: ModalProps) {
   // The parent re-renders on every keystroke and hands over a new onClose each time; the effect below must not re-run
   // for that, or it would give focus back to the opener (the keyboard closes after one character).
@@ -167,8 +162,7 @@ export function Modal({
       }}
     >
       <div
-        className={className ? `modal-card ${className}` : "modal-card"}
-        style={{ maxWidth }}
+        className="modal-card"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >

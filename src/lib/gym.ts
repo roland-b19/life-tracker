@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -25,9 +25,6 @@ import { weekStart, weeksBetween } from "./gym-progress";
 
 /** An expected refusal (a rule of the page, not a bug): the action shows its message instead of failing. */
 export class GymRefusal extends Error {}
-
-/** How many days back a workout without a duration still counts as open (the page's Resume banner uses the same). */
-const OPEN_WINDOW_DAYS = 2;
 
 interface DeloadStatus {
   /** x in "Week x of N": 1 to cycleLength, counted from the week after the last deload. */
@@ -227,6 +224,16 @@ export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Pr
   });
 }
 
+/** One open workout (no duration) per user, as the database index says: a second one is refused here with a message, not left to a constraint error. */
+async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, exceptId?: string) {
+  const [open] = await tx
+    .select({ id: workoutSessions.id })
+    .from(workoutSessions)
+    .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), exceptId ? ne(workoutSessions.id, exceptId) : undefined))
+    .limit(1);
+  if (open) throw new GymRefusal("A workout is already open. Resume or finish it first.");
+}
+
 /**
  * Create a new workout session
  */
@@ -234,7 +241,6 @@ export async function createWorkoutSession(
   userId: string,
   input: CreateSessionInput,
 ) {
-  const today = toISODate();
   if (input.splitDayId) {
     const [day] = await db
       .select({ id: workoutSplitDays.id })
@@ -244,12 +250,7 @@ export async function createWorkoutSession(
   }
   return db.transaction(async (tx) => {
     await lockUser(tx, "session", userId); // two Start taps (or two tabs) at once must not both pass the check below
-    const [open] = await tx
-      .select({ id: workoutSessions.id })
-      .from(workoutSessions)
-      .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), gte(workoutSessions.date, addDays(today, -OPEN_WINDOW_DAYS))))
-      .limit(1);
-    if (open) throw new GymRefusal("A workout is already open. Resume or finish it first.");
+    await refuseIfOpen(tx, userId);
     const [session] = await tx
       .insert(workoutSessions)
       .values({ userId, date: input.date, splitDayId: input.splitDayId ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
@@ -281,12 +282,16 @@ export async function finishWorkoutSession(
  * Open a finished workout again (Undo of Finish): the duration goes back to null, its notes stay. Owner only.
  */
 export async function reopenWorkoutSession(userId: string, sessionId: string) {
-  const [reopened] = await db
-    .update(workoutSessions)
-    .set({ durationMinutes: null })
-    .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
-    .returning({ id: workoutSessions.id });
-  return reopened;
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId);
+    await refuseIfOpen(tx, userId, sessionId); // Undo of Finish after starting another workout would break the one-open rule
+    const [reopened] = await tx
+      .update(workoutSessions)
+      .set({ durationMinutes: null })
+      .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
+      .returning({ id: workoutSessions.id });
+    return reopened;
+  });
 }
 
 /**
@@ -296,6 +301,8 @@ export async function reopenWorkoutSession(userId: string, sessionId: string) {
 export async function restoreWorkoutSession(userId: string, input: RestoreSessionInput) {
   const ids = [...new Set(input.sets.map((s) => s.exerciseId))];
   const sessionId = await db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId);
+    await refuseIfOpen(tx, userId);
     if (ids.length) {
       const visible = await tx
         .select({ id: exercises.id })
@@ -351,17 +358,15 @@ export async function cancelWorkoutSession(userId: string, sessionId: string) {
 }
 
 /**
- * The workout the user left without finishing: the newest session with no duration since `since` (a date).
- * shortcut: "unfinished" is a null duration, so the Finish button insists on one; older rows saved without
- * one would read as open, which `since` hides after a couple of days. Upgrade: a finished_at column.
+ * The workout the user left without finishing: the one session with no duration (the database allows one per user).
+ * shortcut: "unfinished" is a null duration, so the Finish button insists on one. Upgrade: a finished_at column.
  */
-export async function getOpenWorkoutSession(userId: string, since: string) {
+export async function getOpenWorkoutSession(userId: string) {
   const [open] = await db
     .select({ id: workoutSessions.id, splitDayName: workoutSplitDays.name })
     .from(workoutSessions)
     .leftJoin(workoutSplitDays, eq(workoutSessions.splitDayId, workoutSplitDays.id))
-    .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), gte(workoutSessions.date, since)))
-    .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt))
+    .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes)))
     .limit(1);
   if (!open) return null;
   const details = await getWorkoutSessionDetails(userId, open.id);
@@ -555,10 +560,10 @@ export interface HistorySession {
 
 /**
  * Every past workout with sets, newest first, for the Workout tab's History. Rest days are never sessions, so they
- * do not show. A workout still open (no duration, started since `openSince`) is not past yet. Only workouts
+ * do not show. A workout still open (no duration) is not past yet. Only workouts
  * dated `since` or later, so the query stays bounded however long the history grows.
  */
-export async function getWorkoutHistory(userId: string, openSince: string, since: string): Promise<HistorySession[]> {
+export async function getWorkoutHistory(userId: string, since: string): Promise<HistorySession[]> {
   const rows = await db
     .select({
       id: workoutSessions.id,
@@ -583,7 +588,7 @@ export async function getWorkoutHistory(userId: string, openSince: string, since
         eq(workoutSets.userId, userId),
         eq(workoutSessions.userId, userId),
         gte(workoutSessions.date, since),
-        or(isNotNull(workoutSessions.durationMinutes), lt(workoutSessions.date, openSince)),
+        isNotNull(workoutSessions.durationMinutes),
       ),
     )
     .orderBy(desc(workoutSessions.date), desc(workoutSessions.createdAt), workoutSessions.id, workoutSets.createdAt);
