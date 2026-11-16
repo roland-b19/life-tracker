@@ -8,7 +8,7 @@ Companion to `docs/requirements.md` (the checklist and grading rubric) and `docs
 |---|---|
 | **Implemented** | The code, template or script exists in `main`. |
 | **Tested offline** | Covered by a test or a build that needs no Azure account (Vitest, `az bicep build`, CI scans). |
-| **Seen live** | Observed on a real Azure deployment. Two live runs so far, 2026-11-13 (rehearsal) and 2026-11-16 (full app), both in resource group `life-tracker-stage`, region `italynorth`, both torn down afterwards. The 2026-11-13 notes and the migration fix are on `main` (PR #120); evidence of the 2026-11-16 run: `docs/azure-evidence/2026-11-16-live-run.md`. |
+| **Seen live** | Observed on a real Azure deployment. Three live runs so far: 2026-11-13 (rehearsal), 2026-11-16 (full app) and 2026-11-16 (final run, desktop only), both in resource group `life-tracker-stage`, region `italynorth`, both torn down afterwards. The 2026-11-13 notes and the migration fix are on `main` (PR #120); evidence of the 2026-11-16 runs: `docs/azure-evidence/2026-11-16-live-run.md` and `docs/azure-evidence/2026-11-16-final-run.md`. |
 | **Not seen live** | Designed and tested offline, never observed on Azure. |
 
 Nothing is deployed to Azure at the moment (`docs/STATUS.md`, "Deployed Azure resources").
@@ -32,7 +32,7 @@ Life Tracker is a personal tracker (tasks with reminders, wishlist, health with 
  Log Analytics: diagnostics, 3 alert rules → e-mail, 4 saved queries
 ```
 
-Everything is declared in one Bicep template, `infra/main.bicep` (51 resource blocks, tagged `project`, `env`, `owner`).
+Everything is declared in one Bicep template, `infra/main.bicep` (about 54 resources when deployed, tagged `project`, `env`, `owner`).
 
 ## The eight requirements
 
@@ -64,7 +64,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 | Supply chain (CI) | Lint, typecheck, tests, Trivy image scan, SBOM, gitleaks, dependency audit, Bicep build. |
 
 - **Where:** `infra/main.bicep`, `docs/security/azure-hardening.md`, `docs/security-plan.md`, `docs/threat-model.md`; the rules are asserted by `tests/infra-contract.test.ts`.
-- **Status:** Implemented, tested offline. **Seen live (2026-11-13):** Key Vault and ACR returned 403 from the public internet, the queue was blocked by network rules, shared-key access was off, public access was `Disabled` on PostgreSQL, Key Vault and ACR. **Not seen live:** the jobs reading Key Vault secrets over private DNS in a full run (end to end), TLS and diagnostics verification.
+- **Status:** Implemented, tested offline. **Seen live (2026-11-13):** Key Vault and ACR returned 403 from the public internet, the queue was blocked by network rules, shared-key access was off, public access was `Disabled` on PostgreSQL, Key Vault and ACR. **Seen live (final run, 2026-11-16):** TLS (storage TLS1_2, PostgreSQL secure transport on), diagnostics on PostgreSQL, Key Vault, ACR and the queue, backup retention 7 days, secrets as `secretRef` in the app, and the jobs reading the VAPID secret through their identity (a desktop reminder arrived).
 
 ### 4. Authentication and authorization (mandatory)
 
@@ -120,7 +120,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 - **Four saved queries:** web errors, reminder runs and failures, queue activity, vault access.
 - A **budget** resource (`Microsoft.Consumption/budgets`, default 25 USD) e-mails the same contact.
 - A log-based alert on worker failures was dropped: Azure refused to create the scheduled query rule in this subscription during the rehearsal, so worker failures are read from the saved query instead (`docs/decisions.md` 2026-11-13).
-- **Status:** Implemented, tested offline. **Not seen live:** that the alert rules fire, that the saved queries return rows, and that the action group's e-mail arrives. These need a live run.
+- **Status:** Implemented, tested offline. **Seen live (final run, 2026-11-16):** the `web-5xx` alert fired and its e-mail arrived (fired by stopping PostgreSQL for a few minutes: a stopped or restarted web revision gives no 5xx), the saved queries return rows, the budget exists.
 
 ### Deployment (10%)
 
@@ -132,7 +132,4 @@ Estimates, not measurements: an ephemeral 1 to 2 hour run is about 0.20 to 0.35 
 
 ## Open before the presentation
 
-1. ~~Bring the migration-job fix back~~ (on `main`, PR #120, 2026-11-16).
-2. ~~Entra sign-in and a real reminder on a phone~~ (seen live 2026-11-16). Left for the final deploy: an alert fired, a saved query run, the budget and the action group e-mail.
-3. ~~Check that the rehearsal group is gone~~: confirmed read-only on 2026-11-16, only `NetworkWatcherRG` exists.
-4. After each live check, mark it in `docs/requirements.md`, `docs/presentation.md` and `docs/security/azure-hardening.md`.
+All requirements and rubric lines were shown live on 2026-11-16 (`docs/azure-evidence/2026-11-16-final-run.md`). Left: one short deploy the day before or the day of the presentation (nothing stays running), and the demo script in `docs/presentation.md`. Not shown on Azure, by decision: a database restore (done on the personal deploy) and a second-account denial (covered by the authorization tests).
