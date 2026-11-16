@@ -1,6 +1,6 @@
 import { addDays, weekStart as sundayOf } from "./format-date";
 
-export type WeightStats = {
+type WeightStats = {
   latestWeight: number | null;
   latestDate: string | null;
   /** Mean of the weigh-ins from today - 6 to today. */

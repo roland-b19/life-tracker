@@ -34,13 +34,13 @@ export interface TodoItem {
   createdAt: Date;
 }
 
-export interface TodoStats {
+interface TodoStats {
   total: number;
   completed: number;
   percentage: number;
 }
 
-export interface DailyTodosResult {
+interface DailyTodosResult {
   todos: TodoItem[];
   stats: TodoStats;
 }

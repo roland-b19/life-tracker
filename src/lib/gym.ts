@@ -27,9 +27,9 @@ import { weekStart, weeksBetween } from "./gym-progress";
 export class GymRefusal extends Error {}
 
 /** How many days back a workout without a duration still counts as open (the page's Resume banner uses the same). */
-export const OPEN_WINDOW_DAYS = 2;
+const OPEN_WINDOW_DAYS = 2;
 
-export interface DeloadStatus {
+interface DeloadStatus {
   /** x in "Week x of N": 1 to cycleLength, counted from the week after the last deload. */
   cycleWeek: number;
   /** N: normal training weeks between two deload weeks. */

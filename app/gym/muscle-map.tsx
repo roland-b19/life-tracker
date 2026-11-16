@@ -324,7 +324,7 @@ function MuscleMap({
   );
 }
 
-export interface PlannedExercise {
+interface PlannedExercise {
   id: string;
   exerciseId: string;
   exerciseName: string;

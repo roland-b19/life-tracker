@@ -1,6 +1,6 @@
 # Release plan: both variants, from now to the presentation and the personal go-live
 
-Status: **agreed by the user on 2026-11-10; sections 3 and 3b are done, the rest is not implemented.** Written 2026-11-10 after an audit of the code, the infra and the docs. It extends `docs/free-hosting-plan.md` (stack, limits, verified claims) and replaces its short "Implementation plan".
+Status: **agreed by the user on 2026-11-10; sections 3 and 3b are done, the rest is not implemented.** Written 2026-11-10 after an audit of the code, the infra and the docs. It extends the free hosting plan of 2026-11-10 (stack, limits, verified claims), now removed (git history) and recorded in `docs/decisions.md`.
 
 Principle: **deploy is the last step.** Nothing is deployed for real until every gate in section 6 passes. Each step is its own commit with its tests, and CI stays green.
 
