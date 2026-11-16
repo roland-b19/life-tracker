@@ -11,11 +11,8 @@ const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ });
 /** The calendar day of a moment, in the app's timezone. */
 export const appDay = (d: Date) => todayFormat.format(d);
 
-/** "YYYY-MM-DD": today in Europe/Bucharest with no argument, otherwise the local calendar date of `d`. */
-export function toISODate(d?: Date): string {
-  if (!d) return todayFormat.format(new Date());
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+/** "YYYY-MM-DD": today in Europe/Bucharest. */
+export const toISODate = () => appDay(new Date());
 
 /** "2026-11-06" + n days, timezone-proof (pure calendar math in UTC). */
 export function addDays(iso: string, n: number): string {

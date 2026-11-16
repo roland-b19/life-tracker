@@ -6,14 +6,14 @@ Source: pasted by the user from the Azure course description (2026-11-02). Origi
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| 1 | At least one **compute** resource on Azure | designed, tested offline (Container Apps app + 2 jobs); live run open |
-| 2 | At least one **database or object storage** | designed, tested offline (PostgreSQL Flexible Server, Storage Queue, ACR); live run open |
-| 3 | App is **secured**: e.g. the database is not exposed to the internet | designed, tested offline (private endpoints, no public data plane, Key Vault); live check open |
-| 4 | **Authentication and authorization** (mandatory) | implemented (Entra login, owner-scoped data, authorization tests); live Entra check open |
-| 5 | Ideally a **message queue** (inter-service communication or email notifications) | implemented and tested offline (Storage Queue, enqueue and send jobs); live run open |
+| 1 | At least one **compute** resource on Azure | designed, tested offline (Container Apps app + 2 jobs); seen live 2026-11-13 and 2026-11-16 |
+| 2 | At least one **database or object storage** | designed, tested offline (PostgreSQL Flexible Server, Storage Queue, ACR); seen live 2026-11-13 and 2026-11-16 |
+| 3 | App is **secured**: e.g. the database is not exposed to the internet | designed, tested offline (private endpoints, no public data plane, Key Vault); public access flags and 403s seen live 2026-11-13 and 2026-11-16 |
+| 4 | **Authentication and authorization** (mandatory) | implemented (Entra login, owner-scoped data, authorization tests); Entra sign-in seen live 2026-11-16; second-account denial skipped by decision, covered by the tests |
+| 5 | Ideally a **message queue** (inter-service communication or email notifications) | implemented and tested offline (Storage Queue, enqueue and send jobs); real reminder on a phone seen live 2026-11-16 |
 | 6 | Real functionality: not "Hello World", not rocket science | done (the app) |
 | 7 | Deployments are **scripted** (az CLI / ARM templates / Terraform; tool to be discussed in later lectures and labs) | done (Bicep, preflight, what-if, deploy, teardown scripts) |
-| 8 | Backend and database in the cloud, secured (a mobile client is allowed, but it is not required) | designed, tested offline; live run open |
+| 8 | Backend and database in the cloud, secured (a mobile client is allowed, but it is not required) | designed, tested offline; seen live as 1 to 3 |
 
 ## Grading rubric
 

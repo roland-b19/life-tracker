@@ -39,6 +39,10 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 - A personal global gitignore that ignores `.claude/` is overridden by `!.claude/` in this repo's `.gitignore`, so the shared Claude Code config is committed.
 - `graphify install` / `graphify gemini install` / `graphify vscode install` also drop copies of the skill in your home folder (`~/.gemini/skills`, `~/.copilot/skills`). Not needed here: the project-scoped skill in `.agents/skills/` is enough.
 
+## Skills in this repo
+
+Eleven folders in `.agents/skills/` (each linked into `.claude/skills/` for Claude Code): `apple-design`, `code-review-guide`, `graphify`, `secure-development`, `ultimate-design-skill`, and the six ponytail skills `ponytail`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`, `ponytail-review`. Sections below describe each family.
+
 ## Ponytail (lazy senior dev rules)
 
 - Official project: <https://github.com/DietrichGebert/ponytail> (MIT). Only trust that repo or the npm package `@dietrichgebert/ponytail`.
@@ -72,7 +76,7 @@ How the agent tooling is wired, and how to set it up on a new machine or with a 
 
 ## Starting other projects
 
-The generic setup for a new project (same structure and the same 5 skills) lives outside this repo: `~/Documents/projects/project-setup/` (`SKILL.md`, `setup.sh`).
+The generic setup for a new project (same structure and a core set of skills; this repo has since grown to the eleven listed above, so check that folder for what it currently installs) lives outside this repo: `~/Documents/projects/project-setup/` (`SKILL.md`, `setup.sh`).
 
 ## Agent support matrix
 

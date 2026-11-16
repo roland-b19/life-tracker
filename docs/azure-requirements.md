@@ -8,7 +8,7 @@ Companion to `docs/requirements.md` (the checklist and grading rubric) and `docs
 |---|---|
 | **Implemented** | The code, template or script exists in `main`. |
 | **Tested offline** | Covered by a test or a build that needs no Azure account (Vitest, `az bicep build`, CI scans). |
-| **Seen live** | Observed on a real Azure deployment. The only live run so far was the rehearsal of 2026-11-13 (resource group `life-tracker-stage`, region `italynorth`); it was torn down afterwards. Its notes sit on the closed branch `fix/azure-migrate` (PR #104), not on `main`. |
+| **Seen live** | Observed on a real Azure deployment. Two live runs so far, 2026-11-13 (rehearsal) and 2026-11-16 (full app), both in resource group `life-tracker-stage`, region `italynorth`, both torn down afterwards. The 2026-11-13 notes and the migration fix are on `main` (PR #120); evidence of the 2026-11-16 run: `docs/azure-evidence/2026-11-16-live-run.md`. |
 | **Not seen live** | Designed and tested offline, never observed on Azure. |
 
 Nothing is deployed to Azure at the moment (`docs/STATUS.md`, "Deployed Azure resources").
@@ -41,7 +41,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 - **What:** Azure Container Apps. A VNet-integrated managed environment runs the web app (`Microsoft.App/containerApps`, HTTPS-only ingress, liveness probe, scale limit) and Container Apps **jobs**: `enqueue`, `send`, and a one-off `migrate` job that applies the database migrations.
 - **Where:** `infra/main.bicep` (`managedEnvironments`, `containerApps`, `jobs`); the worker code is in `worker/` (own Dockerfile, own dependencies).
 - **Images:** built in CI, pushed to ACR and deployed **by digest** (the template refuses a mutable tag).
-- **Status:** Implemented, tested offline (`tests/infra-contract.test.ts`, `tests/worker.test.ts`, `az bicep build` in CI). **Seen live** on 2026-11-13: the Bicep deployed, the web app and the enqueue and send jobs ran every minute.
+- **Status:** Implemented, tested offline (`tests/infra-contract.test.ts`, `tests/worker.test.ts`, `az bicep build` in CI). **Seen live** on 2026-11-13 and 2026-11-16: the Bicep deployed, the web app and the enqueue and send jobs ran every minute.
 
 ### 2. At least one database or object storage
 
@@ -72,7 +72,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 - **Authorization:** every row carries an owner, and every query and server action filters by the signed-in user. The identity key is the provider's immutable subject id, not the e-mail or the login name.
 - **Where:** `src/auth.ts`, `src/server/auth.ts`, `app/api/auth/[...nextauth]/route.ts`.
 - **Tests:** `tests/authorization.test.ts` (owner allowed, another user denied), `tests/actions-anonymous.test.ts` and `tests/pages-auth.test.ts` (anonymous denied), `tests/auth-guard.test.ts`, `tests/auth-github.test.ts`. A new endpoint ships such a test (rule in `AGENTS.md`).
-- **Status:** Implemented, tested offline. **Not seen live:** the Entra callback on a deployed URL and the sign-in itself. A live second-account denial is **skipped by the user's decision** (2026-11-13): isolation between users is covered by the automated authorization tests, and the ASVS V6.8.1 point (any account of the tenant can sign in) stays open.
+- **Status:** Implemented, tested offline. **Seen live (2026-11-16):** the Entra sign-in on the deployed URL; anonymous visitors are redirected to the sign-in page. A live second-account denial is **skipped by the user's decision** (2026-11-13): isolation between users is covered by the automated authorization tests, and the ASVS V6.8.1 point (any account of the tenant can sign in) stays open.
 
 ### 5. A message queue (ideal)
 
@@ -84,7 +84,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 - **Why scheduled and not event-driven:** in the GA Container Apps jobs API a scale rule has no managed-identity option, so an event-driven job would need a storage key, which the design forbids. Cost: a cold-started job, so delivery lands a few seconds after the minute starts (`shortcut:` comment in `infra/main.bicep`, `docs/decisions.md` 2026-11-13).
 - **Where:** `worker/enqueue.mjs`, `worker/send.mjs`, `worker/lib.mjs`, `worker/clients.mjs`; queue and private endpoint in `infra/main.bicep`.
 - **Tests:** `tests/worker.test.ts` (message format, due-reminder selection, retries, gone subscriptions) and the queue rules in `tests/infra-contract.test.ts`.
-- **Status:** Implemented, tested offline. **Seen live:** both jobs started every minute and the queue was reachable only through the private endpoint. **Not seen live:** a real reminder round trip (task with a reminder, queue message, notification on a phone).
+- **Status:** Implemented, tested offline. **Seen live:** both jobs started every minute and the queue was reachable only through the private endpoint. **Seen live (2026-11-16):** a real reminder round trip (task with a reminder, queue message, notification on a phone), after a fix so that it arrives within seconds of the minute (the enqueue job also runs the send step).
 
 ### 6. Real functionality (not Hello World, not rocket science)
 
@@ -102,7 +102,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 | `scripts/azure-teardown.sh` | Deletes the resource group, waits, and verifies it is gone. Idempotent. |
 | `infra/main.bicep` | All resources and role assignments. |
 
-- **Status:** Implemented, tested offline. **Seen live:** the deploy and teardown ran during the 2026-11-13 rehearsal. A migration-job fix found there (`scripts/azure-migrate.sh`) is on the closed branch `fix/azure-migrate` and is **not on `main`**; reopen it before the next live run.
+- **Status:** Implemented, tested offline. **Seen live:** the deploy and teardown ran during the 2026-11-13 rehearsal. A migration-job fix found there (`scripts/azure-migrate.sh`) is on `main` (PR #120). The 2026-11-16 run found that the migration job's own copy of the schema had drifted; the job now applies the Drizzle migrations (PR #121), proven live.
 
 ### 8. Backend and database in the cloud, secured
 
@@ -132,7 +132,7 @@ Estimates, not measurements: an ephemeral 1 to 2 hour run is about 0.20 to 0.35 
 
 ## Open before the presentation
 
-1. ~~Bring the migration-job fix back~~ (branch `fix/azure-migrate-main`, 2026-11-16).
-2. A second live run: Entra sign-in, a real reminder on a phone, an alert fired, a saved query run, the budget and the action group e-mail.
+1. ~~Bring the migration-job fix back~~ (on `main`, PR #120, 2026-11-16).
+2. ~~Entra sign-in and a real reminder on a phone~~ (seen live 2026-11-16). Left for the final deploy: an alert fired, a saved query run, the budget and the action group e-mail.
 3. ~~Check that the rehearsal group is gone~~: confirmed read-only on 2026-11-16, only `NetworkWatcherRG` exists.
 4. After each live check, mark it in `docs/requirements.md`, `docs/presentation.md` and `docs/security/azure-hardening.md`.

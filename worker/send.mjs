@@ -1,13 +1,7 @@
 // Scheduled job (every minute): drains the queue, sends each reminder as a web push, then deletes the message.
 import webpush from "web-push";
-import { dbPool, queueClient, runJob } from "./clients.mjs";
+import { dbPool, need, queueClient, runJob } from "./clients.mjs";
 import { deliverReminder, MAX_ATTEMPTS, parseMessage } from "./lib.mjs";
-
-const need = (name) => {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required.`);
-  return value;
-};
 
 await runJob("send", async () => {
   webpush.setVapidDetails(need("VAPID_SUBJECT"), need("VAPID_PUBLIC_KEY"), need("VAPID_PRIVATE_KEY"));

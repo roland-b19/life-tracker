@@ -57,7 +57,9 @@ describe("Azure infrastructure contract", () => {
     );
     expect(bicep).toContain("type: 'UserAssigned'");
     expect(bicep).toContain("identity: workloadIdentity.id");
-    expect(bicep).toContain("keyVaultSecretsUserRole");
+    // Key Vault Secrets User is granted per secret, never on the whole vault: three for the web app, two for the worker.
+    expect(bicep.match(/scope: \w+Secret\b/g)).toHaveLength(5);
+    expect(bicep).not.toMatch(/guid\(keyVault\.id[^\n]*kv-secrets-user/);
     expect(bicep).toContain("acrPullRole");
     expect(bicep).toContain("registryPrivateDnsGroup");
     expect(bicep).toContain("vaultPrivateDnsGroup");
@@ -107,7 +109,7 @@ describe("Azure reminder pipeline contract", () => {
     expect(bicep).toContain("name: 'vapid-private-key'");
     expect(bicep).toMatch(/@secure\(\)\n@minLength\(1\)\n@description\('VAPID private key[^\n]*\nparam vapidPrivateKey string/);
     // The web app never touches the queue or the push key.
-    const webApp = bicep.slice(bicep.indexOf("resource containerApp "), bicep.indexOf("resource keyVaultSecretsUserRole"));
+    const webApp = bicep.slice(bicep.indexOf("resource containerApp "), bicep.indexOf("// Key Vault Secrets User on each secret"));
     expect(webApp).not.toMatch(/QUEUE_|VAPID/);
   });
 

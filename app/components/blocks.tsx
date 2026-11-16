@@ -406,7 +406,6 @@ export function FormActions({
   busy,
   canSubmit = true,
   submitLabel = "Save",
-  busyLabel = "Saving...",
   compact,
 }: {
   onCancel: () => void;
@@ -415,7 +414,6 @@ export function FormActions({
   busy?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
-  busyLabel?: string;
   compact?: boolean;
 }) {
   return (
@@ -429,7 +427,7 @@ export function FormActions({
         disabled={busy || !canSubmit}
         onClick={onSubmit}
       >
-        {busy ? busyLabel : submitLabel}
+        {busy ? "Saving..." : submitLabel}
       </button>
     </div>
   );
@@ -449,8 +447,6 @@ export function FormModal({
   busy,
   canSubmit,
   submitLabel,
-  maxWidth,
-  className,
   children,
 }: {
   isOpen: boolean;
@@ -463,8 +459,6 @@ export function FormModal({
   busy?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
-  maxWidth?: string;
-  className?: string;
   children: ReactNode;
 }) {
   // State is stale within one tick, so a fast double tap would submit twice: the lock lives until the handler settles.
@@ -481,7 +475,7 @@ export function FormModal({
     }
   };
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth={maxWidth} className={className}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <form onSubmit={submit}>
         <div className="form-stack">
           {children}

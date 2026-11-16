@@ -58,6 +58,7 @@ const sections = (u: string): [string, SQL][] => [
           LEFT JOIN workout_sets t ON t.session_id = w.id LEFT JOIN exercises e ON e.id = t.exercise_id
          WHERE w.user_id = ${u}::uuid ORDER BY w.date, t.set_order`,
   ],
+  ["Deload weeks", sql`SELECT week_start::text AS "week of" FROM deload_weeks WHERE user_id = ${u}::uuid ORDER BY week_start`],
 ];
 
 export async function buildExport(userId: string) {

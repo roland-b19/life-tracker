@@ -16,7 +16,7 @@ The variant is chosen by environment variables, not by branches.
 |---|---|---|
 | Hosting | Container Apps, PostgreSQL Flexible Server (private), Key Vault, ACR | Vercel Hobby + Neon Free |
 | Sign-in | Microsoft Entra (`AUTH_PROVIDER=azure-ad`) | GitHub OAuth with an owner allowlist (`AUTH_PROVIDER=github`, `OWNER_ALLOWLIST`) |
-| Claude assistant (Health, Settings) | on (`NEXT_PUBLIC_CLAUDE_ENABLED=true`) | hidden |
+| Claude assistant (Health, Settings) | off (`NEXT_PUBLIC_CLAUDE_ENABLED=false`, decision 2026-11-16: no health data to an AI provider, no CLI in the image) | hidden |
 | Push reminders | on (`NEXT_PUBLIC_PUSH_ENABLED=true`) | hidden |
 
 The two `NEXT_PUBLIC_*` flags are inlined at build time, so they must be set before `next build`. All variables are documented in [`.env.example`](.env.example). Status of each variant (what is deployed, what is verified) is in [`docs/STATUS.md`](docs/STATUS.md).
@@ -75,7 +75,7 @@ Scripts in [`scripts/`](scripts/) deploy and remove the Azure environment; they 
 
 The infrastructure is [`infra/main.bicep`](infra/main.bicep). Everything is ephemeral: deploy, verify, tear down.
 
-Reminders on Azure are sent by two scheduled jobs from the isolated [`worker/`](worker/) (own `package.json`, image and lockfile): one puts ids of due reminders on a private Storage Queue, the other sends them as web push. The deploy script needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` in your shell (generate them yourself, for example `npx web-push generate-vapid-keys`, and never paste them into chat or commit them); the public key is also baked into the web image as a build argument. The personal deploy does not use any of this. Plan and evidence for the course: [`docs/presentation.md`](docs/presentation.md).
+Reminders on Azure are sent by two scheduled jobs from the isolated [`worker/`](worker/) (own `package.json`, image and lockfile): the `enqueue` job (every minute) puts ids of due reminders on a private Storage Queue and then delivers them as web push in the same run, so they arrive within seconds; the `send` job (every minute) is the retry consumer that picks up anything left on the queue. The deploy script needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` in your shell (generate them yourself, for example `npx web-push generate-vapid-keys`, and never paste them into chat or commit them); the public key is also baked into the web image as a build argument. The personal deploy does not use any of this. Plan and evidence for the course: [`docs/presentation.md`](docs/presentation.md).
 
 ## Personal deploy (variant B): runbook
 
@@ -86,7 +86,6 @@ Live on Vercel (project `life-tracker`, region `fra1`) with a Neon Free database
   ```bash
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && npm run db:migrate; unset DATABASE_URL_MIGRATE
   ```
-- **Migration `0023_meals_forgotten`** (adds `meals.forgotten`) must be run before deploying code that has Past foods delete.
 - **Load your own data (one time):** `scripts/import-personal.cjs` reads the gitignored `.local/personal-data.json` (wishlist with prices, today and daily tasks, and optionally categories: a `categories` object per list, `[name, price, category]` wishlist entries, `[title, category]` daily tasks; run migration `0021` first) into your account. Sign in to the app once first. It skips anything whose name already exists, so it is safe to run again. Gym needs no import: opening Gym creates the routine.
   ```bash
   read -rs "DATABASE_URL_MIGRATE?Neon owner URL (direct): " && export DATABASE_URL_MIGRATE && node scripts/import-personal.cjs --subject <your GitHub numeric id> --dry-run; unset DATABASE_URL_MIGRATE

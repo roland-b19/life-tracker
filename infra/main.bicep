@@ -69,6 +69,9 @@ param keyVaultName string = ''
 @description('Optional budget alert amount in USD for the resource group (0 to disable).')
 param budgetAmount int = 25
 
+@description('First day of the budget period: the 1st of the month of this deployment.')
+param budgetStart string = utcNow('yyyy-MM-01')
+
 @description('Contact email for budget alerts and monitoring alerts.')
 param budgetContactEmail string = owner
 
@@ -648,7 +651,9 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
     registryPrivateDnsGroup
     vaultPrivateEndpoint
     vaultPrivateDnsGroup
-    keyVaultSecretsUserRole
+    webDatabaseUrlRole
+    webNextAuthSecretRole
+    webAuthClientSecretRole
     acrPullRole
     databaseUrlSecret
     nextAuthSecretSecret
@@ -656,9 +661,36 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   ]
 }
 
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, workloadIdentity.id, 'kv-secrets-user')
-  scope: keyVault
+// Key Vault Secrets User on each secret the identity needs, never on the whole vault: the web app cannot read the push key.
+resource webDatabaseUrlRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(databaseUrlSecret.id, workloadIdentity.id, 'kv-secrets-user')
+  scope: databaseUrlSecret
+  properties: {
+    principalId: workloadIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '4633458b-17de-408a-b874-0445c86b69e6'
+    )
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource webNextAuthSecretRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(nextAuthSecretSecret.id, workloadIdentity.id, 'kv-secrets-user')
+  scope: nextAuthSecretSecret
+  properties: {
+    principalId: workloadIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '4633458b-17de-408a-b874-0445c86b69e6'
+    )
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource webAuthClientSecretRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(authAzureClientSecretSecret.id, workloadIdentity.id, 'kv-secrets-user')
+  scope: authAzureClientSecretSecret
   properties: {
     principalId: workloadIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
@@ -682,9 +714,23 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-resource workerKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, workerIdentity.id, 'kv-secrets-user')
-  scope: keyVault
+// The worker reads only the database URL and the push private key.
+resource workerDatabaseUrlRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(databaseUrlSecret.id, workerIdentity.id, 'kv-secrets-user')
+  scope: databaseUrlSecret
+  properties: {
+    principalId: workerIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '4633458b-17de-408a-b874-0445c86b69e6'
+    )
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource workerVapidKeyRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(vapidPrivateKeySecret.id, workerIdentity.id, 'kv-secrets-user')
+  scope: vapidPrivateKeySecret
   properties: {
     principalId: workerIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId(
@@ -833,7 +879,8 @@ resource enqueueJob 'Microsoft.App/jobs@2023-05-01' = {
     }
   }
   dependsOn: [
-    workerKeyVaultRole
+    workerDatabaseUrlRole
+    workerVapidKeyRole
     workerAcrPullRole
     workerQueueSenderRole
     workerQueueProcessorRole
@@ -887,7 +934,8 @@ resource sendJob 'Microsoft.App/jobs@2023-05-01' = {
     }
   }
   dependsOn: [
-    workerKeyVaultRole
+    workerDatabaseUrlRole
+    workerVapidKeyRole
     workerAcrPullRole
     workerQueueSenderRole
     workerQueueProcessorRole
@@ -1162,7 +1210,7 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (budgetAmount > 
     timeGrain: 'Monthly'
     amount: budgetAmount
     timePeriod: {
-      startDate: '2026-11-01T00:00:00Z'
+      startDate: '${budgetStart}T00:00:00Z'
     }
     category: 'Cost'
     notifications: {

@@ -1118,7 +1118,7 @@ button.signin-continue:disabled {
 
 .modal-card {
   width: 100%;
-  max-width: 34rem;
+  max-width: 36rem;
   background: var(--surface-modal);
   border: 1px solid var(--edge);
   border-radius: 1.25rem;
@@ -1975,16 +1975,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .muscle-side .entry-row .number-tabular { white-space: nowrap; }
 .muscle-card { margin-bottom: 1.25rem; }
 
-/* Read by screen readers, not shown */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 /* A header directly followed by a list: the header already supplies the gap */
 .section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
 .section-head + :is(.entries, .todo-list),
@@ -2106,7 +2096,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .routine-row.dragging {
   position: relative;
   z-index: 2;
-  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35);
 }
 .routine-row.dragging .drag-handle { cursor: grabbing; }
 .routine-fields {
@@ -2160,7 +2149,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .category-name.raw { text-transform: none; }
 .category-name { text-transform: capitalize; flex: 1; min-width: 0; margin-inline: 0.5rem; overflow-wrap: anywhere; }
 /* A dragged category row follows the pointer above the others, on a solid ground. */
-.entry-row.dragging { position: relative; z-index: 2; box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35); }
+.entry-row.dragging { position: relative; z-index: 2; }
 .entry-row.dragging .drag-handle { cursor: grabbing; }
 .surface .list-box[data-wash] > .entries > .entry-row.dragging { background-color: var(--surface-solid); }
 /* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
@@ -2303,15 +2292,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 /* Gym progress: a control after a select field gets the same gap as inside a form */
 .gym-progress { margin-block: 1.25rem; } /* the page stacks its cards on this one gap */
-.gym-progress > :is(label, .field) + * { margin-top: 1rem; }
-
-/* A form field that is not a <label> (it holds a popover), laid out like one. */
-.field {
-  display: grid;
-  gap: 0.35rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
+.gym-progress > label + * { margin-top: 1rem; }
 
 /* ==========================================================================
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands

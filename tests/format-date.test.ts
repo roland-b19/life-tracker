@@ -24,10 +24,6 @@ describe("toISODate() is the Europe/Bucharest calendar day", () => {
     expect(at("2026-10-24T20:59:59Z")).toBe("2026-10-24");
     expect(at("2026-10-24T21:00:00Z")).toBe("2026-10-25");
   });
-
-  it("keeps the local calendar date of an explicit Date", () => {
-    expect(toISODate(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
-  });
 });
 
 describe("cleanNumberInput", () => {

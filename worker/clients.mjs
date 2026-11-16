@@ -2,7 +2,7 @@ import { DefaultAzureCredential } from "@azure/identity";
 import { QueueClient } from "@azure/storage-queue";
 import pg from "pg";
 
-const need = (name) => {
+export const need = (name) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
   return value;
