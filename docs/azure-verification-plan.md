@@ -19,6 +19,8 @@ Rules that apply to the whole plan (`AGENTS.md`):
 
 ## Phase 1: preparation with the user (little or no cost)
 
+Checked read-only on 2026-11-16: `az` signed in (subscription "Azure for Students", enabled); only `NetworkWatcherRG` exists; `scripts/azure-preflight.sh italynorth` passes; the resource providers the template needs are registered; the Entra app registration `life-tracker` exists (single tenant, one client secret valid until 2027-11-03); `.env.azure` (git-ignored) holds only the three VAPID values. Still missing in `.env.azure` for the deploy script: `DB_ADMIN_PASSWORD`, `DATABASE_URL`, `NEXTAUTH_SECRET`, `AUTH_AZURE_CLIENT_ID`, `AUTH_AZURE_TENANT_ID`, `AUTH_AZURE_CLIENT_SECRET`, `AUTH_ISSUER`, `NEXTAUTH_URL` (a placeholder: the script rewrites it and the Entra redirect URI from the real address after the deploy). Remaining credit cannot be read with `az` on this subscription: the user checks it in the portal.
+
 1. Read-only: `az account show`, remaining credit. (`life-tracker-stage` is confirmed gone, 2026-11-16.)
 2. Entra: an app registration with the redirect URI of the future web app, and the owner's account (a second test account is skipped by decision, 2026-11-13). The user creates the client secret outside chat.
 3. The user generates the VAPID key pair and chooses the budget e-mail.
