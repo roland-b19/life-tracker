@@ -6,12 +6,12 @@ Older history is in git (`git log`). Decisions: `docs/decisions.md`. What the ap
 
 ## Where we are
 
-- `main` holds everything through PR #122: the Tier 1 to 3 iterations, the Wishlist-style UI for every page, the Azure reminder pipeline (PRs #101 to #103), the Azure migration-job fix (#120), the Azure schema fix (#121, the schema comes only from the Drizzle migrations), the forms audits (#112 to #115), delete for meals and weigh-ins (#116), the Gym audit, the GymClient split and the `undoWith` sweep (#117 to #119), and the cleanup of unused files (#122).
+- `main` holds everything through PR #123: the Tier 1 to 3 iterations, the Wishlist-style UI for every page, the Azure reminder pipeline (PRs #101 to #103), the Azure migration-job fix (#120), the Azure schema fix (#121, the schema comes only from the Drizzle migrations), the forms audits (#112 to #115), delete for meals and weigh-ins (#116), the Gym audit, the GymClient split and the `undoWith` sweep (#117 to #119), the cleanup of unused files (#122), and the audit (#123: one open Gym workout, per-secret Key Vault roles, deload weeks in the export, dead code removed). The audit is live on the personal deploy (2026-11-16, no migration).
 - The personal deploy (variant B, Vercel + Neon) is live and holds the user's real data; its runbook is in `README.md`. Migrations 0030 and 0031 are applied on the live database (the user checked it, 2026-11-16). Nothing is deployed to Azure (see below).
 
 ## Current focus
 
-Audit and slimming of the docs and code (branch `chore/audit-slim`, 2026-11-16): stale statements removed from the docs, executed plan sections collapsed, decisions marked as superseded (nothing deleted). The outcome and what was left alone on purpose is in `docs/decisions.md` ("Audit and slimming 2026-11-16").
+Audit and slimming of the docs and code (merged, PR #123, 2026-11-16); next is the final Azure deploy and the requirements test. Stale statements removed from the docs, executed plan sections collapsed, decisions marked as superseded (nothing deleted). The outcome and what was left alone on purpose is in `docs/decisions.md` ("Audit and slimming 2026-11-16").
 
 Last checks in a browser (375px and desktop), Gym: day edit and Undo, start, log set, delete set and Undo, Exit and Resume, Finish, history open, deload edit and Undo. Meals add/delete/Undo, today's weigh-in delete/Undo and the Shopping tab also work. Not checked: Cancel workout and its Undo, a custom exercise created inside the day editor, a past day (read-only), older weigh-ins, a real phone, the Three.js model.
 
