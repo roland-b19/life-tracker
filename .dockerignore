@@ -5,7 +5,6 @@
 .github
 .next
 coverage
-drizzle
 node_modules
 tests
 graphify-out

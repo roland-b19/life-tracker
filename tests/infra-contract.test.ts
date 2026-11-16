@@ -100,8 +100,9 @@ describe("Azure reminder pipeline contract", () => {
     expect(bicep).toContain("resource enqueueJob 'Microsoft.App/jobs@2023-05-01'");
     expect(bicep).toContain("resource sendJob 'Microsoft.App/jobs@2023-05-01'");
     expect(bicep.match(/triggerType: 'Schedule'/g)).toHaveLength(2);
-    expect(bicep).toContain("'enqueue.mjs'");
     expect(bicep).toContain("'send.mjs'");
+    // The enqueue job delivers what it queued in the same run, so a reminder lands within seconds of its minute (not a minute later).
+    expect(bicep).toContain("node enqueue.mjs; enqueue_exit=$?; node send.mjs && exit $enqueue_exit");
     expect(bicep).toContain("secretRef: 'vapid-private-key'");
     expect(bicep).toContain("name: 'vapid-private-key'");
     expect(bicep).toMatch(/@secure\(\)\n@minLength\(1\)\n@description\('VAPID private key[^\n]*\nparam vapidPrivateKey string/);
@@ -142,6 +143,20 @@ describe("Azure reminder pipeline contract", () => {
     expect(deployScript).toContain('./scripts/azure-migrate.sh "$environment"');
     expect(migrateScript).toContain('az identity show --name "life-tracker-$environment-identity"');
     expect(migrateScript).toContain("userAssignedIdentities:");
+  });
+
+  it("builds the Azure schema from the Drizzle migrations only, so it cannot drift from the code", () => {
+    const dbInit = readFileSync("scripts/db-init.cjs", "utf8");
+    expect(dbInit).toContain("drizzle-orm/node-postgres/migrator");
+    expect(dbInit).not.toMatch(/CREATE TABLE|GRANT SELECT/); // 2026-11-16: a hand-kept copy of the schema left the live Gym, Food and export pages broken
+    expect(dockerfile).toContain("COPY --chown=nextjs:nodejs drizzle ./drizzle");
+    expect(dockerfile).toContain("/app/node_modules/drizzle-orm ./node_modules/drizzle-orm");
+    expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("drizzle");
+  });
+
+  it("ships public/ in the image: the service worker, manifest, icons and 3D models are served from it", () => {
+    expect(dockerfile).toContain("/app/public ./public");
+    expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("public");
   });
 
   it("keeps the database secrets of the migration job out of plain env values", () => {

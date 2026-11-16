@@ -78,9 +78,10 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 
 - **What:** **Azure Storage Queue** `reminders` carries web-push reminders between two jobs.
   - The `enqueue` job runs every minute, finds the reminders due in that minute and writes one **ids-only** message each.
-  - The `send` job runs every minute, reads the queue, rechecks the owner and the task, sends the web push, deletes a subscription the push service reports gone (404, 410) and drops a message after 5 attempts.
+  - The `enqueue` job then runs `send.mjs` in the same execution, so a reminder set for 09:00 is pushed within seconds of 09:00. (Two separate jobs started at the same instant raced: `send` found an empty queue and the message waited a whole minute.)
+  - The `send` job runs every minute as a retry consumer: it reads the queue, rechecks the owner and the task, sends the web push, deletes a subscription the push service reports gone (404, 410) and drops a message after 5 attempts.
   - The web app has no queue code.
-- **Why scheduled and not event-driven:** in the GA Container Apps jobs API a scale rule has no managed-identity option, so an event-driven job would need a storage key, which the design forbids. Cost: about one minute of extra delay (`shortcut:` comment in `infra/main.bicep`, `docs/decisions.md` 2026-11-13).
+- **Why scheduled and not event-driven:** in the GA Container Apps jobs API a scale rule has no managed-identity option, so an event-driven job would need a storage key, which the design forbids. Cost: a cold-started job, so delivery lands a few seconds after the minute starts (`shortcut:` comment in `infra/main.bicep`, `docs/decisions.md` 2026-11-13).
 - **Where:** `worker/enqueue.mjs`, `worker/send.mjs`, `worker/lib.mjs`, `worker/clients.mjs`; queue and private endpoint in `infra/main.bicep`.
 - **Tests:** `tests/worker.test.ts` (message format, due-reminder selection, retries, gone subscriptions) and the queue rules in `tests/infra-contract.test.ts`.
 - **Status:** Implemented, tested offline. **Seen live:** both jobs started every minute and the queue was reachable only through the private endpoint. **Not seen live:** a real reminder round trip (task with a reminder, queue message, notification on a phone).
