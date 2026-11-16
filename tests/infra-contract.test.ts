@@ -153,6 +153,11 @@ describe("Azure reminder pipeline contract", () => {
     expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("drizzle");
   });
 
+  it("ships public/ in the image: the service worker, manifest, icons and 3D models are served from it", () => {
+    expect(dockerfile).toContain("/app/public ./public");
+    expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("public");
+  });
+
   it("keeps the database secrets of the migration job out of plain env values", () => {
     expect(migrateScript).toContain("secretRef: db-admin-password");
     expect(migrateScript).toContain("secretRef: database-url");

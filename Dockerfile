@@ -31,6 +31,8 @@ RUN addgroup --system --gid 1001 nodejs \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The standalone output has no public/: without it /sw.js, the manifest, the icons and the 3D models are 404 (found live 2026-11-16: no service worker, so no push button).
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # The Azure migration job runs scripts/db-init.cjs from this image: it needs the Drizzle migrator and the migration files.
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
 COPY --chown=nextjs:nodejs drizzle ./drizzle
