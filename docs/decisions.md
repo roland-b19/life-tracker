@@ -526,3 +526,8 @@ The user did not answer the nine owner questions one by one, so the recommended 
 ## 2026-11-16 — Azure schema comes only from the Drizzle migrations
 
 The first live run showed that `scripts/db-init.cjs` held a hand-kept copy of the schema that had drifted (Gym, Food and export broke). Decision: the Azure migration job applies the same Drizzle migrations as the personal deploy; `db-init.cjs` only creates the database and the app role. The image carries `drizzle/` and `drizzle-orm`. A contract test forbids `CREATE TABLE` in the script. A deployment with a wrong schema is torn down and redeployed, not patched, so no destructive reset option exists in the script.
+
+## 2026-11-16 — Azure live run: fix in place, one final full deploy; reminders delivered in the minute they are set
+
+- **Process (the user's call):** problems found during the live run are fixed in the running environment (image or job update in place). One complete teardown and fresh deploy happens only at the end, when everything is verified. No teardown and redeploy for each small problem (each cycle cost about an hour).
+- **Reminder timing:** the `enqueue` and `send` jobs started at the same instant, so `send` usually ran before `enqueue` had written the message and the push arrived one minute late. The `enqueue` job now runs `node enqueue.mjs` then `node send.mjs` in one execution (a failure in either gives a failing execution); the `send` job stays as a retry consumer. Delivery is within seconds of the minute start (job cold start), not at :00.0. A skipped cron run still loses that minute's reminders (`shortcut:` in `worker/enqueue.mjs`).

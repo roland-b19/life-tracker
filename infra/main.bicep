@@ -790,7 +790,8 @@ var workerJobEnv = [
   }
 ]
 
-// Every minute: queue one message per reminder that is due (task and user ids only).
+// Every minute: queue one message per reminder that is due (task and user ids only), then deliver it in the same run,
+// so a reminder set for 09:00 is pushed within seconds of 09:00 (the send job below would race it and wait a whole minute).
 resource enqueueJob 'Microsoft.App/jobs@2023-05-01' = {
   name: '${suffix}-enqueue'
   location: location
@@ -800,7 +801,7 @@ resource enqueueJob 'Microsoft.App/jobs@2023-05-01' = {
     environmentId: containerEnv.id
     configuration: {
       triggerType: 'Schedule'
-      replicaTimeout: 55
+      replicaTimeout: 100
       replicaRetryLimit: 0
       scheduleTriggerConfig: {
         cronExpression: '* * * * *'
@@ -816,10 +817,11 @@ resource enqueueJob 'Microsoft.App/jobs@2023-05-01' = {
           name: 'enqueue'
           image: workerImage
           command: [
-            'node'
+            'sh'
           ]
           args: [
-            'enqueue.mjs'
+            '-c'
+            'node enqueue.mjs; enqueue_exit=$?; node send.mjs && exit $enqueue_exit'
           ]
           env: workerJobEnv
           resources: {

@@ -100,8 +100,9 @@ describe("Azure reminder pipeline contract", () => {
     expect(bicep).toContain("resource enqueueJob 'Microsoft.App/jobs@2023-05-01'");
     expect(bicep).toContain("resource sendJob 'Microsoft.App/jobs@2023-05-01'");
     expect(bicep.match(/triggerType: 'Schedule'/g)).toHaveLength(2);
-    expect(bicep).toContain("'enqueue.mjs'");
     expect(bicep).toContain("'send.mjs'");
+    // The enqueue job delivers what it queued in the same run, so a reminder lands within seconds of its minute (not a minute later).
+    expect(bicep).toContain("node enqueue.mjs; enqueue_exit=$?; node send.mjs && exit $enqueue_exit");
     expect(bicep).toContain("secretRef: 'vapid-private-key'");
     expect(bicep).toContain("name: 'vapid-private-key'");
     expect(bicep).toMatch(/@secure\(\)\n@minLength\(1\)\n@description\('VAPID private key[^\n]*\nparam vapidPrivateKey string/);
