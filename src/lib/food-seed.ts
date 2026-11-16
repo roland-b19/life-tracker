@@ -6,7 +6,7 @@ import {
   recipeIngredients,
 } from "@/db/schema";
 
-export const DEFAULT_NUTRITION_TARGETS = {
+const DEFAULT_NUTRITION_TARGETS = {
   calories: 3350,
   proteinGrams: 170,
   carbsGrams: 300,
@@ -15,7 +15,7 @@ export const DEFAULT_NUTRITION_TARGETS = {
   steps: 10000,
 };
 
-export const SAMPLE_RECIPES = [
+const SAMPLE_RECIPES = [
   {
     name: "Chicken Breast & Basmati Rice",
     description: "Lean high-protein staple with clean carbs",

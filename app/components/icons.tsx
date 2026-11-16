@@ -88,27 +88,6 @@ export function CheckIcon({ size = 16, className, ...props }: IconProps) {
   );
 }
 
-export function LockIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-
 export function DropIcon({ size = 16, className, ...props }: IconProps) {
   return (
     <svg
@@ -232,27 +211,6 @@ export function ArrowsIcon({ size = 16, className, ...props }: IconProps) {
     >
       <path d="M12 3v18M3 12h18" />
       <path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" />
-    </svg>
-  );
-}
-
-/** Chevron pointing left: step to the previous day, month or year. */
-export function ChevronLeftIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <path d="M15 18l-6-6 6-6" />
     </svg>
   );
 }

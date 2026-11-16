@@ -17,7 +17,11 @@ fi
 resource_group="life-tracker-$environment"
 if az group show --name "$resource_group" --output none 2>/dev/null; then
   az group delete --name "$resource_group" --yes --no-wait
-  az group wait --name "$resource_group" --deleted --timeout 1800
+  # `az group wait --deleted` can return while the group is still Deleting (seen 2026-11-16), so poll until it is gone.
+  for _ in $(seq 1 180); do
+    [[ "$(az group exists --name "$resource_group")" == "false" ]] && break
+    sleep 10
+  done
 else
   echo "Resource group is already absent: $resource_group"
 fi

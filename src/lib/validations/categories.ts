@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { visible } from "./common";
 
-export const categoryScopeSchema = z.enum(["wishlist", "personal", "business"]);
+const categoryScopeSchema = z.enum(["wishlist", "personal", "business"]);
 export type CategoryScope = z.infer<typeof categoryScopeSchema>;
 
 /** Free text, so the user can add and rename categories; lower case so "Gifts" and "gifts" are one group. */

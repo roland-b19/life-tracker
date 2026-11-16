@@ -2,9 +2,9 @@ import { z } from "zod";
 import { categorySchema } from "./categories";
 import { isoDate, visible } from "./common";
 
-export const todoSpaceSchema = z.enum(["personal", "business"]);
+const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task, "daily" for a repeating one.
-export const recurrencePatternSchema = z.enum(["none", "daily"]);
+const recurrencePatternSchema = z.enum(["none", "daily"]);
 
 export const createTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),

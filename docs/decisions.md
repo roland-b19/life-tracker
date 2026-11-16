@@ -328,7 +328,7 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 
 ## Open
 
-- Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (see the plan); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection); see `docs/free-hosting-plan.md`.
+- Free personal variant: Neon `CREATE ROLE` verified 2026-11-10 (plan since removed, see git history); Vercel Hobby (no card, region fra1, build) verified the same day; Neon inactive-project rules read the same day (nothing found that deletes inactive Free projects; terms can change without stated notice, so backups are the protection).
 - Region selection for Phase 2B is approved (`italynorth`); awaiting final live validation.
 - Authorization model details (owner-only now; account-scoped data).
 - Public vs private repo, and a license, once the project is shared.
@@ -495,12 +495,12 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **The Assistant replies in Romanian**; code, docs and commits stay in English.
 - **Default exercises are unique by name** (partial unique index `exercises_default_name_uniq` where `user_id is null`, migration 0030) and seeding is idempotent (`onConflictDoNothing`), because two cold instances could both seed. The user runs the migration from their Mac after the duplicate check in its header; an agent never runs it against live.
 - **Shopping categories:** renaming onto the same name is refused, and a revert never drops the name it puts back (guard on the server in `revertShoppingCategory`; the Tasks and Wishlist revert already behaved that way, so their schema is unchanged).
-- **STATUS.md is a short live file** (state, focus, next, deployed, last session entries). The old content moved verbatim to `docs/STATUS-archive.md`.
+- **STATUS.md is a short live file** (state, focus, next, deployed, last session entries). The old content moved to an archive file, since removed (git history keeps it).
 - **Gym audit (2026-11-16):** the ranked findings go to the user; none is implemented until they decide. `GymClient` is split only after those fixes.
 
 ## 2026-11-16 — Gym audit outcome (user: "reparam tot ce este de reparat")
 
-- Everything fixable in `docs/gym-audit-2026-11-16.md` is implemented. A workout counts as a deload only when it was started as one (the earlier decision, now enforced everywhere).
+- Everything fixable in the Gym audit (2026-11-16) is implemented (the audit file was removed in the cleanup of 2026-11-16). A workout counts as a deload only when it was started as one (the earlier decision, now enforced everywhere).
 - **Left on purpose:** G-12 (no revalidate in `logSetAction`/`deleteSetAction`) because refetching the page on every set is the costliest call and the client keeps its own state; G-15 (workout timer kept in localStorage) because it would be per-device state the server cannot see, for a cosmetic gain.
 - **Plates and kg are never mixed:** a set's load adds the extra kg only for kg and bodyweight sets; a chart uses the unit of the exercise's latest set and the day-over-day progress skips plate sets.
 - **Custom exercises** can be renamed (`updateCustomExerciseAction`, also the Undo of an edit) and deleted while no routine or workout uses them; Undo of a delete re-inserts the same row (`restoreCustomExerciseAction`). Names are unique per user, ignoring case.

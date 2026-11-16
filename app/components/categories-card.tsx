@@ -295,7 +295,7 @@ export function useFolded(page: string) {
 }
 
 /** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
-export function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
+function GroupToggle({ name, folded, onToggle }: { name: string; folded: boolean; onToggle: () => void }) {
   return (
     <GroupLabel>
       <button type="button" className="group-toggle" aria-expanded={!folded} onClick={onToggle}>
@@ -346,7 +346,7 @@ export function GroupedList<T extends { id: string; category: string }>({
 }
 
 /** "gifts" → "Gifts": categories are stored lower case and shown with a capital. */
-export const categoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
+const categoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
 
 /** The Category drop-down of an item's form: the list's categories, the item's own if the list lacks it, and Other. */
 export function CategoryField({

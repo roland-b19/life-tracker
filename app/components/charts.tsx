@@ -41,7 +41,7 @@ export function ProgressRing({
   );
 }
 
-export interface HBarRow {
+interface HBarRow {
   label: string;
   value: number;
   display: string;

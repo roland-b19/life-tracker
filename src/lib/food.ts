@@ -362,7 +362,7 @@ const DIMS = {
     on: (v: string) => eq(shoppingItems.unit, v),
   },
 };
-export type ShoppingKind = keyof typeof DIMS;
+type ShoppingKind = keyof typeof DIMS;
 
 const ownCategory = (userId: string, name: string, kind: ShoppingKind) =>
   and(eq(DIMS[kind].table.userId, userId), eq(DIMS[kind].table.name, name));

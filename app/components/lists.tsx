@@ -16,7 +16,7 @@ export function ListBox({ className, wash, children }: { className?: string; was
 }
 
 /** A round icon button of a row or a card head: the shared look of Edit, Delete and the drag handle. */
-export function IconButton({
+function IconButton({
   icon,
   label,
   title,

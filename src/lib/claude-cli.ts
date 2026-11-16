@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export interface ClaudeRun {
+interface ClaudeRun {
   system: string;
   input: string;
   /** JSON Schema the answer must match; the CLI returns it as `structured_output`. */
@@ -12,7 +12,7 @@ export interface ClaudeRun {
   token: string | null;
 }
 
-export type ClaudeResult =
+type ClaudeResult =
   | { ok: true; output: unknown }
   | { ok: false; reason: "auth" | "unavailable" | "busy" | "error" };
 

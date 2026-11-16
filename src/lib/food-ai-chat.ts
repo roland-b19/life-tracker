@@ -4,12 +4,12 @@ import { logMealSchema } from "./validations/food";
 import { runClaude } from "./claude-cli";
 import { getClaudeToken } from "./claude-connection";
 
-export interface ChatMessage {
+interface ChatMessage {
   role: "user" | "model";
   text: string;
 }
 
-export interface FoodChatContext {
+interface FoodChatContext {
   /** The day the meals go to (YYYY-MM-DD), the one open in the Today tab. */
   date: string;
   /** The user's local time (HH:MM), to guess the meal type. */
