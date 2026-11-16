@@ -72,7 +72,7 @@ Everything is declared in one Bicep template, `infra/main.bicep` (51 resource bl
 - **Authorization:** every row carries an owner, and every query and server action filters by the signed-in user. The identity key is the provider's immutable subject id, not the e-mail or the login name.
 - **Where:** `src/auth.ts`, `src/server/auth.ts`, `app/api/auth/[...nextauth]/route.ts`.
 - **Tests:** `tests/authorization.test.ts` (owner allowed, another user denied), `tests/actions-anonymous.test.ts` and `tests/pages-auth.test.ts` (anonymous denied), `tests/auth-guard.test.ts`, `tests/auth-github.test.ts`. A new endpoint ships such a test (rule in `AGENTS.md`).
-- **Status:** Implemented, tested offline. **Not seen live:** the Entra callback on a deployed URL and the denial of a second Entra account (they need a second test account).
+- **Status:** Implemented, tested offline. **Not seen live:** the Entra callback on a deployed URL and the sign-in itself. A live second-account denial is **skipped by the user's decision** (2026-11-13): isolation between users is covered by the automated authorization tests, and the ASVS V6.8.1 point (any account of the tenant can sign in) stays open.
 
 ### 5. A message queue (ideal)
 
@@ -131,7 +131,7 @@ Estimates, not measurements: an ephemeral 1 to 2 hour run is about 0.20 to 0.35 
 
 ## Open before the presentation
 
-1. Reopen `fix/azure-migrate` (the migration-job fix) and merge it.
-2. A second live run: Entra sign-in, a second account denied another user's task, a real reminder on a phone, an alert fired, a saved query run, the budget and the action group e-mail.
-3. Check that the rehearsal resource group `life-tracker-stage` no longer exists (`az group exists`), since it costs credit if it does. Not verified in this session.
+1. ~~Bring the migration-job fix back~~ (branch `fix/azure-migrate-main`, 2026-11-16).
+2. A second live run: Entra sign-in, a real reminder on a phone, an alert fired, a saved query run, the budget and the action group e-mail.
+3. ~~Check that the rehearsal group is gone~~: confirmed read-only on 2026-11-16, only `NetworkWatcherRG` exists.
 4. After each live check, mark it in `docs/requirements.md`, `docs/presentation.md` and `docs/security/azure-hardening.md`.

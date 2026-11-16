@@ -143,4 +143,9 @@ describe("Azure reminder pipeline contract", () => {
     expect(migrateScript).toContain('az identity show --name "life-tracker-$environment-identity"');
     expect(migrateScript).toContain("userAssignedIdentities:");
   });
+
+  it("keeps the database secrets of the migration job out of plain env values", () => {
+    expect(migrateScript).toContain("secretRef: db-admin-password");
+    expect(migrateScript).toContain("secretRef: database-url");
+  });
 });

@@ -42,6 +42,11 @@ properties:
     manualTriggerConfig:
       parallelism: 1
       replicaCompletionCount: 1
+    secrets:
+      - name: db-admin-password
+        value: "${DB_ADMIN_PASSWORD}"
+      - name: database-url
+        value: "${DATABASE_URL}"
     registries:
       - server: $acr_login_server
         identity: $workload_identity_id
@@ -56,9 +61,9 @@ properties:
           - "eval(Buffer.from(process.env.MIGRATE_B64,'base64').toString('utf8'))"
         env:
           - name: DB_ADMIN_PASSWORD
-            value: "${DB_ADMIN_PASSWORD}"
+            secretRef: db-admin-password
           - name: DATABASE_URL
-            value: "${DATABASE_URL}"
+            secretRef: database-url
           - name: DB_HOST
             value: "${db_host}"
           - name: MIGRATE_B64
@@ -92,6 +97,8 @@ for i in $(seq 1 30); do
   echo "  Migration status: $job_status"
   if [[ "$job_status" == "Succeeded" ]]; then
     echo "Migrations completed successfully."
+    # The job holds the database secrets; it is not needed once the tables exist.
+    az containerapp job delete --name "lt-migrate-$environment" --resource-group "$resource_group" --yes --output none
     break
   elif [[ "$job_status" == "Failed" ]]; then
     echo "FATAL: Database migration job failed." >&2

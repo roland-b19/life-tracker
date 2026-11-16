@@ -57,6 +57,6 @@ runtime evidence.
   through the private endpoint (enqueue job writes, send job reads, deletes).
 - [ ] Both jobs start every minute, read the VAPID secret through their identity and
   finish without the `enqueue failed:` or `send failed:` log line.
-- [ ] A test notification reaches a real device; a second Entra account is denied
-  another user's task.
+- [ ] A test notification reaches a real device. (A live second-account denial is
+  skipped by decision, 2026-11-13; the authorization tests cover it.)
 - [ ] Alert rules and saved queries exist and the e-mail action group received a test.
