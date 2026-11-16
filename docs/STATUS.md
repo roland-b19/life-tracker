@@ -44,7 +44,9 @@ See "Open" in `docs/decisions.md`.
 
 ## Deployed Azure resources
 
-None for Life Tracker. All resources deployed for Iteration 2 testing were
+**Nothing is deployed (checked read-only with `az group list` on 2026-11-16: the only group is `NetworkWatcherRG`).** The 2026-11-13 `stage` rehearsal (`life-tracker-stage`, `italynorth`) was torn down. What it verified live: Bicep deploys, migrations succeed, enqueue and send run every minute and succeed, Key Vault and ACR refuse a public caller (403), the storage queue is blocked by network rules, shared-key access is off. Not verified: sign-in, a real reminder round-trip. The user chose to skip a second-account test (`docs/decisions.md`). The plan for the next live run is `docs/azure-verification-plan.md`. Phase 0 (offline) done 2026-11-16: 250 of 250 tests, lint, typecheck and `az bicep build` pass (tests need the local Docker Postgres, with migrations applied to `life_tracker_test`); the Bicep review found one gap, now fixed: the migration job passed the database secrets as plain env values, so they are job secrets (`secretRef`) and the job is deleted after it succeeds. This fix is not yet tried on Azure.
+
+Earlier (2026-11-08): all resources deployed for Iteration 2 testing were
 synchronously deleted via `scripts/azure-teardown.sh stage DELETE`. The subscription's
 pre-existing `NetworkWatcherRG` is not owned by this project and was intentionally left untouched.
 

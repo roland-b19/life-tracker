@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const bicep = readFileSync("infra/main.bicep", "utf8");
 const deployScript = readFileSync("scripts/azure-deploy.sh", "utf8");
+const migrateScript = readFileSync("scripts/azure-migrate.sh", "utf8");
 const dockerfile = readFileSync("Dockerfile", "utf8");
 const rootPackage = readFileSync("package.json", "utf8");
 
@@ -135,5 +136,16 @@ describe("Azure reminder pipeline contract", () => {
   it("keeps the worker's dependencies out of the web app (and so out of the Vercel build)", () => {
     for (const dependency of ["web-push", "@azure/storage-queue", "@azure/identity"]) expect(rootPackage).not.toContain(dependency);
     expect(readFileSync("worker/package.json", "utf8")).toContain("@azure/storage-queue");
+  });
+
+  it("runs migrations from their own script, with the identity attached to the job", () => {
+    expect(deployScript).toContain('./scripts/azure-migrate.sh "$environment"');
+    expect(migrateScript).toContain('az identity show --name "life-tracker-$environment-identity"');
+    expect(migrateScript).toContain("userAssignedIdentities:");
+  });
+
+  it("keeps the database secrets of the migration job out of plain env values", () => {
+    expect(migrateScript).toContain("secretRef: db-admin-password");
+    expect(migrateScript).toContain("secretRef: database-url");
   });
 });

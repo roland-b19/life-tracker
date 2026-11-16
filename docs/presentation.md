@@ -42,7 +42,7 @@ Show: `infra/main.bicep` (one template, tagged resources), `worker/` (small, iso
 
 ## 5. Observability (10%)
 
-Log Analytics with diagnostic settings on PostgreSQL, Key Vault, ACR, Container Apps and the queue; an action group (e-mail to the budget contact); alert rules for web 5xx, replica restarts, and queue backlog; four saved queries (web errors, reminder runs and failures, queue activity, vault access). Demo: run a saved query, then trigger a rule with a deliberately bad request.
+Log Analytics with diagnostic settings on PostgreSQL, Key Vault, ACR and the queue (Container Apps logs go there through the environment's `appLogsConfiguration`); an action group (e-mail to the budget contact); alert rules for web 5xx, replica restarts, and queue backlog; four saved queries (web errors, reminder runs and failures, queue activity, vault access). Demo: run a saved query, then trigger a rule with a deliberately bad request.
 
 ## 6. Deployment (10%)
 
@@ -51,7 +51,7 @@ Log Analytics with diagnostic settings on PostgreSQL, Key Vault, ACR, Container 
 ## 7. Demo script (about 8 minutes, needs a live rehearsal first)
 
 1. Show the resource group and its tags; no public data endpoints (portal networking blades, or `az` commands).
-2. Sign in with the Entra account; show another account cannot read the first one's tasks.
+2. Sign in with the Entra account; show the authorization tests that deny another user and anonymous access (no second account live, by decision).
 3. Add a task with a reminder one minute ahead; show the enqueue job run, the queue message (ids only), the send job run and the notification on the phone.
 4. Show Key Vault references, the managed identity roles and the alert rules.
 5. Run a saved Log Analytics query.
@@ -65,4 +65,4 @@ Estimates, not measurements: an ephemeral 1 to 2 hour run is about 0.20 to 0.35 
 
 - No live Azure run of the reminder pipeline yet (role propagation, the jobs reading Key Vault secrets over private DNS, metric and table names used by the alerts and saved queries).
 - Claude Assistant is off on Azure by decision.
-- Entra callback and second-account denial still need a live check.
+- Entra callback still needs a live check. The second-account denial is not tested live by decision (2026-11-13); isolation is covered by the automated authorization tests, and the open ASVS V6.8.1 point (any account of the tenant can sign in) is stated as open.
