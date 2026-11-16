@@ -515,3 +515,10 @@ The user did not answer the nine owner questions one by one, so the recommended 
 - **The sweep (same day):** about 25 other hand-written Undos were read; none changed except the custom exercise edit. They are not a plain write-back: each also reverts local screen state when the write fails (shopping, wishlist, todos, food goals/water, categories, weight), orders itself after a pending delete (`await deleted`), or calls REST and reads `{ok}` (weight). Forcing them into `undoWith` needs an `onFail` option and would not be shorter or safer, so they stay as they are. Use `undoWith` for any new Undo that is only "write the old state back".
 - Two small differences: the day editor's "New exercise" form starts empty each time the editor opens, and the day-save Undo uses the day as it was when the editor opened.
 
+
+## 2026-11-16 — Azure live run: region, restore, alert trigger, Assistant
+
+- **Region:** `italynorth` again (it worked on 2026-11-13; the Entra app already lists that redirect host).
+- **Restore:** no second PostgreSQL server on Azure. Show the configured backup retention; the restore test stays on the personal deploy.
+- **5xx alert:** trigger it by stopping the web replica, not by adding a test endpoint that returns 500 (no demo-only code in the app).
+- **Claude Assistant:** stays off on Azure (`NEXT_PUBLIC_CLAUDE_ENABLED=false`), health data does not go to an AI provider.

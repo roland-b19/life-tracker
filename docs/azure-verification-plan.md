@@ -58,6 +58,8 @@ Follow the demo script in `docs/presentation.md` (about 8 minutes). One more sho
 
 ## Decisions needed
 
+**Answered 2026-11-16** (recorded in `docs/decisions.md`): italynorth; no restore test on Azure; stop a replica to fire the alert; Assistant stays off.
+
 1. **Region and credit:** use `italynorth` again (it worked on 2026-11-13), or another?
 2. **Restore test on Azure:** do it (small extra cost) or just show the retention setting?
 3. **How to trigger the 5xx alert:** a deliberate bad request needs a safe endpoint; if there is none, stop a replica instead.
