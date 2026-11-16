@@ -5,6 +5,8 @@ A personal life-tracking web app (PWA): **Gym**, **Health** (meals, water, steps
 Stack: Next.js 16 (App Router), React 19, NextAuth v4, Drizzle ORM, PostgreSQL, Vitest. Node 24.
 
 > Where we are and what is next: [`docs/STATUS.md`](docs/STATUS.md). The plan to the first deploy: [`docs/release-plan.md`](docs/release-plan.md).
+>
+> Azure course project: the [one-page overview (PDF)](docs/azure-one-pager.pdf) and [how each requirement is implemented](docs/azure-requirements.md).
 
 ## One codebase, two ways to run it
 
