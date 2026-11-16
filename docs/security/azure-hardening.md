@@ -41,8 +41,8 @@ runtime evidence.
 
 - [ ] `az deployment group what-if` reviewed against the final deployment
   parameters (no deployment has been run in this audit).
-- [ ] No public database, Key Vault or registry endpoint is reachable.
-- [ ] Runtime identity pulls from ACR without admin credentials.
+- [x] No public database, Key Vault or registry endpoint is reachable (live 2026-11-13: `publicNetworkAccess` Disabled on all three; Key Vault `Forbidden` and ACR 403 from outside; queue blocked by network rules).
+- [x] Runtime identity pulls from ACR without admin credentials (live 2026-11-13: app, enqueue, send and migration jobs run from ACR with managed identities; admin user disabled).
 - [ ] Secrets are injected from Key Vault and absent from image layers, logs
   and CI output (template contract is validated locally; deployment evidence
   remains required).

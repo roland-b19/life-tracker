@@ -441,6 +441,8 @@ Water, Steps, and meal logging now reject any other date in the server action (`
 - **Claude on Azure stays off** (user, 2026-11-13): `NEXT_PUBLIC_CLAUDE_ENABLED` remains false in the image.
 - Verified offline only: Bicep builds, contract tests and worker tests pass, CI builds and scans the worker. Not verified: any live Azure behaviour. That needs a rehearsal the user approves in the session (credit check, second Entra test account, then teardown).
 
+- **2026-11-13 — No second-account test on Azure.** The user chose to keep a single Entra account and skip the second-account test. The ASVS V6.8.1 point (any account of the tenant can sign in, no "Assignment required") stays open and is stated as such in the presentation. Data isolation between users is covered by the automated authorization tests, not by a live check.
+
 ## 2026-11-15 — Deload weeks, Sunday weeks, decimal comma (user)
 - The user measures a week from Sunday to Saturday, so every Gym week is Sunday-based (`weekStart`, `weeksBetween`); the fifth week of a cycle is the deload.
 - Deload weeks are editable: any week, past or future, can be marked or unmarked. The effective set is the rows of `deload_weeks(user_id, week_start)` plus the weeks of sessions flagged `is_deload`; marking or unmarking also sets or clears the flag on that week's sessions. The cycle restarts after the latest deload week. Undo re-saves the previous list.
