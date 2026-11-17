@@ -39,4 +39,5 @@ Deprecated patterns: the weight REST API (new features use server actions), see 
 - **Service worker cache:** the cache name in `app/components/page-cache.ts` must match `PAGES` in `public/sw.js`; bump `CACHE` in `public/sw.js` to refresh the muscle model.
 - **Backup workflow:** `.github/workflows/backup.yml` must not be weakened; the private `age` key stays with the owner.
 - **Health data:** never sent to an AI provider.
-- **Other worktrees:** `.claude/worktrees/**` carry their own test copies, so lint, typecheck and Vitest exclude `.claude/**`.
+- **Other worktrees:** `.claude/worktrees/**` carry their own test copies, so Vitest excludes `.claude/worktrees/**`; lint, typecheck and the Docker context exclude all of `.claude/`.
+- **Language server:** the `typescript-lsp` plugin needs the global npm packages `typescript-language-server` and `typescript` (`npm install -g --ignore-scripts typescript-language-server typescript`). Installed on the owner's Mac on 2026-11-18.
