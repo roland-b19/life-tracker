@@ -61,27 +61,24 @@ At the end of every working session:
 
 When you start: read the files under "Read first", then `git log --oneline -15`, before touching anything.
 
-## UI design: Apple HIG
+## UI design
 
-The app must feel like Apple software. Before designing or building any UI, UX copy, icon, chart, notification or widget, read the `apple-design` skill (`.agents/skills/apple-design/SKILL.md`) and the references it routes to. Use system components, system colors and text styles before custom ones. The skill's accessibility checklist is part of "done" for every screen.
+The app must feel like Apple software (Apple Human Interface Guidelines: system components, system colors and text styles before custom ones, accessibility on every screen). The house style is the Wishlist page, which the user signed off as the reference: `app/wishlist/wishlist-client.tsx`, its CSS in `app/globals.css` and the shared parts in `app/components/`. Every page must match it. The app has no animations or transitions, except the Tasks progress ring, the Wishlist total count-up and the Nutrition count-up. Decisions about the design are in `docs/decisions.md`.
 
-The house style on top of the HIG is the `ultimate-design-skill` (`.agents/skills/ultimate-design-skill/SKILL.md`): every value, the add/edit/delete + Undo pattern and rejected idea from the Wishlist page (the app has no animations or transitions, except the Tasks progress ring, the Wishlist total count-up and the Nutrition count-up), which the user signed off as the reference. Read it before any UI change and follow its checklist; every page must match the Wishlist.
+## Security
 
-## Security: secure-development skill
+Security is graded and the app will hold personal data. The plan is `docs/security-plan.md`; the standards are ASVS 5.0 target L2, OWASP Top 10:2025, NIST SSDF and MCSB for Azure.
 
-Security is graded and the app will hold personal data. The plan is `docs/security-plan.md`; the standards (ASVS 5.0 target L2, OWASP Top 10:2025, NIST SSDF, MCSB for Azure) are distilled in `.agents/skills/secure-development/`.
-
-- Before designing or changing authentication, authorization, data access, file handling or import, AI features, infrastructure or CI, read the `secure-development` skill (`.agents/skills/secure-development/SKILL.md`) and the references it routes to.
 - Security checks are part of "done" for every change, like tests.
 - Never disable, skip or weaken a security check, test, scanner or hook to make something pass. Fix the cause or ask the user.
 - Every new endpoint ships an authorization test: owner allowed, other user denied, anonymous denied.
 - Never log, commit or paste secrets, tokens, or health/finance data.
-- A new dependency, data type, external service or AI use updates `docs/threat-model.md` and `docs/security/data-inventory.md` in the same PR (templates: `.agents/skills/secure-development/templates/`).
+- A new dependency, data type, external service or AI use updates `docs/threat-model.md` and `docs/security/data-inventory.md` in the same PR.
 - No health data is ever sent to an AI provider (decision in `docs/decisions.md`).
 
-## Code review: code-review-guide skill
+## Code review
 
-When you review a change, prepare one for review, answer review comments, or review code another agent wrote, read the `code-review-guide` skill (`.agents/skills/code-review-guide/SKILL.md`). Say what you did not review or verify.
+When you review a change or prepare one for review, check correctness, security, tests and whether every line is needed. Say what you did not review or verify.
 
 ## Code map (graphify)
 
@@ -89,7 +86,7 @@ Graphify turns the repo into a queryable knowledge graph in `graphify-out/` (not
 
 ## Coding philosophy: ponytail
 
-Vendored from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) (MIT, commit `96608e0`), so it applies to any agent. The six ponytail skills (`/ponytail-review`, `/ponytail-audit`, ...) live in `.agents/skills/`.
+Vendored from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) (MIT, commit `96608e0`), so it applies to any agent.
 
 ### Ponytail, lazy senior dev mode
 

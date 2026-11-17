@@ -1,5 +1,7 @@
 # Security plan
 
+> 2026-11-17: the `secure-development` skill described below (D1) was removed from the repo; its text is in git history. The rest of the plan still stands.
+
 Status: **validated by the user on 2026-11-02.** The `secure-development` skill (D1), the local secret-scan hook config (`.pre-commit-config.yaml`; install with `pre-commit install`), its templates and the `AGENTS.md` security rules (D8) are done and fact-checked. Still open, waiting for the stack decision: CI security pipeline, cloud hardening, threat model v1 and data inventory (written during planning).
 
 Versions below were looked up on 2026-11-02; the skill's `SKILL.md` has the refresh procedure.
