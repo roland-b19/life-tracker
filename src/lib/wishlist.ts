@@ -5,10 +5,10 @@ import { ensureCategory } from "./categories";
 import {
   CreateWishlistItemInput,
   createWishlistItemSchema,
-  priorityForPrice,
   RestoreWishlistItemInput,
   restoreWishlistItemSchema,
 } from "./validations/wishlist";
+import { priorityForPrice } from "./rules";
 
 const wishlistColumns = {
   id: wishlistItems.id,

@@ -1,5 +1,6 @@
 "use client";
 
+import type { MuscleGroupKey } from "@/lib/gym-muscles";
 import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
 import { Banner, Page, TintButton } from "../components/blocks";
@@ -10,7 +11,6 @@ import { DayEditor } from "./day-editor";
 import { DeloadCard } from "./deload-card";
 import { HistoryCard } from "./history-card";
 import { MuscleExplorer } from "./muscle-map";
-import type { MuscleGroup } from "./muscle-groups";
 import { ProgressPanel } from "./progress-panel";
 import { TrainingDays } from "./training-days";
 import type { ActiveSessionData, DeloadInfo, LibraryExercise, SplitDay } from "./types";
@@ -51,7 +51,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
 
   const currentDay = days.find((d) => d.id === selectedDayId);
   // The muscles the day on screen trains: the muscle map starts with them picked (it compares by content, so a new array each render is fine).
-  const dayGroups = [...new Set(currentDay?.exercises.map((e) => e.muscleGroup))] as MuscleGroup[];
+  const dayGroups = [...new Set(currentDay?.exercises.map((e) => e.muscleGroup))] as MuscleGroupKey[];
 
   return (
     <Page userName={userName}>

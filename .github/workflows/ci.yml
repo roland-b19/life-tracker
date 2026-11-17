@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
+        # Keep the same version in docker-compose.yml, backup.yml and scripts/backup-now.sh.
         image: postgres:17.6
         env:
           POSTGRES_PASSWORD: postgres

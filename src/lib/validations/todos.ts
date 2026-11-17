@@ -21,8 +21,6 @@ export const createTodoSchema = z.object({
   category: categorySchema.default("other"),
 });
 
-export { isoDate };
-
 // A time the screen sends back (Undo) can be a minute ahead of the server clock, never more: a year-2099 time would pin a task on top for good.
 const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future");
 

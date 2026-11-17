@@ -9,7 +9,5 @@ node_modules
 tests
 Dockerfile
 docker-compose.yml
-README.md
 docs
-.agents
 *.log

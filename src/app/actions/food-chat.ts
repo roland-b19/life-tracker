@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { toISODate } from "@/lib/format-date";
 import { isoDate } from "@/lib/validations/common";
-import { metricDayEditable } from "@/lib/validations/food";
+import { metricDayEditable } from "@/lib/rules";
 import { requireUser } from "@/server/auth";
 import { assertClaudeEnabled } from "@/lib/features";
 import { sendFoodChatMessage } from "@/lib/food-ai-chat";

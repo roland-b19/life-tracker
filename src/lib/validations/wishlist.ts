@@ -23,7 +23,5 @@ export const restoreWishlistItemSchema = createWishlistItemSchema.extend({
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
-export { priorityForPrice, type Priority } from "../rules";
-
 export type CreateWishlistItemInput = z.input<typeof createWishlistItemSchema>;
 export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;

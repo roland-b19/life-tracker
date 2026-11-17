@@ -7,7 +7,7 @@ case "${DATABASE_URL_MIGRATE:-}" in
   postgresql://*|postgres://*) ;;
   *) echo "Set DATABASE_URL_MIGRATE to the Neon owner URL (direct, starting with postgresql://)"; exit 1 ;;
 esac
-PG_IMAGE="postgres:17.6" # as .github/workflows/backup.yml: pg_dump must be at least as new as the server
+PG_IMAGE="postgres:17.6" # as .github/workflows/backup.yml (pg_dump must be at least as new as the server); keep the version the same in ci.yml and docker-compose.yml
 out="$(cd "$(dirname "$0")/.." && pwd)/.local/backups"
 name="life-tracker-$(date +%Y-%m-%d-%H%M%S).dump"
 mkdir -p "$out"

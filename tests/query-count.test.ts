@@ -68,7 +68,7 @@ afterAll(async () => {
   await admin.end();
 });
 
-// Cost guards (docs/release-plan.md section 6): a page view must not grow with the history, and the Neon and Vercel
+// Cost guards: a page view must not grow with the history, and the Neon and Vercel
 // free limits count queries, rows and bytes. Measured with two years of data; the limits leave a little room.
 describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [

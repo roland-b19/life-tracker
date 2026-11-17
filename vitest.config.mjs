@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -7,6 +7,8 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 20000,
     setupFiles: ["./tests/setup.ts"],
+    // Other worktrees live under .claude/worktrees; their copies of the tests are not ours.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
   resolve: {
     alias: { "@": path.resolve(".", "src") },

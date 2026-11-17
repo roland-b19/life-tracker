@@ -6,16 +6,11 @@ import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
-import {
-  GROUP_COLOR,
-  GROUP_LABEL,
-  MESH_GROUP,
-  MUSCLE_GROUPS,
-  type MuscleGroup,
-} from "./muscle-groups";
+import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, type MuscleGroupKey } from "@/lib/gym-muscles";
+import { GROUP_COLOR, MESH_GROUP } from "./muscle-groups";
 
 interface MapApi {
-  setSelected(g: MuscleGroup[]): void;
+  setSelected(g: MuscleGroupKey[]): void;
   setView(v: "front" | "back"): void;
   rotateBy(dx: number, dy: number): void;
 }
@@ -36,8 +31,8 @@ function MuscleMap({
   onGoBack,
   canGoBack,
 }: {
-  selected: MuscleGroup[];
-  onSelect: (g: MuscleGroup, additive: boolean) => void;
+  selected: MuscleGroupKey[];
+  onSelect: (g: MuscleGroupKey, additive: boolean) => void;
   onGoBack: () => void;
   canGoBack: boolean;
 }) {
@@ -123,7 +118,7 @@ function MuscleMap({
 
         const parts: {
           mesh: InstanceType<typeof THREE.Mesh>;
-          group: MuscleGroup | null;
+          group: MuscleGroupKey | null;
           mat: InstanceType<typeof THREE.MeshStandardMaterial>;
         }[] = [];
         model.traverse((o) => {
@@ -140,7 +135,7 @@ function MuscleMap({
           parts.push({ mesh, group, mat });
         });
 
-        const paint = (sel: MuscleGroup[]) => {
+        const paint = (sel: MuscleGroupKey[]) => {
           const some = sel.length > 0;
           for (const p of parts) {
             const on = p.group !== null && (!some || sel.includes(p.group));
@@ -336,7 +331,7 @@ interface PlannedExercise {
   dayName: string;
 }
 
-const sameGroups = (a: MuscleGroup[], b: MuscleGroup[]) => a.length === b.length && a.every((g) => b.includes(g));
+const sameGroups = (a: MuscleGroupKey[], b: MuscleGroupKey[]) => a.length === b.length && a.every((g) => b.includes(g));
 
 /** 3D model + group chips; the muscles picked list the exercises of the user's split that train them. The day on screen picks its own muscles to start with. */
 export function MuscleExplorer({
@@ -344,33 +339,33 @@ export function MuscleExplorer({
   dayGroups,
 }: {
   planned: PlannedExercise[];
-  dayGroups: MuscleGroup[];
+  dayGroups: MuscleGroupKey[];
 }) {
-  const [selected, setSelected] = useState<MuscleGroup[]>(dayGroups);
+  const [selected, setSelected] = useState<MuscleGroupKey[]>(dayGroups);
   // Another training day on screen: its muscles are picked again (state adjusted while rendering, not in an effect).
   const [seenDay, setSeenDay] = useState(dayGroups);
   if (!sameGroups(seenDay, dayGroups)) {
     setSeenDay(dayGroups);
     setSelected(dayGroups);
   }
-  const toggle = (g: MuscleGroup) => setSelected((s) => (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]));
+  const toggle = (g: MuscleGroupKey) => setSelected((s) => (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]));
   // A tap picks one muscle (a second tap clears it); Shift, Ctrl or Cmd adds to the picked ones.
-  const pick = (g: MuscleGroup, additive: boolean) =>
+  const pick = (g: MuscleGroupKey, additive: boolean) =>
     setSelected((s) => (additive ? (s.includes(g) ? s.filter((x) => x !== g) : [...s, g]) : sameGroups(s, [g]) ? [] : [g]));
-  const setsOf = (g: MuscleGroup) =>
+  const setsOf = (g: MuscleGroupKey) =>
     planned
       .filter((e) => e.muscleGroup === g)
       .reduce((n, e) => n + e.targetSets, 0);
-  const otherSets = planned.filter((e) => !MUSCLE_GROUPS.includes(e.muscleGroup as MuscleGroup)).reduce((n, e) => n + e.targetSets, 0);
+  const otherSets = planned.filter((e) => !MUSCLE_GROUP_KEYS.includes(e.muscleGroup as MuscleGroupKey)).reduce((n, e) => n + e.targetSets, 0);
   // One row per exercise even when it is on several days of the split.
   const list: (PlannedExercise & { days: string[] })[] = [];
   for (const e of planned) {
-    if (!selected.includes(e.muscleGroup as MuscleGroup)) continue;
+    if (!selected.includes(e.muscleGroup as MuscleGroupKey)) continue;
     const row = list.find((r) => r.exerciseId === e.exerciseId);
     if (row) row.days.push(e.dayName);
     else list.push({ ...e, days: [e.dayName] });
   }
-  const title = selected.length === 1 ? `${GROUP_LABEL[selected[0]]} workouts` : "Workouts for the picked muscles";
+  const title = selected.length === 1 ? `${MUSCLE_GROUP_LABEL[selected[0]]} workouts` : "Workouts for the picked muscles";
 
   return (
     <Card
@@ -399,7 +394,7 @@ export function MuscleExplorer({
 
         <div className="muscle-side">
           <div className="muscle-chips" role="group" aria-label="Muscle group">
-            {MUSCLE_GROUPS.map((g) => (
+            {MUSCLE_GROUP_KEYS.map((g) => (
               <button
                 key={g}
                 type="button"
@@ -412,7 +407,7 @@ export function MuscleExplorer({
                   style={{ background: GROUP_COLOR[g] }}
                   aria-hidden="true"
                 />
-                {GROUP_LABEL[g]}
+                {MUSCLE_GROUP_LABEL[g]}
               </button>
             ))}
           </div>
@@ -442,7 +437,7 @@ export function MuscleExplorer({
               <GroupLabel>Planned sets per week</GroupLabel>
               <HBars
                 rows={[
-                  ...MUSCLE_GROUPS.filter((g) => setsOf(g) > 0).map((g) => ({ label: GROUP_LABEL[g], value: setsOf(g), display: String(setsOf(g)) })),
+                  ...MUSCLE_GROUP_KEYS.filter((g) => setsOf(g) > 0).map((g) => ({ label: MUSCLE_GROUP_LABEL[g], value: setsOf(g), display: String(setsOf(g)) })),
                   // A custom exercise filed under "Other" has no spot on the model, so its sets get their own bar.
                   ...(otherSets > 0 ? [{ label: "Other", value: otherSets, display: String(otherSets) }] : []),
                 ]}

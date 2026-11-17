@@ -3,13 +3,9 @@
  * used by exercises. Muscles not listed (face, neck, hands, feet, deep core) are drawn in neutral grey.
  * Model: BodyParts3D via organui/muscles-3d, CC BY-SA 2.1 Japan, see docs/licenses/muscles-model.md.
  */
-import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, type MuscleGroupKey } from "@/lib/gym-muscles";
+import { MUSCLE_GROUP_KEYS, type MuscleGroupKey } from "@/lib/gym-muscles";
 
-export const MUSCLE_GROUPS = MUSCLE_GROUP_KEYS;
-export type MuscleGroup = MuscleGroupKey;
-export const GROUP_LABEL: Record<MuscleGroup, string> = MUSCLE_GROUP_LABEL;
-
-export const GROUP_COLOR: Record<MuscleGroup, string> = {
+export const GROUP_COLOR: Record<MuscleGroupKey, string> = {
   chest: "#ef6f6c",
   shoulders: "#f2b84b",
   biceps: "#9b7fe0",
@@ -25,7 +21,7 @@ export const GROUP_COLOR: Record<MuscleGroup, string> = {
   calves: "#e86fa8",
 };
 
-const MESHES: Record<MuscleGroup, string[]> = {
+const MESHES: Record<MuscleGroupKey, string[]> = {
   chest: ["pectoralis-major", "pectoralis-minor", "subclavius", "serratus-anterior"],
   shoulders: ["deltoid", "supraspinatus", "infraspinatus", "teres-minor", "teres-major", "subscapularis"],
   biceps: ["biceps-brachii", "brachialis", "coracobrachialis"],
@@ -104,6 +100,6 @@ const MESHES: Record<MuscleGroup, string[]> = {
   ],
 };
 
-export const MESH_GROUP: Record<string, MuscleGroup> = Object.fromEntries(
-  MUSCLE_GROUPS.flatMap((g) => MESHES[g].map((id) => [id, g] as const)),
+export const MESH_GROUP: Record<string, MuscleGroupKey> = Object.fromEntries(
+  MUSCLE_GROUP_KEYS.flatMap((g) => MESHES[g].map((id) => [id, g] as const)),
 );
