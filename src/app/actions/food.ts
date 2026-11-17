@@ -2,11 +2,11 @@
 
 import { requireUser } from "@/server/auth";
 import { toISODate } from "@/lib/format-date";
+import { metricDayEditable } from "@/lib/rules";
 import { isoDate, uuid } from "@/lib/validations/common";
 import {
   MAX_STEPS,
   MAX_WATER_ML,
-  metricDayEditable,
   createShoppingItemSchema,
   logMealSchema,
   restoreMealSchema,
@@ -40,7 +40,7 @@ import {
   updateShoppingItem,
 } from "@/lib/food";
 
-/** Water, steps and meals are written for today or yesterday only; older days are history (same rule as saveDailyMetricAction). */
+/** Water, steps and meals are written for today or yesterday only; older days are history. */
 function assertWritableDay(date: string) {
   if (!metricDayEditable(date, toISODate())) throw new Error("Only today and yesterday can be changed.");
 }

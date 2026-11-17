@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
+        # Keep the same version in docker-compose.yml, backup.yml and scripts/backup-now.sh.
         image: postgres:17.6
         env:
           POSTGRES_PASSWORD: postgres
@@ -46,12 +47,9 @@ jobs:
         run: psql "$DATABASE_URL" -c "CREATE ROLE life_tracker_app LOGIN PASSWORD 'ci';"
       - name: Migrate database
         run: npm run db:migrate
-      - name: Lint
-        run: npm run lint
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Tests
-        run: npm test
+      # The one check command (see docs/kb/conventions.md): lint, typecheck, tests and the KB check.
+      - name: Fast checks
+        run: npm run check
       - name: Build production container
         run: docker build --tag life-tracker:ci .
       # Syft runs from its Docker Hub image, pinned by digest: the sbom-action downloads it from

@@ -21,8 +21,6 @@ export const logMealSchema = z.object({
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
-export { metricDayEditable } from "../rules";
-
 export const updateNutritionTargetsSchema = z.object({
   calories: z.number().int().min(500).max(10000),
   proteinGrams: z.number().int().min(20).max(500),

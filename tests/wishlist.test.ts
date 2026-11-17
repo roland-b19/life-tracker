@@ -23,7 +23,7 @@ import {
   updateWishlistItem,
 } from "@/lib/wishlist";
 import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
-import { priorityForPrice } from "@/lib/validations/wishlist";
+import { priorityForPrice } from "@/lib/rules";
 
 async function seedUser(subject: string) {
   const [user] = await db

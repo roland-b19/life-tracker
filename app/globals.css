@@ -1,5 +1,5 @@
 :root {
-  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent (docs/decisions.md, 2026-11-06). */
+  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent. */
   --background: #000000;
   --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0) 100%),
                radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
@@ -14,7 +14,6 @@
   --on-tint: #0b1b30;
   --tint-subtle: rgba(134, 180, 234, 0.24);
   --success: #8fd4a3;
-  --success-subtle: rgba(143, 212, 163, 0.22);
   --warning: #ebc673;
   --warning-subtle: rgba(235, 198, 115, 0.22);
   --danger: #ef8f8f;
@@ -138,8 +137,7 @@ h3 {
 
 /* Tabular Numbers: Ensure numbers and counters never jitter/jiggle */
 .number-tabular,
-.todo-title,
-.badge-carried {
+.todo-title {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
@@ -1050,11 +1048,6 @@ button.signin-continue:disabled {
 .todo-title.completed {
   text-decoration: line-through;
   color: var(--secondary);
-}
-
-.badge-carried {
-  background: var(--warning-subtle);
-  color: var(--warning);
 }
 
 .todo-checkbox-btn.static {

@@ -21,12 +21,9 @@ local.settings.json
 !.claude/
 .claude/settings.local.json
 
-# Python
+# Python (bytecode of the workflow scripts in .claude/skills)
 __pycache__/
 *.pyc
-.venv/
-venv/
-.pytest_cache/
 
 # Node
 node_modules/
@@ -36,18 +33,7 @@ build/
 coverage/
 *.tsbuildinfo
 
-# .NET / Java
-bin/
-obj/
-target/
-
-# Terraform / Azure (state can contain secrets)
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-!*.tfvars.example
-crash.log
+# Azure CLI local state
 .azure/
 
 .neon
@@ -55,3 +41,6 @@ crash.log
 
 # Personal data for scripts/import-personal.cjs (never committed)
 /.local/
+.claude/worktrees/
+CLAUDE.local.md
+.pr-body.md

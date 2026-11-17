@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Edit|Write|NotebookEdit|Bash|mcp__ccd_session__start_session", "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/merge-branch/scripts/guard_hook.py\"", "timeout": 10 }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/merge-branch/scripts/guard_hook.py\"", "timeout": 10 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/merge-branch/scripts/guard_hook.py\"", "timeout": 10 }] }
+    ]
+  }
+}

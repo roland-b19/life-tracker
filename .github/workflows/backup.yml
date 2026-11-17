@@ -2,7 +2,8 @@ name: Backup
 
 # Weekly encrypted dump of the production database (Neon). The dump is piped through `age`, so no plaintext
 # ever touches the runner's disk or the artifact. Only the public key is here; the private key stays offline with the owner.
-# Runbook (secret, backup role, restore test): README "Backups".
+# Runbook: the repo secret BACKUP_DATABASE_URL holds the direct Neon URL of the read-only role `life_tracker_backup`; download the
+# artifact, decrypt it with the private key (`age -d -i <key>`) and prove it restores (`pg_restore -l`, then a restore into a scratch database).
 on:
   schedule:
     - cron: "17 3 * * 0" # Sunday 03:17 UTC
@@ -22,6 +23,7 @@ jobs:
     env:
       AGE_PUBLIC_KEY: age14nc73lll20j2jxx4rflpmp70fw9ctm4z7m53adak4wtwvrpe2dyq28mesy
       # pg_dump must be at least as new as the server; Neon's major version is shown in its console.
+      # Keep the same version in ci.yml, docker-compose.yml and scripts/backup-now.sh.
       PG_IMAGE: postgres:17.6
     steps:
       - name: Install age

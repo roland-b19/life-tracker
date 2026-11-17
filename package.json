@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm test && python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb",
     "db:migrate": "drizzle-kit migrate",
     "seed:dev": "node --env-file=.env scripts/seed-dev.cjs"
   },
