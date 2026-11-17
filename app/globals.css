@@ -137,8 +137,7 @@ h3 {
 
 /* Tabular Numbers: Ensure numbers and counters never jitter/jiggle */
 .number-tabular,
-.todo-title,
-.badge-carried {
+.todo-title {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
