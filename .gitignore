@@ -20,7 +20,6 @@ local.settings.json
 # (hooks, skills) in case a personal global gitignore ignores the whole folder.
 !.claude/
 .claude/settings.local.json
-.gemini/.env
 
 # Python
 __pycache__/
@@ -51,8 +50,6 @@ target/
 crash.log
 .azure/
 
-# Graphify output is derived and rebuilt locally (git hooks, `graphify update .`)
-graphify-out/
 .neon
 .claude/launch.json
 

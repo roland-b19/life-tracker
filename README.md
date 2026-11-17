@@ -136,8 +136,8 @@ The counts must match the live app. Also download one artifact now and then and 
 
 ## For people and for AI agents
 
-- Working rules for every agent (Claude Code, Gemini, Antigravity, Copilot, Codex, ...): [`AGENTS.md`](AGENTS.md)
+- Working rules for every agent (Claude Code, Codex, ...): [`AGENTS.md`](AGENTS.md)
 - Course requirements: [`docs/requirements.md`](docs/requirements.md)
 - Decisions and open questions: [`docs/decisions.md`](docs/decisions.md)
 - Security: [`docs/security-plan.md`](docs/security-plan.md), [`docs/threat-model.md`](docs/threat-model.md), [`docs/security/`](docs/security/)
-- Tooling setup (graphify, ponytail, Azure CLI): [`docs/TOOLING.md`](docs/TOOLING.md)
+- Tooling setup (ponytail, Azure CLI): [`docs/TOOLING.md`](docs/TOOLING.md)

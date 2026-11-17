@@ -7,7 +7,6 @@
 coverage
 node_modules
 tests
-graphify-out
 Dockerfile
 docker-compose.yml
 README.md
