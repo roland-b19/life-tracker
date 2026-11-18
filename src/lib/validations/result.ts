@@ -5,12 +5,15 @@ export class Refusal extends Error {}
 
 export type Failure = { success: false; error: string };
 
+/** A server action's answer: what it returned, or the refusal's message. */
+export type Answer<T extends object = object> = ({ success: true } & T) | Failure;
+
 /**
  * The one answer of a server action: `{ success: true, ...what run returns }` or `{ success: false, error }`.
  * A failed zod `.parse()` and a `Refusal` become the failure, so the browser gets the message (Next hides a thrown
  * one in production). Anything else, the session check included, still throws. Call it after `requireUser()`, never around it.
  */
-export async function respond<T extends object>(run: () => Promise<T>): Promise<({ success: true } & T) | Failure> {
+export async function respond<T extends object>(run: () => Promise<T>): Promise<Answer<T>> {
   try {
     return { success: true, ...(await run()) };
   } catch (e) {

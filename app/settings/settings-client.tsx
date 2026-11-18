@@ -70,7 +70,9 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     const before = connectedAt;
     setConnectedAt(null);
     try {
-      const { previous } = await disconnectClaudeAction();
+      const answer = await disconnectClaudeAction();
+      if (!answer.success) throw new Error(answer.error);
+      const { previous } = answer;
       showToast({
         message: "Disconnected Claude",
         type: "success",

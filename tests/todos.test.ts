@@ -775,12 +775,12 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await createTodo(userA, { space: "business", title: "Later", dueDate: addDays(today, 2), isRecurring: false, recurrencePattern: "none" });
 
       authState.id = userA;
-      const view = await loadTodosViewAction();
+      const view = succeeded(await loadTodosViewAction());
       expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
       expect(view.daily[1].todos).toEqual([]);
 
       authState.id = userB;
-      expect((await loadTodosViewAction()).daily[0].todos).toEqual([]);
+      expect(succeeded(await loadTodosViewAction()).daily[0].todos).toEqual([]);
 
       authState.id = "";
       await expect(loadTodosViewAction()).rejects.toThrow("Authentication required.");

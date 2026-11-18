@@ -22,6 +22,8 @@ export const logMealSchema = z.object({
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
+const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
+
 /** One weigh-in a day: saving a day that already has one replaces its kilograms. */
 export const logWeightSchema = z
   .object({
@@ -29,9 +31,8 @@ export const logWeightSchema = z
     date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
     kilograms: z
       .number("Please enter a valid weight.")
-      .finite("Please enter a valid weight.")
-      .min(20, "The weight must be between 20 and 500 kg.")
-      .max(500, "The weight must be between 20 and 500 kg.")
+      .min(20, WEIGHT_RANGE)
+      .max(500, WEIGHT_RANGE)
       // 78.4 * 100 is 7840.000000000001, so compare against the nearest hundredth instead of Number.isInteger.
       .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "Maximum two decimal places."),
   })

@@ -16,6 +16,7 @@ vi.mock("@/server/auth", () => ({
 import { db } from "@/server/db";
 import { claudeConnections, deloadWeeks, pushSubscriptions, users, weightEntries, wishlistItems, workoutSessions } from "@/db/schema";
 import { exportDataAction } from "@/app/actions/export";
+import { succeeded } from "./succeeded";
 import { createTodo } from "@/lib/todos";
 
 async function seedUser(subject: string) {
@@ -47,7 +48,7 @@ describe("Export: all of the signed-in user's data as text", () => {
 
   it("returns the owner's data as a dated .txt file", async () => {
     authState.id = owner;
-    const { filename, text } = await exportDataAction();
+    const { filename, text } = succeeded(await exportDataAction());
     expect(filename).toMatch(/^life-tracker-export-\d{4}-\d{2}-\d{2}\.txt$/);
     expect(text).toContain("== Wishlist (1) ==");
     expect(text).toContain("name: Owner Standing Desk");
@@ -61,18 +62,18 @@ describe("Export: all of the signed-in user's data as text", () => {
 
   it("never includes another user's data", async () => {
     authState.id = owner;
-    const { text } = await exportDataAction();
+    const { text } = succeeded(await exportDataAction());
     expect(text).not.toContain("Other Secret Gadget");
     expect(text).not.toContain("Other Task");
     authState.id = other;
-    const theirs = await exportDataAction();
+    const theirs = succeeded(await exportDataAction());
     expect(theirs.text).toContain("Other Secret Gadget");
     expect(theirs.text).not.toContain("Owner Standing Desk");
   });
 
   it("leaves out the Claude token and the push subscriptions", async () => {
     authState.id = owner;
-    const { text } = await exportDataAction();
+    const { text } = succeeded(await exportDataAction());
     expect(text).not.toContain(marker);
   });
 

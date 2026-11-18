@@ -42,6 +42,7 @@ function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, start
 /** A change to a one-off task is made on its own day, to a daily one on today. */
 const assertChangeable = (task: { isRecurring: boolean; dueDate: string }) => assertToday(task.isRecurring ? toISODate() : task.dueDate);
 
+const gone = () => new Refusal("This task no longer exists.");
 const duplicate = (title: string) => new Refusal(`"${title}" is already on this list.`);
 
 export async function createTodoAction(rawInput: unknown) {
@@ -75,7 +76,7 @@ export async function toggleTodoAction(rawInput: unknown) {
   return respond(async () => {
     const parsed = toggleTodoSchema.parse(rawInput);
     const task = await findTodo(userId, parsed.id);
-    if (!task) throw new Refusal("This task no longer exists.");
+    if (!task) throw gone();
     assertChangeable(task);
     // A daily task is ticked for today only, and only once it has started.
     if (task.isRecurring && toISODate() < task.dueDate) throw new Refusal("This task is not due today.");
@@ -89,11 +90,11 @@ export async function updateTodoAction(rawInput: unknown) {
   return respond(async () => {
     const parsed = updateTodoSchema.parse(rawInput);
     const task = await findTodo(userId, parsed.id);
-    if (!task) throw new Refusal("This task no longer exists.");
+    if (!task) throw gone();
     assertChangeable(task);
     if (await hasDuplicateTodo(userId, { ...task, title: parsed.title }, task.id)) throw duplicate(parsed.title);
     const todo = await updateTodo(userId, parsed);
-    if (!todo) throw new Refusal("This task no longer exists.");
+    if (!todo) throw gone();
     return { todo };
   });
 }
@@ -117,7 +118,7 @@ export async function deleteTodoAction(todoId: string) {
 export async function loadTodosViewAction() {
   const userId = await requireUser();
   const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-  return { success: true as const, daily: await both((space) => getDailyTodos(userId, space, toISODate())) };
+  return respond(async () => ({ daily: await both((space) => getDailyTodos(userId, space, toISODate())) }));
 }
 
 export async function savePushSubscriptionAction(rawInput: unknown) {

@@ -7,8 +7,9 @@ import { deleteClaudeToken, getStoredConnection, restoreClaudeConnection, saveCl
 import { respond } from "@/lib/validations/result";
 
 // The long-lived OAuth token printed by `claude setup-token`.
+const TOKEN_HINT = "Please paste the token that claude setup-token prints.";
 const tokenSchema = z.object({
-  token: z.string("Please paste the token that claude setup-token prints.").trim().regex(/^sk-ant-[A-Za-z0-9_-]{20,500}$/, "Please paste the token that claude setup-token prints."),
+  token: z.string(TOKEN_HINT).trim().regex(/^sk-ant-[A-Za-z0-9_-]{20,500}$/, TOKEN_HINT),
 });
 
 export async function connectClaudeAction(input: z.input<typeof tokenSchema>) {
@@ -25,9 +26,11 @@ export async function connectClaudeAction(input: z.input<typeof tokenSchema>) {
 export async function disconnectClaudeAction() {
   assertClaudeEnabled();
   const userId = await requireUser();
-  const previous = await getStoredConnection(userId);
-  await deleteClaudeToken(userId);
-  return { success: true as const, previous: sealed(previous) };
+  return respond(async () => {
+    const previous = await getStoredConnection(userId);
+    await deleteClaudeToken(userId);
+    return { previous: sealed(previous) };
+  });
 }
 
 // What Undo needs to put a token back: the stored ciphertext, never the token itself. Only the server key opens it.

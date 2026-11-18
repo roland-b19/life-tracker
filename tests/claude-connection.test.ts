@@ -103,7 +103,7 @@ describe("Claude connection", () => {
     await restoreClaudeConnectionAction(replaced.previous!);
     expect(await getClaudeToken(owner)).toBe(OLD);
 
-    const gone = await disconnectClaudeAction();
+    const gone = succeeded(await disconnectClaudeAction());
     expect(await getClaudeConnection(owner)).toBeNull();
     await restoreClaudeConnectionAction(gone.previous!);
     expect(await getClaudeToken(owner)).toBe(OLD);

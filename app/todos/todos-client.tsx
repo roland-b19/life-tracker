@@ -127,6 +127,7 @@ export function TodosClient({
     const id = ++requestId.current;
     try {
       const view = await loadTodosViewAction();
+      if (!view.success) throw new Error(view.error);
       if (id === requestId.current) {
         setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
       }

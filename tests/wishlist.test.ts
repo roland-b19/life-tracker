@@ -24,6 +24,7 @@ import {
 } from "@/lib/wishlist";
 import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/rules";
+import { succeeded } from "./succeeded";
 
 async function seedUser(subject: string) {
   const [user] = await db
@@ -182,8 +183,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
 
     await deleteWishlistItem(userA, item.id);
     authState.id = userA;
-    const back = await restoreWishlistItemAction(input);
-    if (!back.success) throw new Error(back.error);
+    const back = succeeded(await restoreWishlistItemAction(input));
     expect(back.item.id).toBe(item.id);
     expect(back.item.createdAt.getTime()).toBe(item.createdAt.getTime());
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.priority).toBe("medium");

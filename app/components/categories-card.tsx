@@ -3,14 +3,11 @@
 import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
-import type { Failure } from "@/lib/validations/result";
+import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { undoWith, useToast } from "./toast";
-
-/** A server action's answer: its result, or the refusal's message. */
-type Answer<T extends object = object> = ({ success: true } & T) | Failure;
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
 export interface CategoriesApi {
