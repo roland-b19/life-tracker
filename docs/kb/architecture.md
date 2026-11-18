@@ -1,6 +1,6 @@
 ---
 summary: How Life Tracker is built: folders, request flow, auth, data model, feature flags, push and PWA, deploy variants, backups, CI and tests.
-covers: app/**, src/**, drizzle/**, drizzle.config.ts, next.config.ts, public/sw.js, worker/**, infra/**, Dockerfile, docker-compose.yml, docker/**, scripts/**, tests/**, .github/workflows/**
+covers: app/**, src/**, drizzle/**, drizzle.config.ts, next.config.ts, public/sw.js, worker/**, infra/**, Dockerfile, docker-compose.yml, docker/**, scripts/**, tests/**, playwright.config.ts, .github/workflows/**
 last_verified: 2026-11-18
 ---
 
@@ -51,10 +51,11 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - **Azure (course demo):** `infra/main.bicep` (private networking, ACR by digest, Key Vault, Storage Queue, Container App plus worker jobs). `scripts/azure-deploy.sh` needs `DEPLOY_APPROVED=YES` and `COST_GATE_APPROVED=YES`. The Dockerfile is a 3-stage Alpine build with `public/` and `drizzle/` copied explicitly and a `/health` healthcheck.
 - **Local:** `docker-compose.yml` (Postgres 17.6 on 127.0.0.1:5432; `docker/postgres/init.sh` creates roles and the test database), `.env.example`, `npm run seed:dev`.
 - **Backups:** `.github/workflows/backup.yml` runs weekly, dumps with the read-only role `life_tracker_backup` and encrypts with `age`; the private key stays with the owner. Do not weaken it.
-- **CI:** `.github/workflows/ci.yml` runs one job with a Postgres 17.6 service: migrate, `npm run check` (lint, typecheck, tests, KB check), image builds with Trivy and SBOM, Bicep build, `bash -n` on scripts, `npm audit` (production dependencies only, D-004), gitleaks. The Postgres version is pinned in four places that must match: `ci.yml`, `backup.yml`, `docker-compose.yml`, `scripts/backup-now.sh`.
+- **CI:** `.github/workflows/ci.yml` runs one job with a Postgres 17.6 service: migrate, `npm run check` (lint, typecheck, tests, KB check), `npm run e2e` (Chromium, uploads the report on failure), image builds with Trivy and SBOM, Bicep build, `bash -n` on scripts, `npm audit` (production dependencies only, D-004), gitleaks. The Postgres version is pinned in four places that must match: `ci.yml`, `backup.yml`, `docker-compose.yml`, `scripts/backup-now.sh`.
 
 ## Tests
 - Vitest, node environment, files run serially against one database. Outside CI the app role connects to `life_tracker_test`; in CI one `life_tracker` database as `postgres`. Tests need Postgres (about 15 files); the rest are pure.
+- Playwright Test (D-005) in `tests/e2e/`, run by `npm run e2e` and excluded from Vitest: `playwright.config.ts` starts `next dev` on port 3100 with `AUTH_DEV=true` against the same test database, in two Chromium projects (`desktop`, `phone` at 375 px), one worker, no retries; `@axe-core/playwright` scans each visited page. Details and gotchas: [conventions](conventions.md).
 - Guards worth knowing: `query-count.test.ts` (page query and byte budgets with two years of data), `infra-contract.test.ts` (string checks on the Bicep and scripts), `actions-anonymous` and `pages-auth` (auto-cover new files).
 
 ## Repo layout

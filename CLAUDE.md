@@ -16,6 +16,7 @@ Stack: Next.js 16 (App Router), TypeScript, Drizzle ORM, Postgres, NextAuth, Vit
 
 - `npm run dev` / `build` / `start`
 - `npm run lint`, `npm run typecheck`, `npm test` (CI runs all three against Postgres)
+- `npm run e2e` (Playwright browser spec on `next dev`; needs Postgres, see the KB conventions)
 - `npm run db:migrate` (Drizzle migrations), `npm run seed:dev`
 
 Next.js 16 has breaking changes against older versions: read the relevant guide in `node_modules/next/dist/docs/` before changing framework-level code.

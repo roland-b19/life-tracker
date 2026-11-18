@@ -36,6 +36,7 @@ Life Tracker has only Vitest tests, so nothing checks that the real UI works in 
    - `testDir: "tests/e2e"`, `retries: 0`, `trace: "retain-on-failure"`, headless, `fullyParallel: false`, `workers: 1` (one dev server, one database), reporter `line` locally and `html` in CI, `use.baseURL: "http://localhost:3100"`.
    - Projects: `desktop` (Desktop Chrome) and `phone` (Chromium, viewport 375×812, no touch or mobile emulation: the target is the width).
    - `webServer`: command `npx next dev --port 3100`, url `http://localhost:3100/signin`, `reuseExistingServer: false`, a `webServer` timeout, test timeout, `expect.timeout`, `navigationTimeout` and `actionTimeout` long enough for the first on-demand compile of sign-in, `/food`, `/wishlist` and the first server action (all set from the spike's measurements; Playwright's `expect` default of 5 s is not enough for a cold dev server), env `AUTH_DEV=true`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `DATABASE_URL`: in CI the job's own `DATABASE_URL`, otherwise `DATABASE_URL_TEST` or the same default as `tests/setup.ts`.
+   - The config throws when the database host is not `127.0.0.1` or `localhost`: a developer's `.env` can hold the live Neon URLs, and a spec must never touch them (added after the spike; the process env that `webServer` sets wins over `.env`).
    - If another `next dev` holds the project's dev lock, `npm run e2e` fails at start with Next's own message. It does not stop the other server; the conventions Gotcha tells the reader to stop it first.
 3. [x] The spec — files: `tests/e2e/wishlist.spec.ts` (create); tests: `npm run e2e` (both projects pass, then run again to prove it repeats).
    - Test 1, anonymous: open `/wishlist`, expect the URL to be `/signin`; axe scan of the sign-in page.
@@ -44,7 +45,7 @@ Life Tracker has only Vitest tests, so nothing checks that the real UI works in 
 4. [x] CI step — files: `.github/workflows/ci.yml` (change); tests: the pull request's CI run (the new steps pass; a deliberately failing run is not needed).
    - After "Fast checks": a step `npx playwright install --with-deps chromium`, a step `npm run e2e`, and an `actions/upload-artifact` step with `if: failure()` for `playwright-report/` and `test-results/`, using the same pinned artifact action SHA already in this file.
    - The job-level `DATABASE_URL` and `AUTH_DEV` already exist; `NEXTAUTH_SECRET` is already set. No new secret.
-5. [ ] KB and docs — files: `CLAUDE.md` (change: one line in Commands), `docs/kb/conventions.md`, `docs/kb/architecture.md`, `docs/kb/status.md`, `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md` (change); tests: `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb`.
+5. [x] KB and docs — files: `CLAUDE.md` (change: one line in Commands), `docs/kb/conventions.md`, `docs/kb/architecture.md`, `docs/kb/status.md`, `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md` (change); tests: `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb`.
 6. [ ] Verify and hand off — files: none; tests: `npm run check`, `npm run e2e`, then the merge-branch skill opens the pull request and CI is green.
 
 ## Cleanup and docs
