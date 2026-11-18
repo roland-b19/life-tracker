@@ -15,11 +15,12 @@ last_verified: 2026-11-18
 | CI audit blocks on production dependencies only | done (PR #134, D-004) |
 | First e2e spec (Wishlist, Playwright, D-005) | done, [plan](plans/e2e-first-spec.md) |
 | One source for the local test credentials; dead Azure host fallbacks removed (D-006) | done |
+| Tasks e2e spec (`/todos`, D-012) | planned, [plan](plans/e2e-tasks-spec.md) |
 | Weight REST API → server actions (D-007) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
 
 ## In progress
-None.
+- Tasks e2e spec: plan approved 2026-11-18, building ([plan](plans/e2e-tasks-spec.md)).
 
 ## Next steps
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
