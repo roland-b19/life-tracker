@@ -1,11 +1,77 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
-// Serious and critical findings fail the spec. `next dev` streams the page's <title> in after the content, so a scan
-// that starts at once can see a document without one (axe `document-title`): wait for the title first.
+// After a server action the app refreshes the router 600 ms after the last one (app/providers.tsx). A refresh rebuilds
+// the tags React hoists into <head>, the <title> among them, so a scan that lands in the middle of one sees a page
+// without a title (axe `document-title`) although the title was there a moment before. `watchRefreshes` follows the
+// actions and the refreshes of a page, so a scan can wait for the refresh that is still due.
+const refreshesDue = new WeakMap<Page, { due: boolean }>();
+
+function watchRefreshes(page: Page) {
+  const state = { due: false };
+  let writes = 0;
+  // The refresh requests that started after the last write, with the write count they saw.
+  const covering = new Map<Request, number>();
+  page.on("request", (request) => {
+    const headers = request.headers();
+    if (request.method() === "POST" && "next-action" in headers) {
+      writes++;
+      state.due = true;
+    } else if (
+      state.due &&
+      request.method() === "GET" &&
+      "rsc" in headers &&
+      !("next-router-prefetch" in headers) &&
+      new URL(request.url()).pathname === new URL(page.url()).pathname
+    ) {
+      covering.set(request, writes);
+    }
+  });
+  const ended = (request: Request) => {
+    const seen = covering.get(request);
+    covering.delete(request);
+    // A later write schedules another refresh, so this one does not settle it.
+    if (seen === writes) state.due = false;
+  };
+  page.on("requestfinished", ended);
+  page.on("requestfailed", ended);
+  // A new document drops the timer of the old one.
+  page.on("load", () => {
+    state.due = false;
+    covering.clear();
+  });
+  refreshesDue.set(page, state);
+}
+
+// Resolves once <head> has not changed for a whole animation frame: the refresh response has arrived by then, but React
+// commits it a few tasks later, and the commit removes and re-adds the head tags.
+function headIsQuiet() {
+  return new Promise<void>((resolve) => {
+    let changed = false;
+    const observer = new MutationObserver(() => (changed = true));
+    observer.observe(document.head, { childList: true, subtree: true });
+    const frame = () =>
+      requestAnimationFrame(() => {
+        if (changed) {
+          changed = false;
+          frame();
+        } else {
+          observer.disconnect();
+          resolve();
+        }
+      });
+    frame();
+  });
+}
+
+// Serious and critical findings fail the spec. The scan waits for the refresh a write left due, then for a quiet <head>
+// and a title; `next dev` also streams the title in after the content on a first load, so a title can be missing then too.
 export async function expectNoSeriousViolations(page: Page) {
+  const state = refreshesDue.get(page);
+  if (state) await expect.poll(() => state.due, { message: "the refresh after the last server action" }).toBe(false);
+  await page.evaluate(headIsQuiet);
   await expect(page).toHaveTitle(/.+/);
   const { violations } = await new AxeBuilder({ page }).analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
@@ -47,6 +113,7 @@ export const test = base.extend<{ signedInPage: Page }>({
     const name = `e2e-${randomUUID().slice(0, 8)}`;
     const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
     try {
+      watchRefreshes(page);
       await signIn(page, name);
       await provide(page);
     } finally {
