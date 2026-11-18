@@ -3,7 +3,7 @@
 import { toISODate } from "@/lib/format-date";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
 import { useEffect, useRef, useState } from "react";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { emptyInput, canLog, type SetInput } from "./exercise-logger";
 import type { ActiveSessionData, ExerciseItem, SplitDay, WorkoutSetData } from "./types";
 import { clearWorkoutTime, saveWorkoutTime, useWorkoutTimer, workoutMinutes } from "./workout-timer";
@@ -86,23 +86,22 @@ export function useWorkout({
           message: `Started "${day.name}"`,
           type: "success",
           // Only while nothing is logged: Undo must not delete sets.
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             const now = live.current;
             if (now?.id !== started || now.sets.length > 0) {
               warn("Sets are logged; use Cancel workout instead");
-              return;
+              return true;
             }
             const gone = await cancelSessionAction({ sessionId: started }).catch(() => null);
-            if (!gone?.success) {
-              warn("Failed to undo");
-              return;
+            if (gone?.success) {
+              clearWorkoutTime(started);
+              setConfirmCancel(false);
+              setActiveSession(null);
+              setPaused((p) => (p?.id === started ? null : p));
+              setSessionNotes("");
             }
-            clearWorkoutTime(started);
-            setConfirmCancel(false);
-            setActiveSession(null);
-            setPaused((p) => (p?.id === started ? null : p));
-            setSessionNotes("");
-          },
+            return gone;
+          }),
         });
       } else {
         warn(("error" in res && res.error) || "Failed to start workout");
@@ -167,12 +166,12 @@ export function useWorkout({
             ? `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`
             : `Added set ${setOrder}`,
           type: res.set.flagAnomaly ? "warning" : "success",
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             dropSet(logged.id);
-            if (await deleteSetAction(logged.id).then(() => true, () => false)) return;
-            putBackSet(logged);
-            warn("Failed to undo");
-          },
+            const gone = await deleteSetAction(logged.id).then(() => true, () => false);
+            if (!gone) putBackSet(logged);
+            return gone;
+          }),
         });
       } else {
         warn(res.error ?? "Failed to add set");
@@ -195,8 +194,8 @@ export function useWorkout({
     dropSet(set.id);
     showToast({
       message: `Removed set ${set.setOrder}`,
-      onUndo: async () => {
-        if (!(await deleted)) return; // the failure path below puts it back
+      onUndo: undoWith(showToast, async () => {
+        if (!(await deleted)) return true; // the failure path below puts it back
         const res = await logSetAction({
           id: set.id,
           createdAt: set.createdAt,
@@ -215,8 +214,8 @@ export function useWorkout({
           notes: set.notes || undefined,
         }).catch(() => null);
         if (res?.success && res.set) putBackSet(set);
-        else warn("Failed to restore set");
-      },
+        return !!res?.success && !!res.set;
+      }, "Failed to restore set"),
     });
     void deleted.then((ok) => {
       if (ok) return;
@@ -242,22 +241,24 @@ export function useWorkout({
 
   // Undo hands a workout back as it was, unless another one was started in the meantime.
   function takeBack(back: () => Promise<ActiveSessionData | null>, snap: SessionSnapshot, failed: string) {
-    return async () => {
-      if (live.current) {
-        warn("Finish or leave the current workout first");
-        return;
-      }
-      const restored = await back().catch(() => null);
-      if (!restored) {
-        warn(failed);
-        return;
-      }
-      saveWorkoutTime(restored.id, snap.seconds); // before the workout shows, so the timer picks it up
-      if (restored.splitDayId && days.some((d) => d.id === restored.splitDayId)) selectDay(restored.splitDayId);
-      setTimerPaused(false);
-      setSessionNotes(snap.notes);
-      setActiveSession(restored);
-    };
+    return undoWith(
+      showToast,
+      async () => {
+        if (live.current) {
+          warn("Finish or leave the current workout first");
+          return true;
+        }
+        const restored = await back().catch(() => null);
+        if (!restored) return false;
+        saveWorkoutTime(restored.id, snap.seconds); // before the workout shows, so the timer picks it up
+        if (restored.splitDayId && days.some((d) => d.id === restored.splitDayId)) selectDay(restored.splitDayId);
+        setTimerPaused(false);
+        setSessionNotes(snap.notes);
+        setActiveSession(restored);
+        return true;
+      },
+      failed,
+    );
   }
 
   async function cancel() {

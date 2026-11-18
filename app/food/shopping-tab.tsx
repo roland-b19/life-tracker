@@ -4,7 +4,7 @@ import { useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { visible } from "@/lib/validations/common";
 import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, TintButton } from "../components/blocks";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { ListBox, RowActions } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
@@ -113,29 +113,31 @@ export function ShoppingTab({
           ? {
               message: `Added "${item.name}"`,
               type: "success",
-              onUndo: async () => {
+              onUndo: undoWith(showToast, async () => {
                 dropShop(item.id);
-                if (await deleteShoppingItemAction(item.id).then(() => true, () => false)) return;
-                upsertShop(item);
-                showToast({ message: "Failed to undo", type: "warning" });
-              },
+                const gone = await deleteShoppingItemAction(item.id).then(() => true, () => false);
+                if (!gone) upsertShop(item);
+                return gone;
+              }),
             }
           : {
               message: `"${item.name}" is now ${Number(item.amount)} ${item.unit}`,
               type: "success",
-              onUndo: async () => {
-                upsertShop(before);
-                const back = await updateShoppingItemAction({
-                  ...toShopInput(before),
-                  itemId: before.id,
-                  isBought: before.isBought,
-                  checkedAt: before.checkedAt,
-                }).catch(() => null);
-                if (!back?.success) {
-                  upsertShop(item);
-                  return showToast({ message: "Failed to undo the edit", type: "warning" });
-                }
-              },
+              onUndo: undoWith(
+                showToast,
+                async () => {
+                  upsertShop(before);
+                  const back = await updateShoppingItemAction({
+                    ...toShopInput(before),
+                    itemId: before.id,
+                    isBought: before.isBought,
+                    checkedAt: before.checkedAt,
+                  }).catch(() => null);
+                  if (!back?.success) upsertShop(item);
+                  return back;
+                },
+                "Failed to undo the edit",
+              ),
             },
       );
       return true;
@@ -183,14 +185,16 @@ export function ShoppingTab({
         message: `Saved "${item.name}"`,
         type: "success",
         // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-        onUndo: async () => {
-          replaceShop(before);
-          const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
-          if (!back?.success) {
-            replaceShop(item);
-            showToast({ message: "Failed to undo the edit", type: "warning" });
-          }
-        },
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            replaceShop(before);
+            const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
+            if (!back?.success) replaceShop(item);
+            return back;
+          },
+          "Failed to undo the edit",
+        ),
       });
     } catch {
       setFormError("Failed to save item");
@@ -218,13 +222,17 @@ export function ShoppingTab({
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
-      onUndo: async () => {
-        setBought(!next);
-        if (!(await saved)) return; // the failure path below put it back
-        if (await toggleShoppingItemAction(item.id, !next).then(() => true, () => false)) return;
-        setBought(next);
-        showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          setBought(!next);
+          if (!(await saved)) return true; // the failure path below put it back
+          const back = await toggleShoppingItemAction(item.id, !next).then(() => true, () => false);
+          if (!back) setBought(next);
+          return back;
+        },
+        "Failed to undo the edit",
+      ),
     });
     void saved.then((ok) => {
       if (ok) return;
@@ -242,15 +250,17 @@ export function ShoppingTab({
     );
     showToast({
       message: `Removed "${item.name}"`,
-      onUndo: async () => {
-        if (!(await deleted)) return; // the failure path below puts it back
-        upsertShop(item);
-        const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
-        if (!back?.success) {
-          dropShop(item.id);
-          warn("Failed to restore item");
-        }
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          if (!(await deleted)) return true; // the failure path below puts it back
+          upsertShop(item);
+          const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
+          if (!back?.success) dropShop(item.id);
+          return back;
+        },
+        "Failed to restore item",
+      ),
     });
     void deleted.then((ok) => {
       if (ok) return;
@@ -273,15 +283,17 @@ export function ShoppingTab({
     drop();
     showToast({
       message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
-      onUndo: async () => {
-        putBack();
-        if (!(await done)) return; // the clear never happened
-        const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
-        if (!back?.success) {
-          drop();
-          warn("Failed to restore items");
-        }
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          putBack();
+          if (!(await done)) return true; // the clear never happened
+          const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
+          if (!back?.success) drop();
+          return back;
+        },
+        "Failed to restore items",
+      ),
     });
     void done.then((ok) => {
       if (ok) return;

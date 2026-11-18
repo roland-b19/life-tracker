@@ -6,7 +6,7 @@ import type { CategoryScope } from "@/lib/validations/categories";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
-import { useToast } from "./toast";
+import { undoWith, useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
 export interface CategoriesApi {
@@ -88,14 +88,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
-      onUndo: async () => {
+      onUndo: undoWith(showToast, async () => {
         reorder(previous);
         const back = await api.reorder(previous).catch(() => null);
-        if (!back?.success) {
-          reorder(next);
-          showToast({ message: "Failed to undo", type: "warning" });
-        }
-      },
+        if (!back?.success) reorder(next);
+        return back;
+      }),
     });
   }
   const dragRow = useDragSort(move);
@@ -108,23 +106,21 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   }
 
   // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure undoes that.
-  async function revert(name: string, current: string, change: Change, dropCurrent: boolean, at: number) {
-    const put = () => {
+  const revert = (name: string, current: string, change: Change, dropCurrent: boolean, at: number) =>
+    undoWith(showToast, async () => {
       onChange((prev) => {
         const without = dropCurrent ? prev.filter((c) => c !== current) : prev;
         return without.includes(name) ? without : [...without.slice(0, at), name, ...without.slice(at)];
       });
       onRefile(current, name, change.itemIds);
-    };
-    put();
-    const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
-    onSynced?.();
-    if (!back?.success) {
-      onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
-      onRefile(name, current, change.itemIds);
-      showToast({ message: "Failed to undo", type: "warning" });
-    }
-  }
+      const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
+      onSynced?.();
+      if (!back?.success) {
+        onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
+        onRefile(name, current, change.itemIds);
+      }
+      return back;
+    });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -141,18 +137,15 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Added "${to}"`,
           type: "success",
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             onChange((prev) => prev.filter((c) => c !== to));
             const gone = await api.remove(to).catch(() => null);
             onSynced?.();
-            if (!gone?.success) {
-              onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
-              showToast({ message: "Failed to undo", type: "warning" });
-              return;
-            }
+            if (!gone?.success) onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
             // Items filed under it since go to the fallback, like any delete.
-            onRefile(to, builtIn);
-          },
+            else onRefile(to, builtIn);
+            return gone;
+          }),
         });
       } else {
         const res = await api.rename(from, to);
@@ -167,7 +160,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Renamed "${from}" to "${to}"`,
           type: "success",
-          onUndo: () => revert(from, to, change, !change.merged, at),
+          onUndo: revert(from, to, change, !change.merged, at),
         });
       }
       setOpen(false);
@@ -198,7 +191,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onSynced?.();
     showToast({
       message: `Removed "${cat}"; its items are in ${categoryLabel(builtIn)}`,
-      onUndo: () => revert(cat, builtIn, change, false, at),
+      onUndo: revert(cat, builtIn, change, false, at),
     });
   }
 

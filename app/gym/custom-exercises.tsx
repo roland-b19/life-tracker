@@ -71,14 +71,15 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     }
     showToast({
       message: `Removed "${e.name}"`,
-      onUndo: async () => {
-        const back = await restoreCustomExerciseAction(e).catch(() => null);
-        if (!back?.success) {
-          showToast({ message: "Failed to restore exercise", type: "warning" });
-          return;
-        }
-        setGone((g) => g.filter((id) => id !== e.id));
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const back = await restoreCustomExerciseAction(e).catch(() => null);
+          if (back?.success) setGone((g) => g.filter((id) => id !== e.id));
+          return back;
+        },
+        "Failed to restore exercise",
+      ),
     });
   }
 

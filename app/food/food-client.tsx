@@ -9,7 +9,7 @@ import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon } from "../components/icons";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
 import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
 import { DeleteButton, EditButton, ListBox } from "../components/lists";
@@ -165,17 +165,15 @@ export function FoodClient({
     });
   }
 
-  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. Returns the ids removed. */
-  async function undoLogged(logged: MealData[]) {
-    logged.forEach((m) => applyMeal(m, -1));
-    const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then(() => true, () => false)));
-    const failed = logged.filter((_, i) => !results[i]);
-    if (failed.length) {
-      failed.forEach((m) => applyMeal(m, 1));
-      showToast({ message: "Failed to undo", type: "warning" });
-    }
-    return new Set(logged.filter((_, i) => results[i]).map((m) => m.id));
-  }
+  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. `removed` gets the ids that went. */
+  const undoLogged = (logged: MealData[], removed?: (ids: Set<string>) => void) =>
+    undoWith(showToast, async () => {
+      logged.forEach((m) => applyMeal(m, -1));
+      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then(() => true, () => false)));
+      logged.filter((_, i) => !results[i]).forEach((m) => applyMeal(m, 1));
+      removed?.(new Set(logged.filter((_, i) => results[i]).map((m) => m.id)));
+      return results.every(Boolean);
+    });
 
   /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
   async function handleDeleteMeal(meal: MealData) {
@@ -189,21 +187,25 @@ export function FoodClient({
     showToast({
       message: `Removed "${meal.name}"`,
       type: "success",
-      onUndo: async () => {
-        const back = await restoreMealAction({
-          id: meal.id,
-          date: meal.date,
-          name: meal.name,
-          calories: meal.calories,
-          protein: parseFloat(meal.protein),
-          carbs: parseFloat(meal.carbs),
-          fat: parseFloat(meal.fat),
-          isEstimated: meal.isEstimated ?? false,
-          createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
-        }).then((r) => r.success, () => false);
-        if (back) applyMeal(meal, 1);
-        else showToast({ message: "Failed to restore meal", type: "warning" });
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const back = await restoreMealAction({
+            id: meal.id,
+            date: meal.date,
+            name: meal.name,
+            calories: meal.calories,
+            protein: parseFloat(meal.protein),
+            carbs: parseFloat(meal.carbs),
+            fat: parseFloat(meal.fat),
+            isEstimated: meal.isEstimated ?? false,
+            createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
+          }).then((r) => r.success, () => false);
+          if (back) applyMeal(meal, 1);
+          return back;
+        },
+        "Failed to restore meal",
+      ),
     });
   }
 
@@ -236,7 +238,7 @@ export function FoodClient({
         showToast({
           message: `Added meal (${meal.calories} kcal)`,
           type: "success",
-          onUndo: () => void undoLogged([meal]),
+          onUndo: undoLogged([meal]),
         });
       } else setFormError("Failed to add meal");
     } catch {
@@ -261,16 +263,18 @@ export function FoodClient({
     showToast({
       message: `Added ${delta} ml`,
       type: "success",
-      onUndo: async () => {
-        undone = true;
-        bump(-delta);
-        if (!(await saved)) return; // the add never happened
-        const back = await addWaterAction(todayDate, -delta).then((res) => res.success === true, () => false);
-        if (!back) {
-          bump(delta);
-          showToast({ message: "Failed to undo the edit", type: "warning" });
-        }
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          undone = true;
+          bump(-delta);
+          if (!(await saved)) return true; // the add never happened
+          const back = await addWaterAction(todayDate, -delta).then((res) => res.success === true, () => false);
+          if (!back) bump(delta);
+          return back;
+        },
+        "Failed to undo the edit",
+      ),
     });
     void saved.then((ok) => {
       if (ok || undone) return;
@@ -317,7 +321,7 @@ export function FoodClient({
           ? `${name} set to ${value}${unit}, goal ${goal}${unit}`
           : `${name} goal set to ${goal}${unit}`,
       type: "success",
-      onUndo: async () => {
+      onUndo: undoWith(showToast, async () => {
         // Water undoes by the difference, so a tap made since the edit stays; steps have no add, so they go back to the exact value.
         const diff = previous - saved;
         const shift = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
@@ -343,8 +347,8 @@ export function FoodClient({
           putGoals({ [key]: goal });
           failed = true;
         }
-        if (failed) showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
+        return !failed;
+      }, "Failed to undo the edit"),
     });
     return true;
   }
@@ -398,12 +402,16 @@ export function FoodClient({
     showToast({
       message: "Saved nutrition goals",
       type: "success",
-      onUndo: async () => {
-        putGoals(previous);
-        if (await writeGoals(previous)) return;
-        putGoals(next);
-        showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          putGoals(previous);
+          const back = await writeGoals(previous);
+          if (!back) putGoals(next);
+          return back;
+        },
+        "Failed to undo the edit",
+      ),
     });
   }
 
@@ -432,10 +440,9 @@ export function FoodClient({
         showToast({
           message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
           type: "success",
-          onUndo: async () => {
-            const removed = await undoLogged(meals);
-            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m)));
-          },
+          onUndo: undoLogged(meals, (removed) =>
+            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
+          ),
         });
       }
     } catch {

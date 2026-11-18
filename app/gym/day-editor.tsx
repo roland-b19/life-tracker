@@ -148,14 +148,15 @@ export function DayEditor({
           message: `Created "${name}"`,
           type: "success",
           // Refused once a routine or a set uses it, so Undo never deletes data.
-          onUndo: async () => {
-            const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
-            if (!gone?.success) {
-              showToast({ message: "Failed to undo: the exercise is already in use", type: "warning" });
-              return;
-            }
-            setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
-          },
+          onUndo: undoWith(
+            showToast,
+            async () => {
+              const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
+              if (gone?.success) setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
+              return gone;
+            },
+            "Failed to undo: the exercise is already in use",
+          ),
         });
       } else {
         setError(res.error);

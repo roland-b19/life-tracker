@@ -7,7 +7,7 @@ import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { ProgressRing } from "../components/charts";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { isPushEnabled } from "@/lib/features";
 import {
   createTodoAction,
@@ -188,23 +188,28 @@ export function TodosClient({
           showToast({
             message: `Saved "${title}"`,
             type: "success",
-            onUndo: async () => {
-              ++requestId.current;
-              drop(after);
-              putBack(before);
-              const undone = await updateTodoAction({
-                id: before.id,
-                title: before.title,
-                reminderTime: before.reminderTime,
-                category: before.category,
-              }).catch(() => null);
-              if (!undone || !("success" in undone) || !undone.success) {
-                drop(before);
-                putBack(after);
-                showToast({ message: "Failed to undo the edit", type: "warning" });
-              } else keepCategory(before);
-              await loadDay();
-            },
+            onUndo: undoWith(
+              showToast,
+              async () => {
+                ++requestId.current;
+                drop(after);
+                putBack(before);
+                const undone = await updateTodoAction({
+                  id: before.id,
+                  title: before.title,
+                  reminderTime: before.reminderTime,
+                  category: before.category,
+                }).catch(() => null);
+                if (undone && "success" in undone && undone.success) keepCategory(before);
+                else {
+                  drop(before);
+                  putBack(after);
+                }
+                void loadDay();
+                return undone;
+              },
+              "Failed to undo the edit",
+            ),
           });
         }
       } else {
@@ -226,19 +231,17 @@ export function TodosClient({
           showToast({
             message: `Added "${title}"`,
             type: "success",
-            onUndo: async () => {
+            onUndo: undoWith(showToast, async () => {
               ++requestId.current;
               drop(created);
               const gone = await deleteTodoAction(created.id).then(
                 (r) => r.success,
                 () => false,
               );
-              if (!gone) {
-                if (shows(created)) putBack(created);
-                showToast({ message: "Failed to undo", type: "warning" });
-              }
-              await loadDay();
-            },
+              if (!gone && shows(created)) putBack(created);
+              void loadDay();
+              return gone;
+            }),
           });
         }
       }
@@ -311,19 +314,22 @@ export function TodosClient({
     );
     showToast({
       message: `Removed "${target.title}"`,
-      onUndo: async () => {
-        ++requestId.current;
-        if ((await deleted) === "gone") return; // deleted elsewhere: Undo must not bring it back
-        // Only onto the list it was on, if that is still the one on screen.
-        if (shows(target)) putBack(target);
-        if (!(await deleted)) return; // the delete never happened
-        const back = await restoreTodoAction(snapshot(target)).catch(() => null);
-        if (!back?.success) {
-          if (shows(target)) drop(target);
-          showToast({ message: back && "error" in back ? back.error : "Failed to restore task", type: "warning" });
-        } else keepCategory(target);
-        await loadDay();
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          ++requestId.current;
+          if ((await deleted) === "gone") return true; // deleted elsewhere: Undo must not bring it back
+          // Only onto the list it was on, if that is still the one on screen.
+          if (shows(target)) putBack(target);
+          if (!(await deleted)) return true; // the delete never happened
+          const back = await restoreTodoAction(snapshot(target)).catch(() => null);
+          if (back?.success) keepCategory(target);
+          else if (shows(target)) drop(target);
+          void loadDay();
+          return back;
+        },
+        (back) => (back && "error" in back ? back.error : "Failed to restore task"),
+      ),
     });
     void deleted.then((ok) => {
       if (ok === "gone") showToast({ message: `"${target.title}" was already removed`, type: "warning" });
@@ -354,16 +360,21 @@ export function TodosClient({
         message: "Reminders enabled",
         type: "success",
         // Forgets the subscription here and on the server, so no reminder arrives.
-        onUndo: async () => {
-          setPushSubscribed(false);
-          try {
-            await deletePushSubscriptionAction(enabled.endpoint);
-            await enabled.unsubscribe();
-          } catch {
-            setPushSubscribed(true);
-            showToast({ message: "Failed to turn reminders off", type: "warning" });
-          }
-        },
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            setPushSubscribed(false);
+            try {
+              await deletePushSubscriptionAction(enabled.endpoint);
+              await enabled.unsubscribe();
+              return true;
+            } catch {
+              setPushSubscribed(true);
+              return false;
+            }
+          },
+          "Failed to turn reminders off",
+        ),
       });
     } catch {
       showToast({ message: "Failed to enable reminders", type: "warning" });
