@@ -131,8 +131,9 @@ test("the export downloads the user's data and never the Claude token", async ({
   await expect(page.getByText("Exported your data")).toBeVisible();
 
   // Read in memory: nothing is saved outside the test's own output.
-  let text = "";
-  for await (const chunk of await download.createReadStream()) text += chunk;
+  const chunks: Buffer[] = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString("utf8");
   expect(text).toContain("Life Tracker: all your data");
   expect(text).toContain("== Account (1) ==");
   expect(text).not.toContain(token);
