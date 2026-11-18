@@ -9,7 +9,7 @@ import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
 import { DropIcon, FootstepsIcon } from "../components/icons";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
 import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
 import { DeleteButton, EditButton, ListBox } from "../components/lists";
@@ -111,7 +111,7 @@ export function FoodClient({
   const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   // The open meal or shopping form's error; only one form is open at a time.
-  const [formError, setFormError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
   const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
@@ -165,17 +165,15 @@ export function FoodClient({
     });
   }
 
-  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. Returns the ids removed. */
-  async function undoLogged(logged: MealData[]) {
-    logged.forEach((m) => applyMeal(m, -1));
-    const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then(() => true, () => false)));
-    const failed = logged.filter((_, i) => !results[i]);
-    if (failed.length) {
-      failed.forEach((m) => applyMeal(m, 1));
-      showToast({ message: "Failed to undo", type: "warning" });
-    }
-    return new Set(logged.filter((_, i) => results[i]).map((m) => m.id));
-  }
+  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. `removed` gets the ids that went. */
+  const undoLogged = (logged: MealData[], removed?: (ids: Set<string>) => void) =>
+    undoWith(showToast, async () => {
+      logged.forEach((m) => applyMeal(m, -1));
+      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then(() => true, () => false)));
+      logged.filter((_, i) => !results[i]).forEach((m) => applyMeal(m, 1));
+      removed?.(new Set(logged.filter((_, i) => results[i]).map((m) => m.id)));
+      return results.every(Boolean);
+    });
 
   /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
   async function handleDeleteMeal(meal: MealData) {
@@ -189,21 +187,25 @@ export function FoodClient({
     showToast({
       message: `Removed "${meal.name}"`,
       type: "success",
-      onUndo: async () => {
-        const back = await restoreMealAction({
-          id: meal.id,
-          date: meal.date,
-          name: meal.name,
-          calories: meal.calories,
-          protein: parseFloat(meal.protein),
-          carbs: parseFloat(meal.carbs),
-          fat: parseFloat(meal.fat),
-          isEstimated: meal.isEstimated ?? false,
-          createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
-        }).then((r) => r.success, () => false);
-        if (back) applyMeal(meal, 1);
-        else showToast({ message: "Failed to restore meal", type: "warning" });
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const back = await restoreMealAction({
+            id: meal.id,
+            date: meal.date,
+            name: meal.name,
+            calories: meal.calories,
+            protein: parseFloat(meal.protein),
+            carbs: parseFloat(meal.carbs),
+            fat: parseFloat(meal.fat),
+            isEstimated: meal.isEstimated ?? false,
+            createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
+          }).then((r) => r.success, () => false);
+          if (back) applyMeal(meal, 1);
+          return back;
+        },
+        "Failed to restore meal",
+      ),
     });
   }
 
@@ -217,11 +219,11 @@ export function FoodClient({
       fat: parseFloat(mealFat) || 0,
     };
     // Same limits as logMealSchema, so the server never has to refuse with a message the screen cannot show.
-    if (entered.calories > 10000) return setFormError("Calories must be 10000 or less.");
-    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setFormError("Protein, carbs and fat must each be 1000 g or less.");
+    if (entered.calories > 10000) return setErrorMsg("Calories must be 10000 or less.");
+    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setErrorMsg("Protein, carbs and fat must each be 1000 g or less.");
 
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     try {
       const res = await logMealAction({ date: todayDate, ...entered });
 
@@ -236,11 +238,11 @@ export function FoodClient({
         showToast({
           message: `Added meal (${meal.calories} kcal)`,
           type: "success",
-          onUndo: () => void undoLogged([meal]),
+          onUndo: undoLogged([meal]),
         });
-      } else setFormError("Failed to add meal");
+      } else setErrorMsg("Failed to add meal");
     } catch {
-      setFormError("Failed to add meal");
+      setErrorMsg("Failed to add meal");
     } finally {
       setBusy(false);
     }
@@ -261,16 +263,18 @@ export function FoodClient({
     showToast({
       message: `Added ${delta} ml`,
       type: "success",
-      onUndo: async () => {
-        undone = true;
-        bump(-delta);
-        if (!(await saved)) return; // the add never happened
-        const back = await addWaterAction(todayDate, -delta).then((res) => res.success === true, () => false);
-        if (!back) {
-          bump(delta);
-          showToast({ message: "Failed to undo the edit", type: "warning" });
-        }
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          undone = true;
+          bump(-delta);
+          if (!(await saved)) return true; // the add never happened
+          const back = await addWaterAction(todayDate, -delta).then((res) => res.success === true, () => false);
+          if (!back) bump(delta);
+          return back;
+        },
+        "Failed to undo the edit",
+      ),
     });
     void saved.then((ok) => {
       if (ok || undone) return;
@@ -317,7 +321,7 @@ export function FoodClient({
           ? `${name} set to ${value}${unit}, goal ${goal}${unit}`
           : `${name} goal set to ${goal}${unit}`,
       type: "success",
-      onUndo: async () => {
+      onUndo: undoWith(showToast, async () => {
         // Water undoes by the difference, so a tap made since the edit stays; steps have no add, so they go back to the exact value.
         const diff = previous - saved;
         const shift = (d: number) => setSummary((prev) => ({ ...prev, metrics: { ...prev.metrics, waterMl: prev.metrics.waterMl + d } }));
@@ -343,14 +347,14 @@ export function FoodClient({
           putGoals({ [key]: goal });
           failed = true;
         }
-        if (failed) showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
+        return !failed;
+      }, "Failed to undo the edit"),
     });
     return true;
   }
 
   function openMetricEdit(metric: "water" | "steps") {
-    setFormError("");
+    setErrorMsg("");
     setMetricInput(String(metric === "water" ? summary.metrics.waterMl : summary.metrics.steps));
     setMetricGoalInput(String(metric === "water" ? goals.waterMl : goals.steps));
     setMetricEdit(metric);
@@ -363,20 +367,20 @@ export function FoodClient({
     const goal = parseInt(metricGoalInput, 10);
     const range = METRIC_GOAL[metricEdit];
     if (busy) return;
-    if (!Number.isInteger(value) || value < 0) return setFormError("Please enter a whole number.");
-    if (value > METRIC_MAX[metricEdit]) return setFormError(`The total must be ${METRIC_MAX[metricEdit]} or less.`);
+    if (!Number.isInteger(value) || value < 0) return setErrorMsg("Please enter a whole number.");
+    if (value > METRIC_MAX[metricEdit]) return setErrorMsg(`The total must be ${METRIC_MAX[metricEdit]} or less.`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
-      return setFormError(`The goal must be between ${range.min} and ${range.max}.`);
+      return setErrorMsg(`The goal must be between ${range.min} and ${range.max}.`);
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     const ok = await saveMetric(metricEdit, value, goal);
     setBusy(false);
     if (ok) setMetricOpen(false);
-    else setFormError(`Failed to save ${metricEdit}`);
+    else setErrorMsg(`Failed to save ${metricEdit}`);
   }
 
   function openGoals() {
-    setFormError("");
+    setErrorMsg("");
     setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
     setGoalsOpen(true);
   }
@@ -386,24 +390,28 @@ export function FoodClient({
     if (busy) return;
     const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
-    if (bad) return setFormError(`${bad.label.split(" ")[0]} must be between ${bad.min} and ${bad.max}.`);
+    if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${bad.min} and ${bad.max}.`);
     const previous = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, goals[g.key]])) as Record<NutritionGoal, number>;
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     const ok = await writeGoals(next);
     setBusy(false);
-    if (!ok) return setFormError("Failed to save goals");
+    if (!ok) return setErrorMsg("Failed to save goals");
     putGoals(next);
     setGoalsOpen(false);
     showToast({
       message: "Saved nutrition goals",
       type: "success",
-      onUndo: async () => {
-        putGoals(previous);
-        if (await writeGoals(previous)) return;
-        putGoals(next);
-        showToast({ message: "Failed to undo the edit", type: "warning" });
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          putGoals(previous);
+          const back = await writeGoals(previous);
+          if (!back) putGoals(next);
+          return back;
+        },
+        "Failed to undo the edit",
+      ),
     });
   }
 
@@ -432,10 +440,9 @@ export function FoodClient({
         showToast({
           message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
           type: "success",
-          onUndo: async () => {
-            const removed = await undoLogged(meals);
-            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m)));
-          },
+          onUndo: undoLogged(meals, (removed) =>
+            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
+          ),
         });
       }
     } catch {
@@ -493,7 +500,7 @@ export function FoodClient({
               actions={
                 <>
                   <TintButton onClick={openGoals}>Edit goals</TintButton>
-                  <AddButton onClick={() => (setFormError(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                  <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
                 </>
               }
             >
@@ -617,7 +624,7 @@ export function FoodClient({
         onClose={() => setIsMealModalOpen(false)}
         title="New meal"
         onSubmit={handleLogMeal}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={mealHasValues}
       >
@@ -671,7 +678,7 @@ export function FoodClient({
         onClose={() => setMetricOpen(false)}
         title={metricEdit === "water" ? "Edit water" : "Edit steps"}
         onSubmit={handleMetricSubmit}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={metricInput !== "" && metricGoalInput !== ""}
       >
@@ -707,7 +714,7 @@ export function FoodClient({
         onClose={() => setGoalsOpen(false)}
         title="Edit goals"
         onSubmit={handleGoalsSubmit}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={!Object.values(goalInputs).some((v) => v === "")}
       >

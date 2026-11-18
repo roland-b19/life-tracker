@@ -22,7 +22,8 @@ container_env_name=$(az containerapp env list --resource-group "$resource_group"
 container_env_id=$(az containerapp env show --name "$container_env_name" --resource-group "$resource_group" --query id -o tsv)
 workload_identity_id=$(az identity show --name "life-tracker-$environment-identity" --resource-group "$resource_group" --query id -o tsv)
 migrate_b64=$(base64 < scripts/db-init.cjs | tr -d '\n')
-db_host="${postgres_server:-lifetracker${environment}pg}.postgres.database.azure.com"
+# Same name as postgresName in infra/main.bicep.
+db_host="lifetracker${environment}pg.postgres.database.azure.com"
 
 job_yaml_file=$(mktemp)
 trap 'rm -f "$job_yaml_file"' EXIT
