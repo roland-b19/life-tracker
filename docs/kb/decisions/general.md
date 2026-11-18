@@ -32,7 +32,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Rejected:** Cypress or Vitest browser mode (heavier or still needs Playwright, no gain); Firefox and WebKit projects (slower CI, the KB targets are Chromium only); running specs against a production build (AUTH_DEV forbids it); the dev database `life_tracker` (test data would mix with seed data); e2e inside `npm run check` (a browser run at every stop).
 - **Status:** active.
 
-## D-006: Weight is a server action, not a REST API (2026-11-18)
+## D-007: Weight is a server action, not a REST API (2026-11-18)
 - **Why:** Golden rule 1: weight was the only JSON API (its commit predates the server-action convention) and nothing recorded a reason to keep it. Chosen by the owner on 2026-11-18. The weight card calls `saveWeightAction`, `deleteWeightAction` and `restoreWeightAction` in `src/app/actions/food.ts`; data access and schemas moved into `src/lib/food.ts` and `src/lib/validations/food.ts`. Saving sets the day's weight on the server (create, or change the row the day already has, and report the replaced row), which replaces the client's 404/409 retry sequence. Undo of an edit saves the old value again; Undo of a delete restores under the old id. Next checks the Origin of every server action call, so `isSameOrigin`, the generic API error body and the request logger (used only by weight) were deleted.
 - **Rejected:** Keeping the routes for a possible future client (no second client exists); separate create and update actions (the stale-screen cases need a lookup first).
 - **Status:** active. Saves take the per-user advisory lock (`lockUser`, scope `weight`), so two saves of the same new day at once become a create and an edit instead of a unique violation.

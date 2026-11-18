@@ -20,7 +20,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 ## How they connect
 - **Read:** a page calls `getServerSession(authOptions)`, redirects to `/signin` without a user, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
 - **Write:** the client calls a `"use server"` action. It starts with `requireUser()`, zod-parses the raw input, then calls `src/lib`, which uses Drizzle through `src/server/db.ts`. Flagged actions call `assertClaudeEnabled()` or `assertPushEnabled()` first.
-- **Only API route:** `app/api/auth/[...nextauth]`. Every write, weight included, is a server action (D-006); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
+- **Only API route:** `app/api/auth/[...nextauth]`. Every write, weight included, is a server action (D-007); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
 - **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, food and settings, giving a real 307 to `/signin` before markup streams. Pages still check the session themselves.
 
 ## Auth and authorization
