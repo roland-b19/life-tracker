@@ -8,7 +8,7 @@ import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, Empty
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import {
   addWishlistItemAction,
   deleteWishlistItemAction,
@@ -176,14 +176,17 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           type: "success",
           ...(before && {
             // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-            onUndo: async () => {
-              replace(before);
-              const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
-              if (!back?.success) {
-                replace(updated);
-                showToast({ message: "Failed to undo the edit", type: "warning" });
-              } else keepCategory(before.category);
-            },
+            onUndo: undoWith(
+              showToast,
+              async () => {
+                replace(before);
+                const back = await updateWishlistItemAction(before.id, toInput(before)).catch(() => null);
+                if (back?.success) keepCategory(before.category);
+                else replace(updated);
+                return back;
+              },
+              "Failed to undo the edit",
+            ),
           }),
         });
       } else {
@@ -198,14 +201,12 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         showToast({
           message: `Added "${added.name}" (${formatRon(parsedPrice)} RON)`,
           type: "success",
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             setItems((prev) => prev.filter((i) => i.id !== added.id));
             const gone = await deleteWishlistItemAction(added.id).catch(() => null);
-            if (gone?.success === false || !gone) {
-              setItems((prev) => (prev.some((i) => i.id === added.id) ? prev : [added, ...prev]));
-              showToast({ message: "Failed to undo", type: "warning" });
-            }
-          },
+            if (!gone?.success) setItems((prev) => (prev.some((i) => i.id === added.id) ? prev : [added, ...prev]));
+            return gone;
+          }),
         });
       }
       setIsModalOpen(false);
@@ -238,19 +239,22 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     showToast({
       message: `Removed "${target.name}"`,
       // Same id and date, so the row comes back where it was.
-      onUndo: async () => {
-        putBack(target);
-        if (!(await deleted)) return; // the delete never happened
-        const back = await restoreWishlistItemAction({
-          ...toInput(target),
-          id: target.id,
-          createdAt: target.createdAt,
-        }).catch(() => null);
-        if (!back?.success) {
-          dropRow(target.id);
-          showToast({ message: "Failed to restore item", type: "warning" });
-        } else keepCategory(target.category);
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          putBack(target);
+          if (!(await deleted)) return true; // the delete never happened
+          const back = await restoreWishlistItemAction({
+            ...toInput(target),
+            id: target.id,
+            createdAt: target.createdAt,
+          }).catch(() => null);
+          if (back?.success) keepCategory(target.category);
+          else dropRow(target.id);
+          return back;
+        },
+        "Failed to restore item",
+      ),
     });
     if (!(await deleted)) {
       putBack(target);

@@ -23,7 +23,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   const { showToast } = useToast();
   const [editing, setEditing] = useState<CustomExercise | null>(null);
   const [form, setForm] = useState({ name: "", muscleGroup: "chest", equipmentType: "barbell" });
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // A deleted row leaves at once; the refreshed page then no longer holds it.
   const [gone, setGone] = useState<string[]>([]);
@@ -32,7 +32,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   function open(e: CustomExercise) {
     setEditing(e);
     setForm({ name: e.name, muscleGroup: e.muscleGroup, equipmentType: e.equipmentType });
-    setError("");
+    setErrorMsg("");
   }
 
   async function save(e: React.FormEvent) {
@@ -40,12 +40,12 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     if (!editing) return;
     const before = editing;
     const name = form.name.trim();
-    setError("");
+    setErrorMsg("");
     setBusy(true);
     try {
       const res = await updateCustomExerciseAction({ id: before.id, ...form, name });
       if (!res.success) {
-        setError(res.error);
+        setErrorMsg(res.error);
         return;
       }
       setEditing(null);
@@ -55,7 +55,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), "Failed to undo the edit"),
       });
     } catch {
-      setError("Failed to save exercise");
+      setErrorMsg("Failed to save exercise");
     } finally {
       setBusy(false);
     }
@@ -71,14 +71,15 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     }
     showToast({
       message: `Removed "${e.name}"`,
-      onUndo: async () => {
-        const back = await restoreCustomExerciseAction(e).catch(() => null);
-        if (!back?.success) {
-          showToast({ message: "Failed to restore exercise", type: "warning" });
-          return;
-        }
-        setGone((g) => g.filter((id) => id !== e.id));
-      },
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const back = await restoreCustomExerciseAction(e).catch(() => null);
+          if (back?.success) setGone((g) => g.filter((id) => id !== e.id));
+          return back;
+        },
+        "Failed to restore exercise",
+      ),
     });
   }
 
@@ -100,7 +101,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         </ListBox>
       </Card>
 
-      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={error} busy={busy} canSubmit={visible(form.name)}>
+      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} busy={busy} canSubmit={visible(form.name)}>
         <Field label="Name" type="text" required maxLength={100} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <FieldPair>
           <SelectField
