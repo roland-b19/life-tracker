@@ -22,7 +22,7 @@ Wishlist, the weight card and Tasks have a browser spec; Settings (`/settings`) 
 - [x] The existing specs still pass with the flag on, `npm run check` passes with a private database (`CI=1`, `DATABASE_URL` and `DATABASE_URL_MIGRATE` set to it), and CI on the pull request is green.
 
 ## Decisions
-- D-014: Settings e2e spec: the e2e server turns the Claude flag on with a fake key; the spec covers the Claude card and the data export
+- D-017: Settings e2e spec: the e2e server turns the Claude flag on with a fake key; the spec covers the Claude card and the data export
 - D-012: Tasks e2e spec (the model: reload checks, `andSettle`, one `@a11y` test; already active, this plan follows it)
 - D-005: End-to-end specs with Playwright Test on `next dev`, Chromium desktop and phone (already active; this plan follows it)
 
@@ -43,7 +43,7 @@ Wishlist, the weight card and Tasks have a browser spec; Settings (`/settings`) 
 - `docs/kb/conventions.md`, End-to-end specs: list `tests/e2e/settings.spec.ts`; the run count and the number of specs; the e2e server (Gotchas, "e2e server") turns the Claude flag on with a throwaway key, which shows the Settings link and the Assistant tab in every spec.
 - `docs/kb/architecture.md`, Tests section: the Settings spec next to the others, and the two env values in the `playwright.config.ts` sentence; the Flags section if it says the flag is off wherever tests run.
 - `docs/kb/domain.md`: the Settings line says "enable push", but the Settings page holds only the Claude token; push reminders are set on Tasks, and the export is a button in the navigation menu. Fix the line.
-- `docs/kb/status.md`: Roadmap line "Settings e2e spec (D-014)" with the plan link while in progress, then done; archive the plan when done (`git mv` to `docs/kb/archive/plans/`).
+- `docs/kb/status.md`: Roadmap line "Settings e2e spec (D-017)" with the plan link while in progress, then done; archive the plan when done (`git mv` to `docs/kb/archive/plans/`).
 - `docs/kb/log/2026-11.md`: an entry for the plan and one for the build; `docs/kb/INDEX.md`: the current-state line mentions the Settings spec.
 - Risk tier: `playwright.config.ts` is in neither the Low nor the High list, so the pull request is Medium (the other changes are `tests/**` and `docs/**`).
 
