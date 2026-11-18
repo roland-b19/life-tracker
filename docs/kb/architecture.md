@@ -12,23 +12,23 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos, gym (largest), food (the home, `/` redirects to `/food`), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
 - `src/lib/`: data access and pure rules. `src/lib/rules.ts` keeps plain rules apart from zod so client bundles stay small. `src/lib/validations/*` holds zod schemas.
 - `src/app/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection, export).
-- `src/server/`: auth and db.
+- `src/server/`: auth (`requireUser()` for actions, `requirePageUser()` for pages and layouts) and db.
 - `src/db/schema.ts`: Drizzle schema; migrations in `drizzle/0000..0031`.
 - `worker/`: own `package.json` and Dockerfile; its deps stay out of the web app (tested).
 - `infra/main.bicep`, `scripts/azure-*.sh`: the Azure course setup, deployed only on request.
 - `scripts/backup-now.sh`, `scripts/import-personal.cjs`: manual owner tools with no npm script or caller (D-008). `scripts/import-personal.cjs` loads the owner's wishlist and tasks from the gitignored `.local/personal-data.json`; it writes SQL by hand, so it must follow every schema change to `wishlist_items`, `todos` and `item_categories`.
 
 ## How they connect
-- **Read:** a page calls `getServerSession(authOptions)`, redirects to `/signin` without a user, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
+- **Read:** a page calls `requirePageUser()` (`src/server/auth.ts`, D-011), which redirects to `/signin` without a user and returns `{ id, name }`, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
 - **Write:** the client calls a `"use server"` action. It starts with `requireUser()`, then `respond()` (`src/lib/validations/result.ts`, D-010) zod-parses the raw input, calls `src/lib` and answers `{ success: true, ... }` or `{ success: false, error }`; `src/lib` uses Drizzle through `src/server/db.ts`. Flagged actions call `assertClaudeEnabled()` or `assertPushEnabled()` first.
 - **Only API route:** `app/api/auth/[...nextauth]`. Every write, weight included, is a server action (D-007); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
-- **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, food and settings, giving a real 307 to `/signin` before markup streams. Pages still check the session themselves.
+- **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, food and settings, giving a real 307 to `/signin` before markup streams. Pages still call `requirePageUser()` themselves: a layout does not render again on client navigation, so it cannot be the only guard (Next's authentication guide).
 
 ## Auth and authorization
 - `src/auth.ts`: JWT sessions. `AUTH_PROVIDER` is `azure-ad` (default, 4 h sessions) or `github` (the Vercel variant, 180 days, with `OWNER_ALLOWLIST` of GitHub numeric ids rechecked on every session read). `AUTH_DEV=true` swaps in a Credentials dev user and throws if set in production. A missing `NEXTAUTH_SECRET` in production throws at import.
 - Users are unique on (issuer, subject). The local `users.id` is in `token.userId` and `session.user.id`. The session callback does no DB lookup.
 - Authorization is per-user row ownership in code: every `src/lib` query filters by `user_id`, child tables carry `user_id` too. No RLS. The runtime role `life_tracker_app` is least-privilege, and every migration has explicit GRANTs: a new table needs a GRANT in its migration or the app cannot use it.
-- Guards in tests: `tests/actions-anonymous.test.ts` globs every action file and asserts anonymous calls reject; `tests/pages-auth.test.ts` asserts every page checks the session; `tests/authorization.test.ts` covers the weight actions and lists every API route file.
+- Guards in tests: `tests/actions-anonymous.test.ts` globs every action file and asserts anonymous calls reject; `tests/pages-auth.test.ts` calls every page and layout as an anonymous visitor (redirect to `/signin`, no database access) and asserts that only `src/server/auth.ts` reads the session; `tests/authorization.test.ts` covers the weight actions and lists every API route file.
 
 ## Data model
 - All ids are uuid, timestamps are `timestamptz`, day columns are plain `date`. Everything cascades from `users`.

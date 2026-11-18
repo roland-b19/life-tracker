@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
+import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 
 export class UnauthorizedError extends Error {
@@ -9,11 +10,26 @@ export class UnauthorizedError extends Error {
   }
 }
 
+async function currentUser() {
+  const user = ((await getServerSession(authOptions)) as Session | null)?.user;
+  return user?.id ? { id: user.id, name: user.name ?? "User" } : null;
+}
+
+/** For server actions: the signed-in user's id, or a rejection. */
 export async function requireUser(): Promise<string> {
-  const session = await getServerSession(authOptions);
-  const userId = (session as Session | null)?.user?.id;
-  if (!userId) {
+  const user = await currentUser();
+  if (!user) {
     throw new UnauthorizedError();
   }
-  return userId;
+  return user.id;
+}
+
+/**
+ * For pages and layouts: the signed-in user, or a redirect to /signin. Every page calls this itself, even under
+ * `RequireSession`: a layout does not render again on client navigation, so it cannot be the only guard.
+ */
+export async function requirePageUser(): Promise<{ id: string; name: string }> {
+  const user = await currentUser();
+  if (!user) redirect("/signin");
+  return user;
 }

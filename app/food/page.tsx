@@ -1,6 +1,4 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/auth";
+import { requirePageUser } from "@/server/auth";
 import {
   getDailyFoodSummary,
   getNutritionTargets,
@@ -13,27 +11,23 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { FoodClient } from "./food-client";
 
 export default async function FoodPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/signin");
-  }
+  const user = await requirePageUser();
 
-  const userId = session.user.id;
   const today = toISODate();
 
   const [targets, summary, weights, weekMetrics, shoppingList, shoppingCategories, shoppingUnits] = await Promise.all([
-    getNutritionTargets(userId),
-    getDailyFoodSummary(userId, today),
-    listWeightEntries(userId, addDays(today, -364)), // the page shows a year; the database keeps every weigh-in
-    getDailyMetricsHistory(userId, today),
-    getShoppingList(userId),
-    getShoppingCategories(userId),
-    getShoppingCategories(userId, "unit"),
+    getNutritionTargets(user.id),
+    getDailyFoodSummary(user.id, today),
+    listWeightEntries(user.id, addDays(today, -364)), // the page shows a year; the database keeps every weigh-in
+    getDailyMetricsHistory(user.id, today),
+    getShoppingList(user.id),
+    getShoppingCategories(user.id),
+    getShoppingCategories(user.id, "unit"),
   ]);
 
   return (
     <FoodClient
-      userName={session.user.name ?? "User"}
+      userName={user.name}
       todayDate={today}
       targets={(({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }) => ({ calories, proteinGrams, carbsGrams, fatGrams, waterMl, steps }))(targets)}
       initialSummary={summary}
