@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isoDate, uuid, visible } from "./common";
-import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
+import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
 
 /** The limits of a logged set and a note, shared by the form and the server. */
 export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500 } as const;
