@@ -72,8 +72,8 @@ export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const { sessionId } = cancelSessionSchema.parse(rawInput);
     const deleted = await cancelWorkoutSession(userId, sessionId);
-    safeRevalidate("/gym");
     if (!deleted) throw new Refusal("Workout not found.");
+    safeRevalidate("/gym");
     return {};
   });
 }
@@ -124,7 +124,7 @@ export async function deleteSetAction(setId: string) {
 export async function saveSplitDayAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
-    if (!(await saveSplitDay(userId, saveSplitDaySchema.parse(rawInput)))) throw new Refusal("Failed to save day");
+    if (!(await saveSplitDay(userId, saveSplitDaySchema.parse(rawInput)))) throw new Refusal("This day could not be saved.");
     safeRevalidate("/gym");
     return {};
   });
