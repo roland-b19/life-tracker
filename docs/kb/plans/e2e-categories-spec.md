@@ -52,4 +52,4 @@ The categories card is shared by three pages the owner uses (Wishlist, the Tasks
 - Risk tier: only `tests/**` and `docs/**` change, so Low.
 
 ## Approval
-Status: draft
+Status: approved 2026-11-18
