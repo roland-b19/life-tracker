@@ -1,20 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {},
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 import { db } from "@/server/db";
-import { todos, users } from "@/db/schema";
+import { todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
@@ -22,11 +12,6 @@ import { createTodo, getDailyTodos, toggleTodo } from "@/lib/todos";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import { addDays, toISODate } from "@/lib/format-date";
 import { succeeded } from "./succeeded";
-
-async function seedUser(subject: string) {
-  const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
-  return user.id;
-}
 
 describe("Categories: lists, items and multi-user isolation", () => {
   let userA: string;

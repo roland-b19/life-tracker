@@ -2,22 +2,12 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {},
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
-import { users, weightEntries } from "@/db/schema";
+import { weightEntries } from "@/db/schema";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/app/actions/food";
 import { listWeightEntries } from "@/lib/food";
 import { readdirSync } from "node:fs";
@@ -25,14 +15,6 @@ import path from "node:path";
 import { securityHeaders } from "@/../next.config";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-
-async function seedUser(subject: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ issuer: "test", subject })
-    .returning({ id: users.id });
-  return user.id;
-}
 
 describe("weight authorization", () => {
   it("keeps every API route in the authorization test table", () => {

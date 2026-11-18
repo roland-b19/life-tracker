@@ -2,40 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
-
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
 import { createTodo, deleteTodo, getDailyTodos, restoreTodo, toggleTodo } from "@/lib/todos";
 import { deleteCategory } from "@/lib/categories";
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-
-async function seedUser(subject: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ issuer: "test", subject })
-    .returning({ id: users.id });
-  return user.id;
-}
-
 
 describe("Task order: only the user's own actions move a task", () => {
   const today = toISODate();
