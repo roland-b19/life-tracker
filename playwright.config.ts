@@ -1,14 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
+// Sets DATABASE_URL the way the Vitest tests get it: the job's database in CI, otherwise the local test database.
+import "./tests/setup";
 
 const PORT = 3100;
 const BASE_URL = `http://localhost:${PORT}`;
+const databaseUrl = process.env.DATABASE_URL!;
 
-// The same databases as tests/setup.ts: the job's own database in CI, otherwise the local test database.
-const databaseUrl = process.env.CI
-  ? (process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:5432/life_tracker")
-  : (process.env.DATABASE_URL_TEST ?? "postgresql://life_tracker_app:dev-app-password@127.0.0.1:5432/life_tracker_test");
-
-// `.env` on a developer's Mac may hold other databases; a spec only ever runs against a local one.
+// A shell-exported DATABASE_URL_TEST, or CI=1 with a remote DATABASE_URL, could point the dev server at a real
+// database; a spec only ever runs against a local one.
 if (!["127.0.0.1", "localhost"].includes(new URL(databaseUrl).hostname)) {
   throw new Error("The e2e specs only run against a local database.");
 }

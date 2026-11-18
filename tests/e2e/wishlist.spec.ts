@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-// Serious and critical findings fail the spec; nothing is excluded today (no violations on either page).
+// Serious and critical findings fail the spec.
 async function expectNoSeriousViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page }).analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
@@ -38,6 +38,8 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
   const row = page.getByText(name, { exact: true });
   const total = page.getByRole("region", { name: "Estimated Investment" });
   const added = page.getByText(`Added "${name}" (1.234 RON)`);
+  // The total counts up over about 600 ms, so it is checked with a retrying assertion.
+  const expectTotal = (amount: string) => expect(total).toHaveText(new RegExp(`^Estimated Investment\\s*${amount} RON$`));
 
   async function addItem() {
     await page.getByRole("button", { name: "Add item" }).click();
@@ -48,12 +50,12 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
     await expect(added).toBeVisible();
   }
 
-  // Add, then Undo the add. The total counts up over about 600 ms, so it is checked with a retrying assertion.
+  // Add, then Undo the add.
   await addItem();
-  await expect(total).toHaveText(/^Estimated Investment\s*1\.234 RON$/);
+  await expectTotal("1\\.234");
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(row).toBeHidden();
-  await expect(total).toHaveText(/^Estimated Investment\s*0 RON$/);
+  await expectTotal("0");
 
   // Add again, drop its toast so only one Undo exists, then Delete and Undo the delete.
   await addItem();
@@ -64,5 +66,5 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
   await expect(page.getByText(`Removed "${name}"`)).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(row).toBeVisible();
-  await expect(total).toHaveText(/^Estimated Investment\s*1\.234 RON$/);
+  await expectTotal("1\\.234");
 });
