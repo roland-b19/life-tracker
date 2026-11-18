@@ -19,6 +19,7 @@ last_verified: 2026-11-18
 - **Undo:** every change has an Undo toast; the delete restores the row under its old id. The toast's `onUndo` is `undoWith(showToast, write, failed?)` from `app/components/toast.tsx`, never a hand-rolled block: `write` puts the screen back first, then writes, and reverts the screen itself if the write fails. It returns the action's answer (`{success}`, a boolean or nothing) or throws. `undoWith` shows the "Failed to undo" warning (or `failed`, a string or a function of the answer) when the answer is falsy, `{success: false}` or a throw, and nothing when it is `true` or `{success: true}`; return `true` when there is nothing left to write and the screen is already right.
 - **Form error state:** `const [errorMsg, setErrorMsg] = useState("")` (D-009). `FormModal` keeps its `error` prop; pass `error={errorMsg}`.
 - **UI:** the Wishlist page (`app/wishlist/`, `app/globals.css`, `app/components/`) is the reference. Dark only, no animations except the existing ones.
+- **Dependency versions:** caret ranges (`^x.y.z`) in `package.json` and `worker/package.json`; the lockfile pins what is installed. No new exact pin; the remaining ones are listed in status (Tracked migrations). Chosen by the owner on 2026-11-18.
 - **Migrations:** additive Drizzle migrations with explicit GRANTs; the owner runs them on the live database before the dependent code merges.
 - **Checks:** the verify skill has run at the change's test tier, the fast checks pass, and review-change has run; its PR body lists every finding as fixed or with a reason.
   - **Fast checks** (the one check command): `npm run check` (lint, typecheck, tests, KB check). Tests need Postgres, see Gotchas.
@@ -33,7 +34,7 @@ last_verified: 2026-11-18
 
 ## Gotchas
 - **Next.js 16:** has breaking changes against older versions. Read the guide in `node_modules/next/dist/docs/` before changing framework-level code.
-- **Postgres for tests:** `npm test` needs Postgres. Locally `docker compose up` provides it; without Docker or Postgres the DB-backed tests cannot run, and CI is the proof.
+- **Postgres for tests:** `npm test` needs Postgres. Locally `docker compose up` provides it; without Docker or Postgres the DB-backed tests cannot run, and CI is the proof. For a private database (parallel sessions truncate the shared test DB), run with `CI=1` and `DATABASE_URL` and `DATABASE_URL_MIGRATE` both set to it: outside CI, `tests/setup.ts` takes the owner URL from `.env.example`, so `DATABASE_URL_TEST` alone still sends the owner's truncates to the shared DB.
 - **Local credentials:** the Docker passwords and `DATABASE_URL_TEST` are written only in `.env.example` (D-006). `docker compose` and `seed:dev` read your `.env`, a copy of it (`cp .env.example .env`); `tests/setup.ts` reads `.env.example` itself, so keep `.env` in step with it. In CI the job's env is the only source and `tests/setup.ts` has no defaults. Never write a password in code, a script or a doc.
 - **Time zone:** compute "today" with `src/lib/format-date.ts` (`APP_TZ`), never `new Date()` day math on the server, which runs in UTC.
 - **New table:** add a GRANT for `life_tracker_app` in the migration, or the app cannot use it.
