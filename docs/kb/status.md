@@ -30,7 +30,7 @@ None.
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
 - **Import style:** `@/` (57 files) vs relative (41 files) → `@/`.
-- **Test setup duplication:** `seedUser` in 11 test files and the `authState` mock in about 10 → one shared helper in `tests/`.
+- **Test setup duplication:** `tests/food-chat.test.ts` still has its own `seedUser` and `authState` mock (another change was editing that file); move it to `tests/auth.ts` (see conventions) next time it is touched, then remove this entry.
 - **Layout of logic:** `src/app/actions` next to the root `app/`; add vs create function names; the "Health" label vs the `/food` route; `revalidatePath` only in gym.
 - **Chat role `"model"`:** a Gemini leftover in the food chat history. It is a contract between the client and the server, so it moves in one change (server wave): the zod enum in `src/app/actions/food-chat.ts:14` and the type in `src/lib/food-ai-chat.ts:8` (`"user" | "model"`), and on the client `app/food/food-client.tsx` (the history type, the reply message and the `chat-msg` class) with the `.chat-msg.model` rule in `app/globals.css`. Changing only the client would make the server reject the history.
 - **Exact dependency versions:** the rule is caret ranges (see conventions). Still exact: `worker/` `@azure/identity`, `@azure/storage-queue`, `web-push`, and root `three` / `@types/three` (a 0.x library, so a caret does not allow a minor bump; decide before changing).

@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
+import { seedUser } from "./auth";
 import { createTodo, savePushSubscription } from "@/lib/todos";
 import { addDays, toISODate } from "@/lib/format-date";
 import {
@@ -20,10 +19,6 @@ const app = new Pool({ connectionString: process.env.DATABASE_URL });
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 const query = (text: string, params: unknown[]) => app.query(text, params) as Promise<{ rows: Record<string, string>[] }>;
 
-async function seedUser() {
-  const [user] = await db.insert(users).values({ issuer: "test", subject: `w-${randomUUID()}` }).returning({ id: users.id });
-  return user.id;
-}
 const subscribe = (userId: string, endpoint = `https://push.example/${randomUUID()}`) =>
   savePushSubscription(userId, { endpoint, p256dhKey: "p256dh", authKey: "auth" });
 const task = (userId: string, title: string, extra: { dueDate?: string; reminderTime?: string; isRecurring?: boolean } = {}) =>

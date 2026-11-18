@@ -2,28 +2,13 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 
 import { eq } from "drizzle-orm";
 import { succeeded } from "./succeeded";
 import { db } from "@/server/db";
-import { pushSubscriptions, users } from "@/db/schema";
+import { pushSubscriptions } from "@/db/schema";
 import {
   createTodo,
   deleteTodo,
@@ -44,14 +29,6 @@ import {
 import { addDays, toISODate } from "@/lib/format-date";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-
-async function seedUser(subject: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ issuer: "test", subject })
-    .returning({ id: users.id });
-  return user.id;
-}
 
 describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   let userA: string;
