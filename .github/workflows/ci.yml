@@ -51,6 +51,16 @@ jobs:
       - name: Fast checks
         run: npm run check
       # The browser spec (see docs/kb/conventions.md): next dev on port 3100 against the job's database, Chromium only.
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      # Caches the browser download only. The install step below still runs, so the system libraries are installed on a
+      # cache hit too (--with-deps), and it re-downloads nothing that the cache already holds.
+      - name: Cache Playwright browsers v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
       - name: End-to-end spec
