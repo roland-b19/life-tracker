@@ -19,7 +19,7 @@ Only the Wishlist and the weight card have a browser spec; Tasks (`/todos`), a p
 - [x] axe finds no serious or critical violation on `/todos` with a task listed and with the "New task" form open, on `desktop` and `phone` — checked by the spec (a finding is fixed in the code, never excluded).
 - [x] The specs make no waits by time and find elements by role, label or text only — checked by `grep -rn "waitForTimeout\|locator(" tests/e2e` finding nothing.
 - [x] `weight.spec.ts` still passes after `andSettle` moves, and no copy of `andSettle` is left in a spec file — checked by `npm run e2e` and `grep -rn "function andSettle" tests/e2e` finding only `helpers.ts`.
-- [ ] `npm run check` passes with a private database (`CI=1`, `DATABASE_URL` and `DATABASE_URL_MIGRATE` set to it), and CI on the pull request is green.
+- [x] `npm run check` passes with a private database (`CI=1`, `DATABASE_URL` and `DATABASE_URL_MIGRATE` set to it), and CI on the pull request is green.
 
 ## Decisions
 - D-012: Tasks e2e spec: the Today flow plus the space and tab split, checked in the database, one shared settle helper
@@ -34,7 +34,7 @@ Only the Wishlist and the weight card have a browser spec; Tasks (`/todos`), a p
    - Axe test (`@a11y`, both projects): open Today, add a task so a row exists, scan, open "Add task", wait for the dialog "New task", scan.
    - If a name is not found as written (a toast or label differs), read the real text in `app/todos/todos-client.tsx` and use it; never loosen to a CSS selector.
 3. [x] KB and docs — files: `docs/kb/conventions.md`, `docs/kb/architecture.md`, `docs/kb/status.md`, `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md` (change); tests: `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb`.
-4. [ ] Verify and hand off — files: none; tests: `npm run check` and `npm run e2e` against a private database, then the merge-branch skill opens the pull request and CI is green. Do not merge it.
+4. [x] Verify and hand off — files: none; tests: `npm run check` and `npm run e2e` against a private database, then the merge-branch skill opens the pull request and CI is green. Do not merge it.
 
 ## Cleanup and docs
 - Nothing becomes unused: `andSettle` in `weight.spec.ts` is replaced by the helper in step 1, in the same change.
@@ -45,4 +45,4 @@ Only the Wishlist and the weight card have a browser spec; Tasks (`/todos`), a p
 - Risk tier: only `tests/**` and `docs/**` change, so Low.
 
 ## Approval
-Status: approved 2026-11-18
+Status: done 2026-11-18
