@@ -10,7 +10,7 @@ vi.mock("@/auth", () => ({ authOptions: {} }));
 
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { users } from "@/db/schema";
+import { seedUser } from "./auth";
 import { getExercises, getUserSplitWithDays } from "@/lib/gym";
 import { getShoppingCategories } from "@/lib/food";
 
@@ -28,8 +28,7 @@ async function measure<T>(run: () => Promise<T>) {
 let userId = "";
 
 beforeAll(async () => {
-  const [u] = await db.insert(users).values({ issuer: "test", subject: `load-${randomUUID()}` }).returning({ id: users.id });
-  userId = u.id;
+  userId = await seedUser(`load-${randomUUID()}`);
   auth.id = userId;
   await getUserSplitWithDays(userId); // creates the routine
   await getExercises(userId);

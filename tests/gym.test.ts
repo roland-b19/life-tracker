@@ -2,29 +2,12 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 
 import { dayProgress, exerciseSeries, exerciseUnit, kgDelta, progressSets, setLoad, weekStart, weeksBetween, withProgress } from "@/lib/gym-progress";
 import { addDays, toISODate } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
 import {
   cancelWorkoutSession,
   createCustomExercise,
@@ -58,14 +41,6 @@ import { succeeded } from "./succeeded";
 
 const TODAY = toISODate();
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-
-async function seedUser(subject: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ issuer: "test", subject })
-    .returning({ id: users.id });
-  return user.id;
-}
 
 describe("Gym module: Data Access, Logic & Authorization", () => {
   /** A finished workout: a user holds at most one open one (a unique index), so the tests that only need history finish theirs. */
