@@ -15,7 +15,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 ## D-002: One check command, `npm run check`, run by the Stop hook and CI (2026-11-18)
 - **Why:** The verify skill needs one headless command; CI runs it as written. It chains lint, typecheck, Vitest and the KB check, so the local hook and CI give the same answer. Vitest stays (golden rule 1: it was already the runner).
 - **Rejected:** A check without tests (faster, but hides DB regressions); no Stop hook until Postgres runs locally (checks would only run in CI). The owner chose the full command and will start Postgres with `docker compose up` when working.
-- **Status:** active. No end-to-end browser spec exists yet; the first UI feature adds it. Screenshot tests were not requested.
+- **Status:** active. The end-to-end tool was chosen later in D-005. Screenshot tests were not requested.
 
 ## D-003: Keep `azure-preflight.sh` and the unused schema columns (2026-11-18)
 - **Why:** `scripts/azure-preflight.sh` is a manual tool for the Azure course demos (D-001), like `backup-now.sh` and `import-personal.cjs`. The columns `daily_metrics.notes`, `workout_split_days.order_index` and `workout_splits.is_active` may hold rows in the live database, and migrations are additive only; dropping them needs a migration the owner runs. Both chosen by the owner on 2026-11-18.
@@ -26,3 +26,8 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Why:** The picomatch advisory GHSA-fc5q-39xc-vjpf (high) covers every published version and has no fix; only dev tools (vitest, vite, eslint, drizzle-kit) pull picomatch in. `npm audit --omit=dev` finds 0 vulnerabilities. A full audit as a blocking step kept `main` red from 2026-11-17. Chosen by the owner on 2026-11-18 (PR #134).
 - **Rejected:** Waiting for an upstream patch (weeks, `main` blocked meanwhile); `npm audit fix --force` (downgrades vitest to 3.1.4); bypassing branch protection.
 - **Status:** active. The full audit still runs as a report-only step (`continue-on-error`). Revisit when picomatch has a fixed release.
+
+## D-005: End-to-end specs with Playwright Test on `next dev`, Chromium desktop and phone (2026-11-18)
+- **Why:** The verify skill already prescribes Playwright Test (golden rule 1), and it adds a real browser check for the UI flows Vitest cannot see. Specs run against `next dev` because `AUTH_DEV=true` throws under `NODE_ENV=production`, so `next start` cannot sign in. Targets follow the conventions page: Chromium at desktop size and at 375px. `@axe-core/playwright` scans every page a spec visits. `npm run e2e` stays out of `npm run check` so the Stop hook stays fast; CI runs both. Chosen by the owner on 2026-11-18 ("all recommended, axe included"); the first spec is the Wishlist flow ([plan](../plans/e2e-first-spec.md)).
+- **Rejected:** Cypress or Vitest browser mode (heavier or still needs Playwright, no gain); Firefox and WebKit projects (slower CI, the KB targets are Chromium only); running specs against a production build (AUTH_DEV forbids it); the dev database `life_tracker` (test data would mix with seed data); e2e inside `npm run check` (a browser run at every stop).
+- **Status:** active.

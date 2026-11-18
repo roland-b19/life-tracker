@@ -5,6 +5,9 @@
 .github
 .next
 coverage
+test-results
+playwright-report
+playwright.config.ts
 node_modules
 tests
 Dockerfile

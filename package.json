@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm test && python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb",
     "db:migrate": "drizzle-kit migrate",
     "seed:dev": "node --env-file=.env scripts/seed-dev.cjs"
@@ -27,6 +28,8 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.15.6",
     "@types/react": "^19.3.0",

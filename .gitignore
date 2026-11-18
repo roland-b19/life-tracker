@@ -31,6 +31,8 @@ dist/
 build/
 .next/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Azure CLI local state
