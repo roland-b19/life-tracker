@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { andSettle, expectNoSeriousViolations, test } from "./helpers";
 
+const claudeCard = (page: Page) => page.getByRole("region", { name: "Claude", exact: true });
+
 async function openSettings(page: Page) {
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings$/);
   await expect(claudeCard(page)).toBeVisible();
 }
-
-const claudeCard = (page: Page) => page.getByRole("region", { name: "Claude", exact: true });
 
 // A throwaway value in the shape the form accepts (`sk-ant-` and at least 20 more characters). It is only stored, encrypted
 // with the e2e key, and never sent to Claude, so no real token is ever needed or typed.
