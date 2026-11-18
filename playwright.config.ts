@@ -50,6 +50,10 @@ export default defineConfig({
       NEXTAUTH_URL: BASE_URL,
       NEXTAUTH_SECRET: "e2e-only-secret",
       DATABASE_URL: databaseUrl,
+      // The Settings page and its Claude card render only with the flag on, and the card encrypts a token with the key.
+      // The key is throwaway and e2e only, like NEXTAUTH_SECRET: the specs only ever store a fake token.
+      NEXT_PUBLIC_CLAUDE_ENABLED: "true",
+      CLAUDE_TOKEN_KEY: Buffer.alloc(32, "e2e-only").toString("base64"),
     },
   },
 });
