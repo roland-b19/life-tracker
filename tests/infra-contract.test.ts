@@ -156,6 +156,13 @@ describe("Azure reminder pipeline contract", () => {
     expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("drizzle");
   });
 
+  it("has no default Azure database host: the migrate script derives it from the bicep name and passes it in", () => {
+    expect(bicep).toContain("var postgresName = replace('${suffix}-pg', '-', '')"); // lifetracker<env>pg
+    expect(migrateScript).toContain('db_host="lifetracker${environment}pg.postgres.database.azure.com"');
+    expect(migrateScript).toContain("name: DB_HOST");
+    expect(readFileSync("scripts/db-init.cjs", "utf8")).not.toContain("postgres.database.azure.com");
+  });
+
   it("ships public/ in the image: the service worker, manifest, icons and 3D models are served from it", () => {
     expect(dockerfile).toContain("/app/public ./public");
     expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("public");
