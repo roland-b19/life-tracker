@@ -1,40 +1,18 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
-
 const runClaude = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/claude-cli", () => ({ runClaude }));
 
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
+import { authState, seedUser } from "./auth";
 import { succeeded } from "./succeeded";
-
-async function seedUser(subject: string) {
-  const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
-  return user.id;
-}
 
 /** One successful Claude CLI answer whose structured output is `output`. */
 function mockClaude(output: unknown) {
@@ -110,6 +88,25 @@ describe("Food assistant: context prompt and structured answer", () => {
     const meal = summary.meals.find((m) => m.name === "200 g somon la grătar");
     expect(meal?.calories).toBe(413);
     expect(meal?.isEstimated).toBe(true);
+  });
+
+  it("sends earlier turns as a labelled transcript", async () => {
+    process.env.AUTH_DEV = "true";
+    mockClaude({ reply: "Gata.", meals: [] });
+
+    await sendFoodChatMessage(
+      userId,
+      "și o banană",
+      [
+        { role: "user", text: "am mâncat un ou" },
+        { role: "assistant", text: "Am adăugat oul." },
+      ],
+      ctx,
+    );
+
+    expect(runClaude.mock.calls[0][0].input).toBe(
+      "Conversation so far:\n\nUser: am mâncat un ou\n\nAssistant: Am adăugat oul.\n\nNew message:\nși o banană",
+    );
   });
 
   it("logs nothing when the answer does not match the schema", async () => {
@@ -212,6 +209,24 @@ describe("Food assistant: context prompt and structured answer", () => {
         expect(await sendFoodChatMessageAction({ ...input, date })).toEqual({ success: false, error: "Only today and yesterday can be changed." });
       }
       expect(runClaude).not.toHaveBeenCalled();
+    });
+
+    it("accepts the roles user and assistant in the history, nothing else", async () => {
+      authState.id = userId;
+      process.env.AUTH_DEV = "true";
+      mockClaude({ reply: "Gata.", meals: [] });
+      const turns = [
+        { role: "user", text: "salut" },
+        { role: "assistant", text: "Bună!" },
+      ] as const;
+
+      succeeded(await sendFoodChatMessageAction({ ...input, history: [...turns] }));
+
+      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toMatchObject({
+        success: false,
+        error: expect.any(String),
+      });
+      expect(runClaude).toHaveBeenCalledTimes(1);
     });
 
     it("rejects invalid input before calling the model", async () => {

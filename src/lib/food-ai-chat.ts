@@ -5,7 +5,7 @@ import { runClaude } from "./claude-cli";
 import { getClaudeToken } from "./claude-connection";
 
 interface ChatMessage {
-  role: "user" | "model";
+  role: "user" | "assistant";
   text: string;
 }
 

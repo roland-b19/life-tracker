@@ -126,7 +126,7 @@ export function FoodClient({
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
     Array<{
-      role: "user" | "model";
+      role: "user" | "assistant";
       text: string;
       meals?: MealData[];
     }>
@@ -442,7 +442,7 @@ export function FoodClient({
       });
       if (!res.success) return takeBack(res.error);
       const meals = res.meals as MealData[];
-      setChatMessages((prev) => [...prev, { role: "model", text: res.reply, meals }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals }]);
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) {
         showToast({
@@ -586,7 +586,7 @@ export function FoodClient({
         <Card id="chat-title" title="Food assistant">
           <div className="chat-log" aria-live="polite">
             {chatMessages.map((msg, index) => (
-              <div key={index} className={`chat-msg ${msg.role === "user" ? "user" : "model"}`}>
+              <div key={index} className={`chat-msg ${msg.role}`}>
                 <div className="chat-bubble">{msg.text}</div>
                 {msg.meals?.map((m) => (
                   <div key={m.id} className="chat-tool number-tabular">
@@ -597,7 +597,7 @@ export function FoodClient({
               </div>
             ))}
             {chatLoading && (
-              <div className="chat-msg model">
+              <div className="chat-msg assistant">
                 <div className="chat-bubble typing">Calculating macros...</div>
               </div>
             )}
