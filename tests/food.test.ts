@@ -24,7 +24,6 @@ import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
 import { dailyMetrics, users, weightEntries } from "@/db/schema";
-import { createWeightEntry, listWeightEntries, updateWeightEntry } from "@/server/weight";
 import {
   addShoppingItem,
   addWater,
@@ -36,10 +35,12 @@ import {
   getShoppingList,
   getDailyMetricsHistory,
   getPastFoods,
+  listWeightEntries,
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreShoppingItems,
+  saveWeightEntry,
   toggleShoppingItem,
   updateDailySteps,
   updateNutritionTargets,
@@ -628,9 +629,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         { userId: userA, date: addDays(today, -364), kilograms: "80.00" },
         { userId: userB, date: addDays(today, -400), kilograms: "70.00" },
       ]);
-      const created = await createWeightEntry(userA, today, 79.5);
+      await saveWeightEntry(userA, { date: today, kilograms: 79.5 });
       await db.insert(weightEntries).values({ userId: userA, date: addDays(today, -500), kilograms: "90.00" });
-      await updateWeightEntry(userA, created.id, today, 79.4);
+      await saveWeightEntry(userA, { date: today, kilograms: 79.4 });
       expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userA))).toHaveLength(4);
       expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userB))).toHaveLength(1);
       expect((await listWeightEntries(userA)).map((w) => w.date)).toEqual([today, addDays(today, -364), addDays(today, -400), addDays(today, -500)]);

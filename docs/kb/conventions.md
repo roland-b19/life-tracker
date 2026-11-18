@@ -27,10 +27,8 @@ last_verified: 2026-11-18
   - **Targets:** a phone-width browser (375px) and desktop Chrome, dark only. The e2e projects are `desktop` (Desktop Chrome) and `phone` (Chromium at 375×812, no touch emulation).
 - **Risk tiers:** review-change's tier script reads the two lists below from the default branch's copy of this page; a changed file in neither list is Medium.
   - **Low:** `docs/**`, `**/README.md`, `tests/**`
-  - **High:** `.github/**`, `.claude/settings*.json`, `**/hook-settings.json`, `**/*_hook.py`, `src/auth.ts`, `src/server/auth.ts`, `src/server/same-origin.ts`, `drizzle/**`, `drizzle.config.ts`, `infra/**`, `scripts/azure-*`, `scripts/db-init.cjs`, `Dockerfile`, `worker/**`
+  - **High:** `.github/**`, `.claude/settings*.json`, `**/hook-settings.json`, `**/*_hook.py`, `src/auth.ts`, `src/server/auth.ts`, `drizzle/**`, `drizzle.config.ts`, `infra/**`, `scripts/azure-*`, `scripts/db-init.cjs`, `Dockerfile`, `worker/**`
 - **Merge on green:** off
-
-Deprecated patterns: the weight REST API (new features use server actions), see [status](status.md), Tracked migrations.
 
 ## Gotchas
 - **Next.js 16:** has breaking changes against older versions. Read the guide in `node_modules/next/dist/docs/` before changing framework-level code.

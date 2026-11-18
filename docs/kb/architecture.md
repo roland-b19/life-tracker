@@ -12,7 +12,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos, gym (largest), food (the home, `/` redirects to `/food`), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
 - `src/lib/`: data access and pure rules. `src/lib/rules.ts` keeps plain rules apart from zod so client bundles stay small. `src/lib/validations/*` holds zod schemas.
 - `src/app/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection, export).
-- `src/server/`: auth, db, logger, API helpers, `weight.ts`.
+- `src/server/`: auth and db.
 - `src/db/schema.ts`: Drizzle schema; migrations in `drizzle/0000..0031`.
 - `worker/`: own `package.json` and Dockerfile; its deps stay out of the web app (tested).
 - `infra/main.bicep`, `scripts/azure-*.sh`: the Azure course setup, deployed only on request.
@@ -20,14 +20,14 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 ## How they connect
 - **Read:** a page calls `getServerSession(authOptions)`, redirects to `/signin` without a user, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
 - **Write:** the client calls a `"use server"` action. It starts with `requireUser()`, zod-parses the raw input, then calls `src/lib`, which uses Drizzle through `src/server/db.ts`. Flagged actions call `assertClaudeEnabled()` or `assertPushEnabled()` first.
-- **Only API routes:** `app/api/weight` (+ `[id]`) and `app/api/auth/[...nextauth]`. Weight checks JSON content type, then `isSameOrigin` (compares Origin with the forwarded host, not `request.url`), then `requireUser`, then zod, and returns a generic error body (`src/server/api-errors.ts`). See [status](status.md) for why weight is the odd one out.
+- **Only API route:** `app/api/auth/[...nextauth]`. Every write, weight included, is a server action (D-006); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
 - **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, food and settings, giving a real 307 to `/signin` before markup streams. Pages still check the session themselves.
 
 ## Auth and authorization
 - `src/auth.ts`: JWT sessions. `AUTH_PROVIDER` is `azure-ad` (default, 4 h sessions) or `github` (the Vercel variant, 180 days, with `OWNER_ALLOWLIST` of GitHub numeric ids rechecked on every session read). `AUTH_DEV=true` swaps in a Credentials dev user and throws if set in production. A missing `NEXTAUTH_SECRET` in production throws at import.
 - Users are unique on (issuer, subject). The local `users.id` is in `token.userId` and `session.user.id`. The session callback does no DB lookup.
 - Authorization is per-user row ownership in code: every `src/lib` query filters by `user_id`, child tables carry `user_id` too. No RLS. The runtime role `life_tracker_app` is least-privilege, and every migration has explicit GRANTs: a new table needs a GRANT in its migration or the app cannot use it.
-- Guards in tests: `tests/actions-anonymous.test.ts` globs every action file and asserts anonymous calls reject; `tests/pages-auth.test.ts` asserts every page checks the session; `tests/authorization.test.ts` covers the weight routes.
+- Guards in tests: `tests/actions-anonymous.test.ts` globs every action file and asserts anonymous calls reject; `tests/pages-auth.test.ts` asserts every page checks the session; `tests/authorization.test.ts` covers the weight actions and lists every API route file.
 
 ## Data model
 - All ids are uuid, timestamps are `timestamptz`, day columns are plain `date`. Everything cascades from `users`.

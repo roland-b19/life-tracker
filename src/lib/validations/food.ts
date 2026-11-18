@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
+import { toISODate } from "../format-date";
 import { isoDate, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
@@ -20,6 +21,24 @@ export const logMealSchema = z.object({
 
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
+
+/** One weigh-in a day: saving a day that already has one replaces its kilograms. */
+export const logWeightSchema = z
+  .object({
+    // A weigh-in is a measurement: it cannot be in the future.
+    date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
+    kilograms: z
+      .number()
+      .finite()
+      .min(20)
+      .max(500)
+      // 78.4 * 100 is 7840.000000000001, so compare against the nearest hundredth instead of Number.isInteger.
+      .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "Maximum two decimal places."),
+  })
+  .strict();
+
+/** Undo of a delete: the same weigh-in, under its old id. */
+export const restoreWeightSchema = logWeightSchema.extend({ id: uuid });
 
 export const updateNutritionTargetsSchema = z.object({
   calories: z.number().int().min(500).max(10000),
@@ -80,6 +99,8 @@ export const revertShoppingCategorySchema = z
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
 
 export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
+export type LogWeightInput = z.infer<typeof logWeightSchema>;
+export type RestoreWeightInput = z.infer<typeof restoreWeightSchema>;
 export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
