@@ -24,6 +24,12 @@ async function signIn(page: Page, name: string) {
   await expect(page).toHaveURL(/\/food$/);
 }
 
+async function openWishlist(page: Page) {
+  await page.goto("/wishlist");
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+}
+
 // `signedInPage` signs in as a new dev user and deletes that user afterwards; the user's rows go with it (ON DELETE
 // CASCADE). The app role cannot delete users, so the cleanup uses the owner URL like the Vitest tests do. The config
 // refuses a non-local DATABASE_URL and DATABASE_URL_MIGRATE, so this only ever touches the local test database.
@@ -54,16 +60,12 @@ test("an anonymous visit to the Wishlist goes to a sign-in page without serious 
 });
 
 test("the Wishlist has no serious violations", { tag: "@a11y" }, async ({ signedInPage: page }) => {
-  await page.goto("/wishlist");
-  await expect(page).toHaveURL(/\/wishlist$/);
-  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  await openWishlist(page);
   await expectNoSeriousViolations(page);
 });
 
 test("a signed-in user adds, undoes, deletes and restores a wishlist item", async ({ signedInPage: page }) => {
-  await page.goto("/wishlist");
-  await expect(page).toHaveURL(/\/wishlist$/);
-  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  await openWishlist(page);
 
   const name = `E2E item ${randomUUID().slice(0, 8)}`;
   const row = page.getByText(name, { exact: true });
