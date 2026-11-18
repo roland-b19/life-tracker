@@ -16,6 +16,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - `src/db/schema.ts`: Drizzle schema; migrations in `drizzle/0000..0031`.
 - `worker/`: own `package.json` and Dockerfile; its deps stay out of the web app (tested).
 - `infra/main.bicep`, `scripts/azure-*.sh`: the Azure course setup, deployed only on request.
+- `scripts/backup-now.sh`, `scripts/import-personal.cjs`: manual owner tools with no npm script or caller (D-008). `scripts/import-personal.cjs` loads the owner's wishlist and tasks from the gitignored `.local/personal-data.json`; it writes SQL by hand, so it must follow every schema change to `wishlist_items`, `todos` and `item_categories`.
 
 ## How they connect
 - **Read:** a page calls `getServerSession(authOptions)`, redirects to `/signin` without a user, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
@@ -50,7 +51,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - **Vercel + Neon (live):** no `vercel.json`; `AUTH_PROVIDER=github`, `DB_POOL_MAX` 1-2, Claude and push off. Previews get no DB or auth secrets.
 - **Azure (course demo):** `infra/main.bicep` (private networking, ACR by digest, Key Vault, Storage Queue, Container App plus worker jobs). `scripts/azure-deploy.sh` needs `DEPLOY_APPROVED=YES` and `COST_GATE_APPROVED=YES`. The Dockerfile is a 3-stage Alpine build with `public/` and `drizzle/` copied explicitly and a `/health` healthcheck.
 - **Local:** `docker-compose.yml` (Postgres 17.6 on 127.0.0.1:5432; `docker/postgres/init.sh` creates roles and the test database), `.env.example`, `npm run seed:dev`.
-- **Backups:** `.github/workflows/backup.yml` runs weekly, dumps with the read-only role `life_tracker_backup` and encrypts with `age`; the private key stays with the owner. Do not weaken it.
+- **Backups:** `.github/workflows/backup.yml` runs weekly, dumps with the read-only role `life_tracker_backup` and encrypts with `age`; the private key stays with the owner. Do not weaken it. `scripts/backup-now.sh` is the manual twin: one plaintext `pg_dump` of the live database into the gitignored `.local/backups/`, run by the owner before a data-changing step (D-008).
 - **CI:** `.github/workflows/ci.yml` runs one job with a Postgres 17.6 service: migrate, `npm run check` (lint, typecheck, tests, KB check), `npm run e2e` (Chromium, caches `~/.cache/ms-playwright` keyed on the Playwright version, installs the system libraries on every run, uploads the report on failure), image builds with Trivy and SBOM, Bicep build, `bash -n` on scripts, `npm audit` (production dependencies only, D-004), gitleaks. The Postgres version is pinned in four places that must match: `ci.yml`, `backup.yml`, `docker-compose.yml`, `scripts/backup-now.sh`.
 
 ## Tests
