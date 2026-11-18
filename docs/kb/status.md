@@ -29,6 +29,5 @@ None.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- **Import style:** `@/` (57 files) vs relative (41 files) → `@/`.
 - **Layout of logic:** `src/app/actions` next to the root `app/`; add vs create function names; the "Health" label vs the `/food` route; `revalidatePath` only in gym.
 - **Exact dependency versions:** the rule is caret ranges (see conventions). Still exact: `worker/` `@azure/identity`, `@azure/storage-queue`, `web-push`, and root `three` / `@types/three` (a 0.x library, so a caret does not allow a minor bump; decide before changing).
