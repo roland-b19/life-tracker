@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";

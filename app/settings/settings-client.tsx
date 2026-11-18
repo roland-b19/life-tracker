@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
-import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
+import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
 import { formatDMY } from "@/lib/format-date";
 
 interface SettingsClientProps {

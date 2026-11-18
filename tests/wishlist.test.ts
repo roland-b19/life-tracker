@@ -10,7 +10,7 @@ import {
   restoreWishlistItem,
   updateWishlistItem,
 } from "@/lib/wishlist";
-import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
+import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/actions/wishlist";
 import { priorityForPrice } from "@/lib/rules";
 import { succeeded } from "./succeeded";
 

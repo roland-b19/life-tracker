@@ -4,17 +4,17 @@ import { requireUser } from "@/server/auth";
 import { uuid } from "@/lib/validations/common";
 import { Refusal, respond } from "@/lib/validations/result";
 import { addWishlistItem, deleteWishlistItem, restoreWishlistItem, updateWishlistItem } from "@/lib/wishlist";
-import { CreateWishlistItemInput, createWishlistItemSchema, RestoreWishlistItemInput, restoreWishlistItemSchema } from "@/lib/validations/wishlist";
+import { AddWishlistItemInput, addWishlistItemSchema, RestoreWishlistItemInput, restoreWishlistItemSchema } from "@/lib/validations/wishlist";
 
-export async function addWishlistItemAction(rawInput: CreateWishlistItemInput) {
+export async function addWishlistItemAction(rawInput: AddWishlistItemInput) {
   const userId = await requireUser();
-  return respond(async () => ({ item: await addWishlistItem(userId, createWishlistItemSchema.parse(rawInput)) }));
+  return respond(async () => ({ item: await addWishlistItem(userId, addWishlistItemSchema.parse(rawInput)) }));
 }
 
-export async function updateWishlistItemAction(itemId: string, rawInput: CreateWishlistItemInput) {
+export async function updateWishlistItemAction(itemId: string, rawInput: AddWishlistItemInput) {
   const userId = await requireUser();
   return respond(async () => {
-    const item = await updateWishlistItem(userId, uuid.parse(itemId), createWishlistItemSchema.parse(rawInput));
+    const item = await updateWishlistItem(userId, uuid.parse(itemId), addWishlistItemSchema.parse(rawInput));
     if (!item) throw new Refusal("Item not found.");
     return { item };
   });

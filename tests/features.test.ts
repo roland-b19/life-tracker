@@ -4,9 +4,9 @@ const authState = vi.hoisted(() => ({ id: "00000000-0000-0000-0000-000000000001"
 vi.mock("@/server/auth", () => ({ requireUser: vi.fn(async () => authState.id) }));
 
 import { isClaudeEnabled, isPushEnabled } from "@/lib/features";
-import { connectClaudeAction, disconnectClaudeAction } from "@/app/actions/claude-connection";
-import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
-import { savePushSubscriptionAction } from "@/app/actions/todos";
+import { connectClaudeAction, disconnectClaudeAction } from "@/actions/claude-connection";
+import { sendFoodChatMessageAction } from "@/actions/food-chat";
+import { savePushSubscriptionAction } from "@/actions/todos";
 
 afterEach(() => vi.unstubAllEnvs());
 

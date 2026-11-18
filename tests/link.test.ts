@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { linkOf } from "@/lib/link";
-import { createWishlistItemSchema } from "@/lib/validations/wishlist";
-import { createTodoSchema } from "@/lib/validations/todos";
+import { addWishlistItemSchema } from "@/lib/validations/wishlist";
+import { addTodoSchema } from "@/lib/validations/todos";
 
 describe("linkOf", () => {
   it("opens URLs and bare domains, shows the host", () => {
@@ -16,8 +16,8 @@ describe("linkOf", () => {
 
 describe("a name needs a visible character", () => {
   it("refuses zero-width-only wishlist names and task titles", () => {
-    expect(createWishlistItemSchema.safeParse({ name: "​​", estimatedPrice: 5 }).success).toBe(false);
-    expect(createWishlistItemSchema.safeParse({ name: "Lamp", estimatedPrice: 5 }).success).toBe(true);
-    expect(createTodoSchema.safeParse({ title: "﻿", dueDate: "2026-11-15" }).success).toBe(false);
+    expect(addWishlistItemSchema.safeParse({ name: "​​", estimatedPrice: 5 }).success).toBe(false);
+    expect(addWishlistItemSchema.safeParse({ name: "Lamp", estimatedPrice: 5 }).success).toBe(true);
+    expect(addTodoSchema.safeParse({ title: "﻿", dueDate: "2026-11-15" }).success).toBe(false);
   });
 });

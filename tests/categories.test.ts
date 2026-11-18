@@ -8,8 +8,8 @@ import { todos } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
-import { createTodo, getDailyTodos, toggleTodo } from "@/lib/todos";
-import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
+import { addTodo, getDailyTodos, toggleTodo } from "@/lib/todos";
+import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import { addDays, toISODate } from "@/lib/format-date";
 import { succeeded } from "./succeeded";
 
@@ -42,7 +42,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     authState.id = userA;
     await addCategoryAction({ scope: "personal", name: "home" });
     await addCategoryAction({ scope: "personal", name: "house" });
-    await createTodo(userA, {
+    await addTodo(userA, {
       space: "personal",
       title: "Fix tap",
       isRecurring: true,
@@ -64,8 +64,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const today = toISODate();
     const day = (n: number) => addDays(today, n);
     await addCategoryAction({ scope: "personal", name: "gym" });
-    await createTodo(userA, { space: "personal", title: "Lift", isRecurring: true, recurrencePattern: "daily", dueDate: day(-3), category: "gym" });
-    const old = await createTodo(userA, { space: "personal", title: "Old one", isRecurring: false, recurrencePattern: "none", dueDate: day(-1), category: "gym" });
+    await addTodo(userA, { space: "personal", title: "Lift", isRecurring: true, recurrencePattern: "daily", dueDate: day(-3), category: "gym" });
+    const old = await addTodo(userA, { space: "personal", title: "Old one", isRecurring: false, recurrencePattern: "none", dueDate: day(-1), category: "gym" });
     const catOn = async (d: string, title: string) => (await getDailyTodos(userA, "personal", d, today)).todos.find((t) => t.title === title)?.category;
 
     await deleteCategoryAction({ scope: "personal", name: "gym" });
@@ -80,8 +80,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const today = toISODate();
     const day = (n: number) => addDays(today, n);
     await addCategoryAction({ scope: "personal", name: "undo-cat" });
-    const run = await createTodo(userA, { space: "personal", title: "Undo run", isRecurring: true, recurrencePattern: "daily", dueDate: day(-5), category: "undo-cat" });
-    const fresh = await createTodo(userA, { space: "personal", title: "Undo fresh", isRecurring: true, recurrencePattern: "daily", dueDate: today, category: "undo-cat" });
+    const run = await addTodo(userA, { space: "personal", title: "Undo run", isRecurring: true, recurrencePattern: "daily", dueDate: day(-5), category: "undo-cat" });
+    const fresh = await addTodo(userA, { space: "personal", title: "Undo fresh", isRecurring: true, recurrencePattern: "daily", dueDate: today, category: "undo-cat" });
     await toggleTodo(userA, { id: run.id, isCompleted: true });
     await toggleTodo(userA, { id: fresh.id, isCompleted: true });
     const state = async () => ({

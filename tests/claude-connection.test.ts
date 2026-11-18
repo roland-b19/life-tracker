@@ -7,7 +7,7 @@ import { authState, seedUser } from "./auth";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { claudeConnections } from "@/db/schema";
-import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
+import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
 import { succeeded } from "./succeeded";
 

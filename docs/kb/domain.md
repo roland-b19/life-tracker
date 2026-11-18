@@ -12,7 +12,7 @@ last_verified: 2026-11-18
   - **Wishlist:** items with a price; the price range (low, medium, high) is derived from the price, never picked by hand.
   - **Tasks:** spaces personal and business, daily or weekly recurrence, optional reminder time, overdue tasks carry over.
   - **Gym:** training split with days and exercises, sessions, sets, deload weeks, progress, custom exercises, a 3D muscle map.
-  - **Food and health** (route `/food`, the home page): Today (meals, water, steps), Weight, Shopping, and an Assistant tab that turns free text into logged meals.
+  - **Food and health** (route `/health`, the home page; `/food` redirects there): Today (meals, water, steps), Weight, Shopping, and an Assistant tab that turns free text into logged meals.
   - **Settings:** connect a Claude token, enable push, export all data as plain text.
 - The UI is dark only. The Wishlist page is the visual reference; every page matches it. Every change has an Undo toast.
 - Out of scope: other users' data, light theme, sending health data to an AI provider.

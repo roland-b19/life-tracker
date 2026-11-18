@@ -3,7 +3,7 @@
 import { assertPushEnabled } from "@/lib/features";
 import { requireUser } from "@/server/auth";
 import {
-  createTodoSchema,
+  addTodoSchema,
   deleteTodoSchema,
   restoreTodoSchema,
   pushSubscriptionSchema,
@@ -14,7 +14,7 @@ import {
 import { addDays, toISODate } from "@/lib/format-date";
 import { Refusal, respond } from "@/lib/validations/result";
 import {
-  createTodo,
+  addTodo,
   deleteTodo,
   findTodo,
   getDailyTodos,
@@ -45,16 +45,16 @@ const assertChangeable = (task: { isRecurring: boolean; dueDate: string }) => as
 const gone = () => new Refusal("This task no longer exists.");
 const duplicate = (title: string) => new Refusal(`"${title}" is already on this list.`);
 
-export async function createTodoAction(rawInput: unknown) {
+export async function addTodoAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
-    const parsed = createTodoSchema.parse(rawInput);
+    const parsed = addTodoSchema.parse(rawInput);
     assertPlannable(parsed);
     // A page left open past midnight still says yesterday: an open one-off task from a past day would never show or carry over, so it goes on today.
     const today = toISODate();
     const input = !parsed.isRecurring && parsed.dueDate < today ? { ...parsed, dueDate: today } : parsed;
     if (await hasDuplicateTodo(userId, input)) throw duplicate(input.title);
-    return { todo: await createTodo(userId, input) };
+    return { todo: await addTodo(userId, input) };
   });
 }
 

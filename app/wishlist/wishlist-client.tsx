@@ -14,7 +14,7 @@ import {
   deleteWishlistItemAction,
   restoreWishlistItemAction,
   updateWishlistItemAction,
-} from "@/app/actions/wishlist";
+} from "@/actions/wishlist";
 import { WishlistItemData } from "@/lib/wishlist";
 import { type Priority, priorityForPrice } from "@/lib/rules";
 

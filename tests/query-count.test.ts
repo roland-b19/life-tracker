@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -73,7 +73,7 @@ describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [
     ["/gym", () => import("../app/gym/page"), 12, 300_000],
     // Weight sends at most 365 weigh-ins for its chart (the database keeps all), so the page is bounded by that, not by the history.
-    ["/food", () => import("../app/food/page"), 12, 40_000],
+    ["/health", () => import("../app/health/page"), 12, 40_000],
     ["/todos", () => import("../app/todos/page"), 11, 20_000],
     ["/wishlist", () => import("../app/wishlist/page"), 3, 1_000],
   ];
@@ -87,7 +87,7 @@ describe("a page view with two years of data stays cheap", () => {
   }
 
   it("the todos page loads everything in one action, with few queries", async () => {
-    const { loadTodosViewAction } = await import("@/app/actions/todos");
+    const { loadTodosViewAction } = await import("@/actions/todos");
     const { result, queries, bytes } = await measure(() => loadTodosViewAction());
     expect(result.success).toBe(true);
     // 12 = the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history.
@@ -95,17 +95,10 @@ describe("a page view with two years of data stays cheap", () => {
     expect(bytes).toBeLessThanOrEqual(20_000);
   });
 
-  it("actions whose client keeps its own state do not re-render the page", () => {
-    const src = (f: string) => readFileSync(`src/app/actions/${f}.ts`, "utf8");
-    expect(src("wishlist")).not.toContain("revalidatePath");
-    expect(src("todos")).not.toContain("revalidatePath");
-    // Food actions hand back the new rows and the page keeps its own state; the response must not carry a re-rendered page.
-    expect(src("food")).not.toContain("revalidatePath");
-    expect(src("food-chat")).not.toContain("revalidatePath");
-    const gym = src("gym");
-    for (const fn of ["logSetAction", "deleteSetAction"]) {
-      const body = gym.slice(gym.indexOf(`function ${fn}`)).split("\nexport ")[0];
-      expect(body, fn).not.toContain("safeRevalidate");
+  it("no action re-renders the page: every client keeps its own state", () => {
+    // `providers.tsx` refreshes the router cache once the writes stop, so a write never has to revalidate a path.
+    for (const file of readdirSync("src/actions")) {
+      expect(readFileSync(`src/actions/${file}`, "utf8"), file).not.toContain("revalidatePath");
     }
   });
 });

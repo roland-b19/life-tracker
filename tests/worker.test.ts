@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { seedUser } from "./auth";
-import { createTodo, savePushSubscription } from "@/lib/todos";
+import { addTodo, savePushSubscription } from "@/lib/todos";
 import { addDays, toISODate } from "@/lib/format-date";
 import {
   buildPayload,
@@ -22,7 +22,7 @@ const query = (text: string, params: unknown[]) => app.query(text, params) as Pr
 const subscribe = (userId: string, endpoint = `https://push.example/${randomUUID()}`) =>
   savePushSubscription(userId, { endpoint, p256dhKey: "p256dh", authKey: "auth" });
 const task = (userId: string, title: string, extra: { dueDate?: string; reminderTime?: string; isRecurring?: boolean } = {}) =>
-  createTodo(userId, {
+  addTodo(userId, {
     space: "personal",
     title,
     dueDate: extra.dueDate ?? toISODate(),

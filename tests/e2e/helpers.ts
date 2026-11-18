@@ -33,8 +33,8 @@ async function signIn(page: Page, name: string) {
   });
   expect(response.ok()).toBe(true);
   // Without a session the next page would bounce back to /signin.
-  await page.goto("/food");
-  await expect(page).toHaveURL(/\/food$/);
+  await page.goto("/health");
+  await expect(page).toHaveURL(/\/health$/);
 }
 
 // `signedInPage` signs in as a new dev user and deletes that user afterwards; the user's rows go with it (ON DELETE

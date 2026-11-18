@@ -5,8 +5,6 @@ import { addCategory, deleteCategory, renameCategory, reorderCategories, revertC
 import { categoryNameSchema, renameCategorySchema, reorderCategoriesSchema, revertCategorySchema } from "@/lib/validations/categories";
 import { Refusal, respond } from "@/lib/validations/result";
 
-// No revalidatePath: the clients keep their own state, like the other list actions.
-
 export async function addCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {

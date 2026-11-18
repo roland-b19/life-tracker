@@ -10,7 +10,7 @@ import { ProgressRing } from "../components/charts";
 import { undoWith, useToast } from "../components/toast";
 import { isPushEnabled } from "@/lib/features";
 import {
-  createTodoAction,
+  addTodoAction,
   deletePushSubscriptionAction,
   deleteTodoAction,
   loadTodosViewAction,
@@ -18,7 +18,7 @@ import {
   savePushSubscriptionAction,
   toggleTodoAction,
   updateTodoAction,
-} from "@/app/actions/todos";
+} from "@/actions/todos";
 import type { TodoItem } from "@/lib/todos";
 import type { TodoSpace } from "@/lib/validations/todos";
 import { blockPlacements, compareTodos } from "@/lib/todo-order";
@@ -211,7 +211,7 @@ export function TodosClient({
           ),
         });
       } else {
-        const res = await createTodoAction({
+        const res = await addTodoAction({
           space,
           title,
           isRecurring: isDaily,

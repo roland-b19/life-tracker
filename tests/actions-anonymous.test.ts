@@ -15,8 +15,8 @@ vi.mock("@/server/auth", () => {
   };
 });
 
-// Every module under src/app/actions, so a new action file cannot ship without this check.
-const modules = import.meta.glob<Record<string, unknown>>("../src/app/actions/*.ts");
+// Every module under src/actions, so a new action file cannot ship without this check.
+const modules = import.meta.glob<Record<string, unknown>>("../src/actions/*.ts");
 
 describe("server actions reject anonymous callers", () => {
   afterEach(() => vi.unstubAllEnvs());

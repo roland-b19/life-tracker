@@ -11,7 +11,7 @@ import {
   weightEntries,
 } from "@/db/schema";
 import {
-  CreateShoppingItemInput,
+  AddShoppingItemInput,
   LogMealInput,
   LogWeightInput,
   MAX_WATER_ML,
@@ -266,7 +266,7 @@ export async function getShoppingList(userId: string) {
 /** Adds an item, or adds its amount to the same item (same name and unit) already on the list. */
 export async function addShoppingItem(
   userId: string,
-  input: CreateShoppingItemInput,
+  input: AddShoppingItemInput,
 ) {
   await ensureShoppingCategory(userId, input.category);
   await ensureShoppingCategory(userId, input.unit, "unit");

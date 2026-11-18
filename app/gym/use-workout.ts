@@ -15,7 +15,7 @@ import {
   reopenSessionAction,
   restoreSessionAction,
   startSessionAction,
-} from "@/app/actions/gym";
+} from "@/actions/gym";
 
 type SessionSnapshot = { session: ActiveSessionData; seconds: number; notes: string };
 

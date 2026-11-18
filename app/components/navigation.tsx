@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { isClaudeEnabled } from "@/lib/features";
-import { exportDataAction } from "@/app/actions/export";
+import { exportDataAction } from "@/actions/export";
 import { clearPageCache } from "./page-cache";
 
 interface NavigationProps {
@@ -35,7 +35,7 @@ export function Navigation({ userName }: NavigationProps) {
 
   const getPageTitle = () => {
     if (pathname.startsWith("/gym")) return "Gym";
-    if (pathname.startsWith("/food")) return "Health";
+    if (pathname.startsWith("/health")) return "Health";
     if (pathname.startsWith("/todos")) return "Tasks";
     if (pathname.startsWith("/wishlist")) return "Wishlist";
     if (pathname.startsWith("/settings")) return "Settings";
@@ -54,9 +54,9 @@ export function Navigation({ userName }: NavigationProps) {
       ),
     },
     {
-      href: "/food",
+      href: "/health",
       label: "Health",
-      isActive: at.startsWith("/food"),
+      isActive: at.startsWith("/health"),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3" />

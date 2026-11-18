@@ -6,7 +6,7 @@ import { ensureCategory } from "./categories";
 import { APP_TZ, appDay, toISODate } from "./format-date";
 import { compareTodos } from "./todo-order";
 import {
-  CreateTodoInput,
+  AddTodoInput,
   PushSubscriptionInput,
   RestoreTodoInput,
   restoreTodoSchema,
@@ -138,7 +138,7 @@ export async function getDailyTodos(
  */
 export async function hasDuplicateTodo(
   userId: string,
-  task: Pick<CreateTodoInput, "title" | "isRecurring" | "dueDate"> & { space: string },
+  task: Pick<AddTodoInput, "title" | "isRecurring" | "dueDate"> & { space: string },
   exceptId?: string | string[],
 ): Promise<boolean> {
   const [row] = await db
@@ -169,7 +169,7 @@ export async function findTodo(userId: string, todoId: string) {
   return row;
 }
 
-export async function createTodo(userId: string, input: CreateTodoInput): Promise<TodoItem> {
+export async function addTodo(userId: string, input: AddTodoInput): Promise<TodoItem> {
   const isRecurring = Boolean(input.isRecurring);
   const recurrencePattern = patternFor(isRecurring, input.recurrencePattern);
 

@@ -8,8 +8,8 @@
 // The pages cache holds personal data on this device until Sign out (and the sign-in screen) delete it.
 
 const CACHE = "life-tracker-v3";
-const PAGES = "life-tracker-pages-v1";
-const SIGNED_IN = /^\/(gym|food|todos|wishlist|settings)(\/|$)/;
+const PAGES = "life-tracker-pages-v2";
+const SIGNED_IN = /^\/(gym|health|todos|wishlist|settings)(\/|$)/;
 // url -> promise of "the server's page differs from the one shown". Answered when the page asks (see the message handler).
 const pending = new Map();
 // Registered as /sw.js?dev by the dev server: Turbopack dev chunks keep their URL when their content changes.
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
 
   // The root only redirects to Health; doing it here lets the start from the Home Screen reach the cached page.
   if (request.mode === "navigate" && url.pathname === "/") {
-    event.respondWith(Response.redirect(new URL("/food", url.origin).href, 307));
+    event.respondWith(Response.redirect(new URL("/health", url.origin).href, 307));
     return;
   }
   if (request.mode === "navigate" && SIGNED_IN.test(url.pathname)) {

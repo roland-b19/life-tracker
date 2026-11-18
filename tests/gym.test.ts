@@ -10,8 +10,8 @@ import { addDays, toISODate } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import {
   cancelWorkoutSession,
-  createCustomExercise,
-  createWorkoutSession,
+  addCustomExercise,
+  addWorkoutSession,
   deleteWorkoutSet,
   finishWorkoutSession,
   getDeloadStatus,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/gym";
 import {
   cancelSessionAction,
-  createCustomExerciseAction,
+  addCustomExerciseAction,
   deleteCustomExerciseAction,
   restoreCustomExerciseAction,
   updateCustomExerciseAction,
@@ -36,7 +36,7 @@ import {
   saveDeloadWeeksAction,
   saveSplitDayAction,
   startSessionAction,
-} from "@/app/actions/gym";
+} from "@/actions/gym";
 import { succeeded } from "./succeeded";
 
 const TODAY = toISODate();
@@ -94,7 +94,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   });
 
   it("enforces multi-user isolation on custom exercises", async () => {
-    const custom = await createCustomExercise(userA, {
+    const custom = await addCustomExercise(userA, {
       name: "B-Stance Hip Thrust",
       muscleGroup: "quads",
       equipmentType: "barbell",
@@ -110,7 +110,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("undoes a custom exercise for its owner only, and never while a set uses it", async () => {
     const make = async (name: string) =>
-      ((await createCustomExerciseAction({ name, muscleGroup: "quads", equipmentType: "barbell" })) as { exercise: { id: string } }).exercise;
+      ((await addCustomExerciseAction({ name, muscleGroup: "quads", equipmentType: "barbell" })) as { exercise: { id: string } }).exercise;
     const fresh = await make("Undo Squat");
 
     authState.id = userB;
@@ -176,7 +176,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
 
     it("rejects another user's custom exercise", async () => {
-      const foreign = await createCustomExercise(userB, {
+      const foreign = await addCustomExercise(userB, {
         name: "B only",
         muscleGroup: "biceps",
         equipmentType: "cable",
@@ -222,7 +222,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const split = await getUserSplitWithDays(userA);
     const day = split!.days.find((d) => d.exercises.length)!;
     const target = day.exercises[0];
-    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false, splitDayId: day.id });
+    const session = await addWorkoutSession(userA, { date: TODAY, isDeload: false, splitDayId: day.id });
     const log = (setOrder: number, reps: number) =>
       logWorkoutSet(userA, {
         sessionId: session.id, exerciseId: target.exerciseId, setOrder, reps, loadType: "kg", loadValue: 60, extraKg: 0,
@@ -240,7 +240,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("a workout without a routine day never flags a low rep count", async () => {
     const press = (await getExercises(userA)).find((e) => e.name === "Incline barbell press")!;
-    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    const session = await addWorkoutSession(userA, { date: TODAY, isDeload: false });
     const set = await logWorkoutSet(userA, {
       sessionId: session.id, exerciseId: press.id, setOrder: 1, reps: 1, loadType: "kg", loadValue: 60, extraKg: 0,
       isFailure: false, isPartial: false, isGoodForm: true, flagAnomaly: false,
@@ -261,8 +261,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   it("edits and restores a custom exercise: owner only, no clash with another name, the restored row equals the original", async () => {
     await getExercises(userA);
     const input = { muscleGroup: "chest", equipmentType: "barbell" } as const;
-    const made = ((await createCustomExerciseAction({ ...input, name: "Edit Me" })) as { exercise: { id: string } }).exercise;
-    await createCustomExerciseAction({ ...input, name: "Taken" });
+    const made = ((await addCustomExerciseAction({ ...input, name: "Edit Me" })) as { exercise: { id: string } }).exercise;
+    await addCustomExerciseAction({ ...input, name: "Taken" });
     const edit = { id: made.id, name: "Edited", muscleGroup: "back", equipmentType: "cable" };
 
     authState.id = userB; // other user denied
@@ -296,30 +296,30 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   it("refuses a custom exercise whose name exists, ignoring case, among the defaults and the user's own", async () => {
     await getExercises(userA); // seeds the defaults
     const input = { muscleGroup: "chest", equipmentType: "barbell" } as const;
-    expect((await createCustomExerciseAction({ ...input, name: "incline BARBELL press" })).success).toBe(false);
-    expect((await createCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
-    const again = await createCustomExerciseAction({ ...input, name: "my press" });
+    expect((await addCustomExerciseAction({ ...input, name: "incline BARBELL press" })).success).toBe(false);
+    expect((await addCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+    const again = await addCustomExerciseAction({ ...input, name: "my press" });
     expect(again).toMatchObject({ success: false, error: expect.stringContaining("already exists") });
     // Another user may use the same name
     authState.id = userB;
-    expect((await createCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+    expect((await addCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
   });
 
   it("two custom exercises with one name made at once: exactly one is created", async () => {
     const input = { name: "Race Curl", muscleGroup: "biceps", equipmentType: "dumbbell" } as const;
-    const results = await Promise.all([createCustomExerciseAction(input), createCustomExerciseAction({ ...input, name: "race curl" })]);
+    const results = await Promise.all([addCustomExerciseAction(input), addCustomExerciseAction({ ...input, name: "race curl" })]);
     expect(results.map((r) => r.success).sort()).toEqual([false, true]);
   });
 
   it("a repeated Finish keeps the first duration", async () => {
-    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    const session = await addWorkoutSession(userA, { date: TODAY, isDeload: false });
     await finishSessionAction({ sessionId: session.id, durationMinutes: 50 });
     const again = await finishSessionAction({ sessionId: session.id, durationMinutes: 70 });
     expect(again).toMatchObject({ success: true, session: { durationMinutes: 50 } });
   });
 
   it("answers a Finish without minutes with a message, not an exception", async () => {
-    const session = await createWorkoutSession(userA, { date: TODAY, isDeload: false });
+    const session = await addWorkoutSession(userA, { date: TODAY, isDeload: false });
     expect((await finishSessionAction({ sessionId: session.id })).success).toBe(false);
   });
 
@@ -327,7 +327,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const exercisesList = await getExercises(userA);
     const press = exercisesList.find((e) => e.name === "Incline barbell press")!;
 
-    const sessionA = await createWorkoutSession(userA, {
+    const sessionA = await addWorkoutSession(userA, {
       date: "2026-10-29",
       isDeload: false,
     });
@@ -381,10 +381,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("refuses another user's split day or custom exercise when creating a workout or logging a set", async () => {
     const dayA = (await getUserSplitWithDays(userA))!.days[0].id;
-    const custom = await createCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
-    const sessionB = await createWorkoutSession(userB, { date: "2026-10-29", isDeload: false });
+    const custom = await addCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
+    const sessionB = await addWorkoutSession(userB, { date: "2026-10-29", isDeload: false });
 
-    await expect(createWorkoutSession(userB, { date: "2026-10-29", isDeload: false, splitDayId: dayA })).rejects.toThrow(
+    await expect(addWorkoutSession(userB, { date: "2026-10-29", isDeload: false, splitDayId: dayA })).rejects.toThrow(
       "Split day not found or unauthorized",
     );
     await expect(
@@ -419,7 +419,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([1, 5, false, false]);
 
     // The first workout starts the cycle; the deload is due once week 5 is over, and stays due (never wraps)
-    const first = await done(await createWorkoutSession(userA, { date: weeksAgo(3), isDeload: false }));
+    const first = await done(await addWorkoutSession(userA, { date: weeksAgo(3), isDeload: false }));
     expect(await status()).toEqual([4, 5, false, false]);
     await admin.query("UPDATE workout_sessions SET date = $2 WHERE id = $1", [first.id, weeksAgo(4)]);
     expect(await status()).toEqual([5, 5, false, false]);
@@ -429,7 +429,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await status()).toEqual([5, 5, true, false]);
 
     // A deload session alone does not make its week a deload week
-    await done(await createWorkoutSession(userA, { date: toISODate(), isDeload: true }));
+    await done(await addWorkoutSession(userA, { date: toISODate(), isDeload: true }));
     expect(await status()).toEqual([5, 5, true, false]);
     expect((await getDeloadStatus(userA)).lastDeloadWeek).toBeNull();
 
@@ -472,8 +472,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const at = (n: number) => addDays(thisWeek, 7 * n);
     const flag = (n: number) => admin.query("SELECT is_deload FROM workout_sessions WHERE id = $1", [sessions[n].id]).then((r) => r.rows[0].is_deload);
     const sessions = [
-      await done(await createWorkoutSession(userA, { date: addDays(at(-6), 2), isDeload: false })),
-      await done(await createWorkoutSession(userA, { date: addDays(at(-1), 2), isDeload: true })),
+      await done(await addWorkoutSession(userA, { date: addDays(at(-6), 2), isDeload: false })),
+      await done(await addWorkoutSession(userA, { date: addDays(at(-1), 2), isDeload: true })),
     ];
 
     await saveDeloadWeeksAction({ last: at(-1), next: at(4) });
@@ -547,7 +547,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       await denied(reopenSessionAction({ sessionId: id }));
       await denied(restoreSessionAction({ date: TODAY, isDeload: false, sets: [] }));
       await denied(saveSplitDayAction({ id, name: "x", isRest: true, exercises: [] }));
-      await denied(createCustomExerciseAction({ name: "Anon lift", muscleGroup: "chest", equipmentType: "barbell" }));
+      await denied(addCustomExerciseAction({ name: "Anon lift", muscleGroup: "chest", equipmentType: "barbell" }));
       await denied(deleteCustomExerciseAction(id));
       await denied(saveDeloadWeeksAction({ last: null, next: null }));
     });
@@ -556,7 +556,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const [exercise] = await getExercises(userA);
       const set = { exerciseId: exercise.id, setOrder: 1, reps: 5, loadType: "kg" as const, loadValue: 20, extraKg: 0, isFailure: false, isPartial: false, isGoodForm: true, flagAnomaly: false };
       expect((await restoreSessionAction({ date: addDays(TODAY, -30), isDeload: false, sets: [] })).success).toBe(false);
-      const taken = await createWorkoutSession(userA, { date: addDays(TODAY, -10), isDeload: false });
+      const taken = await addWorkoutSession(userA, { date: addDays(TODAY, -10), isDeload: false });
       const have = await logWorkoutSet(userA, { sessionId: taken.id, ...set });
       // The same set id again: a normal "could not restore", not a database error
       expect((await restoreSessionAction({ date: TODAY, isDeload: false, sets: [{ ...set, id: have.id }] })).success).toBe(false);
@@ -655,7 +655,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     async function finished(userId: string, date: string, minutes: number | null) {
       authState.id = userId;
       const [exercise] = await getExercises(userId);
-      const session = await createWorkoutSession(userId, { date, isDeload: false });
+      const session = await addWorkoutSession(userId, { date, isDeload: false });
       await logSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 });
       if (minutes) await finishSessionAction({ sessionId: session.id, durationMinutes: minutes });
       return { id: session.id, exerciseId: exercise.id };
@@ -768,7 +768,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       authState.id = userB;
       const withDay = succeeded(await restoreSessionAction({ date: TODAY, isDeload: false, splitDayId: dayA, sets: [] }));
       expect(withDay.details.session.splitDayId).toBeNull();
-      const custom = await createCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
+      const custom = await addCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
       const res = await restoreSessionAction({
         date: TODAY,
         isDeload: false,

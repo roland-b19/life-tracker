@@ -10,9 +10,9 @@ import {
   workoutSets,
 } from "@/db/schema";
 import {
-  CreateCustomExerciseInput,
+  AddCustomExerciseInput,
   CustomExerciseWithIdInput,
-  CreateSessionInput,
+  AddSessionInput,
   FinishSessionInput,
   LogSetInput,
   RestoreSessionInput,
@@ -58,9 +58,9 @@ export async function getExercises(userId: string) {
 /**
  * Create a custom user exercise
  */
-export async function createCustomExercise(
+export async function addCustomExercise(
   userId: string,
-  input: CreateCustomExerciseInput,
+  input: AddCustomExerciseInput,
 ) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
@@ -235,9 +235,9 @@ async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, excep
 /**
  * Create a new workout session
  */
-export async function createWorkoutSession(
+export async function addWorkoutSession(
   userId: string,
-  input: CreateSessionInput,
+  input: AddSessionInput,
 ) {
   if (input.splitDayId) {
     const [day] = await db

@@ -3,8 +3,8 @@ import { db } from "@/server/db";
 import { wishlistItems } from "@/db/schema";
 import { ensureCategory } from "./categories";
 import {
-  CreateWishlistItemInput,
-  createWishlistItemSchema,
+  AddWishlistItemInput,
+  addWishlistItemSchema,
   RestoreWishlistItemInput,
   restoreWishlistItemSchema,
 } from "./validations/wishlist";
@@ -42,9 +42,9 @@ export async function getWishlist(userId: string): Promise<WishlistItemData[]> {
 
 export async function addWishlistItem(
   userId: string,
-  rawInput: CreateWishlistItemInput,
+  rawInput: AddWishlistItemInput,
 ): Promise<WishlistItemData> {
-  const validated = createWishlistItemSchema.parse(rawInput);
+  const validated = addWishlistItemSchema.parse(rawInput);
 
   const [item] = await db
     .insert(wishlistItems)
@@ -94,9 +94,9 @@ export async function restoreWishlistItem(
 export async function updateWishlistItem(
   userId: string,
   itemId: string,
-  rawInput: CreateWishlistItemInput,
+  rawInput: AddWishlistItemInput,
 ): Promise<WishlistItemData | null> {
-  const validated = createWishlistItemSchema.parse(rawInput);
+  const validated = addWishlistItemSchema.parse(rawInput);
 
   const [item] = await db
     .update(wishlistItems)

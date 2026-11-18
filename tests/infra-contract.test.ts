@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const bicep = readFileSync("infra/main.bicep", "utf8");
@@ -8,6 +8,12 @@ const dockerfile = readFileSync("Dockerfile", "utf8");
 const rootPackage = readFileSync("package.json", "utf8");
 
 describe("Azure infrastructure contract", () => {
+  it("probes the liveness route that the app serves", () => {
+    expect(bicep).toContain("path: '/api/health'");
+    expect(dockerfile).toContain("http://127.0.0.1:3000/api/health");
+    expect(existsSync("app/api/health/route.ts")).toBe(true);
+  });
+
   it("uses a private-access ACR SKU and disables admin access", () => {
     expect(bicep).toContain("name: 'Premium'");
     expect(bicep).toContain("publicNetworkAccess: 'Disabled'");
