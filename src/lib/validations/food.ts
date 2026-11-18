@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { toISODate } from "../format-date";
+import { toISODate } from "@/lib/format-date";
 import { isoDate, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
