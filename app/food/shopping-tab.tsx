@@ -65,7 +65,7 @@ export function ShoppingTab({
   const [units, setUnits] = useState(initialUnits);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
-  const [formError, setFormError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // Shopping input state
   const [shopName, setShopName] = useState("");
@@ -87,7 +87,7 @@ export function ShoppingTab({
   });
 
   function openShopForm(item: ShoppingItemData | null) {
-    setFormError("");
+    setErrorMsg("");
     setEditingShop(item);
     setShopName(item?.name ?? "");
     setShopAmount(item ? String(Number(item.amount)) : "1");
@@ -142,7 +142,7 @@ export function ShoppingTab({
       );
       return true;
     } catch {
-      setFormError("Failed to add item");
+      setErrorMsg("Failed to add item");
       return false;
     } finally {
       setBusy(false);
@@ -163,11 +163,11 @@ export function ShoppingTab({
     };
     if (!visible(input.name)) return;
     // Same limits as createShoppingItemSchema, so a refusal always has a message on screen.
-    if (input.name.length > 120) return setFormError("The name must be 120 characters or less.");
-    if (!(input.amount >= 0.01 && input.amount <= 1000)) return setFormError("The amount must be between 0.01 and 1000.");
-    if (input.unit.length > 30) return setFormError("The unit must be 30 characters or less.");
-    if (input.category.length > 50) return setFormError("The category must be 50 characters or less.");
-    setFormError("");
+    if (input.name.length > 120) return setErrorMsg("The name must be 120 characters or less.");
+    if (!(input.amount >= 0.01 && input.amount <= 1000)) return setErrorMsg("The amount must be between 0.01 and 1000.");
+    if (input.unit.length > 30) return setErrorMsg("The unit must be 30 characters or less.");
+    if (input.category.length > 50) return setErrorMsg("The category must be 50 characters or less.");
+    setErrorMsg("");
 
     if (!editingShop) {
       if (await addShopping(input)) setIsShopModalOpen(false);
@@ -177,7 +177,7 @@ export function ShoppingTab({
     setBusy(true);
     try {
       const res = await updateShoppingItemAction({ ...input, itemId: before.id });
-      if (!res.success) return setFormError(res.error);
+      if (!res.success) return setErrorMsg(res.error);
       const item = res.item as ShoppingItemData;
       replaceShop(item);
       setIsShopModalOpen(false);
@@ -197,7 +197,7 @@ export function ShoppingTab({
         ),
       });
     } catch {
-      setFormError("Failed to save item");
+      setErrorMsg("Failed to save item");
     } finally {
       setBusy(false);
     }
@@ -356,7 +356,7 @@ export function ShoppingTab({
         onClose={() => setIsShopModalOpen(false)}
         title={editingShop ? "Edit shopping item" : "New shopping item"}
         onSubmit={handleShopSubmit}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={visible(shopName)}
       >

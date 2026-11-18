@@ -111,7 +111,7 @@ export function FoodClient({
   const [activeTab, setActiveTab] = useState<"daily" | "shopping" | "chat">("daily");
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   // The open meal or shopping form's error; only one form is open at a time.
-  const [formError, setFormError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [metricEdit, setMetricEdit] = useState<"water" | "steps">("water");
   const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
@@ -219,11 +219,11 @@ export function FoodClient({
       fat: parseFloat(mealFat) || 0,
     };
     // Same limits as logMealSchema, so the server never has to refuse with a message the screen cannot show.
-    if (entered.calories > 10000) return setFormError("Calories must be 10000 or less.");
-    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setFormError("Protein, carbs and fat must each be 1000 g or less.");
+    if (entered.calories > 10000) return setErrorMsg("Calories must be 10000 or less.");
+    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setErrorMsg("Protein, carbs and fat must each be 1000 g or less.");
 
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     try {
       const res = await logMealAction({ date: todayDate, ...entered });
 
@@ -240,9 +240,9 @@ export function FoodClient({
           type: "success",
           onUndo: undoLogged([meal]),
         });
-      } else setFormError("Failed to add meal");
+      } else setErrorMsg("Failed to add meal");
     } catch {
-      setFormError("Failed to add meal");
+      setErrorMsg("Failed to add meal");
     } finally {
       setBusy(false);
     }
@@ -354,7 +354,7 @@ export function FoodClient({
   }
 
   function openMetricEdit(metric: "water" | "steps") {
-    setFormError("");
+    setErrorMsg("");
     setMetricInput(String(metric === "water" ? summary.metrics.waterMl : summary.metrics.steps));
     setMetricGoalInput(String(metric === "water" ? goals.waterMl : goals.steps));
     setMetricEdit(metric);
@@ -367,20 +367,20 @@ export function FoodClient({
     const goal = parseInt(metricGoalInput, 10);
     const range = METRIC_GOAL[metricEdit];
     if (busy) return;
-    if (!Number.isInteger(value) || value < 0) return setFormError("Please enter a whole number.");
-    if (value > METRIC_MAX[metricEdit]) return setFormError(`The total must be ${METRIC_MAX[metricEdit]} or less.`);
+    if (!Number.isInteger(value) || value < 0) return setErrorMsg("Please enter a whole number.");
+    if (value > METRIC_MAX[metricEdit]) return setErrorMsg(`The total must be ${METRIC_MAX[metricEdit]} or less.`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
-      return setFormError(`The goal must be between ${range.min} and ${range.max}.`);
+      return setErrorMsg(`The goal must be between ${range.min} and ${range.max}.`);
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     const ok = await saveMetric(metricEdit, value, goal);
     setBusy(false);
     if (ok) setMetricOpen(false);
-    else setFormError(`Failed to save ${metricEdit}`);
+    else setErrorMsg(`Failed to save ${metricEdit}`);
   }
 
   function openGoals() {
-    setFormError("");
+    setErrorMsg("");
     setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
     setGoalsOpen(true);
   }
@@ -390,13 +390,13 @@ export function FoodClient({
     if (busy) return;
     const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
-    if (bad) return setFormError(`${bad.label.split(" ")[0]} must be between ${bad.min} and ${bad.max}.`);
+    if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${bad.min} and ${bad.max}.`);
     const previous = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, goals[g.key]])) as Record<NutritionGoal, number>;
     setBusy(true);
-    setFormError("");
+    setErrorMsg("");
     const ok = await writeGoals(next);
     setBusy(false);
-    if (!ok) return setFormError("Failed to save goals");
+    if (!ok) return setErrorMsg("Failed to save goals");
     putGoals(next);
     setGoalsOpen(false);
     showToast({
@@ -500,7 +500,7 @@ export function FoodClient({
               actions={
                 <>
                   <TintButton onClick={openGoals}>Edit goals</TintButton>
-                  <AddButton onClick={() => (setFormError(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                  <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
                 </>
               }
             >
@@ -624,7 +624,7 @@ export function FoodClient({
         onClose={() => setIsMealModalOpen(false)}
         title="New meal"
         onSubmit={handleLogMeal}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={mealHasValues}
       >
@@ -678,7 +678,7 @@ export function FoodClient({
         onClose={() => setMetricOpen(false)}
         title={metricEdit === "water" ? "Edit water" : "Edit steps"}
         onSubmit={handleMetricSubmit}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={metricInput !== "" && metricGoalInput !== ""}
       >
@@ -714,7 +714,7 @@ export function FoodClient({
         onClose={() => setGoalsOpen(false)}
         title="Edit goals"
         onSubmit={handleGoalsSubmit}
-        error={formError}
+        error={errorMsg}
         busy={busy}
         canSubmit={!Object.values(goalInputs).some((v) => v === "")}
       >

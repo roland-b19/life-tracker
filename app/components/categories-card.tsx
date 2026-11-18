@@ -62,7 +62,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
@@ -99,7 +99,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const dragRow = useDragSort(move);
 
   function openForm(edit: string | null) {
-    setError("");
+    setErrorMsg("");
     setFrom(edit);
     setName(edit ?? "");
     setOpen(true);
@@ -127,12 +127,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
-    if (to === builtIn) return setError(`Please pick a name other than "${builtIn}".`);
-    setError("");
+    if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}".`);
+    setErrorMsg("");
     setBusy(true);
     try {
       if (from === null) {
-        if (!(await api.add(to)).success) return setError(`"${to}" already exists.`);
+        if (!(await api.add(to)).success) return setErrorMsg(`"${to}" already exists.`);
         onChange((prev) => [...prev, to]);
         showToast({
           message: `Added "${to}"`,
@@ -165,7 +165,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
       }
       setOpen(false);
     } catch {
-      setError(`Failed to save ${noun}`);
+      setErrorMsg(`Failed to save ${noun}`);
     } finally {
       setBusy(false);
     }
@@ -231,7 +231,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         onClose={() => setOpen(false)}
         title={from ? `Edit ${noun}` : `New ${noun}`}
         onSubmit={submit}
-        error={error}
+        error={errorMsg}
         busy={busy}
         canSubmit={!!name.trim()}
       >

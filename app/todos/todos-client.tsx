@@ -67,7 +67,7 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
-  const [titleError, setTitleError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [saving, setSaving] = useState(false);
   // Flows that finish seconds later (Undo, a refresh) read the controls as they are then.
@@ -149,7 +149,7 @@ export function TodosClient({
   };
 
   const openForm = (todo?: TodoItem) => {
-    setTitleError(null);
+    setErrorMsg(null);
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
@@ -169,7 +169,7 @@ export function TodosClient({
     if (!title || saving) return;
     const reminderTime = reminderTimeInput.trim() || null;
     const recurrencePattern = (editing ? editing.isRecurring : isDaily) ? "daily" : "none";
-    setTitleError(null);
+    setErrorMsg(null);
     setSaving(true);
     try {
       if (editing) {
@@ -178,7 +178,7 @@ export function TodosClient({
         const category = before.isRecurring ? categoryInput : before.category;
         const after = { ...before, title, reminderTime, category };
         const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
-        if ("error" in res) return setTitleError(res.error);
+        if ("error" in res) return setErrorMsg(res.error);
         if (!res.success) showToast({ message: `"${before.title}" was removed elsewhere`, type: "warning" });
         else {
           ++requestId.current;
@@ -222,7 +222,7 @@ export function TodosClient({
           reminderTime,
           category: isDaily ? categoryInput : "other",
         });
-        if (!res.success) return setTitleError(res.error); // the form stays open to fix the title
+        if (!res.success) return setErrorMsg(res.error); // the form stays open to fix the title
         if (res.todo) {
           const created = res.todo;
           ++requestId.current;
@@ -248,7 +248,7 @@ export function TodosClient({
       closeForm();
       await loadDay();
     } catch {
-      setTitleError("Failed to save task"); // the form stays open
+      setErrorMsg("Failed to save task"); // the form stays open
     } finally {
       setSaving(false);
     }
@@ -512,7 +512,7 @@ export function TodosClient({
         onClose={closeForm}
         title={editing ? "Edit task" : isDaily ? "New daily task" : "New task"}
         onSubmit={handleSubmit}
-        error={titleError}
+        error={errorMsg}
         errorId="task-title-error"
         busy={saving}
         canSubmit={!!titleInput.trim()}
@@ -526,10 +526,10 @@ export function TodosClient({
           value={titleInput}
           onChange={(e) => {
             setTitleInput(e.target.value);
-            setTitleError(null);
+            setErrorMsg(null);
           }}
-          aria-invalid={titleError ? true : undefined}
-          aria-describedby={titleError ? "task-title-error" : undefined}
+          aria-invalid={errorMsg ? true : undefined}
+          aria-describedby={errorMsg ? "task-title-error" : undefined}
         />
         {(editing ? editing.isRecurring : isDaily) && (
           <CategoryField categories={categories[editing?.space ?? space]} value={categoryInput} onChange={setCategoryInput} disabled={saving} />

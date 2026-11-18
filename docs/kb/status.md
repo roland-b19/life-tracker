@@ -30,7 +30,6 @@ None.
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
 - **uuid validation:** `z.string().uuid()` (about 20 places) → `uuid` from `src/lib/validations/common.ts`.
 - **Action validation and errors:** four styles (throwing parse, `check()` in gym, `safeParse`, hand-written in `food.ts`) and four error contracts (thrown Error, `{success,error}`, `GymRefusal`, null) → one of each, to be chosen.
-- **Form error state names:** `error`, `errorMsg`, `formError`, `titleError` → one name.
 - **Device-local dates:** gym `getDay()` and food `toTimeString()` → `APP_TZ` helpers in `src/lib/format-date.ts`.
 - **Import style:** `@/` (57 files) vs relative (41 files) → `@/`.
 - **Test setup duplication:** `seedUser` in 11 test files and the `authState` mock in about 10 → one shared helper in `tests/`.

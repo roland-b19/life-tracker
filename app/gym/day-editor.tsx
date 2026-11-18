@@ -43,7 +43,7 @@ export function DayEditor({
       maxReps: String(e.maxReps),
     })),
   }));
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [addId, setAddId] = useState("");
   const dragRow = useDragSort((from, to) =>
     setDraft((d) => {
@@ -89,19 +89,19 @@ export function DayEditor({
     const whole = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max;
     const wrong = rows.find((r) => !whole(r.targetSets, 10) || !whole(r.minReps, 100) || !whole(r.maxReps, 100));
     if (wrong) {
-      setError(`Please enter sets from 1 to 10 and reps from 1 to 100 for ${nameOf(wrong.exerciseId)}.`);
+      setErrorMsg(`Please enter sets from 1 to 10 and reps from 1 to 100 for ${nameOf(wrong.exerciseId)}.`);
       return;
     }
     const bad = rows.find((r) => r.minReps > r.maxReps);
     if (bad) {
-      setError(`Please keep min reps at or below max reps for ${nameOf(bad.exerciseId)}.`);
+      setErrorMsg(`Please keep min reps at or below max reps for ${nameOf(bad.exerciseId)}.`);
       return;
     }
     if (!visible(draft.name)) {
-      setError("Please enter a name for the day.");
+      setErrorMsg("Please enter a name for the day.");
       return;
     }
-    setError("");
+    setErrorMsg("");
     setBusy(true);
     try {
       const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
@@ -114,10 +114,10 @@ export function DayEditor({
           onUndo: undoWith(showToast, () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }), "Failed to undo the edit"),
         });
       } else {
-        setError("Failed to save day");
+        setErrorMsg("Failed to save day");
       }
     } catch {
-      setError("Failed to save day");
+      setErrorMsg("Failed to save day");
     } finally {
       setBusy(false);
     }
@@ -127,14 +127,14 @@ export function DayEditor({
     const name = customName.trim();
     if (!visible(name)) return;
     if (name.length < 2) {
-      setError("The name must have at least 2 characters.");
+      setErrorMsg("The name must have at least 2 characters.");
       return;
     }
     if (exercises.some((e) => e.name.trim().toLowerCase() === name.toLowerCase())) {
-      setError(`"${name}" already exists.`);
+      setErrorMsg(`"${name}" already exists.`);
       return;
     }
-    setError("");
+    setErrorMsg("");
     setBusy(true);
     try {
       const res = await createCustomExerciseAction({ name, muscleGroup: customMuscle, equipmentType: customEquipment });
@@ -159,10 +159,10 @@ export function DayEditor({
           ),
         });
       } else {
-        setError(res.error);
+        setErrorMsg(res.error);
       }
     } catch {
-      setError("Failed to create exercise");
+      setErrorMsg("Failed to create exercise");
     } finally {
       setBusy(false);
     }
@@ -174,7 +174,7 @@ export function DayEditor({
       onClose={onClose}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
-      error={error}
+      error={errorMsg}
       busy={busy}
       canSubmit={visible(draft.name) && (draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
     >
