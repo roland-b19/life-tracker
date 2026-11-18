@@ -3,8 +3,10 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Page } from "@playwright/test";
 import { Pool } from "pg";
 
-// Serious and critical findings fail the spec.
+// Serious and critical findings fail the spec. `next dev` streams the page's <title> in after the content, so a scan
+// that starts at once can see a document without one (axe `document-title`): wait for the title first.
 export async function expectNoSeriousViolations(page: Page) {
+  await expect(page).toHaveTitle(/.+/);
   const { violations } = await new AxeBuilder({ page }).analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
