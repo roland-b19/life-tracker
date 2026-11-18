@@ -23,7 +23,7 @@ Only the weight card of the Health page (`/health`, the home page) has a browser
 - [ ] `npm run check` passes with a private database, and CI on the pull request is green — checked by the command and the pull request's checks. The pull request is not merged.
 
 ## Decisions
-- D-014: Health e2e spec: the Today and Shopping tabs in four flows, checked in the database; no day stepper, no Assistant tab
+- D-015: Health e2e spec: the Today and Shopping tabs in four flows, checked in the database; no day stepper, no Assistant tab
 - D-005: End-to-end specs with Playwright Test on `next dev`, Chromium desktop and phone (already active; this plan follows it)
 - D-012: Tasks e2e spec (the model: `andSettle` with a body piece, reload checks, `@a11y` tag)
 
@@ -42,9 +42,9 @@ Only the weight card of the Health page (`/health`, the home page) has a browser
 
 ## Cleanup and docs
 - Nothing becomes unused: no app code, helper or config changes.
-- `docs/kb/conventions.md`, End-to-end specs: list `tests/e2e/health.spec.ts` (the Today flows, the Shopping list and the axe scans of both tabs; D-014); update the run count (5 more tests; other sessions add specs at the same time, so recount after merging `origin/main`).
+- `docs/kb/conventions.md`, End-to-end specs: list `tests/e2e/health.spec.ts` (the Today flows, the Shopping list and the axe scans of both tabs; D-015); update the run count (5 more tests; other sessions add specs at the same time, so recount after merging `origin/main`).
 - `docs/kb/architecture.md`, Tests: mention the Health spec next to the weight one.
-- `docs/kb/status.md`: Roadmap line "Health e2e spec (`/health`, D-014)" with the plan link while in progress, then done; archive the plan when done (`git mv` to `docs/kb/archive/plans/`, and fix the decision's link).
+- `docs/kb/status.md`: Roadmap line "Health e2e spec (`/health`, D-015)" with the plan link while in progress, then done; archive the plan when done (`git mv` to `docs/kb/archive/plans/`, and fix the decision's link).
 - `docs/kb/log/2026-11.md`: an entry for the plan and, at the end, one for the build; `docs/kb/INDEX.md`: the current-state line mentions the Health spec.
 - `docs/kb/domain.md`: the line "Water and steps can be edited only for today and yesterday … Past days are read-only" stays true for the server; no change unless a builder finds the UI differs from it.
 - Risk tier: only `tests/**` and `docs/**` change, so Low.
