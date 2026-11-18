@@ -35,5 +35,5 @@ Deprecated patterns still in use (golden rule 1). New code never uses them; migr
 - **Test setup duplication:** `seedUser` in 11 test files and the `authState` mock in about 10 → one shared helper in `tests/`.
 - **Pages calling `getServerSession` directly** although `RequireSession` guards the layouts (the pages test requires the check, so this stays until that test changes).
 - **Layout of logic:** `src/app/actions` next to the root `app/`; add vs create function names; the "Health" label vs the `/food` route; `revalidatePath` only in gym.
-- **Chat role `"model"`:** a Gemini leftover in the food chat history.
+- **Chat role `"model"`:** a Gemini leftover in the food chat history. It is a contract between the client and the server, so it moves in one change (server wave): the zod enum in `src/app/actions/food-chat.ts:14` and the type in `src/lib/food-ai-chat.ts:8` (`"user" | "model"`), and on the client `app/food/food-client.tsx` (the history type, the reply message and the `chat-msg` class) with the `.chat-msg.model` rule in `app/globals.css`. Changing only the client would make the server reject the history.
 - **`pg` version pinning:** root uses `^`, `worker/` exact.
