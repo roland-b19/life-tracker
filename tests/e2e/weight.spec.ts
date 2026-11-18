@@ -2,8 +2,8 @@ import { expect, type Page } from "@playwright/test";
 import { andSettle, expectNoSeriousViolations, test } from "./helpers";
 
 async function openFood(page: Page) {
-  await page.goto("/food");
-  await expect(page).toHaveURL(/\/food$/);
+  await page.goto("/health");
+  await expect(page).toHaveURL(/\/health$/);
   await expect(page.getByRole("region", { name: "Weight", exact: true })).toBeVisible();
 }
 

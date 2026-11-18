@@ -5,9 +5,9 @@ vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 import { db } from "@/server/db";
 import { claudeConnections, deloadWeeks, pushSubscriptions, weightEntries, wishlistItems, workoutSessions } from "@/db/schema";
-import { exportDataAction } from "@/app/actions/export";
+import { exportDataAction } from "@/actions/export";
 import { succeeded } from "./succeeded";
-import { createTodo } from "@/lib/todos";
+import { addTodo } from "@/lib/todos";
 
 describe("Export: all of the signed-in user's data as text", () => {
   let owner: string;
@@ -23,8 +23,8 @@ describe("Export: all of the signed-in user's data as text", () => {
     await db.insert(weightEntries).values({ userId: owner, date: "2019-03-02", kilograms: "90.0" }); // years old: nothing is ever dropped
     await db.insert(workoutSessions).values({ userId: owner, date: "2020-01-05", notes: "felt strong" });
     await db.insert(deloadWeeks).values({ userId: owner, weekStart: "2026-09-07" });
-    await createTodo(owner, { space: "personal", title: "Owner Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
-    await createTodo(other, { space: "personal", title: "Other Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
+    await addTodo(owner, { space: "personal", title: "Owner Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
+    await addTodo(other, { space: "personal", title: "Other Task", isRecurring: false, recurrencePattern: "none", dueDate: "2026-11-12" });
     await db.insert(claudeConnections).values({ userId: owner, tokenEncrypted: `token-${marker}` });
     await db
       .insert(pushSubscriptions)

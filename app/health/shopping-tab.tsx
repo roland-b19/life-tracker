@@ -19,7 +19,7 @@ import {
   restoreShoppingItemsAction,
   toggleShoppingItemAction,
   updateShoppingItemAction,
-} from "@/app/actions/food";
+} from "@/actions/food";
 
 /** Health's shopping categories live in their own table; the shared Categories card saves through these. */
 const shoppingNames = (kind: "category" | "unit"): CategoriesApi => ({
@@ -166,7 +166,7 @@ export function ShoppingTab({
       category: shopCategory.trim().toLowerCase() || "other",
     };
     if (!visible(input.name)) return;
-    // Same limits as createShoppingItemSchema, so a refusal always has a message on screen.
+    // Same limits as addShoppingItemSchema, so a refusal always has a message on screen.
     if (input.name.length > 120) return setErrorMsg("The name must be 120 characters or less.");
     if (!(input.amount >= 0.01 && input.amount <= 1000)) return setErrorMsg("The amount must be between 0.01 and 1000.");
     if (input.unit.length > 30) return setErrorMsg("The unit must be 30 characters or less.");

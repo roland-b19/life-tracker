@@ -8,7 +8,7 @@ import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField
 import { PlusIcon } from "../components/icons";
 import { undoWith, useToast } from "../components/toast";
 import { DAY_NAMES, type DayDraft, type DraftExercise, type LibraryExercise, type SplitDay } from "./types";
-import { createCustomExerciseAction, deleteCustomExerciseAction, saveSplitDayAction } from "@/app/actions/gym";
+import { addCustomExerciseAction, deleteCustomExerciseAction, saveSplitDayAction } from "@/actions/gym";
 
 const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 
@@ -123,7 +123,7 @@ export function DayEditor({
     }
   }
 
-  async function createCustomExercise() {
+  async function addCustomExercise() {
     const name = customName.trim();
     if (!visible(name)) return;
     if (name.length < 2) {
@@ -137,7 +137,7 @@ export function DayEditor({
     setErrorMsg("");
     setBusy(true);
     try {
-      const res = await createCustomExerciseAction({ name, muscleGroup: customMuscle, equipmentType: customEquipment });
+      const res = await addCustomExerciseAction({ name, muscleGroup: customMuscle, equipmentType: customEquipment });
       if (res.success) {
         // A new exercise is made for this day, so it goes straight into the routine.
         const exerciseId = res.exercise.id;
@@ -289,7 +289,7 @@ export function DayEditor({
                     // Enter creates the exercise instead of submitting the whole day.
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      void createCustomExercise();
+                      void addCustomExercise();
                     }
                   }}
                 />
@@ -318,7 +318,7 @@ export function DayEditor({
                 <FormActions
                   compact
                   onCancel={() => setShowCustom(false)}
-                  onSubmit={createCustomExercise}
+                  onSubmit={addCustomExercise}
                   canSubmit={!busy && visible(customName)}
                   submitLabel="Create and add"
                 />

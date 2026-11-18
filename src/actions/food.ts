@@ -7,7 +7,7 @@ import { uuid } from "@/lib/validations/common";
 import { Refusal, respond } from "@/lib/validations/result";
 import {
   addWaterSchema,
-  createShoppingItemSchema,
+  addShoppingItemSchema,
   logMealSchema,
   logWeightSchema,
   restoreMealSchema,
@@ -138,7 +138,7 @@ export async function updateTargetsAction(rawInput: unknown) {
 
 export async function addShoppingItemAction(rawInput: unknown) {
   const userId = await requireUser();
-  return respond(async () => ({ item: await addShoppingItem(userId, createShoppingItemSchema.parse(rawInput)) }));
+  return respond(async () => ({ item: await addShoppingItem(userId, addShoppingItemSchema.parse(rawInput)) }));
 }
 
 export async function toggleShoppingItemAction(itemId: string, isBought: boolean) {

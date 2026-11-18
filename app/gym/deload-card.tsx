@@ -7,7 +7,7 @@ import { Banner, FormModal, SelectField, TintButton, Toggle } from "../component
 import { PencilIcon } from "../components/icons";
 import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
-import { saveDeloadWeeksAction } from "@/app/actions/gym";
+import { saveDeloadWeeksAction } from "@/actions/gym";
 
 /** The 10 weeks a deload select lists, from this week forward (step 1) or back (step -1), plus the week already chosen if it is outside them. */
 function deloadOptions(step: 1 | -1, current: string, none: string) {

@@ -51,7 +51,7 @@ import {
   toggleShoppingItemAction,
   updateStepsAction,
   updateTargetsAction,
-} from "@/app/actions/food";
+} from "@/actions/food";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 

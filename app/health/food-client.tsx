@@ -21,8 +21,8 @@ import {
   logMealAction,
   updateStepsAction,
   updateTargetsAction,
-} from "@/app/actions/food";
-import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
+} from "@/actions/food";
+import { sendFoodChatMessageAction } from "@/actions/food-chat";
 
 interface MealData {
   id: string;

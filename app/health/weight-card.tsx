@@ -5,7 +5,7 @@ import { BigNumber, Card, Field, FormModal } from "../components/blocks";
 import { ScaleIcon } from "../components/icons";
 import { EditButton, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
-import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/app/actions/food";
+import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { showDecimal } from "@/lib/decimal-input";
 import { toISODate } from "@/lib/format-date";
 import { weightStats } from "@/lib/weight-stats";

@@ -7,7 +7,7 @@ vi.mock("@/lib/claude-cli", () => ({ runClaude }));
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
-import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
+import { sendFoodChatMessageAction } from "@/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";

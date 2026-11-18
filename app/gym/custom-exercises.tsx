@@ -6,7 +6,7 @@ import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel } from "@/lib/gym-mu
 import { Badge, Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
-import { deleteCustomExerciseAction, restoreCustomExerciseAction, updateCustomExerciseAction } from "@/app/actions/gym";
+import { deleteCustomExerciseAction, restoreCustomExerciseAction, updateCustomExerciseAction } from "@/actions/gym";
 
 export interface CustomExercise {
   id: string;

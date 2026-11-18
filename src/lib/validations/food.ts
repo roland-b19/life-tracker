@@ -58,14 +58,14 @@ export const updateNutritionTargetsSchema = z.object({
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
 export const shoppingCategorySchema = categorySchema;
 
-export const createShoppingItemSchema = z.object({
+export const addShoppingItemSchema = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
   amount: z.number().min(0.01).max(1000).default(1),
   unit: z.string().trim().toLowerCase().min(1).max(30).default("pcs"),
   category: shoppingCategorySchema.default("other"),
 });
 
-export const updateShoppingItemSchema = createShoppingItemSchema.extend({
+export const updateShoppingItemSchema = addShoppingItemSchema.extend({
   itemId: uuid,
   // Only Undo sends these, to put back the bought state an "add again" reset.
   isBought: z.boolean().optional(),
@@ -111,5 +111,5 @@ export type LogWeightInput = z.infer<typeof logWeightSchema>;
 export type RestoreWeightInput = z.infer<typeof restoreWeightSchema>;
 export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
-export type CreateShoppingItemInput = z.infer<typeof createShoppingItemSchema>;
+export type AddShoppingItemInput = z.infer<typeof addShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

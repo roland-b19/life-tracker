@@ -8,7 +8,7 @@ import { authState, seedUser } from "./auth";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
 import { weightEntries } from "@/db/schema";
-import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/app/actions/food";
+import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { listWeightEntries } from "@/lib/food";
 import { readdirSync } from "node:fs";
 import path from "node:path";
@@ -22,8 +22,10 @@ describe("weight authorization", () => {
       .map(String)
       .filter((file) => file.endsWith("route.ts"))
       .sort();
+    // `health` is public on purpose: it answers {status:"ok"} and reads no data (tests/health.test.ts).
     expect(routeFiles).toEqual([
       "auth/[...nextauth]/route.ts",
+      "health/route.ts",
     ]);
   });
 

@@ -9,9 +9,9 @@ last_verified: 2026-11-18
 Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest. A separate `worker/` (Node, Docker) sends push reminders on Azure. Node 24 (`.nvmrc`).
 
 ## Parts
-- `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos, gym (largest), food (the home, `/` redirects to `/food`), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
+- `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos, gym (largest), health (route `/health`, the home: `/` redirects to it; `/food` redirects there for good for old bookmarks and the installed app), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
 - `src/lib/`: data access and pure rules. `src/lib/rules.ts` keeps plain rules apart from zod so client bundles stay small. `src/lib/validations/*` holds zod schemas.
-- `src/app/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection, export).
+- `src/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection, export).
 - `src/server/`: auth (`requireUser()` for actions, `requirePageUser()` for pages and layouts) and db.
 - `src/db/schema.ts`: Drizzle schema; migrations in `drizzle/0000..0031`.
 - `worker/`: own `package.json` and Dockerfile; its deps stay out of the web app (tested).
@@ -21,8 +21,8 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 ## How they connect
 - **Read:** a page calls `requirePageUser()` (`src/server/auth.ts`, D-011), which redirects to `/signin` without a user and returns `{ id, name }`, then reads through `src/lib` (often `Promise.all`) and passes initial data to the client component.
 - **Write:** the client calls a `"use server"` action. It starts with `requireUser()`, then `respond()` (`src/lib/validations/result.ts`, D-010) zod-parses the raw input, calls `src/lib` and answers `{ success: true, ... }` or `{ success: false, error }`; `src/lib` uses Drizzle through `src/server/db.ts`. Flagged actions call `assertClaudeEnabled()` or `assertPushEnabled()` first.
-- **Only API route:** `app/api/auth/[...nextauth]`. Every write, weight included, is a server action (D-007); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
-- **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, food and settings, giving a real 307 to `/signin` before markup streams. Pages still call `requirePageUser()` themselves: a layout does not render again on client navigation, so it cannot be the only guard (Next's authentication guide).
+- **API routes:** `app/api/auth/[...nextauth]` and `app/api/health` (`{status:"ok"}`, no data; the Docker healthcheck and the Azure liveness probe call it, pinned by `tests/infra-contract.test.ts`). Every write, weight included, is a server action (D-007); Next itself rejects a cross-origin action call, so the app has no CSRF check of its own.
+- **Layouts:** `RequireSession` is the `layout.tsx` of wishlist, todos, gym, health and settings, giving a real 307 to `/signin` before markup streams. Pages still call `requirePageUser()` themselves: a layout does not render again on client navigation, so it cannot be the only guard (Next's authentication guide).
 
 ## Auth and authorization
 - `src/auth.ts`: JWT sessions. `AUTH_PROVIDER` is `azure-ad` (default, 4 h sessions) or `github` (the Vercel variant, 180 days, with `OWNER_ALLOWLIST` of GitHub numeric ids rechecked on every session read). `AUTH_DEV=true` swaps in a Credentials dev user and throws if set in production. A missing `NEXTAUTH_SECRET` in production throws at import.
@@ -49,14 +49,14 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 
 ## Deploy variants
 - **Vercel + Neon (live):** no `vercel.json`; `AUTH_PROVIDER=github`, `DB_POOL_MAX` 1-2, Claude and push off. Previews get no DB or auth secrets.
-- **Azure (course demo):** `infra/main.bicep` (private networking, ACR by digest, Key Vault, Storage Queue, Container App plus worker jobs). `scripts/azure-deploy.sh` needs `DEPLOY_APPROVED=YES` and `COST_GATE_APPROVED=YES`. The Dockerfile is a 3-stage Alpine build with `public/` and `drizzle/` copied explicitly and a `/health` healthcheck.
+- **Azure (course demo):** `infra/main.bicep` (private networking, ACR by digest, Key Vault, Storage Queue, Container App plus worker jobs). `scripts/azure-deploy.sh` needs `DEPLOY_APPROVED=YES` and `COST_GATE_APPROVED=YES`. The Dockerfile is a 3-stage Alpine build with `public/` and `drizzle/` copied explicitly and a healthcheck on `/api/health`.
 - **Local:** `docker-compose.yml` (Postgres 17.6 on 127.0.0.1:5432; `docker/postgres/init.sh` creates roles and the test database), `.env.example`, `npm run seed:dev`.
 - **Backups:** `.github/workflows/backup.yml` runs weekly, dumps with the read-only role `life_tracker_backup` and encrypts with `age`; the private key stays with the owner. Do not weaken it. `scripts/backup-now.sh` is the manual twin: one plaintext `pg_dump` of the live database into the gitignored `.local/backups/`, run by the owner before a data-changing step (D-008).
 - **CI:** `.github/workflows/ci.yml` runs one job with a Postgres 17.6 service: migrate, `npm run check` (lint, typecheck, tests, KB check), `npm run e2e` (Chromium, caches `~/.cache/ms-playwright` keyed on the Playwright version, installs the system libraries on every run, uploads the report on failure), image builds with Trivy and SBOM, Bicep build, `bash -n` on scripts, `npm audit` (production dependencies only, D-004), gitleaks. The Postgres version is pinned in four places that must match: `ci.yml`, `backup.yml`, `docker-compose.yml`, `scripts/backup-now.sh`.
 
 ## Tests
 - Vitest, node environment, files run serially against one database. Outside CI the app role connects to `life_tracker_test`, with credentials read from `.env.example` (D-006); in CI one `life_tracker` database as `postgres`, from the job's env only. Tests need Postgres (about 15 files); the rest are pure.
-- Playwright Test (D-005) in `tests/e2e/`, run by `npm run e2e` and excluded from Vitest: `playwright.config.ts` starts `next dev` on port 3100 with `AUTH_DEV=true` against the same test database, in two Chromium projects (`desktop`, `phone` at 375 px; `phone` runs only the `@a11y` scans, the flow runs on `desktop`), one worker, no retries; `@axe-core/playwright` scans each visited page; specs: Wishlist, the `/food` weight card and Tasks (`/todos`), with the shared sign-in, user cleanup and axe helper in `tests/e2e/helpers.ts`; each test's user is deleted afterwards. Details and gotchas: [conventions](conventions.md).
+- Playwright Test (D-005) in `tests/e2e/`, run by `npm run e2e` and excluded from Vitest: `playwright.config.ts` starts `next dev` on port 3100 with `AUTH_DEV=true` against the same test database, in two Chromium projects (`desktop`, `phone` at 375 px; `phone` runs only the `@a11y` scans, the flow runs on `desktop`), one worker, no retries; `@axe-core/playwright` scans each visited page; specs: Wishlist, the `/health` weight card and Tasks (`/todos`), with the shared sign-in, user cleanup and axe helper in `tests/e2e/helpers.ts`; each test's user is deleted afterwards. Details and gotchas: [conventions](conventions.md).
 - Guards worth knowing: `query-count.test.ts` (page query and byte budgets with two years of data), `infra-contract.test.ts` (string checks on the Bicep and scripts), `actions-anonymous` and `pages-auth` (auto-cover new files).
 
 ## Repo layout

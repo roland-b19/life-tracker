@@ -24,7 +24,7 @@ export const logSetSchema = z.object({
   notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
 });
 
-export const createSessionSchema = z.object({
+export const addSessionSchema = z.object({
   date: isoDate,
   splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean().default(false),
@@ -58,14 +58,14 @@ export const restoreSessionSchema = z.object({
   sets: z.array(logSetSchema.omit({ sessionId: true })).max(300),
 });
 
-export const createCustomExerciseSchema = z.object({
+export const addCustomExerciseSchema = z.object({
   name: z.string().trim().min(2).max(120).refine(visible, "Name is required"),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
 
 /** Edit and Undo of a delete both name the exercise by id; Undo of a delete puts the same id back. */
-export const customExerciseWithIdSchema = createCustomExerciseSchema.extend({ id: uuid });
+export const customExerciseWithIdSchema = addCustomExerciseSchema.extend({ id: uuid });
 
 export const saveSplitDaySchema = z.object({
   id: uuid,
@@ -87,9 +87,9 @@ export const saveSplitDaySchema = z.object({
 });
 
 export type LogSetInput = z.infer<typeof logSetSchema>;
-export type CreateSessionInput = z.infer<typeof createSessionSchema>;
+export type AddSessionInput = z.infer<typeof addSessionSchema>;
 export type RestoreSessionInput = z.infer<typeof restoreSessionSchema>;
 export type FinishSessionInput = z.infer<typeof finishSessionSchema>;
-export type CreateCustomExerciseInput = z.infer<typeof createCustomExerciseSchema>;
+export type AddCustomExerciseInput = z.infer<typeof addCustomExerciseSchema>;
 export type CustomExerciseWithIdInput = z.infer<typeof customExerciseWithIdSchema>;
 export type SaveSplitDayInput = z.infer<typeof saveSplitDaySchema>;

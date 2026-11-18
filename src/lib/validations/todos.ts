@@ -6,7 +6,7 @@ const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task, "daily" for a repeating one.
 const recurrencePatternSchema = z.enum(["none", "daily"]);
 
-export const createTodoSchema = z.object({
+export const addTodoSchema = z.object({
   space: todoSpaceSchema.default("personal"),
   title: z.string().trim().min(1, "Title is required").max(150).refine(visible, "Title is required"),
   isRecurring: z.boolean().default(false),
@@ -25,7 +25,7 @@ export const createTodoSchema = z.object({
 const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future");
 
 /** Undo of a delete: the same row back, with its id. */
-export const restoreTodoSchema = createTodoSchema.extend({
+export const restoreTodoSchema = addTodoSchema.extend({
   id: uuid,
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
@@ -43,8 +43,8 @@ export const toggleTodoSchema = z.object({
 
 export const updateTodoSchema = z.object({
   id: uuid,
-  title: createTodoSchema.shape.title,
-  reminderTime: createTodoSchema.shape.reminderTime,
+  title: addTodoSchema.shape.title,
+  reminderTime: addTodoSchema.shape.reminderTime,
   // Left out by the one-off form, which has no category: then the task keeps its own.
   category: categorySchema.optional(),
 });
@@ -60,7 +60,7 @@ export const pushSubscriptionSchema = z.object({
 
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;
 // Callers that never file a task (tests, the carry-over) can leave the category out: it is then "other".
-export type CreateTodoInput = Omit<z.infer<typeof createTodoSchema>, "category"> & { category?: string };
+export type AddTodoInput = Omit<z.infer<typeof addTodoSchema>, "category"> & { category?: string };
 export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;

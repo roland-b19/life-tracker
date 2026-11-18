@@ -1,14 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth";
 import { addDays, toISODate } from "@/lib/format-date";
 import { uuid } from "@/lib/validations/common";
 import {
   cancelSessionSchema,
-  createCustomExerciseSchema,
+  addCustomExerciseSchema,
   customExerciseWithIdSchema,
-  createSessionSchema,
+  addSessionSchema,
   finishSessionSchema,
   logSetSchema,
   restoreSessionSchema,
@@ -18,8 +17,8 @@ import {
 import { Refusal, respond } from "@/lib/validations/result";
 import {
   cancelWorkoutSession,
-  createCustomExercise,
-  createWorkoutSession,
+  addCustomExercise,
+  addWorkoutSession,
   deleteCustomExercise,
   restoreCustomExercise,
   updateCustomExercise,
@@ -32,14 +31,6 @@ import {
   saveSplitDay,
 } from "@/lib/gym";
 
-function safeRevalidate(path: string) {
-  try {
-    revalidatePath(path);
-  } catch {
-    // No-op outside Next.js request store (e.g. unit/integration tests)
-  }
-}
-
 /** A workout is made today; a day either side covers the user's timezone and a page left open past midnight. */
 function nearToday(date: string, daysBack = 1) {
   const today = toISODate();
@@ -49,10 +40,9 @@ function nearToday(date: string, daysBack = 1) {
 export async function startSessionAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
-    const parsed = createSessionSchema.parse(rawInput);
+    const parsed = addSessionSchema.parse(rawInput);
     if (!nearToday(parsed.date)) throw new Refusal("A workout can only be started for today.");
-    const session = await createWorkoutSession(userId, parsed);
-    safeRevalidate("/gym");
+    const session = await addWorkoutSession(userId, parsed);
     return { session };
   });
 }
@@ -62,7 +52,6 @@ export async function finishSessionAction(rawInput: unknown) {
   return respond(async () => {
     const session = await finishWorkoutSession(userId, finishSessionSchema.parse(rawInput));
     if (!session) throw new Refusal("Workout not found.");
-    safeRevalidate("/gym");
     return { session };
   });
 }
@@ -73,7 +62,6 @@ export async function cancelSessionAction(rawInput: unknown) {
     const { sessionId } = cancelSessionSchema.parse(rawInput);
     const deleted = await cancelWorkoutSession(userId, sessionId);
     if (!deleted) throw new Refusal("Workout not found.");
-    safeRevalidate("/gym");
     return {};
   });
 }
@@ -84,7 +72,6 @@ export async function reopenSessionAction(rawInput: unknown) {
   return respond(async () => {
     const { sessionId } = cancelSessionSchema.parse(rawInput);
     if (!(await reopenWorkoutSession(userId, sessionId))) throw new Refusal("Workout not found.");
-    safeRevalidate("/gym");
     return {};
   });
 }
@@ -97,12 +84,10 @@ export async function restoreSessionAction(rawInput: unknown) {
     // A workout is cancelled the day it was made, so Undo never brings one back from long ago.
     const details = nearToday(parsed.date, 7) ? await restoreWorkoutSession(userId, parsed) : null;
     if (!details) throw new Refusal("This workout could not be restored.");
-    safeRevalidate("/gym");
     return { details };
   });
 }
 
-// No revalidate for set edits: the client keeps its own state, and refetching the page on every set is the costliest call.
 export async function logSetAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
@@ -125,16 +110,14 @@ export async function saveSplitDayAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
     if (!(await saveSplitDay(userId, saveSplitDaySchema.parse(rawInput)))) throw new Refusal("This day could not be saved.");
-    safeRevalidate("/gym");
     return {};
   });
 }
 
-export async function createCustomExerciseAction(rawInput: unknown) {
+export async function addCustomExerciseAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
-    const exercise = await createCustomExercise(userId, createCustomExerciseSchema.parse(rawInput));
-    safeRevalidate("/gym");
+    const exercise = await addCustomExercise(userId, addCustomExerciseSchema.parse(rawInput));
     return { exercise };
   });
 }
@@ -145,7 +128,6 @@ export async function updateCustomExerciseAction(rawInput: unknown) {
   return respond(async () => {
     const exercise = await updateCustomExercise(userId, customExerciseWithIdSchema.parse(rawInput));
     if (!exercise) throw new Refusal("Exercise not found.");
-    safeRevalidate("/gym");
     return { exercise };
   });
 }
@@ -156,7 +138,6 @@ export async function restoreCustomExerciseAction(rawInput: unknown) {
   return respond(async () => {
     const exercise = await restoreCustomExercise(userId, customExerciseWithIdSchema.parse(rawInput));
     if (!exercise) throw new Refusal("Exercise could not be restored.");
-    safeRevalidate("/gym");
     return { exercise };
   });
 }
@@ -166,7 +147,6 @@ export async function deleteCustomExerciseAction(exerciseId: string) {
   const userId = await requireUser();
   return respond(async () => {
     if (!(await deleteCustomExercise(userId, uuid.parse(exerciseId)))) throw new Refusal("This exercise is used by a routine or a workout, so it stays.");
-    safeRevalidate("/gym");
     return {};
   });
 }
@@ -176,7 +156,6 @@ export async function saveDeloadWeeksAction(rawInput: unknown) {
   const userId = await requireUser();
   return respond(async () => {
     const saved = await saveDeloadWeeks(userId, saveDeloadWeeksSchema.parse(rawInput));
-    safeRevalidate("/gym");
     return saved;
   });
 }

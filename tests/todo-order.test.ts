@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 
-import { createTodo, deleteTodo, getDailyTodos, restoreTodo, toggleTodo } from "@/lib/todos";
+import { addTodo, deleteTodo, getDailyTodos, restoreTodo, toggleTodo } from "@/lib/todos";
 import { deleteCategory } from "@/lib/categories";
 import { addDays, toISODate } from "@/lib/format-date";
 
@@ -33,7 +33,7 @@ describe("Task order: only the user's own actions move a task", () => {
     return result;
   };
   const add = (title: string, over: Record<string, unknown> = {}) =>
-    apart(() => createTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over }));
+    apart(() => addTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over }));
   const daily = (title: string, space: "personal" | "business" = "personal", category = "other") =>
     add(title, { space, isRecurring: true, recurrencePattern: "daily", category });
   const titles = async (day = today, space: "personal" | "business" = "personal") =>
