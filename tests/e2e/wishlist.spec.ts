@@ -10,13 +10,16 @@ async function expectNoSeriousViolations(page: Page) {
 }
 
 async function signInAsNewUser(page: Page) {
-  await page.goto("/signin");
-  // Right after loading, two parallel /api/auth/session calls each set a CSRF cookie. A click before they finish posts a
-  // stale token: NextAuth answers 200 without a session and the next page bounces back to /signin.
-  await page.waitForLoadState("networkidle");
-  await page.getByLabel("Username").fill(`e2e-${randomUUID().slice(0, 8)}`);
-  await page.getByRole("button", { name: "Continue" }).click();
-  // The form pushes "/", which redirects to /food.
+  // Sign in through NextAuth's own endpoints instead of the form. On /signin two parallel /api/auth/session calls each
+  // set a CSRF cookie, so a click that comes too early posts a stale token and no session is created. Here the token and
+  // its cookie come from one request, and the request context shares its cookie jar with the page.
+  const { csrfToken } = await (await page.request.get("/api/auth/csrf")).json();
+  const response = await page.request.post("/api/auth/callback/credentials", {
+    form: { csrfToken, name: `e2e-${randomUUID().slice(0, 8)}`, json: "true" },
+  });
+  expect(response.ok()).toBe(true);
+  // Without a session the next page would bounce back to /signin.
+  await page.goto("/food");
   await expect(page).toHaveURL(/\/food$/);
 }
 
