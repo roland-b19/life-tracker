@@ -7,8 +7,8 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 20000,
     setupFiles: ["./tests/setup.ts"],
-    // Other worktrees live under .claude/worktrees; their copies of the tests are not ours.
-    exclude: [...configDefaults.exclude, ".claude/worktrees/**"],
+    // Other worktrees live under .claude/worktrees; their copies of the tests are not ours. tests/e2e is Playwright's (npm run e2e).
+    exclude: [...configDefaults.exclude, ".claude/worktrees/**", "tests/e2e/**"],
   },
   resolve: {
     alias: { "@": path.resolve(".", "src") },
