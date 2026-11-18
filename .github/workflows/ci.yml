@@ -50,6 +50,20 @@ jobs:
       # The one check command (see docs/kb/conventions.md): lint, typecheck, tests and the KB check.
       - name: Fast checks
         run: npm run check
+      # The browser spec (see docs/kb/conventions.md): next dev on port 3100 against the job's database, Chromium only.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end spec
+        run: npm run e2e
+      - name: Upload end-to-end report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
       - name: Build production container
         run: docker build --tag life-tracker:ci .
       # Syft runs from its Docker Hub image, pinned by digest: the sbom-action downloads it from
