@@ -6,9 +6,8 @@ const PORT = 3100;
 const BASE_URL = `http://localhost:${PORT}`;
 const databaseUrl = process.env.DATABASE_URL!;
 
-// A shell-exported DATABASE_URL_TEST, or CI=1 with a remote DATABASE_URL, could point the dev server at a real
-// database; a spec only ever runs against a local one. The specs also clean up with DATABASE_URL_MIGRATE (the owner
-// role), so it gets the same check.
+// CI=1 with a remote DATABASE_URL could point the dev server at a real database; a spec only ever runs against a
+// local one. The specs also clean up with DATABASE_URL_MIGRATE (the owner role), so it gets the same check.
 for (const url of [databaseUrl, process.env.DATABASE_URL_MIGRATE!]) {
   if (!["127.0.0.1", "localhost"].includes(new URL(url).hostname)) {
     throw new Error("The e2e specs only run against a local database.");
@@ -17,6 +16,7 @@ for (const url of [databaseUrl, process.env.DATABASE_URL_MIGRATE!]) {
 
 export default defineConfig({
   testDir: "tests/e2e",
+  globalSetup: "./tests/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
