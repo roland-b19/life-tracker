@@ -4,9 +4,12 @@ import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
 
 afterEach(() => vi.useRealTimers());
 
-const at = (iso: string) => {
+const setNow = (iso: string) => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(iso));
+};
+const at = (iso: string) => {
+  setNow(iso);
   return toISODate();
 };
 
@@ -39,15 +42,11 @@ describe("the app's clock never follows the device's zone", () => {
   // 2026-11-13 is a Friday in Bucharest from 22:00Z on the 12th (00:00 UTC+2); one minute earlier it is still Thursday the 12th.
   it.each(DEVICE_ZONES)("weekday and time match Bucharest on a device in %s", (zone) => {
     process.env.TZ = zone;
-    const nowIs = (iso: string) => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date(iso));
-    };
-    nowIs("2026-11-12T21:59:00Z");
+    setNow("2026-11-12T21:59:00Z");
     expect([toISODate(), weekday(toISODate()), appTime()]).toEqual(["2026-11-12", 4, "23:59"]);
-    nowIs("2026-11-12T22:00:00Z");
+    setNow("2026-11-12T22:00:00Z");
     expect([toISODate(), weekday(toISODate()), appTime()]).toEqual(["2026-11-13", 5, "00:00"]);
-    nowIs("2026-07-01T06:05:00Z"); // summer, UTC+3
+    setNow("2026-07-01T06:05:00Z"); // summer, UTC+3
     expect([toISODate(), weekday(toISODate()), appTime()]).toEqual(["2026-07-01", 3, "09:05"]);
   });
 
