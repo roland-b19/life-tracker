@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { toISODate } from "@/lib/format-date";
+import { appTime, toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
 import { MAX_STEPS, MAX_WATER_ML } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, TintButton, Toolbar } from "../components/blocks";
@@ -438,7 +438,7 @@ export function FoodClient({
         message: text,
         history,
         date: todayDate,
-        time: new Date().toTimeString().slice(0, 5),
+        time: appTime(),
       });
       if (!res.success) return takeBack(res.error);
       const meals = res.meals as MealData[];

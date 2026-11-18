@@ -1,5 +1,6 @@
 "use client";
 
+import { toISODate, weekday } from "@/lib/format-date";
 import { muscleLabel } from "@/lib/gym-muscles";
 import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, TintButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
@@ -26,7 +27,7 @@ export function TrainingDays({
   onEdit: (day: SplitDay) => void;
 }) {
   const [isFolded, toggleFolded] = useFolded("gym");
-  const todayDayOfWeek = new Date().getDay(); // 0 = Sun, 1 = Mon, ...
+  const todayDayOfWeek = weekday(toISODate()); // 0 = Sun, 1 = Mon, ..., in the app timezone
   return (
     <Dashboard>
       <DashboardMain>

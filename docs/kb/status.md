@@ -29,7 +29,6 @@ None.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- **Device-local dates:** gym `getDay()` and food `toTimeString()` → `APP_TZ` helpers in `src/lib/format-date.ts`.
 - **Import style:** `@/` (57 files) vs relative (41 files) → `@/`.
 - **Test setup duplication:** `seedUser` in 11 test files and the `authState` mock in about 10 → one shared helper in `tests/`.
 - **Pages calling `getServerSession` directly** although `RequireSession` guards the layouts (the pages test requires the check, so this stays until that test changes).
