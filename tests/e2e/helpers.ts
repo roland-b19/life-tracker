@@ -10,6 +10,19 @@ export async function expectNoSeriousViolations(page: Page) {
   expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
 }
 
+// A click that starts a server action returns once the action has answered, so the next step never races the database
+// (a reload would otherwise abort an action still in flight). Next sends server actions as POSTs with this header.
+// A page that refreshes its list after a write sends a second action, so `body` (a piece of the request body, such as
+// a title) names the action to wait for when an earlier refresh may still be in flight and would be taken for it.
+export async function andSettle(page: Page, act: () => Promise<void>, body?: string) {
+  const answered = page.waitForResponse((r) => {
+    const request = r.request();
+    return request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body));
+  });
+  await act();
+  await answered;
+}
+
 async function signIn(page: Page, name: string) {
   // Sign in through NextAuth's own endpoints instead of the form. On /signin two parallel /api/auth/session calls each
   // set a CSRF cookie, so a click that comes too early posts a stale token and no session is created. Here the token and

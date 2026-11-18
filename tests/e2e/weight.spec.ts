@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { expectNoSeriousViolations, test } from "./helpers";
+import { andSettle, expectNoSeriousViolations, test } from "./helpers";
 
 async function openFood(page: Page) {
   await page.goto("/food");
@@ -25,21 +25,13 @@ test("a signed-in user adds, edits and deletes today's weight, with Undo for the
   const field = form.getByLabel("Weight today (kg)");
   const today = (kilograms: string) => card.getByText(`${kilograms} kg today`, { exact: true });
 
-  // A click that starts a server action returns once the action has answered, so the next step never races the
-  // database (a reload would otherwise abort an action still in flight). Next sends server actions as POSTs with this header.
-  async function andSettle(act: () => Promise<void>) {
-    const answered = page.waitForResponse((r) => r.request().method() === "POST" && "next-action" in r.request().headers());
-    await act();
-    await answered;
-  }
-
   // Weights show a decimal comma, like the rest of the app; the form shows two decimals.
   await expect(card.getByText("— kg today", { exact: true })).toBeVisible();
 
   // Add today's weight.
   await card.getByRole("button", { name: "Edit today's weight" }).click();
   await field.fill("72,4");
-  await andSettle(() => form.getByRole("button", { name: "Save" }).click());
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
   await expect(form).toBeHidden();
   await expect(page.getByText("Added 72,4 kg")).toBeVisible();
   await expect(today("72,4")).toBeVisible();
@@ -51,22 +43,22 @@ test("a signed-in user adds, edits and deletes today's weight, with Undo for the
   await card.getByRole("button", { name: "Edit today's weight" }).click();
   await expect(field).toHaveValue("72,40");
   await field.fill("71,8");
-  await andSettle(() => form.getByRole("button", { name: "Save" }).click());
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
   await expect(form).toBeHidden();
   await expect(page.getByText("Weight set to 71,8 kg")).toBeVisible();
   await expect(today("71,8")).toBeVisible();
 
   // Undo the edit: the old value is back, and it is what the database holds.
-  await andSettle(() => page.getByRole("button", { name: "Undo" }).click());
+  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
   await expect(today("72,4")).toBeVisible();
   await page.reload();
   await expect(today("72,4")).toBeVisible();
 
   // Delete it, then Undo the delete: the same weigh-in comes back, also after a reload.
-  await andSettle(() => card.getByRole("button", { name: "Delete today's weight" }).click());
+  await andSettle(page, () => card.getByRole("button", { name: "Delete today's weight" }).click());
   await expect(page.getByText("Removed 72,4 kg")).toBeVisible();
   await expect(card.getByText("— kg today", { exact: true })).toBeVisible();
-  await andSettle(() => page.getByRole("button", { name: "Undo" }).click());
+  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
   await expect(today("72,4")).toBeVisible();
   await page.reload();
   await expect(today("72,4")).toBeVisible();
