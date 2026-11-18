@@ -141,6 +141,15 @@ describe("Azure reminder pipeline contract", () => {
     expect(readFileSync("worker/package.json", "utf8")).toContain("@azure/storage-queue");
   });
 
+  it("imports web-push as a namespace: version 4 is ESM with named exports and no default export", () => {
+    // The worker's dependencies are not installed here, so this guards the import statically; a default import
+    // passes lint, typecheck and every test, and then fails the job at start-up.
+    const send = readFileSync("worker/send.mjs", "utf8");
+    expect(send).toContain('import * as webpush from "web-push";');
+    expect(send).not.toMatch(/import\s+webpush\s+from/);
+    expect(JSON.parse(readFileSync("worker/package.json", "utf8")).dependencies["web-push"]).toMatch(/^\^?4\./);
+  });
+
   it("runs migrations from their own script, with the identity attached to the job", () => {
     expect(deployScript).toContain('./scripts/azure-migrate.sh "$environment"');
     expect(migrateScript).toContain('az identity show --name "life-tracker-$environment-identity"');
