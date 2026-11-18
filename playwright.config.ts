@@ -7,8 +7,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 const databaseUrl = process.env.DATABASE_URL!;
 
 // CI=1 with a remote DATABASE_URL could point the dev server at a real database; a spec only ever runs against a
-// local one. The specs also clean up with DATABASE_URL_MIGRATE (the owner
-// role), so it gets the same check.
+// local one. The specs also clean up with DATABASE_URL_MIGRATE (the owner role), so it gets the same check.
 for (const url of [databaseUrl, process.env.DATABASE_URL_MIGRATE!]) {
   if (!["127.0.0.1", "localhost"].includes(new URL(url).hostname)) {
     throw new Error("The e2e specs only run against a local database.");
