@@ -7,9 +7,12 @@ const BASE_URL = `http://localhost:${PORT}`;
 const databaseUrl = process.env.DATABASE_URL!;
 
 // A shell-exported DATABASE_URL_TEST, or CI=1 with a remote DATABASE_URL, could point the dev server at a real
-// database; a spec only ever runs against a local one.
-if (!["127.0.0.1", "localhost"].includes(new URL(databaseUrl).hostname)) {
-  throw new Error("The e2e specs only run against a local database.");
+// database; a spec only ever runs against a local one. The specs also clean up with DATABASE_URL_MIGRATE (the owner
+// role), so it gets the same check.
+for (const url of [databaseUrl, process.env.DATABASE_URL_MIGRATE!]) {
+  if (!["127.0.0.1", "localhost"].includes(new URL(url).hostname)) {
+    throw new Error("The e2e specs only run against a local database.");
+  }
 }
 
 export default defineConfig({
@@ -28,8 +31,13 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    // The phone target is the width, so no touch or mobile emulation.
-    { name: "phone", use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } } },
+    {
+      name: "phone",
+      // The phone target is the width, so no touch or mobile emulation. Only the axe scans depend on the width, so the
+      // phone project runs just the tests tagged @a11y; the add/undo/delete flow runs once, on desktop.
+      grep: /@a11y/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } },
+    },
   ],
   webServer: {
     // AUTH_DEV throws under NODE_ENV=production, so the specs cannot use a production build.
