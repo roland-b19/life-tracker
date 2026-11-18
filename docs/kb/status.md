@@ -16,11 +16,12 @@ last_verified: 2026-11-18
 | First e2e spec (Wishlist, Playwright, D-005) | done, [plan](archive/plans/e2e-first-spec.md) |
 | One source for the local test credentials; dead Azure host fallbacks removed (D-006) | done |
 | Tasks e2e spec (`/todos`, D-012) | done, [plan](archive/plans/e2e-tasks-spec.md) |
+| Categories e2e spec (Wishlist, Tasks Daily, Health shopping, D-014) | in progress, [plan](plans/e2e-categories-spec.md) |
 | Weight REST API → server actions (D-007) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
 
 ## In progress
-None.
+Categories e2e spec: plan approved 2026-11-18, building ([plan](plans/e2e-categories-spec.md)).
 
 ## Next steps
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
