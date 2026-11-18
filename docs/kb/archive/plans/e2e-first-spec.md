@@ -14,13 +14,13 @@ Life Tracker has only Vitest tests, so nothing checks that the real UI works in 
 - Out: Firefox and WebKit projects; screenshot tests; specs for any other page (Tasks, Gym, Food and health, Settings); fixing UI accessibility problems axe finds (they are listed to the owner and excluded with a comment, see Risks); changing app code, auth code or `next.config.ts`; adding e2e to `npm run check`; a production-build run; any use of the live database.
 
 ## Done criteria
-- [ ] `npm run e2e` passes with `docker compose up` Postgres running, on both projects (4 tests: 2 tests × 2 projects) — checked by running it and reading `4 passed`.
-- [ ] The spec covers: an anonymous visit to `/wishlist` redirects to `/signin`; a signed-in dev user adds an item and sees its row and the updated "Estimated Investment" total; Undo removes it; after adding again, Delete removes the row and Undo brings it back — checked by the spec's own assertions.
-- [ ] axe finds no serious or critical violation on `/signin` and `/wishlist`, except ones listed in `tests/e2e/wishlist.spec.ts` with a comment naming the issue, after the owner was told of them (see step 1) — checked by the spec.
-- [ ] The spec makes no waits by time and finds elements by role, label or text only — checked by `grep -rn "waitForTimeout\|locator(" tests/e2e` finding nothing.
-- [ ] `npm run check` still passes and its Vitest run does not pick up `tests/e2e/` — checked by the test file count in the Vitest output being the same as on `main`.
-- [ ] The CI job runs `npm run e2e` after the fast checks and is green on the pull request — checked on the PR's CI run; the report upload step has `if: failure()` — checked by reading the workflow diff.
-- [ ] KB updated: D-005 active, conventions, architecture, status, log — checked by `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb` with no errors.
+- [x] `npm run e2e` passes with `docker compose up` Postgres running, on both projects (4 tests: 2 tests × 2 projects) — checked by running it and reading `4 passed`.
+- [x] The spec covers: an anonymous visit to `/wishlist` redirects to `/signin`; a signed-in dev user adds an item and sees its row and the updated "Estimated Investment" total; Undo removes it; after adding again, Delete removes the row and Undo brings it back — checked by the spec's own assertions.
+- [x] axe finds no serious or critical violation on `/signin` and `/wishlist`, except ones listed in `tests/e2e/wishlist.spec.ts` with a comment naming the issue, after the owner was told of them (see step 1) — checked by the spec.
+- [x] The spec makes no waits by time and finds elements by role, label or text only — checked by `grep -rn "waitForTimeout\|locator(" tests/e2e` finding nothing.
+- [x] `npm run check` still passes and its Vitest run does not pick up `tests/e2e/` — checked by the test file count in the Vitest output being the same as on `main`.
+- [x] The CI job runs `npm run e2e` after the fast checks and is green on the pull request — checked on the PR's CI run; the report upload step has `if: failure()` — checked by reading the workflow diff.
+- [x] KB updated: D-005 active, conventions, architecture, status, log — checked by `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb` with no errors.
 
 ## Decisions
 - D-005: Playwright Test on `next dev`, Chromium desktop and phone, axe, `npm run e2e` separate from `npm run check`
@@ -46,7 +46,7 @@ Life Tracker has only Vitest tests, so nothing checks that the real UI works in 
    - After "Fast checks": a step `npx playwright install --with-deps chromium`, a step `npm run e2e`, and an `actions/upload-artifact` step with `if: failure()` for `playwright-report/` and `test-results/`, using the same pinned artifact action SHA already in this file.
    - The job-level `DATABASE_URL` and `AUTH_DEV` already exist; `NEXTAUTH_SECRET` is already set. No new secret.
 5. [x] KB and docs — files: `CLAUDE.md` (change: one line in Commands), `docs/kb/conventions.md`, `docs/kb/architecture.md`, `docs/kb/status.md`, `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md` (change); tests: `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb`.
-6. [ ] Verify and hand off — files: none; tests: `npm run check`, `npm run e2e`, then the merge-branch skill opens the pull request and CI is green.
+6. [x] Verify and hand off — files: none; tests: `npm run check`, `npm run e2e`, then the merge-branch skill opens the pull request and CI is green.
 
 ## Cleanup and docs
 - Nothing becomes unused: no code, file or dependency is replaced. The scratch spec from step 1 is deleted in the same step.
