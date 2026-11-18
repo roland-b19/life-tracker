@@ -21,6 +21,7 @@ last_verified: 2026-11-18
 | Categories e2e spec (Wishlist, Tasks Daily, Health shopping, D-016) | done, [plan](archive/plans/e2e-categories-spec.md) |
 | Settings e2e spec (`/settings`, D-017) | done, [plan](archive/plans/e2e-settings-spec.md) |
 | Weight REST API → server actions (D-007) | done |
+| Test database per worktree, created and migrated by a global setup; `AGENTS.md` ignored (D-018) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
 
 ## In progress

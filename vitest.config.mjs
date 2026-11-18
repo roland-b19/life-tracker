@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     fileParallelism: false,
     testTimeout: 20000,
+    globalSetup: ["./tests/global-setup.ts"],
     setupFiles: ["./tests/setup.ts"],
     // Other worktrees live under .claude/worktrees; their copies of the tests are not ours. tests/e2e is Playwright's (npm run e2e).
     exclude: [...configDefaults.exclude, ".claude/worktrees/**", "tests/e2e/**"],

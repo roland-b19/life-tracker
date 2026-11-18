@@ -39,6 +39,8 @@ playwright-report/
 .azure/
 
 .neon
+# `next dev` re-creates this file on every start
+/AGENTS.md
 .claude/launch.json
 
 # Personal data for scripts/import-personal.cjs (never committed)
