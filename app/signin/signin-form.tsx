@@ -12,7 +12,7 @@ const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github
 export function SignInForm({ provider, denied }: { provider: string; denied: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("owner");
-  const [error, setError] = useState(denied ? "This account is not allowed to use this app." : "");
+  const [errorMsg, setErrorMsg] = useState(denied ? "This account is not allowed to use this app." : "");
   const [busy, setBusy] = useState(false);
   // Whoever signs in next never sees pages kept for the previous session.
   useEffect(() => void clearPageCache(), []);
@@ -20,13 +20,13 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    setErrorMsg("");
     const result = await signIn("credentials", { name, redirect: false, callbackUrl: "/" }).catch(() => null);
     if (result?.ok) {
       router.push("/");
       router.refresh();
     } else {
-      setError(
+      setErrorMsg(
         result?.error === "CredentialsSignin"
           ? "Please enter a username using letters, numbers, dots, dashes or underscores."
           : "Failed to sign in",
@@ -39,7 +39,7 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
     <CenterCard id="signin-title" title="Welcome back" pulse>
       {provider !== "dev" ? (
         <div className="form-stack signin-form">
-          {error && <ErrorText>{error}</ErrorText>}
+          {errorMsg && <ErrorText>{errorMsg}</ErrorText>}
           <button
             type="button"
             disabled={busy}
@@ -67,7 +67,7 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
             required
             autoFocus
           />
-          {error && <ErrorText>{error}</ErrorText>}
+          {errorMsg && <ErrorText>{errorMsg}</ErrorText>}
           {/* Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look */}
           <button type="submit" disabled={busy} className="signin-continue">
             {busy ? "Signing in..." : "Continue"}

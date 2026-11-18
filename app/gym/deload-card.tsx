@@ -35,17 +35,17 @@ export function DeloadCard({
   const { showToast } = useToast();
   // Last and next deload week being edited (Sundays, "" for none), null while the dialog is closed.
   const [draft, setDraft] = useState<{ last: string; next: string } | null>(null);
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!draft) return;
     if (draft.last && draft.next && draft.next <= draft.last) {
-      setError("The next deload must come after the last one");
+      setErrorMsg("The next deload must come after the last one");
       return;
     }
     setBusy(true);
-    setError("");
+    setErrorMsg("");
     const before = { last: deload.lastDeloadWeek, next: deload.nextDeloadWeek };
     try {
       const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null });
@@ -57,7 +57,7 @@ export function DeloadCard({
         onUndo: undoWith(showToast, () => saveDeloadWeeksAction(before), "Failed to undo the edit"),
       });
     } catch {
-      setError("Failed to save deload weeks");
+      setErrorMsg("Failed to save deload weeks");
     } finally {
       setBusy(false);
     }
@@ -82,7 +82,7 @@ export function DeloadCard({
             icon={<PencilIcon size={14} />}
             disabled={busy}
             onClick={() => {
-              setError("");
+              setErrorMsg("");
               setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
             }}
           >
@@ -91,7 +91,7 @@ export function DeloadCard({
           <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
         </span>
       </Banner>
-      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={error} busy={busy}>
+      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} busy={busy}>
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
         <SelectField
           label="Last deload"

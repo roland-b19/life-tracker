@@ -9,7 +9,9 @@ import {
   MAX_WATER_ML,
   createShoppingItemSchema,
   logMealSchema,
+  logWeightSchema,
   restoreMealSchema,
+  restoreWeightSchema,
   renameShoppingCategorySchema,
   reorderShoppingCategoriesSchema,
   shoppingCategoryNameSchema,
@@ -26,13 +28,16 @@ import {
   deleteMeal,
   deleteShoppingCategory,
   deleteShoppingItem,
+  deleteWeightEntry,
   hasDuplicateShoppingItem,
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreMeal,
   restoreShoppingItems,
+  restoreWeightEntry,
   revertShoppingCategory,
+  saveWeightEntry,
   toggleShoppingItem,
   updateDailySteps,
   updateDailyWater,
@@ -66,6 +71,28 @@ export async function restoreMealAction(rawInput: unknown) {
   assertWritableDay(parsed.date);
   const meal = await restoreMeal(userId, parsed);
   return { success: meal !== undefined, meal };
+}
+
+/** Sets the day's weight (creates or changes it). Refusals come back as data: Next hides a thrown message from the browser in production. */
+export async function saveWeightAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const parsed = logWeightSchema.safeParse(rawInput);
+  if (!parsed.success) return { success: false as const, error: "Please enter a valid weight." };
+  const { entry, previous } = await saveWeightEntry(userId, parsed.data);
+  return { success: true as const, entry, previous };
+}
+
+export async function deleteWeightAction(entryId: string) {
+  const userId = await requireUser();
+  const deleted = await deleteWeightEntry(userId, uuid.parse(entryId));
+  return { success: deleted !== undefined };
+}
+
+/** Undo of a delete. */
+export async function restoreWeightAction(rawInput: unknown) {
+  const userId = await requireUser();
+  const entry = await restoreWeightEntry(userId, restoreWeightSchema.parse(rawInput));
+  return { success: entry !== undefined, entry };
 }
 
 export async function addWaterAction(date: string, amountMl: number) {

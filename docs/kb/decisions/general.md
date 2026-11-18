@@ -18,7 +18,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Status:** active. The end-to-end tool was chosen later in D-005. Screenshot tests were not requested.
 
 ## D-003: Keep `azure-preflight.sh` and the unused schema columns (2026-11-18)
-- **Why:** `scripts/azure-preflight.sh` is a manual tool for the Azure course demos (D-001), like `backup-now.sh` and `import-personal.cjs`. The columns `daily_metrics.notes`, `workout_split_days.order_index` and `workout_splits.is_active` may hold rows in the live database, and migrations are additive only; dropping them needs a migration the owner runs. Both chosen by the owner on 2026-11-18.
+- **Why:** `scripts/azure-preflight.sh` is a manual tool for the Azure course demos (D-001), like `backup-now.sh` and `import-personal.cjs` (D-008). The columns `daily_metrics.notes`, `workout_split_days.order_index` and `workout_splits.is_active` may hold rows in the live database, and migrations are additive only; dropping them needs a migration the owner runs. Both chosen by the owner on 2026-11-18.
 - **Rejected:** Deleting the script (the demos need it); dropping the columns now (risk to live data for no gain).
 - **Status:** active. A column is removed only in its own change, after a search proves nothing reads it.
 
@@ -36,3 +36,18 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Why:** `tests/setup.ts` repeated the local Docker passwords from `.env.example`, and its CI branch repeated the CI Postgres password from `ci.yml`. Now `tests/setup.ts` parses `.env.example` (`util.parseEnv`) and builds the superuser migrate URL from it; in CI it requires the job's env and has no defaults. `azure-migrate.sh` no longer reads a `postgres_server` override that nothing set: the host is the bicep name `lifetracker<env>pg`, and `db-init.cjs` requires `DB_HOST` instead of defaulting to the stage server, so a run cannot reach another environment's server. `infra-contract.test.ts` pins both. Asked by the owner on 2026-11-18.
 - **Rejected:** Reading `.env` in the tests (it may hold live URLs, so tests could reach a real database); a second copy as defaults in `docker-compose.yml` (another duplicate); keeping the CI fallbacks (a stale copy of `ci.yml`).
 - **Status:** active. Not changed: `DB_APP_PASSWORD` in `db-init.cjs` is also unset by every caller; it was outside the question asked.
+
+## D-007: Weight is a server action, not a REST API (2026-11-18)
+- **Why:** Golden rule 1: weight was the only JSON API (its commit predates the server-action convention) and nothing recorded a reason to keep it. Chosen by the owner on 2026-11-18. The weight card calls `saveWeightAction`, `deleteWeightAction` and `restoreWeightAction` in `src/app/actions/food.ts`; data access and schemas moved into `src/lib/food.ts` and `src/lib/validations/food.ts`. Saving sets the day's weight on the server (create, or change the row the day already has, and report the replaced row), which replaces the client's 404/409 retry sequence. Undo of an edit saves the old value again; Undo of a delete restores under the old id. Next checks the Origin of every server action call, so `isSameOrigin`, the generic API error body and the request logger (used only by weight) were deleted.
+- **Rejected:** Keeping the routes for a possible future client (no second client exists); separate create and update actions (the stale-screen cases need a lookup first).
+- **Status:** active. Saves take the per-user advisory lock (`lockUser`, scope `weight`), so two saves of the same new day at once become a create and an edit instead of a unique violation.
+
+## D-008: Keep `backup-now.sh` and `import-personal.cjs` as manual owner tools (2026-11-18)
+- **Why:** Neither script has an npm script, a CI step or a test, but both are deliberate: `scripts/backup-now.sh` takes one plaintext `pg_dump` of the live database into the gitignored `.local/backups/` before a data-changing step (the weekly encrypted workflow is separate), and `scripts/import-personal.cjs` loads the owner's wishlist and tasks from the gitignored `.local/personal-data.json`. Both carry a header comment with their usage, and the importer was updated for schema changes as late as 2026-11-15. The `bash -n scripts/*.sh` CI step still syntax-checks `backup-now.sh`, and `backup-now.sh` is one of the four places that pin the Postgres version. Chosen by the owner on 2026-11-18, one answer per script.
+- **Rejected:** Deleting `backup-now.sh` (the Postgres version cross-references in `ci.yml`, `backup.yml` and `docker-compose.yml` would then need editing, and the manual copy before data changes would be lost); deleting `import-personal.cjs` (the owner wants to keep it).
+- **Status:** active. The owner runs both from their Mac with the owner URL in a hidden prompt; no agent runs them. `import-personal.cjs` must follow schema changes to the tables it writes.
+
+## D-009: One name for form error state: `errorMsg` (2026-11-18)
+- **Why:** Golden rule 1: client forms used `error` (6 files), `formError` (2) and `titleError` (1) next to `errorMsg` (Wishlist and Settings). The Wishlist page is the reference, so its name wins over the majority. Every client form now declares `[errorMsg, setErrorMsg]`.
+- **Rejected:** `error` (the most used, but it also names the `FormModal` prop and the `error` field of action results, so it reads ambiguously in a handler).
+- **Status:** active. The `error` prop of `FormModal` is unchanged.

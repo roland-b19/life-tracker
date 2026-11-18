@@ -1,5 +1,5 @@
 // Scheduled job (every minute): drains the queue, sends each reminder as a web push, then deletes the message.
-import webpush from "web-push";
+import * as webpush from "web-push";
 import { dbPool, need, queueClient, runJob } from "./clients.mjs";
 import { deliverReminder, MAX_ATTEMPTS, parseMessage } from "./lib.mjs";
 

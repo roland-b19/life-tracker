@@ -46,17 +46,17 @@ describe("weightStats", () => {
   });
 });
 
-describe("weightInput", () => {
+describe("logWeightSchema", () => {
   it("accepts two decimals that float math would reject (78.4, 80.1) and refuses three", async () => {
-    const { weightInput } = await import("@/lib/validations/weight");
-    for (const kilograms of [78.4, 80.1, 72.35]) expect(weightInput.safeParse({ date: "2026-11-11", kilograms }).success).toBe(true);
-    expect(weightInput.safeParse({ date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
+    const { logWeightSchema } = await import("@/lib/validations/food");
+    for (const kilograms of [78.4, 80.1, 72.35]) expect(logWeightSchema.safeParse({ date: "2026-11-11", kilograms }).success).toBe(true);
+    expect(logWeightSchema.safeParse({ date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
   });
 
   it("refuses a future day, accepts today", async () => {
-    const { weightInput } = await import("@/lib/validations/weight");
+    const { logWeightSchema } = await import("@/lib/validations/food");
     const { addDays, toISODate } = await import("@/lib/format-date");
-    expect(weightInput.safeParse({ date: toISODate(), kilograms: 80 }).success).toBe(true);
-    expect(weightInput.safeParse({ date: addDays(toISODate(), 1), kilograms: 80 }).success).toBe(false);
+    expect(logWeightSchema.safeParse({ date: toISODate(), kilograms: 80 }).success).toBe(true);
+    expect(logWeightSchema.safeParse({ date: addDays(toISODate(), 1), kilograms: 80 }).success).toBe(false);
   });
 });

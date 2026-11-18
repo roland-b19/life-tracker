@@ -16,14 +16,14 @@ vi.mock("@/server/auth", () => ({
 }));
 
 import { db } from "@/server/db";
-import { users } from "@/db/schema";
-import { GET, POST } from "@/../app/api/weight/route";
-import { DELETE, PATCH } from "@/../app/api/weight/[id]/route";
+import { eq } from "drizzle-orm";
+import { users, weightEntries } from "@/db/schema";
+import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/app/actions/food";
+import { listWeightEntries } from "@/lib/food";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { securityHeaders } from "@/../next.config";
 
-const appOrigin = "http://localhost:3000";
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
 async function seedUser(subject: string) {
@@ -34,16 +34,6 @@ async function seedUser(subject: string) {
   return user.id;
 }
 
-function request(method: string, url: string, body?: unknown) {
-  return new Request(url, {
-    method,
-    headers: body
-      ? { "Content-Type": "application/json", Origin: appOrigin, Host: new URL(appOrigin).host }
-      : { Origin: appOrigin, Host: new URL(appOrigin).host },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-}
-
 describe("weight authorization", () => {
   it("keeps every API route in the authorization test table", () => {
     const routeFiles = readdirSync(path.resolve("app/api"), { recursive: true })
@@ -52,8 +42,6 @@ describe("weight authorization", () => {
       .sort();
     expect(routeFiles).toEqual([
       "auth/[...nextauth]/route.ts",
-      "weight/[id]/route.ts",
-      "weight/route.ts",
     ]);
   });
 
@@ -84,91 +72,80 @@ describe("weight authorization", () => {
     await admin.end();
   });
 
-  it("allows the owner and rejects anonymous requests", async () => {
-    const ownerResponse = await POST(
-      request("POST", `${appOrigin}/api/weight`, { date: "2026-01-01", kilograms: 80 }),
-    );
-    expect(ownerResponse.status).toBe(201);
+  it("allows the owner and rejects anonymous callers", async () => {
+    const ownerId = authState.id;
+    const saved = await saveWeightAction({ date: "2026-01-01", kilograms: 80 });
+    expect(saved).toMatchObject({ success: true, previous: null, entry: { date: "2026-01-01", kilograms: "80.00" } });
 
     authState.id = "";
-    const anonymousResponse = await GET(request("GET", `${appOrigin}/api/weight`));
-    expect(anonymousResponse.status).toBe(401);
+    await expect(saveWeightAction({ date: "2026-01-02", kilograms: 80 })).rejects.toBeInstanceOf(authState.UnauthorizedError);
+    await expect(deleteWeightAction(randomUUID())).rejects.toBeInstanceOf(authState.UnauthorizedError);
+    await expect(restoreWeightAction({ id: randomUUID(), date: "2026-01-02", kilograms: 80 })).rejects.toBeInstanceOf(
+      authState.UnauthorizedError,
+    );
+    expect(await listWeightEntries(ownerId)).toHaveLength(1); // nothing was written
   });
 
-  it("restores a deleted weigh-in under its old id, and never over another user's row", async () => {
+  it("restores a deleted weigh-in as the same row, and never over another user's row", async () => {
     const ownerId = authState.id;
-    const created = await POST(request("POST", `${appOrigin}/api/weight`, { date: "2026-01-03", kilograms: 82 }));
-    const { entry } = (await created.json()) as { entry: { id: string } };
-    await DELETE(request("DELETE", `${appOrigin}/api/weight/${entry.id}`, {}), { params: Promise.resolve({ id: entry.id }) });
-    const restored = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 82 }));
-    expect(restored.status).toBe(201);
-    expect(((await restored.json()) as { entry: { id: string } }).entry.id).toBe(entry.id);
-    const again = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-04", kilograms: 82 }));
-    expect(again.status).toBe(409); // the id is taken
+    const created = await saveWeightAction({ date: "2026-01-03", kilograms: 82.4 });
+    if (!created.success) throw new Error("save failed");
+    const original = await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id));
+    expect((await deleteWeightAction(created.entry.id)).success).toBe(true);
+    expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([]);
+
+    const restored = await restoreWeightAction({ ...created.entry, kilograms: Number(created.entry.kilograms) });
+    expect(restored.success).toBe(true);
+    expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([
+      { ...original[0], createdAt: expect.any(Date) },
+    ]);
+    expect((await restoreWeightAction({ id: created.entry.id, date: "2026-01-04", kilograms: 82 })).success).toBe(false); // the id is taken
+    expect((await restoreWeightAction({ id: randomUUID(), date: "2026-01-03", kilograms: 82 })).success).toBe(false); // the day is taken
+
     authState.id = await seedUser(`c-${randomUUID()}`);
-    const claimed = await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 90 }));
-    expect(claimed.status).toBe(409); // another user's id cannot be claimed
-    authState.id = "";
-    expect((await POST(request("POST", `${appOrigin}/api/weight`, { id: entry.id, date: "2026-01-03", kilograms: 82 }))).status).toBe(401);
+    expect((await restoreWeightAction({ id: created.entry.id, date: "2026-01-03", kilograms: 90 })).success).toBe(false); // another user's id cannot be claimed
     authState.id = ownerId;
+    expect(await listWeightEntries(ownerId)).toEqual([created.entry]);
   });
 
-  it("does not expose another user's rows or allow their deletion", async () => {
+  it("does not let another user delete or change a row", async () => {
     const ownerId = authState.id;
-    const ownerResponse = await POST(
-      request("POST", `${appOrigin}/api/weight`, { date: "2026-01-02", kilograms: 81 }),
-    );
-    const { entry } = (await ownerResponse.json()) as { entry: { id: string } };
+    const created = await saveWeightAction({ date: "2026-01-02", kilograms: 81 });
+    if (!created.success) throw new Error("save failed");
     const otherId = await seedUser(`b-${randomUUID()}`);
     authState.id = otherId;
 
-    const listResponse = await GET(request("GET", `${appOrigin}/api/weight`));
-    expect(listResponse.status).toBe(200);
-    expect(await listResponse.json()).toEqual({ entries: [] });
-
-    const deleteResponse = await DELETE(request("DELETE", `${appOrigin}/api/weight/${entry.id}`, {}), {
-      params: Promise.resolve({ id: entry.id }),
-    });
-    expect(deleteResponse.status).toBe(404);
-
-    const patchResponse = await PATCH(
-      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 99 }),
-      { params: Promise.resolve({ id: entry.id }) },
-    );
-    expect(patchResponse.status).toBe(404);
+    expect(await listWeightEntries(otherId)).toEqual([]);
+    expect((await deleteWeightAction(created.entry.id)).success).toBe(false);
+    // The same day for another user is a different row: the owner's weight stays 81.
+    const other = await saveWeightAction({ date: "2026-01-02", kilograms: 99 });
+    expect(other).toMatchObject({ success: true, previous: null });
 
     authState.id = ownerId;
-    const ownerPatch = await PATCH(
-      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 79.5 }),
-      { params: Promise.resolve({ id: entry.id }) },
-    );
-    expect(ownerPatch.status).toBe(200);
-    authState.id = "";
-    const anonPatch = await PATCH(
-      request("PATCH", `${appOrigin}/api/weight/${entry.id}`, { date: "2026-01-02", kilograms: 70 }),
-      { params: Promise.resolve({ id: entry.id }) },
-    );
-    expect(anonPatch.status).toBe(401);
-    authState.id = ownerId;
+    expect(await listWeightEntries(ownerId)).toEqual([created.entry]);
+    expect((await deleteWeightAction(created.entry.id)).success).toBe(true);
   });
 
-  it("rejects mass assignment, invalid values and duplicate dates", async () => {
-    const body = { date: "2026-01-03", kilograms: 82, user_id: randomUUID() };
-    expect((await POST(request("POST", `${appOrigin}/api/weight`, body))).status).toBe(400);
-    expect(
-      (await POST(request("POST", `${appOrigin}/api/weight`, { date: "2026-01-03", kilograms: 82 }))).status,
-    ).toBe(201);
-    expect(
-      (await POST(request("POST", `${appOrigin}/api/weight`, { date: "2026-01-03", kilograms: 82 }))).status,
-    ).toBe(409);
+  it("sets the day's weight instead of adding a second row, and reports what it replaced", async () => {
+    const first = await saveWeightAction({ date: "2026-01-03", kilograms: 82 });
+    const second = await saveWeightAction({ date: "2026-01-03", kilograms: 79.5 });
+    if (!first.success || !second.success) throw new Error("save failed");
+    expect(second.entry.id).toBe(first.entry.id);
+    expect(second.previous).toEqual(first.entry);
+    expect(await listWeightEntries(authState.id)).toEqual([{ id: first.entry.id, date: "2026-01-03", kilograms: "79.50" }]);
   });
 
-  it("answers an impossible date or a malformed id with 400/404, never 500", async () => {
-    for (const date of ["2026-13-45", "2026-02-30"]) {
-      expect((await POST(request("POST", `${appOrigin}/api/weight`, { date, kilograms: 82 }))).status).toBe(400);
+  it("rejects mass assignment, invalid values and a malformed id", async () => {
+    const invalid = { success: false, error: "Please enter a valid weight." };
+    expect(await saveWeightAction({ date: "2026-01-03", kilograms: 82, user_id: randomUUID() })).toEqual(invalid);
+    for (const date of ["2026-13-45", "2026-02-30", "2999-01-01"]) {
+      expect(await saveWeightAction({ date, kilograms: 82 })).toEqual(invalid);
     }
-    const context = { params: Promise.resolve({ id: "abc" }) };
-    expect((await PATCH(request("PATCH", `${appOrigin}/api/weight/abc`, { date: "2026-01-03", kilograms: 82 }), context)).status).toBe(404);
-    expect((await DELETE(request("DELETE", `${appOrigin}/api/weight/abc`, {}), context)).status).toBe(404);
+    for (const kilograms of [19.9, 500.5, 80.123, Number.NaN]) {
+      expect(await saveWeightAction({ date: "2026-01-03", kilograms })).toEqual(invalid);
+    }
+    await expect(deleteWeightAction("abc")).rejects.toThrow();
+    await expect(restoreWeightAction({ id: "abc", date: "2026-01-03", kilograms: 82 })).rejects.toThrow();
+    expect(await listWeightEntries(authState.id)).toEqual([]);
   });
 });
