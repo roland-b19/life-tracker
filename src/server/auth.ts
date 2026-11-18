@@ -1,5 +1,4 @@
 import { getServerSession } from "next-auth";
-import type { Session } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
 
@@ -11,7 +10,7 @@ export class UnauthorizedError extends Error {
 }
 
 async function currentUser() {
-  const user = ((await getServerSession(authOptions)) as Session | null)?.user;
+  const user = (await getServerSession(authOptions))?.user;
   return user?.id ? { id: user.id, name: user.name ?? "User" } : null;
 }
 
