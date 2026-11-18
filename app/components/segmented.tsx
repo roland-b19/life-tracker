@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, type CSSProperties } from "react";
 interface SegmentedProps<T extends string> {
   label: string;
   value: T;
-  /** `short` replaces the label when the control is too narrow for it; the full label stays the accessible name. */
+  /** `short` replaces the label when the control is too narrow for it. Both stay in the markup and CSS hides one, so the accessible name is always the text on screen (WCAG 2.5.3). */
   options: { value: T; label: string; short?: string }[];
   onChange: (value: T) => void;
 }
@@ -42,7 +42,6 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
             (e.currentTarget.parentElement?.children[options.indexOf(next)] as HTMLElement | undefined)?.focus();
           }}
           className={value === o.value ? "active" : ""}
-          aria-label={o.short ? o.label : undefined}
           onClick={() => {
             if (o.value !== value) scrolled.current = window.scrollY;
             onChange(o.value);
