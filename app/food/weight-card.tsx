@@ -43,7 +43,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
   async function handleDelete(entry: WeightEntry) {
     setEntries((list) => list.filter((e) => e.id !== entry.id));
     const gone = await deleteWeightAction(entry.id).catch(() => null);
-    // Not found: another device already deleted it, so the screen is right as it is.
+    // `success: false` means another device already deleted it, so the screen is right as it is; only a thrown error needs the rollback.
     if (!gone) {
       upsert(entry);
       showToast({ message: "Failed to remove weight", type: "warning" });
@@ -85,14 +85,12 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
         showToast({
           message: `Added ${showDecimal(String(kg))} kg`,
           type: "success",
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             setEntries((list) => list.filter((e) => e.id !== entry.id));
             const gone = await deleteWeightAction(entry.id).catch(() => null);
-            if (!gone?.success) {
-              upsert(entry);
-              showToast({ message: "Failed to undo", type: "warning" });
-            }
-          },
+            if (!gone?.success) upsert(entry);
+            return gone;
+          }),
         });
         return;
       }
@@ -100,15 +98,16 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
         message: `Weight set to ${showDecimal(String(kg))} kg`,
         type: "success",
         // Writes the old value back; if that fails the edit stays, so the screen matches the database.
-        onUndo: async () => {
-          upsert(previous);
-          const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
-          if (back?.success) upsert(back.entry);
-          else {
-            upsert(entry);
-            showToast({ message: "Failed to undo the edit", type: "warning" });
-          }
-        },
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            upsert(previous);
+            const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
+            if (!back?.success) upsert(entry);
+            return back;
+          },
+          "Failed to undo the edit",
+        ),
       });
     } catch {
       setError("Failed to save weight");

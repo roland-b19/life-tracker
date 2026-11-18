@@ -637,5 +637,15 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await listWeightEntries(userA)).map((w) => w.date)).toEqual([today, addDays(today, -364), addDays(today, -400), addDays(today, -500)]);
       expect((await listWeightEntries(userA, addDays(today, -364))).map((w) => w.date)).toEqual([today, addDays(today, -364)]);
     });
+
+    it("turns two simultaneous saves of a new day into one create and one edit", async () => {
+      const today = toISODate();
+      const results = await Promise.all([
+        saveWeightEntry(userA, { date: today, kilograms: 80 }),
+        saveWeightEntry(userA, { date: today, kilograms: 81 }),
+      ]);
+      expect(results.filter((r) => r.previous === null)).toHaveLength(1);
+      expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userA))).toHaveLength(1);
+    });
   });
 });

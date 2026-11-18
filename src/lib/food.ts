@@ -27,6 +27,7 @@ import {
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
+import { lockUser } from "./gym-seed";
 
 
 export async function getNutritionTargets(userId: string) {
@@ -546,7 +547,7 @@ export async function listWeightEntries(userId: string, since?: string) {
   return db
     .select(weightColumns)
     .from(weightEntries)
-    .where(since ? and(eq(weightEntries.userId, userId), gte(weightEntries.date, since)) : eq(weightEntries.userId, userId))
+    .where(and(eq(weightEntries.userId, userId), since ? gte(weightEntries.date, since) : undefined))
     .orderBy(desc(weightEntries.date));
 }
 
@@ -554,11 +555,11 @@ export async function listWeightEntries(userId: string, since?: string) {
 export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
   return db.transaction(async (tx) => {
+    await lockUser(tx, "weight", userId); // two saves of a new day at once must not both insert
     const [previous] = await tx
       .select(weightColumns)
       .from(weightEntries)
-      .where(and(eq(weightEntries.userId, userId), eq(weightEntries.date, input.date)))
-      .for("update");
+      .where(and(eq(weightEntries.userId, userId), eq(weightEntries.date, input.date)));
     if (!previous) {
       const [entry] = await tx.insert(weightEntries).values({ userId, date: input.date, kilograms }).returning(weightColumns);
       return { entry, previous: null };

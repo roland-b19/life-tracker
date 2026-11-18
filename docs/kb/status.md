@@ -28,7 +28,7 @@ None.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- **Hand-rolled Undo blocks** (about 8 files) → `undoWith()` from `app/components/toast.tsx`, used in 3 files today.
+- **Hand-rolled Undo blocks** (about 8 files) → `undoWith()` from `app/components/toast.tsx`, used in 4 files today.
 - **uuid validation:** `z.string().uuid()` (about 20 places) → `uuid` from `src/lib/validations/common.ts`.
 - **Action validation and errors:** four styles (throwing parse, `check()` in gym, `safeParse`, hand-written in `food.ts`) and four error contracts (thrown Error, `{success,error}`, `GymRefusal`, null) → one of each, to be chosen.
 - **Form error state names:** `error`, `errorMsg`, `formError`, `titleError` → one name.
