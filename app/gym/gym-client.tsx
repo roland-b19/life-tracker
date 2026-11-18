@@ -1,5 +1,6 @@
 "use client";
 
+import { toISODate, weekday } from "@/lib/format-date";
 import type { MuscleGroupKey } from "@/lib/gym-muscles";
 import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
@@ -33,7 +34,8 @@ interface GymClientProps {
 export function GymClient({ userName, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
   const days = split?.days ?? [];
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
-    const todayMatch = days.find((d) => d.dayOfWeek === new Date().getDay());
+    const today = weekday(toISODate());
+    const todayMatch = days.find((d) => d.dayOfWeek === today);
     return todayMatch ? todayMatch.id : days[0]?.id ?? "";
   });
   const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
