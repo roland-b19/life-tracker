@@ -5,9 +5,9 @@
   "description": "Azure-only reminder pipeline (enqueue job + queue consumer). Not part of the Next.js app or the Vercel deploy.",
   "engines": { "node": ">=24" },
   "dependencies": {
-    "@azure/identity": "4.14.1",
-    "@azure/storage-queue": "12.32.0",
+    "@azure/identity": "^4.14.1",
+    "@azure/storage-queue": "^12.32.0",
     "pg": "^8.23.1",
-    "web-push": "4.0.0"
+    "web-push": "^4.0.0"
   }
 }
