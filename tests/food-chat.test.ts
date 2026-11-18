@@ -1,40 +1,18 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
-
 const runClaude = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/claude-cli", () => ({ runClaude }));
 
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
+import { authState, seedUser } from "./auth";
 import { succeeded } from "./succeeded";
-
-async function seedUser(subject: string) {
-  const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
-  return user.id;
-}
 
 /** One successful Claude CLI answer whose structured output is `output`. */
 function mockClaude(output: unknown) {
