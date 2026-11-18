@@ -1,20 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {},
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
-import { db } from "@/server/db";
-import { users } from "@/db/schema";
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 import {
   addWishlistItem,
   deleteWishlistItem,
@@ -25,14 +13,6 @@ import {
 import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/rules";
 import { succeeded } from "./succeeded";
-
-async function seedUser(subject: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ issuer: "test", subject })
-    .returning({ id: users.id });
-  return user.id;
-}
 
 describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   let userA: string;

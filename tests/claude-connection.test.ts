@@ -1,37 +1,17 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({
-  id: "",
-  UnauthorizedError: class UnauthorizedError extends Error {
-    constructor() {
-      super("Authentication required.");
-      this.name = "UnauthorizedError";
-    }
-  },
-}));
-
-vi.mock("@/server/auth", () => ({
-  UnauthorizedError: authState.UnauthorizedError,
-  requireUser: vi.fn(async () => {
-    if (!authState.id) throw new authState.UnauthorizedError();
-    return authState.id;
-  }),
-}));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState, seedUser } from "./auth";
 
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
-import { claudeConnections, users } from "@/db/schema";
+import { claudeConnections } from "@/db/schema";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
 import { succeeded } from "./succeeded";
 
 const TOKEN = "sk-ant-oat01-test-token-abcdefghijklmnopqrstuvwxyz";
-
-async function seedUser() {
-  const [user] = await db.insert(users).values({ issuer: "test", subject: `claude-${randomUUID()}` }).returning({ id: users.id });
-  return user.id;
-}
 
 describe("Claude connection", () => {
   beforeAll(() => {
