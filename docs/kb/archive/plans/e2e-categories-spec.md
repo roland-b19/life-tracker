@@ -22,7 +22,7 @@ The categories card is shared by three pages the owner uses (Wishlist, the Tasks
 - [x] `npm run check` passes with a private database, and CI on the pull request is green; the pull request is not merged — checked by the command output and the PR checks.
 
 ## Decisions
-- D-014: Categories e2e spec: one shared flow run on Wishlist, Tasks Daily and Health shopping
+- D-015: Categories e2e spec: one shared flow run on Wishlist, Tasks Daily and Health shopping
 - D-012: Tasks e2e spec (this is the spec it left out), D-005: Playwright specs (already active; this plan follows them)
 
 ## Steps
@@ -47,8 +47,8 @@ The categories card is shared by three pages the owner uses (Wishlist, the Tasks
 
 ## Cleanup and docs
 - Nothing becomes unused: no code, dependency or config is added or replaced.
-- `docs/kb/conventions.md`, End-to-end specs: list `tests/e2e/categories.spec.ts` (categories card on Wishlist, Tasks Daily and Health shopping, D-014) and the new run count; the Targets line's run count. `docs/kb/architecture.md` Tests line: add the spec. `docs/kb/status.md`: Roadmap line "Categories e2e spec (D-014)" with the plan link, then done with the archive link. `docs/kb/decisions/general.md`: D-012's Out list names categories "its own spec later"; D-014 is that spec, no edit of D-012 needed. `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md`.
-- Other sessions add specs for Gym, Health and Settings at the same time and also edit these KB pages and take decision numbers: expect merge conflicts in the KB, resolve them by merging `origin/main`, and renumber D-014 if another session took it first (update every mention in this plan and the spec comments).
+- `docs/kb/conventions.md`, End-to-end specs: list `tests/e2e/categories.spec.ts` (categories card on Wishlist, Tasks Daily and Health shopping, D-015) and the new run count; the Targets line's run count. `docs/kb/architecture.md` Tests line: add the spec. `docs/kb/status.md`: Roadmap line "Categories e2e spec (D-015)" with the plan link, then done with the archive link. `docs/kb/decisions/general.md`: D-012's Out list names categories "its own spec later"; D-015 is that spec, no edit of D-012 needed. `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md`.
+- Other sessions add specs for Gym, Health and Settings at the same time and also edit these KB pages and take decision numbers: expect merge conflicts in the KB, resolve them by merging `origin/main`, and renumber D-015 if another session took it first (update every mention in this plan and the spec comments).
 - Risk tier: only `tests/**` and `docs/**` change, so Low.
 
 ## Approval
