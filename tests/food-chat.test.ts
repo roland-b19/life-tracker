@@ -112,6 +112,25 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect(meal?.isEstimated).toBe(true);
   });
 
+  it("sends earlier turns as a labelled transcript", async () => {
+    process.env.AUTH_DEV = "true";
+    mockClaude({ reply: "Gata.", meals: [] });
+
+    await sendFoodChatMessage(
+      userId,
+      "și o banană",
+      [
+        { role: "user", text: "am mâncat un ou" },
+        { role: "assistant", text: "Am adăugat oul." },
+      ],
+      ctx,
+    );
+
+    expect(runClaude.mock.calls[0][0].input).toBe(
+      "Conversation so far:\n\nUser: am mâncat un ou\n\nAssistant: Am adăugat oul.\n\nNew message:\nși o banană",
+    );
+  });
+
   it("logs nothing when the answer does not match the schema", async () => {
     process.env.AUTH_DEV = "true";
     mockClaude("Sure! I logged your pizza.");
@@ -212,6 +231,24 @@ describe("Food assistant: context prompt and structured answer", () => {
         expect(await sendFoodChatMessageAction({ ...input, date })).toEqual({ success: false, error: "Only today and yesterday can be changed." });
       }
       expect(runClaude).not.toHaveBeenCalled();
+    });
+
+    it("accepts the roles user and assistant in the history, nothing else", async () => {
+      authState.id = userId;
+      process.env.AUTH_DEV = "true";
+      mockClaude({ reply: "Gata.", meals: [] });
+      const turns = [
+        { role: "user", text: "salut" },
+        { role: "assistant", text: "Bună!" },
+      ] as const;
+
+      succeeded(await sendFoodChatMessageAction({ ...input, history: [...turns] }));
+
+      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toMatchObject({
+        success: false,
+        error: expect.any(String),
+      });
+      expect(runClaude).toHaveBeenCalledTimes(1);
     });
 
     it("rejects invalid input before calling the model", async () => {

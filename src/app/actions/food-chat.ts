@@ -12,7 +12,7 @@ import { getDailyFoodSummary } from "@/lib/food";
 
 const chatInputSchema = z.object({
   message: z.string().trim().min(1).max(1000),
-  history: z.array(z.object({ role: z.enum(["user", "model"]), text: z.string().max(4000) })).max(20),
+  history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(4000) })).max(20),
   date: isoDate,
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
 });
