@@ -7,19 +7,14 @@ async function openFood(page: Page) {
   await expect(page.getByRole("region", { name: "Weight", exact: true })).toBeVisible();
 }
 
-// Known finding, not fixed here (test-only change): at phone width the Shopping tab shows "Shop" and the Assistant tab
-// (only when NEXT_PUBLIC_CLAUDE_ENABLED is set, as in a local .env) shows "AI", while their names are the long words
-// (axe: label-content-name-mismatch). Each is excluded by its own selector, so the rest of the page is still scanned.
-const shortLabelTabs = ['[role="tab"][aria-label="Shopping"]', '[role="tab"][aria-label="Assistant"]'];
-
 // Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
 // axe scan depends on the width (see playwright.config.ts).
 test("the home page with the weight form open has no serious violations", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openFood(page);
-  await expectNoSeriousViolations(page, shortLabelTabs);
+  await expectNoSeriousViolations(page);
   await page.getByRole("button", { name: "Edit today's weight" }).click();
   await expect(page.getByRole("dialog", { name: "Edit weight" })).toBeVisible();
-  await expectNoSeriousViolations(page, shortLabelTabs);
+  await expectNoSeriousViolations(page);
 });
 
 test("a signed-in user adds, edits and deletes today's weight, with Undo for the edit and the delete", async ({ signedInPage: page }) => {

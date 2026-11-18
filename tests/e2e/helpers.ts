@@ -3,9 +3,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Page } from "@playwright/test";
 import { Pool } from "pg";
 
-// Serious and critical findings fail the spec. `exclude` takes selectors of known findings, each named in a comment at the call.
-export async function expectNoSeriousViolations(page: Page, exclude: string[] = []) {
-  const { violations } = await exclude.reduce((axe, selector) => axe.exclude(selector), new AxeBuilder({ page })).analyze();
+// Serious and critical findings fail the spec.
+export async function expectNoSeriousViolations(page: Page) {
+  const { violations } = await new AxeBuilder({ page }).analyze();
   const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
 }
