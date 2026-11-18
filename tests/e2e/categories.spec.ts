@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { andSettle, expectNoSeriousViolations, test } from "./helpers";
 
-// The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-015. One driver runs
+// The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
 interface Surface {
   /** Goes to the page (also the reload) and waits until it is ready. */
