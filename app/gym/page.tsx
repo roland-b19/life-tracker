@@ -1,6 +1,4 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/auth";
+import { requirePageUser } from "@/server/auth";
 import {
   getDeloadStatus,
   getOpenWorkoutSession,
@@ -13,27 +11,23 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { progressSets, withProgress } from "@/lib/gym-progress";
 
 export default async function GymPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/signin");
-  }
+  const user = await requirePageUser();
 
-  const userId = session.user.id;
   // Same year of sets the Exercise progress card draws from, so a workout's figures match its Exercise progress chart.
   const since = addDays(toISODate(), -370);
   const [split, exercises, deload, open, workouts] = await Promise.all([
-    getUserSplitWithDays(userId),
-    getExercises(userId),
-    getDeloadStatus(userId),
-    getOpenWorkoutSession(userId),
-    getWorkoutHistory(userId, since),
+    getUserSplitWithDays(user.id),
+    getExercises(user.id),
+    getDeloadStatus(user.id),
+    getOpenWorkoutSession(user.id),
+    getWorkoutHistory(user.id, since),
   ]);
   const names = new Map(exercises.map((e) => [e.id, e.name]));
   const history = withProgress(workouts, progressSets(workouts, open && { ...open.session, splitDayName: open.splitDayName, sets: open.sets }, names));
 
   return (
     <GymClient
-      userName={session.user.name ?? "User"}
+      userName={user.name}
       split={split}
       deload={deload}
       history={history}

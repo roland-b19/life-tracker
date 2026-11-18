@@ -1,22 +1,16 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/auth";
 import { getCategories } from "@/lib/categories";
 import { getWishlist } from "@/lib/wishlist";
+import { requirePageUser } from "@/server/auth";
 import { WishlistClient } from "./wishlist-client";
 
 export default async function WishlistPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/signin");
-  }
+  const user = await requirePageUser();
 
-  const userId = session.user.id;
-  const [items, { wishlist }] = await Promise.all([getWishlist(userId), getCategories(userId, ["wishlist"])]);
+  const [items, { wishlist }] = await Promise.all([getWishlist(user.id), getCategories(user.id, ["wishlist"])]);
 
   return (
     <WishlistClient
-      userName={session.user.name ?? "User"}
+      userName={user.name}
       initialItems={items}
       initialCategories={wishlist}
     />

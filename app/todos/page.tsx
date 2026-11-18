@@ -1,29 +1,23 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/auth";
+import { requirePageUser } from "@/server/auth";
 import { getCategories } from "@/lib/categories";
 import { getDailyTodos } from "@/lib/todos";
 import { toISODate } from "@/lib/format-date";
 import { TodosClient } from "./todos-client";
 
 export default async function TodosPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/signin");
-  }
+  const user = await requirePageUser();
 
-  const userId = session.user.id;
   const today = toISODate();
 
   const [categories, personalData, businessData] = await Promise.all([
-    getCategories(userId, ["personal", "business"]),
-    getDailyTodos(userId, "personal", today),
-    getDailyTodos(userId, "business", today),
+    getCategories(user.id, ["personal", "business"]),
+    getDailyTodos(user.id, "personal", today),
+    getDailyTodos(user.id, "business", today),
   ]);
 
   return (
     <TodosClient
-      userName={session.user.name ?? "User"}
+      userName={user.name}
       todayDate={today}
       initialPersonalTodos={personalData.todos}
       initialBusinessTodos={businessData.todos}
