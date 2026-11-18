@@ -24,6 +24,7 @@ import { db } from "@/server/db";
 import { claudeConnections, users } from "@/db/schema";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
+import { succeeded } from "./succeeded";
 
 const TOKEN = "sk-ant-oat01-test-token-abcdefghijklmnopqrstuvwxyz";
 
@@ -59,7 +60,7 @@ describe("Claude connection", () => {
     const stranger = await seedUser();
     authState.id = owner;
 
-    const res = await connectClaudeAction({ token: `  ${TOKEN}  ` });
+    const res = succeeded(await connectClaudeAction({ token: `  ${TOKEN}  ` }));
 
     expect(res.connectedAt).toBeTruthy();
     const [row] = await db.select().from(claudeConnections).where(eq(claudeConnections.userId, owner));
@@ -97,12 +98,12 @@ describe("Claude connection", () => {
     const OLD = `${TOKEN}-old`;
     authState.id = owner;
     await connectClaudeAction({ token: OLD });
-    const replaced = await connectClaudeAction({ token: TOKEN });
+    const replaced = succeeded(await connectClaudeAction({ token: TOKEN }));
     expect(await getClaudeToken(owner)).toBe(TOKEN);
     await restoreClaudeConnectionAction(replaced.previous!);
     expect(await getClaudeToken(owner)).toBe(OLD);
 
-    const gone = await disconnectClaudeAction();
+    const gone = succeeded(await disconnectClaudeAction());
     expect(await getClaudeConnection(owner)).toBeNull();
     await restoreClaudeConnectionAction(gone.previous!);
     expect(await getClaudeToken(owner)).toBe(OLD);

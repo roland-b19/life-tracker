@@ -15,9 +15,8 @@ import {
   saveDeloadWeeksSchema,
   saveSplitDaySchema,
 } from "@/lib/validations/gym";
-import type { ZodType } from "zod";
+import { Refusal, respond } from "@/lib/validations/result";
 import {
-  GymRefusal,
   cancelWorkoutSession,
   createCustomExercise,
   createWorkoutSession,
@@ -41,22 +40,6 @@ function safeRevalidate(path: string) {
   }
 }
 
-/** What the user typed is checked here and answered with the form's own message; a bad request from anything else still throws. */
-function check<T>(schema: ZodType<T>, raw: unknown): { ok: true; value: T } | { ok: false; error: string } {
-  const r = schema.safeParse(raw);
-  return r.success ? { ok: true, value: r.data } : { ok: false, error: r.error.issues[0]?.message ?? "Invalid input." };
-}
-
-/** A rule of the page (a workout is already open, a name is taken) is an answer for the form, not a crash. */
-async function refusable<T extends object, R extends object = object>(run: () => Promise<T>, onRefusal?: R): Promise<T | ({ success: false; error: string } & R)> {
-  try {
-    return await run();
-  } catch (e) {
-    if (e instanceof GymRefusal) return { success: false, error: e.message, ...onRefusal } as { success: false; error: string } & R;
-    throw e;
-  }
-}
-
 /** A workout is made today; a day either side covers the user's timezone and a page left open past midnight. */
 function nearToday(date: string, daysBack = 1) {
   const today = toISODate();
@@ -65,128 +48,135 @@ function nearToday(date: string, daysBack = 1) {
 
 export async function startSessionAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = createSessionSchema.parse(rawInput);
-  if (!nearToday(parsed.date)) return { success: false as const, error: "A workout can only be started for today." };
-  return refusable(async () => {
+  return respond(async () => {
+    const parsed = createSessionSchema.parse(rawInput);
+    if (!nearToday(parsed.date)) throw new Refusal("A workout can only be started for today.");
     const session = await createWorkoutSession(userId, parsed);
     safeRevalidate("/gym");
-    return { success: true as const, session };
+    return { session };
   });
 }
 
 export async function finishSessionAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = check(finishSessionSchema, rawInput);
-  if (!parsed.ok) return { success: false as const, error: parsed.error };
-  const session = await finishWorkoutSession(userId, parsed.value);
-  if (!session) return { success: false as const, error: "Workout not found." };
-  safeRevalidate("/gym");
-  return { success: true as const, session };
+  return respond(async () => {
+    const session = await finishWorkoutSession(userId, finishSessionSchema.parse(rawInput));
+    if (!session) throw new Refusal("Workout not found.");
+    safeRevalidate("/gym");
+    return { session };
+  });
 }
 
 export async function cancelSessionAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { sessionId } = cancelSessionSchema.parse(rawInput);
-  const deleted = await cancelWorkoutSession(userId, sessionId);
-  safeRevalidate("/gym");
-  return { success: Boolean(deleted) };
+  return respond(async () => {
+    const { sessionId } = cancelSessionSchema.parse(rawInput);
+    const deleted = await cancelWorkoutSession(userId, sessionId);
+    if (!deleted) throw new Refusal("Workout not found.");
+    safeRevalidate("/gym");
+    return {};
+  });
 }
 
 /** Undo of Finish: the workout is open again. */
 export async function reopenSessionAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { sessionId } = cancelSessionSchema.parse(rawInput);
-  return refusable(async () => {
-    const reopened = await reopenWorkoutSession(userId, sessionId);
+  return respond(async () => {
+    const { sessionId } = cancelSessionSchema.parse(rawInput);
+    if (!(await reopenWorkoutSession(userId, sessionId))) throw new Refusal("Workout not found.");
     safeRevalidate("/gym");
-    return { success: Boolean(reopened) };
+    return {};
   });
 }
 
 /** Undo of Cancel: the workout and its sets come back (open, with new ids). */
 export async function restoreSessionAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = restoreSessionSchema.parse(rawInput);
-  // A workout is cancelled the day it was made, so Undo never brings one back from long ago.
-  return refusable(async () => {
+  return respond(async () => {
+    const parsed = restoreSessionSchema.parse(rawInput);
+    // A workout is cancelled the day it was made, so Undo never brings one back from long ago.
     const details = nearToday(parsed.date, 7) ? await restoreWorkoutSession(userId, parsed) : null;
-    if (details) safeRevalidate("/gym");
-    return { success: Boolean(details), details };
-  }, { details: null });
+    if (!details) throw new Refusal("This workout could not be restored.");
+    safeRevalidate("/gym");
+    return { details };
+  });
 }
 
 // No revalidate for set edits: the client keeps its own state, and refetching the page on every set is the costliest call.
 export async function logSetAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = check(logSetSchema, rawInput);
-  if (!parsed.ok) return { success: false as const, error: parsed.error, set: null };
-  const set = await logWorkoutSet(userId, parsed.value);
-  return { success: Boolean(set), set };
+  return respond(async () => {
+    const set = await logWorkoutSet(userId, logSetSchema.parse(rawInput));
+    if (!set) throw new Refusal("This set could not be saved.");
+    return { set };
+  });
 }
 
 export async function deleteSetAction(setId: string) {
   const userId = await requireUser();
-  const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
-  return { success: Boolean(deleted), deleted };
+  return respond(async () => {
+    const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
+    if (!deleted) throw new Refusal("Set not found.");
+    return { deleted };
+  });
 }
 
 export async function saveSplitDayAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = saveSplitDaySchema.parse(rawInput);
-  const saved = await saveSplitDay(userId, parsed);
-  if (saved) safeRevalidate("/gym");
-  return { success: saved };
+  return respond(async () => {
+    if (!(await saveSplitDay(userId, saveSplitDaySchema.parse(rawInput)))) throw new Refusal("This day could not be saved.");
+    safeRevalidate("/gym");
+    return {};
+  });
 }
 
 export async function createCustomExerciseAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = check(createCustomExerciseSchema, rawInput);
-  if (!parsed.ok) return { success: false as const, error: parsed.error };
-  return refusable(async () => {
-    const exercise = await createCustomExercise(userId, parsed.value);
+  return respond(async () => {
+    const exercise = await createCustomExercise(userId, createCustomExerciseSchema.parse(rawInput));
     safeRevalidate("/gym");
-    return { success: true as const, exercise };
+    return { exercise };
   });
 }
 
 /** Edit of a custom exercise, and the Undo of that edit (it sends the old values). */
 export async function updateCustomExerciseAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = check(customExerciseWithIdSchema, rawInput);
-  if (!parsed.ok) return { success: false as const, error: parsed.error };
-  return refusable(async () => {
-    const exercise = await updateCustomExercise(userId, parsed.value);
-    if (!exercise) return { success: false as const, error: "Exercise not found." };
+  return respond(async () => {
+    const exercise = await updateCustomExercise(userId, customExerciseWithIdSchema.parse(rawInput));
+    if (!exercise) throw new Refusal("Exercise not found.");
     safeRevalidate("/gym");
-    return { success: true as const, exercise };
+    return { exercise };
   });
 }
 
 /** Undo of deleting a custom exercise: the same row comes back. */
 export async function restoreCustomExerciseAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = check(customExerciseWithIdSchema, rawInput);
-  if (!parsed.ok) return { success: false as const, error: parsed.error };
-  return refusable(async () => {
-    const exercise = await restoreCustomExercise(userId, parsed.value);
-    if (!exercise) return { success: false as const, error: "Exercise could not be restored." };
+  return respond(async () => {
+    const exercise = await restoreCustomExercise(userId, customExerciseWithIdSchema.parse(rawInput));
+    if (!exercise) throw new Refusal("Exercise could not be restored.");
     safeRevalidate("/gym");
-    return { success: true as const, exercise };
+    return { exercise };
   });
 }
 
-/** Delete of a custom exercise, and the Undo of creating one; false when a routine or a set already uses it. */
+/** Delete of a custom exercise, and the Undo of creating one; refused when a routine or a set already uses it. */
 export async function deleteCustomExerciseAction(exerciseId: string) {
   const userId = await requireUser();
-  const deleted = await deleteCustomExercise(userId, uuid.parse(exerciseId));
-  if (deleted) safeRevalidate("/gym");
-  return { success: deleted };
+  return respond(async () => {
+    if (!(await deleteCustomExercise(userId, uuid.parse(exerciseId)))) throw new Refusal("This exercise is used by a routine or a workout, so it stays.");
+    safeRevalidate("/gym");
+    return {};
+  });
 }
 
 /** Sets the last and next deload week; Undo sends the previous pair through the same action. */
 export async function saveDeloadWeeksAction(rawInput: unknown) {
   const userId = await requireUser();
-  const saved = await saveDeloadWeeks(userId, saveDeloadWeeksSchema.parse(rawInput));
-  safeRevalidate("/gym");
-  return { success: true, ...saved };
+  return respond(async () => {
+    const saved = await saveDeloadWeeks(userId, saveDeloadWeeksSchema.parse(rawInput));
+    safeRevalidate("/gym");
+    return saved;
+  });
 }

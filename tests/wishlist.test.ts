@@ -24,6 +24,7 @@ import {
 } from "@/lib/wishlist";
 import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/app/actions/wishlist";
 import { priorityForPrice } from "@/lib/rules";
+import { succeeded } from "./succeeded";
 
 async function seedUser(subject: string) {
   const [user] = await db
@@ -151,7 +152,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     const item = await addWishlistItem(userA, { name: "Monitor", estimatedPrice: 300 });
     const edit = { name: "Monitor 4K", estimatedPrice: 350 };
     authState.id = userB;
-    expect((await updateWishlistItemAction(item.id, edit)).success).toBe(false);
+    expect(await updateWishlistItemAction(item.id, edit)).toEqual({ success: false, error: "Item not found." });
     authState.id = "";
     await expect(updateWishlistItemAction(item.id, edit)).rejects.toThrow();
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor");
@@ -163,8 +164,8 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
 
   it("rejects a price that rounds to zero and a malformed id", async () => {
     authState.id = userA;
-    await expect(addWishlistItemAction({ name: "Tiny", estimatedPrice: 0.004 })).rejects.toThrow();
-    await expect(deleteWishlistItemAction("nope")).rejects.toThrow("Invalid id");
+    expect(await addWishlistItemAction({ name: "Tiny", estimatedPrice: 0.004 })).toMatchObject({ success: false, error: expect.any(String) });
+    expect(await deleteWishlistItemAction("nope")).toEqual({ success: false, error: "Invalid id" });
   });
 
   it("restores a deleted item with its id and date, for the owner only", async () => {
@@ -177,15 +178,14 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
 
     // While the row exists another user cannot take its id.
     authState.id = userB;
-    expect((await restoreWishlistItemAction(input)).success).toBe(false);
+    expect(await restoreWishlistItemAction(input)).toEqual({ success: false, error: "Item could not be restored." });
     expect((await getWishlist(userB)).find((i) => i.id === item.id)).toBeUndefined();
 
     await deleteWishlistItem(userA, item.id);
     authState.id = userA;
-    const back = await restoreWishlistItemAction(input);
-    expect(back.success).toBe(true);
-    expect(back.item?.id).toBe(item.id);
-    expect(back.item?.createdAt.getTime()).toBe(item.createdAt.getTime());
+    const back = succeeded(await restoreWishlistItemAction(input));
+    expect(back.item.id).toBe(item.id);
+    expect(back.item.createdAt.getTime()).toBe(item.createdAt.getTime());
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.priority).toBe("medium");
 
     // A second restore of a live row is a no-op.

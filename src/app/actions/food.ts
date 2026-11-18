@@ -3,10 +3,10 @@
 import { requireUser } from "@/server/auth";
 import { toISODate } from "@/lib/format-date";
 import { metricDayEditable } from "@/lib/rules";
-import { isoDate, uuid } from "@/lib/validations/common";
+import { uuid } from "@/lib/validations/common";
+import { Refusal, respond } from "@/lib/validations/result";
 import {
-  MAX_STEPS,
-  MAX_WATER_ML,
+  addWaterSchema,
   createShoppingItemSchema,
   logMealSchema,
   logWeightSchema,
@@ -17,8 +17,11 @@ import {
   shoppingCategoryNameSchema,
   restoreShoppingItemsSchema,
   revertShoppingCategorySchema,
-  updateShoppingItemSchema,
+  setWaterSchema,
+  toggleShoppingItemSchema,
   updateNutritionTargetsSchema,
+  updateShoppingItemSchema,
+  updateStepsSchema,
 } from "@/lib/validations/food";
 import {
   addShoppingCategory,
@@ -47,175 +50,189 @@ import {
 
 /** Water, steps and meals are written for today or yesterday only; older days are history. */
 function assertWritableDay(date: string) {
-  if (!metricDayEditable(date, toISODate())) throw new Error("Only today and yesterday can be changed.");
+  if (!metricDayEditable(date, toISODate())) throw new Refusal("Only today and yesterday can be changed.");
 }
 
 export async function logMealAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = logMealSchema.parse(rawInput);
-  assertWritableDay(parsed.date);
-  const meal = await logMeal(userId, parsed);
-  return { success: true, meal };
+  return respond(async () => {
+    const parsed = logMealSchema.parse(rawInput);
+    assertWritableDay(parsed.date);
+    return { meal: await logMeal(userId, parsed) };
+  });
 }
 
 export async function deleteMealAction(mealId: string) {
   const userId = await requireUser();
-  const deleted = await deleteMeal(userId, uuid.parse(mealId), assertWritableDay);
-  return { success: true, deleted };
+  return respond(async () => ({ deleted: await deleteMeal(userId, uuid.parse(mealId), assertWritableDay) }));
 }
 
 /** Undo of a delete. */
 export async function restoreMealAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = restoreMealSchema.parse(rawInput);
-  assertWritableDay(parsed.date);
-  const meal = await restoreMeal(userId, parsed);
-  return { success: meal !== undefined, meal };
+  return respond(async () => {
+    const parsed = restoreMealSchema.parse(rawInput);
+    assertWritableDay(parsed.date);
+    const meal = await restoreMeal(userId, parsed);
+    if (meal === undefined) throw new Refusal("This meal could not be restored.");
+    return { meal };
+  });
 }
 
-/** Sets the day's weight (creates or changes it). Refusals come back as data: Next hides a thrown message from the browser in production. */
+/** Sets the day's weight (creates or changes it). */
 export async function saveWeightAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = logWeightSchema.safeParse(rawInput);
-  if (!parsed.success) return { success: false as const, error: "Please enter a valid weight." };
-  const { entry, previous } = await saveWeightEntry(userId, parsed.data);
-  return { success: true as const, entry, previous };
+  return respond(() => saveWeightEntry(userId, logWeightSchema.parse(rawInput)));
 }
 
 export async function deleteWeightAction(entryId: string) {
   const userId = await requireUser();
-  const deleted = await deleteWeightEntry(userId, uuid.parse(entryId));
-  return { success: deleted !== undefined };
+  return respond(async () => {
+    if ((await deleteWeightEntry(userId, uuid.parse(entryId))) === undefined) throw new Refusal("Weight entry not found.");
+    return {};
+  });
 }
 
 /** Undo of a delete. */
 export async function restoreWeightAction(rawInput: unknown) {
   const userId = await requireUser();
-  const entry = await restoreWeightEntry(userId, restoreWeightSchema.parse(rawInput));
-  return { success: entry !== undefined, entry };
+  return respond(async () => {
+    const entry = await restoreWeightEntry(userId, restoreWeightSchema.parse(rawInput));
+    if (entry === undefined) throw new Refusal("This weight entry could not be restored.");
+    return { entry };
+  });
 }
 
 export async function addWaterAction(date: string, amountMl: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(amountMl) || Math.abs(amountMl) > MAX_WATER_ML) {
-    throw new Error("Invalid water parameters");
-  }
-  assertWritableDay(isoDate.parse(date));
-  const metrics = await addWater(userId, date, amountMl);
-  return { success: true, metrics };
+  return respond(async () => {
+    const input = addWaterSchema.parse({ date, amountMl });
+    assertWritableDay(input.date);
+    return { metrics: await addWater(userId, input.date, input.amountMl) };
+  });
 }
 
 /** Sets the day's water to an exact amount, so an edit from a stale screen cannot add onto a newer total. */
 export async function setWaterAction(date: string, waterMl: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(waterMl) || waterMl < 0 || waterMl > MAX_WATER_ML) {
-    throw new Error("Invalid water parameters");
-  }
-  assertWritableDay(isoDate.parse(date));
-  const metrics = await updateDailyWater(userId, date, waterMl);
-  return { success: true, metrics };
+  return respond(async () => {
+    const input = setWaterSchema.parse({ date, waterMl });
+    assertWritableDay(input.date);
+    return { metrics: await updateDailyWater(userId, input.date, input.waterMl) };
+  });
 }
 
 export async function updateStepsAction(date: string, steps: number) {
   const userId = await requireUser();
-  if (!Number.isInteger(steps) || steps < 0 || steps > MAX_STEPS) {
-    throw new Error("Invalid steps parameter");
-  }
-  assertWritableDay(isoDate.parse(date));
-  const metrics = await updateDailySteps(userId, date, steps);
-  return { success: true, metrics };
+  return respond(async () => {
+    const input = updateStepsSchema.parse({ date, steps });
+    assertWritableDay(input.date);
+    return { metrics: await updateDailySteps(userId, input.date, input.steps) };
+  });
 }
 
 export async function updateTargetsAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = updateNutritionTargetsSchema.parse(rawInput);
-  const targets = await updateNutritionTargets(userId, parsed);
-  return { success: true, targets };
+  return respond(async () => ({ targets: await updateNutritionTargets(userId, updateNutritionTargetsSchema.parse(rawInput)) }));
 }
 
 export async function addShoppingItemAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = createShoppingItemSchema.parse(rawInput);
-  const item = await addShoppingItem(userId, parsed);
-  return { success: true, item };
+  return respond(async () => ({ item: await addShoppingItem(userId, createShoppingItemSchema.parse(rawInput)) }));
 }
 
 export async function toggleShoppingItemAction(itemId: string, isBought: boolean) {
   const userId = await requireUser();
-  if (typeof isBought !== "boolean") {
-    throw new Error("Invalid parameters");
-  }
-  const item = await toggleShoppingItem(userId, uuid.parse(itemId), isBought);
-  if (!item) throw new Error("Item not found");
-  return { success: true, item };
+  return respond(async () => {
+    const input = toggleShoppingItemSchema.parse({ itemId, isBought });
+    const item = await toggleShoppingItem(userId, input.itemId, input.isBought);
+    if (!item) throw new Refusal("Item not found.");
+    return { item };
+  });
 }
 
 export async function deleteShoppingItemAction(itemId: string) {
   const userId = await requireUser();
-  const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
-  if (!deleted) throw new Error("Item not found");
-  return { success: true, deleted };
+  return respond(async () => {
+    const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
+    if (!deleted) throw new Refusal("Item not found.");
+    return { deleted };
+  });
 }
 
 /** Clears the bought items the screen shows (their ids), not every bought item the server holds. */
 export async function clearBoughtItemsAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
-  const deleted = await clearBoughtShoppingItems(userId, itemIds);
-  return { success: true, deletedCount: deleted.length };
+  return respond(async () => {
+    const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
+    return { deletedCount: (await clearBoughtShoppingItems(userId, itemIds)).length };
+  });
 }
 
 export async function restoreShoppingItemsAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
-  const items = await restoreShoppingItems(userId, itemIds);
-  if (items.length === 0) throw new Error("Item not found");
-  return { success: true, items };
+  return respond(async () => {
+    const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
+    const items = await restoreShoppingItems(userId, itemIds);
+    if (items.length === 0) throw new Refusal("Item not found.");
+    return { items };
+  });
 }
 
 export async function updateShoppingItemAction(rawInput: unknown) {
   const userId = await requireUser();
-  const parsed = updateShoppingItemSchema.parse(rawInput);
-  // Refusals come back as data: Next hides a thrown message from the browser in production.
-  if (await hasDuplicateShoppingItem(userId, parsed)) {
-    return { success: false as const, error: `"${parsed.name}" is already on the list with this unit.` };
-  }
-  const item = await updateShoppingItem(userId, parsed);
-  if (!item) return { success: false as const, error: "This item is no longer on the list." };
-  return { success: true as const, item };
+  return respond(async () => {
+    const parsed = updateShoppingItemSchema.parse(rawInput);
+    if (await hasDuplicateShoppingItem(userId, parsed)) throw new Refusal(`"${parsed.name}" is already on the list with this unit.`);
+    const item = await updateShoppingItem(userId, parsed);
+    if (!item) throw new Refusal("This item is no longer on the list.");
+    return { item };
+  });
 }
 
 export async function addShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
-  const added = await addShoppingCategory(userId, name, kind);
-  return { success: added, name };
+  return respond(async () => {
+    const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
+    if (!(await addShoppingCategory(userId, name, kind))) throw new Refusal(`"${name}" already exists.`);
+    return { name };
+  });
 }
 
 export async function reorderShoppingCategoriesAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { kind, names } = reorderShoppingCategoriesSchema.parse(rawInput);
-  await reorderShoppingCategories(userId, names, kind);
-  return { success: true };
+  return respond(async () => {
+    const { kind, names } = reorderShoppingCategoriesSchema.parse(rawInput);
+    await reorderShoppingCategories(userId, names, kind);
+    return {};
+  });
 }
 
 export async function renameShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { kind, from, to } = renameShoppingCategorySchema.parse(rawInput);
-  const change = await renameShoppingCategory(userId, from, to, kind);
-  return { success: change !== null, change };
+  return respond(async () => {
+    const { kind, from, to } = renameShoppingCategorySchema.parse(rawInput);
+    const change = await renameShoppingCategory(userId, from, to, kind);
+    if (!change) throw new Refusal("Category not found.");
+    return { change };
+  });
 }
 
 export async function deleteShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
-  const change = await deleteShoppingCategory(userId, name, kind);
-  return { success: change !== null, change };
+  return respond(async () => {
+    const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
+    const change = await deleteShoppingCategory(userId, name, kind);
+    if (!change) throw new Refusal("Category not found.");
+    return { change };
+  });
 }
 
 export async function revertShoppingCategoryAction(rawInput: unknown) {
   const userId = await requireUser();
-  const { kind, ...input } = revertShoppingCategorySchema.parse(rawInput);
-  await revertShoppingCategory(userId, input, kind);
-  return { success: true };
+  return respond(async () => {
+    const { kind, ...input } = revertShoppingCategorySchema.parse(rawInput);
+    await revertShoppingCategory(userId, input, kind);
+    return {};
+  });
 }

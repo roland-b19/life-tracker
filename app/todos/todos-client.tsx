@@ -127,6 +127,7 @@ export function TodosClient({
     const id = ++requestId.current;
     try {
       const view = await loadTodosViewAction();
+      if (!view.success) throw new Error(view.error);
       if (id === requestId.current) {
         setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
       }
@@ -178,40 +179,37 @@ export function TodosClient({
         const category = before.isRecurring ? categoryInput : before.category;
         const after = { ...before, title, reminderTime, category };
         const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
-        if ("error" in res) return setErrorMsg(res.error);
-        if (!res.success) showToast({ message: `"${before.title}" was removed elsewhere`, type: "warning" });
-        else {
-          ++requestId.current;
-          drop(before);
-          putBack(after);
-          keepCategory(after);
-          showToast({
-            message: `Saved "${title}"`,
-            type: "success",
-            onUndo: undoWith(
-              showToast,
-              async () => {
-                ++requestId.current;
-                drop(after);
-                putBack(before);
-                const undone = await updateTodoAction({
-                  id: before.id,
-                  title: before.title,
-                  reminderTime: before.reminderTime,
-                  category: before.category,
-                }).catch(() => null);
-                if (undone && "success" in undone && undone.success) keepCategory(before);
-                else {
-                  drop(before);
-                  putBack(after);
-                }
-                void loadDay();
-                return undone;
-              },
-              "Failed to undo the edit",
-            ),
-          });
-        }
+        if (!res.success) return setErrorMsg(res.error); // the form stays open, also when the task was removed elsewhere
+        ++requestId.current;
+        drop(before);
+        putBack(after);
+        keepCategory(after);
+        showToast({
+          message: `Saved "${title}"`,
+          type: "success",
+          onUndo: undoWith(
+            showToast,
+            async () => {
+              ++requestId.current;
+              drop(after);
+              putBack(before);
+              const undone = await updateTodoAction({
+                id: before.id,
+                title: before.title,
+                reminderTime: before.reminderTime,
+                category: before.category,
+              }).catch(() => null);
+              if (undone?.success) keepCategory(before);
+              else {
+                drop(before);
+                putBack(after);
+              }
+              void loadDay();
+              return undone;
+            },
+            "Failed to undo the edit",
+          ),
+        });
       } else {
         const res = await createTodoAction({
           space,
@@ -272,7 +270,8 @@ export function TodosClient({
       });
     }
     try {
-      await toggleTodoAction({ id: todo.id, isCompleted: next, completedAt });
+      const res = await toggleTodoAction({ id: todo.id, isCompleted: next, completedAt });
+      if (!res.success) showToast({ message: res.error, type: "warning" });
     } catch {
       showToast({ message: "Failed to update task", type: "warning" });
     }
@@ -328,7 +327,7 @@ export function TodosClient({
           void loadDay();
           return back;
         },
-        (back) => (back && "error" in back ? back.error : "Failed to restore task"),
+        (back) => (back && !back.success ? back.error : "Failed to restore task"),
       ),
     });
     void deleted.then((ok) => {
@@ -365,7 +364,7 @@ export function TodosClient({
           async () => {
             setPushSubscribed(false);
             try {
-              await deletePushSubscriptionAction(enabled.endpoint);
+              if (!(await deletePushSubscriptionAction(enabled.endpoint)).success) throw new Error("not removed");
               await enabled.unsubscribe();
               return true;
             } catch {

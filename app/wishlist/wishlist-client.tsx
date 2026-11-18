@@ -163,8 +163,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     try {
       if (editingId) {
         const res = await updateWishlistItemAction(editingId, input);
-        if (!res.success || !res.item) {
-          setErrorMsg("Item not found.");
+        if (!res.success) {
+          setErrorMsg(res.error);
           return;
         }
         const updated = res.item as WishlistItemData;
@@ -191,8 +191,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         });
       } else {
         const res = await addWishlistItemAction(input);
-        if (!res.success || !res.item) {
-          setErrorMsg("Failed to save item");
+        if (!res.success) {
+          setErrorMsg(res.error);
           return;
         }
         const added = res.item as WishlistItemData;
@@ -211,7 +211,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       }
       setIsModalOpen(false);
     } catch {
-      // The form checks every limit first; what is left is a refusal whose text the server hides in production.
+      // A network or server failure; a refusal comes back as data with its own message.
       setErrorMsg("Failed to save item. Please try again.");
     } finally {
       setBusy(false);
@@ -233,7 +233,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   async function handleRemove(target: WishlistItemData) {
     dropRow(target.id);
     const deleted = deleteWishlistItemAction(target.id).then(
-      (res) => res.success !== false,
+      (res) => res.success,
       () => false,
     );
     showToast({

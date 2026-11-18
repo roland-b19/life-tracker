@@ -22,16 +22,17 @@ export const logMealSchema = z.object({
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
+const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
+
 /** One weigh-in a day: saving a day that already has one replaces its kilograms. */
 export const logWeightSchema = z
   .object({
     // A weigh-in is a measurement: it cannot be in the future.
     date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
     kilograms: z
-      .number()
-      .finite()
-      .min(20)
-      .max(500)
+      .number("Please enter a valid weight.")
+      .min(20, WEIGHT_RANGE)
+      .max(500, WEIGHT_RANGE)
       // 78.4 * 100 is 7840.000000000001, so compare against the nearest hundredth instead of Number.isInteger.
       .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "Maximum two decimal places."),
   })
@@ -39,6 +40,11 @@ export const logWeightSchema = z
 
 /** Undo of a delete: the same weigh-in, under its old id. */
 export const restoreWeightSchema = logWeightSchema.extend({ id: uuid });
+
+/** Quick taps (negative, for Undo) and exact totals on a day; both stop at the same ceiling. */
+export const addWaterSchema = z.object({ date: isoDate, amountMl: z.number().int().min(-MAX_WATER_ML).max(MAX_WATER_ML) });
+export const setWaterSchema = z.object({ date: isoDate, waterMl: z.number().int().min(0).max(MAX_WATER_ML) });
+export const updateStepsSchema = z.object({ date: isoDate, steps: z.number().int().min(0).max(MAX_STEPS) });
 
 export const updateNutritionTargetsSchema = z.object({
   calories: z.number().int().min(500).max(10000),
@@ -60,7 +66,7 @@ export const createShoppingItemSchema = z.object({
 });
 
 export const updateShoppingItemSchema = createShoppingItemSchema.extend({
-  itemId: z.string().uuid(),
+  itemId: uuid,
   // Only Undo sends these, to put back the bought state an "add again" reset.
   isBought: z.boolean().optional(),
   checkedAt: z.coerce.date().nullable().optional(),
@@ -91,12 +97,14 @@ export const revertShoppingCategorySchema = z
     name: shoppingCategorySchema,
     current: shoppingCategorySchema,
     sortOrder: z.number().int(),
-    itemIds: z.array(z.string().uuid()).max(5000),
+    itemIds: z.array(uuid).max(5000),
     dropCurrent: z.boolean(),
   })
   .refine((v) => managed(v, [v.name]), builtIn);
 
-export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) });
+export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean() });
+
+export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(500) });
 
 export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
 export type LogWeightInput = z.infer<typeof logWeightSchema>;

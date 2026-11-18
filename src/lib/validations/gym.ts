@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate, visible } from "./common";
+import { isoDate, uuid, visible } from "./common";
 import { MUSCLE_GROUP_KEYS } from "../gym-muscles";
 
 /** The limits of a logged set and a note, shared by the form and the server. */
@@ -7,10 +7,10 @@ export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500 } as c
 
 export const logSetSchema = z.object({
   // Only Undo sends these, to bring a deleted set back as it was (same id, same time).
-  id: z.string().uuid().optional(),
+  id: uuid.optional(),
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future").optional(),
-  sessionId: z.string().uuid(),
-  exerciseId: z.string().uuid(),
+  sessionId: uuid,
+  exerciseId: uuid,
   setOrder: z.number().int().min(1).max(50),
   reps: z.number().int().min(1).max(GYM_LIMITS.reps),
   loadType: z.enum(["kg", "plates", "bodyweight"]),
@@ -26,14 +26,14 @@ export const logSetSchema = z.object({
 
 export const createSessionSchema = z.object({
   date: isoDate,
-  splitDayId: z.string().uuid().optional().nullable(),
+  splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean().default(false),
   notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
 });
 
 // The duration is required: a workout without one would read as still open.
 export const finishSessionSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: uuid,
   durationMinutes: z.number().int().min(1).max(600),
   notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
 });
@@ -45,14 +45,14 @@ export const saveDeloadWeeksSchema = z
   .object({ last: weekSunday.nullable(), next: weekSunday.nullable() })
   .refine((v) => !v.last || !v.next || v.next > v.last, { message: "The next deload must come after the last one", path: ["next"] });
 
-export const cancelSessionSchema = z.object({ sessionId: z.string().uuid() });
+export const cancelSessionSchema = z.object({ sessionId: uuid });
 
 /** Undo of cancelling a workout: the session as it was, with all its sets (same ids and times). */
 export const restoreSessionSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: uuid.optional(),
   createdAt: logSetSchema.shape.createdAt,
   date: isoDate,
-  splitDayId: z.string().uuid().optional().nullable(),
+  splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean(),
   notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
   sets: z.array(logSetSchema.omit({ sessionId: true })).max(300),
@@ -65,17 +65,17 @@ export const createCustomExerciseSchema = z.object({
 });
 
 /** Edit and Undo of a delete both name the exercise by id; Undo of a delete puts the same id back. */
-export const customExerciseWithIdSchema = createCustomExerciseSchema.extend({ id: z.string().uuid() });
+export const customExerciseWithIdSchema = createCustomExerciseSchema.extend({ id: uuid });
 
 export const saveSplitDaySchema = z.object({
-  id: z.string().uuid(),
+  id: uuid,
   name: z.string().trim().min(1).max(100).refine(visible, "Name is required"),
   isRest: z.boolean(),
   exercises: z
     .array(
       z
         .object({
-          exerciseId: z.string().uuid(),
+          exerciseId: uuid,
           targetSets: z.number().int().min(1).max(10),
           minReps: z.number().int().min(1).max(100),
           maxReps: z.number().int().min(1).max(100),

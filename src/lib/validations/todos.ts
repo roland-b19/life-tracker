@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { isoDate, visible } from "./common";
+import { isoDate, uuid, visible } from "./common";
 
 const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task, "daily" for a repeating one.
@@ -26,7 +26,7 @@ const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60
 
 /** Undo of a delete: the same row back, with its id. */
 export const restoreTodoSchema = createTodoSchema.extend({
-  id: z.string().uuid(),
+  id: uuid,
   isCompleted: z.boolean(),
   isCarriedOver: z.boolean(),
   completedAt: notInFuture.nullable().optional(), // when the box last changed, so Undo keeps the list order
@@ -35,21 +35,21 @@ export const restoreTodoSchema = createTodoSchema.extend({
 });
 
 export const toggleTodoSchema = z.object({
-  id: z.string().uuid(),
+  id: uuid,
   isCompleted: z.boolean(),
   // Undo of a tick: the time the box last changed before, so the task goes back to where it was. Left out, it is now.
   completedAt: notInFuture.nullable().optional(),
 });
 
 export const updateTodoSchema = z.object({
-  id: z.string().uuid(),
+  id: uuid,
   title: createTodoSchema.shape.title,
   reminderTime: createTodoSchema.shape.reminderTime,
   // Left out by the one-off form, which has no category: then the task keeps its own.
   category: categorySchema.optional(),
 });
 
-export const deleteTodoSchema = z.object({ id: z.string().uuid() });
+export const deleteTodoSchema = z.object({ id: uuid });
 
 export const pushSubscriptionSchema = z.object({
   // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.

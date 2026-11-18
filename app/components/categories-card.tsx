@@ -3,6 +3,7 @@
 import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
+import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
@@ -16,11 +17,11 @@ export interface CategoriesApi {
   noun?: string;
   /** The built-in fallback name that cannot be added, renamed or deleted ("other"; "pcs" for units). */
   builtIn?: string;
-  add: (name: string) => Promise<{ success: boolean }>;
-  rename: (from: string, to: string) => Promise<{ success: boolean; change?: Change | null }>;
-  remove: (name: string) => Promise<{ success: boolean; change?: Change | null }>;
-  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<{ success: boolean }>;
-  reorder: (names: string[]) => Promise<{ success: boolean }>;
+  add: (name: string) => Promise<Answer>;
+  rename: (from: string, to: string) => Promise<Answer<{ change: Change }>>;
+  remove: (name: string) => Promise<Answer<{ change: Change }>>;
+  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<Answer>;
+  reorder: (names: string[]) => Promise<Answer>;
 }
 
 /** The api of a scope-based list (Wishlist, or a Tasks space). */
@@ -132,7 +133,8 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     setBusy(true);
     try {
       if (from === null) {
-        if (!(await api.add(to)).success) return setErrorMsg(`"${to}" already exists.`);
+        const added = await api.add(to);
+        if (!added.success) return setErrorMsg(added.error);
         onChange((prev) => [...prev, to]);
         showToast({
           message: `Added "${to}"`,
@@ -149,7 +151,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         });
       } else {
         const res = await api.rename(from, to);
-        if (!res.success || !res.change) throw new Error("Category not found");
+        if (!res.success) return setErrorMsg(res.error);
         const change = res.change;
         const at = categories.indexOf(from);
         onRefile(from, to);
@@ -179,7 +181,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onChange((prev) => prev.filter((c) => c !== cat));
     if (moved) onRefile(cat, builtIn, moved);
     const res = await api.remove(cat).catch(() => null);
-    if (!res?.success || !res.change) {
+    if (!res?.success) {
       onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
       if (moved) onRefile(builtIn, cat, moved);
       onSynced?.();

@@ -54,6 +54,7 @@ import {
   saveSplitDayAction,
   startSessionAction,
 } from "@/app/actions/gym";
+import { succeeded } from "./succeeded";
 
 const TODAY = toISODate();
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -227,7 +228,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
           isRest: false,
           exercises: [{ exerciseId: ex, targetSets: 2, minReps: 9, maxReps: 8 }],
         }),
-      ).rejects.toThrow();
+      ).resolves.toMatchObject({ success: false, error: expect.any(String) });
       await expect(
         saveSplitDayAction({
           id: day.id,
@@ -238,7 +239,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
             { exerciseId: ex, targetSets: 2, minReps: 5, maxReps: 8 },
           ],
         }),
-      ).rejects.toThrow();
+      ).resolves.toMatchObject({ success: false, error: expect.any(String) });
     });
   });
 
@@ -429,7 +430,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   });
 
   it("answers a malformed set id with a validation error, not a database error", async () => {
-    await expect(deleteSetAction("not-a-uuid")).rejects.toThrow("Invalid id");
+    expect(await deleteSetAction("not-a-uuid")).toEqual({ success: false, error: "Invalid id" });
   });
 
   it("counts Week x of N from the last and the next deload week", async () => {
@@ -518,9 +519,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("refuses a deload week that does not start on a Sunday or a next deload that is not after the last", async () => {
     const thisWeek = weekStart(toISODate());
-    await expect(saveDeloadWeeksAction({ last: addDays(thisWeek, 1), next: null })).rejects.toThrow();
-    await expect(saveDeloadWeeksAction({ last: addDays(thisWeek, 7), next: thisWeek })).rejects.toThrow();
-    await expect(saveDeloadWeeksAction({ last: thisWeek, next: thisWeek })).rejects.toThrow();
+    for (const weeks of [
+      { last: addDays(thisWeek, 1), next: null },
+      { last: addDays(thisWeek, 7), next: thisWeek },
+      { last: thisWeek, next: thisWeek },
+    ]) {
+      expect(await saveDeloadWeeksAction(weeks)).toMatchObject({ success: false, error: expect.any(String) });
+    }
   });
 
   it("keeps deload weeks per user and refuses anonymous callers", async () => {
@@ -589,38 +594,41 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const exercise = exercisesList[0];
 
       // 1. Start session
-      const startRes = (await startSessionAction({
-        date: TODAY,
-        isDeload: false,
-        notes: "Chest day action test",
-      })) as { success: true; session: { id: string } };
-      expect(startRes.success).toBe(true);
+      const startRes = succeeded(
+        await startSessionAction({
+          date: TODAY,
+          isDeload: false,
+          notes: "Chest day action test",
+        }),
+      );
       expect(startRes.session.id).toBeDefined();
 
       // 2. Log set
-      const logRes = (await logSetAction({
-        sessionId: startRes.session.id,
-        exerciseId: exercise.id,
-        setOrder: 1,
-        reps: 8,
-        loadType: "kg",
-        loadValue: 42.5,
-        extraKg: 0,
-        isFailure: true,
-        isPartial: false,
-        isGoodForm: true,
-        flagAnomaly: false,
-      })) as { success: boolean; set: { id: string; reps: number } };
-      expect(logRes.success).toBe(true);
+      const logRes = succeeded(
+        await logSetAction({
+          sessionId: startRes.session.id,
+          exerciseId: exercise.id,
+          setOrder: 1,
+          reps: 8,
+          loadType: "kg",
+          loadValue: 42.5,
+          extraKg: 0,
+          isFailure: true,
+          isPartial: false,
+          isGoodForm: true,
+          flagAnomaly: false,
+        }),
+      );
       expect(logRes.set.reps).toBe(8);
 
       // 3. Finish session
-      const finishRes = await finishSessionAction({
-        sessionId: startRes.session.id,
-        durationMinutes: 55,
-      });
-      expect(finishRes.success).toBe(true);
-      expect(finishRes.session?.durationMinutes).toBe(55);
+      const finishRes = succeeded(
+        await finishSessionAction({
+          sessionId: startRes.session.id,
+          durationMinutes: 55,
+        }),
+      );
+      expect(finishRes.session.durationMinutes).toBe(55);
 
       // 4. Delete set
       const deleteRes = await deleteSetAction(logRes.set.id);
@@ -655,7 +663,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     });
 
     it("rejects a malformed id", async () => {
-      await expect(cancelSessionAction({ sessionId: "nope" })).rejects.toThrow();
+      expect(await cancelSessionAction({ sessionId: "nope" })).toEqual({ success: false, error: "Invalid id" });
     });
 
     it("finds only the owner's unfinished recent workout", async () => {
@@ -720,14 +728,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         sets: [{ exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       };
       await cancelSessionAction({ sessionId: id });
-      const back = await restoreSessionAction(input);
-      expect(back.success).toBe(true);
-      expect(back.details?.sets).toHaveLength(1);
-      expect((await getOpenWorkoutSession(userA))?.session.id).toBe(back.details?.session.id);
+      const back = succeeded(await restoreSessionAction(input));
+      expect(back.details.sets).toHaveLength(1);
+      expect((await getOpenWorkoutSession(userA))?.session.id).toBe(back.details.session.id);
 
       authState.id = userB; // B restores under B: nothing of A's changes, and A's exercise stays out of reach
-      const own = await restoreSessionAction({ ...input, sets: [] });
-      expect(own.details?.session.userId).toBe(userB);
+      const own = succeeded(await restoreSessionAction({ ...input, sets: [] }));
+      expect(own.details.session.userId).toBe(userB);
       authState.id = "";
       await expect(restoreSessionAction(input)).rejects.toThrow("Authentication required.");
     });
@@ -744,12 +751,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         isDeload: false,
         sets: [{ id: set.id, createdAt: set.createdAt, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: false, isPartial: false, isGoodForm: false, flagAnomaly: false }],
       };
-      const back = await restoreSessionAction(input);
-      expect(back.details?.session.id).toBe(id);
-      expect(back.details?.session.createdAt).toEqual(before.session.createdAt);
-      expect(back.details?.sets[0].id).toBe(set.id);
-      expect(back.details?.sets[0].createdAt).toEqual(set.createdAt);
-      expect(back.details?.sets[0].isGoodForm).toBe(false); // the form flag survives the Undo
+      const back = succeeded(await restoreSessionAction(input));
+      expect(back.details.session.id).toBe(id);
+      expect(back.details.session.createdAt).toEqual(before.session.createdAt);
+      expect(back.details.sets[0].id).toBe(set.id);
+      expect(back.details.sets[0].createdAt).toEqual(set.createdAt);
+      expect(back.details.sets[0].isGoodForm).toBe(false); // the form flag survives the Undo
       // Restoring twice, or into an id another user holds, writes nothing.
       expect((await restoreSessionAction(input)).success).toBe(false);
       authState.id = userB;
@@ -762,9 +769,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const set = (await getWorkoutSessionDetails(userA, id))!.sets[0];
       await deleteSetAction(set.id);
       const input = { id: set.id, createdAt: set.createdAt, sessionId: id, exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40 };
-      const res = await logSetAction(input);
-      expect(res.set?.id).toBe(set.id);
-      expect(res.set?.createdAt).toEqual(set.createdAt);
+      const res = succeeded(await logSetAction(input));
+      expect(res.set.id).toBe(set.id);
+      expect(res.set.createdAt).toEqual(set.createdAt);
       expect((await logSetAction(input)).success).toBe(false); // already there
       authState.id = userB;
       await expect(logSetAction(input)).rejects.toThrow(); // not their workout
@@ -784,8 +791,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const { exerciseId } = await finished(userA, TODAY, 50);
       const dayA = (await getUserSplitWithDays(userA))!.days[0].id;
       authState.id = userB;
-      const withDay = await restoreSessionAction({ date: TODAY, isDeload: false, splitDayId: dayA, sets: [] });
-      expect(withDay.details?.session.splitDayId).toBeNull();
+      const withDay = succeeded(await restoreSessionAction({ date: TODAY, isDeload: false, splitDayId: dayA, sets: [] }));
+      expect(withDay.details.session.splitDayId).toBeNull();
       const custom = await createCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
       const res = await restoreSessionAction({
         date: TODAY,

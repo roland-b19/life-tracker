@@ -124,7 +124,9 @@ export function Navigation({ userName }: NavigationProps) {
   const exportData = async () => {
     setExporting(true);
     try {
-      const { filename, text } = await exportDataAction();
+      const result = await exportDataAction();
+      if (!result.success) throw new Error(result.error);
+      const { filename, text } = result;
       const href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
       Object.assign(document.createElement("a"), { href, download: filename }).click();
       URL.revokeObjectURL(href);

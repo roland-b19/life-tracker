@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { toISODate } from "@/lib/format-date";
 import { isoDate } from "@/lib/validations/common";
+import { Refusal, respond } from "@/lib/validations/result";
 import { metricDayEditable } from "@/lib/rules";
 import { requireUser } from "@/server/auth";
 import { assertClaudeEnabled } from "@/lib/features";
@@ -19,16 +20,18 @@ const chatInputSchema = z.object({
 export async function sendFoodChatMessageAction(input: z.input<typeof chatInputSchema>) {
   assertClaudeEnabled();
   const userId = await requireUser();
-  const { message, history, date, time } = chatInputSchema.parse(input);
-  // Same rule as logging a meal by hand: the Assistant may not write into older days.
-  if (!metricDayEditable(date, toISODate())) throw new Error("Only today and yesterday can be changed.");
+  return respond(async () => {
+    const { message, history, date, time } = chatInputSchema.parse(input);
+    // Same rule as logging a meal by hand: the Assistant may not write into older days.
+    if (!metricDayEditable(date, toISODate())) throw new Refusal("Only today and yesterday can be changed.");
 
-  // Only the last 10 turns go to the model: enough for follow-ups, bounded in size.
-  const result = await sendFoodChatMessage(userId, message, history.slice(-10), { date, time });
+    // Only the last 10 turns go to the model: enough for follow-ups, bounded in size.
+    const result = await sendFoodChatMessage(userId, message, history.slice(-10), { date, time });
 
-  return {
-    reply: result.reply,
-    meals: result.meals,
-    freshSummary: result.meals.length ? await getDailyFoodSummary(userId, date) : null,
-  };
+    return {
+      reply: result.reply,
+      meals: result.meals,
+      freshSummary: result.meals.length ? await getDailyFoodSummary(userId, date) : null,
+    };
+  });
 }

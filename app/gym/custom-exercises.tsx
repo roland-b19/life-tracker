@@ -66,7 +66,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     const res = await deleteCustomExerciseAction(e.id).catch(() => null);
     if (!res?.success) {
       setGone((g) => g.filter((id) => id !== e.id));
-      showToast({ message: res ? `"${e.name}" is used by a routine or a workout, so it stays` : `Failed to delete "${e.name}"`, type: "warning" });
+      showToast({ message: res ? res.error : `Failed to delete "${e.name}"`, type: "warning" });
       return;
     }
     showToast({
