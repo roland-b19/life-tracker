@@ -8,7 +8,7 @@
 // The pages cache holds personal data on this device until Sign out (and the sign-in screen) delete it.
 
 const CACHE = "life-tracker-v3";
-const PAGES = "life-tracker-pages-v1";
+const PAGES = "life-tracker-pages-v2";
 const SIGNED_IN = /^\/(gym|health|todos|wishlist|settings)(\/|$)/;
 // url -> promise of "the server's page differs from the one shown". Answered when the page asks (see the message handler).
 const pending = new Map();

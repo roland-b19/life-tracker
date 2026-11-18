@@ -44,7 +44,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 - Claude chat: `src/lib/claude-cli.ts` spawns the `claude` binary headless (no tools, empty temp dir, 90 s timeout, 2 concurrent children, 1 MB output cap, stdout never logged). `food-ai-chat.ts` validates the JSON reply and logs meals.
 - Token: the user pastes `claude setup-token` output in Settings; AES-256-GCM with `CLAUDE_TOKEN_KEY`, never returned to the client.
 - Push: the browser subscribes in Settings; two Azure jobs run every minute from `worker/`: `enqueue.mjs` puts `{todoId,userId}` (ids only) on a Storage Queue, `send.mjs` re-reads the todo, checks the owner and sends web-push, dropping dead subscriptions.
-- PWA: `public/sw.js` has two caches: `life-tracker-v3` (static assets and the muscle model) and `life-tracker-pages-v1` (signed-in HTML, only same-day pages are served). Server actions and `/api` are never cached. `app/providers.tsx` triggers `router.refresh()` after writes. `app/components/page-cache.ts` clears the page cache on sign-out (its cache name must match `PAGES` in `public/sw.js`).
+- PWA: `public/sw.js` has two caches: `life-tracker-v3` (static assets and the muscle model) and `life-tracker-pages-v2` (signed-in HTML, only same-day pages are served). Server actions and `/api` are never cached. `app/providers.tsx` triggers `router.refresh()` after writes. `app/components/page-cache.ts` clears the page cache on sign-out (its cache name must match `PAGES` in `public/sw.js`).
 - `next.config.ts`: strict CSP and security headers (asserted in tests), `output: "standalone"`.
 
 ## Deploy variants

@@ -13,7 +13,7 @@ last_verified: 2026-11-18
 | Weekly encrypted backup | done |
 | Workflow install (KB, skills, checks, CI job, branch protection on `main`) | done (PR #133) |
 | CI audit blocks on production dependencies only | done (PR #134, D-004) |
-| First e2e spec (Wishlist, Playwright, D-005) | done, [plan](plans/e2e-first-spec.md) |
+| First e2e spec (Wishlist, Playwright, D-005) | done, [plan](archive/plans/e2e-first-spec.md) |
 | One source for the local test credentials; dead Azure host fallbacks removed (D-006) | done |
 | Tasks e2e spec (`/todos`, D-012) | done, [plan](archive/plans/e2e-tasks-spec.md) |
 | Weight REST API → server actions (D-007) | done |
