@@ -21,6 +21,7 @@ import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { createTodo, getDailyTodos, toggleTodo } from "@/lib/todos";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/app/actions/categories";
 import { addDays, toISODate } from "@/lib/format-date";
+import { succeeded } from "./succeeded";
 
 async function seedUser(subject: string) {
   const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
@@ -39,7 +40,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
   it("adds, renames and deletes a category, moving the items with it", async () => {
     authState.id = userA;
     expect((await addCategoryAction({ scope: "wishlist", name: "  Gifts " })).success).toBe(true);
-    expect((await addCategoryAction({ scope: "wishlist", name: "gifts" })).success).toBe(false);
+    expect(await addCategoryAction({ scope: "wishlist", name: "gifts" })).toEqual({ success: false, error: '"gifts" already exists.' });
     const item = await addWishlistItem(userA, { name: "Scarf", estimatedPrice: 20, category: "gifts" });
     expect(item.category).toBe("gifts");
 
@@ -69,8 +70,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const { todos } = await getDailyTodos(userA, "personal", toISODate());
     expect(todos.find((t) => t.title === "Fix tap")?.category).toBe("house");
 
-    await expect(renameCategoryAction({ scope: "personal", from: "house", to: "other" })).rejects.toThrow();
-    await expect(addCategoryAction({ scope: "personal", name: "other" })).rejects.toThrow();
+    expect(await renameCategoryAction({ scope: "personal", from: "house", to: "other" })).toEqual({ success: false, error: '"other" is built in.' });
+    expect(await addCategoryAction({ scope: "personal", name: "other" })).toEqual({ success: false, error: '"other" is built in.' });
   });
 
   it("deleting a task category refiles all its tasks to other", async () => {
@@ -103,9 +104,9 @@ describe("Categories: lists, items and multi-user isolation", () => {
     });
     const before = await state();
 
-    const del = await deleteCategoryAction({ scope: "personal", name: "undo-cat" });
+    const del = succeeded(await deleteCategoryAction({ scope: "personal", name: "undo-cat" }));
     expect((await state()).rows.length).toBe(before.rows.length); // refiled in place, never split
-    await revertCategoryAction({ scope: "personal", name: "undo-cat", current: "other", dropCurrent: false, ...del.change! });
+    await revertCategoryAction({ scope: "personal", name: "undo-cat", current: "other", dropCurrent: false, ...del.change });
 
     const after = await state();
     expect(after.rows).toEqual(before.rows);
@@ -123,8 +124,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
 
     authState.id = userB;
     expect((await getCategories(userB, ["business", "wishlist"])).business).toEqual([]);
-    expect((await renameCategoryAction({ scope: "business", from: "clients", to: "x" })).success).toBe(false);
-    expect((await deleteCategoryAction({ scope: "business", name: "clients" })).success).toBe(false);
+    expect(await renameCategoryAction({ scope: "business", from: "clients", to: "x" })).toEqual({ success: false, error: "Category not found." });
+    expect(await deleteCategoryAction({ scope: "business", name: "clients" })).toEqual({ success: false, error: "Category not found." });
     expect((await getCategories(userA, ["business"])).business).toEqual(["clients"]);
   });
 
@@ -136,9 +137,9 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const alreadyOther = await addWishlistItem(userA, { name: "Misc", estimatedPrice: 5, category: "other" });
     const catOf = async (id: string) => (await getWishlist(userA)).find((i) => i.id === id)?.category;
 
-    const del = await deleteCategoryAction({ scope: "wishlist", name: "books" });
-    expect(del.change?.itemIds).toEqual([inBooks.id]);
-    const undo = { scope: "wishlist", name: "books", current: "other", dropCurrent: false, ...del.change! };
+    const del = succeeded(await deleteCategoryAction({ scope: "wishlist", name: "books" }));
+    expect(del.change.itemIds).toEqual([inBooks.id]);
+    const undo = { scope: "wishlist", name: "books", current: "other", dropCurrent: false, ...del.change };
 
     // Another user cannot revert it: the owner's item stays in Other.
     authState.id = userB;
@@ -152,17 +153,17 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect((await getCategories(userA, ["wishlist"])).wishlist).toContain("books");
 
     // A rename onto a new name is undone, dropping the new name again; a merge keeps the existing target.
-    const ren = await renameCategoryAction({ scope: "wishlist", from: "books", to: "reading" });
+    const ren = succeeded(await renameCategoryAction({ scope: "wishlist", from: "books", to: "reading" }));
     expect(await catOf(inBooks.id)).toBe("reading");
-    await revertCategoryAction({ scope: "wishlist", name: "books", current: "reading", dropCurrent: !ren.change!.merged, ...ren.change! });
+    await revertCategoryAction({ scope: "wishlist", name: "books", current: "reading", dropCurrent: !ren.change.merged, ...ren.change });
     expect(await catOf(inBooks.id)).toBe("books");
     const cats = (await getCategories(userA, ["wishlist"])).wishlist;
     expect(cats).toContain("books");
     expect(cats).not.toContain("reading");
 
-    const merge = await renameCategoryAction({ scope: "wishlist", from: "books", to: "games" });
-    expect(merge.change?.merged).toBe(true);
-    await revertCategoryAction({ scope: "wishlist", name: "books", current: "games", dropCurrent: false, ...merge.change! });
+    const merge = succeeded(await renameCategoryAction({ scope: "wishlist", from: "books", to: "games" }));
+    expect(merge.change.merged).toBe(true);
+    await revertCategoryAction({ scope: "wishlist", name: "books", current: "games", dropCurrent: false, ...merge.change });
     expect(await catOf(inBooks.id)).toBe("books");
     expect((await getCategories(userA, ["wishlist"])).wishlist).toEqual(expect.arrayContaining(["books", "games"]));
   });
@@ -170,7 +171,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
   it("refuses a rename to the same name, and a revert never deletes the category it puts back", async () => {
     authState.id = userA;
     await addCategoryAction({ scope: "wishlist", name: "keepme" });
-    await expect(renameCategoryAction({ scope: "wishlist", from: "keepme", to: "keepme" })).rejects.toThrow();
+    expect(await renameCategoryAction({ scope: "wishlist", from: "keepme", to: "keepme" })).toEqual({ success: false, error: "That is already its name." });
     await revertCategoryAction({ scope: "wishlist", name: "keepme", current: "keepme", sortOrder: 1, itemIds: [], dropCurrent: true });
     expect((await getCategories(userA, ["wishlist"])).wishlist).toContain("keepme");
   });
@@ -190,7 +191,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect(await list()).toEqual(["third", "first", "second"]);
 
     authState.id = userA;
-    await expect(reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).rejects.toThrow();
+    expect(await reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).toEqual({ success: false, error: "Names must be unique." });
     authState.id = "";
     await expect(reorderCategoriesAction({ scope: "personal", names: ["first"] })).rejects.toThrow();
   });

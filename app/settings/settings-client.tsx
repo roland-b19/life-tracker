@@ -32,8 +32,8 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     setBusy(true);
     try {
       const res = await connectClaudeAction({ token });
-      if (!res.connectedAt) {
-        setErrorMsg(res.error ?? "Failed to connect Claude");
+      if (!res.success) {
+        setErrorMsg(res.error);
         return;
       }
       const before = connectedAt;
@@ -59,7 +59,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     undoWith(showToast, async () => {
       setConnectedAt(before);
       const ok = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).then(
-        () => true,
+        (res) => res.success,
         () => false,
       );
       if (!ok) setConnectedAt(now);

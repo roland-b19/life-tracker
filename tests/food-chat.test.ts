@@ -29,6 +29,7 @@ import { sendFoodChatMessageAction } from "@/app/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
+import { succeeded } from "./succeeded";
 
 async function seedUser(subject: string) {
   const [user] = await db.insert(users).values({ issuer: "test", subject }).returning({ id: users.id });
@@ -197,7 +198,7 @@ describe("Food assistant: context prompt and structured answer", () => {
       mockClaude({ reply: "Gata.", meals: [{ name: "1 banană", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }] });
       authState.id = owner;
 
-      const res = await sendFoodChatMessageAction(input);
+      const res = succeeded(await sendFoodChatMessageAction(input));
 
       expect(res.meals).toHaveLength(1);
       expect(res.freshSummary?.meals.map((m) => m.name)).toEqual(["1 banană"]);
@@ -208,16 +209,16 @@ describe("Food assistant: context prompt and structured answer", () => {
       authState.id = userId;
       process.env.AUTH_DEV = "true";
       for (const date of ["2026-11-05", "2999-01-01"]) {
-        await expect(sendFoodChatMessageAction({ ...input, date })).rejects.toThrow("Only today and yesterday can be changed.");
+        expect(await sendFoodChatMessageAction({ ...input, date })).toEqual({ success: false, error: "Only today and yesterday can be changed." });
       }
       expect(runClaude).not.toHaveBeenCalled();
     });
 
     it("rejects invalid input before calling the model", async () => {
       authState.id = userId;
-      await expect(sendFoodChatMessageAction({ ...input, message: "   " })).rejects.toThrow();
-      await expect(sendFoodChatMessageAction({ ...input, time: "25:00" })).rejects.toThrow();
-      await expect(sendFoodChatMessageAction({ ...input, message: "x".repeat(1001) })).rejects.toThrow();
+      for (const bad of [{ message: "   " }, { time: "25:00" }, { message: "x".repeat(1001) }]) {
+        expect(await sendFoodChatMessageAction({ ...input, ...bad })).toMatchObject({ success: false, error: expect.any(String) });
+      }
       expect(runClaude).not.toHaveBeenCalled();
     });
   });

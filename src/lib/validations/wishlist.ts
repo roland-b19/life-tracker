@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { visible } from "./common";
+import { uuid, visible } from "./common";
 
 export const createWishlistItemSchema = z.object({
   // trim() leaves zero-width characters, so a name of only those would look empty on screen.
@@ -19,7 +19,7 @@ export const createWishlistItemSchema = z.object({
 
 /** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
 export const restoreWishlistItemSchema = createWishlistItemSchema.extend({
-  id: z.string().uuid(),
+  id: uuid,
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 

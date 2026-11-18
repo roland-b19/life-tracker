@@ -70,7 +70,7 @@ export function useWorkout({
         splitDayId: day.id,
         isDeload: isDeloadMode,
       });
-      if (res.success && res.session) {
+      if (res.success) {
         setTimerPaused(false);
         setActiveSession({
           id: res.session.id,
@@ -104,7 +104,7 @@ export function useWorkout({
           }),
         });
       } else {
-        warn(("error" in res && res.error) || "Failed to start workout");
+        warn(res.error);
       }
     } catch {
       warn("Failed to start workout");
@@ -143,7 +143,7 @@ export function useWorkout({
         notes: state.notes || undefined,
       });
 
-      if (res.success && res.set) {
+      if (res.success) {
         const logged: WorkoutSetData = {
           id: res.set.id,
           exerciseId: exercise.exerciseId,
@@ -168,13 +168,13 @@ export function useWorkout({
           type: res.set.flagAnomaly ? "warning" : "success",
           onUndo: undoWith(showToast, async () => {
             dropSet(logged.id);
-            const gone = await deleteSetAction(logged.id).then(() => true, () => false);
+            const gone = await deleteSetAction(logged.id).then((r) => r.success, () => false);
             if (!gone) putBackSet(logged);
             return gone;
           }),
         });
       } else {
-        warn(res.error ?? "Failed to add set");
+        warn(res.error);
       }
     } catch {
       warn("Failed to add set");
@@ -213,8 +213,8 @@ export function useWorkout({
           anomalyReason: set.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
           notes: set.notes || undefined,
         }).catch(() => null);
-        if (res?.success && res.set) putBackSet(set);
-        return !!res?.success && !!res.set;
+        if (res?.success) putBackSet(set);
+        return !!res?.success;
       }, "Failed to restore set"),
     });
     void deleted.then((ok) => {
@@ -301,7 +301,7 @@ export function useWorkout({
                 notes: x.notes,
               })),
             });
-            if (!res.success || !res.details) return null;
+            if (!res.success) return null;
             const { session, sets } = res.details;
             return {
               id: session.id,

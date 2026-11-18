@@ -169,7 +169,7 @@ export function FoodClient({
   const undoLogged = (logged: MealData[], removed?: (ids: Set<string>) => void) =>
     undoWith(showToast, async () => {
       logged.forEach((m) => applyMeal(m, -1));
-      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then(() => true, () => false)));
+      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then((r) => r.success, () => false)));
       logged.filter((_, i) => !results[i]).forEach((m) => applyMeal(m, 1));
       removed?.(new Set(logged.filter((_, i) => results[i]).map((m) => m.id)));
       return results.every(Boolean);
@@ -424,6 +424,13 @@ export function FoodClient({
     setChatInput("");
     setChatLoading(true);
 
+    // Take the message back so it can be sent again.
+    const takeBack = (message: string) => {
+      setChatMessages((prev) => prev.filter((m) => m !== userMsg));
+      setChatInput(text);
+      setStatusMessage(message);
+    };
+
     try {
       // The server reads only the last 10 turns and rejects more than 20.
       const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
@@ -433,6 +440,7 @@ export function FoodClient({
         date: todayDate,
         time: new Date().toTimeString().slice(0, 5),
       });
+      if (!res.success) return takeBack(res.error);
       const meals = res.meals as MealData[];
       setChatMessages((prev) => [...prev, { role: "model", text: res.reply, meals }]);
       if (res.freshSummary) setSummary(res.freshSummary);
@@ -446,10 +454,7 @@ export function FoodClient({
         });
       }
     } catch {
-      // Take the message back so it can be sent again.
-      setChatMessages((prev) => prev.filter((m) => m !== userMsg));
-      setChatInput(text);
-      setStatusMessage("Failed to send message");
+      takeBack("Failed to send message");
     } finally {
       setChatLoading(false);
     }

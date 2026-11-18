@@ -105,6 +105,10 @@ export function ShoppingTab({
     setBusy(true);
     try {
       const res = await addShoppingItemAction(input);
+      if (!res.success) {
+        setErrorMsg(res.error);
+        return false;
+      }
       const item = res.item as ShoppingItemData;
       const before = shoppingList.find((i) => i.id === item.id);
       upsertShop(item);
@@ -115,7 +119,7 @@ export function ShoppingTab({
               type: "success",
               onUndo: undoWith(showToast, async () => {
                 dropShop(item.id);
-                const gone = await deleteShoppingItemAction(item.id).then(() => true, () => false);
+                const gone = await deleteShoppingItemAction(item.id).then((r) => r.success, () => false);
                 if (!gone) upsertShop(item);
                 return gone;
               }),
@@ -216,7 +220,7 @@ export function ShoppingTab({
       setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt: new Date() } : i)));
     setBought(next);
     const saved = toggleShoppingItemAction(item.id, next).then(
-      () => true,
+      (r) => r.success,
       () => false,
     );
     showToast({
@@ -227,7 +231,7 @@ export function ShoppingTab({
         async () => {
           setBought(!next);
           if (!(await saved)) return true; // the failure path below put it back
-          const back = await toggleShoppingItemAction(item.id, !next).then(() => true, () => false);
+          const back = await toggleShoppingItemAction(item.id, !next).then((r) => r.success, () => false);
           if (!back) setBought(next);
           return back;
         },
@@ -245,7 +249,7 @@ export function ShoppingTab({
     // The row leaves at once; the server delete runs alongside, so the tap never waits on the network.
     dropShop(item.id);
     const deleted = deleteShoppingItemAction(item.id).then(
-      () => true,
+      (r) => r.success,
       () => false,
     );
     showToast({
@@ -275,7 +279,7 @@ export function ShoppingTab({
     if (!cleared.length) return;
     const ids = new Set(cleared.map((c) => c.id));
     const done = clearBoughtItemsAction({ itemIds: [...ids] }).then(
-      () => true,
+      (r) => r.success,
       () => false,
     );
     const drop = () => setShoppingList((prev) => prev.filter((i) => !ids.has(i.id)));

@@ -18,13 +18,11 @@ import {
   RestoreSessionInput,
   SaveSplitDayInput,
 } from "./validations/gym";
+import { Refusal } from "./validations/result";
 import { setLoad } from "./gym-progress";
 import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit, lockUser } from "./gym-seed";
 import { addDays, toISODate } from "./format-date";
 import { weekStart, weeksBetween } from "./gym-progress";
-
-/** An expected refusal (a rule of the page, not a bug): the action shows its message instead of failing. */
-export class GymRefusal extends Error {}
 
 interface DeloadStatus {
   /** x in "Week x of N": 1 to cycleLength, counted from the week after the last deload. */
@@ -67,7 +65,7 @@ export async function createCustomExercise(
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
     // Case-insensitive, against the defaults and the user's own, so the picker never lists two of the same name.
-    if (await nameTaken(tx, userId, input.name)) throw new GymRefusal(`"${input.name}" already exists.`);
+    if (await nameTaken(tx, userId, input.name)) throw new Refusal(`"${input.name}" already exists.`);
     const [created] = await tx
       .insert(exercises)
       .values({ userId, name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType, isCustom: true })
@@ -90,7 +88,7 @@ async function nameTaken(tx: Pick<typeof db, "select">, userId: string, name: st
 export async function updateCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
-    if (await nameTaken(tx, userId, input.name, input.id)) throw new GymRefusal(`"${input.name}" already exists.`);
+    if (await nameTaken(tx, userId, input.name, input.id)) throw new Refusal(`"${input.name}" already exists.`);
     const [row] = await tx
       .update(exercises)
       .set({ name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType })
@@ -104,7 +102,7 @@ export async function updateCustomExercise(userId: string, input: CustomExercise
 export async function restoreCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
-    if (await nameTaken(tx, userId, input.name, input.id)) throw new GymRefusal(`"${input.name}" already exists.`);
+    if (await nameTaken(tx, userId, input.name, input.id)) throw new Refusal(`"${input.name}" already exists.`);
     await tx.insert(exercises).values({ ...input, userId, isCustom: true }).onConflictDoNothing();
     const [row] = await tx.select().from(exercises).where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)));
     return row ?? null;
@@ -231,7 +229,7 @@ async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, excep
     .from(workoutSessions)
     .where(and(eq(workoutSessions.userId, userId), isNull(workoutSessions.durationMinutes), exceptId ? ne(workoutSessions.id, exceptId) : undefined))
     .limit(1);
-  if (open) throw new GymRefusal("A workout is already open. Resume or finish it first.");
+  if (open) throw new Refusal("A workout is already open. Resume or finish it first.");
 }
 
 /**
