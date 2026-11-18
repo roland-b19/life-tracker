@@ -8,12 +8,15 @@ import {
   shoppingCategories,
   shoppingItems,
   shoppingUnits,
+  weightEntries,
 } from "@/db/schema";
 import {
   CreateShoppingItemInput,
   LogMealInput,
+  LogWeightInput,
   MAX_WATER_ML,
   RestoreMealInput,
+  RestoreWeightInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
 } from "./validations/food";
@@ -24,6 +27,7 @@ import {
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
+import { lockUser } from "./gym-seed";
 
 
 export async function getNutritionTargets(userId: string) {
@@ -530,4 +534,59 @@ export async function getUserRecipes(userId: string) {
     })
     .from(recipes)
     .where(eq(recipes.userId, userId));
+}
+
+const weightColumns = {
+  id: weightEntries.id,
+  date: weightEntries.date,
+  kilograms: weightEntries.kilograms,
+};
+
+/** Every weigh-in is kept forever; `since` only limits what a page reads. */
+export async function listWeightEntries(userId: string, since?: string) {
+  return db
+    .select(weightColumns)
+    .from(weightEntries)
+    .where(and(eq(weightEntries.userId, userId), since ? gte(weightEntries.date, since) : undefined))
+    .orderBy(desc(weightEntries.date));
+}
+
+/** Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row, or null when this save created the day. */
+export async function saveWeightEntry(userId: string, input: LogWeightInput) {
+  const kilograms = input.kilograms.toFixed(2);
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "weight", userId); // two saves of a new day at once must not both insert
+    const [previous] = await tx
+      .select(weightColumns)
+      .from(weightEntries)
+      .where(and(eq(weightEntries.userId, userId), eq(weightEntries.date, input.date)));
+    if (!previous) {
+      const [entry] = await tx.insert(weightEntries).values({ userId, date: input.date, kilograms }).returning(weightColumns);
+      return { entry, previous: null };
+    }
+    const [entry] = await tx
+      .update(weightEntries)
+      .set({ kilograms })
+      .where(and(eq(weightEntries.id, previous.id), eq(weightEntries.userId, userId)))
+      .returning(weightColumns);
+    return { entry, previous };
+  });
+}
+
+export async function deleteWeightEntry(userId: string, id: string) {
+  const [deleted] = await db
+    .delete(weightEntries)
+    .where(and(eq(weightEntries.id, id), eq(weightEntries.userId, userId)))
+    .returning({ id: weightEntries.id });
+  return deleted;
+}
+
+/** Undo of a delete: the weigh-in comes back under its old id. A taken id or day gives back undefined. */
+export async function restoreWeightEntry(userId: string, input: RestoreWeightInput) {
+  const [restored] = await db
+    .insert(weightEntries)
+    .values({ id: input.id, userId, date: input.date, kilograms: input.kilograms.toFixed(2) })
+    .onConflictDoNothing()
+    .returning(weightColumns);
+  return restored;
 }
