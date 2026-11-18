@@ -5,9 +5,9 @@ async function main() {
   const adminPassword = process.env.DB_ADMIN_PASSWORD;
   // The app role's password is the one in the app's own DATABASE_URL, so the two can never drift apart.
   const dbUserPassword = process.env.DB_APP_PASSWORD || decodeURIComponent(new URL(process.env.DATABASE_URL || "postgres://invalid").password);
-  if (!adminPassword || !dbUserPassword) throw new Error("DB_ADMIN_PASSWORD and DATABASE_URL (with the app password) are required.");
+  const pgHost = process.env.DB_HOST; // set by scripts/azure-migrate.sh; no default, so a run can never hit another environment's server
+  if (!adminPassword || !dbUserPassword || !pgHost) throw new Error("DB_ADMIN_PASSWORD, DB_HOST and DATABASE_URL (with the app password) are required.");
   const sqlPassword = dbUserPassword.replaceAll("'", "''");
-  const pgHost = process.env.DB_HOST || "lifetrackerstagepg.postgres.database.azure.com";
 
   const sslOptions = process.env.DB_SSL === "disable" ? false : { rejectUnauthorized: true }; // shortcut: DB_SSL=disable is for a local test database only
   console.log("Connecting to postgres maintenance db...");

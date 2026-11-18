@@ -14,6 +14,7 @@ last_verified: 2026-11-18
 | Workflow install (KB, skills, checks, CI job, branch protection on `main`) | done (PR #133) |
 | CI audit blocks on production dependencies only | done (PR #134, D-004) |
 | First e2e spec (Wishlist, Playwright, D-005) | done, [plan](plans/e2e-first-spec.md) |
+| One source for the local test credentials; dead Azure host fallbacks removed (D-006) | done |
 
 ## In progress
 None.
@@ -22,7 +23,6 @@ None.
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
 
 ## Open questions
-- The test password is duplicated in `tests/setup.ts`; the Azure scripts keep a `postgres_server` fallback and a default host in `db-init.cjs`.
 - `scripts/backup-now.sh`, `scripts/import-personal.cjs` and `scripts/azure-preflight.sh` have no npm script or caller (kept as manual tools; D-003 for the last).
 - **Weight REST vs server actions.** Investigated 2026-11-18: weight was the first feature (commit b34a649, 2026-11-03, "iteration one security spine") and was built as a JSON API with same-origin, session and error-contract checks plus `tests/authorization.test.ts`; every later feature used server actions. No recorded reason to keep it. Only `app/food/weight-card.tsx` calls it. It is listed under Tracked migrations; the owner has not decided when to migrate.
 
