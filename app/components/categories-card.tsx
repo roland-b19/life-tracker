@@ -6,7 +6,7 @@ import type { CategoryScope } from "@/lib/validations/categories";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
-import { useToast } from "./toast";
+import { undoWith, useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
 export interface CategoriesApi {
@@ -62,7 +62,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
@@ -88,71 +88,64 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
-      onUndo: async () => {
+      onUndo: undoWith(showToast, async () => {
         reorder(previous);
         const back = await api.reorder(previous).catch(() => null);
-        if (!back?.success) {
-          reorder(next);
-          showToast({ message: "Failed to undo", type: "warning" });
-        }
-      },
+        if (!back?.success) reorder(next);
+        return back;
+      }),
     });
   }
   const dragRow = useDragSort(move);
 
   function openForm(edit: string | null) {
-    setError("");
+    setErrorMsg("");
     setFrom(edit);
     setName(edit ?? "");
     setOpen(true);
   }
 
   // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure undoes that.
-  async function revert(name: string, current: string, change: Change, dropCurrent: boolean, at: number) {
-    const put = () => {
+  const revert = (name: string, current: string, change: Change, dropCurrent: boolean, at: number) =>
+    undoWith(showToast, async () => {
       onChange((prev) => {
         const without = dropCurrent ? prev.filter((c) => c !== current) : prev;
         return without.includes(name) ? without : [...without.slice(0, at), name, ...without.slice(at)];
       });
       onRefile(current, name, change.itemIds);
-    };
-    put();
-    const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
-    onSynced?.();
-    if (!back?.success) {
-      onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
-      onRefile(name, current, change.itemIds);
-      showToast({ message: "Failed to undo", type: "warning" });
-    }
-  }
+      const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
+      onSynced?.();
+      if (!back?.success) {
+        onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
+        onRefile(name, current, change.itemIds);
+      }
+      return back;
+    });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
-    if (to === builtIn) return setError(`Please pick a name other than "${builtIn}".`);
-    setError("");
+    if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}".`);
+    setErrorMsg("");
     setBusy(true);
     try {
       if (from === null) {
-        if (!(await api.add(to)).success) return setError(`"${to}" already exists.`);
+        if (!(await api.add(to)).success) return setErrorMsg(`"${to}" already exists.`);
         onChange((prev) => [...prev, to]);
         showToast({
           message: `Added "${to}"`,
           type: "success",
-          onUndo: async () => {
+          onUndo: undoWith(showToast, async () => {
             onChange((prev) => prev.filter((c) => c !== to));
             const gone = await api.remove(to).catch(() => null);
             onSynced?.();
-            if (!gone?.success) {
-              onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
-              showToast({ message: "Failed to undo", type: "warning" });
-              return;
-            }
+            if (!gone?.success) onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
             // Items filed under it since go to the fallback, like any delete.
-            onRefile(to, builtIn);
-          },
+            else onRefile(to, builtIn);
+            return gone;
+          }),
         });
       } else {
         const res = await api.rename(from, to);
@@ -167,12 +160,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Renamed "${from}" to "${to}"`,
           type: "success",
-          onUndo: () => revert(from, to, change, !change.merged, at),
+          onUndo: revert(from, to, change, !change.merged, at),
         });
       }
       setOpen(false);
     } catch {
-      setError(`Failed to save ${noun}`);
+      setErrorMsg(`Failed to save ${noun}`);
     } finally {
       setBusy(false);
     }
@@ -198,7 +191,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onSynced?.();
     showToast({
       message: `Removed "${cat}"; its items are in ${categoryLabel(builtIn)}`,
-      onUndo: () => revert(cat, builtIn, change, false, at),
+      onUndo: revert(cat, builtIn, change, false, at),
     });
   }
 
@@ -238,7 +231,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         onClose={() => setOpen(false)}
         title={from ? `Edit ${noun}` : `New ${noun}`}
         onSubmit={submit}
-        error={error}
+        error={errorMsg}
         busy={busy}
         canSubmit={!!name.trim()}
       >

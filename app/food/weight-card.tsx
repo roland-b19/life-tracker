@@ -22,7 +22,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
   const [entries, setEntries] = useState(initial);
   const [open, setOpen] = useState(false);
   const [kilograms, setKilograms] = useState("");
-  const [error, setError] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
@@ -34,7 +34,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
   function openForm() {
     const day = toISODate();
     setToday(day);
-    setError("");
+    setErrorMsg("");
     setKilograms(entries.find((e) => e.date === day)?.kilograms ?? "");
     setOpen(true);
   }
@@ -68,14 +68,14 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
-    setError("");
+    setErrorMsg("");
     const kg = Number(kilograms);
     setSaving(true);
     try {
       // The screen can be behind the database (another device): the server creates the day or changes the row it already has.
       const saved = await saveWeightAction({ date: today, kilograms: kg });
       if (!saved.success) {
-        setError(saved.error);
+        setErrorMsg(saved.error);
         return;
       }
       const { entry, previous } = saved;
@@ -112,7 +112,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
         ),
       });
     } catch {
-      setError("Failed to save weight");
+      setErrorMsg("Failed to save weight");
     } finally {
       setSaving(false);
     }
@@ -132,7 +132,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
         <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
       </Card>
 
-      <FormModal isOpen={open} onClose={() => setOpen(false)} title="Edit weight" onSubmit={handleSubmit} error={error} busy={saving} canSubmit={!!kilograms}>
+      <FormModal isOpen={open} onClose={() => setOpen(false)} title="Edit weight" onSubmit={handleSubmit} error={errorMsg} busy={saving} canSubmit={!!kilograms}>
         <Field
           label="Weight today (kg)"
           type="number"
