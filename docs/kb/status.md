@@ -15,11 +15,10 @@ last_verified: 2026-11-18
 | CI audit blocks on production dependencies only | done (PR #134, D-004) |
 
 ## In progress
-Nothing.
+- First end-to-end spec, the Wishlist flow with Playwright (D-005): [plan](plans/e2e-first-spec.md), plan approved 2026-11-18, being built.
 
 ## Next steps
-1. First end-to-end spec for the main UI flow (none exists yet).
-2. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
+1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
 
 ## Open questions
 - The test password is duplicated in `tests/setup.ts`; the Azure scripts keep a `postgres_server` fallback and a default host in `db-init.cjs`.
