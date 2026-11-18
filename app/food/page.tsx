@@ -7,9 +7,9 @@ import {
   getDailyMetricsHistory,
   getShoppingCategories,
   getShoppingList,
+  listWeightEntries,
 } from "@/lib/food";
 import { addDays, toISODate } from "@/lib/format-date";
-import { listWeightEntries } from "@/server/weight";
 import { FoodClient } from "./food-client";
 
 export default async function FoodPage() {

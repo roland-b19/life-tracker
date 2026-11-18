@@ -128,14 +128,22 @@ export function useToast() {
   return context;
 }
 
-/** An Undo that writes the old state back: a write that throws or answers without success shows `failed` as a warning. */
-export function undoWith(
+/** What an Undo write answers: a server action's `{ success }`, a plain yes or no, or nothing when it threw. */
+type Written = boolean | { success?: boolean } | null | undefined;
+
+/**
+ * An Undo that writes the old state back. The screen goes back first inside `write`, which puts it right again when the
+ * write fails; a write that throws or does not answer success shows `failed` (or what it returns for the answer) as a warning.
+ * A `write` that has already told the user why it did nothing returns `true`.
+ */
+export function undoWith<R extends Written>(
   showToast: ToastContextValue["showToast"],
-  write: () => Promise<{ success?: boolean } | null | undefined>,
-  failed = "Failed to undo",
+  write: () => Promise<R>,
+  failed: string | ((back: Exclude<R, true> | null) => string) = "Failed to undo",
 ) {
   return async () => {
     const back = await write().catch(() => null);
-    if (!back?.success) showToast({ message: failed, type: "warning" });
+    if (back === true || (back && typeof back === "object" && back.success)) return;
+    showToast({ message: typeof failed === "function" ? failed(back as Exclude<R, true> | null) : failed, type: "warning" });
   };
 }

@@ -141,6 +141,15 @@ describe("Azure reminder pipeline contract", () => {
     expect(readFileSync("worker/package.json", "utf8")).toContain("@azure/storage-queue");
   });
 
+  it("imports web-push as a namespace: version 4 is ESM with named exports and no default export", () => {
+    // The worker's dependencies are not installed here, so this guards the import statically; a default import
+    // passes lint, typecheck and every test, and then fails the job at start-up.
+    const send = readFileSync("worker/send.mjs", "utf8");
+    expect(send).toContain('import * as webpush from "web-push";');
+    expect(send).not.toMatch(/import\s+webpush\s+from/);
+    expect(JSON.parse(readFileSync("worker/package.json", "utf8")).dependencies["web-push"]).toMatch(/^\^?4\./);
+  });
+
   it("runs migrations from their own script, with the identity attached to the job", () => {
     expect(deployScript).toContain('./scripts/azure-migrate.sh "$environment"');
     expect(migrateScript).toContain('az identity show --name "life-tracker-$environment-identity"');
@@ -154,6 +163,13 @@ describe("Azure reminder pipeline contract", () => {
     expect(dockerfile).toContain("COPY --chown=nextjs:nodejs drizzle ./drizzle");
     expect(dockerfile).toContain("/app/node_modules/drizzle-orm ./node_modules/drizzle-orm");
     expect(readFileSync(".dockerignore", "utf8").split("\n")).not.toContain("drizzle");
+  });
+
+  it("has no default Azure database host: the migrate script derives it from the bicep name and passes it in", () => {
+    expect(bicep).toContain("var postgresName = replace('${suffix}-pg', '-', '')"); // lifetracker<env>pg
+    expect(migrateScript).toContain('db_host="lifetracker${environment}pg.postgres.database.azure.com"');
+    expect(migrateScript).toContain("name: DB_HOST");
+    expect(readFileSync("scripts/db-init.cjs", "utf8")).not.toContain("postgres.database.azure.com");
   });
 
   it("ships public/ in the image: the service worker, manifest, icons and 3D models are served from it", () => {

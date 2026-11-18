@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
-import { useToast } from "../components/toast";
+import { undoWith, useToast } from "../components/toast";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/app/actions/claude-connection";
 import { formatDMY } from "@/lib/format-date";
 
@@ -41,7 +41,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
       showToast({
         message: before ? "Saved the new Claude token" : "Connected Claude",
         type: "success",
-        onUndo: () => undo(before, res.previous, res.connectedAt),
+        onUndo: undo(before, res.previous, res.connectedAt),
       });
       setToken("");
       setIsModalOpen(false);
@@ -55,17 +55,16 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
   type Previous = { tokenEncrypted: string; connectedAt: string } | null;
 
   // Puts the earlier connection back: the stored (still encrypted) token, or none when there was none.
-  async function undo(before: string | null, previous: Previous, now: string | null) {
-    setConnectedAt(before);
-    const ok = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).then(
-      () => true,
-      () => false,
-    );
-    if (!ok) {
-      setConnectedAt(now);
-      showToast({ message: "Failed to undo", type: "warning" });
-    }
-  }
+  const undo = (before: string | null, previous: Previous, now: string | null) =>
+    undoWith(showToast, async () => {
+      setConnectedAt(before);
+      const ok = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).then(
+        () => true,
+        () => false,
+      );
+      if (!ok) setConnectedAt(now);
+      return ok;
+    });
 
   async function handleDisconnect() {
     const before = connectedAt;
@@ -75,7 +74,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
       showToast({
         message: "Disconnected Claude",
         type: "success",
-        onUndo: () => undo(before, previous, null),
+        onUndo: undo(before, previous, null),
       });
     } catch {
       setConnectedAt(before);
