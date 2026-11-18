@@ -20,7 +20,7 @@ Only the weight card of the Health page (`/health`, the home page) has a browser
 - [x] The Shopping flow, on the Shopping tab, adds an item (toast `Added "<name>"`), edits it (name, amount), ticks it (toast `Bought "<name>"`, Undo), clears the bought items (toast `Cleared 1 bought item`, Undo brings it back), and deletes it (toast `Removed "<name>"`, Undo brings it back), each also after a reload and each Undo checked in the database — checked by the spec's assertions.
 - [x] axe finds no serious or critical violation on the Today tab, with the "New meal" form open, on the Shopping tab with an item listed and with the "New shopping item" form open, on `desktop` and `phone` — checked by the spec (a finding is fixed in the code, never excluded).
 - [x] The specs make no waits by time and find elements by role, label or text only — checked by `grep -rn "waitForTimeout\|locator(" tests/e2e` finding nothing.
-- [ ] `npm run check` passes with a private database, and CI on the pull request is green — checked by the command and the pull request's checks. The pull request is not merged.
+- [x] `npm run check` passes with a private database, and CI on the pull request is green — checked by the command and the pull request's checks. The pull request is not merged.
 
 ## Decisions
 - D-015: Health e2e spec: the Today and Shopping tabs in four flows, checked in the database; no day stepper, no Assistant tab
@@ -38,7 +38,7 @@ Only the weight card of the Health page (`/health`, the home page) has a browser
    - Shopping flow: "Add item" opens "New shopping item" with `Name`, `Amount`, `Unit` (select) and the category field; fill name `E2E item <8 hex>` and amount 2, Save through `andSettle`; the row shows `<name> · 2 pcs`; edit with `Edit <name>` (dialog "Edit shopping item"), change the name and amount; tick with `Mark <name> as bought` (Undo, then tick again); "Clear bought" (Undo brings the row back, then clear again and Undo); delete with `Delete <name>` and Undo. The Shopping list card is `getByRole("region", { name: "Shopping list" })`. A tick, a delete and a clear are optimistic: `andSettle` waits for the action's POST, and a reload proves the database. The Undo of a tick or a clear sends a second action, so pass `andSettle` a body piece that tells it from the first (the item id or `"isBought":false`; read the real body in `src/actions/food.ts` and the browser).
    - Axe test (`@a11y`, both projects): Today tab, scan; "Add meal", wait for the dialog "New meal", scan, close it with `Cancel`; Shopping tab, add an item, scan; "Add item", wait for the dialog "New shopping item", scan.
 3. [x] KB and docs — files: `docs/kb/conventions.md`, `docs/kb/architecture.md`, `docs/kb/status.md`, `docs/kb/log/2026-11.md`, `docs/kb/INDEX.md`, `docs/kb/decisions/general.md` (change: the plan link after archiving); tests: `python3 .claude/skills/maintain-kb/scripts/kb_check.py docs/kb`.
-4. [ ] Verify and hand off — files: none; tests: `npm run check` and `npm run e2e` against a private database, then the merge-branch skill opens the pull request and CI is green. Do not merge it.
+4. [x] Verify and hand off — files: none; tests: `npm run check` and `npm run e2e` against a private database, then the merge-branch skill opens the pull request and CI is green. Do not merge it.
 
 ## Cleanup and docs
 - Nothing becomes unused: no app code, helper or config changes.
