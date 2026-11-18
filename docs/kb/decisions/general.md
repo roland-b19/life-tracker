@@ -18,7 +18,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Status:** active. The end-to-end tool was chosen later in D-005. Screenshot tests were not requested.
 
 ## D-003: Keep `azure-preflight.sh` and the unused schema columns (2026-11-18)
-- **Why:** `scripts/azure-preflight.sh` is a manual tool for the Azure course demos (D-001), like `backup-now.sh` and `import-personal.cjs`. The columns `daily_metrics.notes`, `workout_split_days.order_index` and `workout_splits.is_active` may hold rows in the live database, and migrations are additive only; dropping them needs a migration the owner runs. Both chosen by the owner on 2026-11-18.
+- **Why:** `scripts/azure-preflight.sh` is a manual tool for the Azure course demos (D-001), like `backup-now.sh` and `import-personal.cjs` (D-008). The columns `daily_metrics.notes`, `workout_split_days.order_index` and `workout_splits.is_active` may hold rows in the live database, and migrations are additive only; dropping them needs a migration the owner runs. Both chosen by the owner on 2026-11-18.
 - **Rejected:** Deleting the script (the demos need it); dropping the columns now (risk to live data for no gain).
 - **Status:** active. A column is removed only in its own change, after a search proves nothing reads it.
 
@@ -42,7 +42,12 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Rejected:** Keeping the routes for a possible future client (no second client exists); separate create and update actions (the stale-screen cases need a lookup first).
 - **Status:** active. Saves take the per-user advisory lock (`lockUser`, scope `weight`), so two saves of the same new day at once become a create and an edit instead of a unique violation.
 
-## D-008: One name for form error state: `errorMsg` (2026-11-18)
+## D-008: Keep `backup-now.sh` and `import-personal.cjs` as manual owner tools (2026-11-18)
+- **Why:** Neither script has an npm script, a CI step or a test, but both are deliberate: `scripts/backup-now.sh` takes one plaintext `pg_dump` of the live database into the gitignored `.local/backups/` before a data-changing step (the weekly encrypted workflow is separate), and `scripts/import-personal.cjs` loads the owner's wishlist and tasks from the gitignored `.local/personal-data.json`. Both carry a header comment with their usage, and the importer was updated for schema changes as late as 2026-11-15. The `bash -n scripts/*.sh` CI step still syntax-checks `backup-now.sh`, and `backup-now.sh` is one of the four places that pin the Postgres version. Chosen by the owner on 2026-11-18, one answer per script.
+- **Rejected:** Deleting `backup-now.sh` (the Postgres version cross-references in `ci.yml`, `backup.yml` and `docker-compose.yml` would then need editing, and the manual copy before data changes would be lost); deleting `import-personal.cjs` (the owner wants to keep it).
+- **Status:** active. The owner runs both from their Mac with the owner URL in a hidden prompt; no agent runs them. `import-personal.cjs` must follow schema changes to the tables it writes.
+
+## D-009: One name for form error state: `errorMsg` (2026-11-18)
 - **Why:** Golden rule 1: client forms used `error` (6 files), `formError` (2) and `titleError` (1) next to `errorMsg` (Wishlist and Settings). The Wishlist page is the reference, so its name wins over the majority. Every client form now declares `[errorMsg, setErrorMsg]`.
 - **Rejected:** `error` (the most used, but it also names the `FormModal` prop and the `error` field of action results, so it reads ambiguously in a handler).
 - **Status:** active. The `error` prop of `FormModal` is unchanged.
