@@ -35,6 +35,5 @@ Deprecated patterns still in use (golden rule 1). New code never uses them; migr
 - **Test setup duplication:** `seedUser` in 11 test files and the `authState` mock in about 10 → one shared helper in `tests/`.
 - **Pages calling `getServerSession` directly** although `RequireSession` guards the layouts (the pages test requires the check, so this stays until that test changes).
 - **Layout of logic:** `src/app/actions` next to the root `app/`; add vs create function names; the "Health" label vs the `/food` route; `revalidatePath` only in gym.
-- **CSS:** duplicate selectors `.entry-row`, `.todo-row`, `.item-link-text` in `app/globals.css`.
 - **Chat role `"model"`:** a Gemini leftover in the food chat history.
 - **`pg` version pinning:** root uses `^`, `worker/` exact.
