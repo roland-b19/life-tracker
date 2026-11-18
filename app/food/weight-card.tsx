@@ -88,7 +88,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
           onUndo: undoWith(showToast, async () => {
             setEntries((list) => list.filter((e) => e.id !== entry.id));
             const gone = await deleteWeightAction(entry.id).catch(() => null);
-            if (!gone?.success) upsert(entry);
+            if (!gone) upsert(entry); // `success: false` means it is already gone, so the screen is right without it
             return gone;
           }),
         });
@@ -103,7 +103,9 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
           async () => {
             upsert(previous);
             const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
-            if (!back?.success) upsert(entry);
+            // The saved row is the one the database has now: a new id if the day was deleted elsewhere in the meantime.
+            if (back?.success) upsert(back.entry);
+            else upsert(entry);
             return back;
           },
           "Failed to undo the edit",
