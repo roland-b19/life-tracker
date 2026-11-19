@@ -5,7 +5,6 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
-import { isClaudeEnabled } from "@/lib/features";
 import { exportDataAction } from "@/actions/export";
 import { clearPageCache } from "./page-cache";
 
@@ -42,7 +41,7 @@ export function Navigation({ userName }: NavigationProps) {
     return "Life Tracker";
   };
 
-  const navLinks = [
+  const links = [
     {
       href: "/gym",
       label: "Gym",
@@ -97,8 +96,6 @@ export function Navigation({ userName }: NavigationProps) {
     },
   ];
 
-  // Settings only holds the Claude connection, so it exists only when that is enabled.
-  const links = isClaudeEnabled() ? navLinks : navLinks.filter((l) => l.href !== "/settings");
   const primary = links.slice(0, 4);
   const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);

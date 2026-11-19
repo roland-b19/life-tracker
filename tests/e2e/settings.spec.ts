@@ -54,7 +54,7 @@ test("the Settings page has no serious violations, also with the connect form op
 });
 
 test("a signed-in user connects Claude, with a refusal for a bad token and Undo, also after a reload", async ({ signedInPage: page }) => {
-  // The sidebar link only exists with the Claude flag on (the e2e server sets it).
+  // The sidebar always links to Settings; the Claude card on it needs the Claude flag (the e2e server sets it).
   await page.goto("/health");
   await page.getByRole("navigation", { name: "Main Navigation" }).getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/settings$/);
@@ -138,4 +138,64 @@ test("the export downloads the user's data and never the Claude token", async ({
   expect(text).toContain("== Account (1) ==");
   expect(text).not.toContain(token);
   expect(text).not.toContain("sk-ant-");
+});
+
+const appearance = (page: Page) => page.getByRole("region", { name: "Appearance", exact: true });
+const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme ?? "auto");
+// The page color is the last layer of the body background (app/globals.css), a light-dark() token.
+const pageColor = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+async function pick(page: Page, choice: "Auto" | "Light" | "Dark") {
+  await appearance(page).getByRole("tab", { name: choice, exact: true }).click();
+  await expect(appearance(page).getByRole("tab", { name: choice, exact: true })).toHaveAttribute("aria-selected", "true");
+}
+
+test("a signed-in user picks Light or Dark for this device, with Undo, also after a reload", async ({ signedInPage: page }) => {
+  // The script in <head> changes <html> before React hydrates; React must not warn about it.
+  const hydrationWarnings: string[] = [];
+  page.on("console", (m) => {
+    if (/hydrat/i.test(m.text())) hydrationWarnings.push(m.text());
+  });
+
+  await openSettings(page);
+  await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("auto");
+  const dark = await pageColor(page); // this project's system scheme is dark
+  await page.emulateMedia({ colorScheme: "light" });
+  const light = await pageColor(page);
+  expect(light).not.toBe(dark);
+
+  // Light against a dark system; Undo puts Auto back, and the page follows the system again.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await pick(page, "Light");
+  await expect(page.getByText("Appearance set to Light")).toBeVisible();
+  expect(await theme(page)).toBe("light");
+  expect(await pageColor(page)).toBe(light);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("auto");
+  expect(await pageColor(page)).toBe(dark);
+  await openSettings(page);
+  expect(await theme(page)).toBe("auto");
+
+  // Light is kept across a reload.
+  await pick(page, "Light");
+  await openSettings(page);
+  await expect(appearance(page).getByRole("tab", { name: "Light", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("light");
+  expect(await pageColor(page)).toBe(light);
+
+  // Dark against a light system, also after a reload; then Auto follows the light system.
+  await page.emulateMedia({ colorScheme: "light" });
+  await pick(page, "Dark");
+  expect(await pageColor(page)).toBe(dark);
+  await openSettings(page);
+  await expect(appearance(page).getByRole("tab", { name: "Dark", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("dark");
+  expect(await pageColor(page)).toBe(dark);
+  await pick(page, "Auto");
+  expect(await theme(page)).toBe("auto");
+  expect(await pageColor(page)).toBe(light);
+
+  expect(hydrationWarnings).toEqual([]);
 });

@@ -422,12 +422,6 @@ button.nav-link:disabled {
   padding-bottom: 0.75rem;
 }
 
-/* Alone in the menu (no Settings link below it) the row has the same space above and below */
-.more-user:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0.5rem;
-}
-
 .more-user-text {
   flex: 1;
   min-width: 0;

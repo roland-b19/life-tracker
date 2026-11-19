@@ -1,14 +1,13 @@
-import { notFound } from "next/navigation";
 import { requirePageUser } from "@/server/auth";
 import { getClaudeConnection } from "@/lib/claude-connection";
 import { isClaudeEnabled } from "@/lib/features";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
-  if (!isClaudeEnabled()) notFound();
   const user = await requirePageUser();
 
-  const connection = await getClaudeConnection(user.id);
+  // Settings is always shown (Appearance); only the Claude card and its data sit behind the flag.
+  const connection = isClaudeEnabled() ? await getClaudeConnection(user.id) : null;
 
   return (
     <SettingsClient
