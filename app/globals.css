@@ -960,10 +960,11 @@ button:disabled {
   border-color: color-mix(in srgb, var(--tint), var(--text) 35%);
 }
 /* Until their fields are filled in, Save, Log set and Send look like the grey secondary buttons (their fill and
-   hairline edge) with the muted label, still raised, so they read as a button that cannot be pressed yet (D-033) */
+   hairline edge), still raised, with the label faded like a disabled button's (the 0.45 above), so they read as a
+   button that cannot be pressed yet (D-033) */
 :is(button:not([class]), button.log-set):disabled {
   opacity: 1;
-  color: var(--secondary);
+  color: color-mix(in srgb, var(--text) 45%, transparent);
   background: var(--surface-secondary);
   border-color: var(--card-edge);
 }
