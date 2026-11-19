@@ -27,7 +27,7 @@ last_verified: 2026-11-19
 | New color palette: slate, one turquoise accent, dark and light modes with a manual switch (D-020 to D-024) | in progress, [plan](plans/color-palette.md) (approved 2026-11-19; built on `claude/palette-build-2d56b0` through step 8, waiting on the owner's iOS check, step 9) |
 
 ## In progress
-- Color palette: steps 2–8 built (tokens, light scans, surfaces, numerals, the Appearance switch, icons); step 6 waits on the subtle-accent question, step 9 on the owner's iOS status bar check.
+- Color palette: steps 2–8, 11 and 12 built (tokens, light scans, surfaces, neutral small buttons, numerals, the Appearance switch, icons, docs); step 9 waits on the owner's iOS status bar check, then step 10.
 
 ## Next steps
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).

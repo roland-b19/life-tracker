@@ -151,10 +151,10 @@ async function pick(page: Page, choice: "Auto" | "Light" | "Dark") {
 }
 
 test("a signed-in user picks Light or Dark for this device, with Undo, also after a reload", async ({ signedInPage: page }) => {
-  // The script in <head> changes <html> before React hydrates; React must not warn about it.
-  const hydrationWarnings: string[] = [];
+  // The script in <head> changes <html> before React hydrates; React must not warn about either (InlineScript).
+  const reactWarnings: string[] = [];
   page.on("console", (m) => {
-    if (/hydrat/i.test(m.text())) hydrationWarnings.push(m.text());
+    if (/hydrat|script tag/i.test(m.text())) reactWarnings.push(m.text());
   });
 
   await openSettings(page);
@@ -197,5 +197,5 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   expect(await theme(page)).toBe("auto");
   expect(await pageColor(page)).toBe(light);
 
-  expect(hydrationWarnings).toEqual([]);
+  expect(reactWarnings).toEqual([]);
 });
