@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { visible } from "@/lib/validations/common";
-import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel } from "@/lib/gym-muscles";
-import { Badge, Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
+import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL } from "@/lib/gym-muscles";
+import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { deleteCustomExerciseAction, restoreCustomExerciseAction, updateCustomExerciseAction } from "@/actions/gym";
+import { MuscleTag } from "./muscle-tag";
 
 export interface CustomExercise {
   id: string;
@@ -90,11 +91,11 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
           {shown.length === 0 && <EmptyNote>No custom exercises yet.</EmptyNote>}
           {shown.map((e) => (
             <div key={e.id} className="entry-row">
-              <div>
+              <div className="entry-main entry-stack">
                 <strong>{e.name}</strong>
-                <span className="muted muscle-day">{cap(e.equipmentType)}</span>
+                <MuscleTag group={e.muscleGroup} />
+                <span className="muted entry-detail">{cap(e.equipmentType)}</span>
               </div>
-              <Badge kind="rest">{muscleLabel(e.muscleGroup)}</Badge>
               <RowActions onEdit={() => open(e)} onDelete={() => remove(e)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>
           ))}

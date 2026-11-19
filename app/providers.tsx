@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SessionProvider } from "next-auth/react";
+import { fadeTheme } from "./components/theme";
 import { ToastProvider } from "./components/toast";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -54,10 +55,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       if (wrote) window.location.reload();
     };
     window.addEventListener("popstate", onPop);
+    // A system switch between dark and light fades too (it shows only in Auto; with a forced mode nothing changes).
+    const scheme = matchMedia("(prefers-color-scheme: dark)");
+    scheme.addEventListener("change", fadeTheme);
     return () => {
       clearTimeout(refreshTimer);
       window.fetch = realFetch;
       window.removeEventListener("popstate", onPop);
+      scheme.removeEventListener("change", fadeTheme);
       sw?.removeEventListener("message", onSw);
       for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, touch, { capture: true });
       document.removeEventListener("gesturestart", blockPinch);

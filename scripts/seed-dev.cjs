@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Fills a local dev user with sample weigh-ins, water, steps, meals, a shopping list, tasks, a wishlist and 8 weeks of workouts, so every Health tab, Tasks and Gym Progress have data.
-// Usage: npm run seed:dev [-- <dev user name>]   (default user: "demo"; sign in with that name)
+// Fills local dev users with sample weigh-ins, water, steps, meals, a shopping list, tasks (some habits already ticked today,
+// a few with a reminder), a wishlist, custom exercises and 8 weeks of workouts with a deload week, so every page has data.
+// Usage: npm run seed:dev [-- <dev user name> ...]   (default user: "demo"; sign in with that name)
 // Only runs against a local database with dev sign-in on. Weight, water and steps fill only the days
 // that have no entry; meals, shopping and tasks only fill when the user has none yet; workouts fill only the training days
 // without a session (the user must have opened Gym once, which creates the split). Nothing is overwritten.
 const { Client } = require("pg");
 
-const name = process.argv[2] || "demo";
+const names = process.argv.slice(2).length ? process.argv.slice(2) : ["demo"];
 // SEED_DAYS=730 gives about two years of history (for the cost-guard measurements); the default keeps the sample small.
 const DAYS = Number(process.env.SEED_DAYS) || 90;
 const url = process.env.DATABASE_URL_MIGRATE || process.env.DATABASE_URL || "";
@@ -177,13 +178,12 @@ async function seedTasks(db, userId) {
   for (const space of ["personal", "business"]) {
     for (const [i, c] of TASK_CATEGORIES[space].entries())
       await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [userId, space, c, i + 1]);
+    // A habit due today is already ticked by its odds, so the Daily tab shows both done and open ones.
     for (const habit of HABITS[space]) {
-      await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
+      const id = await insert(space, habit.title, true, habit.pattern, start, false, habit.category);
+      const dueToday = habit.pattern === "daily" || habit.pattern.slice(5).split(",").includes(String(weekday(today)));
+      if (dueToday && random() < habit.odds) await db.query("UPDATE todos SET is_completed = true, completed_at = now() WHERE id = $1", [id]);
       count++;
-      for (let day = start; day <= today; day = addDays(day, 1)) {
-        const due = habit.pattern === "daily" || habit.pattern.slice(5).split(",").includes(String(weekday(day)));
-        if (!due) continue;
-      }
     }
 
     // One to three one-off tasks a day: past ones done, yesterday's last one left open so it carries over today.
@@ -194,7 +194,9 @@ async function seedTasks(db, userId) {
       const n = i === 0 ? 3 : Math.floor(between(1, 3.99));
       for (let k = 0; k < n; k++) {
         const done = i > 1 || (i === 1 && k < n - 1) || (i === 0 && k === 0);
-        await insert(space, titles[t++ % titles.length], false, "none", day, done);
+        const id = await insert(space, titles[t++ % titles.length], false, "none", day, done);
+        // Today's and the coming days' last task has a reminder.
+        if (i <= 0 && k === n - 1) await db.query("UPDATE todos SET reminder_time = $2 WHERE id = $1", [id, i === 0 ? "18:00" : "09:00"]);
         count++;
       }
     }
@@ -218,39 +220,76 @@ async function seedFixtureDay(db, userId) {
   await add("Tue 10.11 daily, mind", true, "2026-11-03", { category: "mind" });
   await add("Tue 10.11 one-off, done", false, FIXTURE_DAY, { done: true });
   await add("Tue 10.11 one-off, open", false, FIXTURE_DAY);
-  return `fixture day: 5 tasks on ${FIXTURE_DAY}`;
+  return `fixture day: 4 tasks on ${FIXTURE_DAY}`;
 }
 
-// [name, link, price]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover https, a bare domain and free text.
+// [name, link, price, category]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover
+// https, a bare domain, free text and none; the categories leave one item under Other.
 const WISHLIST = [
-  ["Standing desk", "https://www.ikea.com/ro/ro/", 1450],
-  ["Mechanical keyboard", "emag.ro", 480],
-  ["Noise-cancelling headphones", "https://example.com/headphones", 1100],
-  ["Running shoes", "Decathlon", 320],
-  ["Desk lamp", null, 89.9],
-  ["Yoga mat", "decathlon.ro", 119],
-  ["Espresso machine", null, 899],
-  ["Water bottle", "emag", 45],
+  ["Standing desk", "https://www.ikea.com/ro/ro/", 1450, "home"],
+  ["Desk lamp", null, 89.9, "home"],
+  ["Linen bedding set", "https://www.ikea.com/ro/ro/", 340, "home"],
+  ["Robot vacuum", "emag.ro", 1290, "home"],
+  ["Mechanical keyboard", "emag.ro", 480, "tech"],
+  ["Noise-cancelling headphones", "https://example.com/headphones", 1100, "tech"],
+  ["E-reader", "https://example.com/e-reader", 699, "tech"],
+  ["USB-C hub", null, 149, "tech"],
+  ["Smart watch", "Garmin", 1650, "tech"],
+  ["Running shoes", "Decathlon", 320, "sport"],
+  ["Yoga mat", "decathlon.ro", 119, "sport"],
+  ["Adjustable dumbbells", "https://example.com/dumbbells", 890, "sport"],
+  ["Resistance bands", null, 65, "sport"],
+  ["Espresso machine", null, 899, "kitchen"],
+  ["Cast iron pan", "emag", 210, "kitchen"],
+  ["Chef's knife", "https://example.com/knife", 420, "kitchen"],
+  ["Water bottle", "emag", 45, "other"],
+  ["Weekend city break", "Booking", 1800, "other"],
 ];
 
 // Wishlist categories, in order; the seed files each item under one of them (or Other).
 const WISHLIST_CATEGORIES = ["home", "tech", "sport", "kitchen"];
-const WISHLIST_CATEGORY = { "Standing desk": "home", "Mechanical keyboard": "tech", "Noise-cancelling headphones": "tech", "Running shoes": "sport", "Desk lamp": "home", "Yoga mat": "sport", "Espresso machine": "kitchen" };
 
 async function seedWishlist(db, userId) {
-  if (!(await isEmpty(db, "wishlist_items", userId))) return "wishlist: skipped, the user has items";
   for (const [i, c] of WISHLIST_CATEGORIES.entries())
     await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, 'wishlist', $2, $3) ON CONFLICT DO NOTHING`, [userId, c, i + 1]);
-  for (const [i, [itemName, link, price]] of WISHLIST.entries()) {
+  // Only the items the user does not have yet (by name), so a rerun or an account with its own items gets the rest.
+  const { rows } = await db.query(`SELECT name FROM wishlist_items WHERE user_id = $1`, [userId]);
+  const have = new Set(rows.map((r) => r.name));
+  let added = 0;
+  for (const [i, [itemName, link, price, category]] of WISHLIST.entries()) {
+    if (have.has(itemName)) continue;
     const priority = price >= 750 ? "high" : price >= 250 ? "medium" : "low";
     await db.query(
       `INSERT INTO wishlist_items (user_id, name, url, estimated_price, priority, category, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, now() - make_interval(days => $7))`,
-      [userId, itemName, link, price, priority, WISHLIST_CATEGORY[itemName] ?? "other", i * 3],
+      [userId, itemName, link, price, priority, category, i * 2],
     );
+    added++;
   }
-  return `wishlist: ${WISHLIST.length} items`;
+  return `wishlist: ${added} items added`;
 }
+
+// [name, muscle group, equipment]: the user's own exercises, beside the shared defaults.
+const CUSTOM_EXERCISES = [
+  ["Landmine press", "shoulders", "barbell"],
+  ["Single-arm cable row", "back", "cable"],
+  ["Nordic curl", "hamstrings", "bodyweight"],
+];
+
+async function seedCustomExercises(db, userId) {
+  let count = 0;
+  for (const [exerciseName, muscle, equipment] of CUSTOM_EXERCISES) {
+    const { rowCount } = await db.query(
+      `INSERT INTO exercises (user_id, name, muscle_group, equipment_type, is_custom) VALUES ($1, $2, $3, $4, true) ON CONFLICT DO NOTHING`,
+      [userId, exerciseName, muscle, equipment],
+    );
+    count += rowCount;
+  }
+  return `custom exercises: ${count} added`;
+}
+
+// The Sunday that starts the date's week, as the app's deload weeks and Progress tab count them.
+const sunday = (iso) => addDays(iso, -new Date(`${iso}T00:00:00Z`).getUTCDay());
 
 async function seedGym(db, userId) {
   const { rows: days } = await db.query(
@@ -264,14 +303,16 @@ async function seedGym(db, userId) {
   const byWeekday = new Map(days.map((d) => [d.day_of_week, d]));
   let sessions = 0;
   const WEEKS = DAYS > 90 ? Math.floor(DAYS / 7) : 8;
+  const first = sunday(addDays(today, -WEEKS * 7));
   for (let i = WEEKS * 7; i >= 1; i--) {
     const date = addDays(today, -i);
     const day = byWeekday.get(new Date(`${date}T00:00:00Z`).getUTCDay());
     if (!day || random() < 0.1) continue; // a skipped workout now and then
     const taken = await db.query("SELECT 1 FROM workout_sessions WHERE user_id = $1 AND date = $2 LIMIT 1", [userId, date]);
     if (taken.rowCount) continue;
-    const week = Math.floor((WEEKS * 7 - i) / 7);
-    const deload = week % 8 === 4; // one deload week in every eight
+    const week = Math.round((new Date(`${sunday(date)}T00:00:00Z`) - new Date(`${first}T00:00:00Z`)) / 864e5 / 7);
+    const deload = week % 8 === 4; // one calendar week in every eight is a deload week, marked as the user would
+    if (deload) await db.query("INSERT INTO deload_weeks (user_id, week_start) VALUES ($1, $2) ON CONFLICT DO NOTHING", [userId, sunday(date)]);
     const { rows } = await db.query(
       `INSERT INTO workout_sessions (user_id, split_day_id, date, duration_minutes, is_deload, created_at)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -284,21 +325,30 @@ async function seedGym(db, userId) {
       const load = (base + Math.floor(week / 2) * 2.5) * (deload ? 0.6 : 1);
       for (let set = 1; set <= 2; set++) {
         const reps = Math.round(between(day.mins[e], day.maxs[e]));
+        // Now and then a set short of failure or with a partial rep, so the set flags show up too.
         await db.query(
-          `INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value, extra_kg, created_at)
-           VALUES ($1, $2, $3, $4, $5, 'kg', $6, 0, $7)`,
-          [rows[0].id, userId, day.exercises[e], set, reps, load.toFixed(2), `${date}T18:${pad(e * 2 + set)}:00Z`],
+          `INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value, extra_kg, is_failure, is_partial, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'kg', $6, 0, $7, $8, $9)`,
+          [rows[0].id, userId, day.exercises[e], set, reps, load.toFixed(2), random() > 0.15, random() < 0.08, `${date}T18:${pad(e * 2 + set)}:00Z`],
         );
       }
     }
     sessions++;
   }
-  return `gym: ${sessions} workouts added (8 weeks, one deload week)`;
+  return `gym: ${sessions} workouts added (${WEEKS} weeks, a deload week in every eight)`;
 }
 
 async function main() {
   const db = new Client({ connectionString: url });
   await db.connect();
+  try {
+    for (const name of names) await seedUser(db, name);
+  } finally {
+    await db.end();
+  }
+}
+
+async function seedUser(db, name) {
   try {
     await db.query("BEGIN");
     // The same row dev sign-in creates for this name.
@@ -316,6 +366,7 @@ async function main() {
       await seedTasks(db, userId),
       await seedFixtureDay(db, userId),
       await seedWishlist(db, userId),
+      await seedCustomExercises(db, userId),
       await seedGym(db, userId),
     ];
     await db.query("COMMIT");
@@ -323,8 +374,6 @@ async function main() {
   } catch (error) {
     await db.query("ROLLBACK");
     throw error;
-  } finally {
-    await db.end();
   }
 }
 

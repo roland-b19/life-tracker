@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { compareShopping } from "@/lib/check-order";
 import { visible } from "@/lib/validations/common";
-import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, TintButton } from "../components/blocks";
+import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, SmallButton } from "../components/blocks";
 import { undoWith, useToast } from "../components/toast";
 import { ListBox, RowActions } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
@@ -317,9 +317,9 @@ export function ShoppingTab({
         below
         actions={
           <>
-            <TintButton disabled={shoppingList.every((i) => !i.isBought)} onClick={handleClearBought}>
+            <SmallButton disabled={shoppingList.every((i) => !i.isBought)} onClick={handleClearBought}>
               Clear bought
-            </TintButton>
+            </SmallButton>
             <AddButton onClick={() => openShopForm(null)}>Add item</AddButton>
           </>
         }
@@ -339,8 +339,11 @@ export function ShoppingTab({
                     onChange={() => handleToggleShopping(item)}
                     label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
                   />
-                  <span>
-                    {item.name} <span className="shopping-qty">· {Number(item.amount)} {item.unit}</span>
+                  <span className="entry-main entry-stack">
+                    <span>{item.name}</span>
+                    <span>
+                      {Number(item.amount)} {item.unit}
+                    </span>
                   </span>
                 </div>
                 <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />

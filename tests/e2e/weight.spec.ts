@@ -7,8 +7,8 @@ async function openFood(page: Page) {
   await expect(page.getByRole("region", { name: "Weight", exact: true })).toBeVisible();
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the home page with the weight form open has no serious violations", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openFood(page);
   await expectNoSeriousViolations(page);

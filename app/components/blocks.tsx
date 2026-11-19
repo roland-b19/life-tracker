@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
-import { CheckIcon, ChevronRightIcon, PlusIcon } from "./icons";
+import { ChevronRightIcon, PlusIcon } from "./icons";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
 
@@ -82,13 +82,12 @@ export function DashboardAside({ summaryFirst, children }: { summaryFirst?: bool
 
 /**
  * A titled card. `id` names the title, which labels the card. `count`: the number after the title. `sub`: the line
- * under it. `icon`: before the title. `actions`: the buttons at the head's end (`below`: they drop under the title
+ * under it. `actions`: the buttons at the head's end (`below`: they drop under the title
  * on a phone); `end`: anything else that closes the head. No `title`: a card without a head, named by `label`.
  */
 export function Card({
   id,
   title,
-  icon,
   count,
   sub,
   actions,
@@ -103,7 +102,6 @@ export function Card({
 }: {
   id?: string;
   title?: ReactNode;
-  icon?: ReactNode;
   count?: number;
   sub?: ReactNode;
   actions?: ReactNode;
@@ -119,8 +117,7 @@ export function Card({
   children?: ReactNode;
 }) {
   const heading = (
-    <h2 id={id} className={cx("section-title", !!icon && "icon-title")}>
-      {icon && <>{icon} </>}
+    <h2 id={id} className="section-title">
       {title}
       {count !== undefined && (
         <>
@@ -245,47 +242,43 @@ export function ProgressBar({ percent, over }: { percent: number; over?: boolean
   );
 }
 
-/** A small coloured tag: `kind` is the colour (rest, info, carried, reminder, danger, ...). */
+/** A small coloured tag: `kind` is the colour (rest, info, carried, warning, danger). */
 export function Badge({ kind, className, children }: { kind?: string; className?: string; children: ReactNode }) {
   return <span className={cx("badge", kind && `badge-${kind}`, className)}>{children}</span>;
 }
 
-/** The small tinted button of a card head or a toolbar; `icon` goes before the label. */
-export function TintButton({
+/** The small neutral button of a card head or a toolbar; `icon` goes before the label. */
+export function SmallButton({
   icon,
   className,
   children,
   ...button
 }: { icon?: ReactNode } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   return (
-    <button type="button" className={cx("btn-sm", "tint", className)} {...button}>
+    <button type="button" className={cx("btn-sm", className)} {...button}>
       {icon}
       {children}
     </button>
   );
 }
 
-/** "Add item", "Add category": the tinted button with a plus. */
+/** "Add item", "Add category": the small button with a plus. */
 export function AddButton({ children, ...button }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   return (
-    <TintButton icon={<PlusIcon size={14} />} {...button}>
+    <SmallButton icon={<PlusIcon size={14} />} {...button}>
       {children}
-    </TintButton>
+    </SmallButton>
   );
 }
 
 /** The round tick box of a to-do or a shopping row. No `onChange`: shown only, not a control. */
 export function Checkbox({ checked, onChange, label }: { checked: boolean; onChange?: () => void; label?: string }) {
+  // The tick is drawn by the CSS, the same one as on a checkbox input
   const cls = cx("todo-checkbox-btn", !onChange && "static", checked && "checked");
-  const tick = checked && <CheckIcon size={12} strokeWidth={3} />;
   return onChange ? (
-    <button type="button" className={cls} onClick={onChange} aria-label={label}>
-      {tick}
-    </button>
+    <button type="button" className={cls} onClick={onChange} aria-label={label} />
   ) : (
-    <span className={cls} aria-hidden="true">
-      {tick}
-    </span>
+    <span className={cls} aria-hidden="true" />
   );
 }
 
@@ -423,7 +416,7 @@ export function FormActions({
       </button>
       <button
         type={onSubmit ? "button" : "submit"}
-        className={compact ? "btn-sm tint" : undefined}
+        className={compact ? "btn-sm" : undefined}
         disabled={busy || !canSubmit}
         onClick={onSubmit}
       >

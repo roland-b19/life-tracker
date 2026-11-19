@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, EmptyNote, GroupLabel, TintButton } from "../components/blocks";
+import { Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { GROUP_COLOR, MESH_GROUP } from "./muscle-groups";
+import { MuscleTag } from "./muscle-tag";
 
 interface MapApi {
   setSelected(g: MuscleGroupKey[]): void;
@@ -305,7 +306,7 @@ function MuscleMap({
           </button>
         )}
         {/* Always rendered so the strip never shifts; it shows once the picked muscles differ from the day's */}
-        <TintButton
+        <SmallButton
           className="muscle-back"
           onClick={onGoBack}
           style={{ visibility: canGoBack ? "visible" : "hidden" }}
@@ -313,7 +314,7 @@ function MuscleMap({
           tabIndex={canGoBack ? 0 : -1}
         >
           Go back
-        </TintButton>
+        </SmallButton>
       </div>
     </div>
   );
@@ -374,14 +375,14 @@ export function MuscleExplorer({
       className="muscle-card"
       end={
         // Always rendered so the card never shifts when it appears
-        <TintButton
+        <SmallButton
           onClick={() => setSelected([])}
           style={{ visibility: selected.length ? "visible" : "hidden" }}
           aria-hidden={!selected.length}
           tabIndex={selected.length ? 0 : -1}
         >
           Show all
-        </TintButton>
+        </SmallButton>
       }
     >
       <div className="muscle-layout">
@@ -421,9 +422,14 @@ export function MuscleExplorer({
                 )}
                 {list.map((e) => (
                   <div key={e.exerciseId} className="entry-row">
-                    <div>
+                    <div className="entry-main entry-stack">
                       <strong>{e.exerciseName}</strong>
-                      <span className="muted muscle-day">{e.days.join(", ")}</span>
+                      <MuscleTag group={e.muscleGroup} />
+                      {e.days.map((day, i) => (
+                        <span key={i} className="muted entry-detail">
+                          {day}
+                        </span>
+                      ))}
                     </div>
                     <span className="muted number-tabular">
                       {e.targetSets} × {e.minReps} – {e.maxReps}

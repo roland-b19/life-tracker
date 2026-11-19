@@ -85,7 +85,7 @@ const healthShopping: Surface = {
     await form.getByRole("combobox", { name: "Category", exact: true }).selectOption({ label: label(category) });
     await saveItem(page, form, `"name":"${name}"`, this.item(page, name));
   },
-  // A shopping row is one text, "<name> · 1 pcs", so the row is found by its Edit button.
+  // A shopping row's name and quantity are two lines, so the row is found by its Edit button.
   item: (page, name) => page.getByRole("button", { name: `Edit ${name}`, exact: true }),
 };
 
@@ -226,8 +226,8 @@ async function scanWithForms(surface: Surface, page: Page) {
   await expectNoSeriousViolations(page);
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts). The flow is long (about 40 steps, each waiting for the
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts). The flow is long (about 40 steps, each waiting for the
 // server), so it gets the longer slow-test timeout.
 test("the Wishlist categories card adds, renames, merges and deletes, with Undo, also after a reload", async ({ signedInPage: page }) => {
   test.slow();
