@@ -1,34 +1,49 @@
 :root {
-  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent. */
-  --background: #000000;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
-  --surface: rgba(28, 28, 30, 0.78);
-  --surface-solid: #1c1c1e;
-  --surface-secondary: rgba(58, 58, 60, 0.8);
-  --surface-modal: #242426;
-  --text: #ebebf0;
-  --secondary: #a1a1a8;
-  --tint: #86b4ea;
-  --tint-hover: #9bc2ef;
-  --on-tint: #0b1b30;
-  --tint-subtle: rgba(134, 180, 234, 0.24);
-  --success: #8fd4a3;
-  --warning: #ebc673;
-  --warning-subtle: rgba(235, 198, 115, 0.22);
-  --danger: #ef8f8f;
-  --danger-subtle: rgba(239, 143, 143, 0.22);
-  --separator: #38383a;
-  --card-border: #48484a;
-  /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
-     High contrast (below) brings the outline back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
-  --edge: transparent;
+  /* Two modes from one set of tokens: each color is written once as light-dark(light, dark), and
+     color-scheme picks the side. Auto follows the system; [data-theme] (set by the Settings switch) forces one. */
+  color-scheme: light dark;
+  --background: light-dark(#eef2f6, #0b0f14);
+  /* The page glow: turquoise top left, blue on the right, both fading to nothing */
+  --bg-radial: radial-gradient(70% 45% at 10% 0%, light-dark(rgba(25, 154, 129, 0.26), rgba(30, 182, 152, 0.3)), transparent 70%),
+               radial-gradient(60% 40% at 100% 35%, light-dark(rgba(70, 120, 220, 0.18), rgba(70, 120, 220, 0.22)), transparent 70%);
+  --surface: light-dark(rgba(255, 255, 255, 0.6), rgba(24, 32, 42, 0.6));
+  --surface-solid: light-dark(#ffffff, #18202a);
+  --surface-modal: light-dark(#ffffff, #1c2530);
+  --surface-secondary: light-dark(#e4eaf1, #2e3a48);
+  --text: light-dark(#0f1a2b, #eef3f8);
+  --secondary: light-dark(#4a596b, #97a6b8);
+  /* The accent and the status colors are fills, never text (D-021) */
+  --tint: light-dark(#199a81, #1eb698);
+  --tint-hover: light-dark(#22ab8f, #3cc9ad);
+  --on-tint: light-dark(#04201b, #04201b);
+  --tint-subtle: light-dark(rgba(25, 154, 129, 0.16), rgba(30, 182, 152, 0.18));
+  --tint-highlight: light-dark(rgba(25, 154, 129, 0.24), rgba(30, 182, 152, 0.28));
+  --success: light-dark(#259d51, #2bb95f);
+  --success-subtle: light-dark(rgba(37, 157, 81, 0.16), rgba(43, 185, 95, 0.18));
+  --warning: light-dark(#cc8c0a, #e5a51f);
+  --warning-subtle: light-dark(rgba(204, 140, 10, 0.16), rgba(229, 165, 31, 0.18));
+  --danger: light-dark(#e0444c, #ee5d63);
+  --danger-subtle: light-dark(rgba(224, 68, 76, 0.16), rgba(238, 93, 99, 0.18));
+  --separator: light-dark(#d5dde6, #2a3441);
+  --card-border: light-dark(#c3cdd9, #3a4757);
+  /* Glass cards and floating surfaces get a hairline edge and a soft shadow; controls keep no edge.
+     High contrast (below) brings the outlines back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
+  --card-edge: light-dark(rgba(15, 26, 43, 0.08), rgba(238, 243, 248, 0.08));
+  --card-shadow: 0 1px 2px light-dark(rgba(15, 26, 43, 0.06), rgba(0, 0, 0, 0.4)),
+                 0 10px 24px -12px light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
+  --edge: light-dark(transparent, transparent);
   --glass-blur: blur(28px) saturate(160%);
-  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
-     grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
-  --highlight: rgba(255, 255, 255, 0.05);
-  --highlight-fill: rgba(255, 255, 255, 0.2);
-  --tint-highlight: rgba(134, 180, 234, 0.34);
+  /* Hover and selection highlights, all subtle: a wash on clear controls, a clearly stronger one on
+     filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
+  --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
+  --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
 }
 
@@ -46,6 +61,7 @@
     --separator: var(--text);
     --card-border: var(--text);
     --edge: var(--text);
+    --card-edge: var(--text);
   }
 }
 
@@ -69,8 +85,8 @@ body {
   margin: 0;
   min-height: 100dvh;
   color: var(--text);
-  background: var(--background);
-  background-image: var(--bg-radial);
+  /* The glow layers first and the color last, or the shorthand is invalid */
+  background: var(--bg-radial), var(--background);
   background-attachment: fixed;
   /* Monospaced everywhere: every letter and digit takes the same width, so numbers and columns line up */
   font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -1450,8 +1466,6 @@ main > .error {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #3a3a3c;
-    --surface-modal: #242426;
     --glass-blur: none;
   }
 
