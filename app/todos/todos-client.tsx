@@ -433,7 +433,7 @@ export function TodosClient({
                         {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                           <div className="badge-row">
                             {!listDaily && task.isCarriedOver && <Badge kind="carried">Carried over</Badge>}
-                            {task.reminderTime && isPushEnabled() && <Badge kind="reminder">{task.reminderTime}</Badge>}
+                            {task.reminderTime && isPushEnabled() && <Badge kind="info">{task.reminderTime}</Badge>}
                           </div>
                         )}
                       </div>

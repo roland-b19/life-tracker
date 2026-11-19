@@ -18,7 +18,6 @@
   --on-tint: light-dark(#04201b, #04201b);
   --tint-subtle: light-dark(rgba(25, 154, 129, 0.16), rgba(30, 182, 152, 0.18));
   --success: light-dark(#259d51, #2bb95f);
-  --success-subtle: light-dark(rgba(37, 157, 81, 0.16), rgba(43, 185, 95, 0.18));
   --warning: light-dark(#cc8c0a, #e5a51f);
   --warning-subtle: light-dark(rgba(204, 140, 10, 0.16), rgba(229, 165, 31, 0.18));
   --danger: light-dark(#e0444c, #ee5d63);
@@ -31,7 +30,7 @@
   --shadow-near: light-dark(rgba(15, 26, 43, 0.06), rgba(0, 0, 0, 0.4));
   --shadow-far: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
   --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
-  --edge: light-dark(transparent, transparent);
+  --edge: transparent; /* tags, badges and the chat: flat, until high contrast outlines them */
   --glass-blur: blur(28px) saturate(160%);
   /* Neutral washes, all subtle: the hover on clear controls and the bands behind rows, and a clearly stronger one for
      the hover on filled controls (so it still reads over their fill) */
@@ -66,7 +65,6 @@
 @property --tint-hover { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --tint-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --success { syntax: "<color>"; inherits: true; initial-value: transparent; }
-@property --success-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --warning { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --warning-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --danger { syntax: "<color>"; inherits: true; initial-value: transparent; }
@@ -81,7 +79,7 @@
 
 :root[data-theme-fade] {
   transition-property: --background, --glow, --surface, --surface-solid, --surface-modal,
-    --surface-secondary, --text, --secondary, --tint, --tint-hover, --tint-subtle, --success, --success-subtle,
+    --surface-secondary, --text, --secondary, --tint, --tint-hover, --tint-subtle, --success,
     --warning, --warning-subtle, --danger, --danger-subtle, --separator, --card-edge, --shadow-near, --shadow-far,
     --highlight, --highlight-fill, --scrim;
   transition-duration: 0.5s;
@@ -373,8 +371,10 @@ h3 {
   }
 }
 
-/* The active item has the navigation's thumb, as in the tab bar (D-026), with its edge and shadow (D-030) */
-.nav-link.active {
+/* The active item has the navigation's thumb, as in the tab bar (D-026), with its edge and shadow (D-030); a link in
+   the More menu is a button like Sign out, so it has the same look */
+.nav-link.active,
+.more-links .nav-link {
   background: var(--surface-secondary);
   color: var(--text);
   border-color: var(--card-edge);
@@ -492,14 +492,10 @@ h3 {
   gap: 0.25rem;
 }
 
-/* The icon and label sit in the middle of the column; a link here is a button like Sign out above it (D-030) */
+/* The icon and label sit in the middle of the column */
 .more-links .nav-link {
   justify-content: center;
   padding-inline: 1rem;
-  background: var(--surface-secondary);
-  color: var(--text);
-  border-color: var(--card-edge);
-  box-shadow: var(--card-shadow);
 }
 
 main {
@@ -559,8 +555,6 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.625rem;
-    border: 1px solid var(--card-edge);
-    box-shadow: var(--card-shadow); /* raised like a card (D-030) */
     border-radius: 1rem;
     background: var(--surface-secondary);
   }
@@ -568,7 +562,6 @@ main {
   /* On the box's --surface-secondary the button takes the bar's fill instead, like the segmented thumb on its track */
   .side-user .signout-btn {
     background: var(--surface-solid);
-    box-shadow: var(--card-shadow);
   }
 
   .side-user-row {
@@ -660,11 +653,6 @@ main {
   min-width: calc(10ch + 0.4em + 1.3rem + 2px);
 }
 
-.badge-reminder {
-  background: var(--tint-subtle);
-  font-size: 0.75rem;
-}
-
 .deload-card { margin-bottom: 1.25rem; }
 /* The Deload session check sits right under the text, at the left (D-031) */
 .deload-card > .section-head { margin-bottom: 0; }
@@ -674,8 +662,6 @@ main {
 .split-day-card {
   padding: 1rem 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--card-edge);
-  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
@@ -816,10 +802,11 @@ main {
   color: var(--secondary);
 }
 
-/* Every raised surface (a card, the tab bar, the More menu, a modal, the toast) has the hairline edge and the soft
-   shadow; fields keep no edge (--edge). Filled buttons and a segmented control that stands on the page share the look
-   (D-029). */
-:is(.surface, .tabbar, .more-menu, .modal-card, .toast-item) {
+/* Every raised surface (a card, the tab bar, the More menu, a modal, the toast, the sidebar's user box, a segmented
+   control, Gym's day cards, routine rows and new-exercise box) has the hairline edge and the soft shadow (D-029, D-030).
+   Buttons and fields take the same pair in their own base rules (D-031); tags, badges and the chat keep --edge. */
+:is(.surface, .tabbar, .more-menu, .modal-card, .toast-item, .side-user, .segmented, .split-day-card, .routine-row,
+  .custom-exercise) {
   border: 1px solid var(--card-edge);
   box-shadow: var(--card-shadow);
 }
@@ -970,7 +957,7 @@ button.danger {
   background: var(--danger-subtle);
 }
 
-:is(.tab-item, .segmented button, .split-day-select, .history-toggle, .group-toggle) {
+:is(.tab-item, .segmented button, .split-day-select, .history-toggle) {
   box-shadow: none;
 }
 
@@ -1402,19 +1389,18 @@ button.btn-sm {
   border-radius: 0.7rem;
   background: var(--surface-solid);
   box-shadow: var(--card-shadow);
-  border: 1px solid transparent;
+  border: 1px solid var(--card-edge);
   box-sizing: border-box;
   transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
   z-index: -1;
 }
 /* The thumb's radius, so the idle hover fill has its shape */
 :is(.segmented button, .tab-item) { border-radius: 0.7rem; }
-/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow. Every thumb takes the cards'
-   edge too (D-029, D-030). */
+/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow and the cards' edge
+   (D-029, D-030). */
 .tabbar::before {
   background: var(--surface-secondary);
 }
-:is(.tabbar, .segmented)::before { border-color: var(--card-edge); }
 /* The tab bar floats like the More menu above it, so it has the menu's corners; the thumb's corners follow them
    inside the bar's padding and edge (1.25rem - 0.25rem - 1px), so the gap around it is even */
 .tabbar { border-radius: 1.25rem; }
@@ -1425,9 +1411,6 @@ button.btn-sm {
   display: grid;
   position: relative;
   background: var(--surface-secondary);
-  /* A raised surface like the cards, on the page and inside a card alike (D-029, D-030) */
-  border: 1px solid var(--card-edge);
-  box-shadow: var(--card-shadow);
 }
 
 .segmented button {
@@ -1635,9 +1618,6 @@ select.sort-select {
   font-weight: 600;
   border-radius: 0.7rem;
   --chevron-end: 0.8rem;
-  /* It sits beside Add item, so it has the buttons' edge and shadow (D-029) */
-  border-color: var(--card-edge);
-  box-shadow: var(--card-shadow);
 }
 /* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
    the keyboard keeps a ring */
@@ -2083,7 +2063,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
-.section-title > .group-toggle { padding-inline: 0.45rem; vertical-align: middle; } /* the arrow alone: a square box */
+.section-title > .group-toggle { vertical-align: middle; }
 .set-flag { margin-left: 0.5rem; }
 /* The set's checks: one column, at the left */
 .toggle-row {
@@ -2146,8 +2126,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   align-items: center; /* the drag handle sits on the row's own vertical centre */
   gap: 0 0.75rem;
   padding: 0.75rem 0.75rem 0.85rem 0.75rem;
-  border: 1px solid var(--card-edge);
-  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
@@ -2188,8 +2166,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--card-edge);
-  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
@@ -2252,8 +2228,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 /* 1rem below the block above, with the list's 0.5rem (D-030) */
 .todo-list > .group-label:first-child,
 .wishlist-entries > .group-label:first-child { margin-top: 0.5rem; }
-/* A title that folds its group looks like any other title; the arrow after the text turns down while the group is open.
-   The tap area reaches 0.75rem past the text without moving it. */
+/* A title that folds its group: the arrow after the text turns down while the group is open (the box it sits in is
+   below). The tap area reaches 0.75rem past the text without moving it. */
 .group-toggle {
   position: relative;
   display: inline-flex;

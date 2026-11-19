@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Badge, Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
+import { Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
-import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
+import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { GROUP_COLOR, MESH_GROUP } from "./muscle-groups";
+import { MuscleTag } from "./muscle-tag";
 
 interface MapApi {
   setSelected(g: MuscleGroupKey[]): void;
@@ -423,7 +424,7 @@ export function MuscleExplorer({
                   <div key={e.exerciseId} className="entry-row">
                     <div className="entry-main entry-stack">
                       <strong>{e.exerciseName}</strong>
-                      <Badge kind="rest" className="muscle-tag">{muscleLabel(e.muscleGroup)}</Badge>
+                      <MuscleTag group={e.muscleGroup} />
                       {e.days.map((day, i) => (
                         <span key={i} className="muted entry-detail">
                           {day}

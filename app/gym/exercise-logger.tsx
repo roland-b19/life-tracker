@@ -3,12 +3,12 @@
 import { formatDMY } from "@/lib/format-date";
 import { showDecimal } from "@/lib/decimal-input";
 import type { HistoryEntry } from "@/lib/gym-progress";
-import { muscleLabel } from "@/lib/gym-muscles";
 import { GYM_LIMITS } from "@/lib/validations/gym";
 import { Badge, ErrorText, Field, SelectField, Toggle } from "../components/blocks";
 import { ChevronRightIcon, PlusIcon } from "../components/icons";
 import { DeleteButton, ListBox } from "../components/lists";
 import { setText, type ActiveSessionData, type ExerciseItem, type WorkoutSetData } from "./types";
+import { MuscleTag } from "./muscle-tag";
 
 const ANOMALY_LABEL: Record<string, string> = { too_heavy: "Too heavy", form: "Form", pain: "Pain", other: "Other" };
 const UNIT_LABEL: Record<string, string> = { kg: "kg", plates: "plates", bodyweight: "BW" };
@@ -85,7 +85,7 @@ export function ExerciseLogger({
             <ChevronRightIcon size={14} />
           </button>
         </h3>
-        <Badge kind="rest" className="muscle-tag">{muscleLabel(exercise.muscleGroup)}</Badge>
+        <MuscleTag group={exercise.muscleGroup} />
         <span className="muted exercise-meta">
           Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
         </span>

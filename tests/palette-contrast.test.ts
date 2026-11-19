@@ -99,7 +99,7 @@ describe("the palette's contrast, in both modes", () => {
         ["--surface-secondary", t("--surface-secondary")],
         ["--background", t("--background")],
         ["--background under the glow", glow],
-        ...["tint", "success", "warning", "danger"].map((k): [string, Rgba] => [`--${k}-subtle`, over(t(`--${k}-subtle`), card)]),
+        ...["tint", "warning", "danger"].map((k): [string, Rgba] => [`--${k}-subtle`, over(t(`--${k}-subtle`), card)]),
       ];
       for (const fg of ["--text", "--secondary"])
         for (const [label, bg] of backs) expect(contrast(t(fg), bg), `${fg} on ${label}`).toBeGreaterThanOrEqual(4.5);

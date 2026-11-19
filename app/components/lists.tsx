@@ -90,16 +90,21 @@ export function RowActions({
 
 const PAGE = 10;
 
+/** The button that shows more of a long list (useMore, useMoreDialog). */
+function MoreButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="btn-sm more-btn" onClick={onClick}>
+      More
+    </button>
+  );
+}
+
 /**
  * A long list shows 10 rows; `more` (put it last inside the list's ListBox) adds 10 at a time.
  */
 export function useMore<T>(list: T[]) {
   const [shown, setShown] = useState(PAGE);
-  const more = list.length > shown && (
-    <button key="more" type="button" className="btn-sm more-btn" onClick={() => setShown((n) => n + PAGE)}>
-      More
-    </button>
-  );
+  const more = list.length > shown && <MoreButton key="more" onClick={() => setShown((n) => n + PAGE)} />;
   return [list.slice(0, shown), more] as const;
 }
 
@@ -109,11 +114,7 @@ export function useMore<T>(list: T[]) {
  */
 export function useMoreDialog<T>(list: T[], title: string, row: (item: T) => ReactNode) {
   const [open, setOpen] = useState(false);
-  const more = list.length > PAGE && (
-    <button key="more" type="button" className="btn-sm more-btn" onClick={() => setOpen(true)}>
-      More
-    </button>
-  );
+  const more = list.length > PAGE && <MoreButton key="more" onClick={() => setOpen(true)} />;
   const dialog = (
     <Modal isOpen={open} onClose={() => setOpen(false)} title={title}>
       <ListBox wash className="entries">

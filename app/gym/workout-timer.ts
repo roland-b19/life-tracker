@@ -56,12 +56,14 @@ export function useWorkoutTimer(sessionId: string | null, running: boolean | nul
 
   useEffect(() => {
     const now = sessionId ? load(sessionId) : stopped();
+    const since = now.since;
     if (sessionId && running === true && now.since === null) now.since = Date.now();
     if (running === false && now.since !== null) Object.assign(now, stopped(elapsed(now)));
     time.current = now;
-    if (sessionId) save(sessionId, now);
+    if (sessionId && now.since !== since) save(sessionId, now);
     setShown(Math.floor(elapsed(time.current)));
-    if (now.since === null) return;
+    // Only the open workout shows the clock: a workout left open keeps its start in storage but needs no tick.
+    if (running !== true) return;
     const tick = setInterval(() => setShown(Math.floor(elapsed(time.current))), 1000);
     return () => clearInterval(tick);
   }, [sessionId, running]);

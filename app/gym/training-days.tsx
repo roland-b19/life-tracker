@@ -1,12 +1,12 @@
 "use client";
 
 import { toISODate, weekday } from "@/lib/format-date";
-import { muscleLabel } from "@/lib/gym-muscles";
 import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { PencilIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { DAY_NAMES, type SplitDay } from "./types";
+import { MuscleTag } from "./muscle-tag";
 
 /** The week's training days (pick one, or Start it) and, beside them, the picked day's routine with Edit and Start. */
 export function TrainingDays({
@@ -102,7 +102,7 @@ export function TrainingDays({
                           <strong>
                             {idx + 1}. {ex.exerciseName}
                           </strong>
-                          <Badge kind="rest" className="muscle-tag">{muscleLabel(ex.muscleGroup)}</Badge>
+                          <MuscleTag group={ex.muscleGroup} />
                         </div>
                         <span className="muted number-tabular entry-side">
                           {ex.targetSets} × {ex.minReps} – {ex.maxReps}
