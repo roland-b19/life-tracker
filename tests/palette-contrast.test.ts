@@ -90,7 +90,7 @@ describe("the palette's contrast, in both modes", () => {
   for (const [mode, name] of MODES) {
     const t = (n: string) => token(n, mode);
     const card = t("--surface-solid");
-    const glows = lightDarks(tokens.get("--bg-radial") ?? "").map((p) => over(parseColor(p[mode]), t("--background")));
+    const glows = ["--glow-1", "--glow-2"].map((n) => over(t(n), t("--background")));
 
     it(`${name}: text and secondary text read on every surface`, () => {
       const backs: [string, Rgba][] = [

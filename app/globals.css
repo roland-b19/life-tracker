@@ -3,9 +3,10 @@
      color-scheme picks the side. Auto follows the system; [data-theme] (set by the Settings switch) forces one. */
   color-scheme: light dark;
   --background: light-dark(#eef2f6, #0b0f14);
-  /* The page glow: turquoise top left, blue on the right, both fading to nothing */
-  --bg-radial: radial-gradient(70% 45% at 10% 0%, light-dark(rgba(25, 154, 129, 0.26), rgba(30, 182, 152, 0.3)), transparent 70%),
-               radial-gradient(60% 40% at 100% 35%, light-dark(rgba(70, 120, 220, 0.18), rgba(70, 120, 220, 0.22)), transparent 70%);
+  /* The page glow, two soft patches fixed to the screen (body::before and ::after): turquoise from the top left corner
+     reaching down, blue from the bottom right corner reaching up */
+  --glow-1: light-dark(rgba(25, 154, 129, 0.26), rgba(30, 182, 152, 0.3));
+  --glow-2: light-dark(rgba(70, 120, 220, 0.18), rgba(70, 120, 220, 0.22));
   --surface: light-dark(rgba(255, 255, 255, 0.6), rgba(24, 32, 42, 0.6));
   --surface-solid: light-dark(#ffffff, #18202a);
   --surface-modal: light-dark(#ffffff, #1c2530);
@@ -35,6 +36,9 @@
      clearly stronger one for the hover on filled controls (so it still reads over their fill) */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
+  /* The selected item of the navigation (the tab bar, the More menu, the sidebar): a clearly darker or lighter fill
+     than the bar it sits on, with no dot (D-025) */
+  --nav-thumb: light-dark(rgba(15, 26, 43, 0.12), rgba(238, 243, 248, 0.18));
   /* The dim behind a modal or the More menu */
   --scrim: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.5));
 }
@@ -45,6 +49,38 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* The glow patches: one layer each, the size of the screen, under all content. Each is drawn in currentColor, which
+   is a plain color, so the theme fade below can change it smoothly (a gradient's own colors cannot transition). */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
+}
+body::before {
+  color: var(--glow-1);
+  background: radial-gradient(75% 70% at 0% 0%, currentColor, transparent);
+}
+body::after {
+  color: var(--glow-2);
+  background: radial-gradient(75% 70% at 100% 100%, currentColor, transparent);
+}
+
+/* Switching between dark and light (the Appearance switch or the system) fades the colors instead of swapping them
+   at once: theme.ts sets data-theme-fade on <html> for the length of the fade (D-025). */
+:root[data-theme-fade],
+:root[data-theme-fade] *,
+:root[data-theme-fade] *::before,
+:root[data-theme-fade] *::after {
+  transition: color 0.5s ease, background-color 0.5s ease, border-color 0.5s ease, outline-color 0.5s ease,
+    text-decoration-color 0.5s ease, fill 0.5s ease, stroke 0.5s ease, box-shadow 0.5s ease !important;
 }
 
 /* No visible scrollbars anywhere; scrolling still works */
@@ -85,9 +121,8 @@ body {
   margin: 0;
   min-height: 100dvh;
   color: var(--text);
-  /* The glow layers first and the color last, or the shorthand is invalid */
-  background: var(--bg-radial), var(--background);
-  background-attachment: fixed;
+  /* The page color is on <html>; the glow is fixed to the screen below, so every page shows the same background
+     however long it is, and it stays put while the page scrolls (background-attachment: fixed does neither on iOS) */
   /* Monospaced everywhere: every letter and digit takes the same width, so numbers and columns line up */
   font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 1.0625rem;
@@ -321,21 +356,10 @@ button.nav-link:disabled {
   }
 }
 
-/* The active item is the raised neutral thumb of the segmented control, with the accent only as its dot */
+/* The active item has the navigation's thumb, as in the tab bar */
 .nav-link.active {
-  background: var(--surface-solid);
-  box-shadow: var(--card-shadow);
+  background: var(--nav-thumb);
   color: var(--text);
-}
-
-.nav-link.active::after {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin-left: auto;
-  border-radius: 50%;
-  background: var(--tint);
 }
 
 /* Phone and tablet: floating blurred tab bar */
@@ -363,8 +387,7 @@ button.nav-link:disabled {
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
-  /* Room above the icon for the active tab's dot */
-  padding: 0.6rem 0 0.2rem;
+  padding: 0.4rem 0;
   border: 0;
   background: transparent;
   color: var(--secondary);
@@ -1301,9 +1324,9 @@ button.btn-sm {
   border-radius: 0.7rem;
 }
 
-/* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a raised
-   neutral thumb under the active item --i. The active label is --text with a 6px --tint dot, beside the label in a
-   segmented control and above the icon in the tab bar. */
+/* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a neutral
+   thumb under the active item --i. The active label is --text; a segmented control adds a 6px --tint dot beside it,
+   the tab bar has none and a stronger thumb instead (below). */
 :is(.segmented, .tabbar) {
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
   --seg-gap: 0.25rem; /* the items never touch */
@@ -1327,11 +1350,10 @@ button.btn-sm {
 }
 /* The thumb's radius, so the idle hover fill has its shape */
 :is(.segmented button, .tab-item) { border-radius: 0.7rem; }
-/* The tab bar's dot rides on its thumb, so it shows only where the thumb is (the More tab while its menu is open) */
+/* The tab bar's thumb stands out from the glass, flat like the More menu's selected item */
 .tabbar::before {
-  background:
-    radial-gradient(circle at 50% 0.3rem, var(--tint) 2.6px, transparent 3.2px),
-    var(--surface-solid);
+  background: var(--nav-thumb);
+  box-shadow: none;
 }
 
 .segmented {

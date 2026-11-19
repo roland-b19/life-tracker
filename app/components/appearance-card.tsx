@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Card } from "./blocks";
 import { Segmented } from "./segmented";
-import { THEME_STORAGE } from "./theme";
+import { fadeTheme, THEME_STORAGE } from "./theme";
 import { undoWith, useToast } from "./toast";
 
 type Theme = "auto" | "light" | "dark";
@@ -31,6 +31,7 @@ const loadTheme = (): Theme => {
 
 const setTheme = (next: Theme) => {
   theme = next;
+  fadeTheme();
   const root = document.documentElement;
   if (next === "auto") delete root.dataset.theme;
   else root.dataset.theme = next;
