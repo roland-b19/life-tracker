@@ -263,7 +263,7 @@ h3 {
 
 .app-title {
   font-size: 2rem;
-  font-weight: 700;
+  font-weight: 800; /* titles 800, key values 800 and big, labels 600 or lighter (D-022) */
   margin: 0;
   letter-spacing: -0.025em;
 }
@@ -322,9 +322,21 @@ button.nav-link:disabled {
   }
 }
 
+/* The active item is the raised neutral thumb of the segmented control, with the accent only as its dot */
 .nav-link.active {
-  background: var(--tint-subtle);
+  background: var(--surface-solid);
+  box-shadow: var(--card-shadow);
   color: var(--text);
+}
+
+.nav-link.active::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--tint);
 }
 
 /* Phone and tablet: floating blurred tab bar */
@@ -560,12 +572,24 @@ main {
   background: var(--tint-subtle);
 }
 
+/* A status badge: the subtle fill, a dot of the status color and a --text word (D-022) */
 .badge-warning {
+  --dot: var(--warning);
   background: var(--warning-subtle);
 }
 
 .badge-danger {
+  --dot: var(--danger);
   background: var(--danger-subtle);
+}
+
+:is(.badge-warning, .badge-danger)::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot);
 }
 
 .badge-rest {
@@ -671,6 +695,7 @@ main {
 .macro-target {
   font-size: 0.78rem;
   font-weight: 500;
+  letter-spacing: 0; /* not the tight spacing of the big number it sits beside */
   color: var(--secondary);
   white-space: nowrap; /* the unit never drops below its number */
 }
@@ -875,7 +900,7 @@ button.secondary {
 
 button.danger {
   color: var(--text);
-  background: transparent;
+  background: var(--danger-subtle);
   border: 1px solid var(--edge);
 }
 
@@ -986,12 +1011,6 @@ button.signin-continue:disabled {
 }
 
 /* To-Do & Habits Module Styles (Apple HIG) */
-
-.todo-stats-fraction {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--secondary);
-}
 
 .todo-checkbox-btn {
   position: relative;
@@ -1463,7 +1482,7 @@ main > .error {
 
 .section-title {
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.01em;
 }
 
@@ -1610,8 +1629,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   margin: 0;
   line-height: 1;
   text-align: center;
-  font-size: 2rem;
-  font-weight: 700;
   color: var(--text);
 }
 
@@ -2090,9 +2107,15 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .metric-big {
   margin: 0 0 0.5rem;
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+}
+.dash-hero-text > .metric-big { margin: 0; }
+
+/* Key numerals (D-022): weight, water, steps, tasks done, the wishlist total and only the Calories value of the
+   Nutrition card; the other macros keep .macro-numbers. Sized so none wraps or overflows at 375px. */
+:is(.metric-big, .item-total, .macro-grid > .macro-card:first-child .macro-numbers) {
+  font-size: clamp(2rem, 9vw, 2.7rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 .form-pair {
   display: grid;
@@ -2262,7 +2285,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   .delete-icon-btn:hover:not(:disabled) {
     background: var(--tint-highlight);
   }
-  button.danger:hover:not(:disabled),
+  button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-subtle), var(--text) 8%); }
   .muscle-chip:not(.active):hover {
     background: var(--highlight);
   }

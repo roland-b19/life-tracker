@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -484,10 +484,8 @@ export function TodosClient({
               <div className="dash-hero">
                 <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
-                  <span className="todo-stats-fraction number-tabular">
-                    {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
-                    {doneCount} of {totalCount} done
-                  </span>
+                  {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
+                  <BigNumber value={doneCount} of={`of ${totalCount} done`} />
                   <span className="muted">Today</span>
                 </div>
               </div>
