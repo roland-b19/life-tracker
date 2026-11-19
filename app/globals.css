@@ -25,7 +25,6 @@
   --danger: light-dark(#e0444c, #ee5d63);
   --danger-subtle: light-dark(rgba(224, 68, 76, 0.16), rgba(238, 93, 99, 0.18));
   --separator: light-dark(#d5dde6, #2a3441);
-  --card-border: light-dark(#c3cdd9, #3a4757);
   /* Glass cards and floating surfaces get a hairline edge and a soft shadow; controls keep no edge.
      High contrast (below) brings the outlines back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
   --card-edge: light-dark(rgba(15, 26, 43, 0.08), rgba(238, 243, 248, 0.08));
@@ -60,8 +59,8 @@
 
 @media (prefers-contrast: more) {
   :root {
+    --surface: var(--surface-solid);
     --separator: var(--text);
-    --card-border: var(--text);
     --edge: var(--text);
     --card-edge: var(--text);
   }
@@ -335,47 +334,27 @@ button.nav-link:disabled {
   right: 0.75rem;
   bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 850;
-  /* Like the Segmented control: --n tabs, --i the active one, a thumb that slides to it, a gap that keeps the
-     pills apart */
+  /* The segmented control's shape on the glass (the shared rule under .segmented); content scrolls under it.
+     Its display is set here, not in the shared rule, so the desktop rule below can hide it. */
   display: grid;
-  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-  --tab-gap: 0.25rem;
-  column-gap: var(--tab-gap);
   align-items: stretch;
-  isolation: isolate;
-  padding: 0.25rem;
   background: var(--surface);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--edge);
-  border-radius: 1.5rem;
-}
-
-.tabbar::before {
-  content: "";
-  position: absolute;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  left: 0.25rem;
-  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--tab-gap)) / var(--n));
-  border-radius: 1.25rem;
-  background: var(--tint-subtle);
-  transform: translateX(calc(var(--i) * (100% + var(--tab-gap))));
-  z-index: -1;
 }
 .tabbar[data-idle]::before { opacity: 0; }
 
 .tab-item {
   min-width: 0;
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
-  padding: 0.25rem 0;
+  /* Room above the icon for the active tab's dot */
+  padding: 0.6rem 0 0.2rem;
   border: 0;
-  border-radius: 1.25rem;
   background: transparent;
   color: var(--secondary);
   font: inherit;
@@ -409,14 +388,13 @@ button.nav-link:disabled {
   position: fixed;
   left: 0.75rem;
   right: 0.75rem;
-  bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
   z-index: 860;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem;
   background: var(--surface-modal);
-  border: 1px solid var(--edge);
   border-radius: 1.25rem;
   transform-origin: bottom right;
 }
@@ -481,10 +459,10 @@ main {
     flex-direction: column;
     gap: 0.375rem;
     padding: 1.5rem 1rem;
-    background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
-    border-right: 1px solid var(--card-border);
+    background: var(--surface);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border-right: 1px solid var(--card-edge);
   }
 
   .brand {
@@ -762,14 +740,19 @@ main {
   color: var(--secondary);
 }
 
-/* Glassmorphism Surface: Unslop Apple HIG */
+/* Every raised surface (a card, the tab bar, the More menu, a modal, the toast) has the hairline edge and the soft
+   shadow; controls keep no edge (--edge) */
+:is(.surface, .tabbar, .more-menu, .modal-card, .toast-item) {
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow);
+}
+
+/* A card: glass over the page glow. No blur, which stays on what content scrolls under (the tab bar, the sidebar,
+   the modal backdrop). */
 .surface {
   --card-pad: 1.35rem;
   padding: var(--card-pad);
   background: var(--surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--edge);
   border-radius: 1.15rem;
 }
 
@@ -824,39 +807,36 @@ select {
   cursor: pointer;
 }
 
-/* Checkboxes and radios are not text fields: undo the field sizing above and use the system control in the tint. */
-input[type="checkbox"],
-input[type="radio"] {
+/* Every checkbox is one round check, the inputs and the Checkbox block (Tasks, Shopping) alike: a ring, filled with
+   the tint and ticked once checked. Not a text field, so the field sizing above is undone. The tick is a mask, so it
+   takes the --on-tint token in either mode. */
+:is(input[type="checkbox"], .todo-checkbox-btn) {
+  appearance: none;
+  display: inline-block;
   flex: none;
   width: 1.25rem;
   height: 1.25rem;
   min-height: 0;
   padding: 0;
-  accent-color: var(--tint);
-  cursor: pointer;
-}
-/* A checkbox is the same round check as the Tasks one: a ring, filled with the tint and ticked once checked. */
-input[type="checkbox"] {
-  appearance: none;
-  width: 1.45rem;
-  height: 1.45rem;
   border-radius: 50%;
   border: 1.5px solid var(--secondary);
   background: transparent;
+  cursor: pointer;
 }
-input[type="checkbox"]:checked {
+:is(input[type="checkbox"]:checked, .todo-checkbox-btn.checked) {
   background-color: var(--tint);
   border-color: var(--tint);
 }
-/* The tick is a mask, so it takes the --on-tint token in either mode */
-input[type="checkbox"]:checked::before {
+:is(input[type="checkbox"]:checked, .todo-checkbox-btn.checked)::before {
   content: "";
   display: block;
+  width: 100%;
   height: 100%;
   background-color: var(--on-tint);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center / 0.85rem no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center / 0.75rem no-repeat;
 }
-input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
+/* A disabled box, or a daily task shown ahead of its day, cannot be ticked */
+:is(input[type="checkbox"]:disabled, .todo-checkbox-btn.static:not(.checked)) { opacity: 0.5; cursor: default; }
 input[type="checkbox"]:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
 
 input:focus,
@@ -1014,32 +994,14 @@ button.signin-continue:disabled {
 }
 
 .todo-checkbox-btn {
-  width: 1.45rem;
-  height: 1.45rem;
-  border-radius: 50%;
-  border: 1.5px solid var(--secondary);
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  min-height: 0; /* the global button min-height would stretch the circle into an oval */
-  flex-shrink: 0;
   position: relative;
 }
 
-/* 44pt tap target around the 23px circle */
+/* 44pt tap target around the 20px circle */
 .todo-checkbox-btn::after {
   content: "";
   position: absolute;
-  inset: -0.7rem;
-}
-
-.todo-checkbox-btn.checked {
-  background: var(--tint);
-  border-color: var(--tint);
-  color: var(--on-tint);
+  inset: calc((100% - 44px) / 2);
 }
 
 .todo-title {
@@ -1117,7 +1079,6 @@ button.signin-continue:disabled {
   width: 100%;
   max-width: 36rem;
   background: var(--surface-modal);
-  border: 1px solid var(--edge);
   border-radius: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -1229,7 +1190,7 @@ button.signin-continue:disabled {
     align-items: center;
     left: 1rem;
     right: 1rem;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    bottom: calc(5.75rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -1239,10 +1200,7 @@ button.signin-continue:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: color-mix(in srgb, var(--surface-modal) 95%, transparent);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--edge);
+  background: var(--surface-modal);
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
@@ -1337,21 +1295,18 @@ button.btn-sm.tint {
   border-color: transparent;
 }
 
-/* Segmented control with a sliding thumb: --n segments, --i active index */
-.segmented {
-  position: relative;
-  display: grid;
+/* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a raised
+   neutral thumb under the active item --i. The active label is --text with a 6px --tint dot, beside the label in a
+   segmented control and above the icon in the tab bar. */
+:is(.segmented, .tabbar) {
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-  --seg-gap: 0.25rem; /* the pills never touch */
+  --seg-gap: 0.25rem; /* the items never touch */
   column-gap: var(--seg-gap);
   padding: 0.25rem;
-  background: var(--surface-secondary);
-  border: 1px solid var(--edge);
   border-radius: 0.95rem;
   isolation: isolate;
 }
-
-.segmented::before {
+:is(.segmented, .tabbar)::before {
   content: "";
   position: absolute;
   top: 0.25rem;
@@ -1359,14 +1314,29 @@ button.btn-sm.tint {
   left: 0.25rem;
   width: calc((100% - 0.5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));
   border-radius: 0.7rem;
-  background: var(--tint);
+  background: var(--surface-solid);
+  box-shadow: var(--card-shadow);
   transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
   z-index: -1;
+}
+/* The thumb's radius, so the idle hover fill has its shape */
+:is(.segmented button, .tab-item) { border-radius: 0.7rem; }
+/* The tab bar's dot rides on its thumb, so it shows only where the thumb is (the More tab while its menu is open) */
+.tabbar::before {
+  background:
+    radial-gradient(circle at 50% 0.3rem, var(--tint) 2.6px, transparent 3.2px),
+    var(--surface-solid);
+}
+
+.segmented {
+  display: grid;
+  position: relative;
+  background: var(--surface-secondary);
+  border: 1px solid var(--edge);
 }
 
 .segmented button {
   min-height: 2.25rem;
-  border-radius: 0.7rem; /* the thumb's radius, so the idle hover fill has its shape */
   padding: 0.3rem 0.85rem;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -1375,6 +1345,7 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
+  gap: 0.35rem; /* the label and the active dot */
 }
 
 /* An idle tab lightens on hover; the selected tab stays on its thumb. */
@@ -1400,13 +1371,16 @@ button.btn-sm.tint {
 }
 
 .segmented button.active {
-  color: var(--on-tint);
+  color: var(--text);
 }
-
-@media (hover: hover) {
-  .segmented button.active:hover:not(:disabled) {
-    color: var(--on-tint);
-  }
+.segmented button.active::after {
+  content: "";
+  /* A flex item of the button, so it must not shrink to nothing when the label is long */
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tint);
 }
 
 /* Shared row for a segmented control and a primary action */
@@ -1465,14 +1439,6 @@ main > .error {
   :root {
     --surface: var(--surface-solid);
     --glass-blur: none;
-  }
-
-  .side,
-  .tabbar,
-  .more-menu {
-    background: var(--surface-solid);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 
   .more-scrim,
@@ -1596,7 +1562,7 @@ select.sort-select:focus-visible:not([data-pointer]) {
 /* Field highlights as quiet as the filter's hover (a 5% wash of the text color), focus and an open menu a step more */
 select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
 @media (hover: hover) {
-  :is(input:not([type="checkbox"], [type="radio"]), select, textarea):hover:not(:focus, :disabled),
+  :is(input:not([type="checkbox"]), select, textarea):hover:not(:focus, :disabled),
   select.sort-select:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 5%);
   }
@@ -2258,10 +2224,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-size: 0.875rem;
 }
 
-/* A daily task shown ahead of its day cannot be ticked yet. */
-.todo-checkbox-btn.static:not(.checked) {
-  opacity: 0.5;
-}
 
 
 /* Takes the line chart's place at its height (140px plot + axis line), so changing the period never resizes the card. */
@@ -2459,7 +2421,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 /* iOS zooms into any field under 16px on focus; pinch zoom stays allowed, so keep touch fields at 16px. */
 @media (pointer: coarse) {
-  input:not([type="checkbox"]):not([type="radio"]),
+  input:not([type="checkbox"]),
   select,
   select.sort-select,
   textarea {

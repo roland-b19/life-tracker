@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
 import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
-import { CheckIcon, ChevronRightIcon, PlusIcon } from "./icons";
+import { ChevronRightIcon, PlusIcon } from "./icons";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
 
@@ -276,16 +276,12 @@ export function AddButton({ children, ...button }: Omit<ButtonHTMLAttributes<HTM
 
 /** The round tick box of a to-do or a shopping row. No `onChange`: shown only, not a control. */
 export function Checkbox({ checked, onChange, label }: { checked: boolean; onChange?: () => void; label?: string }) {
+  // The tick is drawn by the CSS, the same one as on a checkbox input
   const cls = cx("todo-checkbox-btn", !onChange && "static", checked && "checked");
-  const tick = checked && <CheckIcon size={12} strokeWidth={3} />;
   return onChange ? (
-    <button type="button" className={cls} onClick={onChange} aria-label={label}>
-      {tick}
-    </button>
+    <button type="button" className={cls} onClick={onChange} aria-label={label} />
   ) : (
-    <span className={cls} aria-hidden="true">
-      {tick}
-    </span>
+    <span className={cls} aria-hidden="true" />
   );
 }
 
