@@ -201,19 +201,21 @@ export function Navigation({ userName }: NavigationProps) {
                 Sign out
               </button>
             </div>
-            {overflow.map((link) => (
-              <NextLink
-                key={link.href}
-                href={link.href}
-                className={`nav-link ${link.isActive ? "active" : ""}`}
-                aria-current={link.isActive ? "page" : undefined}
-                onClick={() => goFromMenu(link.href)}
-              >
-                {link.icon}
-                <span>{link.label}</span>
-              </NextLink>
-            ))}
-            {exportButton}
+            <div className="more-links">
+              {overflow.map((link) => (
+                <NextLink
+                  key={link.href}
+                  href={link.href}
+                  className={`nav-link ${link.isActive ? "active" : ""}`}
+                  aria-current={link.isActive ? "page" : undefined}
+                  onClick={() => goFromMenu(link.href)}
+                >
+                  {link.icon}
+                  <span>{link.label}</span>
+                </NextLink>
+              ))}
+              {exportButton}
+            </div>
           </div>
         </>
       )}

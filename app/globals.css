@@ -491,6 +491,13 @@ button.nav-link:disabled {
   flex: none;
 }
 
+/* Settings and Export data: one column as wide as the longer item, in the middle of the menu */
+.more-links {
+  display: grid;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
 main {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom));
 }
@@ -1381,6 +1388,11 @@ button.btn-sm {
   background: var(--surface-secondary);
   box-shadow: none;
 }
+/* The tab bar floats like the More menu above it, so it has the menu's corners; the thumb's corners follow them
+   inside the bar's padding and edge (1.25rem - 0.25rem - 1px), so the gap around it is even */
+.tabbar { border-radius: 1.25rem; }
+.tabbar::before,
+.tabbar .tab-item { border-radius: 0.9375rem; }
 
 .segmented {
   display: grid;
