@@ -29,7 +29,7 @@ last_verified: 2026-11-18
 None.
 
 ## Next steps
-1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
+None.
 
 ## Open questions
 None.
