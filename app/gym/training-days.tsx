@@ -102,7 +102,7 @@ export function TrainingDays({
                           <strong>
                             {idx + 1}. {ex.exerciseName}
                           </strong>
-                          <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
+                          <Badge kind="rest" className="muscle-tag">{muscleLabel(ex.muscleGroup)}</Badge>
                         </div>
                         <span className="muted number-tabular entry-side">
                           {ex.targetSets} × {ex.minReps} – {ex.maxReps}

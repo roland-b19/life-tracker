@@ -90,11 +90,11 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
           {shown.length === 0 && <EmptyNote>No custom exercises yet.</EmptyNote>}
           {shown.map((e) => (
             <div key={e.id} className="entry-row">
-              <div>
+              <div className="entry-main entry-stack">
                 <strong>{e.name}</strong>
-                <span className="muted muscle-day">{cap(e.equipmentType)}</span>
+                <Badge kind="rest" className="muscle-tag">{muscleLabel(e.muscleGroup)}</Badge>
+                <span className="muted">{cap(e.equipmentType)}</span>
               </div>
-              <Badge kind="rest">{muscleLabel(e.muscleGroup)}</Badge>
               <RowActions onEdit={() => open(e)} onDelete={() => remove(e)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>
           ))}

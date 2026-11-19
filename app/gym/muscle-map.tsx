@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
+import { Badge, Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { Segmented } from "../components/segmented";
-import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, type MuscleGroupKey } from "@/lib/gym-muscles";
+import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { GROUP_COLOR, MESH_GROUP } from "./muscle-groups";
 
 interface MapApi {
@@ -421,9 +421,12 @@ export function MuscleExplorer({
                 )}
                 {list.map((e) => (
                   <div key={e.exerciseId} className="entry-row">
-                    <div>
-                      <strong>{e.exerciseName}</strong>
-                      <span className="muted muscle-day">{e.days.join(", ")}</span>
+                    <div className="entry-main entry-stack">
+                      <span>
+                        <strong>{e.exerciseName}</strong>
+                        <span className="muted muscle-day">{e.days.join(", ")}</span>
+                      </span>
+                      <Badge kind="rest" className="muscle-tag">{muscleLabel(e.muscleGroup)}</Badge>
                     </div>
                     <span className="muted number-tabular">
                       {e.targetSets} × {e.minReps} – {e.maxReps}

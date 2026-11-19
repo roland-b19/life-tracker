@@ -17,7 +17,6 @@ export interface SetInput {
   reps: string;
   loadType: "kg" | "plates" | "bodyweight";
   loadValue: string;
-  extraKg: string;
   isFailure: boolean;
   isPartial: boolean;
   isGoodForm: boolean;
@@ -30,7 +29,6 @@ export function emptyInput(e: ExerciseItem): SetInput {
     reps: String(e.minReps),
     loadType: e.equipmentType === "cable" ? "plates" : e.equipmentType === "bodyweight" ? "bodyweight" : "kg",
     loadValue: "",
-    extraKg: "0",
     isFailure: true,
     isPartial: false,
     isGoodForm: true,
@@ -40,10 +38,9 @@ export function emptyInput(e: ExerciseItem): SetInput {
 
 /** What stops a set from being logged, in the form's words ("" when nothing does); the limits are the server's. */
 function inputProblem(i: SetInput) {
-  const reps = Number(i.reps), load = Number(i.loadValue || 0), extra = Number(i.extraKg || 0);
+  const reps = Number(i.reps), load = Number(i.loadValue || 0);
   if (i.reps && (!Number.isInteger(reps) || reps < 1 || reps > GYM_LIMITS.reps)) return `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}.`;
   if (load < 0 || load > GYM_LIMITS.load) return `Value can be at most ${GYM_LIMITS.load}.`;
-  if (extra < 0 || extra > GYM_LIMITS.extra) return `Extra can be at most ${GYM_LIMITS.extra} kg.`;
   return "";
 }
 export const canLog = (i: SetInput) => Number(i.reps) > 0 && (i.loadType === "bodyweight" || Number(i.loadValue) > 0) && !inputProblem(i);
@@ -82,28 +79,26 @@ export function ExerciseLogger({
   return (
     <div className="entry-row workout-exercise-card">
       <div className="exercise-header">
-        <div>
-          <h3 className="exercise-title">
-            <button type="button" className="group-toggle" aria-expanded={open} onClick={onToggle}>
-              {exercise.exerciseName}
-              <ChevronRightIcon size={14} />
-            </button>
-          </h3>
-          <span className="muted exercise-meta">
-            Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
-          </span>
-          {last && (
-            <div className="last-time">
-              <span className="muted">Last time · {formatDMY(last.date)}</span>
-              {lastSets.map((set, i) => (
-                <span key={i} className="number-tabular">
-                  {setText(set)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <Badge kind="rest">{muscleLabel(exercise.muscleGroup)}</Badge>
+        <h3 className="exercise-title">
+          <button type="button" className="group-toggle" aria-expanded={open} onClick={onToggle}>
+            {exercise.exerciseName}
+            <ChevronRightIcon size={14} />
+          </button>
+        </h3>
+        <Badge kind="rest" className="muscle-tag">{muscleLabel(exercise.muscleGroup)}</Badge>
+        <span className="muted exercise-meta">
+          Target: {exercise.targetSets} sets · {exercise.minReps} – {exercise.maxReps} reps
+        </span>
+        {last && (
+          <div className="last-time">
+            <span className="muted">Last time · {formatDMY(last.date)}</span>
+            {lastSets.map((set, i) => (
+              <span key={i} className="number-tabular">
+                {setText(set)}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {open && (
@@ -139,17 +134,6 @@ export function ExerciseLogger({
               value={input.reps}
               onChange={(e) => onPatch({ reps: e.target.value })}
             />
-            <SelectField
-              label="Unit"
-              disabled={busy}
-              value={input.loadType}
-              onChange={(e) => onPatch({ loadType: e.target.value as SetInput["loadType"] })}
-              options={[
-                { value: "kg", label: "kg" },
-                { value: "plates", label: "Plates" },
-                { value: "bodyweight", label: "BW" },
-              ]}
-            />
             <Field
               label="Value"
               type="number"
@@ -160,16 +144,16 @@ export function ExerciseLogger({
               value={input.loadValue}
               onChange={(e) => onPatch({ loadValue: e.target.value })}
             />
-            <Field
-              label="Extra"
-              title="Extra weight in kg"
-              type="number"
-              step="0.25"
-              min="0"
-              inputMode="decimal"
+            <SelectField
+              label="Unit"
               disabled={busy}
-              value={input.extraKg}
-              onChange={(e) => onPatch({ extraKg: e.target.value })}
+              value={input.loadType}
+              onChange={(e) => onPatch({ loadType: e.target.value as SetInput["loadType"] })}
+              options={[
+                { value: "kg", label: "kg" },
+                { value: "plates", label: "Plates" },
+                { value: "bodyweight", label: "BW" },
+              ]}
             />
           </div>
 

@@ -3,8 +3,8 @@
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { weekStart } from "@/lib/gym-progress";
 import { useState } from "react";
-import { Banner, FormModal, SelectField, SmallButton, Toggle } from "../components/blocks";
-import { PencilIcon } from "../components/icons";
+import { Card, FormModal, SelectField, Toggle } from "../components/blocks";
+import { EditButton } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
 import { saveDeloadWeeksAction } from "@/actions/gym";
@@ -65,7 +65,7 @@ export function DeloadCard({
 
   return (
     <>
-      <Banner
+      <Card
         id="deload-title"
         className="deload-card"
         title={deload.inDeloadWeek ? "Deload week chosen" : deload.isDeloadDue ? "Deload week due" : `Week ${deload.cycleWeek} of ${deload.cycleLength}`}
@@ -76,21 +76,19 @@ export function DeloadCard({
               ? `Deload starts ${formatDMY(deload.nextDeloadWeek)}.`
               : `${deload.cycleLength + 1 - deload.cycleWeek} ${deload.cycleLength + 1 - deload.cycleWeek === 1 ? "week" : "weeks"} until deload.`
         }
-      >
-        <span className="deload-actions">
-          <SmallButton
-            icon={<PencilIcon size={14} />}
+        end={
+          <EditButton
+            label="Edit deload weeks"
             disabled={busy}
             onClick={() => {
               setErrorMsg("");
               setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
             }}
-          >
-            Edit
-          </SmallButton>
-          <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
-        </span>
-      </Banner>
+          />
+        }
+      >
+        <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
+      </Card>
       <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} busy={busy}>
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
         <SelectField

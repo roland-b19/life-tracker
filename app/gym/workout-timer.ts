@@ -4,22 +4,36 @@ import { useEffect, useRef, useState } from "react";
 
 const key = (sessionId: string) => `gym-timer:${sessionId}`;
 
-/** The saved time of a workout, in seconds (0 when none, or when storage is blocked). */
-function load(sessionId: string) {
+/** A workout's time: the seconds counted so far, plus the running stretch since `since` (epoch ms; null when stopped). */
+type Stored = { seconds: number; since: number | null };
+const stopped = (seconds = 0): Stored => ({ seconds, since: null });
+
+function load(sessionId: string): Stored {
   try {
-    return Number(localStorage.getItem(key(sessionId))) || 0;
+    const raw = localStorage.getItem(key(sessionId));
+    if (!raw) return stopped();
+    const v: unknown = JSON.parse(raw);
+    if (typeof v === "number") return stopped(v); // the older format: plain seconds
+    const { seconds, since } = (v ?? {}) as Partial<Stored>;
+    return { seconds: Number(seconds) || 0, since: typeof since === "number" ? since : null };
   } catch {
-    return 0;
+    return stopped();
   }
 }
 
-/** Put a workout's time away, or back (Undo hands a finished or cancelled workout its time again). */
-export function saveWorkoutTime(sessionId: string, seconds: number) {
+function save(sessionId: string, time: Stored) {
   try {
-    localStorage.setItem(key(sessionId), String(seconds));
+    localStorage.setItem(key(sessionId), JSON.stringify(time));
   } catch {
     // Storage blocked: the timer then restarts from 0 after a reload.
   }
+}
+
+const elapsed = (time: Stored) => time.seconds + (time.since === null ? 0 : Math.max(0, Date.now() - time.since) / 1000);
+
+/** Put a workout's time back, stopped (Undo hands a finished or cancelled workout its time again). */
+export function saveWorkoutTime(sessionId: string, seconds: number) {
+  save(sessionId, stopped(seconds));
 }
 
 export function clearWorkoutTime(sessionId: string) {
@@ -31,33 +45,28 @@ export function clearWorkoutTime(sessionId: string) {
 }
 
 /**
- * Elapsed workout time. It counts while `running`, and stays put otherwise (workout paused or left). The time is
- * kept in this browser per workout, so Exit, Resume and reloads carry on from where it stopped.
+ * Elapsed workout time, kept in this browser per workout. `running` true starts or keeps the clock, false stops it
+ * (Pause, Exit), and null leaves it as it was: a workout whose page or app was closed while it ran keeps counting,
+ * since the clock is the start of the running stretch, not a tick.
  * shortcut: the time lives in localStorage, so another device starts from 0; upgrade: a column on the session.
  */
-export function useWorkoutTimer(sessionId: string | null, running: boolean) {
-  const seconds = useRef(0);
+export function useWorkoutTimer(sessionId: string | null, running: boolean | null) {
+  const time = useRef<Stored>(stopped());
   const [shown, setShown] = useState(0);
 
   useEffect(() => {
-    seconds.current = sessionId ? load(sessionId) : 0;
-    setShown(Math.floor(seconds.current));
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId || !running) return;
-    let last = Date.now();
-    const tick = setInterval(() => {
-      const now = Date.now();
-      seconds.current += (now - last) / 1000; // real elapsed time, so a throttled background tab loses nothing
-      last = now;
-      saveWorkoutTime(sessionId, seconds.current);
-      setShown(Math.floor(seconds.current));
-    }, 1000);
+    const now = sessionId ? load(sessionId) : stopped();
+    if (sessionId && running === true && now.since === null) now.since = Date.now();
+    if (running === false && now.since !== null) Object.assign(now, stopped(elapsed(now)));
+    time.current = now;
+    if (sessionId) save(sessionId, now);
+    setShown(Math.floor(elapsed(time.current)));
+    if (now.since === null) return;
+    const tick = setInterval(() => setShown(Math.floor(elapsed(time.current))), 1000);
     return () => clearInterval(tick);
   }, [sessionId, running]);
 
-  return { shown, seconds: () => seconds.current };
+  return { shown, seconds: () => elapsed(time.current) };
 }
 
 /** 7:05 or 1:02:09. */

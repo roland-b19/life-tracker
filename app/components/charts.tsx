@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
@@ -98,8 +99,10 @@ export function LineChart({
   const ticks = !values.length ? [] : hi === lo ? [lo] : [hi, (hi + lo) / 2, lo];
   const grid = ticks.length ? ticks.map(y) : [pad, height / 2, height - pad];
   const fmt = (n: number) => String(Math.round(n * 100) / 100);
+  // The value axis is as wide as its longest label (the font is monospace), so the plot starts right after it
+  const labelChars = Math.max(1, ...ticks.map((t) => fmt(t).length));
   return (
-    <div className="line" role="img" aria-label={summary}>
+    <div className="line" role="img" aria-label={summary} style={{ "--y-chars": labelChars } as CSSProperties}>
       <div className="line-plot">
         <div className="line-y number-tabular" aria-hidden="true" style={{ height }}>
           {ticks.map((t) => (

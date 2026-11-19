@@ -44,8 +44,8 @@ function IconButton({
   );
 }
 
-export function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return <IconButton edit icon={<PencilIcon size={17} />} label={label} title="Edit" onClick={onClick} />;
+export function EditButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
+  return <IconButton edit icon={<PencilIcon size={17} />} label={label} title="Edit" disabled={disabled} onClick={onClick} />;
 }
 
 /** `title` is the tooltip (a disconnect says "Disconnect"). */
