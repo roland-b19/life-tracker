@@ -1,6 +1,6 @@
 ---
 summary: Where the project stands: roadmap, work in progress, next steps, open questions and tracked migrations.
-last_verified: 2026-11-18
+last_verified: 2026-11-19
 ---
 
 # Status
@@ -24,9 +24,10 @@ last_verified: 2026-11-18
 | Test database per worktree, created and migrated by a global setup; `AGENTS.md` ignored (D-018) | done |
 | Axe scans wait for the refresh a write left due (second `document-title` flake, D-019) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
+| New color palette: slate, one turquoise accent, dark and light modes with a manual switch (D-020 to D-024) | planned, [plan](plans/color-palette.md) (approved 2026-11-19, build not started) |
 
 ## In progress
-None.
+- Color palette plan approved (D-020 to D-024); the build follows the plan's steps 2–12.
 
 ## Next steps
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
