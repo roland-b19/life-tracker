@@ -268,7 +268,7 @@ export function DayEditor({
                   ))}
                 </select>
               </Label>
-              <button type="button" className="secondary" onClick={addRow}>
+              <button type="button" className="secondary btn-sm" onClick={addRow}>
                 <PlusIcon size={14} />
                 Add exercise
               </button>

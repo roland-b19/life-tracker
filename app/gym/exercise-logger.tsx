@@ -79,9 +79,10 @@ export function ExerciseLogger({
   return (
     <div className="entry-row workout-exercise-card">
       <div className="exercise-header">
+        {/* The arrow folds the exercise, like a card's fold arrow; the name is plain text (D-033) */}
         <h3 className="exercise-title">
-          <button type="button" className="group-toggle" aria-expanded={open} onClick={onToggle}>
-            {exercise.exerciseName}
+          {exercise.exerciseName}{" "}
+          <button type="button" className="group-toggle" aria-expanded={open} aria-label={`Show ${exercise.exerciseName}`} onClick={onToggle}>
             <ChevronRightIcon size={14} />
           </button>
         </h3>

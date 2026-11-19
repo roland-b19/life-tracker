@@ -36,7 +36,7 @@ async function dismissToast(page: Page, message: string | RegExp) {
 
 // Opens the exercise (a closed exercise shows no set form) and logs one set of 5 reps at 60 kg; reps start at the day's minimum.
 async function logSet(page: Page) {
-  await page.getByRole("button", { name: EXERCISE, exact: true }).click();
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await page.getByLabel("Value").fill("60");
   await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
 }

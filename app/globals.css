@@ -33,9 +33,12 @@
   --edge: transparent; /* tags, badges and the chat: flat, until high contrast outlines them */
   --glass-blur: blur(28px) saturate(160%);
   /* Neutral washes, all subtle: the hover on clear controls and the bands behind rows, and a clearly stronger one for
-     the hover on filled controls (so it still reads over their fill) */
+     the Rest badge */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
+  /* The open or chosen item in a list (the open History workout, the chosen training day): a darker wash in both
+     modes, laid over whatever is behind it (D-033) */
+  --highlight-open: light-dark(rgba(15, 26, 43, 0.1), rgba(0, 0, 0, 0.3));
   /* The dim behind a modal or the More menu */
   --scrim: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.5));
 }
@@ -75,13 +78,14 @@
 @property --shadow-far { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --highlight { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --highlight-fill { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight-open { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --scrim { syntax: "<color>"; inherits: true; initial-value: transparent; }
 
 :root[data-theme-fade] {
   transition-property: --background, --glow, --surface, --surface-solid, --surface-modal,
     --surface-secondary, --text, --secondary, --tint, --tint-hover, --tint-subtle, --success,
     --warning, --warning-subtle, --danger, --danger-subtle, --separator, --card-edge, --shadow-near, --shadow-far,
-    --highlight, --highlight-fill, --scrim;
+    --highlight, --highlight-fill, --highlight-open, --scrim;
   transition-duration: 0.5s;
   transition-timing-function: ease;
 }
@@ -654,14 +658,17 @@ main {
 }
 
 .deload-card { margin-bottom: 1.25rem; }
-/* The Deload session check sits right under the text, at the left (D-031) */
-.deload-card > .section-head { margin-bottom: 0; }
+/* The Deload session check sits right under the text, at the left (D-031); the Edit button is centred on the whole card,
+   beside both (D-033) */
+.deload-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 0.75rem; }
+.deload-card > .section-head { display: contents; }
+.deload-card > .section-head > :last-child { grid-column: 2; grid-row: 1 / span 2; }
 /* The check keeps its 44px tap height but draws into the bottom padding, so its text sits one card padding from the edge */
 .deload-card > .toggle-label:last-child { margin-bottom: calc((1lh - 44px) / 2); }
 
 .split-day-card {
   padding: 1rem 1.25rem;
-  background: var(--surface-solid);
+  background: var(--surface-secondary); /* the fill of Health's macro tiles (D-033) */
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
@@ -669,11 +676,14 @@ main {
   cursor: pointer;
 }
 
+/* The chosen day: the open-item wash over the card's fill (D-033) */
 .split-day-card.selected {
-  background: var(--tint-subtle);
+  background: linear-gradient(var(--highlight-open), var(--highlight-open)) var(--surface-secondary);
 }
+/* On the card's --surface-secondary, Start takes the bar's fill instead, like the sign-out button in the sidebar */
+.split-day-card .btn-sm { background: var(--surface-solid); }
 
-/* The exercise title box, its muscle tag right under it, then the target and last time's sets, all at the left */
+/* The exercise name and its fold arrow, its muscle tag right under it, then the target and last time's sets, all at the left */
 .exercise-header {
   display: grid;
   justify-items: start;
@@ -945,6 +955,12 @@ button:disabled {
   transform: none;
 }
 
+/* The turquoise buttons (a form's Save, Log set, the assistant's Send, Continue) have an edge that shows on their fill:
+   the --card-edge hairline vanishes on turquoise. Disabled, the whole button fades, edge included (D-033). */
+:is(button:not([class]), button.log-set, button.signin-continue) {
+  border-color: color-mix(in srgb, var(--tint), var(--text) 35%);
+}
+
 /* Secondary, small and icon buttons share one opaque fill: the tab bar's selected item and the fields (--surface-secondary),
    so they read clearly on a card in both modes */
 button.secondary {
@@ -1048,15 +1064,6 @@ textarea:focus-visible {
 .signin-form .error { margin: 0; }
 /* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
 .signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
-/* Log set rests disabled until the set is filled in: flat, in the neutral fill, since it cannot be pressed yet; it turns
-   raised and turquoise once it can log (D-032) */
-button.log-set:disabled {
-  opacity: 1;
-  color: var(--secondary);
-  background: var(--surface-secondary);
-  border-color: transparent;
-  box-shadow: none;
-}
 button.signin-continue:disabled {
   opacity: 1;
   cursor: progress;
@@ -2027,8 +2034,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .modal-body > .list-box:first-child > .entries { margin-top: -0.5rem; }
 .modal-body > .list-box:last-child { margin-bottom: -0.5rem; }
 
-/* The 7-day average under a metric: the same gap above and below it. Last in a card, its 1rem below the baseline mirrors
-   the title's cap height, centred on the 44px Edit button, at the top. */
+/* The 7-day average under a metric: the same gap above and below it */
 .metric-avg {
   margin: 1rem 0;
   font-size: 0.875rem;
@@ -2036,6 +2042,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 /* Right under a big number (Weight) the number's own 1rem is the gap */
 .metric-big + .metric-avg { margin-top: 0; }
+/* Last in a card (Steps), the card's own padding is the gap below it, as under every other card's last line */
+.metric-avg:last-child { margin-bottom: 0; }
 .metric-avg + .tap-buttons { margin-top: 0; }
 
 /* Second line under a card title */
@@ -2063,7 +2071,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
-.section-title > .group-toggle { vertical-align: middle; }
+:is(.section-title, .exercise-title) > .group-toggle { vertical-align: middle; }
 .set-flag { margin-left: 0.5rem; }
 /* The set's checks: one column, at the left */
 .toggle-row {
@@ -2154,13 +2162,14 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .routine-fields input { text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .routine-fields input::-webkit-inner-spin-button,
 .routine-fields input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+/* The exercise select takes the dialog's width like every field; Add exercise is a small button under it, like
+   New exercise (D-033) */
 .routine-add {
-  display: flex;
-  align-items: end;
+  display: grid;
+  justify-items: start;
   gap: 0.75rem;
 }
-.routine-add > button { flex: none; height: 2.75rem; min-height: 0; padding-block: 0; } /* the select's height, so both share one centre line */
-.routine-add select { height: 2.75rem; min-height: 0; padding-block: 0; }
+.routine-add > label { justify-self: stretch; }
 /* New exercise, created inline in the day editor (same card style as a routine row) */
 .custom-exercise {
   display: grid;
@@ -2253,8 +2262,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .group-toggle svg { flex-shrink: 0; }
 .group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 /* A category title of a grouped list (Wishlist, Tasks, Shopping) is a box, easier to spot and read: the small buttons'
-   fill, edge and shadow, with the --text label and the arrow inside it (D-029). A workout's exercise title and a card's
-   fold arrow are the same box (D-031). */
+   fill, edge and shadow, with the --text label and the arrow inside it (D-029). A card's and a workout exercise's fold
+   arrows are the same box (D-031, D-033). */
 :is(.group-label, .section-title, .exercise-title) > .group-toggle {
   min-height: 1.875rem;
   padding: 0.25rem 0.55rem 0.25rem 0.7rem;
@@ -2265,6 +2274,9 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   border-radius: 0.6rem;
   box-shadow: var(--card-shadow);
 }
+/* A fold arrow alone in its box (a card's, a workout exercise's): even padding, so the arrow sits centred pointing right
+   and down */
+:is(.section-title, .exercise-title) > .group-toggle { padding-inline: 0.625rem; }
 
 /* Health: assistant chat */
 .chat-log {
@@ -2360,7 +2372,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
    With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
   button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
-  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), var(--text) 6%); }
+  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
   button.secondary:hover:not(:disabled),
   button.btn-sm:hover:not(:disabled),
   :is(.group-label, .section-title, .exercise-title) > .group-toggle:hover,
@@ -2456,8 +2468,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   gap: 0.75rem;
   margin-bottom: 1.25rem; /* the gap every Gym card keeps from the next */
 }
-/* Training days stand out from the card behind them */
-.split-day-card:not(.selected) { background: var(--highlight); }
 
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }
@@ -2467,8 +2477,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .history-entry { display: block; padding-block: 0.25rem; }
 /* A history row's text sits 0.75rem in (the row's 0.25rem and its toggle's 0.5rem), so its title keeps 0.25rem for the cards' 1rem (D-030) */
 .surface.gym-history > .section-head { margin-bottom: 0.25rem; }
-/* The open workout is a stronger neutral wash, so it stands out from the banded rows around it (D-031). */
-.history-entry.open { background-color: var(--highlight-fill) !important; /* wins over the band and wash rules above */ }
+/* The open workout takes the open-item wash, so it stands out from the banded rows around it (D-031, D-033). */
+.history-entry.open { background-color: var(--highlight-open) !important; /* wins over the band and wash rules above */ }
 .history-entry.open .history-chevron { color: var(--text); }
 .history-toggle {
   display: grid;
