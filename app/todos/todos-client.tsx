@@ -432,7 +432,7 @@ export function TodosClient({
                         <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
                         {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                           <div className="badge-row">
-                            {!listDaily && task.isCarriedOver && <Badge kind="carried">Carried over</Badge>}
+                            {!listDaily && task.isCarriedOver && <Badge kind="info">Carried over</Badge>}
                             {task.reminderTime && isPushEnabled() && <Badge kind="info">{task.reminderTime}</Badge>}
                           </div>
                         )}

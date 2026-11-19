@@ -776,19 +776,18 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
   <h2>Badges and tags</h2>
   <ul class="rules">
     <li><span class="rid">D1</span><span>A badge is flat (P5): padding <code>calc(.25rem + .5px) .65rem calc(.25rem - .5px)</code> (centres the caps), border <code>--edge</code> (transparent), radius 0.6rem, <code>--text</code> 0.75rem/700, uppercase, 0.04em.</span></li>
-    <li><span class="rid">D2</span><span>Kinds: <code>info</code> <code>--tint-subtle</code> (Today, an exercise count, a price, a reminder time); <code>warning</code> and <code>danger</code> a <code>-subtle</code> fill + a 6px dot of the status color + the word (Wishlist range 250-750 and 750+, a set anomaly); <code>rest</code> <code>--highlight-fill</code> (Rest, Deload, muscle tags, Wishlist range &lt; 250).</span></li>
+    <li><span class="rid">D2</span><span>Kinds: <code>info</code> <code>--tint-subtle</code> (Today, an exercise count, a price, a reminder time, Tasks' Carried over); <code>warning</code> and <code>danger</code> a <code>-subtle</code> fill + a 6px dot of the status color + the word (Wishlist range 250-750 and 750+, a set anomaly); <code>rest</code> <code>--highlight-fill</code> (Rest, Deload, muscle tags, Wishlist range &lt; 250).</span></li>
     <li><span class="rid">D3</span><span>The Wishlist list's range badges drop their dot (<code>.item-range::before</code>) and share one width in their own column; the filter keeps the dot (D-029).</span></li>
     <li><span class="rid">D4</span><span>Gym muscle tags (<code>.muscle-tag</code>, a rest badge) share one width, the longest label's ("Hamstrings"): <code>min-width: calc(10ch + .4em + 1.3rem + 2px)</code>, text centred, the tag left-aligned in its column, under the exercise name (D-031).</span></li>
   </ul>
   <div class="duo"><div class="pane">
     <div class="col">
-      <div class="row"><span class="badge badge-info">Today</span><span class="badge badge-info num">6</span><span class="badge badge-info num">649 RON</span><span class="badge badge-info num">08:30</span></div>
+      <div class="row"><span class="badge badge-info">Today</span><span class="badge badge-info num">6</span><span class="badge badge-info num">649 RON</span><span class="badge badge-info num">08:30</span><span class="badge badge-info">Carried over</span></div>
       <div class="row"><span class="badge badge-rest">Rest</span><span class="badge badge-rest">Deload</span><span class="badge badge-warning">250-750</span><span class="badge badge-danger">750+</span><span class="badge badge-danger">Anomaly</span></div>
       <div class="row"><span class="badge badge-warning item-range">250-750</span><span class="badge badge-danger item-range">750+</span><span class="ann">in the Wishlist list: no dot</span></div>
       <div class="stack"><span class="badge badge-rest muscle-tag">Chest</span><span class="badge badge-rest muscle-tag">Hamstrings</span><span class="badge badge-rest muscle-tag">Back</span></div>
     </div>
   </div></div>
-  <p class="note warn">Found while scanning: Tasks' "Carried over" badge uses <code>kind="carried"</code>, and <code>app/globals.css</code> has no <code>.badge-carried</code> rule, so it draws as a plain badge with no fill. It is listed here as it is in the code; whether it should have a fill is for the functionality / next aesthetics round.</p>
 </section>
 
 <section id="lists">
@@ -1066,6 +1065,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
 
 <section id="reuse">
   <h2>Reuse in another project</h2>
+  <p>A project-agnostic version of these rules, with general examples and the decisions as reusable reasons, is <code>docs/design/design-rules-general.html</code>: start a new project from that page. Or:</p>
   <ol>
     <li>Copy the token block (<a href="#color">Color tokens</a>), with <code>color-scheme: light dark</code>, the two <code>[data-theme]</code> rules and, if you want the fade, the <code>@property</code> registrations and the <code>[data-theme-fade]</code> rule.</li>
     <li>Copy the recipes in this order: base (font, headings), surfaces and the raised recipe, buttons, fields, checkbox, segmented, badges, lists, modal and toast.</li>
@@ -1079,6 +1079,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
   <table class="t">
     <tr><th>File</th><th>What it is</th><th>Status</th></tr>
     <tr><td><code>docs/design/design-system.html</code></td><td>This page</td><td><b>Latest: read this one</b></td></tr>
+    <tr><td><code>docs/design/design-rules-general.html</code></td><td>The same rules made general (no project names), for new projects; version 1, 2026-11-20</td><td>A snapshot: not kept in sync with this page</td></tr>
     <tr><td><code>docs/design/OLD-2026-11-19-palette-prototype.html</code></td><td>The clickable prototype shown before the palette build ("Life Tracker Palette"): the three choices, tokens and contrast before the build</td><td>Old: history only. Superseded where it differs (e.g. the tab bar dot, Calories-only big numeral, blue glow, turquoise small buttons, flat disabled Log set)</td></tr>
     <tr><td><code>docs/kb/plans/color-palette.md</code></td><td>The build plan, token table and contrast pairs</td><td>Done except the iOS status bar check (steps 9–10)</td></tr>
   </table>

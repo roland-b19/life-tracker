@@ -11,7 +11,7 @@ Live and in daily use. The workflow setup (knowledge base, skills, checks, branc
 - decisions (D-NNN), with reasons and rejected alternatives, one page per area: [general](decisions/general.md)
 - [conventions](conventions.md) — working agreement, the one way to do each job, checks, risk tiers, gotchas
 - [status](status.md) — roadmap, tracked migrations, open questions
-- [design system](../design/design-system.html) — every visual rule (tokens, components, states, spacing, opacity, motion) with light and dark examples; the latest look reference (`docs/design/OLD-*` files are history)
+- [design system](../design/design-system.html) — every visual rule (tokens, components, states, spacing, opacity, motion) with light and dark examples; the latest look reference (`docs/design/OLD-*` files are history); `docs/design/design-rules-general.html` is the same rules made project-agnostic for new projects (a snapshot, not kept in sync)
 
 ## History
 Session logs: `log/YYYY-MM.md` (newest: 2026-11). Superseded and removed content: `archive/`.

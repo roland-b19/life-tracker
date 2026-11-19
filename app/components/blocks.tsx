@@ -249,7 +249,7 @@ export function ProgressBar({ percent, over }: { percent: number; over?: boolean
   );
 }
 
-/** A small coloured tag: `kind` is the colour (rest, info, carried, warning, danger). */
+/** A small coloured tag: `kind` is the colour (rest, info, warning, danger). */
 export function Badge({ kind, className, children }: { kind?: string; className?: string; children: ReactNode }) {
   return <span className={cx("badge", kind && `badge-${kind}`, className)}>{children}</span>;
 }
