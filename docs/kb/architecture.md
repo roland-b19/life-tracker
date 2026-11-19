@@ -1,7 +1,7 @@
 ---
 summary: How Life Tracker is built: folders, request flow, auth, data model, feature flags, push and PWA, deploy variants, backups, CI and tests.
 covers: app/**, src/**, drizzle/**, drizzle.config.ts, next.config.ts, public/sw.js, worker/**, infra/**, Dockerfile, docker-compose.yml, docker/**, scripts/**, tests/**, playwright.config.ts, .github/workflows/**
-last_verified: 2026-11-18
+last_verified: 2026-11-20
 ---
 
 # Architecture

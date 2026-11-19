@@ -1,0 +1,1107 @@
+<title>Interface Design Rules</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  Interface design rules: a project-agnostic rule set (principles, tokens, contrast, type, spacing, every component and
+  state, motion, accessibility, decisions with rejected options) with live light and dark examples. Version 1, 2026-11-20.
+  Start a new project's own design-system page from this one.
+-->
+<style>
+/* ===== The page's own chrome (not part of the design system) ===== */
+:root{
+  --d-bg:#f3f6f9; --d-ink:#0f1a2b; --d-muted:#4a596b; --d-line:#d5dde6; --d-card:#ffffff; --d-code:#e9eef4; --d-mark:#199a81;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --d-bg:#090d12; --d-ink:#eef3f8; --d-muted:#97a6b8; --d-line:#26303c; --d-card:#121922; --d-code:#18212c; --d-mark:#1eb698;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --d-bg:#090d12; --d-ink:#eef3f8; --d-muted:#97a6b8; --d-line:#26303c; --d-card:#121922; --d-code:#18212c; --d-mark:#1eb698;
+  color-scheme:dark;
+}
+
+/* ===== The design tokens (each written once with light-dark(light, dark)) =====
+   Not registered with @property on this page, so each example pane resolves them in its own color-scheme. */
+:root{
+  --background: light-dark(#eef2f6, #0b0f14);
+  --glow: light-dark(rgba(25,154,129,.26), rgba(30,182,152,.3));
+  --surface: light-dark(rgba(255,255,255,.6), rgba(24,32,42,.6));
+  --surface-solid: light-dark(#ffffff, #18202a);
+  --surface-modal: light-dark(#ffffff, #1c2530);
+  --surface-secondary: light-dark(#e4eaf1, #2e3a48);
+  --text: light-dark(#0f1a2b, #eef3f8);
+  --secondary: light-dark(#4a596b, #97a6b8);
+  --tint: light-dark(#199a81, #1eb698);
+  --tint-hover: light-dark(#22ab8f, #3cc9ad);
+  --on-tint: light-dark(#04201b, #04201b);
+  --tint-subtle: light-dark(rgba(25,154,129,.16), rgba(30,182,152,.18));
+  --success: light-dark(#259d51, #2bb95f);
+  --warning: light-dark(#cc8c0a, #e5a51f);
+  --warning-subtle: light-dark(rgba(204,140,10,.16), rgba(229,165,31,.18));
+  --danger: light-dark(#e0444c, #ee5d63);
+  --danger-subtle: light-dark(rgba(224,68,76,.16), rgba(238,93,99,.18));
+  --separator: light-dark(#d5dde6, #2a3441);
+  --card-edge: light-dark(rgba(15,26,43,.08), rgba(238,243,248,.08));
+  --shadow-near: light-dark(rgba(15,26,43,.06), rgba(0,0,0,.4));
+  --shadow-far: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.75));
+  --highlight: light-dark(rgba(15,26,43,.05), rgba(238,243,248,.06));
+  --highlight-fill: light-dark(rgba(15,26,43,.1), rgba(238,243,248,.16));
+  --highlight-open: light-dark(rgba(15,26,43,.1), rgba(0,0,0,.3));
+  --scrim: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.5));
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
+  --edge: transparent;
+  --glass-blur: blur(28px) saturate(160%);
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--d-bg); color:var(--d-ink);
+  font:15px/1.55 var(--mono); -webkit-font-smoothing:antialiased;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.doc{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:32px;padding:28px 0 80px}
+@media (min-width:1100px){.doc{grid-template-columns:230px minmax(0,1fr)}}
+.toc{font-size:13px}
+@media (min-width:1100px){.toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto}}
+.toc details{border:1px solid var(--d-line);border-radius:12px;background:var(--d-card);padding:10px 14px}
+@media (min-width:1100px){.toc details{border:0;background:none;padding:0}.toc summary{display:none}}
+.toc summary{cursor:pointer;font-weight:700}
+.toc ol{margin:8px 0 0;padding-left:20px}
+.toc li{margin:3px 0}
+.toc a{color:var(--d-muted);text-decoration:none}
+.toc a:hover{color:var(--d-ink)}
+main{min-width:0}
+header.top h1{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.15;letter-spacing:-.025em;margin:0 0 10px;font-weight:800}
+.lede{color:var(--d-muted);max-width:72ch;margin:0 0 14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+.chip{font-size:12px;border:1px solid var(--d-line);border-radius:999px;padding:3px 10px;color:var(--d-muted);background:var(--d-card)}
+.modebar{display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;color:var(--d-muted)}
+.modebar button{font:inherit;font-size:13px;color:var(--d-ink);background:var(--d-card);border:1px solid var(--d-line);border-radius:8px;padding:4px 10px;cursor:pointer}
+.modebar button[aria-pressed="true"]{border-color:var(--d-mark);font-weight:700}
+section{border-top:1px solid var(--d-line);padding-top:26px;margin-top:34px}
+section > h2{font-size:1.45rem;letter-spacing:-.02em;margin:0 0 6px;font-weight:800}
+section h3{font-size:1.05rem;margin:26px 0 8px;font-weight:800}
+p{margin:8px 0;max-width:80ch}
+.muted{color:var(--d-muted)}
+code{font-family:var(--mono);font-size:.92em;background:var(--d-code);padding:1px 5px;border-radius:5px}
+pre{background:var(--d-code);border:1px solid var(--d-line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;margin:10px 0}
+pre code{background:none;padding:0}
+.rules{list-style:none;padding:0;margin:10px 0;display:grid;gap:7px}
+.rules li{display:grid;grid-template-columns:3.4em 1fr;gap:8px;align-items:start}
+.rid{font-weight:800;font-size:12px;color:var(--d-ink);background:var(--d-code);border:1px solid var(--d-line);border-radius:6px;text-align:center;padding:1px 0;margin-top:2px}
+table.t{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;display:block;overflow-x:auto}
+table.t th,table.t td{text-align:left;border-bottom:1px solid var(--d-line);padding:7px 10px 7px 0;vertical-align:top}
+table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--d-muted)}
+.sw{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.sw i{width:22px;height:22px;border-radius:6px;border:1px solid var(--d-line);display:inline-block;flex:none;
+  background-image:linear-gradient(45deg,#8883 25%,transparent 25%,transparent 75%,#8883 75%),linear-gradient(45deg,#8883 25%,transparent 25%,transparent 75%,#8883 75%);
+  background-size:8px 8px;background-position:0 0,4px 4px;position:relative;overflow:hidden}
+.sw i b{position:absolute;inset:0}
+.note{border-left:3px solid var(--d-mark);padding:6px 12px;background:var(--d-card);border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px}
+
+/* ===== Example panes: each example is shown in light and dark side by side ===== */
+.duo{display:grid;grid-template-columns:1fr;gap:12px;margin:12px 0 4px}
+@media (min-width:760px){.duo{grid-template-columns:1fr 1fr}}
+.pane{
+  color-scheme:light; position:relative; border-radius:14px; border:1px solid var(--d-line);
+  padding:34px 18px 18px; min-width:0; overflow:hidden; color:var(--text);
+  background:radial-gradient(75% 70% at 0% 0%, var(--glow), transparent),radial-gradient(75% 70% at 100% 100%, var(--glow), transparent),var(--background);
+  font-size:1.0625rem; line-height:1.5;
+}
+.pane.dk{color-scheme:dark}
+.pane::before{content:"Light";position:absolute;top:9px;left:14px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary);font-weight:700}
+.pane.dk::before{content:"Dark"}
+.pane.flat{background:var(--background)}
+.lab{display:block;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--secondary);font-weight:700;margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.col{display:grid;gap:14px}
+.stack{display:grid;gap:6px;justify-items:start}
+
+/* ----- The recipes, scoped to the example panes ----- */
+.pane h1,.pane h2,.pane h3{margin:0;line-height:1.2;letter-spacing:-.015em;text-wrap:balance}
+.pane h1{font-size:1.85rem}.pane h2{font-size:1.3rem}.pane h3{font-size:1.1rem}
+.pane .app-title{font-size:2rem;font-weight:800;letter-spacing:-.025em;margin:0}
+.pane .num{font-variant-numeric:tabular-nums}
+.pane .mutedt{color:var(--secondary)}
+.pane .surface{--card-pad:1.35rem;background:var(--surface);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.15rem;padding:var(--card-pad)}
+.pane .section-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem .75rem;margin-bottom:1rem}
+.pane .section-title{font-size:1.15rem;font-weight:800;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:.5rem}
+.pane .card-sub{margin:.5rem 0 0;font-size:.875rem;color:var(--secondary)}
+.pane label.f{display:grid;gap:.35rem;font-weight:600;font-size:.9rem}
+
+/* buttons */
+.pane button{font:inherit;min-height:2.75rem;padding:.65rem 1.25rem;color:var(--on-tint);background:var(--tint);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);cursor:pointer;font-weight:700;letter-spacing:-.01em;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.85rem}
+.pane button:disabled{cursor:not-allowed;opacity:.45}
+.pane :is(button:not([class]),button.wide,button.continue){border-color:color-mix(in srgb, var(--tint), var(--text) 35%)}
+.pane :is(button:not([class]),button.wide):disabled{opacity:1;color:color-mix(in srgb, var(--text) 45%, transparent);background:var(--surface-secondary);border-color:var(--card-edge)}
+.pane button.continue:disabled{opacity:1;cursor:progress}
+.pane button.secondary{color:var(--text);background:var(--surface-secondary)}
+.pane button.danger{color:var(--text);background:var(--danger-subtle)}
+.pane button.btn-sm{min-height:2.25rem;padding:.35rem .85rem;font-size:.875rem;font-weight:600;color:var(--text);background:var(--surface-secondary);border-radius:.7rem}
+.pane button.wide{width:100%}
+.pane .icon-btn{background:var(--surface-secondary);color:var(--text);padding:0;border-radius:.85rem;width:44px;height:44px;min-height:0}
+.pane .icon-btn:disabled{opacity:.35;cursor:default}
+.pane button[data-s="focus"],.pane button:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane button:where([data-s="hover"]){background:var(--tint-hover)}
+.pane button.secondary[data-s="hover"],.pane button.btn-sm[data-s="hover"],.pane .icon-btn[data-s="hover"]{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+.pane button.danger[data-s="hover"]{background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
+@media (hover:hover){
+  .pane button:where(:hover:not(:disabled)){background:var(--tint-hover)}
+  .pane button.secondary:hover:not(:disabled),.pane button.btn-sm:hover:not(:disabled),.pane .icon-btn:hover:not(:disabled),
+  .pane .fold:hover,.pane :is(.modal-close-btn,.toast-close-btn,.toast-action-btn,.chip-btn:not(.active)):hover{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+  .pane button.danger:hover:not(:disabled){background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
+  .pane .modal-close-btn:hover,.pane .toast-close-btn:hover{color:var(--text)}
+  .pane .segmented button:not(.active):hover{background:var(--highlight);color:var(--text)}
+  .pane .tab-item:not(.active):hover{background:var(--highlight);color:var(--text)}
+  .pane .nav-link:not(.active):hover{background:var(--surface-secondary);color:var(--text)}
+  .pane .choice-card:not(.selected):hover{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+  .pane :is(input:not([type=checkbox]),select,textarea):hover:not(:focus,:disabled){background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 5%)}
+}
+
+/* fields */
+.pane :is(input:not([type=checkbox]),select,textarea){font:inherit;font-size:1rem;min-height:2.75rem;padding:.65rem .95rem;color:var(--text);background-color:var(--surface-secondary);border:1px solid var(--card-edge);border-radius:.85rem;box-shadow:var(--card-shadow);width:100%;min-width:0;appearance:none}
+.pane :is(input,select,textarea):focus{outline:none;background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+.pane [data-s="fhover"]{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 5%) !important}
+.pane [data-s="ffocus"]{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%) !important}
+.pane input::placeholder,.pane textarea::placeholder{color:var(--secondary)}
+.pane select{--chevron-end:1rem;padding-right:2.6rem;background-image:linear-gradient(45deg,transparent 50%,var(--secondary) 50%),linear-gradient(135deg,var(--secondary) 50%,transparent 50%);background-position:calc(100% - var(--chevron-end) - 5px) 52%,calc(100% - var(--chevron-end)) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.pane select.sort-select{width:auto;min-height:2.25rem;border-radius:.7rem;font-size:.875rem;padding-block:.35rem;text-align:center}
+
+/* checkbox */
+.pane input[type=checkbox]{appearance:none;width:1.25rem;height:1.25rem;margin:0;border-radius:50%;border:1.5px solid var(--secondary);background:transparent;position:relative;cursor:pointer;flex:none;display:inline-grid;place-items:center}
+.pane input[type=checkbox]:checked{background:var(--tint);border-color:var(--tint)}
+.pane input[type=checkbox]:checked::before{content:"";width:.75rem;height:.75rem;background:var(--on-tint);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center/.75rem no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center/.75rem no-repeat}
+.pane input[type=checkbox]:disabled{opacity:.5;cursor:default}
+.pane input[type=checkbox][data-s="focus"],.pane input[type=checkbox]:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane .toggle-label{display:flex;align-items:center;gap:.6rem;min-height:44px;font-size:.9375rem;font-weight:500}
+
+/* segmented + tab bar */
+.pane .segmented{--seg-gap:.25rem;position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:var(--seg-gap);padding:.25rem;border-radius:.95rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow)}
+.pane .segmented::before{content:"";position:absolute;top:.25rem;bottom:.25rem;left:.25rem;width:calc((100% - .5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.7rem;transform:translateX(calc(var(--i) * (100% + var(--seg-gap))))}
+.pane .segmented button{position:relative;z-index:1;min-height:2.25rem;padding:.3rem .5rem;font-size:.9375rem;font-weight:600;background:transparent;color:var(--secondary);border:0;box-shadow:none;border-radius:.7rem;gap:.4rem}
+.pane .segmented button.active{color:var(--text)}
+.pane .segmented button.active::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--tint);flex:none}
+.pane .segmented.dense button{font-size:.8125rem;padding-inline:.1rem}
+.pane .tabbar{position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);padding:.3rem;gap:.25rem;background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem}
+.pane .tabbar::before{content:"";position:absolute;top:.3rem;bottom:.3rem;left:.3rem;width:calc((100% - .6rem - (var(--n) - 1) * .25rem) / var(--n));background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.9375rem;transform:translateX(calc(var(--i) * (100% + .25rem)))}
+.pane .tab-item{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;min-height:3.5rem;padding:.4rem 0;border:0;background:transparent;box-shadow:none;color:var(--secondary);font-size:.6875rem;font-weight:600;border-radius:.9375rem}
+.pane .tab-item.active{color:var(--text)}
+.pane .tab-item svg{width:22px;height:22px}
+.pane .nav-link{display:flex;align-items:center;gap:.7rem;min-height:2.75rem;padding:.5rem .8rem;border-radius:.75rem;color:var(--secondary);font-size:.9375rem;font-weight:500;text-decoration:none;border:1px solid transparent}
+.pane .nav-link.active,.pane .more .nav-link{background:var(--surface-secondary);color:var(--text);border-color:var(--card-edge);box-shadow:var(--card-shadow)}
+.pane .side{width:100%;max-width:248px;padding:.9rem;background:var(--surface);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid var(--card-edge);border-radius:1rem;display:grid;gap:.25rem}
+.pane .brand{display:flex;align-items:center;gap:.6rem;font-weight:800;margin:0 0 .5rem}
+.pane .brand-mark{width:1.75rem;height:1.75rem;border-radius:.55rem;background:var(--tint);color:var(--on-tint);display:grid;place-items:center;font-weight:800;font-size:.85rem}
+.pane .side-user{margin-top:.6rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.6rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1rem;font-size:.85rem}
+.pane .side-user .btn-sm{background:var(--surface-solid)}
+.pane .avatar{width:2rem;height:2rem;border-radius:50%;background:var(--surface-secondary);display:grid;place-items:center;font-weight:700;font-size:.8rem;border:1px solid var(--card-edge)}
+.pane .more{background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem;padding:.75rem;display:grid;justify-items:center}
+
+/* badges */
+.pane .badge{display:inline-flex;align-items:center;gap:.35rem;padding:calc(.25rem + .5px) .65rem calc(.25rem - .5px);border:1px solid var(--edge);border-radius:.6rem;color:var(--text);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;line-height:1.5}
+.pane .badge-info{background:var(--tint-subtle)}
+.pane .badge-warning{--dot:var(--warning);background:var(--warning-subtle)}
+.pane .badge-danger{--dot:var(--danger);background:var(--danger-subtle)}
+.pane :is(.badge-warning,.badge-danger)::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--dot)}
+.pane .badge-rest{background:var(--highlight-fill)}
+.pane .tag-even{justify-content:center;min-width:calc(10ch + .4em + 1.3rem + 2px)}
+
+/* lists */
+.pane .group-label{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--secondary);margin:.5rem 0 .25rem}
+.pane .fold{display:inline-flex;align-items:center;gap:.35rem;min-height:1.875rem;padding:.25rem .55rem .25rem .7rem;color:var(--text);background:var(--surface-secondary);border:1px solid var(--card-edge);border-radius:.6rem;box-shadow:var(--card-shadow);font:inherit;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.pane .fold.lone{padding-inline:.625rem;vertical-align:middle;letter-spacing:0}
+.pane .fold svg{width:14px;height:14px;flex:none}
+.pane .fold[aria-expanded="true"] svg{transform:rotate(90deg)}
+.pane .entries{display:grid;gap:.25rem;--band-out:.75rem;margin-inline:calc(-1 * var(--band-out))}
+.pane .surface .entries{--band-out:calc(var(--card-pad) + 1px - .5rem)}
+.pane .entry{display:flex;align-items:center;gap:1rem;padding:.5rem var(--band-out);border-radius:.75rem}
+.pane .entries > .entry:nth-child(even){background:color-mix(in srgb, var(--text) 3%, transparent)}
+.pane .entry-main{flex:1;min-width:0;display:grid;gap:.1rem}
+.pane .entry-title{font-weight:600}
+.pane .entry-meta{font-size:.875rem;color:var(--secondary)}
+.pane .entry-detail{font-size:.8rem;color:var(--secondary)}
+.pane .done{text-decoration:line-through;color:var(--secondary)}
+.pane .empty-note{color:var(--secondary);font-size:.9375rem;text-align:center;padding:1.5rem 0;margin:0}
+.pane .more-btn{display:flex;justify-content:center;margin-top:.5rem}
+
+/* data */
+.pane .progress-track{height:.45rem;background:var(--separator);border-radius:1rem;overflow:hidden}
+.pane .progress-fill{height:100%;background:var(--tint);border-radius:1rem}
+.pane .progress-fill.over{background:var(--danger)}
+.pane .metric-big{font-size:clamp(2rem,9vw,2.7rem);font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:0 0 1rem;line-height:1;text-box:trim-both cap alphabetic}
+.pane .metric-sub{margin:1rem 0 0;font-size:.875rem;color:var(--secondary);text-box:trim-both cap alphabetic}
+.pane .ring-track{stroke:var(--separator)}.pane .ring-fill{stroke:var(--tint);stroke-linecap:round}
+.pane .ring-text{font-size:1.75rem;font-weight:800;fill:var(--text)}
+.pane .hbar{display:grid;grid-template-columns:5.5rem 1fr auto;gap:.6rem;align-items:center;font-size:.85rem}
+.pane .hbar-track{height:.6rem;background:var(--separator);border-radius:1rem;overflow:hidden}
+.pane .hbar-fill{height:100%;background:var(--tint);border-radius:1rem}
+.pane .hbar-val{color:var(--secondary);font-weight:600;font-variant-numeric:tabular-nums}
+.pane .line-path{stroke:var(--tint);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.pane .line-grid{stroke:var(--separator);stroke-width:1}
+.pane .axis{font-size:11px;fill:var(--secondary)}
+.pane .tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.pane .tile{background:var(--surface-secondary);border-radius:.9rem;padding:.8rem;text-align:center;display:grid;gap:.3rem}
+.pane .tile-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--secondary);font-weight:700}
+.pane .tile-value{font-size:clamp(2rem,9vw,2.7rem);font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.pane .tile-sub{font-size:.78rem;color:var(--secondary)}
+
+/* modal + toast */
+.pane .scrim{border-radius:12px;padding:18px;background:var(--scrim)}
+.pane .modal-card{background:var(--surface-modal);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem;max-width:36rem}
+.pane .modal-head{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.25rem 0}
+.pane .modal-title{font-size:1.25rem;font-weight:600;margin:0}
+.pane .modal-body{padding:1.25rem}
+.pane .modal-close-btn{position:relative;width:1.75rem;height:1.75rem;min-height:0;padding:0;border-radius:50%;background:var(--surface-secondary);color:var(--secondary);box-shadow:var(--card-shadow)}
+.pane .toast-item{display:flex;align-items:center;gap:.6rem;background:var(--surface-modal);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.95rem;padding:.75rem 1.15rem}
+.pane .toast-message{font-size:.875rem;font-weight:500;flex:1}
+.pane .toast-action-btn{background:var(--surface-secondary);color:var(--text);font-size:.8125rem;font-weight:600;border-radius:.7rem;padding:.35rem .65rem;min-height:36px;min-width:44px}
+.pane .toast-close-btn{background:var(--surface-secondary);color:var(--secondary);padding:.25rem;min-width:36px;min-height:36px;border-radius:.7rem}
+
+/* chat */
+.pane .chat-log{display:flex;flex-direction:column;gap:.75rem;background:var(--surface-secondary);border:1px solid var(--edge);border-radius:.9rem;padding:.9rem}
+.pane .chat-bubble{background:var(--surface);border-radius:1.1rem 1.1rem 1.1rem .3rem;padding:.6rem .85rem;max-width:85%;font-size:.9375rem}
+.pane .chat-bubble.user{align-self:flex-end;background:var(--tint);color:var(--on-tint);border-radius:1.1rem 1.1rem .3rem 1.1rem}
+.pane .chat-tool{background:var(--tint-subtle);border-radius:.6rem;padding:.25rem .6rem;font-size:.8rem;align-self:flex-start}
+
+/* selection pieces */
+.pane .choice-card{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem .5rem 1rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.85rem}
+.pane .choice-card.selected{background:linear-gradient(var(--highlight-open),var(--highlight-open)) var(--surface-secondary)}
+.pane .choice-select{flex:1;min-height:44px;display:flex;align-items:center;gap:.5rem;font-weight:700;text-align:left}
+.pane .open-row{border-radius:.75rem;padding:.5rem .6rem;display:flex;align-items:center;gap:.6rem}
+.pane .open-row.open{background-color:var(--highlight-open)}
+.pane .open-chevron{color:var(--secondary);width:14px;height:14px}
+.pane .sub-row{padding:.35rem .6rem;border-radius:.5rem;font-size:.875rem}
+.pane .sub-row:nth-child(odd){background:var(--highlight)}
+.pane .timer{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
+.pane .timer.paused{opacity:.5}
+.pane .chip-btn{border-radius:999px;background:var(--surface-secondary);color:var(--text);min-height:2.25rem;padding:.3rem .85rem;font-size:.85rem;font-weight:600}
+.pane .chip-btn.active{background:var(--tint-subtle)}
+.pane .dot{width:7px;height:7px;border-radius:50%;background:var(--tint);display:inline-block}
+.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem}
+.pane.hc{--surface:var(--surface-solid);--separator:var(--text);--edge:var(--text);--card-edge:var(--text)}
+.pane svg{display:block}
+.ann{font-size:.7rem;color:var(--secondary);font-weight:600}
+.spacer{display:flex;align-items:center;gap:.4rem;font-size:.66rem;color:var(--secondary)}
+.spacer i{display:block;background:color-mix(in srgb, var(--danger) 35%, transparent);border-radius:2px}
+.pane .choice-card .btn-sm{background:var(--surface-solid)}
+.pane .open-row.open .open-chevron{color:var(--text);transform:rotate(90deg)}
+.pane .open-row{font-size:.95rem}
+</style>
+
+<div class="doc">
+<nav class="toc" aria-label="Contents">
+  <details open>
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#how">How to use these rules</a></li>
+      <li><a href="#principles">Principles</a></li>
+      <li><a href="#color">Color tokens</a></li>
+      <li><a href="#accent">Choosing the accent</a></li>
+      <li><a href="#contrast">Contrast and color use</a></li>
+      <li><a href="#type">Typography</a></li>
+      <li><a href="#numerals">Key numerals</a></li>
+      <li><a href="#layout">Page layout</a></li>
+      <li><a href="#spacing">Spacing inside a card</a></li>
+      <li><a href="#radius">Corner radii</a></li>
+      <li><a href="#elevation">Surfaces, raised and flat</a></li>
+      <li><a href="#buttons">Buttons</a></li>
+      <li><a href="#opacity">Opacity and disabled states</a></li>
+      <li><a href="#hover">Hover, focus and press</a></li>
+      <li><a href="#fields">Fields and selects</a></li>
+      <li><a href="#checkbox">Checkboxes</a></li>
+      <li><a href="#segmented">Segmented controls</a></li>
+      <li><a href="#nav">Navigation</a></li>
+      <li><a href="#badges">Badges and tags</a></li>
+      <li><a href="#lists">Lists and rows</a></li>
+      <li><a href="#fold">Groups and fold arrows</a></li>
+      <li><a href="#highlights">Selected and open states</a></li>
+      <li><a href="#data">Progress and charts</a></li>
+      <li><a href="#modal">Dialogs and the Undo toast</a></li>
+      <li><a href="#chat">Chat</a></li>
+      <li><a href="#a11y">Accessibility modes</a></li>
+      <li><a href="#motion">Motion</a></li>
+      <li><a href="#decisions">Decisions and why</a></li>
+      <li><a href="#checklist">Checklist for new work</a></li>
+      <li><a href="#adopt">Adopting this in a new project</a></li>
+      <li><a href="#starter">Starter CSS</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main>
+<header class="top">
+  <h1>Interface design rules</h1>
+  <p class="lede">A project-agnostic rule set for calm, orderly app interfaces in light and dark mode: principles, color roles, contrast, type, spacing, every component in every state, motion, accessibility, and the decisions behind them with the options that were rejected. Every example is drawn live in both modes. Start a new project from here, swap the accent, and keep the rules.</p>
+  <div class="meta">
+    <span class="chip">Version 1</span>
+    <span class="chip">2026-11-20</span>
+    <span class="chip">Starter accent: turquoise (swappable)</span>
+  </div>
+  <div class="modebar" role="group" aria-label="Page mode">This page: <button type="button" data-mode="auto">Auto</button><button type="button" data-mode="light">Light</button><button type="button" data-mode="dark">Dark</button> <span>(the examples always show both modes)</span></div>
+</header>
+
+<section id="how">
+  <h2>How to use these rules</h2>
+  <ul class="rules">
+    <li><span class="rid">U1</span><span>Every rule has an ID (P2, B3, H1…). Quote it in a request or a review: "this breaks K5".</span></li>
+    <li><span class="rid">U2</span><span>Every example is drawn twice, light on the left and dark on the right (stacked on a phone). States that need an action (hover, focus) are also shown frozen.</span></li>
+    <li><span class="rid">U3</span><span>The rules are general; the values are a starting point. A project keeps the rules, swaps the accent (<a href="#accent">Choosing the accent</a>), and may tune sizes, as long as it tunes them in one place.</span></li>
+    <li><span class="rid">U4</span><span>Each project then keeps its own design-system page (its tokens, its components, its decisions) built from this one. In a project, its CSS wins: when the page and the CSS differ, fix the page in the same change.</span></li>
+  </ul>
+</section>
+
+<section id="principles">
+  <h2>Principles</h2>
+  <p class="muted">The target feel: serious, motivating, energetic and orderly, like a good native app that people open many times a day.</p>
+  <ul class="rules">
+    <li><span class="rid">P1</span><span><b>Change the look, not the structure.</b> Visual work never moves screens, adds features or changes layouts unless that change is asked for on its own.</span></li>
+    <li><span class="rid">P2</span><span><b>One accent color, used only for "act" and "progress":</b> the primary button, progress fills and rings, the active segment's dot, the focus ring, a checked checkbox, a selected chip. Never decoration, never headings.</span></li>
+    <li><span class="rid">P3</span><span><b>Accent and status colors are never text.</b> Text is one of two tokens: <code>--text</code> or <code>--secondary</code>. A colored fill carries a dark <code>--on-tint</code> label.</span></li>
+    <li><span class="rid">P4</span><span><b>A status is never color alone.</b> A word always goes with it: a badge's label, an "Over" note.</span></li>
+    <li><span class="rid">P5</span><span><b>Raised means you can act on it.</b> Buttons, fields, selects, chips, fold arrows, tabs: a hairline edge and a soft shadow. Tags, counts and info tiles stay flat. Containers (cards, dialogs) keep the card look.</span></li>
+    <li><span class="rid">P6</span><span><b>Neutral grey for everything that is not the primary action.</b> Secondary, small, icon and toast buttons share one grey fill. Selected neutral things use a neutral wash, never the solid accent.</span></li>
+    <li><span class="rid">P7</span><span><b>Two modes, one token list.</b> Light and dark follow the system or a manual Auto / Light / Dark switch; every color token is written once with <code>light-dark(light, dark)</code>.</span></li>
+    <li><span class="rid">P8</span><span><b>"Alive" without animation.</b> Big bold numerals for key numbers, a clear weight hierarchy, glass cards on a soft accent glow. Motion is rare and listed (<a href="#motion">Motion</a>).</span></li>
+    <li><span class="rid">P9</span><span><b>One font family.</b> Hierarchy comes from size and weight. Numbers that line up use tabular figures.</span></li>
+    <li><span class="rid">P10</span><span><b>One way to do each thing.</b> A style is set once on the shared structure (tokens, base element rules, shared classes) and inherited; no per-page copies. One page is the reference and every other page matches it.</span></li>
+    <li><span class="rid">P11</span><span><b>No literal colors outside the token block.</b> Everything else is a token or a <code>color-mix()</code> of tokens. A test enforces it.</span></li>
+    <li><span class="rid">P12</span><span><b>Every change can be undone.</b> A toast with Undo follows every change (a delete, an edit, a setting), instead of "Are you sure?" dialogs.</span></li>
+  </ul>
+</section>
+
+<section id="color">
+  <h2>Color tokens</h2>
+  <p>All tokens live in one <code>:root</code> block with <code>color-scheme: light dark</code>. <code>[data-theme="light"]</code> or <code>[data-theme="dark"]</code> on <code>&lt;html&gt;</code> forces a mode (the manual switch, saved per device and applied by a tiny inline script before the first paint, so there is no flash). Every token that differs between modes is registered with <code>@property … { syntax: "&lt;color&gt;" }</code> so the mode change can fade.</p>
+  <ul class="rules">
+    <li><span class="rid">C1</span><span>Use a token by its role, not its look: a field is <code>--surface-secondary</code> because it is a control, not because it is "the light grey".</span></li>
+    <li><span class="rid">C2</span><span>Accent and status colors have about the same brightness within a mode: no pale colors in dark, no dull or brownish ones in light.</span></li>
+    <li><span class="rid">C3</span><span>A new color is a new token with both values, registered and added to the fade list; never a literal in a rule.</span></li>
+    <li><span class="rid">C4</span><span>Neutrals are a cool slate, not pure grey or pure black: they give depth in both modes and let one saturated accent carry all the meaning.</span></li>
+  </ul>
+  <div id="tokens"></div>
+  <h3>Functional colors in use</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><span class="dot" style="background:var(--tint)"></span><span>tint: act, progress, active, focus, checked</span></div>
+      <div class="row"><span class="dot" style="background:var(--success)"></span><span>success: good (with a word)</span></div>
+      <div class="row"><span class="dot" style="background:var(--warning)"></span><span>warning: attention (with a word)</span></div>
+      <div class="row"><span class="dot" style="background:var(--danger)"></span><span>danger: problem, over target, destructive</span></div>
+      <div class="row"><span class="badge badge-info">Info</span><span class="badge badge-warning">Warning</span><span class="badge badge-danger">Danger</span><span class="badge badge-rest">Neutral</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="accent">
+  <h2>Choosing the accent</h2>
+  <ul class="rules">
+    <li><span class="rid">AC1</span><span>Swap these together, never one alone: <code>--tint</code>, <code>--tint-hover</code>, <code>--tint-subtle</code>, <code>--glow</code> (and <code>--on-tint</code> if the new accent is dark).</span></li>
+    <li><span class="rid">AC2</span><span>Pick a mid-bright, saturated hue: a dark label (<code>--on-tint</code>, a very dark shade of the accent's own hue) on it must reach 4.5:1, and the fill on the card and the page must reach 3:1 (K2, K3).</span></li>
+    <li><span class="rid">AC3</span><span>The dark-mode value is a little brighter than the light one; <code>--tint-hover</code> is one step brighter again in each mode.</span></li>
+    <li><span class="rid">AC4</span><span><code>--tint-subtle</code> is the accent at 16% alpha in light and 18% in dark; <code>--glow</code> at about 26% and 30%.</span></li>
+    <li><span class="rid">AC5</span><span>The accent must differ clearly from <code>--success</code>, <code>--warning</code> and <code>--danger</code>. A green accent makes success ambiguous: then move success toward a classic green and keep words on every status (P4).</span></li>
+    <li><span class="rid">AC6</span><span>One accent for the whole app. Per-page or per-section accents were tried and rejected: the color stops meaning "act".</span></li>
+  </ul>
+</section>
+
+<section id="contrast">
+  <h2>Contrast and color use</h2>
+  <ul class="rules">
+    <li><span class="rid">K1</span><span>Text at least <b>4.5:1</b> in both modes: <code>--text</code> and <code>--secondary</code> on every surface (page, page under the glow's peak, card, control fill, solid, dialog) and on the <code>-subtle</code> fills.</span></li>
+    <li><span class="rid">K2</span><span><code>--on-tint</code> (dark, the same in both modes) on <code>--tint</code>, <code>--tint-hover</code>, <code>--success</code> and <code>--warning</code>: at least 4.5:1. Check it on <code>--danger</code> before using it there; usually it fails, so a danger fill is subtle with <code>--text</code> (B7).</span></li>
+    <li><span class="rid">K3</span><span>Colored fills (accent, status) at least <b>3:1</b> against the card and the page. A deliberate exception (say a golden warning at 2.9:1) is written down, with the status word carrying the meaning, and the test pins its floor.</span></li>
+    <li><span class="rid">K4</span><span>No saturated fill on the grey control fill (it drops under 3:1 in light): a track is <code>--separator</code> or a <code>-subtle</code> fill.</span></li>
+    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes the accent or a status color (fills, borders, SVG <code>fill</code> and <code>stroke</code> may). Links are <code>--text</code>, weight 600. Error text is <code>--text</code>, small, never red.</span></li>
+    <li><span class="rid">K6</span><span>The only allowed accent "text" is a decorative unit beside a big display numeral (large text needs 3:1, which the fill rule already guarantees), and only when it carries no meaning on its own.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Right: text tokens, accent as a fill with on-tint</span>
+        <div class="row"><span>--text</span><span class="mutedt">--secondary</span><button type="button">Save</button><span class="badge badge-danger">Over</span></div></div>
+      <div><span class="lab">Wrong (never do this)</span>
+        <div class="row"><span style="color:var(--tint)">accent text</span><span style="color:var(--danger)">red error</span><span style="background:var(--danger);color:var(--on-tint);padding:2px 8px;border-radius:6px">on-tint on danger</span></div></div>
+      <p class="error">Error text: the message in --text, never red.</p>
+    </div>
+  </div></div>
+</section>
+
+<section id="type">
+  <h2>Typography</h2>
+  <ul class="rules">
+    <li><span class="rid">T1</span><span>One family everywhere; base 1.0625rem, line-height 1.5, antialiased. The starter uses a system monospace stack (<code>ui-monospace, "SF Mono", Menlo, Consolas, monospace</code>) for an even rhythm and aligned numbers; a sans family works the same way.</span></li>
+    <li><span class="rid">T2</span><span>Headings: line-height 1.2, letter-spacing -0.015em, <code>text-wrap: balance</code>.</span></li>
+    <li><span class="rid">T3</span><span>Hierarchy by weight and size, not color: 800 titles and numerals; 700 buttons and caps labels; 600 row titles and small buttons; 500 navigation and messages; 400 body.</span></li>
+    <li><span class="rid">T4</span><span>Numbers that line up (lists, totals, timers, charts) use <code>font-variant-numeric: tabular-nums</code>.</span></li>
+    <li><span class="rid">T5</span><span>On touch devices fields use at least 16px, so iOS does not zoom on focus.</span></li>
+  </ul>
+  <table class="t">
+    <tr><th>Role</th><th>Size</th><th>Weight</th><th>Other</th></tr>
+    <tr><td>Page title</td><td>2rem (1.75rem on a phone)</td><td>800</td><td>-0.025em</td></tr>
+    <tr><td>h1 / h2 / h3</td><td>1.85rem / 1.3rem / 1.1rem</td><td>bold</td><td>-0.015em</td></tr>
+    <tr><td>Card title</td><td>1.15rem</td><td>800</td><td>-0.01em</td></tr>
+    <tr><td>Key numeral</td><td>clamp(2rem, 9vw, 2.7rem)</td><td>800</td><td>-0.03em, tabular</td></tr>
+    <tr><td>Ring value</td><td>1.75rem</td><td>800</td><td></td></tr>
+    <tr><td>Dialog title</td><td>1.25rem</td><td>600</td><td></td></tr>
+    <tr><td>Timer</td><td>1.25rem</td><td>600</td><td>tabular</td></tr>
+    <tr><td>Body</td><td>1.0625rem</td><td>400</td><td>line-height 1.5</td></tr>
+    <tr><td>Nav link, segment</td><td>0.9375rem</td><td>500 / 600</td><td>idle <code>--secondary</code>, active <code>--text</code></td></tr>
+    <tr><td>Field label</td><td>0.9rem</td><td>600</td><td>gap 0.35rem above the field</td></tr>
+    <tr><td>Small button, toast message, sub line, error</td><td>0.875rem</td><td>600 / 500 / 400</td><td>sub line <code>--secondary</code></td></tr>
+    <tr><td>Toast Undo</td><td>0.8125rem</td><td>600</td><td></td></tr>
+    <tr><td>Row detail</td><td>0.8rem</td><td>400</td><td><code>--secondary</code></td></tr>
+    <tr><td>Group label, tile title</td><td>0.75rem</td><td>700</td><td>uppercase, 0.06em, <code>--secondary</code></td></tr>
+    <tr><td>Badge</td><td>0.75rem</td><td>700</td><td>uppercase, 0.04em, <code>--text</code></td></tr>
+    <tr><td>Tab bar label, chart axis</td><td>0.6875rem</td><td>600 / 400</td><td>axis <code>--secondary</code></td></tr>
+  </table>
+  <div class="duo"><div class="pane">
+    <div class="col" style="gap:10px">
+      <p class="app-title">Overview</p>
+      <h2>Heading 2</h2>
+      <p class="section-title">Card title</p>
+      <span class="metric-big" style="margin:0">72.4</span>
+      <span>Body text in --text</span>
+      <span class="mutedt" style="font-size:.875rem">Sub line in --secondary</span>
+      <span class="group-label" style="margin:0">Group label</span>
+      <span class="entry-detail">Row detail · second line</span>
+    </div>
+  </div></div>
+</section>
+
+<section id="numerals">
+  <h2>Key numerals</h2>
+  <ul class="rules">
+    <li><span class="rid">N1</span><span>The one or two numbers a screen exists for are big: <code>clamp(2rem, 9vw, 2.7rem)</code>, 800, -0.03em, tabular. Every number of the same kind on a screen gets the same size (don't make only one of four tiles big). A unit or "of N" beside it stays small.</span></li>
+    <li><span class="rid">N2</span><span>A big numeral and the line under it are trimmed to their letters (<code>text-box: trim-both cap alphabetic</code>), so the margins around them are the gaps you see.</span></li>
+    <li><span class="rid">N3</span><span>A numeral may count up to its new value (ease-out, about 600ms); with reduced motion it jumps.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <div class="section-head"><p class="section-title">Balance</p><button type="button" class="btn-sm">Add</button></div>
+      <p class="metric-big">1,284 <span style="font-size:1rem;font-weight:600;color:var(--secondary)">pts</span></p>
+      <p class="metric-sub">7-day average 1,190</p>
+    </div>
+  </div></div>
+</section>
+
+<section id="layout">
+  <h2>Page layout</h2>
+  <ul class="rules">
+    <li><span class="rid">L1</span><span>Background: <code>--background</code> plus two soft accent glow patches (<code>radial-gradient(75% 70% at 0% 0%, var(--glow), transparent)</code> and the same at 100% 100%), one hue, drawn by fixed pseudo-elements 100lvh tall so every page has the same backdrop while it scrolls. Avoid <code>background-attachment: fixed</code> (broken on iOS).</span></li>
+    <li><span class="rid">L2</span><span>On a centred screen that never scrolls (sign-in, not found, error) the glow is <code>position: absolute</code>: iOS Safari draws nothing fixed under its bottom bar.</span></li>
+    <li><span class="rid">L3</span><span>Content width: <code>min(100% - 1.5rem, 82rem)</code>, wider gutters from 640px (2.5rem) and 1024px (4rem). Two-column grids from about 992px (<code>1.6fr 1fr</code>), gap 1.25–1.5rem between cards.</span></li>
+    <li><span class="rid">L4</span><span>Phone: a bottom tab bar, fixed 0.75rem from the sides and 0.5rem plus the safe area from the bottom; the toast sits above it. Desktop (≥1024px): a 248px sidebar, the toast bottom right.</span></li>
+  </ul>
+  <div class="duo"><div class="pane" style="min-height:150px">
+    <span class="lab">The page: background + glow from the top left and bottom right</span>
+  </div></div>
+</section>
+
+<section id="spacing">
+  <h2>Spacing inside a card</h2>
+  <ul class="rules">
+    <li><span class="rid">S1</span><span>Card padding <code>--card-pad</code>: 1.35rem (1.6rem from 768px).</span></li>
+    <li><span class="rid">S2</span><span>Title → content: 1rem visible. Block → block: 1rem. Group → group: 1rem. A group label sits 0.25rem above its rows.</span></li>
+    <li><span class="rid">S3</span><span>The last line of a card sits exactly one card padding from the bottom edge: the last element drops its bottom margin.</span></li>
+    <li><span class="rid">S4</span><span>List rows carry 0.5rem padding top and bottom; the header before a list keeps 0.5rem and the list 0.5rem, so the gap reads as 1rem.</span></li>
+    <li><span class="rid">S5</span><span>A card's sub line sits 0.5rem under its title. A card header wraps, gap 1rem 0.75rem.</span></li>
+    <li><span class="rid">S6</span><span>Forms: fields 1rem apart; the action buttons share the row equally (flex 1, gap 0.75rem). Fix spacing with these shared rules, never with per-card tweaks.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <p class="section-title">Progress</p>
+      <div class="spacer"><i style="width:10px;height:16px"></i>1rem</div>
+      <p class="metric-big">8,412</p>
+      <div class="progress-track"><div class="progress-fill" style="width:84%"></div></div>
+      <p class="metric-sub" style="margin-bottom:0">7-day average 7,930</p>
+      <div class="spacer" style="margin-top:4px"><i style="width:10px;height:21px"></i>card padding to the edge</div>
+    </div>
+  </div></div>
+</section>
+
+<section id="radius">
+  <h2>Corner radii</h2>
+  <ul class="rules">
+    <li><span class="rid">RA1</span><span>An inner radius is the outer radius minus the padding between them, so nested corners stay parallel (tab bar 1.25rem with a 0.3rem inset → thumb about 0.94rem).</span></li>
+    <li><span class="rid">RA2</span><span>A small control's radius is about 0.31 × its height.</span></li>
+  </ul>
+  <table class="t">
+    <tr><th>Element</th><th>Radius</th></tr>
+    <tr><td>Tab bar, menu, dialog</td><td>1.25rem</td></tr>
+    <tr><td>Card</td><td>1.15rem</td></tr>
+    <tr><td>Segmented track, toast</td><td>0.95rem</td></tr>
+    <tr><td>Stat tile, chat log</td><td>0.9rem</td></tr>
+    <tr><td>Button, field, choice card, icon button</td><td>0.85rem</td></tr>
+    <tr><td>Nav link, list band</td><td>0.75rem</td></tr>
+    <tr><td>Small button, segmented thumb, toast buttons</td><td>0.7rem</td></tr>
+    <tr><td>Badge, group box</td><td>0.6rem</td></tr>
+    <tr><td>Chat bubble</td><td>1.1rem with one 0.3rem tail corner</td></tr>
+    <tr><td>Chip</td><td>999px (pill)</td></tr>
+    <tr><td>Checkbox, round close, avatar, dots</td><td>50%</td></tr>
+    <tr><td>Progress and bar tracks</td><td>1rem</td></tr>
+  </table>
+</section>
+
+<section id="elevation">
+  <h2>Surfaces, raised and flat</h2>
+  <ul class="rules">
+    <li><span class="rid">E1</span><span>Surface steps, back to front: page <code>--background</code> → glass card <code>--surface</code> (60% alpha over the glow) → control fill <code>--surface-secondary</code> → <code>--surface-solid</code> (tab bar, menu, segmented thumb) → <code>--surface-modal</code> (dialog, toast).</span></li>
+    <li><span class="rid">E2</span><span>The raised recipe is <code>border: 1px solid var(--card-edge); box-shadow: var(--card-shadow)</code> (a 1px near shadow plus a soft far one). It goes on cards, bars, menus, dialogs, toasts, segmented tracks, every filled button, every field and select, the active nav link, group boxes and fold arrows.</span></li>
+    <li><span class="rid">E3</span><span>Flat (no edge, no shadow): badges and tags, counts, stat tiles, the chat log, and clear controls that sit on a track (tab items, segments).</span></li>
+    <li><span class="rid">E4</span><span>Blur only where content passes under: the sidebar and the scrims (dialog 20px, menu 8px). Cards carry no blur (it costs paint and adds nothing on a still page).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="surface"><p class="section-title">Card (raised container)</p><p class="card-sub">glass --surface, hairline, soft shadow</p></div>
+      <div class="row"><button type="button" class="btn-sm">Raised: actionable</button><span class="badge badge-rest">Flat: a tag</span><span class="mutedt num">12 · flat count</span></div>
+      <div class="tile-grid" style="max-width:280px"><div class="tile"><span class="tile-title">Flat tile</span><span class="tile-value" style="font-size:1.6rem">142</span></div><div class="tile"><span class="tile-title">Info only</span><span class="tile-value" style="font-size:1.6rem">61</span></div></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="buttons">
+  <h2>Buttons</h2>
+  <ul class="rules">
+    <li><span class="rid">B1</span><span><b>Primary</b>: <code>--tint</code> fill, <code>--on-tint</code> label, 700, -0.01em, padding 0.65rem 1.25rem, min-height 2.75rem, radius 0.85rem, raised. Hover <code>--tint-hover</code>. One primary per view.</span></li>
+    <li><span class="rid">B2</span><span><b>Its edge</b> is <code>color-mix(in srgb, var(--tint), var(--text) 35%)</code>: the plain hairline vanishes on a saturated fill.</span></li>
+    <li><span class="rid">B3</span><span><b>A primary that waits for its fields</b> (Save, Send, Add) looks like a grey secondary button while disabled: the grey fill, the plain hairline, still raised, opacity 1, label <code>color-mix(in srgb, var(--text) 45%, transparent)</code>. It reads as "a button you can't press yet", then turns accent once the fields are valid.</span></li>
+    <li><span class="rid">B4</span><span><b>A primary that is busy</b> (signing in, sending) keeps its accent look with <code>cursor: progress</code>: busy is not "unavailable".</span></li>
+    <li><span class="rid">B5</span><span><b>Any other disabled button</b>: opacity 0.45, <code>cursor: not-allowed</code>.</span></li>
+    <li><span class="rid">B6</span><span><b>Secondary</b>: <code>--text</code> on <code>--surface-secondary</code>. <b>Small</b>: the same fill, min-height 2.25rem, 0.875rem/600, radius 0.7rem, a 44px hit area from a pseudo-element. Hover both: <code>color-mix(--surface-secondary, --text 8%)</code>. Never accent.</span></li>
+    <li><span class="rid">B7</span><span><b>Destructive</b>: <code>--text</code> on <code>--danger-subtle</code>, hover 8% toward the text. A faint red fill, never a red label or a solid red button; Undo (P12) is the safety net.</span></li>
+    <li><span class="rid">B8</span><span><b>Icon button</b> (row Edit / Delete): 44×44, the grey fill, radius 0.85rem, an <code>aria-label</code>; disabled opacity 0.35.</span></li>
+    <li><span class="rid">B9</span><span><b>A small button on a grey box</b> takes <code>--surface-solid</code> so it stands out from the box.</span></li>
+    <li><span class="rid">B10</span><span><b>Clear controls</b> (tab items, segments, a whole-row select) have no fill and no shadow.</span></li>
+    <li><span class="rid">B11</span><span><b>Pressing changes nothing</b>: no scale, no pulse, no press color.</span></li>
+  </ul>
+  <h3>Primary and the field-dependent primary</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Save · rest · hover · focus · waiting for fields (B1–B3)</span>
+        <div class="row"><button type="button">Save</button><button type="button" data-s="hover">Save</button><button type="button" data-s="focus">Save</button><button type="button" disabled>Save</button></div></div>
+      <div><span class="lab">Full width: enabled / waiting</span>
+        <div class="col" style="gap:8px"><button type="button" class="wide">Add entry</button><button type="button" class="wide" disabled>Add entry</button></div></div>
+      <div><span class="lab">Continue / busy (B4)</span>
+        <div class="row"><button type="button" class="continue">Continue</button><button type="button" class="continue" disabled>Continue</button></div></div>
+    </div>
+  </div></div>
+  <h3>Neutral buttons</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Secondary · hover · disabled (B5, B6)</span>
+        <div class="row"><button type="button" class="secondary">Cancel</button><button type="button" class="secondary" data-s="hover">Cancel</button><button type="button" class="secondary" disabled>Cancel</button></div></div>
+      <div><span class="lab">Small · hover · disabled 0.45</span>
+        <div class="row"><button type="button" class="btn-sm">Add</button><button type="button" class="btn-sm" data-s="hover">Add</button><button type="button" class="btn-sm" disabled>Start</button></div></div>
+      <div><span class="lab">Destructive · hover (B7)</span>
+        <div class="row"><button type="button" class="danger">Delete</button><button type="button" class="danger" data-s="hover">Delete</button></div></div>
+      <div><span class="lab">Icon buttons · hover · disabled 0.35 (B8)</span>
+        <div class="row">
+          <button type="button" class="icon-btn" aria-label="Edit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button type="button" class="icon-btn" data-s="hover" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+          <button type="button" class="icon-btn" disabled aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+        </div></div>
+      <div class="side-user" style="max-width:260px"><span class="avatar">A</span><button type="button" class="btn-sm">Sign out</button><span class="ann">B9</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="opacity">
+  <h2>Opacity and disabled states</h2>
+  <p>Opacity means only "not available now". Everything else that looks lighter is a token (<code>--secondary</code>, a <code>-subtle</code> fill, a wash), not <code>opacity</code>.</p>
+  <table class="t">
+    <tr><th>Value</th><th>Where</th></tr>
+    <tr><td>1, label 45%</td><td>A primary waiting for its fields (B3)</td></tr>
+    <tr><td>1</td><td>A busy primary (B4)</td></tr>
+    <tr><td>0.45</td><td>Any other disabled button (B5)</td></tr>
+    <tr><td>0.5</td><td>A disabled checkbox; an item shown ahead of its time; a paused timer</td></tr>
+    <tr><td>0.35</td><td>A disabled icon button</td></tr>
+    <tr><td>Alpha inside tokens</td><td>Glass card 60%, subtle fills 16% / 18%, hairline 8%, washes 5–16%, row band 3%, scrim 28% / 50%</td></tr>
+  </table>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><button type="button" disabled>Save</button><button type="button" class="btn-sm" disabled>Start</button><input type="checkbox" disabled aria-label="disabled"><input type="checkbox" checked disabled aria-label="disabled checked"></div>
+      <div class="row"><span class="timer">24:18</span><span class="timer paused">24:18</span><span class="ann">running / paused</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="hover">
+  <h2>Hover, focus and press</h2>
+  <ul class="rules">
+    <li><span class="rid">Y1</span><span>Hover exists only inside <code>@media (hover: hover)</code>, so a phone never keeps a stuck hover.</span></li>
+    <li><span class="rid">Y2</span><span>One hover step per family: accent → <code>--tint-hover</code>; neutral fills → 8% toward <code>--text</code>; destructive → 8% toward <code>--text</code>; fields → 5%; idle tabs and segments → the <code>--highlight</code> wash with <code>--text</code>; idle nav links → the grey fill with <code>--text</code>; round close buttons also turn their icon to <code>--text</code>.</span></li>
+    <li><span class="rid">Y3</span><span>Focus: buttons and checkboxes get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover).</span></li>
+    <li><span class="rid">Y4</span><span>Rows have no hover highlight. Press has no effect (B11).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><button type="button" class="secondary">Rest</button><button type="button" class="secondary" data-s="hover">Hover 8%</button><button type="button" class="secondary" data-s="focus">Focus ring</button></div>
+      <div class="row" style="max-width:420px"><input value="Rest" aria-label="rest"><input value="Hover 5%" data-s="fhover" aria-label="hover"><input value="Focus 8%" data-s="ffocus" aria-label="focus"></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="fields">
+  <h2>Fields and selects</h2>
+  <ul class="rules">
+    <li><span class="rid">F1</span><span>Input, select, textarea: min-height 2.75rem, padding 0.65rem 0.95rem, <code>--surface-secondary</code>, raised (fields are actionable), radius 0.85rem. Placeholder <code>--secondary</code>.</span></li>
+    <li><span class="rid">F2</span><span>A label sits above its field, gap 0.35rem, 600, 0.9rem.</span></li>
+    <li><span class="rid">F3</span><span>The select's chevron is drawn with two <code>linear-gradient</code> strokes in <code>--secondary</code> (no data-URI), so it follows the token in both modes.</span></li>
+    <li><span class="rid">F4</span><span>Time and date inputs use <code>appearance: none</code> and <code>min-width: 0</code>, so they never overflow on iOS.</span></li>
+    <li><span class="rid">F5</span><span>In a dialog a select and its Add button do not sit side by side: the select takes the full width and a small Add sits under it.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col" style="max-width:420px">
+      <label class="f">Name<input placeholder="e.g. Running shoes"></label>
+      <label class="f">Category<select><option>Sport</option><option>Home</option></select></label>
+      <div class="row"><select class="sort-select" aria-label="Sort"><option>Newest</option></select><button type="button" class="btn-sm">Add item</button></div>
+      <label class="f">Note<textarea rows="2" placeholder="Optional"></textarea></label>
+    </div>
+  </div></div>
+</section>
+
+<section id="checkbox">
+  <h2>Checkboxes</h2>
+  <ul class="rules">
+    <li><span class="rid">X1</span><span>One round style everywhere: a 1.25rem circle with a 1.5px <code>--secondary</code> ring, a 44px tap area from a pseudo-element.</span></li>
+    <li><span class="rid">X2</span><span>Checked: accent fill and border, an <code>--on-tint</code> tick drawn as a CSS mask, so the tick follows the token.</span></li>
+    <li><span class="rid">X3</span><span>Disabled: opacity 0.5. Focus: the 2px accent ring.</span></li>
+    <li><span class="rid">X4</span><span>A finished item is struck through in <code>--secondary</code>. A check with a label is a 44px-tall row, label 0.9375rem/500.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><input type="checkbox" aria-label="a"><input type="checkbox" checked aria-label="b"><input type="checkbox" data-s="focus" aria-label="c"><input type="checkbox" disabled aria-label="d"><span class="ann">off · on · focus · disabled</span></div>
+      <div class="entries" style="margin:0">
+        <div class="entry"><input type="checkbox" aria-label="e"><div class="entry-main"><span class="entry-title">Call the plumber</span></div></div>
+        <div class="entry"><input type="checkbox" checked aria-label="f"><div class="entry-main"><span class="entry-title done">Buy milk</span></div></div>
+      </div>
+      <label class="toggle-label"><input type="checkbox">Remind me</label>
+    </div>
+  </div></div>
+</section>
+
+<section id="segmented">
+  <h2>Segmented controls</h2>
+  <ul class="rules">
+    <li><span class="rid">G1</span><span>Track: the grey fill, padding and gap 0.25rem, radius 0.95rem, raised, everywhere (inside a card too).</span></li>
+    <li><span class="rid">G2</span><span>Thumb: <code>--surface-solid</code>, raised, radius 0.7rem, placed by <code>translateX(calc(var(--i) * (100% + gap)))</code>. It jumps; no slide.</span></li>
+    <li><span class="rid">G3</span><span>Items are clear, 0.9375rem/600, <code>--secondary</code>; the active one is <code>--text</code> with a 6px accent dot after the label.</span></li>
+    <li><span class="rid">G4</span><span>Five or more items, or a narrow phone: a dense size (0.8125rem) and short labels.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="segmented" style="--n:2;--i:0"><button type="button" class="active">Personal</button><button type="button">Work</button></div>
+      <div class="segmented" style="--n:3;--i:0"><button type="button" class="active">Auto</button><button type="button">Light</button><button type="button">Dark</button></div>
+      <div class="segmented dense" style="--n:5;--i:2"><button type="button">All</button><button type="button">&lt;50</button><button type="button" class="active">50+</button><button type="button">200+</button><button type="button">Sale</button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="nav">
+  <h2>Navigation</h2>
+  <ul class="rules">
+    <li><span class="rid">V1</span><span><b>Tab bar</b> (phone) is the segmented control with its colors swapped: an opaque <code>--surface-solid</code> bar (no blur), radius 1.25rem, raised; the selected item's thumb is the grey fill, raised.</span></li>
+    <li><span class="rid">V2</span><span>Tab items: icon over label, min-height 3.5rem, 0.6875rem/600, <code>--secondary</code>; active <code>--text</code>, no dot (the thumb already says it). At most five; the fifth is More.</span></li>
+    <li><span class="rid">V3</span><span><b>More menu</b>: the bar's surface and radius on a scrim with an 8px blur; its links are raised buttons in one centred column.</span></li>
+    <li><span class="rid">V4</span><span><b>Sidebar</b> (desktop): 248px glass with blur and a hairline; links 2.75rem tall, radius 0.75rem, <code>--secondary</code>; the active link is the grey fill, <code>--text</code>, raised.</span></li>
+    <li><span class="rid">V5</span><span>Brand mark: the accent with <code>--on-tint</code>. User box: the grey fill, raised; its Sign out takes <code>--surface-solid</code> (B9).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="tabbar" style="--n:4;--i:0">
+        <button type="button" class="tab-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9H3z"/></svg>Home</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Tasks</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
+      </div>
+      <div class="row" style="align-items:start">
+        <div class="side">
+          <div class="brand"><span class="brand-mark">A</span>App</div>
+          <a class="nav-link active" href="#nav">Home</a><a class="nav-link" href="#nav">Tasks</a><a class="nav-link" href="#nav">Stats</a>
+          <div class="side-user"><span class="avatar">A</span><button type="button" class="btn-sm">Sign out</button></div>
+        </div>
+        <div class="more" style="min-width:150px"><a class="nav-link" href="#nav">Settings</a></div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<section id="badges">
+  <h2>Badges and tags</h2>
+  <ul class="rules">
+    <li><span class="rid">D1</span><span>A badge is flat (P5): radius 0.6rem, <code>--text</code> 0.75rem/700, uppercase, 0.04em, with padding nudged half a pixel down so the caps sit centred.</span></li>
+    <li><span class="rid">D2</span><span>Kinds by meaning: <b>info</b> <code>--tint-subtle</code> (today, a count, a price, a time, a carried-over item); <b>warning</b> and <b>danger</b> a <code>-subtle</code> fill plus a 6px dot of the status color plus the word; <b>neutral</b> <code>--highlight-fill</code> (rest, a category tag). Every badge kind has a fill: a badge with no fill is a bug.</span></li>
+    <li><span class="rid">D3</span><span>Where badges form a column (a list's price ranges, category tags), they share one width (the longest label's) and drop the dot if the column header already explains it.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><span class="badge badge-info">Today</span><span class="badge badge-info num">6</span><span class="badge badge-info num">49.90</span><span class="badge badge-info num">08:30</span><span class="badge badge-info">Carried over</span></div>
+      <div class="row"><span class="badge badge-rest">Neutral</span><span class="badge badge-warning">Soon</span><span class="badge badge-danger">Overdue</span></div>
+      <div class="stack"><span class="badge badge-rest tag-even">Home</span><span class="badge badge-rest tag-even">Paperwork</span><span class="badge badge-rest tag-even">Sport</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="lists">
+  <h2>Lists and rows</h2>
+  <ul class="rules">
+    <li><span class="rid">R1</span><span>Rows 0.25rem apart, 0.5rem vertical padding, gap 1rem between the text and the actions.</span></li>
+    <li><span class="rid">R2</span><span>Every even row gets a band of 3% <code>--text</code>, radius 0.75rem. Inside a card the band reaches out so the row text keeps the card's padding line. No hover highlight on rows.</span></li>
+    <li><span class="rid">R3</span><span>Row text: title 600 <code>--text</code>; meta 0.875rem <code>--secondary</code>; extra detail lines 0.8rem <code>--secondary</code>. Split dense data over two or three short lines rather than one long one.</span></li>
+    <li><span class="rid">R4</span><span>Long lists show 10 rows, then a centred small More button.</span></li>
+    <li><span class="rid">R5</span><span>An empty list shows a centred <code>--secondary</code> note and keeps at least one row's height, so the card does not jump.</span></li>
+    <li><span class="rid">R6</span><span>Group label: 0.75rem/700, 0.06em, uppercase, <code>--secondary</code>, 0.25rem above its rows.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <div class="section-head"><p class="section-title">Entries</p><button type="button" class="btn-sm">Add</button></div>
+      <div class="entries">
+        <div class="entry"><div class="entry-main"><span class="entry-title">Desk lamp</span><span class="entry-meta num">49.90 · Home</span></div><button type="button" class="icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+        <div class="entry"><div class="entry-main"><span class="entry-title">Running shoes</span><span class="entry-meta num">119.00 · Sport</span></div><button type="button" class="icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+        <div class="entry"><div class="entry-main"><span class="entry-title">Notebook</span><span class="entry-meta num">6.50 · Office</span></div><button type="button" class="icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+      </div>
+      <div class="more-btn"><button type="button" class="btn-sm">More</button></div>
+    </div>
+  </div></div>
+  <div class="duo"><div class="pane">
+    <div class="surface"><p class="section-title">Notes</p><p class="empty-note">Nothing here yet.</p></div>
+  </div></div>
+</section>
+
+<section id="fold">
+  <h2>Groups and fold arrows</h2>
+  <ul class="rules">
+    <li><span class="rid">W1</span><span>A group title in a grouped list is a small raised box: the grey fill, hairline, radius 0.6rem, the label in <code>--text</code> caps, the arrow inside after the text.</span></li>
+    <li><span class="rid">W2</span><span>A fold arrow alone in its box has even side padding, so it sits centred whether it points right or down.</span></li>
+    <li><span class="rid">W3</span><span>The arrow points right when closed and turns 90° down when open, driven by <code>[aria-expanded="true"]</code>, instantly.</span></li>
+    <li><span class="rid">W4</span><span>When a title is also content (a name you read), only the arrow box folds; the title stays plain text.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><button type="button" class="fold" aria-expanded="true">Sport<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></div>
+      <div><button type="button" class="fold" aria-expanded="false">Home<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></div>
+      <p class="section-title">Categories <button type="button" class="fold lone" aria-expanded="false" aria-label="Show"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></p>
+      <p class="section-title">Details <button type="button" class="fold lone" aria-expanded="true" aria-label="Hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></p>
+    </div>
+  </div></div>
+</section>
+
+<section id="highlights">
+  <h2>Selected and open states</h2>
+  <p>Every "this one is different" state uses one of these washes, faintest to strongest. A selected neutral thing never takes the solid accent.</p>
+  <table class="t">
+    <tr><th>Token / mix</th><th>Light</th><th>Dark</th><th>Used for</th></tr>
+    <tr><td>Row band</td><td colspan="2">3% of <code>--text</code></td><td>Even list rows (R2)</td></tr>
+    <tr><td><code>--highlight</code></td><td>text at 5%</td><td>text at 6%</td><td>Idle tab and segment hover, sub-row bands, a stage panel</td></tr>
+    <tr><td><code>--highlight-fill</code></td><td>text at 10%</td><td>text at 16%</td><td>Neutral badge fill</td></tr>
+    <tr><td><code>--highlight-open</code></td><td>text at 10%</td><td>black at 30% (darker, not lighter)</td><td>The chosen card, the open row</td></tr>
+    <tr><td><code>--tint-subtle</code></td><td>accent 16%</td><td>accent 18%</td><td>Info badges, a picked chip, a tool line in chat</td></tr>
+    <tr><td>5% toward text</td><td colspan="2"><code>color-mix(--surface-secondary, --text 5%)</code></td><td>Field hover</td></tr>
+    <tr><td>8% toward text</td><td colspan="2"><code>color-mix(--surface-secondary, --text 8%)</code></td><td>Neutral button hover, field focus, an active neutral toggle</td></tr>
+  </table>
+  <ul class="rules">
+    <li><span class="rid">H1</span><span>A selected container is a wash over its own fill, drawn as <code>linear-gradient(var(--highlight-open), var(--highlight-open)) var(--surface-secondary)</code>, so the fill under it stays.</span></li>
+    <li><span class="rid">H2</span><span>In dark mode a selected or open thing goes <b>darker</b>, not lighter: a lighter wash reads as hover.</span></li>
+    <li><span class="rid">H3</span><span>An open row's chevron turns <code>--text</code> and points down; its children use <code>--highlight</code> bands on odd rows.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="entries" style="margin:0"><div class="entry">Row 1</div><div class="entry">Row 2 (band)</div><div class="entry">Row 3</div></div>
+      <div class="choice-card"><span class="choice-select">Plan A <span class="badge badge-info">Today</span></span><button type="button" class="btn-sm">Start</button></div>
+      <div class="choice-card selected"><span class="choice-select">Plan B <span class="badge badge-info num">6</span></span><button type="button" class="btn-sm">Start</button></div>
+      <div class="open-row open"><svg class="open-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg><b>Last week</b><span class="mutedt" style="font-size:.85rem">3 items</span></div>
+      <div><div class="sub-row">First item</div><div class="sub-row">Second item</div><div class="sub-row">Third item</div></div>
+      <div class="row"><button type="button" class="chip-btn">Idle chip</button><button type="button" class="chip-btn active">Picked chip</button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="data">
+  <h2>Progress and charts</h2>
+  <ul class="rules">
+    <li><span class="rid">Q1</span><span>Progress bar: a 0.45rem <code>--separator</code> track, radius 1rem, an accent fill; over target the fill turns <code>--danger</code>, always with a word.</span></li>
+    <li><span class="rid">Q2</span><span>Ring: <code>--separator</code> track, accent fill with a round cap, the value 1.75rem/800 in <code>--text</code>.</span></li>
+    <li><span class="rid">Q3</span><span>Bars: a 0.6rem track, accent fill, value <code>--secondary</code> 600 tabular.</span></li>
+    <li><span class="rid">Q4</span><span>Line chart: accent line 2.5px; grid <code>--separator</code>; axis labels 0.6875rem <code>--secondary</code>; an empty chart keeps its height with a note.</span></li>
+    <li><span class="rid">Q5</span><span>Data visualisations that need many categories (maps, multi-series) may keep their own palette; everything around them follows the tokens.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row" style="gap:18px">
+        <svg width="110" height="110" viewBox="0 0 120 120" role="img" aria-label="ring"><circle class="ring-track" cx="60" cy="60" r="50" fill="none" stroke-width="10"/><circle class="ring-fill" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="110" transform="rotate(-90 60 60)"/><text class="ring-text" x="60" y="70" text-anchor="middle">65%</text></svg>
+        <div class="col" style="flex:1;min-width:150px;gap:10px">
+          <div class="progress-track"><div class="progress-fill" style="width:62%"></div></div>
+          <div class="progress-track"><div class="progress-fill over" style="width:100%"></div></div>
+          <span class="ann">Over by 120</span>
+        </div>
+      </div>
+      <div class="hbar"><span>Mon</span><div class="hbar-track"><div class="hbar-fill" style="width:80%"></div></div><span class="hbar-val">12</span></div>
+      <div class="hbar"><span>Tue</span><div class="hbar-track"><div class="hbar-fill" style="width:55%"></div></div><span class="hbar-val">8</span></div>
+      <svg viewBox="0 0 300 110" width="100%" height="110" role="img" aria-label="line chart"><line class="line-grid" x1="28" x2="296" y1="20" y2="20"/><line class="line-grid" x1="28" x2="296" y1="55" y2="55"/><line class="line-grid" x1="28" x2="296" y1="90" y2="90"/><text class="axis" x="0" y="24">74</text><text class="axis" x="0" y="94">71</text><path class="line-path" d="M30 40 L80 52 L130 47 L180 66 L230 72 L294 80"/></svg>
+      <div class="tile-grid">
+        <div class="tile"><span class="tile-title">Today</span><span class="tile-value">1,640</span><span class="tile-sub">of 2,400</span></div>
+        <div class="tile"><span class="tile-title">Week</span><span class="tile-value">83</span><span class="tile-sub">of 140</span></div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<section id="modal">
+  <h2>Dialogs and the Undo toast</h2>
+  <ul class="rules">
+    <li><span class="rid">M1</span><span>Dialog: centred, never a bottom sheet. Scrim with a 20px blur. Card <code>--surface-modal</code>, radius 1.25rem, max-width 36rem, raised. Title 1.25rem/600. Body padding 1.5rem (1.25rem on a phone).</span></li>
+    <li><span class="rid">M2</span><span>Close: a 1.75rem circle, the grey fill, a <code>--secondary</code> icon (hover <code>--text</code>), a 44px hit area.</span></li>
+    <li><span class="rid">M3</span><span>Dialog actions: Cancel (secondary) and the primary share the row equally.</span></li>
+    <li><span class="rid">M4</span><span>Every change shows a toast with Undo (P12): <code>--surface-modal</code>, radius 0.95rem, raised; message 0.875rem/500; Undo a small grey button; a close button.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="scrim"><div class="modal-card">
+        <div class="modal-head"><p class="modal-title">Edit entry</p><button type="button" class="modal-close-btn" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+        <div class="modal-body"><div class="col"><label class="f">Name<input value="Desk lamp"></label><div class="row" style="flex-wrap:nowrap"><button type="button" class="secondary" style="flex:1">Cancel</button><button type="button" style="flex:1">Save</button></div></div></div>
+      </div></div>
+      <div class="toast-item"><span class="toast-message">Entry deleted</span><button type="button" class="toast-action-btn">Undo</button><button type="button" class="toast-close-btn" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="chat">
+  <h2>Chat</h2>
+  <ul class="rules">
+    <li><span class="rid">A1</span><span>Log: the grey fill, flat, radius 0.9rem, gap 0.75rem; an empty log collapses.</span></li>
+    <li><span class="rid">A2</span><span>Assistant bubble <code>--surface</code> with a small tail corner; the user's bubble is the accent with <code>--on-tint</code>; a tool line is <code>--tint-subtle</code>. Send follows B2 and B3.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="chat-log">
+        <div class="chat-bubble user">What is left for today?</div>
+        <div class="chat-tool">Read today's tasks</div>
+        <div class="chat-bubble">Two tasks: call the plumber and buy milk.</div>
+      </div>
+      <div class="row" style="flex-wrap:nowrap"><input placeholder="Ask something" aria-label="message"><button type="button" disabled>Send</button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="a11y">
+  <h2>Accessibility modes</h2>
+  <ul class="rules">
+    <li><span class="rid">AX1</span><span><code>prefers-contrast: more</code>: the glass surface turns solid; <code>--separator</code>, <code>--edge</code> and <code>--card-edge</code> become <code>--text</code>, so every edge is a visible outline.</span></li>
+    <li><span class="rid">AX2</span><span><code>prefers-reduced-transparency</code>: the glass turns solid, the blur is off.</span></li>
+    <li><span class="rid">AX3</span><span><code>prefers-reduced-motion</code>: the theme fade and number count-ups are skipped.</span></li>
+    <li><span class="rid">AX4</span><span>Every tap target is at least 44px; small controls add it with a pseudo-element without changing their look.</span></li>
+    <li><span class="rid">AX5</span><span>An automated accessibility scan (axe) runs on every page in light and dark, on a phone and a desktop width, with nothing excluded.</span></li>
+  </ul>
+  <div class="duo"><div class="pane hc">
+    <span class="lab">prefers-contrast: more</span>
+    <div class="surface"><p class="section-title">Card</p><div class="row" style="margin-top:1rem"><button type="button" class="btn-sm">Add</button><span class="badge badge-rest">Tag</span></div></div>
+  </div></div>
+</section>
+
+<section id="motion">
+  <h2>Motion</h2>
+  <p>Nothing moves except what is listed. A new animation needs the product owner's explicit yes and then joins this list.</p>
+  <table class="t">
+    <tr><th>What</th><th>How</th><th>Reduced motion</th></tr>
+    <tr><td>Light ↔ dark fade</td><td>Set an attribute on <code>&lt;html&gt;</code> for about 600ms; while it is there the registered color tokens transition 0.5s ease. Elements inherit; none has its own transition.</td><td>Skipped</td></tr>
+    <tr><td>Numbers count up</td><td>Ease-out cubic, about 600ms from the last value; a ring may fill from 0</td><td>Jumps</td></tr>
+    <tr><td>Not animated</td><td>Segmented and tab thumbs (jump), fold arrows (rotate instantly), hovers, presses, dialogs, toasts</td><td>—</td></tr>
+  </table>
+<pre><code>@property --text { syntax: "&lt;color&gt;"; inherits: true; initial-value: transparent; }
+:root[data-theme-fade] {
+  transition-property: --background, --surface, --text /* …every registered color token… */;
+  transition-duration: .5s; transition-timing-function: ease; }</code></pre>
+</section>
+
+<section id="decisions">
+  <h2>Decisions and why</h2>
+  <p class="muted">The choices behind the rules, with the options that were tried or considered and rejected. Reuse the reasons when a new project faces the same question.</p>
+  <table class="t">
+    <tr><th>ID</th><th>Decision</th><th>Why</th><th>Rejected</th></tr>
+    <tr><td>GD1</td><td>Cool slate neutrals plus one saturated accent, in light and dark</td><td>Depth in both modes; one color can then mean "act"</td><td>Flat graphite; warm graphite + amber; near-black + neon; a blue accent that reads as a link; dark only; per-page accents</td></tr>
+    <tr><td>GD2</td><td>Functional colors of equal brightness, each with a word</td><td>No color shouts louder than another; color-blind users get the word</td><td>Deep dull light-mode colors; colored status text</td></tr>
+    <tr><td>GD3</td><td>Translucent glass cards with a hairline and a soft two-layer shadow</td><td>The steps page → card → control stay visible in both modes</td><td>Opaque flat cards; hairline only (flat in dark); heavy shadows</td></tr>
+    <tr><td>GD4</td><td>"Alive" through big numerals and weight, not motion</td><td>Energy without distraction in an app opened many times a day</td><td>Motion everywhere; accent on every heading; decorative gradients</td></tr>
+    <tr><td>GD5</td><td>Only actionable things are raised</td><td>Depth then means "you can press this"</td><td>A shadow on every element, tags included; shadows on clear controls</td></tr>
+    <tr><td>GD6</td><td>Non-primary buttons share one opaque grey fill; hover 8% toward the text</td><td>One primary stands out; the grey works on every surface</td><td>White or solid-surface buttons (sink in dark); accent small buttons</td></tr>
+    <tr><td>GD7</td><td>A primary waiting for its fields looks like a grey secondary with a 45% label, then turns accent</td><td>Users see a real button that is not ready yet, and the change to accent signals "ready"</td><td>A plain 45% fade (looks broken); an accent edge on the grey (looks half-enabled); an accent label (accent text, K5); a flat grey block (not a button)</td></tr>
+    <tr><td>GD8</td><td>Selected and open states use a neutral wash, darker in dark mode</td><td>Accent stays for "act"; a lighter wash in dark reads as hover</td><td>The subtle accent for a selected card; a lighter dark-mode wash</td></tr>
+    <tr><td>GD9</td><td>Segmented controls and the tab bar share one track-and-thumb shape; the tab bar has the colors swapped and no dot</td><td>One pattern to learn; the thumb already marks the active tab</td><td>A glass tab bar (unreadable over content); a dot under the active tab</td></tr>
+    <tr><td>GD10</td><td>Mode fade by transitioning registered color tokens on the root, for 0.5s</td><td>Every element changes together</td><td>A transition on every element (snaps, out of sync); View Transitions</td></tr>
+    <tr><td>GD11</td><td>Theme Auto / Light / Dark, per device, applied before first paint</td><td>Follows the system by default; no flash of the wrong mode</td><td>Dark only; a setting stored only on the server</td></tr>
+    <tr><td>GD12</td><td>No press effects</td><td>Calm; the result of the action is the feedback</td><td>Scale or pulse on press; a press color</td></tr>
+    <tr><td>GD13</td><td>Shared spacing rules (S1–S6) for every card</td><td>Cards line up and stay consistent as the app grows</td><td>Per-card spacing tweaks</td></tr>
+    <tr><td>GD14</td><td>Links in app lists are <code>--text</code> 600, not underlined</td><td>The row is obviously the link; accent stays for actions</td><td>Underlined or accent links inside lists</td></tr>
+    <tr><td>GD15</td><td>Undo toast after every change instead of confirmation dialogs</td><td>Fast for the common case, safe for the mistake</td><td>"Are you sure?" dialogs; no recovery</td></tr>
+    <tr><td>GD16</td><td>Centred dialogs, never bottom sheets</td><td>One dialog pattern on every width</td><td>Bottom sheets on phones</td></tr>
+    <tr><td>GD17</td><td>Fixed glow behind scrolling pages; absolute glow on centred screens</td><td>A steady backdrop; iOS draws nothing fixed under its bottom bar</td><td><code>background-attachment: fixed</code>; two glow hues</td></tr>
+  </table>
+</section>
+
+<section id="checklist">
+  <h2>Checklist for new work</h2>
+  <ul class="rules">
+    <li><span class="rid">Z1</span><span>Find the existing class or token first; add a rule only when nothing covers it, on the shared structure (P10).</span></li>
+    <li><span class="rid">Z2</span><span>Pick the color by role (C1). Accent only for act or progress (P2); text only <code>--text</code> or <code>--secondary</code> (P3); a status gets a word (P4).</span></li>
+    <li><span class="rid">Z3</span><span>Can the user act on it? Raised (E2). Not? Flat (E3). A container? The card look.</span></li>
+    <li><span class="rid">Z4</span><span>Give it every state: rest, hover (inside <code>@media (hover: hover)</code>), focus-visible, disabled (the opacity table), selected (the washes table).</span></li>
+    <li><span class="rid">Z5</span><span>Check both modes, a phone width, 44px targets, and the change's Undo toast.</span></li>
+    <li><span class="rid">Z6</span><span>Run the contrast test (text pairs, no accent text, no literal colors, every differing token registered and faded) and the accessibility scans.</span></li>
+    <li><span class="rid">Z7</span><span>Update the project's design-system page and decision log in the same change.</span></li>
+  </ul>
+</section>
+
+<section id="adopt">
+  <h2>Adopting this in a new project</h2>
+  <ol>
+    <li>Copy the <a href="#starter">starter CSS</a>: tokens, the two <code>[data-theme]</code> rules, the base recipes. Add the <code>@property</code> registrations and the fade rule if you want the mode fade.</li>
+    <li>Pick the accent (<a href="#accent">AC1–AC6</a>) and replace <code>--tint</code>, <code>--tint-hover</code>, <code>--tint-subtle</code> and <code>--glow</code> together.</li>
+    <li>Write a contrast test before the first screen: it computes K1–K4 for every token pair in both modes, fails on <code>color:</code> with an accent or status token, fails on a literal color outside the token block, and checks every mode-dependent token is registered and in the fade list.</li>
+    <li>Add the inline theme script (reads the saved choice, sets <code>data-theme</code> before paint) and an Auto / Light / Dark segmented control in Settings.</li>
+    <li>Build one reference page fully, with every state; build every other page to match it.</li>
+    <li>Start the project's own design-system page from this one: keep the rule IDs, replace the examples with the project's components, and log each new decision with its reason and the rejected options.</li>
+    <li>Review every component in light and dark side by side before calling it done.</li>
+  </ol>
+</section>
+
+<section id="starter">
+  <h2>Starter CSS</h2>
+  <p class="muted">The token block and the core recipes. Values are the starter (turquoise accent); change the accent as in AC1.</p>
+<pre><code>:root {
+  color-scheme: light dark;
+  --background: light-dark(#eef2f6, #0b0f14);
+  --glow: light-dark(rgba(25,154,129,.26), rgba(30,182,152,.3));
+  --surface: light-dark(rgba(255,255,255,.6), rgba(24,32,42,.6));
+  --surface-solid: light-dark(#ffffff, #18202a);
+  --surface-modal: light-dark(#ffffff, #1c2530);
+  --surface-secondary: light-dark(#e4eaf1, #2e3a48);
+  --text: light-dark(#0f1a2b, #eef3f8);
+  --secondary: light-dark(#4a596b, #97a6b8);
+  --tint: light-dark(#199a81, #1eb698);
+  --tint-hover: light-dark(#22ab8f, #3cc9ad);
+  --on-tint: #04201b;
+  --tint-subtle: light-dark(rgba(25,154,129,.16), rgba(30,182,152,.18));
+  --success: light-dark(#259d51, #2bb95f);
+  --warning: light-dark(#cc8c0a, #e5a51f);
+  --warning-subtle: light-dark(rgba(204,140,10,.16), rgba(229,165,31,.18));
+  --danger: light-dark(#e0444c, #ee5d63);
+  --danger-subtle: light-dark(rgba(224,68,76,.16), rgba(238,93,99,.18));
+  --separator: light-dark(#d5dde6, #2a3441);
+  --card-edge: light-dark(rgba(15,26,43,.08), rgba(238,243,248,.08));
+  --shadow-near: light-dark(rgba(15,26,43,.06), rgba(0,0,0,.4));
+  --shadow-far: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.75));
+  --highlight: light-dark(rgba(15,26,43,.05), rgba(238,243,248,.06));
+  --highlight-fill: light-dark(rgba(15,26,43,.1), rgba(238,243,248,.16));
+  --highlight-open: light-dark(rgba(15,26,43,.1), rgba(0,0,0,.3));
+  --scrim: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.5));
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
+  --edge: transparent;
+  --glass-blur: blur(28px) saturate(160%);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+.surface { background: var(--surface); border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow); border-radius: 1.15rem; padding: var(--card-pad, 1.35rem); }
+
+button { min-height: 2.75rem; padding: .65rem 1.25rem; border-radius: .85rem;
+  color: var(--on-tint); background: var(--tint); font-weight: 700; letter-spacing: -.01em;
+  border: 1px solid color-mix(in srgb, var(--tint), var(--text) 35%); box-shadow: var(--card-shadow); }
+button:disabled { cursor: not-allowed; opacity: .45; }
+button.primary-waits:disabled { opacity: 1; background: var(--surface-secondary);
+  border-color: var(--card-edge); color: color-mix(in srgb, var(--text) 45%, transparent); }
+:is(button.secondary, button.btn-sm) { color: var(--text); background: var(--surface-secondary);
+  border-color: var(--card-edge); }
+button.danger { color: var(--text); background: var(--danger-subtle); border-color: var(--card-edge); }
+button:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
+@media (hover: hover) {
+  button:where(:hover:not(:disabled)) { background: var(--tint-hover); }
+  :is(button.secondary, button.btn-sm):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
+  button.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger-subtle), var(--text) 8%); } }
+
+:is(input, select, textarea) { min-height: 2.75rem; padding: .65rem .95rem; border-radius: .85rem;
+  color: var(--text); background-color: var(--surface-secondary);
+  border: 1px solid var(--card-edge); box-shadow: var(--card-shadow); }
+:is(input, select, textarea):focus { outline: none;
+  background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
+
+.badge { padding: calc(.25rem + .5px) .65rem calc(.25rem - .5px); border: 1px solid var(--edge);
+  border-radius: .6rem; color: var(--text); font-size: .75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; }
+.badge-info { background: var(--tint-subtle); }
+.badge-warning { background: var(--warning-subtle); }
+.badge-danger { background: var(--danger-subtle); }
+.badge-rest { background: var(--highlight-fill); }
+
+.metric-big { font-size: clamp(2rem, 9vw, 2.7rem); font-weight: 800; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums; line-height: 1; text-box: trim-both cap alphabetic; }
+
+@media (prefers-contrast: more) {
+  :root { --surface: var(--surface-solid); --separator: var(--text); --edge: var(--text); --card-edge: var(--text); } }
+@media (prefers-reduced-transparency: reduce) {
+  :root { --surface: var(--surface-solid); --glass-blur: none; } }</code></pre>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+  // Draw every example twice: the light pane as written, and a dark copy beside it.
+  document.querySelectorAll('.duo').forEach(function(d){
+    var p=d.querySelector('.pane'); if(!p) return;
+    var c=p.cloneNode(true); c.classList.add('dk'); c.setAttribute('aria-hidden','true');
+    c.querySelectorAll('button,input,select,textarea,a').forEach(function(e){e.setAttribute('tabindex','-1')});
+    d.appendChild(c);
+  });
+  // Token swatches
+  var T=[
+    ['--background','#eef2f6','#0b0f14','Page color under the glow'],
+    ['--glow','rgba(25,154,129,.26)','rgba(30,182,152,.3)','The two fixed glow patches (one hue, the accent)'],
+    ['--surface','rgba(255,255,255,.6)','rgba(24,32,42,.6)','Glass card (60%), sidebar'],
+    ['--surface-solid','#ffffff','#18202a','Tab bar, menu, segmented thumb, a small button on a grey box'],
+    ['--surface-modal','#ffffff','#1c2530','Dialog, toast'],
+    ['--surface-secondary','#e4eaf1','#2e3a48','Control fill: fields, neutral buttons, tracks, group boxes, choice cards, tiles'],
+    ['--text','#0f1a2b','#eef3f8','All primary text, links, badge text, labels on neutral buttons'],
+    ['--secondary','#4a596b','#97a6b8','Muted text, idle tabs and segments, chevrons, checkbox ring'],
+    ['--tint','#199a81','#1eb698','The accent: primary button, progress, ring, active dot, focus ring, checked box'],
+    ['--tint-hover','#22ab8f','#3cc9ad','Primary button hover'],
+    ['--on-tint','#04201b','#04201b','Label on the accent (and on success / warning)'],
+    ['--tint-subtle','rgba(25,154,129,.16)','rgba(30,182,152,.18)','Info badge, picked chip, chat tool line'],
+    ['--success','#259d51','#2bb95f','Good (fill / dot, with a word)'],
+    ['--warning','#cc8c0a','#e5a51f','Attention dot (with a word)'],
+    ['--warning-subtle','rgba(204,140,10,.16)','rgba(229,165,31,.18)','Warning badge fill'],
+    ['--danger','#e0444c','#ee5d63','Problem dot, over-target bar'],
+    ['--danger-subtle','rgba(224,68,76,.16)','rgba(238,93,99,.18)','Danger badge, destructive button'],
+    ['--separator','#d5dde6','#2a3441','Progress and chart tracks, chart grid'],
+    ['--card-edge','rgba(15,26,43,.08)','rgba(238,243,248,.08)','The 1px hairline of every raised thing'],
+    ['--shadow-near','rgba(15,26,43,.06)','rgba(0,0,0,.4)','First layer of --card-shadow (0 1px 2px)'],
+    ['--shadow-far','rgba(15,26,43,.28)','rgba(0,0,0,.75)','Second layer of --card-shadow (0 10px 24px -12px)'],
+    ['--highlight','rgba(15,26,43,.05)','rgba(238,243,248,.06)','Hover wash on idle tabs and segments, sub-row bands'],
+    ['--highlight-fill','rgba(15,26,43,.1)','rgba(238,243,248,.16)','Neutral badge fill'],
+    ['--highlight-open','rgba(15,26,43,.1)','rgba(0,0,0,.3)','The chosen card, the open row (darker in dark mode)'],
+    ['--scrim','rgba(15,26,43,.28)','rgba(0,0,0,.5)','Behind a dialog (blur 20px) or a menu (blur 8px)']
+  ];
+  var h='<table class="t"><tr><th>Token</th><th>Light</th><th>Dark</th><th>Role</th></tr>';
+  T.forEach(function(r){
+    h+='<tr><td><code>'+r[0]+'</code></td><td><span class="sw"><i><b style="background:'+r[1]+'"></b></i>'+r[1]+'</span></td><td><span class="sw"><i><b style="background:'+r[2]+'"></b></i>'+r[2]+'</span></td><td>'+r[3]+'</td></tr>';
+  });
+  h+='<tr><td><code>--card-shadow</code></td><td colspan="2"><code>0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far)</code></td><td>Every raised thing</td></tr>';
+  h+='<tr><td><code>--edge</code></td><td colspan="2"><code>transparent</code></td><td>Flat things: badges, tags, chat log (becomes --text in high contrast)</td></tr>';
+  h+='<tr><td><code>--glass-blur</code></td><td colspan="2"><code>blur(28px) saturate(160%)</code></td><td>Sidebar (none with reduced transparency)</td></tr>';
+  document.getElementById('tokens').innerHTML=h+'</table>';
+  // Page mode (this page's chrome only)
+  var root=document.documentElement, KEY='design-rules-mode';
+  function apply(m){ if(m==='light'||m==='dark') root.setAttribute('data-theme',m); else root.removeAttribute('data-theme');
+    document.querySelectorAll('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed', String(b.getAttribute('data-mode')===(m||'auto')))}); }
+  var saved=null; try{saved=localStorage.getItem(KEY)}catch(e){}
+  apply(saved||'auto');
+  document.querySelectorAll('[data-mode]').forEach(function(b){b.addEventListener('click',function(){var m=b.getAttribute('data-mode');apply(m);try{ if(m==='auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY,m)}catch(e){}})});
+})();
+</script>
