@@ -37,6 +37,8 @@
      filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
+  /* The dim behind a modal or the More menu */
+  --scrim: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.5));
 }
 
 :root[data-theme="light"] {
@@ -323,7 +325,7 @@ button.nav-link:disabled {
 
 .nav-link.active {
   background: var(--tint-subtle);
-  color: var(--tint);
+  color: var(--text);
 }
 
 /* Phone and tablet: floating blurred tab bar */
@@ -342,9 +344,9 @@ button.nav-link:disabled {
   align-items: stretch;
   isolation: isolate;
   padding: 0.25rem;
-  background: rgba(28, 28, 30, 0.72);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  backdrop-filter: blur(28px) saturate(160%);
+  background: var(--surface);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--edge);
   border-radius: 1.5rem;
 }
@@ -391,14 +393,14 @@ button.nav-link:disabled {
 
 /* The highlight is the bar's sliding thumb, not the item's own fill */
 .tab-item.active {
-  color: var(--tint);
+  color: var(--text);
 }
 
 .more-scrim {
   position: fixed;
   inset: 0;
   z-index: 840;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -569,6 +571,7 @@ main {
   padding: calc(0.25rem + 0.5px) 0.65rem calc(0.25rem - 0.5px);
   border: 1px solid var(--edge);
   border-radius: 0.6rem;
+  color: var(--text);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -577,27 +580,22 @@ main {
 
 .badge-info {
   background: var(--tint-subtle);
-  color: var(--tint);
 }
 
 .badge-warning {
   background: var(--warning-subtle);
-  color: var(--warning);
 }
 
 .badge-danger {
   background: var(--danger-subtle);
-  color: var(--danger);
 }
 
 .badge-rest {
-  background: rgba(161, 161, 168, 0.2);
-  color: #c7c7cc;
+  background: var(--highlight-fill);
 }
 
 .badge-reminder {
   background: var(--tint-subtle);
-  color: var(--tint);
   font-size: 0.75rem;
 }
 
@@ -782,18 +780,6 @@ main {
   }
 }
 
-/* Hover on fields: a lighter fill, no scaling. */
-@media (hover: hover) {
-  input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
-  select:hover:not(:focus, :disabled),
-  textarea:hover:not(:focus, :disabled) {
-    background-color: rgba(72, 72, 74, 0.95); /* color only: keeps the select's chevron */
-  }
-  select.sort-select:hover:not(:disabled) {
-    background-color: var(--highlight-fill);
-  }
-}
-
 label {
   display: grid;
   gap: 0.35rem;
@@ -817,19 +803,24 @@ textarea {
   width: 100%;
   padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: rgba(28, 28, 30, 0.85);
+  background: var(--surface-secondary);
   border: 1px solid var(--edge);
   border-radius: 0.85rem;
 }
 
-/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
+/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge.
+   A select holds no pseudo-element to mask, so its two strokes are gradients in the --secondary token,
+   one 5px square each (the left one falls, the right one rises); --chevron-end is the inset from the right. */
 select {
+  --chevron-end: 1rem;
   appearance: none;
   padding-right: 2.6rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a1a9b2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 0.9px), var(--secondary) 0 calc(50% + 0.9px), transparent 0),
+    linear-gradient(to top left, transparent calc(50% - 0.9px), var(--secondary) 0 calc(50% + 0.9px), transparent 0);
   background-repeat: no-repeat;
-  background-position: right 1rem center;
-  background-size: 0.75rem;
+  background-position: right calc(var(--chevron-end) + 0.3125rem) center, right var(--chevron-end) center;
+  background-size: 0.3125rem 0.3125rem;
   cursor: pointer;
 }
 
@@ -851,12 +842,19 @@ input[type="checkbox"] {
   height: 1.45rem;
   border-radius: 50%;
   border: 1.5px solid var(--secondary);
-  background: transparent center / 0.85rem no-repeat;
+  background: transparent;
 }
 input[type="checkbox"]:checked {
   background-color: var(--tint);
   border-color: var(--tint);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%230b1b30' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+}
+/* The tick is a mask, so it takes the --on-tint token in either mode */
+input[type="checkbox"]:checked::before {
+  content: "";
+  display: block;
+  height: 100%;
+  background-color: var(--on-tint);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center / 0.85rem no-repeat;
 }
 input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
 input[type="checkbox"]:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
@@ -865,7 +863,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(84, 84, 86, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
+  background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
 button {
@@ -891,12 +889,12 @@ button:disabled {
 
 button.secondary {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--highlight);
   border: 1px solid var(--edge);
 }
 
 button.danger {
-  color: var(--danger);
+  color: var(--text);
   background: transparent;
   border: 1px solid var(--edge);
 }
@@ -915,7 +913,7 @@ textarea:focus-visible {
 
 .error {
   margin: 0.75rem 0 0;
-  color: var(--danger);
+  color: var(--text);
   font-size: 0.875rem;
 }
 
@@ -977,7 +975,7 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tint);
+  color: var(--secondary);
 }
 .signin-form {
   margin: 1.25rem 0 0;
@@ -995,7 +993,7 @@ button.signin-continue:disabled {
 .delete-icon-btn {
   background: var(--tint-subtle);
   border: none;
-  color: var(--tint);
+  color: var(--text);
   cursor: pointer;
   padding: 0;
   border-radius: 0.85rem;
@@ -1092,7 +1090,7 @@ button.signin-continue:disabled {
   /* Reaches past the top and bottom of the screen, so no strip (toolbar, home bar) is left unblurred. */
   inset: -4rem 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur janked on iPhone */
   touch-action: none;
@@ -1154,7 +1152,7 @@ button.signin-continue:disabled {
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
   border: 0;
   color: var(--secondary);
 }
@@ -1241,7 +1239,7 @@ button.signin-continue:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(28, 28, 30, 0.95);
+  background: color-mix(in srgb, var(--surface-modal) 95%, transparent);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border: 1px solid var(--edge);
@@ -1266,7 +1264,7 @@ button.signin-continue:disabled {
 
 .toast-action-btn {
   background: var(--tint-subtle);
-  color: var(--tint);
+  color: var(--text);
   border: 0;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -1305,7 +1303,7 @@ button.signin-continue:disabled {
 }
 
 /* ==========================================================================
-   Clean Action Buttons (No Shadows)
+   Compact action buttons
    ========================================================================== */
 
 /* Small secondary action used inside lists and card headers */
@@ -1327,14 +1325,14 @@ button.btn-sm {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--highlight);
   border: 1px solid var(--edge);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
 
 button.btn-sm.tint {
-  color: var(--tint);
+  color: var(--text);
   background: var(--tint-subtle);
   border-color: transparent;
 }
@@ -1571,8 +1569,7 @@ select.sort-select {
   font-size: 0.875rem;
   font-weight: 600;
   border-radius: 0.7rem;
-  background-color: var(--surface-secondary);
-  background-position: right 0.8rem center;
+  --chevron-end: 0.8rem;
 }
 /* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
    the keyboard keeps a ring */
@@ -1596,17 +1593,12 @@ select.sort-select:focus-visible:not([data-pointer]) {
   .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
 }
 
-/* Field highlights as quiet as the filter's hover (a 5% white wash), focus and an open menu a step more */
-:is(input, select, textarea):not(.sort-select, [type="checkbox"], [type="radio"]):focus {
-  background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 8%);
-}
-select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
+/* Field highlights as quiet as the filter's hover (a 5% wash of the text color), focus and an open menu a step more */
+select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
 @media (hover: hover) {
-  :is(input:not([type="checkbox"], [type="radio"]), select, textarea):not(.sort-select):hover:not(:focus, :disabled) {
-    background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%);
-  }
+  :is(input:not([type="checkbox"], [type="radio"]), select, textarea):hover:not(:focus, :disabled),
   select.sort-select:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--surface-secondary), white 5%);
+    background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 5%);
   }
 }
 
@@ -1630,8 +1622,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .item-link {
   font-weight: 600;
-  color: var(--tint);
-  text-decoration: none;
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .list-box:has(> .wishlist-entries) { container-type: inline-size; }
@@ -1654,7 +1646,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   text-align: center;
   font-size: 2rem;
   font-weight: 700;
-  color: var(--tint);
+  color: var(--text);
 }
 
 .item-actions .btn-sm {
@@ -1920,7 +1912,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), white 8%); }
+.muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
 @media (pointer: coarse) {
   .muscle-move { display: grid; }
   /* The wrapper's touch-action none would also block the canvas's pan-y: the page scrolls over the map. */
@@ -2250,7 +2242,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   padding: 0.3rem 0.6rem;
   border-radius: 0.5rem;
   background: var(--tint-subtle);
-  color: var(--tint);
+  color: var(--text);
   font-size: 0.8125rem;
 }
 .chat-form {
@@ -2299,7 +2291,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
    With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
   button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
-  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
+  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), var(--text) 6%); }
   button.secondary:hover:not(:disabled),
   button.btn-sm:not(.tint):hover:not(:disabled) {
     background: var(--highlight-fill);
@@ -2343,7 +2335,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   --band-out: calc(var(--card-pad) + 1px - 0.5rem);
 }
 :is(.entries, .todo-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row)) {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: color-mix(in srgb, var(--text) 3%, transparent);
 }
 /* A wash list (ListBox's `wash`, Wishlist): the band sits halfway between the card edge and the text. */
 .surface .list-box[data-wash],
@@ -2358,7 +2350,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .list-box[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
 .list-box[data-wash] > :is(.entries, .todo-list) > :nth-child(even of :is(.entry-row, .todo-row)) {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 
@@ -2388,7 +2380,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   padding-inline: 0.75rem 0.5rem;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--highlight);
 }
 
 /* Gym: the bar that brings an unfinished workout back */
@@ -2400,7 +2392,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   margin-bottom: 1.25rem; /* the gap every Gym card keeps from the next */
 }
 /* Training days stand out from the card behind them */
-.split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
+.split-day-card:not(.selected) { background: var(--highlight); }
 
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }
@@ -2410,7 +2402,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .history-entry { display: block; padding-block: 0.25rem; }
 /* The open workout is a tinted fill, so it stands out from the banded rows around it. */
 .history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
-.history-entry.open .history-chevron { color: var(--tint); }
+.history-entry.open .history-chevron { color: var(--text); }
 .history-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2445,7 +2437,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   border-radius: 0.5rem;
   font-size: 0.9375rem;
 }
-.history-exercise:nth-of-type(odd) { background-color: rgba(255, 255, 255, 0.05); }
+.history-exercise:nth-of-type(odd) { background-color: var(--highlight); }
 .history-exercise > span { text-align: right; }
 
 /* The set to beat: what this exercise was last time this day was trained */
@@ -2455,21 +2447,15 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   margin-top: 0.25rem;
   font-size: 0.875rem;
 }
-/* The set being logged: labels and values centred on their fields; Log set comes last, at full width.
-   The fields sit on a grey fill so they stand out from the card's band. */
+/* The set being logged: labels and values centred on their fields; Log set comes last, at full width. */
 .log-set { width: 100%; }
 .set-input-grid label { text-align: center; }
 .set-input-grid :is(input, select) {
   padding-inline: 0.25rem;
   text-align: center;
   text-align-last: center;
-  background-color: var(--surface-secondary);
 }
 .set-input-grid select { background-image: none; }
-.set-input-grid :is(input, select):focus { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
-@media (hover: hover) {
-  .set-input-grid :is(input, select):hover:not(:focus, :disabled) { background-color: color-mix(in srgb, var(--surface-secondary), white 5%); }
-}
 
 /* iOS zooms into any field under 16px on focus; pinch zoom stays allowed, so keep touch fields at 16px. */
 @media (pointer: coarse) {

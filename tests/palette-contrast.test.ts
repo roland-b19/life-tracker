@@ -121,6 +121,24 @@ describe("the palette's contrast, in both modes", () => {
     });
   }
 
-  it.todo("no color: declaration takes an accent or status color");
-  it.todo("no color literal is left outside the :root token blocks");
+});
+
+describe("the color rule in the CSS", () => {
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  // D-021: the accent and the status colors are fills, never text. Only the color property is matched,
+  // not accent-color, background-color, border-color, fill or stroke.
+  it("no color: declaration takes an accent or status color", () => {
+    const colored = [...code.matchAll(/(?<![\w-])color\s*:\s*([^;}]+)/g)]
+      .map((m) => m[0].trim())
+      .filter((d) => /var\(--(tint|success|warning|danger)/.test(d));
+    expect(colored).toEqual([]);
+  });
+
+  // Every color is a token, so both modes come from :root; a data-URI icon's own stroke only shapes a mask.
+  it("no color literal is left outside the :root token blocks", () => {
+    const rest = code.replace(/:root(\[[^\]]*\])?\s*\{[^}]*\}/g, "").replace(/url\([^)]*\)/g, "url()");
+    const literals = rest.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])(white|black)(?![\w-])/gi) ?? [];
+    expect(literals).toEqual([]);
+  });
 });
