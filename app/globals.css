@@ -959,14 +959,13 @@ button:disabled {
 :is(button:not([class]), button.log-set, button.signin-continue) {
   border-color: color-mix(in srgb, var(--tint), var(--text) 35%);
 }
-/* Until their fields are filled in, Save, Log set and Send are outlined: the secondary buttons' fill with a turquoise
-   edge and the muted label (the accent is never text, D-021), still raised, so they read as the main action that cannot
-   be pressed yet (D-033) */
+/* Until their fields are filled in, Save, Log set and Send are outlined: the secondary buttons' fill inside the same
+   turquoise edge as when they can be pressed, with the muted label (the accent is never text, D-021), still raised, so
+   they read as the main action that cannot be pressed yet (D-033) */
 :is(button:not([class]), button.log-set):disabled {
   opacity: 1;
   color: var(--secondary);
   background: var(--surface-secondary);
-  border-color: var(--tint);
 }
 
 /* Secondary, small and icon buttons share one opaque fill: the tab bar's selected item and the fields (--surface-secondary),
