@@ -142,8 +142,12 @@ test("the export downloads the user's data and never the Claude token", async ({
 
 const appearance = (page: Page) => page.getByRole("region", { name: "Appearance", exact: true });
 const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme ?? "auto");
-// The page color is the last layer of the body background (app/globals.css), a light-dark() token.
-const pageColor = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+// The page color is the background of <html> (app/globals.css), a light-dark() token. A change of mode fades it while
+// data-theme-fade is set (D-025), so it is read once the fade is over; read before the fade starts, it is already final.
+async function pageColor(page: Page) {
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-fade");
+  return page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+}
 
 async function pick(page: Page, choice: "Auto" | "Light" | "Dark") {
   await appearance(page).getByRole("tab", { name: choice, exact: true }).click();
@@ -196,6 +200,18 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   await pick(page, "Auto");
   expect(await theme(page)).toBe("auto");
   expect(await pageColor(page)).toBe(light);
+
+  // A change of mode fades the colors (data-theme-fade, set as the click is handled), but not with reduced motion.
+  const pickFades = (choice: string) =>
+    appearance(page)
+      .getByRole("tab", { name: choice, exact: true })
+      .evaluate((tab: HTMLElement) => {
+        tab.click();
+        return "themeFade" in document.documentElement.dataset;
+      });
+  expect(await pickFades("Dark")).toBe(true);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await pickFades("Light")).toBe(false);
 
   expect(reactWarnings).toEqual([]);
 });
