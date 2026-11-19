@@ -210,6 +210,7 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
         return "themeFade" in document.documentElement.dataset;
       });
   expect(await pickFades("Dark")).toBe(true);
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-fade");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await pickFades("Light")).toBe(false);
 
