@@ -3,7 +3,7 @@
 A personal life-tracking app (wishlist, tasks, gym, food and health) built and used by one person: the owner. It started as a university Azure course project and now runs live for personal use on Vercel + Neon.
 
 ## Current state
-Live and in daily use. The workflow setup (knowledge base, skills, checks, branch protection) is installed; code cleanup is done; every server action answers `{ success, error }` (D-010); browser specs (`npm run e2e`: Wishlist, weight card, Tasks, Gym, Health Today and Shopping, categories card, Settings) are in. A new color palette is being built ([plan](plans/color-palette.md)), with the owner's per-page round in (D-029), waiting on the owner's iOS check. Details: [status](status.md).
+Live and in daily use. The workflow setup (knowledge base, skills, checks, branch protection) is installed; code cleanup is done; every server action answers `{ success, error }` (D-010); browser specs (`npm run e2e`: Wishlist, weight card, Tasks, Gym, Health Today and Shopping, categories card, Settings) are in. A new color palette is being built ([plan](plans/color-palette.md)), with the owner's per-page and general rounds in (D-029, D-030), waiting on the owner's iOS check. Details: [status](status.md).
 
 ## Pages
 - [domain](domain.md) — what the product is, who uses it, the rules and the time zone it assumes

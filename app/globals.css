@@ -344,6 +344,7 @@ h3 {
   gap: 0.75rem;
   min-height: 2.75rem;
   padding: 0 0.75rem;
+  border: 1px solid transparent;
   border-radius: 0.75rem;
   color: var(--secondary);
   font-size: 0.9375rem;
@@ -364,10 +365,12 @@ h3 {
   }
 }
 
-/* The active item has the navigation's thumb, as in the tab bar (D-026) */
+/* The active item has the navigation's thumb, as in the tab bar (D-026), with its edge and shadow (D-030) */
 .nav-link.active {
   background: var(--surface-secondary);
   color: var(--text);
+  border-color: var(--card-edge);
+  box-shadow: var(--card-shadow);
 }
 
 /* Phone and tablet: floating blurred tab bar */
@@ -481,9 +484,14 @@ h3 {
   gap: 0.25rem;
 }
 
-/* The icon and label sit in the middle of the column */
+/* The icon and label sit in the middle of the column; a link here is a button like Sign out above it (D-030) */
 .more-links .nav-link {
   justify-content: center;
+  padding-inline: 1rem;
+  background: var(--surface-secondary);
+  color: var(--text);
+  border-color: var(--card-edge);
+  box-shadow: var(--card-shadow);
 }
 
 main {
@@ -543,7 +551,8 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.625rem;
-    border: 1px solid var(--edge);
+    border: 1px solid var(--card-edge);
+    box-shadow: var(--card-shadow); /* raised like a card (D-030) */
     border-radius: 1rem;
     background: var(--surface-secondary);
   }
@@ -657,7 +666,8 @@ main {
 .split-day-card {
   padding: 1rem 1.25rem;
   background: var(--surface-solid);
-  border: 1px solid var(--edge);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
@@ -672,7 +682,7 @@ main {
 /* The title block (name, then the fold arrow right after it) and the muscle tag, which stays at the right edge */
 .exercise-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: max-content minmax(0, 1fr); /* the count keeps its width; the ring takes what is left, up to its size */
   align-items: center;
   gap: 0.75rem;
 }
@@ -709,9 +719,12 @@ main {
   padding: 0.9rem 1rem;
   background: var(--surface-secondary);
   border-radius: 0.9rem;
-  border: 1px solid var(--edge);
+  /* Raised like a button, its text centred (D-030) */
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow);
   display: grid;
   gap: 0.3rem;
+  text-align: center;
 }
 
 .macro-title {
@@ -975,11 +988,12 @@ textarea:focus-visible {
   font-size: 0.875rem;
 }
 
-/* Rows carry 0.5rem padding; the list's outer margins subtract it so the first and last row sit exactly one card padding from the edges. */
+/* Rows carry 0.5rem padding; the list's outer margins subtract it, so a row's text sits 1rem below the block above it, like
+   every other block in a card (D-030), and the first and last row of a card sit exactly one card padding from its edges. */
 .entries {
   display: grid;
   gap: 0.25rem;
-  margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
+  margin-top: 0.5rem;
 }
 /* On the list box (.list-box), not the list inside it */
 .surface > .entries:last-child,
@@ -1043,7 +1057,6 @@ textarea:focus-visible {
 .signin-form .error { margin: 0; }
 /* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
 .signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
-.dash-hero-text > .muted { font-size: 0.875rem; }
 button.signin-continue:disabled {
   opacity: 1;
   cursor: progress;
@@ -1388,12 +1401,12 @@ button.btn-sm {
 }
 /* The thumb's radius, so the idle hover fill has its shape */
 :is(.segmented button, .tab-item) { border-radius: 0.7rem; }
-/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow. It and the thumb of a
-   segmented control on the page take the cards' edge too; one inside a card keeps its plain thumb. */
+/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow. Every thumb takes the cards'
+   edge too (D-029, D-030). */
 .tabbar::before {
   background: var(--surface-secondary);
 }
-:is(.tabbar, .segmented:not(.surface *))::before { border-color: var(--card-edge); }
+:is(.tabbar, .segmented)::before { border-color: var(--card-edge); }
 /* The tab bar floats like the More menu above it, so it has the menu's corners; the thumb's corners follow them
    inside the bar's padding and edge (1.25rem - 0.25rem - 1px), so the gap around it is even */
 .tabbar { border-radius: 1.25rem; }
@@ -1404,11 +1417,8 @@ button.btn-sm {
   display: grid;
   position: relative;
   background: var(--surface-secondary);
-  border: 1px solid var(--edge);
-}
-/* On the page, not in a card, the control is a raised surface like the cards (D-029) */
-.segmented:not(.surface *) {
-  border-color: var(--card-edge);
+  /* A raised surface like the cards, on the page and inside a card alike (D-029, D-030) */
+  border: 1px solid var(--card-edge);
   box-shadow: var(--card-shadow);
 }
 
@@ -1498,7 +1508,7 @@ main > .error {
 .chart-controls {
   display: flex;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .chart-controls .segmented {
@@ -1531,7 +1541,7 @@ main > .error {
   flex-wrap: wrap; /* a narrow card drops the button under the title instead of breaking its label */
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 1rem 0.75rem; /* a wrapped button row sits as far below the title as the card's content (D-030) */
   margin-bottom: 1rem;
 }
 .section-head > button { white-space: nowrap; }
@@ -1687,12 +1697,12 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .section-head:has(+ .item-total) {
   justify-content: center;
-  margin-bottom: var(--card-pad);
 }
 
 .item-total {
   margin: 0;
   line-height: 1;
+  text-box: trim-both cap alphabetic; /* 1rem under the title, like a key numeral (D-030) */
   text-align: center;
   color: var(--text);
 }
@@ -1712,7 +1722,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .todo-list {
   display: grid;
   gap: 0.25rem; /* the Wishlist's band gap */
-  margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
+  margin-top: 0.5rem;
 }
 
 .todo-row {
@@ -1771,8 +1781,10 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .ring {
   position: relative;
-  flex-shrink: 0;
+  width: 100%;
+  aspect-ratio: 1;
 }
+.ring > svg { display: block; width: 100%; height: 100%; }
 
 .ring-track {
   fill: none;
@@ -1880,25 +1892,27 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 
 
-/* The Tasks progress: the count in the left half, the ring in the right half, each centred in its half and on the
-   same middle line (D-029) */
-.dash-hero {
+/* Tasks' Progress: the title at the top left, the count at the bottom left under it, and the ring on the right,
+   centred on the whole card rather than on the space under the title (D-030) */
+.surface:has(> .dash-hero) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  justify-items: center;
-  gap: 1rem;
-  padding-block: 0.25rem;
-  text-align: center;
+  grid-template-columns: max-content minmax(0, 1fr); /* the count keeps its width; the ring takes what is left, up to its size */
+  grid-template-rows: auto 1fr;
+  column-gap: 1rem;
 }
-
+.surface:has(> .dash-hero) > .section-head { grid-area: 1 / 1; margin-bottom: 0; }
+.dash-hero { display: contents; }
+.dash-hero > .ring { grid-area: 1 / 2 / span 2; align-self: center; justify-self: end; }
 .dash-hero-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  grid-area: 2 / 1;
+  align-self: end;
+  display: grid;
+  gap: 0.5rem;
   min-width: 0;
+  padding-top: 1rem; /* never closer to the title than the cards' title gap */
 }
+.dash-hero-text > .metric-big { margin: 0; }
+.dash-hero-text > .muted { font-size: 0.875rem; }
 
 /* Gym muscle map */
 .muscle-layout {
@@ -1994,13 +2008,16 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .muscle-chip.active {
   background: var(--tint-subtle);
+  /* a picked chip is raised like a selected tab (D-030) */
+  border-color: var(--card-edge);
+  box-shadow: var(--card-shadow);
 }
 .muscle-dot {
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;
 }
-.muscle-side .group-label { margin-bottom: 0.5rem; }
+.muscle-side .group-label { margin-bottom: 0.25rem; } /* label to row, as in every list (D-030) */
 .muscle-side .hbars { margin-top: 0.25rem; } /* same gap under the title as the exercise list */
 /* The list follows its title at the band gap, so the title sits where "Planned sets per week" does */
 .group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 4.1875rem; /* a two-part row, 67px */ }
@@ -2017,21 +2034,25 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .muscle-side .entry-row .number-tabular { white-space: nowrap; }
 .muscle-card { margin-bottom: 1.25rem; }
 
-/* A header directly followed by a list: the header already supplies the gap */
-.section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
+/* A header directly followed by a list: the rows' 0.5rem padding completes the cards' 1rem title gap (D-030) */
+.section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: 0.5rem; }
+/* A list that opens its card starts one card padding from the top edge */
+.surface > :is(.entries, .todo-list):first-child,
+.surface > .list-box:first-child > :is(.entries, .todo-list) { margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem); }
 .section-head + :is(.entries, .todo-list),
 .section-head + .list-box > :is(.entries, .todo-list) { margin-top: 0; }
+/* A list in a dialog (a long list's More, D-029): its rows' text starts and ends at the body's padding, the gap every dialog keeps under its title */
+.modal-body > .list-box:first-child > .entries { margin-top: -0.5rem; }
+.modal-body > .list-box:last-child { margin-bottom: -0.5rem; }
 
-/* The 7-day average under a metric: the same gap above and below it */
+/* The 7-day average under a metric: the same gap above and below it. Last in a card, its 1rem below the baseline mirrors
+   the title's cap height, centred on the 44px Edit button, at the top. */
 .metric-avg {
-  margin: 0.75rem 0;
+  margin: 1rem 0;
   font-size: 0.875rem;
+  text-box: trim-both cap alphabetic;
 }
-/* Last in a card: its text sits as far from the card's bottom edge as the title (centred on the 44px Edit button) sits from the top */
-.metric-avg:last-child { margin-bottom: calc((2.75rem - 1.38rem) / 2); }
-/* Right under a big number (Weight) the number's tall line box already leaves ~16px below the digits, so the average
-   takes no margin above: it then sits as far from the digits as Water's and Steps' from their bar (D-029) */
-.metric-big:has(+ .metric-avg) { margin-bottom: 0; }
+/* Right under a big number (Weight) the number's own 1rem is the gap */
 .metric-big + .metric-avg { margin-top: 0; }
 .metric-avg + .tap-buttons { margin-top: 0; }
 
@@ -2125,7 +2146,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   align-items: center; /* the drag handle sits on the row's own vertical centre */
   gap: 0 0.75rem;
   padding: 0.75rem 0.75rem 0.85rem 0.75rem;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
@@ -2166,7 +2188,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow); /* raised like a card (D-030) */
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
@@ -2174,15 +2197,13 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .delete-icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* Health */
-.icon-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+/* A key numeral and the 7-day average under it are trimmed to their letters (cap height to baseline), so the 1rem gaps
+   around them are the visible gaps, as between every other block in a card (D-030) */
 .metric-big {
-  margin: 0 0 0.5rem;
+  margin: 0 0 1rem;
+  text-box: trim-both cap alphabetic;
 }
-.dash-hero-text > .metric-big { margin: 0; }
+.metric-big + .progress-track { margin-top: 0; }
 
 /* Key numerals (D-022): weight, water, steps, tasks done, the wishlist total and every macro of the Nutrition card
    (D-029). Sized so none wraps or overflows at 375px. */
@@ -2205,17 +2226,16 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .entry-row.dragging .drag-handle { cursor: grabbing; }
 .surface .list-box[data-wash] > .entries > .entry-row.dragging { background-color: var(--surface-solid); }
 /* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
-.shopping-groups { display: grid; row-gap: 1.25rem; }
+.shopping-groups { display: grid; row-gap: 1rem; } /* the gap between groups everywhere (D-030) */
 .shopping-groups > .shopping-group > .group-label { margin-top: 0; }
-/* clear of the section head, like the first title in Wishlist and Tasks */
-.shopping-groups > .shopping-group:first-child > .group-label { margin-top: 0.5rem; }
 .surface > .list-box:has(> .shopping-groups),
 .shopping-groups > .shopping-group {
   --band-out: calc((var(--card-pad) + 1px) / 2);
   margin-inline: calc(-1 * var(--band-out));
   padding-inline: var(--band-out);
 }
-.surface > .list-box:has(> .shopping-groups) { margin-bottom: 0; }
+/* the last row's text one card padding from the bottom, as in every list (D-030) */
+.surface > .list-box:has(> .shopping-groups) { margin-bottom: -0.65rem; }
 
 .group-label {
   margin: 0 0 0.25rem;
@@ -2229,7 +2249,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 /* The Wishlist's All tab: a category title is a full-width row of the list, set apart from the group above it */
 .wishlist-entries > .group-label,
 .todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
-/* clear of the tabs above */
+/* 1rem below the block above, with the list's 0.5rem (D-030) */
 .todo-list > .group-label:first-child,
 .wishlist-entries > .group-label:first-child { margin-top: 0.5rem; }
 /* A title that folds its group looks like any other title; the arrow after the text turns down while the group is open.
@@ -2283,6 +2303,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 /* No greeting: an empty log collapses but stays in the page as the live region for the first answer. */
 .chat-log:empty { padding: 0; border: 0; }
+.chat-log:empty + .chat-form { margin-top: 0; } /* an empty chat keeps the cards' 1rem title gap (D-030) */
 .chat-msg {
   display: flex;
   flex-direction: column;
@@ -2469,6 +2490,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
 @media (min-width: 992px) { .deload-card, .gym-history, .gym-progress, .muscle-card, .resume-bar { margin-block: 1.5rem; } .deload-card, .resume-bar { margin-top: 0; } .gym-history { margin-bottom: 0; } }
 .history-entry { display: block; padding-block: 0.25rem; }
+/* A history row's text sits 0.75rem in (the row's 0.25rem and its toggle's 0.5rem), so its title keeps 0.25rem for the cards' 1rem (D-030) */
+.surface.gym-history > .section-head { margin-bottom: 0.25rem; }
 /* The open workout is a tinted fill, so it stands out from the banded rows around it. */
 .history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
 .history-entry.open .history-chevron { color: var(--text); }

@@ -82,13 +82,12 @@ export function DashboardAside({ summaryFirst, children }: { summaryFirst?: bool
 
 /**
  * A titled card. `id` names the title, which labels the card. `count`: the number after the title. `sub`: the line
- * under it. `icon`: before the title. `actions`: the buttons at the head's end (`below`: they drop under the title
+ * under it. `actions`: the buttons at the head's end (`below`: they drop under the title
  * on a phone); `end`: anything else that closes the head. No `title`: a card without a head, named by `label`.
  */
 export function Card({
   id,
   title,
-  icon,
   count,
   sub,
   actions,
@@ -103,7 +102,6 @@ export function Card({
 }: {
   id?: string;
   title?: ReactNode;
-  icon?: ReactNode;
   count?: number;
   sub?: ReactNode;
   actions?: ReactNode;
@@ -119,8 +117,7 @@ export function Card({
   children?: ReactNode;
 }) {
   const heading = (
-    <h2 id={id} className={cx("section-title", !!icon && "icon-title")}>
-      {icon && <>{icon} </>}
+    <h2 id={id} className="section-title">
       {title}
       {count !== undefined && (
         <>

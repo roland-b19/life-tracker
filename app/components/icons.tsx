@@ -88,69 +88,6 @@ export function CheckIcon({ size = 16, className, ...props }: IconProps) {
   );
 }
 
-export function DropIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
-    </svg>
-  );
-}
-
-export function FootstepsIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <path d="M4 16v-2.38C4 11.5 5.5 10 7.38 10H8c1.66 0 3 1.34 3 3v3a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" />
-      <path d="M13 10V7.62C13 5.5 14.5 4 16.38 4H17c1.66 0 3 1.34 3 3v3a3 3 0 0 1-3 3h-1a3 3 0 0 1-3-3z" />
-    </svg>
-  );
-}
-
-export function ScaleIcon({ size = 16, className, ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-      {...props}
-    >
-      <rect x="2" y="3" width="20" height="18" rx="4" />
-      <circle cx="12" cy="9" r="3" />
-      <path d="M12 9v1.5" />
-    </svg>
-  );
-}
-
 export function BellIcon({ size = 16, className, ...props }: IconProps) {
   return (
     <svg

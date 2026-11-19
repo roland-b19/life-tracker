@@ -8,7 +8,6 @@ import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, E
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
-import { DropIcon, FootstepsIcon } from "../components/icons";
 import { undoWith, useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
 import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
@@ -559,7 +558,6 @@ export function FoodClient({
             <Card
               id="water-title"
               title="Water"
-              icon={<DropIcon size={18} />}
               end={<EditButton label="Edit water and goal" onClick={() => openMetricEdit("water")} />}
             >
               <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
@@ -578,7 +576,6 @@ export function FoodClient({
             <Card
               id="steps-title"
               title="Steps"
-              icon={<FootstepsIcon size={18} />}
               end={<EditButton label="Edit steps and goal" onClick={() => openMetricEdit("steps")} />}
             >
               <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />

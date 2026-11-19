@@ -20,8 +20,9 @@ export function ProgressRing({
   // Fills from empty when it appears, then eases between values (Apple Fitness rings).
   const shown = useAnimatedNumber(p, 0, 900);
   return (
-    <div className="ring" style={{ width: size, height: size }} role="img" aria-label={`${p}% ${label}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+    // At most `size` wide; it shrinks when its card is narrow, so the count beside it keeps its room
+    <div className="ring" style={{ maxWidth: size }} role="img" aria-label={`${p}% ${label}`}>
+      <svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} className="ring-track" strokeWidth={stroke} />
         <circle
           cx={size / 2}
