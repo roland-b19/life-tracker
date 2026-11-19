@@ -1,12 +1,12 @@
 "use client";
 
 import { toISODate, weekday } from "@/lib/format-date";
-import { muscleLabel } from "@/lib/gym-muscles";
-import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, TintButton } from "../components/blocks";
+import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { PencilIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
 import { DAY_NAMES, type SplitDay } from "./types";
+import { MuscleTag } from "./muscle-tag";
 
 /** The week's training days (pick one, or Start it) and, beside them, the picked day's routine with Edit and Start. */
 export function TrainingDays({
@@ -47,7 +47,7 @@ export function TrainingDays({
                     <span className="muted split-day-sub">{day.name}</span>
                   </button>
                   {!day.isRest && day.exercises.length > 0 && (
-                    <TintButton
+                    <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused}
                       onClick={() => {
@@ -56,7 +56,7 @@ export function TrainingDays({
                       }}
                     >
                       Start
-                    </TintButton>
+                    </SmallButton>
                   )}
                 </div>
               );
@@ -78,17 +78,17 @@ export function TrainingDays({
               below
               actions={
                 <>
-                  <TintButton icon={<PencilIcon size={14} />} aria-label={`Edit ${day.name}`} onClick={() => onEdit(day)}>
+                  <SmallButton icon={<PencilIcon size={14} />} aria-label={`Edit ${day.name}`} onClick={() => onEdit(day)}>
                     Edit
-                  </TintButton>
+                  </SmallButton>
                   {!day.isRest && (
-                    <TintButton
+                    <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused || day.exercises.length === 0}
                       onClick={() => onStart(day)}
                     >
                       Start
-                    </TintButton>
+                    </SmallButton>
                   )}
                 </>
               }
@@ -102,7 +102,7 @@ export function TrainingDays({
                           <strong>
                             {idx + 1}. {ex.exerciseName}
                           </strong>
-                          <Badge kind="rest">{muscleLabel(ex.muscleGroup)}</Badge>
+                          <MuscleTag group={ex.muscleGroup} />
                         </div>
                         <span className="muted number-tabular entry-side">
                           {ex.targetSets} × {ex.minReps} – {ex.maxReps}

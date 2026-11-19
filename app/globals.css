@@ -1,35 +1,119 @@
 :root {
-  /* Graphite: Apple's dark system greys on a true black page, with the Storm steel blue accent. */
-  --background: #000000;
-  --bg-radial: radial-gradient(1200px 500px at 50% -50px, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0) 100%),
-               radial-gradient(800px 400px at 100% 100%, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0) 100%);
-  --surface: rgba(28, 28, 30, 0.78);
-  --surface-solid: #1c1c1e;
-  --surface-secondary: rgba(58, 58, 60, 0.8);
-  --surface-modal: #242426;
-  --text: #ebebf0;
-  --secondary: #a1a1a8;
-  --tint: #86b4ea;
-  --tint-hover: #9bc2ef;
-  --on-tint: #0b1b30;
-  --tint-subtle: rgba(134, 180, 234, 0.24);
-  --success: #8fd4a3;
-  --warning: #ebc673;
-  --warning-subtle: rgba(235, 198, 115, 0.22);
-  --danger: #ef8f8f;
-  --danger-subtle: rgba(239, 143, 143, 0.22);
-  --separator: #38383a;
-  --card-border: #48484a;
-  /* No shadows and no outlines anywhere (the user's call, 2026-11-06): objects stand out by their grey fill.
-     High contrast (below) brings the outline back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
-  --edge: transparent;
+  /* Two modes from one set of tokens: each color is written once as light-dark(light, dark), and
+     color-scheme picks the side. Auto follows the system; [data-theme] (set by the Settings switch) forces one. */
+  color-scheme: light dark;
+  --background: light-dark(#eef2f6, #0b0f14);
+  /* The page glow, two soft turquoise patches fixed to the screen (body::before and ::after): one from the top left
+     corner reaching down, one from the bottom right corner reaching up */
+  --glow: light-dark(rgba(25, 154, 129, 0.26), rgba(30, 182, 152, 0.3));
+  --surface: light-dark(rgba(255, 255, 255, 0.6), rgba(24, 32, 42, 0.6));
+  --surface-solid: light-dark(#ffffff, #18202a);
+  --surface-modal: light-dark(#ffffff, #1c2530);
+  --surface-secondary: light-dark(#e4eaf1, #2e3a48);
+  --text: light-dark(#0f1a2b, #eef3f8);
+  --secondary: light-dark(#4a596b, #97a6b8);
+  /* The accent and the status colors are fills, never text (D-021) */
+  --tint: light-dark(#199a81, #1eb698);
+  --tint-hover: light-dark(#22ab8f, #3cc9ad);
+  --on-tint: light-dark(#04201b, #04201b);
+  --tint-subtle: light-dark(rgba(25, 154, 129, 0.16), rgba(30, 182, 152, 0.18));
+  --success: light-dark(#259d51, #2bb95f);
+  --warning: light-dark(#cc8c0a, #e5a51f);
+  --warning-subtle: light-dark(rgba(204, 140, 10, 0.16), rgba(229, 165, 31, 0.18));
+  --danger: light-dark(#e0444c, #ee5d63);
+  --danger-subtle: light-dark(rgba(224, 68, 76, 0.16), rgba(238, 93, 99, 0.18));
+  --separator: light-dark(#d5dde6, #2a3441);
+  /* Glass cards, floating surfaces and everything you can act on (buttons, fields, checks, chips) get a hairline edge
+     and a soft shadow; what you cannot act on (tags, counts) stays flat, so the two read apart (D-031).
+     High contrast (below) brings the outlines back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
+  --card-edge: light-dark(rgba(15, 26, 43, 0.08), rgba(238, 243, 248, 0.08));
+  --shadow-near: light-dark(rgba(15, 26, 43, 0.06), rgba(0, 0, 0, 0.4));
+  --shadow-far: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
+  --edge: transparent; /* tags, badges and the chat: flat, until high contrast outlines them */
   --glass-blur: blur(28px) saturate(160%);
-  /* Hover and selection highlights, all subtle: a grey wash on clear controls, a clearly stronger one on
-     grey-filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
-  --highlight: rgba(255, 255, 255, 0.05);
-  --highlight-fill: rgba(255, 255, 255, 0.2);
-  --tint-highlight: rgba(134, 180, 234, 0.34);
+  /* Neutral washes, all subtle: the hover on clear controls and the bands behind rows, and a clearly stronger one for
+     the Rest badge */
+  --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
+  --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
+  /* The open or chosen item in a list (the open History workout, the chosen training day): a darker wash in both
+     modes, laid over whatever is behind it (D-033) */
+  --highlight-open: light-dark(rgba(15, 26, 43, 0.1), rgba(0, 0, 0, 0.3));
+  /* The dim behind a modal or the More menu */
+  --scrim: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.5));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* Switching between dark and light (the Appearance switch or the system) fades the colors instead of swapping them
+   at once (D-025). Each color token that differs between the modes is registered as a <color>, so it is computed to a
+   plain color in the active mode and can be animated: <html> animates the tokens themselves while theme.ts sets
+   data-theme-fade, and every element follows through inheritance, text included. Animating each element's own color
+   instead would chain (a child chases its parent's animated color) and snap when the attribute is removed. */
+@property --background { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --glow { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-solid { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-modal { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-secondary { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --text { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --secondary { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint-hover { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --success { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --warning { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --warning-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --danger { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --danger-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --separator { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --card-edge { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --shadow-near { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --shadow-far { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight-fill { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight-open { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --scrim { syntax: "<color>"; inherits: true; initial-value: transparent; }
+
+:root[data-theme-fade] {
+  transition-property: --background, --glow, --surface, --surface-solid, --surface-modal,
+    --surface-secondary, --text, --secondary, --tint, --tint-hover, --tint-subtle, --success,
+    --warning, --warning-subtle, --danger, --danger-subtle, --separator, --card-edge, --shadow-near, --shadow-far,
+    --highlight, --highlight-fill, --highlight-open, --scrim;
+  transition-duration: 0.5s;
+  transition-timing-function: ease;
+}
+
+/* The glow patches: one layer each, the size of the screen, under all content */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
+}
+body::before {
+  background: radial-gradient(75% 70% at 0% 0%, var(--glow), transparent);
+}
+body::after {
+  background: radial-gradient(75% 70% at 100% 100%, var(--glow), transparent);
+}
+/* A centered card screen (sign-in, not found, error) never scrolls, so its glow is part of the page, not fixed:
+   iOS 26 Safari draws nothing fixed under its bottom bar and fills that strip with the plain page color instead,
+   which showed as a bar under the glow. */
+body:has(.signin-page)::before,
+body:has(.signin-page)::after {
+  position: absolute;
 }
 
 /* No visible scrollbars anywhere; scrolling still works */
@@ -43,9 +127,10 @@
 
 @media (prefers-contrast: more) {
   :root {
+    --surface: var(--surface-solid);
     --separator: var(--text);
-    --card-border: var(--text);
     --edge: var(--text);
+    --card-edge: var(--text);
   }
 }
 
@@ -69,9 +154,8 @@ body {
   margin: 0;
   min-height: 100dvh;
   color: var(--text);
-  background: var(--background);
-  background-image: var(--bg-radial);
-  background-attachment: fixed;
+  /* The page color is on <html>; the glow is fixed to the screen below, so every page shows the same background
+     however long it is, and it stays put while the page scrolls (background-attachment: fixed does neither on iOS) */
   /* Monospaced everywhere: every letter and digit takes the same width, so numbers and columns line up */
   font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 1.0625rem;
@@ -241,12 +325,12 @@ h3 {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--success);
+  background: var(--tint);
 }
 
 .app-title {
   font-size: 2rem;
-  font-weight: 700;
+  font-weight: 800; /* titles 800, key values 800 and big, labels 600 or lighter (D-022) */
   margin: 0;
   letter-spacing: -0.025em;
 }
@@ -270,26 +354,12 @@ h3 {
   gap: 0.75rem;
   min-height: 2.75rem;
   padding: 0 0.75rem;
+  border: 1px solid transparent;
   border-radius: 0.75rem;
   color: var(--secondary);
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
-}
-
-button.nav-link {
-  width: 100%;
-  justify-content: flex-start;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-button.nav-link:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .nav-link svg {
@@ -305,9 +375,14 @@ button.nav-link:disabled {
   }
 }
 
-.nav-link.active {
-  background: var(--tint-subtle);
-  color: var(--tint);
+/* The active item has the navigation's thumb, as in the tab bar (D-026), with its edge and shadow (D-030); a link in
+   the More menu is a button like Sign out, so it has the same look */
+.nav-link.active,
+.more-links .nav-link {
+  background: var(--surface-secondary);
+  color: var(--text);
+  border-color: var(--card-edge);
+  box-shadow: var(--card-shadow);
 }
 
 /* Phone and tablet: floating blurred tab bar */
@@ -317,47 +392,25 @@ button.nav-link:disabled {
   right: 0.75rem;
   bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 850;
-  /* Like the Segmented control: --n tabs, --i the active one, a thumb that slides to it, a gap that keeps the
-     pills apart */
+  /* The segmented control's shape with its colors swapped (D-026): the bar is the segmented thumb's solid fill and
+     its thumb the segmented track's (below), the same as the More menu. Its display is set here, not in the shared
+     rule, so the desktop rule below can hide it. */
   display: grid;
-  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-  --tab-gap: 0.25rem;
-  column-gap: var(--tab-gap);
   align-items: stretch;
-  isolation: isolate;
-  padding: 0.25rem;
-  background: rgba(28, 28, 30, 0.72);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid var(--edge);
-  border-radius: 1.5rem;
-}
-
-.tabbar::before {
-  content: "";
-  position: absolute;
-  top: 0.25rem;
-  bottom: 0.25rem;
-  left: 0.25rem;
-  width: calc((100% - 0.5rem - (var(--n) - 1) * var(--tab-gap)) / var(--n));
-  border-radius: 1.25rem;
-  background: var(--tint-subtle);
-  transform: translateX(calc(var(--i) * (100% + var(--tab-gap))));
-  z-index: -1;
+  background: var(--surface-solid);
 }
 .tabbar[data-idle]::before { opacity: 0; }
 
 .tab-item {
   min-width: 0;
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
-  padding: 0.25rem 0;
+  padding: 0.4rem 0;
   border: 0;
-  border-radius: 1.25rem;
   background: transparent;
   color: var(--secondary);
   font: inherit;
@@ -375,14 +428,14 @@ button.nav-link:disabled {
 
 /* The highlight is the bar's sliding thumb, not the item's own fill */
 .tab-item.active {
-  color: var(--tint);
+  color: var(--text);
 }
 
 .more-scrim {
   position: fixed;
   inset: 0;
   z-index: 840;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -391,14 +444,13 @@ button.nav-link:disabled {
   position: fixed;
   left: 0.75rem;
   right: 0.75rem;
-  bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
   z-index: 860;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem;
-  background: var(--surface-modal);
-  border: 1px solid var(--edge);
+  background: var(--surface-solid); /* the tab bar's fill */
   border-radius: 1.25rem;
   transform-origin: bottom right;
 }
@@ -412,12 +464,6 @@ button.nav-link:disabled {
   font-weight: 600;
   margin-bottom: 0.25rem;
   padding-bottom: 0.75rem;
-}
-
-/* Alone in the menu (no Settings link below it) the row has the same space above and below */
-.more-user:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0.5rem;
 }
 
 .more-user-text {
@@ -443,6 +489,19 @@ button.nav-link:disabled {
   flex: none;
 }
 
+/* Settings: one column in the middle of the menu */
+.more-links {
+  display: grid;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+/* The icon and label sit in the middle of the column */
+.more-links .nav-link {
+  justify-content: center;
+  padding-inline: 1rem;
+}
+
 main {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom));
 }
@@ -463,10 +522,10 @@ main {
     flex-direction: column;
     gap: 0.375rem;
     padding: 1.5rem 1rem;
-    background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
-    border-right: 1px solid var(--card-border);
+    background: var(--surface);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border-right: 1px solid var(--card-edge);
   }
 
   .brand {
@@ -500,9 +559,13 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.625rem;
-    border: 1px solid var(--edge);
     border-radius: 1rem;
     background: var(--surface-secondary);
+  }
+
+  /* On the box's --surface-secondary the button takes the bar's fill instead, like the segmented thumb on its track */
+  .side-user .signout-btn {
+    background: var(--surface-solid);
   }
 
   .side-user-row {
@@ -553,6 +616,7 @@ main {
   padding: calc(0.25rem + 0.5px) 0.65rem calc(0.25rem - 0.5px);
   border: 1px solid var(--edge);
   border-radius: 0.6rem;
+  color: var(--text);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -561,46 +625,49 @@ main {
 
 .badge-info {
   background: var(--tint-subtle);
-  color: var(--tint);
 }
 
+/* A status badge: the subtle fill, a dot of the status color and a --text word (D-022) */
 .badge-warning {
+  --dot: var(--warning);
   background: var(--warning-subtle);
-  color: var(--warning);
 }
 
 .badge-danger {
+  --dot: var(--danger);
   background: var(--danger-subtle);
-  color: var(--danger);
+}
+
+:is(.badge-warning, .badge-danger)::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot);
 }
 
 .badge-rest {
-  background: rgba(161, 161, 168, 0.2);
-  color: #c7c7cc;
+  background: var(--highlight-fill);
 }
 
-.badge-reminder {
-  background: var(--tint-subtle);
-  color: var(--tint);
-  font-size: 0.75rem;
+/* Gym's muscle tags share one width, the longest label's ("Hamstrings"), their text centred, so stacked rows line up (D-031) */
+.muscle-tag {
+  justify-content: center;
+  min-width: calc(10ch + 0.4em + 1.3rem + 2px);
 }
 
-.deload-card {
-  display: flex;
-  flex-wrap: wrap; /* on a phone the Edit button and the toggle drop under the title */
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.deload-card > div:first-child { flex: 1 1 11rem; }
-.deload-actions { display: flex; align-items: center; gap: 0.75rem; }
+/* The Deload session check sits right under the text, at the left (D-031); the Edit button is centred on the whole card,
+   beside both (D-033) */
+.deload-card { margin-bottom: 1.25rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 0.75rem; }
+.deload-card > .section-head { display: contents; }
+.deload-card > .section-head > :last-child { grid-column: 2; grid-row: 1 / span 2; }
+/* The check keeps its 44px tap height but draws into the bottom padding, so its text sits one card padding from the edge */
+.deload-card > .toggle-label:last-child { margin-bottom: calc((1lh - 44px) / 2); }
 
 .split-day-card {
   padding: 1rem 1.25rem;
-  background: var(--surface-solid);
-  border: 1px solid var(--edge);
+  background: var(--surface-secondary); /* the fill of Health's macro tiles (D-033) */
   border-radius: 0.85rem;
   display: flex;
   align-items: center;
@@ -608,24 +675,23 @@ main {
   cursor: pointer;
 }
 
+/* The chosen day: the open-item wash over the card's fill (D-033) */
 .split-day-card.selected {
-  background: var(--tint-subtle);
+  background: linear-gradient(var(--highlight-open), var(--highlight-open)) var(--surface-secondary);
 }
+/* On the card's --surface-secondary, Start takes the bar's fill instead, like the sign-out button in the sidebar */
+.split-day-card .btn-sm { background: var(--surface-solid); }
 
-/* The title block (name, then the fold arrow right after it) and the muscle tag, which stays at the right edge */
+/* The exercise name and its fold arrow, its muscle tag right under it, then the target and last time's sets, all at the left */
 .exercise-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
+  justify-items: start;
+  gap: 0.25rem;
 }
-
-/* The tag goes out over the row's inner padding, so it sits against the row's right edge */
-.exercise-header > .badge { margin-right: calc(-1 * var(--band-out)); }
 
 .set-input-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)); /* Reps, Unit, Value, Extra: one row, equal widths */
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* Reps, Value, Unit: one row, equal widths */
   gap: 0.5rem;
   align-items: end;
 }
@@ -652,9 +718,10 @@ main {
   padding: 0.9rem 1rem;
   background: var(--surface-secondary);
   border-radius: 0.9rem;
-  border: 1px solid var(--edge);
+  /* Flat: a count, not a control (D-031); its text centred (D-030) */
   display: grid;
   gap: 0.3rem;
+  text-align: center;
 }
 
 .macro-title {
@@ -666,10 +733,7 @@ main {
 }
 
 .macro-numbers {
-  font-size: 1.3rem;
-  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
   /* The target sits under the number: counting changes the number's width, never the line breaks or the card. */
   display: grid;
   gap: 0.1rem;
@@ -679,6 +743,7 @@ main {
 .macro-target {
   font-size: 0.78rem;
   font-weight: 500;
+  letter-spacing: 0; /* not the tight spacing of the big number it sits beside */
   color: var(--secondary);
   white-space: nowrap; /* the unit never drops below its number */
 }
@@ -736,8 +801,6 @@ main {
 }
 .shopping-item-name > :first-child { flex-shrink: 0; }
 .shopping-item-name > span { min-width: 0; }
-/* The dot, amount and unit wrap to the next line together, never split */
-.shopping-qty { display: inline-block; white-space: nowrap; overflow-wrap: normal; }
 
 .shopping-item-name.bought {
   text-decoration: line-through;
@@ -748,14 +811,21 @@ main {
   color: var(--secondary);
 }
 
-/* Glassmorphism Surface: Unslop Apple HIG */
+/* Every raised surface (a card, the tab bar, the More menu, a modal, the toast, the sidebar's user box, a segmented
+   control, Gym's day cards, routine rows and new-exercise box) has the hairline edge and the soft shadow (D-029, D-030).
+   Buttons and fields take the same pair in their own base rules (D-031); tags, badges and the chat keep --edge. */
+:is(.surface, .tabbar, .more-menu, .modal-card, .toast-item, .side-user, .segmented, .split-day-card, .routine-row,
+  .custom-exercise) {
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow);
+}
+
+/* A card: glass over the page glow. No blur, which stays on what content scrolls under (the tab bar, the sidebar,
+   the modal backdrop). */
 .surface {
   --card-pad: 1.35rem;
   padding: var(--card-pad);
   background: var(--surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--edge);
   border-radius: 1.15rem;
 }
 
@@ -763,18 +833,6 @@ main {
   .surface {
     --card-pad: 1.6rem;
     padding: 1.6rem;
-  }
-}
-
-/* Hover on fields: a lighter fill, no scaling. */
-@media (hover: hover) {
-  input:not([type="checkbox"]):not([type="radio"]):hover:not(:focus, :disabled),
-  select:hover:not(:focus, :disabled),
-  textarea:hover:not(:focus, :disabled) {
-    background-color: rgba(72, 72, 74, 0.95); /* color only: keeps the select's chevron */
-  }
-  select.sort-select:hover:not(:disabled) {
-    background-color: var(--highlight-fill);
   }
 }
 
@@ -801,62 +859,85 @@ textarea {
   width: 100%;
   padding: 0.65rem 0.95rem;
   color: var(--text);
-  background: rgba(28, 28, 30, 0.85);
-  border: 1px solid var(--edge);
+  background: var(--surface-secondary);
+  border: 1px solid var(--card-edge);
   border-radius: 0.85rem;
+  box-shadow: var(--card-shadow); /* raised like a button: it can be acted on (D-031) */
 }
 
-/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge */
+/* iOS draws a time field at its own minimum width, wider than a narrow form: drop its native look so it takes the
+   form's width like every other field, with the value at the start (D-029) */
+input[type="time"] {
+  appearance: none;
+  display: block;
+  min-width: 0;
+}
+input[type="time"]::-webkit-date-and-time-value { text-align: start; }
+
+/* Our own chevron, inset like the field's text, instead of the native arrow pressed against the edge.
+   A select holds no pseudo-element to mask, so its two strokes are gradients in the --secondary token,
+   one 5px square each (the left one falls, the right one rises); --chevron-end is the inset from the right. */
 select {
+  --chevron-end: 1rem;
   appearance: none;
   padding-right: 2.6rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a1a9b2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 0.9px), var(--secondary) 0 calc(50% + 0.9px), transparent 0),
+    linear-gradient(to top left, transparent calc(50% - 0.9px), var(--secondary) 0 calc(50% + 0.9px), transparent 0);
   background-repeat: no-repeat;
-  background-position: right 1rem center;
-  background-size: 0.75rem;
+  background-position: right calc(var(--chevron-end) + 0.3125rem) center, right var(--chevron-end) center;
+  background-size: 0.3125rem 0.3125rem;
   cursor: pointer;
 }
 
-/* Checkboxes and radios are not text fields: undo the field sizing above and use the system control in the tint. */
-input[type="checkbox"],
-input[type="radio"] {
+/* Every checkbox is one round check, the inputs and the Checkbox block (Tasks, Shopping) alike: a ring, filled with
+   the tint and ticked once checked. Not a text field, so the field sizing above is undone. The tick is a mask, so it
+   takes the --on-tint token in either mode. */
+:is(input[type="checkbox"], .todo-checkbox-btn) {
+  appearance: none;
+  display: inline-block;
   flex: none;
   width: 1.25rem;
   height: 1.25rem;
   min-height: 0;
   padding: 0;
-  accent-color: var(--tint);
-  cursor: pointer;
-}
-/* A checkbox is the same round check as the Tasks one: a ring, filled with the tint and ticked once checked. */
-input[type="checkbox"] {
-  appearance: none;
-  width: 1.45rem;
-  height: 1.45rem;
+  margin: 0; /* the browser's own margin would push a check off its column */
   border-radius: 50%;
   border: 1.5px solid var(--secondary);
-  background: transparent center / 0.85rem no-repeat;
+  background: transparent;
+  cursor: pointer;
 }
-input[type="checkbox"]:checked {
+:is(input[type="checkbox"]:checked, .todo-checkbox-btn.checked) {
   background-color: var(--tint);
   border-color: var(--tint);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%230b1b30' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
 }
-input[type="checkbox"]:disabled { opacity: 0.5; cursor: default; }
+:is(input[type="checkbox"]:checked, .todo-checkbox-btn.checked)::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: var(--on-tint);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center / 0.75rem no-repeat;
+}
+/* A disabled box, or a daily task shown ahead of its day, cannot be ticked */
+:is(input[type="checkbox"]:disabled, .todo-checkbox-btn.static:not(.checked)) { opacity: 0.5; cursor: default; }
 input[type="checkbox"]:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background-color: rgba(84, 84, 86, 0.95); /* color only: keeps the select's chevron; a step past hover, no tint */
+  background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); /* color only: keeps the select's chevron; a step past hover, no tint */
 }
 
+/* A filled button is drawn like a card: the hairline edge and the soft shadow (D-029). Clear controls (tabs, close
+   buttons, titles that fold, the checkbox) drop both below. */
 button {
   padding: 0.65rem 1.25rem;
   color: var(--on-tint);
   background: var(--tint);
-  border: 0;
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-shadow);
   cursor: pointer;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -873,16 +954,35 @@ button:disabled {
   transform: none;
 }
 
+/* The turquoise buttons (a form's Save, Log set, the assistant's Send, Continue) have an edge that shows on their fill:
+   the --card-edge hairline vanishes on turquoise (D-033). */
+:is(button:not([class]), button.log-set, button.signin-continue) {
+  border-color: color-mix(in srgb, var(--tint), var(--text) 35%);
+}
+/* Until their fields are filled in, Save, Log set and Send look like the grey secondary buttons (their fill and
+   hairline edge), still raised, with the label faded like a disabled button's (the 0.45 above), so they read as a
+   button that cannot be pressed yet (D-033) */
+:is(button:not([class]), button.log-set):disabled {
+  opacity: 1;
+  color: color-mix(in srgb, var(--text) 45%, transparent);
+  background: var(--surface-secondary);
+  border-color: var(--card-edge);
+}
+
+/* Secondary, small and icon buttons share one opaque fill: the tab bar's selected item and the fields (--surface-secondary),
+   so they read clearly on a card in both modes */
 button.secondary {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--edge);
+  background: var(--surface-secondary);
 }
 
 button.danger {
-  color: var(--danger);
-  background: transparent;
-  border: 1px solid var(--edge);
+  color: var(--text);
+  background: var(--danger-subtle);
+}
+
+:is(.tab-item, .segmented button, .split-day-select, .history-toggle) {
+  box-shadow: none;
 }
 
 /* Fields show focus with their own edge (above); only buttons get the keyboard ring */
@@ -899,15 +999,16 @@ textarea:focus-visible {
 
 .error {
   margin: 0.75rem 0 0;
-  color: var(--danger);
+  color: var(--text);
   font-size: 0.875rem;
 }
 
-/* Rows carry 0.5rem padding; the list's outer margins subtract it so the first and last row sit exactly one card padding from the edges. */
+/* Rows carry 0.5rem padding; the list's outer margins subtract it, so a row's text sits 1rem below the block above it, like
+   every other block in a card (D-030), and the first and last row of a card sit exactly one card padding from its edges. */
 .entries {
   display: grid;
   gap: 0.25rem;
-  margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
+  margin-top: 0.5rem;
 }
 /* On the list box (.list-box), not the list inside it */
 .surface > .entries:last-child,
@@ -943,7 +1044,9 @@ textarea:focus-visible {
 /* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
 /* Sign-in: one card in the middle of the screen, built from the same parts as every page card */
 .signin-page {
-  min-height: 85vh;
+  /* The whole screen with the same space above and below, so the card sits in the middle */
+  min-height: 100dvh;
+  padding-block: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -961,7 +1064,7 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tint);
+  color: var(--secondary);
 }
 .signin-form {
   margin: 1.25rem 0 0;
@@ -969,17 +1072,15 @@ textarea:focus-visible {
 .signin-form .error { margin: 0; }
 /* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
 .signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
-.dash-hero-text > .muted { font-size: 0.875rem; }
 button.signin-continue:disabled {
   opacity: 1;
   cursor: progress;
 }
 
-/* Icon-only row actions (edit, delete): same tinted fill and size as the tinted text buttons */
+/* Icon-only row actions (edit, delete): the same neutral fill, edge and height as the small text buttons */
 .delete-icon-btn {
-  background: var(--tint-subtle);
-  border: none;
-  color: var(--tint);
+  background: var(--surface-secondary);
+  color: var(--text);
   cursor: pointer;
   padding: 0;
   border-radius: 0.85rem;
@@ -993,39 +1094,15 @@ button.signin-continue:disabled {
 
 /* To-Do & Habits Module Styles (Apple HIG) */
 
-.todo-stats-fraction {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--secondary);
-}
-
 .todo-checkbox-btn {
-  width: 1.45rem;
-  height: 1.45rem;
-  border-radius: 50%;
-  border: 1.5px solid var(--secondary);
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  min-height: 0; /* the global button min-height would stretch the circle into an oval */
-  flex-shrink: 0;
   position: relative;
 }
 
-/* 44pt tap target around the 23px circle */
+/* 44pt tap target around the 20px circle */
 .todo-checkbox-btn::after {
   content: "";
   position: absolute;
-  inset: -0.7rem;
-}
-
-.todo-checkbox-btn.checked {
-  background: var(--tint);
-  border-color: var(--tint);
-  color: var(--on-tint);
+  inset: calc((100% - 44px) / 2);
 }
 
 .todo-title {
@@ -1076,7 +1153,7 @@ button.signin-continue:disabled {
   /* Reaches past the top and bottom of the screen, so no strip (toolbar, home bar) is left unblurred. */
   inset: -4rem 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px); /* lighter than the tab bar's: a full-screen blur janked on iPhone */
   touch-action: none;
@@ -1103,7 +1180,6 @@ button.signin-continue:disabled {
   width: 100%;
   max-width: 36rem;
   background: var(--surface-modal);
-  border: 1px solid var(--edge);
   border-radius: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -1138,13 +1214,12 @@ button.signin-continue:disabled {
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 0;
+  background: var(--surface-secondary);
   color: var(--secondary);
 }
 
 @media (hover: hover) {
-  .modal-close-btn:hover { background: var(--highlight-fill); color: var(--text); }
+  .modal-close-btn:hover { color: var(--text); }
 }
 
 /* Keeps a 44pt touch target around the small visible circle */
@@ -1215,7 +1290,7 @@ button.signin-continue:disabled {
     align-items: center;
     left: 1rem;
     right: 1rem;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    bottom: calc(5.75rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -1225,10 +1300,7 @@ button.signin-continue:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(28, 28, 30, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--edge);
+  background: var(--surface-modal);
   border-radius: 0.95rem;
   padding: 0.75rem 1.15rem;
   color: var(--text);
@@ -1249,9 +1321,8 @@ button.signin-continue:disabled {
 }
 
 .toast-action-btn {
-  background: var(--tint-subtle);
-  color: var(--tint);
-  border: 0;
+  background: var(--surface-secondary);
+  color: var(--text);
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1263,13 +1334,12 @@ button.signin-continue:disabled {
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: var(--tint-highlight);
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%);
   }
 }
 
 .toast-close-btn {
-  background: transparent;
-  border: none;
+  background: var(--surface-secondary);
   color: var(--secondary);
   cursor: pointer;
   padding: 0.25rem;
@@ -1282,14 +1352,11 @@ button.signin-continue:disabled {
 }
 
 @media (hover: hover) {
-  .toast-close-btn:hover {
-    color: var(--text);
-    background: var(--highlight-fill);
-  }
+  .toast-close-btn:hover { color: var(--text); }
 }
 
 /* ==========================================================================
-   Clean Action Buttons (No Shadows)
+   Compact action buttons
    ========================================================================== */
 
 /* Small secondary action used inside lists and card headers */
@@ -1311,33 +1378,23 @@ button.btn-sm {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--edge);
+  background: var(--surface-secondary);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
 
-button.btn-sm.tint {
-  color: var(--tint);
-  background: var(--tint-subtle);
-  border-color: transparent;
-}
-
-/* Segmented control with a sliding thumb: --n segments, --i active index */
-.segmented {
-  position: relative;
-  display: grid;
+/* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a neutral
+   thumb under the active item --i. The active label is --text; a segmented control adds a 6px --tint dot beside it,
+   the tab bar has none and swaps the colors instead (below). */
+:is(.segmented, .tabbar) {
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-  --seg-gap: 0.25rem; /* the pills never touch */
+  --seg-gap: 0.25rem; /* the items never touch */
   column-gap: var(--seg-gap);
   padding: 0.25rem;
-  background: var(--surface-secondary);
-  border: 1px solid var(--edge);
   border-radius: 0.95rem;
   isolation: isolate;
 }
-
-.segmented::before {
+:is(.segmented, .tabbar)::before {
   content: "";
   position: absolute;
   top: 0.25rem;
@@ -1345,14 +1402,34 @@ button.btn-sm.tint {
   left: 0.25rem;
   width: calc((100% - 0.5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));
   border-radius: 0.7rem;
-  background: var(--tint);
+  background: var(--surface-solid);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-edge);
+  box-sizing: border-box;
   transform: translateX(calc(var(--i) * (100% + var(--seg-gap))));
   z-index: -1;
+}
+/* The thumb's radius, so the idle hover fill has its shape */
+:is(.segmented button, .tab-item) { border-radius: 0.7rem; }
+/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow and the cards' edge
+   (D-029, D-030). */
+.tabbar::before {
+  background: var(--surface-secondary);
+}
+/* The tab bar floats like the More menu above it, so it has the menu's corners; the thumb's corners follow them
+   inside the bar's padding and edge (1.25rem - 0.25rem - 1px), so the gap around it is even */
+.tabbar { border-radius: 1.25rem; }
+.tabbar::before,
+.tabbar .tab-item { border-radius: 0.9375rem; }
+
+.segmented {
+  display: grid;
+  position: relative;
+  background: var(--surface-secondary);
 }
 
 .segmented button {
   min-height: 2.25rem;
-  border-radius: 0.7rem; /* the thumb's radius, so the idle hover fill has its shape */
   padding: 0.3rem 0.85rem;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -1361,6 +1438,7 @@ button.btn-sm.tint {
   color: var(--secondary);
   border: 0;
   white-space: nowrap;
+  gap: 0.35rem; /* the label and the active dot */
 }
 
 /* An idle tab lightens on hover; the selected tab stays on its thumb. */
@@ -1386,13 +1464,16 @@ button.btn-sm.tint {
 }
 
 .segmented button.active {
-  color: var(--on-tint);
+  color: var(--text);
 }
-
-@media (hover: hover) {
-  .segmented button.active:hover:not(:disabled) {
-    color: var(--on-tint);
-  }
+.segmented button.active::after {
+  content: "";
+  /* A flex item of the button, so it must not shrink to nothing when the label is long */
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tint);
 }
 
 /* Shared row for a segmented control and a primary action */
@@ -1433,7 +1514,7 @@ main > .error {
 .chart-controls {
   display: flex;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .chart-controls .segmented {
@@ -1450,17 +1531,7 @@ main > .error {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: var(--surface-solid);
-    --surface-secondary: #3a3a3c;
-    --surface-modal: #242426;
     --glass-blur: none;
-  }
-
-  .side,
-  .tabbar,
-  .more-menu {
-    background: var(--surface-solid);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 
   .more-scrim,
@@ -1476,7 +1547,7 @@ main > .error {
   flex-wrap: wrap; /* a narrow card drops the button under the title instead of breaking its label */
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 1rem 0.75rem; /* a wrapped button row sits as far below the title as the card's content (D-030) */
   margin-bottom: 1rem;
 }
 .section-head > button { white-space: nowrap; }
@@ -1485,7 +1556,7 @@ main > .error {
 
 .section-title {
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.01em;
 }
 
@@ -1514,30 +1585,34 @@ main > .error {
    the same place on every row. Wide lists keep the whole item on one line, actions on the right; narrow lists
    stack the name, the price and range boxes and the link, with the actions in their own column, centred on the
    whole item. A row without a link has no third line. */
-.wishlist-entries { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
+.wishlist-entries { grid-template-columns: auto auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
 .wishlist-entries > * { grid-column: 1 / -1; }
 .item-row {
   display: grid;
   grid-template-columns: subgrid;
-  grid-template-areas: "name name actions" "price range actions" "link link actions";
+  grid-template-areas: "name name name actions" "price range . actions" "link link link actions";
   align-items: center;
   row-gap: 0.4rem;
 }
 .item-row > .item-actions { grid-area: actions; justify-self: end; }
 .item-meta { display: contents; }
 .item-price { grid-area: price; justify-content: center; white-space: nowrap; }
-.item-range { grid-area: range; justify-self: start; justify-content: center; white-space: nowrap; }
+.item-range { grid-area: range; justify-self: stretch; justify-content: center; white-space: nowrap; }
+.item-range::before { content: none; } /* the list's range badges carry no dot; the range filter above keeps its own (D-029) */
 :is(.item-link, .item-link-text) { grid-area: link; }
 @container (min-width: 34rem) {
   .wishlist-entries { grid-template-columns: fit-content(40%) auto auto minmax(0, 1fr) auto; column-gap: 0.75rem; }
   .wishlist-entries:not(:has(.item-range)) { grid-template-columns: fit-content(40%) auto minmax(0, 1fr) auto; }
   .item-row { grid-template-areas: "name price range link actions"; }
   .wishlist-entries:not(:has(.item-range)) .item-row { grid-template-areas: "name price link actions"; }
-  .item-range { justify-self: stretch; }
 }
 @container (max-width: 33.99rem) {
   .item-row > .item-actions { flex-direction: column; gap: 0.5rem; } /* a phone has no room for the price, the range and two buttons side by side */
-  .item-row:not(:has(.item-link, .item-link-text)) { grid-template-areas: "name name actions" "price range actions"; }
+  /* The two stacked buttons are taller than a short item: empty flexible rows above and below take the extra
+     height, so the item's lines keep their gap and sit centred on the buttons instead of spreading apart. */
+  .item-row { row-gap: 0; grid-template-rows: 1fr auto auto auto 1fr; grid-template-areas: ". . . actions" "name name name actions" "price range . actions" "link link link actions" ". . . actions"; }
+  .item-row:not(:has(.item-link, .item-link-text)) { grid-template-rows: 1fr auto auto 1fr; grid-template-areas: ". . . actions" "name name name actions" "price range . actions" ". . . actions"; }
+  :is(.item-price, .item-range, .item-link, .item-link-text) { margin-top: 0.4rem; }
 }
 
 @container (max-width: 18rem) { .item-range { white-space: normal; } } /* a 320px phone: let the range wrap instead of running under the buttons */
@@ -1557,8 +1632,7 @@ select.sort-select {
   font-size: 0.875rem;
   font-weight: 600;
   border-radius: 0.7rem;
-  background-color: var(--surface-secondary);
-  background-position: right 0.8rem center;
+  --chevron-end: 0.8rem;
 }
 /* The highlight shows only while the menu is open (or hovered), not while focus lingers after it closes;
    the keyboard keeps a ring */
@@ -1582,17 +1656,12 @@ select.sort-select:focus-visible:not([data-pointer]) {
   .segmented button { padding-inline: 0.1rem; font-size: 0.8125rem; }
 }
 
-/* Field highlights as quiet as the filter's hover (a 5% white wash), focus and an open menu a step more */
-:is(input, select, textarea):not(.sort-select, [type="checkbox"], [type="radio"]):focus {
-  background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 8%);
-}
-select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
+/* Field highlights as quiet as the filter's hover (a 5% wash of the text color), focus and an open menu a step more */
+select.sort-select:open { background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
 @media (hover: hover) {
-  :is(input:not([type="checkbox"], [type="radio"]), select, textarea):not(.sort-select):hover:not(:focus, :disabled) {
-    background-color: color-mix(in srgb, rgba(28, 28, 30, 0.85), white 5%);
-  }
+  :is(input:not([type="checkbox"]), select, textarea):hover:not(:focus, :disabled),
   select.sort-select:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--surface-secondary), white 5%);
+    background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 5%);
   }
 }
 
@@ -1616,7 +1685,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .item-link {
   font-weight: 600;
-  color: var(--tint);
+  color: var(--text);
   text-decoration: none;
 }
 
@@ -1631,17 +1700,18 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .section-head:has(+ .item-total) {
   justify-content: center;
-  margin-bottom: var(--card-pad);
 }
 
 .item-total {
   margin: 0;
   line-height: 1;
+  text-box: trim-both cap alphabetic; /* 1rem under the title, like a key numeral (D-030) */
   text-align: center;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--tint);
+  color: var(--text);
 }
+/* The owner's one exception to D-021: the total's currency takes the accent, the turquoise of the Tasks ring. It is
+   large text, which needs 3:1, and the accent fill test holds it to 3:1 on the card and the page (D-029). */
+.item-currency { color: var(--tint); }
 
 .item-actions .btn-sm {
   min-height: 44px;
@@ -1655,7 +1725,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .todo-list {
   display: grid;
   gap: 0.25rem; /* the Wishlist's band gap */
-  margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem);
+  margin-top: 0.5rem;
 }
 
 .todo-row {
@@ -1714,8 +1784,10 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 
 .ring {
   position: relative;
-  flex-shrink: 0;
+  width: 100%;
+  aspect-ratio: 1;
 }
+.ring > svg { display: block; width: 100%; height: 100%; }
 
 .ring-track {
   fill: none;
@@ -1780,13 +1852,15 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 
 /* A value axis on the left (top, middle and bottom value) with faint gridlines; the dates sit under the plot. */
+/* The value axis takes its longest label's width (--y-chars, set by LineChart), then the plot */
 .line-plot {
   display: grid;
-  grid-template-columns: 2.75rem 1fr;
+  grid-template-columns: max-content 1fr;
   gap: 0.5rem;
 }
 .line-y {
   position: relative;
+  width: calc(var(--y-chars) * 1ch);
   font-size: 0.6875rem;
   color: var(--secondary);
   text-align: right;
@@ -1817,29 +1891,33 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .line-axis {
   display: flex;
   justify-content: space-between;
-  margin: 0.35rem 0 0 3.25rem; /* under the plot, past the value axis */
+  margin: 0.35rem 0 0 calc(var(--y-chars) * 1ch + 0.5rem); /* under the plot, past the value axis and the gap */
   font-size: 0.6875rem;
   color: var(--secondary);
 }
 
 
-/* Ring (or donut) centred in its card, caption centred below */
-.dash-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  padding-block: 0.25rem;
-  text-align: center;
+/* Tasks' Progress: the title at the top left, the count at the bottom left under it, and the ring on the right,
+   centred on the whole card rather than on the space under the title (D-030) */
+.surface:has(> .dash-hero) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr); /* the count keeps its width; the ring takes what is left, up to its size */
+  grid-template-rows: auto 1fr;
+  column-gap: 1rem;
 }
-
+.surface:has(> .dash-hero) > .section-head { grid-area: 1 / 1; margin-bottom: 0; }
+.dash-hero { display: contents; }
+.dash-hero > .ring { grid-area: 1 / 2 / span 2; align-self: center; justify-self: end; }
 .dash-hero-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  grid-area: 2 / 1;
+  align-self: end;
+  display: grid;
+  gap: 0.5rem;
   min-width: 0;
+  padding-top: 1rem; /* never closer to the title than the cards' title gap */
 }
+.dash-hero-text > .metric-big { margin: 0; }
+.dash-hero-text > .muted { font-size: 0.875rem; }
 
 /* Gym muscle map */
 .muscle-layout {
@@ -1889,7 +1967,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 /* Move is a 2.75rem square (touch only), Go back a fixed width, Front/Back takes all the space between; nothing resizes when one shows or hides */
 .muscle-views > .muscle-side-switch { flex: 1 1 0; min-width: 0; }
-.muscle-views > .muscle-back { flex: 0 0 6.5rem; height: auto; min-height: 0; padding-inline: 0; }
+.muscle-views > .muscle-back { flex: 0 0 6.5rem; height: auto; min-height: 0; padding-inline: 0; border-radius: 0.85rem; } /* the corners of Move beside it, not a small button's (D-031) */
 /* Touch screens only: always grey. Hold it and slide the same finger to move the model; a drag on the model scrolls the page. */
 .muscle-move {
   display: none;
@@ -1906,7 +1984,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), white 8%); }
+.muscle-move.active { background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
 @media (pointer: coarse) {
   .muscle-move { display: grid; }
   /* The wrapper's touch-action none would also block the canvas's pan-y: the page scrolls over the map. */
@@ -1929,27 +2007,22 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   font-size: 0.85rem;
-  background: transparent;
+  background: var(--surface-secondary); /* a button like any other, raised by the base rule (D-031) */
   color: inherit;
-  border: 1px solid var(--edge);
 }
-.muscle-chip.active {
-  background: var(--tint-subtle);
-}
+.muscle-chip.active { background: var(--tint-subtle); }
 .muscle-dot {
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;
 }
-.muscle-side .group-label { margin-bottom: 0.5rem; }
+.muscle-side .group-label { margin-bottom: 0.25rem; } /* label to row, as in every list (D-030) */
 .muscle-side .hbars { margin-top: 0.25rem; } /* same gap under the title as the exercise list */
 /* The list follows its title at the band gap, so the title sits where "Planned sets per week" does */
-.group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 4.1875rem; /* a two-part row, 67px */ }
+.group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 6.04375rem; /* a name line, its muscle tag and one day line, 96.7px */ }
 .muscle-entries .entry-row > div { min-width: 0; overflow-wrap: anywhere; } /* a long exercise name wraps instead of pushing the sets out */
-.muscle-day {
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
-}
+/* A row's detail lines under its title and tag (the days an exercise is on, its equipment): smaller, muted */
+.entry-detail { font-size: 0.8rem; }
 @media (max-width: 760px) {
   .muscle-layout {
     grid-template-columns: 1fr;
@@ -1958,24 +2031,32 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .muscle-side .entry-row .number-tabular { white-space: nowrap; }
 .muscle-card { margin-bottom: 1.25rem; }
 
-/* A header directly followed by a list: the header already supplies the gap */
-.section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: calc(var(--card-pad, 1.5rem) - 0.5rem); }
+/* A header directly followed by a list: the rows' 0.5rem padding completes the cards' 1rem title gap (D-030) */
+.section-head:has(+ :is(.entries, .todo-list), + .list-box > :is(.entries, .todo-list)) { margin-bottom: 0.5rem; }
+/* A list that opens its card starts one card padding from the top edge */
+.surface > :is(.entries, .todo-list):first-child,
+.surface > .list-box:first-child > :is(.entries, .todo-list) { margin-top: calc(var(--card-pad, 1.5rem) - 0.5rem); }
 .section-head + :is(.entries, .todo-list),
 .section-head + .list-box > :is(.entries, .todo-list) { margin-top: 0; }
+/* A list in a dialog (a long list's More, D-029): its rows' text starts and ends at the body's padding, the gap every dialog keeps under its title */
+.modal-body > .list-box:first-child > .entries { margin-top: -0.5rem; }
+.modal-body > .list-box:last-child { margin-bottom: -0.5rem; }
 
 /* The 7-day average under a metric: the same gap above and below it */
 .metric-avg {
-  margin: 0.75rem 0;
+  margin: 1rem 0;
   font-size: 0.875rem;
+  text-box: trim-both cap alphabetic;
 }
-/* Last in a card: its text sits as far from the card's bottom edge as the title (centred on the 44px Edit button) sits from the top */
-.metric-avg:last-child { margin-bottom: calc((2.75rem - 1.38rem) / 2); }
-.metric-big:has(+ .metric-avg) { margin-bottom: 0; }
+/* Right under a big number (Weight) the number's own 1rem is the gap */
+.metric-big + .metric-avg { margin-top: 0; }
+/* Last in a card (Steps), the card's own padding is the gap below it, as under every other card's last line */
+.metric-avg:last-child { margin-bottom: 0; }
 .metric-avg + .tap-buttons { margin-top: 0; }
 
 /* Second line under a card title */
 .card-sub {
-  margin: 0.2rem 0 0;
+  margin: 0.5rem 0 0; /* Gym's cards: the title, then a clear gap (D-031) */
   font-size: 0.875rem;
 }
 
@@ -1987,7 +2068,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   min-width: 0;
 }
 .entry-side { white-space: nowrap; }
-/* A day's exercise in the preview: the name, and the muscle tag always on the line below */
+/* A day's exercise in the preview: the name, and the muscle tag always on the line below. A meal (its numbers) and a
+   shopping item (its amount) stack the same way (D-029). */
 .entry-stack { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
 
 /* Gym: active session */
@@ -1997,14 +2079,11 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
-/* A long name wraps and the arrow stays right after its last word, not at the end of the block */
-.exercise-title .group-toggle { display: inline; text-align: start; }
-.exercise-title .group-toggle svg { display: inline-block; margin-left: 0.3rem; vertical-align: -0.1em; }
 .set-flag { margin-left: 0.5rem; }
+/* The set's checks: one column, at the left */
 .toggle-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1.25rem;
+  display: grid;
+  justify-items: start;
 }
 .session-footer {
   display: grid;
@@ -2062,7 +2141,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   align-items: center; /* the drag handle sits on the row's own vertical centre */
   gap: 0 0.75rem;
   padding: 0.75rem 0.75rem 0.85rem 0.75rem;
-  border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
@@ -2091,36 +2169,38 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .routine-fields input { text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .routine-fields input::-webkit-inner-spin-button,
 .routine-fields input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+/* The exercise select takes the dialog's width like every field; Add exercise is a small button under it, like
+   New exercise (D-033) */
 .routine-add {
-  display: flex;
-  align-items: end;
+  display: grid;
   gap: 0.75rem;
 }
-.routine-add > button { flex: none; height: 2.75rem; min-height: 0; padding-block: 0; } /* the select's height, so both share one centre line */
-.routine-add select { height: 2.75rem; min-height: 0; padding-block: 0; }
 /* New exercise, created inline in the day editor (same card style as a routine row) */
 .custom-exercise {
   display: grid;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--edge);
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
-.custom-exercise-btn { justify-self: start; }
+:is(.routine-add > button, .custom-exercise-btn) { justify-self: start; }
 .delete-icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* Health */
-.icon-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+/* A key numeral and the 7-day average under it are trimmed to their letters (cap height to baseline), so the 1rem gaps
+   around them are the visible gaps, as between every other block in a card (D-030) */
 .metric-big {
-  margin: 0 0 0.5rem;
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  margin: 0 0 1rem;
+  text-box: trim-both cap alphabetic;
+}
+.metric-big + .progress-track { margin-top: 0; }
+
+/* Key numerals (D-022): weight, water, steps, tasks done, the wishlist total and every macro of the Nutrition card
+   (D-029). Sized so none wraps or overflows at 375px. */
+:is(.metric-big, .item-total, .macro-numbers) {
+  font-size: clamp(2rem, 9vw, 2.7rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 .form-pair {
   display: grid;
@@ -2136,17 +2216,16 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .entry-row.dragging .drag-handle { cursor: grabbing; }
 .surface .list-box[data-wash] > .entries > .entry-row.dragging { background-color: var(--surface-solid); }
 /* Groups sit in a grid. Group and list box widen by the row band, so neither cuts the band off. */
-.shopping-groups { display: grid; row-gap: 1.25rem; }
+.shopping-groups { display: grid; row-gap: 1rem; } /* the gap between groups everywhere (D-030) */
 .shopping-groups > .shopping-group > .group-label { margin-top: 0; }
-/* clear of the section head, like the first title in Wishlist and Tasks */
-.shopping-groups > .shopping-group:first-child > .group-label { margin-top: 0.5rem; }
 .surface > .list-box:has(> .shopping-groups),
 .shopping-groups > .shopping-group {
   --band-out: calc((var(--card-pad) + 1px) / 2);
   margin-inline: calc(-1 * var(--band-out));
   padding-inline: var(--band-out);
 }
-.surface > .list-box:has(> .shopping-groups) { margin-bottom: 0; }
+/* the last row's text one card padding from the bottom, as in every list (D-030) */
+.surface > .list-box:has(> .shopping-groups) { margin-bottom: -0.65rem; }
 
 .group-label {
   margin: 0 0 0.25rem;
@@ -2160,11 +2239,11 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 /* The Wishlist's All tab: a category title is a full-width row of the list, set apart from the group above it */
 .wishlist-entries > .group-label,
 .todo-list > .group-label { margin: 0.75rem 0 0.25rem; }
-/* clear of the tabs above */
+/* 1rem below the block above, with the list's 0.5rem (D-030) */
 .todo-list > .group-label:first-child,
 .wishlist-entries > .group-label:first-child { margin-top: 0.5rem; }
-/* A title that folds its group looks like any other title; the arrow after the text turns down while the group is open.
-   The tap area reaches 0.75rem past the text without moving it. */
+/* A title that folds its group: the arrow after the text turns down while the group is open (the box it sits in is
+   below). The tap area reaches 0.75rem past the text without moving it. */
 .group-toggle {
   position: relative;
   display: inline-flex;
@@ -2187,6 +2266,22 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .group-toggle { max-width: 100%; text-align: start; overflow-wrap: anywhere; }
 .group-toggle svg { flex-shrink: 0; }
 .group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+/* A category title of a grouped list (Wishlist, Tasks, Shopping) is a box, easier to spot and read: the small buttons'
+   fill, edge and shadow, with the --text label and the arrow inside it (D-029). A card's and a workout exercise's fold
+   arrows are the same box (D-031, D-033). */
+:is(.group-label, .section-title, .exercise-title) > .group-toggle {
+  min-height: 1.875rem;
+  padding: 0.25rem 0.55rem 0.25rem 0.7rem;
+  gap: 0.35rem;
+  color: var(--text);
+  background: var(--surface-secondary);
+  border: 1px solid var(--card-edge);
+  border-radius: 0.6rem;
+  box-shadow: var(--card-shadow);
+}
+/* A fold arrow alone in its box (a card's, a workout exercise's): even padding, so the arrow sits centred pointing right
+   and down */
+:is(.section-title, .exercise-title) > .group-toggle { vertical-align: middle; padding-inline: 0.625rem; }
 
 /* Health: assistant chat */
 .chat-log {
@@ -2202,6 +2297,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 /* No greeting: an empty log collapses but stays in the page as the live region for the first answer. */
 .chat-log:empty { padding: 0; border: 0; }
+.chat-log:empty + .chat-form { margin-top: 0; } /* an empty chat keeps the cards' 1rem title gap (D-030) */
 .chat-msg {
   display: flex;
   flex-direction: column;
@@ -2236,7 +2332,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   padding: 0.3rem 0.6rem;
   border-radius: 0.5rem;
   background: var(--tint-subtle);
-  color: var(--tint);
+  color: var(--text);
   font-size: 0.8125rem;
 }
 .chat-form {
@@ -2252,10 +2348,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-size: 0.875rem;
 }
 
-/* A daily task shown ahead of its day cannot be ticked yet. */
-.todo-checkbox-btn.static:not(.checked) {
-  opacity: 0.5;
-}
 
 
 /* Takes the line chart's place at its height (140px plot + axis line), so changing the period never resizes the card. */
@@ -2281,23 +2373,19 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
 
-/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint.
+/* An idle (unselected, secondary or small) button takes a deeper neutral fill on hover.
    With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
   button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
-  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), white 6%); }
+  .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); }
   button.secondary:hover:not(:disabled),
-  button.btn-sm:not(.tint):hover:not(:disabled) {
-    background: var(--highlight-fill);
-  }
-  button.btn-sm.tint:hover:not(:disabled),
+  button.btn-sm:hover:not(:disabled),
+  :is(.group-label, .section-title, .exercise-title) > .group-toggle:hover,
+  :is(.modal-close-btn, .toast-close-btn, .muscle-chip:not(.active)):hover,
   .delete-icon-btn:hover:not(:disabled) {
-    background: var(--tint-highlight);
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%);
   }
-  button.danger:hover:not(:disabled),
-  .muscle-chip:not(.active):hover {
-    background: var(--highlight);
-  }
+  button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-subtle), var(--text) 8%); }
   .tab-item:not(.active):hover {
     color: var(--text);
     background: var(--highlight);
@@ -2329,7 +2417,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   --band-out: calc(var(--card-pad) + 1px - 0.5rem);
 }
 :is(.entries, .todo-list, .shopping-group) > :nth-child(even of :is(.entry-row, .todo-row, .shopping-row)) {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: color-mix(in srgb, var(--text) 3%, transparent);
 }
 /* A wash list (ListBox's `wash`, Wishlist): the band sits halfway between the card edge and the text. */
 .surface .list-box[data-wash],
@@ -2344,7 +2432,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .list-box[data-wash] > :is(.entries, .todo-list) > :is(.entry-row, .todo-row) { background-color: transparent; }
 .list-box[data-wash] > :is(.entries, .todo-list) > :nth-child(even of :is(.entry-row, .todo-row)) {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 
@@ -2374,7 +2462,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 .surface .workout-exercise-card .list-box[data-wash] > .entries.set-list > .entry-row {
   padding-inline: 0.75rem 0.5rem;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--highlight);
 }
 
 /* Gym: the bar that brings an unfinished workout back */
@@ -2385,8 +2473,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   gap: 0.75rem;
   margin-bottom: 1.25rem; /* the gap every Gym card keeps from the next */
 }
-/* Training days stand out from the card behind them */
-.split-day-card:not(.selected) { background: rgba(255, 255, 255, 0.05); }
 
 /* Gym: the workout timer, and one past workout in History */
 .session-timer { font-size: 1.25rem; font-weight: 600; }
@@ -2394,9 +2480,11 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .gym-history { margin-top: 1.25rem; } /* the gap the cards above keep from each other */
 @media (min-width: 992px) { .deload-card, .gym-history, .gym-progress, .muscle-card, .resume-bar { margin-block: 1.5rem; } .deload-card, .resume-bar { margin-top: 0; } .gym-history { margin-bottom: 0; } }
 .history-entry { display: block; padding-block: 0.25rem; }
-/* The open workout is a tinted fill, so it stands out from the banded rows around it. */
-.history-entry.open { background-color: color-mix(in srgb, var(--tint-subtle), transparent 55%) !important; /* wins over the band and wash rules above */ }
-.history-entry.open .history-chevron { color: var(--tint); }
+/* A history row's text sits 0.75rem in (the row's 0.25rem and its toggle's 0.5rem), so its title keeps 0.25rem for the cards' 1rem (D-030) */
+.surface.gym-history > .section-head { margin-bottom: 0.25rem; }
+/* The open workout takes the open-item wash, so it stands out from the banded rows around it (D-031, D-033). */
+.history-entry.open { background-color: var(--highlight-open) !important; /* wins over the band and wash rules above */ }
+.history-entry.open .history-chevron { color: var(--text); }
 .history-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2431,35 +2519,28 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   border-radius: 0.5rem;
   font-size: 0.9375rem;
 }
-.history-exercise:nth-of-type(odd) { background-color: rgba(255, 255, 255, 0.05); }
+.history-exercise:nth-of-type(odd) { background-color: var(--highlight); }
 .history-exercise > span { text-align: right; }
 
 /* The set to beat: what this exercise was last time this day was trained */
 .last-time {
   display: grid;
   gap: 0.15rem;
-  margin-top: 0.25rem;
   font-size: 0.875rem;
 }
-/* The set being logged: labels and values centred on their fields; Log set comes last, at full width.
-   The fields sit on a grey fill so they stand out from the card's band. */
+/* The set being logged: labels and values centred on their fields; Log set comes last, at full width. */
 .log-set { width: 100%; }
 .set-input-grid label { text-align: center; }
 .set-input-grid :is(input, select) {
   padding-inline: 0.25rem;
   text-align: center;
   text-align-last: center;
-  background-color: var(--surface-secondary);
 }
 .set-input-grid select { background-image: none; }
-.set-input-grid :is(input, select):focus { background-color: color-mix(in srgb, var(--surface-secondary), white 8%); }
-@media (hover: hover) {
-  .set-input-grid :is(input, select):hover:not(:focus, :disabled) { background-color: color-mix(in srgb, var(--surface-secondary), white 5%); }
-}
 
 /* iOS zooms into any field under 16px on focus; pinch zoom stays allowed, so keep touch fields at 16px. */
 @media (pointer: coarse) {
-  input:not([type="checkbox"]):not([type="radio"]),
+  input:not([type="checkbox"]),
   select,
   select.sort-select,
   textarea {

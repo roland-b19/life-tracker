@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -432,8 +432,8 @@ export function TodosClient({
                         <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
                         {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                           <div className="badge-row">
-                            {!listDaily && task.isCarriedOver && <Badge kind="carried">Carried over</Badge>}
-                            {task.reminderTime && isPushEnabled() && <Badge kind="reminder">{task.reminderTime}</Badge>}
+                            {!listDaily && task.isCarriedOver && <Badge kind="info">Carried over</Badge>}
+                            {task.reminderTime && isPushEnabled() && <Badge kind="info">{task.reminderTime}</Badge>}
                           </div>
                         )}
                       </div>
@@ -482,14 +482,12 @@ export function TodosClient({
               </EmptyNote>
             ) : (
               <div className="dash-hero">
-                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
-                  <span className="todo-stats-fraction number-tabular">
-                    {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
-                    {doneCount} of {totalCount} done
-                  </span>
+                  {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
+                  <BigNumber value={doneCount} of={`of ${totalCount} done`} />
                   <span className="muted">Today</span>
                 </div>
+                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
               </div>
             )}
           </Card>
@@ -500,7 +498,7 @@ export function TodosClient({
               <span className="push-toggle-label">
                 <BellIcon size={16} /> Task reminders
               </span>
-              <TintButton onClick={handleEnablePush}>Enable</TintButton>
+              <SmallButton onClick={handleEnablePush}>Enable</SmallButton>
             </Card>
           )}
         </DashboardAside>

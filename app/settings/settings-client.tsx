@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page } from "../components/blocks";
+import { AppearanceCard } from "../components/appearance-card";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
+import { isClaudeEnabled } from "@/lib/features";
 import { formatDMY } from "@/lib/format-date";
 
 interface SettingsClientProps {
@@ -88,35 +90,38 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     <Page userName={userName}>
       <Dashboard>
         <DashboardMain>
-          <Card
-            id="claude-title"
-            title="Claude"
-            end={
-              // Always rendered, so the header keeps its shape once connected.
-              <AddButton
-                onClick={openForm}
-                style={connectedAt ? { visibility: "hidden" } : undefined}
-                aria-hidden={connectedAt ? true : undefined}
-                tabIndex={connectedAt ? -1 : undefined}
-              >
-                Connect Claude
-              </AddButton>
-            }
-          >
-            <ListBox className="entries">
-              {connectedAt === null ? (
-                <EmptyNote>Not connected.</EmptyNote>
-              ) : (
-                <div className="entry-row item-row">
-                  <strong className="item-name">Claude account</strong>
-                  <div className="item-meta">
-                    <span className="muted number-tabular">Connected {formatDMY(connectedAt)}</span>
+          <AppearanceCard />
+          {isClaudeEnabled() && (
+            <Card
+              id="claude-title"
+              title="Claude"
+              end={
+                // Always rendered, so the header keeps its shape once connected.
+                <AddButton
+                  onClick={openForm}
+                  style={connectedAt ? { visibility: "hidden" } : undefined}
+                  aria-hidden={connectedAt ? true : undefined}
+                  tabIndex={connectedAt ? -1 : undefined}
+                >
+                  Connect Claude
+                </AddButton>
+              }
+            >
+              <ListBox className="entries">
+                {connectedAt === null ? (
+                  <EmptyNote>Not connected.</EmptyNote>
+                ) : (
+                  <div className="entry-row item-row">
+                    <strong className="item-name">Claude account</strong>
+                    <div className="item-meta">
+                      <span className="muted number-tabular">Connected {formatDMY(connectedAt)}</span>
+                    </div>
+                    <RowActions className="item-actions" onEdit={openForm} onDelete={handleDisconnect} editLabel="Replace the Claude token" deleteLabel="Disconnect Claude" deleteTitle="Disconnect" />
                   </div>
-                  <RowActions className="item-actions" onEdit={openForm} onDelete={handleDisconnect} editLabel="Replace the Claude token" deleteLabel="Disconnect Claude" deleteTitle="Disconnect" />
-                </div>
-              )}
-            </ListBox>
-          </Card>
+                )}
+              </ListBox>
+            </Card>
+          )}
         </DashboardMain>
       </Dashboard>
 

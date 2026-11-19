@@ -20,8 +20,8 @@ async function dismissToast(page: Page, message: string) {
   await expect(page.getByText(message)).toBeHidden();
 }
 
-// The meal form has no name field; the server names the meal "Meal".
-const MEAL_NUMBERS = "· 450 kcal · P 30 · C 40 · F 12";
+// The meal form has no name field; the server names the meal "Meal". Its numbers are two lines under the name.
+const MEAL_NUMBERS = "450 kcal · P 30";
 
 async function addMeal(page: Page) {
   await page.getByRole("button", { name: "Add meal" }).click();
@@ -38,8 +38,9 @@ async function addMeal(page: Page) {
 
 const itemName = () => `E2E item ${randomUUID().slice(0, 8)}`;
 
-// The quantity sits in the same line as the name: "<name> · <amount> <unit>".
-const itemLine = (page: Page, name: string, amount: number) => page.getByText(`${name} · ${amount} pcs`, { exact: true });
+// The quantity sits on the line under the name, so the row is the one whose Edit button names the item.
+const itemLine = (page: Page, name: string, amount: number) =>
+  page.locator(".shopping-row").filter({ has: page.getByRole("button", { name: `Edit ${name}`, exact: true }) }).getByText(`${amount} pcs`, { exact: true });
 
 async function addItem(page: Page, name: string, amount: number) {
   await page.getByRole("button", { name: "Add item" }).click();
@@ -52,8 +53,8 @@ async function addItem(page: Page, name: string, amount: number) {
   await expect(itemLine(page, name, amount)).toBeVisible();
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Today and Shopping tabs have no serious violations, also with a form open", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   await addMeal(page);

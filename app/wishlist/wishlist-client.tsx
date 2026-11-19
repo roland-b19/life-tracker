@@ -317,7 +317,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         <DashboardAside summaryFirst>
           <Card id="wishlist-summary-title" title="Estimated Investment">
             <p className="item-total number-tabular">
-              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="muted">RON</span>
+              <AnimatedNumber value={totalCost} format={formatRon} /> <span className="item-currency">RON</span>
             </p>
           </Card>
         </DashboardAside>

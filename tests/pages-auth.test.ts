@@ -7,9 +7,6 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`redirect:${to}`);
   },
-  notFound: () => {
-    throw new Error("notFound");
-  },
 }));
 // Any query an anonymous visitor's page makes would go through `db`: touching it at all is a failure.
 vi.mock("@/server/db", () => ({
@@ -30,7 +27,6 @@ const guarded = (loaders: Record<string, Load>) => Object.entries(loaders).filte
 beforeEach(() => {
   state.session = null;
   state.dbTouched = 0;
-  vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true"); // settings answers notFound() before it checks the session when off
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -61,6 +57,18 @@ describe("pages require a session", () => {
     await expect(requirePageUser()).resolves.toEqual({ id: "u1", name: "Ana" });
     state.session = { user: { id: "u1", name: null } };
     await expect(requirePageUser()).resolves.toEqual({ id: "u1", name: "User" });
+  });
+
+  it("Settings renders for a signed-in user with the Claude flag off, without reading the Claude connection", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "false");
+    state.session = { user: { id: "u1", name: "Ana" } };
+    const { default: Settings } = await pageLoaders["../app/settings/page.tsx"]();
+    await expect(Promise.resolve().then(() => Settings({ children: "" }))).resolves.toBeTruthy();
+    expect(state.dbTouched).toBe(0);
+
+    // With the flag on the same render reads the connection, so the check above can fail.
+    vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
+    await expect(Promise.resolve().then(() => Settings({ children: "" }))).rejects.toThrow("db read");
   });
 
   it("one way: only the shared helper reads the session, no page or layout does", () => {

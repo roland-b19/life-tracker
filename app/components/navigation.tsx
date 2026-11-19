@@ -5,8 +5,6 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
-import { isClaudeEnabled } from "@/lib/features";
-import { exportDataAction } from "@/actions/export";
 import { clearPageCache } from "./page-cache";
 
 interface NavigationProps {
@@ -42,7 +40,7 @@ export function Navigation({ userName }: NavigationProps) {
     return "Life Tracker";
   };
 
-  const navLinks = [
+  const links = [
     {
       href: "/gym",
       label: "Gym",
@@ -97,8 +95,6 @@ export function Navigation({ userName }: NavigationProps) {
     },
   ];
 
-  // Settings only holds the Claude connection, so it exists only when that is enabled.
-  const links = isClaudeEnabled() ? navLinks : navLinks.filter((l) => l.href !== "/settings");
   const primary = links.slice(0, 4);
   const overflow = links.slice(4);
   const moreActive = overflow.some((l) => l.isActive);
@@ -118,33 +114,6 @@ export function Navigation({ userName }: NavigationProps) {
     router.push("/signin");
     router.refresh();
   };
-
-  const [exporting, setExporting] = useState(false);
-  // Everything the user owns as a .txt, built by the server and saved by the browser.
-  const exportData = async () => {
-    setExporting(true);
-    try {
-      const result = await exportDataAction();
-      if (!result.success) throw new Error(result.error);
-      const { filename, text } = result;
-      const href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-      Object.assign(document.createElement("a"), { href, download: filename }).click();
-      URL.revokeObjectURL(href);
-      showToast({ message: "Exported your data", type: "success" });
-    } catch {
-      showToast({ message: "Failed to export your data", type: "warning" });
-    } finally {
-      setExporting(false);
-    }
-  };
-  const exportButton = (
-    <button type="button" className="nav-link" onClick={exportData} disabled={exporting}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-      </svg>
-      <span>Export data</span>
-    </button>
-  );
 
   return (
     <>
@@ -171,14 +140,13 @@ export function Navigation({ userName }: NavigationProps) {
               <span>{link.label}</span>
             </NextLink>
           ))}
-          {exportButton}
         </nav>
         <div className="side-user">
           <div className="side-user-row">
             <span className="user-avatar-circle">{initial}</span>
             <span>{userName}</span>
           </div>
-          <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
+          <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
             Sign out
           </button>
         </div>
@@ -200,23 +168,24 @@ export function Navigation({ userName }: NavigationProps) {
                 <span className="more-user-name">{userName}</span>
                 <span className="more-user-brand">Life Tracker</span>
               </div>
-              <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
+              <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
                 Sign out
               </button>
             </div>
-            {overflow.map((link) => (
-              <NextLink
-                key={link.href}
-                href={link.href}
-                className={`nav-link ${link.isActive ? "active" : ""}`}
-                aria-current={link.isActive ? "page" : undefined}
-                onClick={() => goFromMenu(link.href)}
-              >
-                {link.icon}
-                <span>{link.label}</span>
-              </NextLink>
-            ))}
-            {exportButton}
+            <div className="more-links">
+              {overflow.map((link) => (
+                <NextLink
+                  key={link.href}
+                  href={link.href}
+                  className={`nav-link ${link.isActive ? "active" : ""}`}
+                  aria-current={link.isActive ? "page" : undefined}
+                  onClick={() => goFromMenu(link.href)}
+                >
+                  {link.icon}
+                  <span>{link.label}</span>
+                </NextLink>
+              ))}
+            </div>
           </div>
         </>
       )}

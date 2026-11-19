@@ -28,7 +28,7 @@ Next.js 16 has breaking changes against older versions: read the relevant guide 
 - Smallest change that fully solves the task. No speculative features or abstractions.
 - Every new endpoint or server action ships an authorization test: owner allowed, other user denied, anonymous denied.
 - Never disable or weaken a security check, test or scanner to make something pass.
-- UI: the Wishlist page (`app/wishlist/`, `app/globals.css`, `app/components/`) is the reference; every page matches it. Dark only, no animations except the existing ones, every change has an Undo toast.
+- UI: the Wishlist page (`app/wishlist/`, `app/globals.css`, `app/components/`) is the reference; every page matches it. Dark and light modes (the system's, or a manual switch in Settings), no animations except the existing ones, every change has an Undo toast.
 
 ## Git
 

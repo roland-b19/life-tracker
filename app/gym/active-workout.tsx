@@ -2,7 +2,7 @@
 
 import type { HistoryEntry } from "@/lib/gym-progress";
 import { GYM_LIMITS } from "@/lib/validations/gym";
-import { Card, Field, TintButton } from "../components/blocks";
+import { Card, Field, SmallButton } from "../components/blocks";
 import { ListBox } from "../components/lists";
 import { emptyInput, ExerciseLogger } from "./exercise-logger";
 import type { SplitDay } from "./types";
@@ -23,7 +23,7 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
           <span className={`session-timer number-tabular${w.timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
             {formatClock(w.timer.shown)}
           </span>
-          <TintButton onClick={() => w.setTimerPaused((p) => !p)}>{w.timerPaused ? "Resume" : "Pause"}</TintButton>
+          <SmallButton onClick={() => w.setTimerPaused((p) => !p)}>{w.timerPaused ? "Resume" : "Pause"}</SmallButton>
         </>
       }
     >

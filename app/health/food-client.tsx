@@ -4,15 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { appTime, toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
 import { MAX_STEPS, MAX_WATER_ML } from "@/lib/validations/food";
-import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, TintButton, Toolbar } from "../components/blocks";
+import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
-import { DropIcon, FootstepsIcon } from "../components/icons";
 import { undoWith, useToast } from "../components/toast";
 import { WeightCard, type WeightEntry } from "./weight-card";
 import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
-import { DeleteButton, EditButton, ListBox } from "../components/lists";
+import { DeleteButton, EditButton, ListBox, useMoreDialog } from "../components/lists";
 import {
   addWaterAction,
   setWaterAction,
@@ -460,6 +459,23 @@ export function FoodClient({
     }
   }
 
+  // A meal is its name over two lines of numbers: the calories and protein, then the carbs and fat (D-029).
+  const mealRow = (meal: MealData) => (
+    <div key={meal.id} className="entry-row">
+      <span className="entry-main entry-stack">
+        <span>{visible(meal.name) ? meal.name : "Meal"}</span>
+        <span className="muted number-tabular">
+          {meal.calories} kcal · P {Number(meal.protein)}
+        </span>
+        <span className="muted number-tabular">
+          C {Number(meal.carbs)} · F {Number(meal.fat)}
+        </span>
+      </span>
+      <DeleteButton label={`Delete ${meal.name}`} onClick={() => void handleDeleteMeal(meal)} />
+    </div>
+  );
+  const [shownMeals, moreMeals, mealsDialog] = useMoreDialog(summary.meals, "Today's meals", mealRow);
+
   const macros = [
     { label: "Calories", value: day.totals.calories, target: goals.calories, unit: " kcal" },
     { label: "Protein", value: day.totals.protein, target: goals.proteinGrams, unit: "g" },
@@ -504,7 +520,7 @@ export function FoodClient({
               below
               actions={
                 <>
-                  <TintButton onClick={openGoals}>Edit goals</TintButton>
+                  <SmallButton onClick={openGoals}>Edit goals</SmallButton>
                   <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
                 </>
               }
@@ -529,18 +545,10 @@ export function FoodClient({
             <Card id="meals-title" title="Meals" count={summary.meals.length}>
               <ListBox wash className="entries">
                 {summary.meals.length === 0 && <EmptyNote>No meals logged today.</EmptyNote>}
-                {summary.meals.map((meal) => (
-                  <div key={meal.id} className="entry-row">
-                    <span>
-                      {visible(meal.name) ? meal.name : "Meal"}{" "}
-                      <span className="muted number-tabular">
-                        · {meal.calories} kcal · P {Number(meal.protein)} · C {Number(meal.carbs)} · F {Number(meal.fat)}
-                      </span>
-                    </span>
-                    <DeleteButton label={`Delete ${meal.name}`} onClick={() => void handleDeleteMeal(meal)} />
-                  </div>
-                ))}
+                {shownMeals.map(mealRow)}
+                {moreMeals}
               </ListBox>
+              {mealsDialog}
             </Card>
 
             <WeightCard today={todayDate} initial={initialWeights} />
@@ -550,7 +558,6 @@ export function FoodClient({
             <Card
               id="water-title"
               title="Water"
-              icon={<DropIcon size={18} />}
               end={<EditButton label="Edit water and goal" onClick={() => openMetricEdit("water")} />}
             >
               <BigNumber value={Math.round(day.metrics.waterMl)} of={`/ ${goals.waterMl} ml`} />
@@ -569,7 +576,6 @@ export function FoodClient({
             <Card
               id="steps-title"
               title="Steps"
-              icon={<FootstepsIcon size={18} />}
               end={<EditButton label="Edit steps and goal" onClick={() => openMetricEdit("steps")} />}
             >
               <BigNumber value={Math.round(day.metrics.steps)} of={`/ ${goals.steps}`} />

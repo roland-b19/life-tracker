@@ -4,7 +4,7 @@ import { toISODate, weekday } from "@/lib/format-date";
 import type { MuscleGroupKey } from "@/lib/gym-muscles";
 import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
-import { Banner, Page, TintButton } from "../components/blocks";
+import { Banner, Page, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { ActiveWorkout } from "./active-workout";
 import { CustomExercises, type CustomExercise } from "./custom-exercises";
@@ -70,7 +70,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
               title="Workout in progress"
               sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
             >
-              <TintButton onClick={w.resume}>Resume</TintButton>
+              <SmallButton onClick={w.resume}>Resume</SmallButton>
             </Banner>
           )}
           <TrainingDays

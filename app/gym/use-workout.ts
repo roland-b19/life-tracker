@@ -43,12 +43,13 @@ export function useWorkout({
   const [paused, setPaused] = useState<ActiveSessionData | null>(openSession);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionNotes, setSessionNotes] = useState("");
-  const [timerPaused, setTimerPaused] = useState(false); // the Pause button; leaving the workout stops the timer too
+  const [timerPaused, setTimerPaused] = useState(false); // the Pause button
+  const [left, setLeft] = useState(false); // Exit stops the timer; a workout found open after a reload keeps its clock
   // Exercises opened in the workout; they start collapsed and are not kept between workouts.
   const [openEx, setOpenEx] = useState<string[]>([]);
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
-  const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, Boolean(activeSession) && !timerPaused);
+  const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, activeSession ? !timerPaused : left ? false : null);
   const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
   useEffect(() => {
     live.current = activeSession ?? paused;
@@ -120,7 +121,6 @@ export function useWorkout({
 
     const repsNum = Number(state.reps);
     const loadNum = Number(state.loadValue || 0);
-    const extraNum = Number(state.extraKg || 0);
 
     setBusy(true);
     try {
@@ -136,7 +136,6 @@ export function useWorkout({
         reps: repsNum,
         loadType: state.loadType,
         loadValue: loadNum,
-        extraKg: extraNum,
         isFailure: state.isFailure,
         isPartial: state.isPartial,
         isGoodForm: state.isGoodForm,
@@ -225,6 +224,7 @@ export function useWorkout({
   }
 
   function exit() {
+    setLeft(true);
     setPaused(activeSession);
     setConfirmCancel(false);
     setActiveSession(null);
@@ -235,6 +235,7 @@ export function useWorkout({
     const dayId = paused.splitDayId;
     if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
     setTimerPaused(false);
+    setLeft(false);
     setActiveSession(paused);
     setPaused(null);
   }

@@ -29,14 +29,21 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 60_000,
   },
+  // Playwright's default scheme is light, so the dark projects say so. With Auto the page follows colorScheme.
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
     {
       name: "phone",
-      // The phone target is the width, so no touch or mobile emulation. Only the axe scans depend on the width, so the
-      // phone project runs just the tests tagged @a11y; the add/undo/delete flow runs once, on desktop.
+      // The phone target is the width, so no touch or mobile emulation. Only the axe scans depend on the width and
+      // the color scheme, so the other projects run just the tests tagged @a11y; the flows run once, on desktop.
       grep: /@a11y/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 }, colorScheme: "dark" },
+    },
+    { name: "desktop-light", grep: /@a11y/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
+    {
+      name: "phone-light",
+      grep: /@a11y/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 }, colorScheme: "light" },
     },
   ],
   webServer: {
@@ -50,7 +57,7 @@ export default defineConfig({
       NEXTAUTH_URL: BASE_URL,
       NEXTAUTH_SECRET: "e2e-only-secret",
       DATABASE_URL: databaseUrl,
-      // The Settings page and its Claude card render only with the flag on, and the card encrypts a token with the key.
+      // The Claude card on Settings renders only with the flag on, and it encrypts a token with the key.
       // The key is throwaway and e2e only, like NEXTAUTH_SECRET: the specs only ever store a fake token.
       NEXT_PUBLIC_CLAUDE_ENABLED: "true",
       CLAUDE_TOKEN_KEY: Buffer.alloc(32, "e2e-only").toString("base64"),

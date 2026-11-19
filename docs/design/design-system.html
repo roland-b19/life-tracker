@@ -1,0 +1,1143 @@
+<title>Life Tracker Design System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  Life Tracker design system: the LATEST, complete reference for the app's look (tokens, every component and state,
+  spacing, opacity, highlights, motion, accessibility) with live light and dark examples, and the decisions D-020 to D-033.
+  Source of truth: app/globals.css (code wins). Old design files in this folder start with OLD-.
+  Built 2026-11-20 from app/globals.css, docs/kb/decisions/general.md, docs/kb/conventions.md and docs/kb/plans/color-palette.md.
+-->
+<style>
+/* ===== The page's own chrome (not part of the design system) ===== */
+:root{
+  --d-bg:#f3f6f9; --d-ink:#0f1a2b; --d-muted:#4a596b; --d-line:#d5dde6; --d-card:#ffffff; --d-code:#e9eef4; --d-mark:#199a81;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --d-bg:#090d12; --d-ink:#eef3f8; --d-muted:#97a6b8; --d-line:#26303c; --d-card:#121922; --d-code:#18212c; --d-mark:#1eb698;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --d-bg:#090d12; --d-ink:#eef3f8; --d-muted:#97a6b8; --d-line:#26303c; --d-card:#121922; --d-code:#18212c; --d-mark:#1eb698;
+  color-scheme:dark;
+}
+
+/* ===== The app's tokens, exactly as in app/globals.css (each written once with light-dark(light, dark)) =====
+   They are NOT registered with @property here, so each example pane resolves them in its own color-scheme. */
+:root{
+  --background: light-dark(#eef2f6, #0b0f14);
+  --glow: light-dark(rgba(25,154,129,.26), rgba(30,182,152,.3));
+  --surface: light-dark(rgba(255,255,255,.6), rgba(24,32,42,.6));
+  --surface-solid: light-dark(#ffffff, #18202a);
+  --surface-modal: light-dark(#ffffff, #1c2530);
+  --surface-secondary: light-dark(#e4eaf1, #2e3a48);
+  --text: light-dark(#0f1a2b, #eef3f8);
+  --secondary: light-dark(#4a596b, #97a6b8);
+  --tint: light-dark(#199a81, #1eb698);
+  --tint-hover: light-dark(#22ab8f, #3cc9ad);
+  --on-tint: light-dark(#04201b, #04201b);
+  --tint-subtle: light-dark(rgba(25,154,129,.16), rgba(30,182,152,.18));
+  --success: light-dark(#259d51, #2bb95f);
+  --warning: light-dark(#cc8c0a, #e5a51f);
+  --warning-subtle: light-dark(rgba(204,140,10,.16), rgba(229,165,31,.18));
+  --danger: light-dark(#e0444c, #ee5d63);
+  --danger-subtle: light-dark(rgba(224,68,76,.16), rgba(238,93,99,.18));
+  --separator: light-dark(#d5dde6, #2a3441);
+  --card-edge: light-dark(rgba(15,26,43,.08), rgba(238,243,248,.08));
+  --shadow-near: light-dark(rgba(15,26,43,.06), rgba(0,0,0,.4));
+  --shadow-far: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.75));
+  --highlight: light-dark(rgba(15,26,43,.05), rgba(238,243,248,.06));
+  --highlight-fill: light-dark(rgba(15,26,43,.1), rgba(238,243,248,.16));
+  --highlight-open: light-dark(rgba(15,26,43,.1), rgba(0,0,0,.3));
+  --scrim: light-dark(rgba(15,26,43,.28), rgba(0,0,0,.5));
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
+  --edge: transparent;
+  --glass-blur: blur(28px) saturate(160%);
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--d-bg); color:var(--d-ink);
+  font:15px/1.55 var(--mono); -webkit-font-smoothing:antialiased;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.doc{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:32px;padding:28px 0 80px}
+@media (min-width:1100px){.doc{grid-template-columns:230px minmax(0,1fr)}}
+.toc{font-size:13px}
+@media (min-width:1100px){.toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto}}
+.toc details{border:1px solid var(--d-line);border-radius:12px;background:var(--d-card);padding:10px 14px}
+@media (min-width:1100px){.toc details{border:0;background:none;padding:0}.toc summary{display:none}}
+.toc summary{cursor:pointer;font-weight:700}
+.toc ol{margin:8px 0 0;padding-left:20px}
+.toc li{margin:3px 0}
+.toc a{color:var(--d-muted);text-decoration:none}
+.toc a:hover{color:var(--d-ink)}
+main{min-width:0}
+header.top h1{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.15;letter-spacing:-.025em;margin:0 0 10px;font-weight:800}
+.lede{color:var(--d-muted);max-width:72ch;margin:0 0 14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+.chip{font-size:12px;border:1px solid var(--d-line);border-radius:999px;padding:3px 10px;color:var(--d-muted);background:var(--d-card)}
+.modebar{display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;color:var(--d-muted)}
+.modebar button{font:inherit;font-size:13px;color:var(--d-ink);background:var(--d-card);border:1px solid var(--d-line);border-radius:8px;padding:4px 10px;cursor:pointer}
+.modebar button[aria-pressed="true"]{border-color:var(--d-mark);font-weight:700}
+section{border-top:1px solid var(--d-line);padding-top:26px;margin-top:34px}
+section > h2{font-size:1.45rem;letter-spacing:-.02em;margin:0 0 6px;font-weight:800}
+section h3{font-size:1.05rem;margin:26px 0 8px;font-weight:800}
+p{margin:8px 0;max-width:80ch}
+.muted{color:var(--d-muted)}
+code{font-family:var(--mono);font-size:.92em;background:var(--d-code);padding:1px 5px;border-radius:5px}
+pre{background:var(--d-code);border:1px solid var(--d-line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;margin:10px 0}
+pre code{background:none;padding:0}
+.rules{list-style:none;padding:0;margin:10px 0;display:grid;gap:7px}
+.rules li{display:grid;grid-template-columns:3.4em 1fr;gap:8px;align-items:start}
+.rid{font-weight:800;font-size:12px;color:var(--d-ink);background:var(--d-code);border:1px solid var(--d-line);border-radius:6px;text-align:center;padding:1px 0;margin-top:2px}
+.why{color:var(--d-muted);font-size:13px}
+table.t{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;display:block;overflow-x:auto}
+table.t th,table.t td{text-align:left;border-bottom:1px solid var(--d-line);padding:7px 10px 7px 0;vertical-align:top}
+table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--d-muted)}
+.sw{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.sw i{width:22px;height:22px;border-radius:6px;border:1px solid var(--d-line);display:inline-block;flex:none;
+  background-image:linear-gradient(45deg,#8883 25%,transparent 25%,transparent 75%,#8883 75%),linear-gradient(45deg,#8883 25%,transparent 25%,transparent 75%,#8883 75%);
+  background-size:8px 8px;background-position:0 0,4px 4px;position:relative;overflow:hidden}
+.sw i b{position:absolute;inset:0}
+.note{border-left:3px solid var(--d-mark);padding:6px 12px;background:var(--d-card);border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px}
+.warn{border-left-color:#cc8c0a}
+
+/* ===== Example panes: each example is shown in light and dark side by side ===== */
+.duo{display:grid;grid-template-columns:1fr;gap:12px;margin:12px 0 4px}
+@media (min-width:760px){.duo{grid-template-columns:1fr 1fr}}
+.pane{
+  color-scheme:light; position:relative; border-radius:14px; border:1px solid var(--d-line);
+  padding:34px 18px 18px; min-width:0; overflow:hidden; color:var(--text);
+  background:radial-gradient(75% 70% at 0% 0%, var(--glow), transparent),radial-gradient(75% 70% at 100% 100%, var(--glow), transparent),var(--background);
+  font-size:1.0625rem; line-height:1.5;
+}
+.pane.dk{color-scheme:dark}
+.pane::before{content:"Light";position:absolute;top:9px;left:14px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary);font-weight:700}
+.pane.dk::before{content:"Dark"}
+.pane.flat{background:var(--background)}
+.lab{display:block;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--secondary);font-weight:700;margin:0 0 6px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.col{display:grid;gap:14px}
+.stack{display:grid;gap:6px;justify-items:start}
+
+/* ----- Design-system recipes, scoped to the panes (the same values as app/globals.css) ----- */
+.pane h1,.pane h2,.pane h3{margin:0;line-height:1.2;letter-spacing:-.015em;text-wrap:balance}
+.pane h1{font-size:1.85rem}.pane h2{font-size:1.3rem}.pane h3{font-size:1.1rem}
+.pane .app-title{font-size:2rem;font-weight:800;letter-spacing:-.025em;margin:0}
+.pane .num{font-variant-numeric:tabular-nums}
+.pane .mutedt{color:var(--secondary)}
+.pane .surface{--card-pad:1.35rem;background:var(--surface);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.15rem;padding:var(--card-pad)}
+.pane .section-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem .75rem;margin-bottom:1rem}
+.pane .section-title{font-size:1.15rem;font-weight:800;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:.5rem}
+.pane .card-sub{margin:.5rem 0 0;font-size:.875rem;color:var(--secondary)}
+.pane label.f{display:grid;gap:.35rem;font-weight:600;font-size:.9rem}
+
+/* buttons */
+.pane button{font:inherit;min-height:2.75rem;padding:.65rem 1.25rem;color:var(--on-tint);background:var(--tint);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);cursor:pointer;font-weight:700;letter-spacing:-.01em;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.85rem}
+.pane button:disabled{cursor:not-allowed;opacity:.45}
+.pane :is(button:not([class]),button.log-set,button.signin-continue){border-color:color-mix(in srgb, var(--tint), var(--text) 35%)}
+.pane :is(button:not([class]),button.log-set):disabled{opacity:1;color:color-mix(in srgb, var(--text) 45%, transparent);background:var(--surface-secondary);border-color:var(--card-edge)}
+.pane button.signin-continue:disabled{opacity:1;cursor:progress}
+.pane button.secondary{color:var(--text);background:var(--surface-secondary)}
+.pane button.danger{color:var(--text);background:var(--danger-subtle)}
+.pane button.btn-sm{min-height:2.25rem;padding:.35rem .85rem;font-size:.875rem;font-weight:600;color:var(--text);background:var(--surface-secondary);border-radius:.7rem}
+.pane button.log-set{width:100%}
+.pane .delete-icon-btn{background:var(--surface-secondary);color:var(--text);padding:0;border-radius:.85rem;width:44px;height:44px;min-height:0}
+.pane .delete-icon-btn:disabled{opacity:.35;cursor:default}
+.pane button[data-s="focus"],.pane button:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane button:where([data-s="hover"]){background:var(--tint-hover)}
+.pane button.secondary[data-s="hover"],.pane button.btn-sm[data-s="hover"],.pane .delete-icon-btn[data-s="hover"]{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+.pane button.danger[data-s="hover"]{background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
+@media (hover:hover){
+  .pane button:where(:hover:not(:disabled)){background:var(--tint-hover)}
+  .pane button.secondary:hover:not(:disabled),.pane button.btn-sm:hover:not(:disabled),.pane .delete-icon-btn:hover:not(:disabled),
+  .pane .fold:hover,.pane :is(.modal-close-btn,.toast-close-btn,.toast-action-btn,.muscle-chip:not(.active)):hover{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+  .pane button.danger:hover:not(:disabled){background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
+  .pane .modal-close-btn:hover,.pane .toast-close-btn:hover{color:var(--text)}
+  .pane .segmented button:not(.active):hover{background:var(--highlight);color:var(--text)}
+  .pane .tab-item:not(.active):hover{background:var(--highlight);color:var(--text)}
+  .pane .nav-link:not(.active):hover{background:var(--surface-secondary);color:var(--text)}
+  .pane .split-day-card:not(.selected):hover{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+  .pane :is(input:not([type=checkbox]),select,textarea):hover:not(:focus,:disabled){background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 5%)}
+}
+
+/* fields */
+.pane :is(input:not([type=checkbox]),select,textarea){font:inherit;font-size:1rem;min-height:2.75rem;padding:.65rem .95rem;color:var(--text);background-color:var(--surface-secondary);border:1px solid var(--card-edge);border-radius:.85rem;box-shadow:var(--card-shadow);width:100%;min-width:0;appearance:none}
+.pane :is(input,select,textarea):focus{outline:none;background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+.pane [data-s="fhover"]{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 5%) !important}
+.pane [data-s="ffocus"]{background-color:color-mix(in srgb, var(--surface-secondary), var(--text) 8%) !important}
+.pane input::placeholder,.pane textarea::placeholder{color:var(--secondary)}
+.pane select{--chevron-end:1rem;padding-right:2.6rem;background-image:linear-gradient(45deg,transparent 50%,var(--secondary) 50%),linear-gradient(135deg,var(--secondary) 50%,transparent 50%);background-position:calc(100% - var(--chevron-end) - 5px) 52%,calc(100% - var(--chevron-end)) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.pane select.sort-select{width:auto;min-height:2.25rem;border-radius:.7rem;font-size:.875rem;padding-block:.35rem;text-align:center}
+
+/* checkbox */
+.pane input[type=checkbox]{appearance:none;width:1.25rem;height:1.25rem;margin:0;border-radius:50%;border:1.5px solid var(--secondary);background:transparent;position:relative;cursor:pointer;flex:none;display:inline-grid;place-items:center}
+.pane input[type=checkbox]:checked{background:var(--tint);border-color:var(--tint)}
+.pane input[type=checkbox]:checked::before{content:"";width:.75rem;height:.75rem;background:var(--on-tint);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center/.75rem no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E") center/.75rem no-repeat}
+.pane input[type=checkbox]:disabled{opacity:.5;cursor:default}
+.pane input[type=checkbox][data-s="focus"],.pane input[type=checkbox]:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane .toggle-label{display:flex;align-items:center;gap:.6rem;min-height:44px;font-size:.9375rem;font-weight:500}
+
+/* segmented + tab bar */
+.pane .segmented{--seg-gap:.25rem;position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:var(--seg-gap);padding:.25rem;border-radius:.95rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow)}
+.pane .segmented::before{content:"";position:absolute;top:.25rem;bottom:.25rem;left:.25rem;width:calc((100% - .5rem - (var(--n) - 1) * var(--seg-gap)) / var(--n));background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.7rem;transform:translateX(calc(var(--i) * (100% + var(--seg-gap))))}
+.pane .segmented button{position:relative;z-index:1;min-height:2.25rem;padding:.3rem .5rem;font-size:.9375rem;font-weight:600;background:transparent;color:var(--secondary);border:0;box-shadow:none;border-radius:.7rem;gap:.4rem}
+.pane .segmented button.active{color:var(--text)}
+.pane .segmented button.active::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--tint);flex:none}
+.pane .segmented.dense button{font-size:.8125rem;padding-inline:.1rem}
+.pane .tabbar{position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);padding:.3rem;gap:.25rem;background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem}
+.pane .tabbar::before{content:"";position:absolute;top:.3rem;bottom:.3rem;left:.3rem;width:calc((100% - .6rem - (var(--n) - 1) * .25rem) / var(--n));background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.9375rem;transform:translateX(calc(var(--i) * (100% + .25rem)))}
+.pane .tab-item{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;min-height:3.5rem;padding:.4rem 0;border:0;background:transparent;box-shadow:none;color:var(--secondary);font-size:.6875rem;font-weight:600;border-radius:.9375rem}
+.pane .tab-item.active{color:var(--text)}
+.pane .tab-item svg{width:22px;height:22px}
+.pane .nav-link{display:flex;align-items:center;gap:.7rem;min-height:2.75rem;padding:.5rem .8rem;border-radius:.75rem;color:var(--secondary);font-size:.9375rem;font-weight:500;text-decoration:none;border:1px solid transparent}
+.pane .nav-link.active,.pane .more .nav-link{background:var(--surface-secondary);color:var(--text);border-color:var(--card-edge);box-shadow:var(--card-shadow)}
+.pane .side{width:100%;max-width:248px;padding:.9rem;background:var(--surface);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid var(--card-edge);border-radius:1rem;display:grid;gap:.25rem}
+.pane .brand{display:flex;align-items:center;gap:.6rem;font-weight:800;margin:0 0 .5rem}
+.pane .brand-mark{width:1.75rem;height:1.75rem;border-radius:.55rem;background:var(--tint);color:var(--on-tint);display:grid;place-items:center;font-weight:800;font-size:.85rem}
+.pane .side-user{margin-top:.6rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.6rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1rem;font-size:.85rem}
+.pane .side-user .btn-sm{background:var(--surface-solid)}
+.pane .avatar{width:2rem;height:2rem;border-radius:50%;background:var(--surface-secondary);display:grid;place-items:center;font-weight:700;font-size:.8rem;border:1px solid var(--card-edge)}
+.pane .more{background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem;padding:.75rem;display:grid;justify-items:center}
+
+/* badges */
+.pane .badge{display:inline-flex;align-items:center;gap:.35rem;padding:calc(.25rem + .5px) .65rem calc(.25rem - .5px);border:1px solid var(--edge);border-radius:.6rem;color:var(--text);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;line-height:1.5}
+.pane .badge-info{background:var(--tint-subtle)}
+.pane .badge-warning{--dot:var(--warning);background:var(--warning-subtle)}
+.pane .badge-danger{--dot:var(--danger);background:var(--danger-subtle)}
+.pane :is(.badge-warning,.badge-danger)::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--dot)}
+.pane .badge-rest{background:var(--highlight-fill)}
+.pane .muscle-tag{justify-content:center;min-width:calc(10ch + .4em + 1.3rem + 2px)}
+.pane .item-range::before{display:none}
+
+/* lists */
+.pane .group-label{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--secondary);margin:.5rem 0 .25rem}
+.pane .fold{display:inline-flex;align-items:center;gap:.35rem;min-height:1.875rem;padding:.25rem .55rem .25rem .7rem;color:var(--text);background:var(--surface-secondary);border:1px solid var(--card-edge);border-radius:.6rem;box-shadow:var(--card-shadow);font:inherit;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.pane .fold.lone{padding-inline:.625rem;vertical-align:middle;letter-spacing:0}
+.pane .fold svg{width:14px;height:14px;flex:none}
+.pane .fold[aria-expanded="true"] svg{transform:rotate(90deg)}
+.pane .entries{display:grid;gap:.25rem;--band-out:.75rem;margin-inline:calc(-1 * var(--band-out))}
+.pane .surface .entries{--band-out:calc(var(--card-pad) + 1px - .5rem)}
+.pane .entry{display:flex;align-items:center;gap:1rem;padding:.5rem var(--band-out);border-radius:.75rem}
+.pane .entries > .entry:nth-child(even){background:color-mix(in srgb, var(--text) 3%, transparent)}
+.pane .entry-main{flex:1;min-width:0;display:grid;gap:.1rem}
+.pane .entry-title{font-weight:600}
+.pane .entry-meta{font-size:.875rem;color:var(--secondary)}
+.pane .entry-detail{font-size:.8rem;color:var(--secondary)}
+.pane .done{text-decoration:line-through;color:var(--secondary)}
+.pane .empty-note{color:var(--secondary);font-size:.9375rem;text-align:center;padding:1.5rem 0;margin:0}
+.pane .more-btn{display:flex;justify-content:center;margin-top:.5rem}
+
+/* data */
+.pane .progress-track{height:.45rem;background:var(--separator);border-radius:1rem;overflow:hidden}
+.pane .progress-fill{height:100%;background:var(--tint);border-radius:1rem}
+.pane .progress-fill.over{background:var(--danger)}
+.pane .metric-big{font-size:clamp(2rem,9vw,2.7rem);font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:0 0 1rem;line-height:1;text-box:trim-both cap alphabetic}
+.pane .metric-avg{margin:1rem 0;font-size:.875rem;color:var(--secondary);text-box:trim-both cap alphabetic}
+.pane .ring-track{stroke:var(--separator)}.pane .ring-fill{stroke:var(--tint);stroke-linecap:round}
+.pane .ring-text{font-size:1.75rem;font-weight:800;fill:var(--text)}
+.pane .hbar{display:grid;grid-template-columns:5.5rem 1fr auto;gap:.6rem;align-items:center;font-size:.85rem}
+.pane .hbar-track{height:.6rem;background:var(--separator);border-radius:1rem;overflow:hidden}
+.pane .hbar-fill{height:100%;background:var(--tint);border-radius:1rem}
+.pane .hbar-val{color:var(--secondary);font-weight:600;font-variant-numeric:tabular-nums}
+.pane .line-path{stroke:var(--tint);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.pane .line-grid{stroke:var(--separator);stroke-width:1}
+.pane .axis{font-size:11px;fill:var(--secondary)}
+.pane .macro-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.pane .macro-card{background:var(--surface-secondary);border-radius:.9rem;padding:.8rem;text-align:center;display:grid;gap:.3rem}
+.pane .macro-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--secondary);font-weight:700}
+.pane .macro-numbers{font-size:clamp(2rem,9vw,2.7rem);font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.pane .macro-target{font-size:.78rem;color:var(--secondary)}
+
+/* modal + toast */
+.pane .scrim{border-radius:12px;padding:18px;background:var(--scrim)}
+.pane .modal-card{background:var(--surface-modal);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:1.25rem;max-width:36rem}
+.pane .modal-head{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.25rem 0}
+.pane .modal-title{font-size:1.25rem;font-weight:600;margin:0}
+.pane .modal-body{padding:1.25rem}
+.pane .modal-close-btn{position:relative;width:1.75rem;height:1.75rem;min-height:0;padding:0;border-radius:50%;background:var(--surface-secondary);color:var(--secondary);box-shadow:var(--card-shadow)}
+.pane .toast-item{display:flex;align-items:center;gap:.6rem;background:var(--surface-modal);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.95rem;padding:.75rem 1.15rem}
+.pane .toast-message{font-size:.875rem;font-weight:500;flex:1}
+.pane .toast-action-btn{background:var(--surface-secondary);color:var(--text);font-size:.8125rem;font-weight:600;border-radius:.7rem;padding:.35rem .65rem;min-height:36px;min-width:44px}
+.pane .toast-close-btn{background:var(--surface-secondary);color:var(--secondary);padding:.25rem;min-width:36px;min-height:36px;border-radius:.7rem}
+
+/* chat */
+.pane .chat-log{display:flex;flex-direction:column;gap:.75rem;background:var(--surface-secondary);border:1px solid var(--edge);border-radius:.9rem;padding:.9rem}
+.pane .chat-bubble{background:var(--surface);border-radius:1.1rem 1.1rem 1.1rem .3rem;padding:.6rem .85rem;max-width:85%;font-size:.9375rem}
+.pane .chat-bubble.user{align-self:flex-end;background:var(--tint);color:var(--on-tint);border-radius:1.1rem 1.1rem .3rem 1.1rem}
+.pane .chat-tool{background:var(--tint-subtle);border-radius:.6rem;padding:.25rem .6rem;font-size:.8rem;align-self:flex-start}
+
+/* gym + page pieces */
+.pane .split-day-card{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem .5rem 1rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.85rem}
+.pane .split-day-card.selected{background:linear-gradient(var(--highlight-open),var(--highlight-open)) var(--surface-secondary)}
+.pane .split-day-card .btn-sm{background:var(--surface-solid)}
+.pane .split-day-select{flex:1;min-height:44px;display:flex;align-items:center;gap:.5rem;font-weight:700;text-align:left}
+.pane .history-entry{border-radius:.75rem;padding:.5rem .6rem;display:flex;align-items:center;gap:.6rem}
+.pane .history-entry.open{background-color:var(--highlight-open)}
+.pane .history-chevron{color:var(--secondary);width:14px;height:14px}
+.pane .history-entry.open .history-chevron{color:var(--text);transform:rotate(90deg)}
+.pane .history-exercise{padding:.35rem .6rem;border-radius:.5rem;font-size:.875rem}
+.pane .history-exercise:nth-child(odd){background:var(--highlight)}
+.pane .session-timer{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
+.pane .session-timer.paused{opacity:.5}
+.pane .muscle-chip{border-radius:999px;background:var(--surface-secondary);color:var(--text);min-height:2.25rem;padding:.3rem .85rem;font-size:.85rem;font-weight:600}
+.pane .muscle-chip.active{background:var(--tint-subtle)}
+.pane .muscle-stage{background:var(--highlight);border-radius:1rem;height:6rem;display:grid;place-items:center;color:var(--secondary);font-size:.8rem}
+.pane .muscle-move{background:var(--surface-secondary);color:var(--secondary);min-height:2.25rem;padding:.3rem .8rem;font-size:.85rem;border-radius:.7rem}
+.pane .muscle-move.active{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
+.pane .routine-row{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;background:var(--surface-solid);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.85rem}
+.pane .drag{color:var(--secondary);cursor:grab}
+.pane .item-total{font-size:clamp(2rem,9vw,2.7rem);font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1;text-align:center}
+.pane .item-currency{color:var(--tint)}
+.pane .item-link{color:var(--text);font-weight:600;text-decoration:none}
+.pane .dot{width:7px;height:7px;border-radius:50%;background:var(--tint);display:inline-block}
+.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem}
+.pane .signin-card{max-width:22rem;margin:0 auto;text-align:center;display:grid;gap:.9rem}
+.pane.hc{--surface:var(--surface-solid);--separator:var(--text);--edge:var(--text);--card-edge:var(--text)}
+.pane.rt{--surface:var(--surface-solid);--glass-blur:none}
+.pane svg{display:block}
+.ann{font-size:.7rem;color:var(--secondary);font-weight:600}
+.spacer{display:flex;align-items:center;gap:.4rem;font-size:.66rem;color:var(--secondary)}
+.spacer i{display:block;background:color-mix(in srgb, var(--danger) 35%, transparent);border-radius:2px}
+</style>
+
+<div class="doc">
+<nav class="toc" aria-label="Contents">
+  <details open>
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#how">How to use this page</a></li>
+      <li><a href="#principles">Principles</a></li>
+      <li><a href="#color">Color tokens</a></li>
+      <li><a href="#contrast">Contrast and color use</a></li>
+      <li><a href="#type">Typography</a></li>
+      <li><a href="#numerals">Key numerals</a></li>
+      <li><a href="#layout">Page layout and glow</a></li>
+      <li><a href="#spacing">Spacing inside a card</a></li>
+      <li><a href="#radius">Corner radii</a></li>
+      <li><a href="#elevation">Surfaces, raised and flat</a></li>
+      <li><a href="#buttons">Buttons</a></li>
+      <li><a href="#opacity">Opacity and disabled states</a></li>
+      <li><a href="#hover">Hover, focus and press</a></li>
+      <li><a href="#fields">Fields and selects</a></li>
+      <li><a href="#checkbox">Checkboxes</a></li>
+      <li><a href="#segmented">Segmented controls</a></li>
+      <li><a href="#nav">Tab bar, sidebar, More menu</a></li>
+      <li><a href="#badges">Badges and tags</a></li>
+      <li><a href="#lists">Lists and rows</a></li>
+      <li><a href="#fold">Category boxes and fold arrows</a></li>
+      <li><a href="#highlights">Highlights and washes</a></li>
+      <li><a href="#data">Progress and charts</a></li>
+      <li><a href="#modal">Modal and toast (Undo)</a></li>
+      <li><a href="#chat">Chat</a></li>
+      <li><a href="#pages">Page pieces</a></li>
+      <li><a href="#a11y">Accessibility modes</a></li>
+      <li><a href="#motion">Motion</a></li>
+      <li><a href="#decisions">Decisions D-020 to D-033</a></li>
+      <li><a href="#checklist">Checklist for new work</a></li>
+      <li><a href="#reuse">Reuse in another project</a></li>
+      <li><a href="#history">History and old files</a></li>
+    </ol>
+  </details>
+</nav>
+
+<main>
+<header class="top">
+  <h1>Life Tracker design system</h1>
+  <p class="lede">Every visual rule of the app in one place: the palette, type, spacing, every component in every state (active, inactive, hover, focus, disabled), opacity, highlights, motion and accessibility, with a live example of each in light and dark mode, and the decisions behind them. This is the latest version: read this one.</p>
+  <div class="meta">
+    <span class="chip">Version: aesthetics round 1 (D-033)</span>
+    <span class="chip">Built 2026-11-20</span>
+    <span class="chip">Source of truth: <code>app/globals.css</code></span>
+    <span class="chip">Repo copy: <code>docs/design/design-system.html</code></span>
+  </div>
+  <div class="modebar" role="group" aria-label="Page mode">This page: <button type="button" data-mode="auto">Auto</button><button type="button" data-mode="light">Light</button><button type="button" data-mode="dark">Dark</button> <span>(the examples always show both modes)</span></div>
+</header>
+
+<section id="how">
+  <h2>How to use this page</h2>
+  <ul class="rules">
+    <li><span class="rid">U1</span><span>Every rule has an ID (P1, B4, H2…): quote it in a request or a review ("this breaks B6").</span></li>
+    <li><span class="rid">U2</span><span>Every example is drawn twice, Light on the left and Dark on the right (stacked on a phone), with the app's own token values, so what you see is what the app draws. Hover works on the examples with a mouse; states that need an action (hover, focus) are also shown frozen.</span></li>
+    <li><span class="rid">U3</span><span>Code wins. If this page and <code>app/globals.css</code> ever differ, the CSS is right and this page is updated in the same change (golden rule 5). The decisions' full text, with the rejected options, is in <code>docs/kb/decisions/general.md</code>.</span></li>
+    <li><span class="rid">U4</span><span>Older design files are kept in <code>docs/design/</code> with names that start with <code>OLD-</code>. They are history: never build from them.</span></li>
+  </ul>
+</section>
+
+<section id="principles">
+  <h2>Principles</h2>
+  <p class="muted">The owner opens the app all day (food, gym, tasks). The look should feel serious, motivating, energetic and orderly, like Apple's native apps, with one accent everywhere (D-020, D-022).</p>
+  <ul class="rules">
+    <li><span class="rid">P1</span><span><b>Change the look, not the structure.</b> Aesthetic work never moves screens, adds features or changes layouts unless the owner asks for that change.</span></li>
+    <li><span class="rid">P2</span><span><b>One accent: turquoise.</b> It marks only what means "act" or "progress": the primary button, progress fills and rings, the active segment's dot, the focus ring, a checked checkbox, a selected chip. Never decoration (D-020, D-022).</span></li>
+    <li><span class="rid">P3</span><span><b>Accent and status colors are never text.</b> Text is <code>--text</code> or <code>--secondary</code>; a colored fill carries the dark <code>--on-tint</code> label. One exception: the Wishlist total's large "RON" (D-021, D-029).</span></li>
+    <li><span class="rid">P4</span><span><b>A status is never color alone.</b> A word always goes with it (a badge's text, a "Over" label) (D-022).</span></li>
+    <li><span class="rid">P5</span><span><b>Raised means you can act on it.</b> Buttons, fields, selects, checkboxes, chips, fold arrows, tabs: hairline edge + soft shadow. Tags, counts, info tiles stay flat. Containers (cards, sheets) keep the card look (D-031).</span></li>
+    <li><span class="rid">P6</span><span><b>Neutral grey for everything that is not the primary action.</b> Secondary, small, icon and toast buttons share <code>--surface-secondary</code>; selected states use a neutral wash or the subtle turquoise, never a solid accent (D-024, D-028).</span></li>
+    <li><span class="rid">P7</span><span><b>Two modes, one token list.</b> Dark and light follow the system, or the Auto / Light / Dark switch in Settings; every color token is written once with <code>light-dark(light, dark)</code> (D-020, D-024).</span></li>
+    <li><span class="rid">P8</span><span><b>"Alive" without animation.</b> Big bold numerals for key metrics, a clear weight hierarchy, glass cards on a turquoise glow. Nothing moves except the existing animations (<a href="#motion">Motion</a>) (D-022).</span></li>
+    <li><span class="rid">P9</span><span><b>One font: SF Mono</b> (monospace), for the even rhythm and aligned numerals (D-023).</span></li>
+    <li><span class="rid">P10</span><span><b>One style everywhere.</b> Set a style once on the shared structure (tokens, base element rules, shared classes) and let children inherit; no per-page copies. Wishlist is the reference page (CLAUDE.md, the plan's "Where styles go").</span></li>
+    <li><span class="rid">P11</span><span><b>No literal colors outside the token block.</b> Everything else is a token or a <code>color-mix()</code> of tokens (enforced by <code>tests/palette-contrast.test.ts</code>).</span></li>
+    <li><span class="rid">P12</span><span><b>Every change has an Undo toast</b>, the theme switch included (CLAUDE.md).</span></li>
+  </ul>
+</section>
+
+<section id="color">
+  <h2>Color tokens</h2>
+  <p>All tokens live in one <code>:root</code> block at the top of <code>app/globals.css</code>, with <code>color-scheme: light dark</code>. <code>[data-theme="light"]</code> / <code>[data-theme="dark"]</code> on <code>&lt;html&gt;</code> force a mode (the Settings switch, saved per device under <code>localStorage["lt-theme"]</code>, applied before first paint by an inline script). Every color token that differs between modes is also registered with <code>@property … { syntax: "&lt;color&gt;" }</code> so the mode change can fade (<a href="#motion">Motion</a>).</p>
+  <ul class="rules">
+    <li><span class="rid">C1</span><span>Use a token by its role, not by its look: a field is <code>--surface-secondary</code> because it is a control, not because it is "the light grey".</span></li>
+    <li><span class="rid">C2</span><span>Accent and status colors share about the same brightness in each mode: no pale colors in dark, no dull or brownish ones in light (D-020).</span></li>
+    <li><span class="rid">C3</span><span>A new color is a new token with both values, registered with <code>@property</code> and added to the fade list; never a literal in a rule.</span></li>
+  </ul>
+  <div id="tokens"></div>
+  <h3>Token recipe</h3>
+<pre><code>:root {
+  color-scheme: light dark;
+  --tint: light-dark(#199a81, #1eb698);
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+@property --tint { syntax: "&lt;color&gt;"; inherits: true; initial-value: transparent; }</code></pre>
+  <h3>Functional colors in use</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><span class="dot" style="background:var(--tint)"></span><span>tint: progress, primary, active dot, focus, checked</span></div>
+      <div class="row"><span class="dot" style="background:var(--success)"></span><span>success: good (with a word)</span></div>
+      <div class="row"><span class="dot" style="background:var(--warning)"></span><span>warning: attention (with a word)</span></div>
+      <div class="row"><span class="dot" style="background:var(--danger)"></span><span>danger: problem, over target, destructive</span></div>
+      <div class="row"><span class="badge badge-info">Info</span><span class="badge badge-warning">Warning</span><span class="badge badge-danger">Danger</span><span class="badge badge-rest">Rest</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="contrast">
+  <h2>Contrast and color use</h2>
+  <ul class="rules">
+    <li><span class="rid">K1</span><span>Text at least <b>4.5:1</b> in both modes: <code>--text</code> and <code>--secondary</code> on <code>--surface-solid</code>, <code>--surface-modal</code>, <code>--surface-secondary</code>, <code>--background</code>, on the background with the glow at its peak, and on the three <code>-subtle</code> fills over the card.</span></li>
+    <li><span class="rid">K2</span><span><code>--on-tint</code> (dark, the same in both modes) on <code>--tint</code>, <code>--tint-hover</code>, <code>--success</code>, <code>--warning</code>: at least 4.5:1. Never put <code>--on-tint</code> on <code>--danger</code> (4.2:1 in light).</span></li>
+    <li><span class="rid">K3</span><span>Colored fills at least <b>3:1</b> on the card and the page. One exception: light <code>--warning</code> #cc8c0a (2.9:1 on the card), the owner's choice; the status word carries the meaning, and the test holds it to 2.5.</span></li>
+    <li><span class="rid">K4</span><span>No colored fill on <code>--surface-secondary</code> (2.9:1 in light): a track is <code>--separator</code> or a <code>-subtle</code> fill.</span></li>
+    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes <code>--tint</code>, <code>--success</code>, <code>--warning</code> or <code>--danger</code> (fills, borders, <code>fill</code>, <code>stroke</code> may). Links are <code>--text</code>, weight 600, not underlined (D-029). Error text is <code>--text</code> 0.875rem, never red.</span></li>
+    <li><span class="rid">K6</span><span>The one exception to K5: <code>.item-currency</code>, the "RON" beside the Wishlist total, is <code>--tint</code> (large text, 3:1 as a fill), at the owner's request (D-029).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Right: text tokens, accent as a fill with on-tint</span>
+        <div class="row"><span>--text</span><span class="mutedt">--secondary</span><button type="button">Save</button><span class="badge badge-danger">Over</span></div></div>
+      <div><span class="lab">Wrong (never do this)</span>
+        <div class="row"><span style="color:var(--tint)">turquoise text</span><span style="color:var(--danger)">red error</span><span style="background:var(--danger);color:var(--on-tint);padding:2px 8px;border-radius:6px">on-tint on danger</span></div></div>
+      <p class="error">Error text: the message in --text, never red.</p>
+    </div>
+  </div></div>
+</section>
+
+<section id="type">
+  <h2>Typography</h2>
+  <ul class="rules">
+    <li><span class="rid">T1</span><span>One family everywhere: <code>ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace</code>; base 1.0625rem, line-height 1.5, antialiased (D-023).</span></li>
+    <li><span class="rid">T2</span><span>Headings: line-height 1.2, letter-spacing -0.015em, <code>text-wrap: balance</code>.</span></li>
+    <li><span class="rid">T3</span><span>Hierarchy by weight and size, not color: 800 for titles and numerals, 700 for buttons and labels in caps, 600 for row titles and small buttons, 500 for nav and messages.</span></li>
+    <li><span class="rid">T4</span><span>Numbers that line up use <code>.number-tabular</code> (<code>font-variant-numeric: tabular-nums</code>).</span></li>
+    <li><span class="rid">T5</span><span>On touch devices fields use 16px, so iOS does not zoom.</span></li>
+  </ul>
+  <table class="t">
+    <tr><th>Role</th><th>Class / element</th><th>Size</th><th>Weight</th><th>Other</th></tr>
+    <tr><td>Page title</td><td><code>.app-title</code></td><td>2rem (1.75rem ≤640px)</td><td>800</td><td>-0.025em</td></tr>
+    <tr><td>h1</td><td><code>h1</code></td><td>1.85rem (2.15rem ≥768px)</td><td>bold</td><td>-0.015em</td></tr>
+    <tr><td>h2</td><td><code>h2</code></td><td>1.3rem</td><td>bold</td><td></td></tr>
+    <tr><td>h3</td><td><code>h3</code></td><td>1.1rem</td><td>bold</td><td></td></tr>
+    <tr><td>Card title</td><td><code>.section-title</code></td><td>1.15rem</td><td>800</td><td>-0.01em</td></tr>
+    <tr><td>Key numeral</td><td><code>.metric-big .item-total .macro-numbers</code></td><td>clamp(2rem, 9vw, 2.7rem)</td><td>800</td><td>-0.03em, tabular</td></tr>
+    <tr><td>Ring value</td><td><code>.ring-text</code></td><td>1.75rem</td><td>800</td><td></td></tr>
+    <tr><td>Modal title</td><td><code>.modal-title</code></td><td>1.25rem</td><td>600</td><td></td></tr>
+    <tr><td>Workout timer</td><td><code>.session-timer</code></td><td>1.25rem</td><td>600</td><td>tabular</td></tr>
+    <tr><td>Body</td><td><code>body</code></td><td>1.0625rem</td><td>400</td><td>line-height 1.5</td></tr>
+    <tr><td>Nav link</td><td><code>.nav-link</code></td><td>0.9375rem</td><td>500</td><td><code>--secondary</code>, active <code>--text</code></td></tr>
+    <tr><td>Segment</td><td><code>.segmented button</code></td><td>0.9375rem (0.8125rem dense / ≤30rem)</td><td>600</td><td></td></tr>
+    <tr><td>Field label</td><td><code>label</code></td><td>0.9rem</td><td>600</td><td>grid, gap 0.35rem</td></tr>
+    <tr><td>Small button</td><td><code>.btn-sm</code></td><td>0.875rem</td><td>600</td><td></td></tr>
+    <tr><td>Toast message</td><td><code>.toast-message</code></td><td>0.875rem</td><td>500</td><td></td></tr>
+    <tr><td>Card sub line, average, error</td><td><code>.card-sub .metric-avg .error</code></td><td>0.875rem</td><td>400</td><td>sub and average <code>--secondary</code></td></tr>
+    <tr><td>Toast Undo</td><td><code>.toast-action-btn</code></td><td>0.8125rem</td><td>600</td><td></td></tr>
+    <tr><td>Row detail</td><td><code>.entry-detail</code></td><td>0.8rem</td><td>400</td><td><code>--secondary</code> (D-032)</td></tr>
+    <tr><td>Macro target</td><td><code>.macro-target</code></td><td>0.78rem</td><td>400</td><td><code>--secondary</code></td></tr>
+    <tr><td>Group label, macro title</td><td><code>.group-label .macro-title</code></td><td>0.75rem</td><td>700</td><td>uppercase, 0.06em, <code>--secondary</code></td></tr>
+    <tr><td>Badge</td><td><code>.badge</code></td><td>0.75rem</td><td>700</td><td>uppercase, 0.04em, <code>--text</code></td></tr>
+    <tr><td>Tab bar label</td><td><code>.tab-item</code></td><td>0.6875rem</td><td>600</td><td></td></tr>
+    <tr><td>Chart axis</td><td>axis labels</td><td>0.6875rem</td><td>400</td><td><code>--secondary</code></td></tr>
+  </table>
+  <div class="duo"><div class="pane">
+    <div class="col" style="gap:10px">
+      <p class="app-title">Gym</p>
+      <h2>Heading 2</h2>
+      <p class="section-title">Card title</p>
+      <span class="metric-big" style="margin:0">72.4</span>
+      <span>Body text in --text</span>
+      <span class="mutedt" style="font-size:.875rem">Card sub line in --secondary</span>
+      <span class="group-label" style="margin:0">Group label</span>
+      <span class="entry-detail">Row detail · Barbell</span>
+    </div>
+  </div></div>
+</section>
+
+<section id="numerals">
+  <h2>Key numerals</h2>
+  <ul class="rules">
+    <li><span class="rid">N1</span><span>Key metrics are big: <code>:is(.metric-big, .item-total, .macro-numbers)</code> → <code>clamp(2rem, 9vw, 2.7rem)</code>, 800, -0.03em, tabular. Used on: weight, water, steps, every macro value (Calories, Protein, Carbs, Fat; D-029), the Wishlist total, the Tasks done count ("of N done" stays small beside it). Gym has none (D-024).</span></li>
+    <li><span class="rid">N2</span><span>A big numeral and the 7-day average are trimmed to their letters (<code>text-box: trim-both cap alphabetic</code>) so the 1rem margins around them are the visible gaps (D-030).</span></li>
+    <li><span class="rid">N3</span><span>Numerals count up to a new value (ease-out cubic, 600ms; reduced motion jumps). That is one of the existing animations.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <div class="section-head" style="margin-bottom:1rem"><p class="section-title">Weight</p><button type="button" class="btn-sm">Add</button></div>
+      <p class="metric-big">72.4 <span style="font-size:1rem;font-weight:600;color:var(--secondary)">kg</span></p>
+      <p class="metric-avg">7-day average 72.9 kg</p>
+    </div>
+  </div></div>
+</section>
+
+<section id="layout">
+  <h2>Page layout and glow</h2>
+  <ul class="rules">
+    <li><span class="rid">L1</span><span>Page background: <code>--background</code> plus two fixed turquoise glow patches, <code>radial-gradient(75% 70% at 0% 0%, var(--glow), transparent)</code> and the same at 100% 100%, drawn by <code>body::before</code> / <code>::after</code>, <code>position: fixed</code>, 100lvh tall, so every page has the same background while it scrolls (D-025, one hue since D-029).</span></li>
+    <li><span class="rid">L2</span><span>On a centred card screen that never scrolls (sign-in, not found, error) the glow is <code>position: absolute</code>: iOS 26 Safari draws nothing fixed under its bottom bar (D-032).</span></li>
+    <li><span class="rid">L3</span><span><code>main</code> width: <code>min(100% - 1.5rem, 82rem)</code>; ≥640px <code>100% - 2.5rem</code>; ≥1024px <code>100% - 4rem</code>, max 84rem, and with the sidebar the left margin is <code>248px + 2rem</code>.</span></li>
+    <li><span class="rid">L4</span><span>Page grids: <code>.dashboard-grid</code> 1 column, gap 1.25rem; ≥992px <code>1.6fr 1fr</code>, gap 1.5rem; <code>.dashboard-grid-even</code> 1fr 1fr. <code>.page-head</code> margin-bottom 1.5rem; <code>.toolbar</code> 1.25rem. Gym cards keep 1.25rem between them (1.5rem ≥992px).</span></li>
+    <li><span class="rid">L5</span><span>Scrollbars are hidden. The tab bar is fixed 0.75rem from the sides and 0.5rem + safe area from the bottom; the toast sits bottom right at 1.5rem (on a phone centred above the tab bar at 5.75rem).</span></li>
+  </ul>
+  <div class="duo"><div class="pane" style="min-height:150px">
+    <span class="lab">The page: background + glow from the top left and bottom right</span>
+  </div></div>
+</section>
+
+<section id="spacing">
+  <h2>Spacing inside a card</h2>
+  <ul class="rules">
+    <li><span class="rid">S1</span><span>Card padding <code>--card-pad</code>: 1.35rem (1.6rem ≥768px).</span></li>
+    <li><span class="rid">S2</span><span>Title → content: 1rem visible. Block → block: 1rem. Groups: 1rem apart. A group label sits 0.25rem above its rows (D-030).</span></li>
+    <li><span class="rid">S3</span><span>The last row's text sits one card padding from the bottom edge; a card's last line (e.g. the 7-day average on Steps) drops its bottom margin (D-033).</span></li>
+    <li><span class="rid">S4</span><span>Rows carry 0.5rem padding top and bottom; a header right before a list keeps 0.5rem and the list 0.5rem (<code>.section-head:has(+ …)</code>). Gaps of 24–29px between groups come from band parity, not a different rule.</span></li>
+    <li><span class="rid">S5</span><span>A card's sub line sits 0.5rem under its title (<code>.card-sub</code>, D-031). <code>.section-head</code>: wrap, gap 1rem 0.75rem, margin-bottom 1rem.</span></li>
+    <li><span class="rid">S6</span><span>Forms: <code>.form-stack</code> gap 1rem; <code>.form-actions</code> buttons flex 1, gap 0.75rem; a header with two buttons gives them equal columns (<code>.head-actions</code>). In a dialog a list's text starts and ends at the body padding.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <p class="section-title">Steps</p>
+      <div class="spacer"><i style="width:10px;height:16px"></i>1rem</div>
+      <p class="metric-big">8,412</p>
+      <div class="progress-track"><div class="progress-fill" style="width:84%"></div></div>
+      <p class="metric-avg" style="margin-bottom:0">7-day average 7,930</p>
+      <div class="spacer" style="margin-top:4px"><i style="width:10px;height:21px"></i>card padding to the edge</div>
+    </div>
+  </div></div>
+</section>
+
+<section id="radius">
+  <h2>Corner radii</h2>
+  <p class="muted">The rounded corners stayed as they were in the palette work (plan, out of scope); the inner radius follows the outer one minus the padding.</p>
+  <table class="t">
+    <tr><th>Element</th><th>Radius</th></tr>
+    <tr><td>Tab bar, More menu, modal card</td><td>1.25rem</td></tr>
+    <tr><td>Card <code>.surface</code></td><td>1.15rem</td></tr>
+    <tr><td>Sidebar user box, muscle stage</td><td>1rem</td></tr>
+    <tr><td>Segmented track, toast</td><td>0.95rem</td></tr>
+    <tr><td>Tab bar thumb (inside the 1.25rem bar)</td><td>0.9375rem</td></tr>
+    <tr><td>Macro tile, chat log</td><td>0.9rem</td></tr>
+    <tr><td>Button, field, split-day card, routine row, delete icon, row action buttons</td><td>0.85rem</td></tr>
+    <tr><td>Nav link, list band</td><td>0.75rem</td></tr>
+    <tr><td>Small button, sort select, segmented thumb, toast buttons, muscle map back button</td><td>0.7rem (about 0.31 × height)</td></tr>
+    <tr><td>Badge, category box</td><td>0.6rem</td></tr>
+    <tr><td>Brand mark</td><td>0.55rem</td></tr>
+    <tr><td>History exercise row</td><td>0.5rem</td></tr>
+    <tr><td>Chat bubble</td><td>1.1rem 1.1rem 1.1rem 0.3rem (the tail corner)</td></tr>
+    <tr><td>Muscle chip</td><td>999px (pill)</td></tr>
+    <tr><td>Checkbox, modal close, avatar, dots</td><td>50% (round)</td></tr>
+    <tr><td>Progress and bar tracks</td><td>1rem</td></tr>
+  </table>
+</section>
+
+<section id="elevation">
+  <h2>Surfaces, raised and flat</h2>
+  <ul class="rules">
+    <li><span class="rid">E1</span><span>Surface steps, back to front: page <code>--background</code> → glass card <code>--surface</code> (60% alpha, on the glow) → control fill <code>--surface-secondary</code> → solid <code>--surface-solid</code> (tab bar, More menu, segmented thumb) → <code>--surface-modal</code> (modal, toast).</span></li>
+    <li><span class="rid">E2</span><span>The raised recipe is <code>border: 1px solid var(--card-edge); box-shadow: var(--card-shadow)</code>. It goes on: <code>.surface</code>, <code>.tabbar</code>, <code>.more-menu</code>, <code>.modal-card</code>, <code>.toast-item</code>, <code>.side-user</code>, <code>.segmented</code>, <code>.split-day-card</code>, <code>.routine-row</code>, <code>.custom-exercise</code>, every filled button, every field and select, the active nav link, category boxes and fold arrows (D-021, D-029–D-031).</span></li>
+    <li><span class="rid">E3</span><span>Flat (no edge, no shadow): badges and muscle tags (<code>--edge</code> is transparent), counts, Health's macro tiles, the chat log, and the clear controls that sit on a track: <code>.tab-item</code>, <code>.segmented button</code>, <code>.split-day-select</code>, <code>.history-toggle</code> (D-031).</span></li>
+    <li><span class="rid">E4</span><span>Cards carry no blur; the blur (<code>--glass-blur: blur(28px) saturate(160%)</code>) is only on surfaces content passes under: the sidebar and the scrims (modal 20px, More menu 8px).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="surface"><p class="section-title">Card (raised container)</p><p class="card-sub">glass --surface, hairline, soft shadow</p></div>
+      <div class="row"><button type="button" class="btn-sm">Raised: actionable</button><span class="badge badge-rest">Flat: a tag</span><span class="mutedt num">12 · flat count</span></div>
+      <div class="macro-grid" style="max-width:280px"><div class="macro-card"><span class="macro-title">Flat tile</span><span class="macro-numbers" style="font-size:1.6rem">142</span></div><div class="macro-card"><span class="macro-title">Info only</span><span class="macro-numbers" style="font-size:1.6rem">61</span></div></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="buttons">
+  <h2>Buttons</h2>
+  <ul class="rules">
+    <li><span class="rid">B1</span><span><b>Base button</b> (primary): <code>--tint</code> fill, <code>--on-tint</code> label, 700, -0.01em, padding 0.65rem 1.25rem, min-height 2.75rem, radius 0.85rem, <code>--card-edge</code> border, <code>--card-shadow</code>, inline-flex, gap 0.5rem. Hover: <code>--tint-hover</code>.</span></li>
+    <li><span class="rid">B2</span><span><b>Turquoise buttons that wait for their fields</b> (a form's Save = a button with no class, <code>.log-set</code>, the assistant's Send, sign-in <code>.signin-continue</code>): the border is <code>color-mix(in srgb, var(--tint), var(--text) 35%)</code>, because the hairline vanishes on turquoise (D-033).</span></li>
+    <li><span class="rid">B3</span><span><b>Disabled Save, Log set, Send</b> look like a grey secondary button: <code>--surface-secondary</code> fill, <code>--card-edge</code> border, still raised with <code>--card-shadow</code>, opacity 1, label <code>color-mix(in srgb, var(--text) 45%, transparent)</code>, so they read as a button that cannot be pressed yet (D-033, the owner's final choice).</span></li>
+    <li><span class="rid">B4</span><span><b>Disabled Continue</b> (sign-in, while it signs in) keeps its turquoise look: opacity 1, <code>cursor: progress</code>.</span></li>
+    <li><span class="rid">B5</span><span><b>Any other disabled button</b>: opacity 0.45, <code>cursor: not-allowed</code> (e.g. a day card's Start while a workout runs; buttons disabled for a moment while saving).</span></li>
+    <li><span class="rid">B6</span><span><b>Secondary</b> <code>.secondary</code>: <code>--text</code> on <code>--surface-secondary</code>. <b>Small</b> <code>.btn-sm</code>: the same fill, min-height 2.25rem, padding 0.35rem 0.85rem, 0.875rem/600, radius 0.7rem, a 44px hit area from <code>::before</code> (Add, More, Sign out, Edit, Start, Sort). Hover for both: <code>color-mix(--surface-secondary, --text 8%)</code>. Never turquoise (D-024, D-028).</span></li>
+    <li><span class="rid">B7</span><span><b>Danger</b> <code>.danger</code>: <code>--text</code> on <code>--danger-subtle</code>; hover <code>color-mix(--danger-subtle, --text 8%)</code>. The faint red fill, never a red label (D-022).</span></li>
+    <li><span class="rid">B8</span><span><b>Icon button</b> <code>.delete-icon-btn</code> (row Edit / Delete): 44×44, <code>--surface-secondary</code>, radius 0.85rem; disabled opacity 0.35. Row action small buttons (<code>.item-actions .btn-sm</code>) get min-height 44px and radius 0.85rem.</span></li>
+    <li><span class="rid">B9</span><span><b>A small button on a <code>--surface-secondary</code> box</b> takes <code>--surface-solid</code> so it stands out: Sign out in the sidebar user box, Start on a training day card (D-028, D-033).</span></li>
+    <li><span class="rid">B10</span><span><b>Clear controls</b> have no fill and no shadow: tab items, segments, the split-day select, the history toggle, a title's text button.</span></li>
+    <li><span class="rid">B11</span><span>Pressing changes nothing: no scale, no pulse, no press color (the owner's call, 2026-11-12).</span></li>
+  </ul>
+  <h3>Primary and the field-dependent buttons</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Save · rest · hover · focus · disabled (B2, B3)</span>
+        <div class="row"><button type="button">Save</button><button type="button" data-s="hover">Save</button><button type="button" data-s="focus">Save</button><button type="button" disabled>Save</button></div></div>
+      <div><span class="lab">Log set: enabled / disabled (full width)</span>
+        <div class="col" style="gap:8px"><button type="button" class="log-set">Log set</button><button type="button" class="log-set" disabled>Log set</button></div></div>
+      <div><span class="lab">Continue (sign-in) / signing in (B4)</span>
+        <div class="row"><button type="button" class="signin-continue">Continue</button><button type="button" class="signin-continue" disabled>Continue</button></div></div>
+    </div>
+  </div></div>
+  <h3>Neutral buttons</h3>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><span class="lab">Secondary · hover · disabled (B5, B6)</span>
+        <div class="row"><button type="button" class="secondary">Cancel</button><button type="button" class="secondary" data-s="hover">Cancel</button><button type="button" class="secondary" disabled>Cancel</button></div></div>
+      <div><span class="lab">Small · hover · disabled 0.45 (e.g. Start while a workout runs)</span>
+        <div class="row"><button type="button" class="btn-sm">Add</button><button type="button" class="btn-sm" data-s="hover">Add</button><button type="button" class="btn-sm" disabled>Start</button></div></div>
+      <div><span class="lab">Danger · hover</span>
+        <div class="row"><button type="button" class="danger">Delete</button><button type="button" class="danger" data-s="hover">Delete</button></div></div>
+      <div><span class="lab">Icon buttons · hover · disabled 0.35 (B8)</span>
+        <div class="row">
+          <button type="button" class="delete-icon-btn" aria-label="Edit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button type="button" class="delete-icon-btn" data-s="hover" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+          <button type="button" class="delete-icon-btn" disabled aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+        </div></div>
+    </div>
+  </div></div>
+  <h3>Recipe</h3>
+<pre><code>button { padding: .65rem 1.25rem; color: var(--on-tint); background: var(--tint);
+  border: 1px solid var(--card-edge); box-shadow: var(--card-shadow);
+  font-weight: 700; letter-spacing: -.01em; border-radius: .85rem; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+:is(button:not([class]), button.log-set, button.signin-continue) {
+  border-color: color-mix(in srgb, var(--tint), var(--text) 35%); }
+:is(button:not([class]), button.log-set):disabled { opacity: 1;
+  color: color-mix(in srgb, var(--text) 45%, transparent);
+  background: var(--surface-secondary); border-color: var(--card-edge); }
+button.secondary { color: var(--text); background: var(--surface-secondary); }
+button.danger    { color: var(--text); background: var(--danger-subtle); }
+@media (hover: hover) {
+  button:where(:hover:not(:disabled)) { background: var(--tint-hover); }
+  button.secondary:hover:not(:disabled), button.btn-sm:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%); } }</code></pre>
+</section>
+
+<section id="opacity">
+  <h2>Opacity and disabled states</h2>
+  <p>Opacity is used only for "not available now". Everything else that looks lighter is a token (<code>--secondary</code>, a <code>-subtle</code> fill, a wash), not opacity.</p>
+  <table class="t">
+    <tr><th>Value</th><th>Where</th><th>Rule</th></tr>
+    <tr><td>1 + label 45%</td><td>Disabled Save, Log set, Send</td><td>Grey secondary look; label <code>color-mix(--text 45%, transparent)</code> (B3)</td></tr>
+    <tr><td>1</td><td>Disabled Continue</td><td>Keeps turquoise, <code>cursor: progress</code> (B4)</td></tr>
+    <tr><td>0.45</td><td>Any other disabled button (Start while a workout runs, buttons while saving)</td><td><code>button:disabled</code> (B5)</td></tr>
+    <tr><td>0.5</td><td>Disabled checkbox; a daily task shown ahead of its day</td><td><code>:is(input[type=checkbox]:disabled, .todo-checkbox-btn.static:not(.checked))</code></td></tr>
+    <tr><td>0.5</td><td>Paused workout timer</td><td><code>.session-timer.paused</code></td></tr>
+    <tr><td>0.35</td><td>Disabled icon button</td><td><code>.delete-icon-btn:disabled</code></td></tr>
+    <tr><td>Alpha in tokens</td><td>Glass card 60%, subtle fills 16% light / 18% dark, hairline 8%, highlights 5–16%, row band 3%, scrim 28% / 50%</td><td>Token values, not <code>opacity</code></td></tr>
+  </table>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><button type="button" disabled>Save</button><button type="button" class="btn-sm" disabled>Start</button><input type="checkbox" disabled aria-label="disabled"><input type="checkbox" checked disabled aria-label="disabled checked"></div>
+      <div class="row"><span class="session-timer">24:18</span><span class="session-timer paused">24:18</span><span class="ann">running / paused</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="hover">
+  <h2>Hover, focus and press</h2>
+  <ul class="rules">
+    <li><span class="rid">Y1</span><span>Hover exists only under <code>@media (hover: hover)</code>, so a phone never keeps a stuck hover.</span></li>
+    <li><span class="rid">Y2</span><span>The hover steps: turquoise → <code>--tint-hover</code>; neutral fills (secondary, small, icon, toast Undo and close, modal close, category boxes, idle muscle chips, an unselected day card) → <code>color-mix(--surface-secondary, --text 8%)</code>; danger → <code>color-mix(--danger-subtle, --text 8%)</code>; fields and the sort select → 5%; idle tabs and segments → <code>--highlight</code> wash with <code>--text</code>; idle nav links → <code>--surface-secondary</code> with <code>--text</code>; the round close buttons also turn their icon to <code>--text</code>.</span></li>
+    <li><span class="rid">Y3</span><span>Focus: buttons and checkboxes get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover). The sort select shows the ring for the keyboard only (not after a pointer press, <code>data-pointer</code>).</span></li>
+    <li><span class="rid">Y4</span><span>Rows have no hover highlight. Press has no effect (B11).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><button type="button" class="secondary">Rest</button><button type="button" class="secondary" data-s="hover">Hover 8%</button><button type="button" class="secondary" data-s="focus">Focus ring</button></div>
+      <div class="row" style="max-width:420px"><input value="Rest" aria-label="rest"><input value="Hover 5%" data-s="fhover" aria-label="hover"><input value="Focus 8%" data-s="ffocus" aria-label="focus"></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="fields">
+  <h2>Fields and selects</h2>
+  <ul class="rules">
+    <li><span class="rid">F1</span><span>input, select, textarea: min-height 2.75rem, padding 0.65rem 0.95rem, <code>--surface-secondary</code>, <code>--card-edge</code> border, radius 0.85rem, <code>--card-shadow</code> (fields are actionable, so raised). Placeholder <code>--secondary</code>.</span></li>
+    <li><span class="rid">F2</span><span>A label is a grid above its field: gap 0.35rem, 600, 0.9rem.</span></li>
+    <li><span class="rid">F3</span><span>The select's chevron is two <code>linear-gradient</code> strokes in <code>--secondary</code> (no data-URI, so it follows the token); <code>--chevron-end: 1rem</code>, padding-right 2.6rem.</span></li>
+    <li><span class="rid">F4</span><span><code>select.sort-select</code> (Sort in a card header): auto width, min-height 2.25rem, centred text, radius 0.7rem, edge and shadow; open = the 8% step.</span></li>
+    <li><span class="rid">F5</span><span><code>input[type=time]</code> uses <code>appearance: none</code> and <code>min-width: 0</code> so it never overflows on iOS (D-029). Touch devices use 16px font in fields.</span></li>
+    <li><span class="rid">F6</span><span>A select and its Add button do not sit side by side in a dialog: the select is full width, Add is a small button under it (D-033).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col" style="max-width:420px">
+      <label class="f">Name<input placeholder="e.g. Running shoes"></label>
+      <label class="f">Category<select><option>Sport</option><option>Home</option></select></label>
+      <div class="row"><select class="sort-select" aria-label="Sort"><option>Newest</option></select><button type="button" class="btn-sm">Add item</button></div>
+      <label class="f">Note<textarea rows="2" placeholder="Optional"></textarea></label>
+    </div>
+  </div></div>
+</section>
+
+<section id="checkbox">
+  <h2>Checkboxes</h2>
+  <ul class="rules">
+    <li><span class="rid">X1</span><span>One round style everywhere (<code>input[type=checkbox]</code> and <code>.todo-checkbox-btn</code>): a 1.25rem circle with a 1.5px <code>--secondary</code> ring.</span></li>
+    <li><span class="rid">X2</span><span>Checked: <code>--tint</code> fill and border with an <code>--on-tint</code> tick drawn as a mask (path <code>M3.5 8.5l3 3 6-6.5</code>, stroke 2.4, 0.75rem), so the tick follows the token.</span></li>
+    <li><span class="rid">X3</span><span>Disabled or a task ahead of its day: opacity 0.5. Focus: the 2px <code>--tint</code> ring. The 44px tap target comes from <code>::after</code>.</span></li>
+    <li><span class="rid">X4</span><span>A finished task or a bought item is struck through in <code>--secondary</code>.</span></li>
+    <li><span class="rid">X5</span><span>A check with a label (<code>.toggle-label</code>): min-height 44px, 0.9375rem/500, left-aligned in a column (D-031).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><input type="checkbox" aria-label="a"><input type="checkbox" checked aria-label="b"><input type="checkbox" data-s="focus" aria-label="c"><input type="checkbox" disabled aria-label="d"><span class="ann">off · on · focus · disabled</span></div>
+      <div class="entries" style="margin:0">
+        <div class="entry"><input type="checkbox" aria-label="e"><div class="entry-main"><span class="entry-title">Call the dentist</span></div></div>
+        <div class="entry"><input type="checkbox" checked aria-label="f"><div class="entry-main"><span class="entry-title done">Buy milk</span></div></div>
+      </div>
+      <label class="toggle-label"><input type="checkbox">Deload session</label>
+    </div>
+  </div></div>
+</section>
+
+<section id="segmented">
+  <h2>Segmented controls</h2>
+  <ul class="rules">
+    <li><span class="rid">G1</span><span>Track: <code>--surface-secondary</code>, padding 0.25rem, gap 0.25rem, radius 0.95rem, raised (edge + shadow), everywhere, inside a card too (D-030).</span></li>
+    <li><span class="rid">G2</span><span>Thumb (<code>::before</code>): <code>--surface-solid</code>, <code>--card-edge</code>, <code>--card-shadow</code>, radius 0.7rem, placed by <code>translateX(calc(var(--i) * (100% + gap)))</code>; it jumps, no slide.</span></li>
+    <li><span class="rid">G3</span><span>Items are clear: min-height 2.25rem, 0.9375rem/600, <code>--secondary</code>; the active one is <code>--text</code> with a 6px <code>--tint</code> dot after the label. Idle hover: <code>--highlight</code> + <code>--text</code>.</span></li>
+    <li><span class="rid">G4</span><span>Five or more items, or a phone ≤30rem: <code>.dense</code>, 0.8125rem. <code>.has-short</code> swaps to short labels below a 29rem container.</span></li>
+    <li><span class="rid">G5</span><span>Used for: Personal / Business, Daily / Today, Today / Shop / AI, the Wishlist price range, chart ranges, the Auto / Light / Dark switch.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="segmented" style="--n:2;--i:0"><button type="button" class="active">Personal</button><button type="button">Business</button></div>
+      <div class="segmented" style="--n:3;--i:1"><button type="button">Today</button><button type="button" class="active">Shop</button><button type="button">AI</button></div>
+      <div class="segmented" style="--n:3;--i:0"><button type="button" class="active">Auto</button><button type="button">Light</button><button type="button">Dark</button></div>
+      <div class="segmented dense" style="--n:5;--i:2"><button type="button">All</button><button type="button">&lt;250</button><button type="button" class="active">250+</button><button type="button">750+</button><button type="button">Sale</button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="nav">
+  <h2>Tab bar, sidebar, More menu</h2>
+  <ul class="rules">
+    <li><span class="rid">V1</span><span><b>Tab bar</b> (phone): the segmented colors swapped. Bar <code>--surface-solid</code>, opaque, no blur, radius 1.25rem, raised; selected item thumb <code>--surface-secondary</code>, radius 0.9375rem, with edge and <code>--card-shadow</code> (D-026, D-028, D-029).</span></li>
+    <li><span class="rid">V2</span><span>Tab items: icon over label, min-height 3.5rem, 0.6875rem/600, <code>--secondary</code>; active <code>--text</code>, <b>no dot</b> (D-025). Idle hover: <code>--highlight</code>.</span></li>
+    <li><span class="rid">V3</span><span><b>More menu</b>: <code>--surface-solid</code> like the bar, radius 1.25rem, on a <code>--scrim</code> with an 8px blur. Its Settings link is a raised button in one centred column (D-026, D-030).</span></li>
+    <li><span class="rid">V4</span><span><b>Sidebar</b> (≥1024px): 248px, glass <code>--surface</code> with the blur, <code>--card-edge</code> right border. Nav links min-height 2.75rem, radius 0.75rem, <code>--secondary</code> 0.9375rem/500; active (and More menu links) <code>--surface-secondary</code> + <code>--text</code> + edge + shadow; hover <code>--surface-secondary</code>.</span></li>
+    <li><span class="rid">V5</span><span>Brand mark 1.75rem, radius 0.55rem, <code>--tint</code> with <code>--on-tint</code>. User box <code>--surface-secondary</code>, radius 1rem, raised; its Sign out takes <code>--surface-solid</code> (B9). Avatar 2rem circle. The sync dot (<code>.cloud-pulse-dot</code>) is 7px <code>--tint</code>.</span></li>
+    <li><span class="rid">V6</span><span>The app opens on Tasks (D-028).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="tabbar" style="--n:5;--i:0">
+        <button type="button" class="tab-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Tasks</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>Gym</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>Health</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7"/></svg>Wishlist</button>
+        <button type="button" class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
+      </div>
+      <div class="row" style="align-items:start">
+        <div class="side">
+          <div class="brand"><span class="brand-mark">L</span>Life Tracker</div>
+          <a class="nav-link active" href="#nav">Tasks</a><a class="nav-link" href="#nav">Gym</a><a class="nav-link" href="#nav">Health</a>
+          <div class="side-user"><span class="avatar">A</span><button type="button" class="btn-sm">Sign out</button></div>
+        </div>
+        <div class="more" style="min-width:150px"><a class="nav-link" href="#nav">Settings</a></div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<section id="badges">
+  <h2>Badges and tags</h2>
+  <ul class="rules">
+    <li><span class="rid">D1</span><span>A badge is flat (P5): padding <code>calc(.25rem + .5px) .65rem calc(.25rem - .5px)</code> (centres the caps), border <code>--edge</code> (transparent), radius 0.6rem, <code>--text</code> 0.75rem/700, uppercase, 0.04em.</span></li>
+    <li><span class="rid">D2</span><span>Kinds: <code>info</code> <code>--tint-subtle</code> (Today, an exercise count, a price, a reminder time, Tasks' Carried over); <code>warning</code> and <code>danger</code> a <code>-subtle</code> fill + a 6px dot of the status color + the word (Wishlist range 250-750 and 750+, a set anomaly); <code>rest</code> <code>--highlight-fill</code> (Rest, Deload, muscle tags, Wishlist range &lt; 250).</span></li>
+    <li><span class="rid">D3</span><span>The Wishlist list's range badges drop their dot (<code>.item-range::before</code>) and share one width in their own column; the filter keeps the dot (D-029).</span></li>
+    <li><span class="rid">D4</span><span>Gym muscle tags (<code>.muscle-tag</code>, a rest badge) share one width, the longest label's ("Hamstrings"): <code>min-width: calc(10ch + .4em + 1.3rem + 2px)</code>, text centred, the tag left-aligned in its column, under the exercise name (D-031).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row"><span class="badge badge-info">Today</span><span class="badge badge-info num">6</span><span class="badge badge-info num">649 RON</span><span class="badge badge-info num">08:30</span><span class="badge badge-info">Carried over</span></div>
+      <div class="row"><span class="badge badge-rest">Rest</span><span class="badge badge-rest">Deload</span><span class="badge badge-warning">250-750</span><span class="badge badge-danger">750+</span><span class="badge badge-danger">Anomaly</span></div>
+      <div class="row"><span class="badge badge-warning item-range">250-750</span><span class="badge badge-danger item-range">750+</span><span class="ann">in the Wishlist list: no dot</span></div>
+      <div class="stack"><span class="badge badge-rest muscle-tag">Chest</span><span class="badge badge-rest muscle-tag">Hamstrings</span><span class="badge badge-rest muscle-tag">Back</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="lists">
+  <h2>Lists and rows</h2>
+  <ul class="rules">
+    <li><span class="rid">R1</span><span><code>.entries</code>: gap 0.25rem. Rows (<code>.entry-row</code>, <code>.todo-row</code>, <code>.shopping-row</code>) have 0.5rem vertical padding; <code>.entry-row</code> gap 1rem.</span></li>
+    <li><span class="rid">R2</span><span>Bands: every even row gets <code>color-mix(in srgb, var(--text) 3%, transparent)</code>, radius 0.75rem; the band reaches out <code>--band-out</code> (0.75rem; inside a card <code>calc(var(--card-pad) + 1px - .5rem)</code>, so the row text keeps the card's padding line). No hover highlight on rows.</span></li>
+    <li><span class="rid">R3</span><span>Row text: title 600 <code>--text</code>; meta 0.875rem <code>--secondary</code>; detail lines (<code>.entry-detail</code>, 0.8rem <code>--secondary</code>) for a muscle map exercise's days and a custom exercise's equipment (D-032).</span></li>
+    <li><span class="rid">R4</span><span>A meal row is three lines (name; kcal · P; C · F), a shopping row two (name; amount and unit), no dot after the name (D-029).</span></li>
+    <li><span class="rid">R5</span><span>Long lists: 10 rows, then a centred More button under the last row (<code>useMore</code> adds 10 inline; <code>useMoreDialog</code> opens the full list in a modal; both exist, pending the owner's choice).</span></li>
+    <li><span class="rid">R6</span><span>Empty list: <code>.empty-note</code>, <code>--secondary</code> 0.9375rem, centred, padding 1.5rem 0, keeping one row height (<code>--row-h</code>, 3.75rem).</span></li>
+    <li><span class="rid">R7</span><span>Group label: 0.75rem/700, 0.06em, uppercase, <code>--secondary</code>, 0.25rem above its rows.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface">
+      <div class="section-head"><p class="section-title">Meals</p><button type="button" class="btn-sm">Add</button></div>
+      <div class="entries">
+        <div class="entry"><div class="entry-main"><span class="entry-title">Oats with berries</span><span class="entry-meta num">420 kcal · P 18</span><span class="entry-meta num">C 68 · F 9</span></div><button type="button" class="delete-icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+        <div class="entry"><div class="entry-main"><span class="entry-title">Chicken bowl</span><span class="entry-meta num">620 kcal · P 48</span><span class="entry-meta num">C 60 · F 18</span></div><button type="button" class="delete-icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+        <div class="entry"><div class="entry-main"><span class="entry-title">Greek yogurt</span><span class="entry-meta num">180 kcal · P 17</span><span class="entry-meta num">C 6 · F 10</span></div><button type="button" class="delete-icon-btn" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></div>
+      </div>
+      <div class="more-btn"><button type="button" class="btn-sm">More</button></div>
+    </div>
+  </div></div>
+  <div class="duo"><div class="pane">
+    <div class="surface"><p class="section-title">Water</p><p class="empty-note">Nothing logged today.</p></div>
+  </div></div>
+</section>
+
+<section id="fold">
+  <h2>Category boxes and fold arrows</h2>
+  <ul class="rules">
+    <li><span class="rid">W1</span><span>A category title of a grouped list (Wishlist, Tasks Daily, shopping groups; <code>GroupToggle</code>) is a box: <code>--surface-secondary</code>, <code>--card-edge</code>, radius 0.6rem, <code>--card-shadow</code>, <code>--text</code> label, the arrow inside after the text; min-height 1.875rem, padding 0.25rem 0.55rem 0.25rem 0.7rem, gap 0.35rem (D-029).</span></li>
+    <li><span class="rid">W2</span><span>A fold arrow alone in its box (a card's, a workout exercise's) has even side padding 0.625rem, so it sits centred pointing right and down; <code>vertical-align: middle</code> (D-033).</span></li>
+    <li><span class="rid">W3</span><span>The arrow points right when closed and turns 90° down when open (<code>[aria-expanded="true"] svg { transform: rotate(90deg) }</code>), instantly. Hover: the 8% step.</span></li>
+    <li><span class="rid">W4</span><span>In a started workout the exercise name is plain text; only the arrow box beside it folds the exercise (D-033).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div><button type="button" class="fold" aria-expanded="true">Sport<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></div>
+      <div><button type="button" class="fold" aria-expanded="false">Home<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></div>
+      <p class="section-title">Categories <button type="button" class="fold lone" aria-expanded="false" aria-label="Show"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></p>
+      <p class="section-title">Bench press <button type="button" class="fold lone" aria-expanded="true" aria-label="Hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></p>
+    </div>
+  </div></div>
+</section>
+
+<section id="highlights">
+  <h2>Highlights and washes</h2>
+  <p>Every "this one is different" state uses one of these, from faintest to strongest. Selected neutral states never use the solid accent.</p>
+  <table class="t">
+    <tr><th>Token / mix</th><th>Light</th><th>Dark</th><th>Used for</th></tr>
+    <tr><td>Row band <code>color-mix(--text 3%, transparent)</code></td><td colspan="2">3% of the text color</td><td>Even list rows (R2)</td></tr>
+    <tr><td><code>--highlight</code></td><td>rgba(15,26,43,.05)</td><td>rgba(238,243,248,.06)</td><td>Idle tab / segment hover, odd History exercise rows, set bands in a workout card, the muscle map stage</td></tr>
+    <tr><td><code>--highlight-fill</code></td><td>rgba(15,26,43,.1)</td><td>rgba(238,243,248,.16)</td><td>Rest badge fill (Rest, Deload, muscle tags, range &lt; 250)</td></tr>
+    <tr><td><code>--highlight-open</code></td><td>rgba(15,26,43,.1)</td><td>rgba(0,0,0,.3) (darker, not lighter)</td><td>The chosen training day, the open History workout (D-033)</td></tr>
+    <tr><td><code>--tint-subtle</code></td><td>teal 16%</td><td>teal 18%</td><td>Info badges, a picked muscle chip, a chat tool line</td></tr>
+    <tr><td><code>color-mix(--surface-secondary, --text 5%)</code></td><td colspan="2">5% toward text</td><td>Field and sort-select hover</td></tr>
+    <tr><td><code>color-mix(--surface-secondary, --text 8%)</code></td><td colspan="2">8% toward text</td><td>Neutral button hover, field focus, open sort select, an active muscle-map back button, an unselected day card hover</td></tr>
+  </table>
+  <ul class="rules">
+    <li><span class="rid">H1</span><span>A selected container is a wash over its own fill, drawn as <code>linear-gradient(var(--highlight-open), var(--highlight-open)) var(--surface-secondary)</code>, so the fill under it stays (the chosen day card).</span></li>
+    <li><span class="rid">H2</span><span>The open History workout: <code>.history-entry.open { background-color: var(--highlight-open) !important }</code>; its chevron turns <code>--text</code> and points down. Its exercises use <code>--highlight</code> bands on odd rows, radius 0.5rem.</span></li>
+    <li><span class="rid">H3</span><span>The owner rejected the turquoise <code>--tint-subtle</code> for the chosen day and a lighter wash in dark mode (D-033).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="entries" style="margin:0"><div class="entry">Row 1</div><div class="entry">Row 2 (band)</div><div class="entry">Row 3</div></div>
+      <div class="split-day-card"><span class="split-day-select">Push A <span class="badge badge-info">Today</span></span><button type="button" class="btn-sm">Start</button></div>
+      <div class="split-day-card selected"><span class="split-day-select">Pull A <span class="badge badge-info num">6</span></span><button type="button" class="btn-sm">Start</button></div>
+      <div class="history-entry open"><svg class="history-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg><b>Legs</b><span class="mutedt" style="font-size:.85rem">15.11</span></div>
+      <div><div class="history-exercise">Squat 4 × 6</div><div class="history-exercise">Leg press 3 × 10</div><div class="history-exercise">Calf raise 3 × 15</div></div>
+      <div class="row"><button type="button" class="muscle-chip">Chest</button><button type="button" class="muscle-chip active">Back</button><span class="badge badge-rest">Rest</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="data">
+  <h2>Progress and charts</h2>
+  <ul class="rules">
+    <li><span class="rid">Q1</span><span>Progress bar: track 0.45rem <code>--separator</code>, radius 1rem; fill <code>--tint</code>; over target <code>.over</code> → <code>--danger</code>, always with a word.</span></li>
+    <li><span class="rid">Q2</span><span>Ring: track <code>--separator</code>, fill <code>--tint</code> with a round cap, value 1.75rem/800 in <code>--text</code>; on Tasks the ring is centred on the whole card, the title top left and the count under it; it shrinks below 132px on a narrow card (D-030). The ring counts up from 0 (900ms).</span></li>
+    <li><span class="rid">Q3</span><span>Bars (<code>.hbars</code>): track 0.6rem <code>--separator</code>, fill <code>--tint</code>, value <code>--secondary</code> 600.</span></li>
+    <li><span class="rid">Q4</span><span>Line chart: line <code>--tint</code>, stroke 2.5; grid <code>--separator</code>; axis labels 0.6875rem <code>--secondary</code>; an empty chart keeps its height (<code>.chart-note</code>, 140px + 1.375rem). Gym's progress chart has a trimmed left gutter (D-031).</span></li>
+    <li><span class="rid">Q5</span><span>The muscle map keeps its own group colors (not the palette) (D-022).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="row" style="gap:18px">
+        <svg width="110" height="110" viewBox="0 0 120 120" role="img" aria-label="ring"><circle class="ring-track" cx="60" cy="60" r="50" fill="none" stroke-width="10"/><circle class="ring-fill" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="110" transform="rotate(-90 60 60)"/><text class="ring-text" x="60" y="70" text-anchor="middle">65%</text></svg>
+        <div class="col" style="flex:1;min-width:150px;gap:10px">
+          <div class="progress-track"><div class="progress-fill" style="width:62%"></div></div>
+          <div class="progress-track"><div class="progress-fill over" style="width:100%"></div></div>
+          <span class="ann">Over by 120 kcal</span>
+        </div>
+      </div>
+      <div class="hbar"><span>Chest</span><div class="hbar-track"><div class="hbar-fill" style="width:80%"></div></div><span class="hbar-val">12</span></div>
+      <div class="hbar"><span>Back</span><div class="hbar-track"><div class="hbar-fill" style="width:55%"></div></div><span class="hbar-val">8</span></div>
+      <svg viewBox="0 0 300 110" width="100%" height="110" role="img" aria-label="line chart"><line class="line-grid" x1="28" x2="296" y1="20" y2="20"/><line class="line-grid" x1="28" x2="296" y1="55" y2="55"/><line class="line-grid" x1="28" x2="296" y1="90" y2="90"/><text class="axis" x="0" y="24">74</text><text class="axis" x="0" y="94">71</text><path class="line-path" d="M30 40 L80 52 L130 47 L180 66 L230 72 L294 80"/></svg>
+    </div>
+  </div></div>
+</section>
+
+<section id="modal">
+  <h2>Modal and toast (Undo)</h2>
+  <ul class="rules">
+    <li><span class="rid">M1</span><span>Modal: centred, never a bottom sheet. Scrim <code>--scrim</code> with blur(20px). Card <code>--surface-modal</code>, radius 1.25rem, max-width 36rem, raised. Title 1.25rem/600. Body padding 1.5rem (1.25rem on a phone).</span></li>
+    <li><span class="rid">M2</span><span>Close: a 1.75rem circle, <code>--surface-secondary</code>, <code>--secondary</code> icon (hover <code>--text</code> and the 8% fill), a 44px hit area from <code>::before</code>.</span></li>
+    <li><span class="rid">M3</span><span>Every change shows a toast with Undo (P12). Toast: <code>--surface-modal</code>, radius 0.95rem, padding 0.75rem 1.15rem, raised; message 0.875rem/500; Undo <code>.toast-action-btn</code> <code>--surface-secondary</code> 0.8125rem/600 radius 0.7rem, min 36×44; close <code>.toast-close-btn</code> <code>--secondary</code> icon, radius 0.7rem.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="scrim"><div class="modal-card">
+        <div class="modal-head"><p class="modal-title">Edit meal</p><button type="button" class="modal-close-btn" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+        <div class="modal-body"><div class="col"><label class="f">Name<input value="Chicken bowl"></label><div class="row" style="flex-wrap:nowrap"><button type="button" class="secondary" style="flex:1">Cancel</button><button type="button" style="flex:1">Save</button></div></div></div>
+      </div></div>
+      <div class="toast-item"><span class="toast-message">Meal deleted</span><button type="button" class="toast-action-btn">Undo</button><button type="button" class="toast-close-btn" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="chat">
+  <h2>Chat (Health assistant)</h2>
+  <ul class="rules">
+    <li><span class="rid">A1</span><span>Log: <code>--surface-secondary</code>, flat (<code>--edge</code>), radius 0.9rem, gap 0.75rem; an empty log collapses.</span></li>
+    <li><span class="rid">A2</span><span>Assistant bubble <code>--surface</code>, radius 1.1rem 1.1rem 1.1rem 0.3rem; the user's bubble is <code>--tint</code> with <code>--on-tint</code>; a tool line is <code>--tint-subtle</code>. Send follows B2 and B3.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="chat-log">
+        <div class="chat-bubble user">How much protein today?</div>
+        <div class="chat-tool">Read today's meals</div>
+        <div class="chat-bubble">83 g so far, 57 g to your goal.</div>
+      </div>
+      <div class="row" style="flex-wrap:nowrap"><input placeholder="Ask about your food" aria-label="message"><button type="button" disabled>Send</button></div>
+    </div>
+  </div></div>
+</section>
+
+<section id="pages">
+  <h2>Page pieces</h2>
+  <h3>Tasks</h3>
+  <ul class="rules">
+    <li><span class="rid">PT1</span><span>The progress card: the ring centred on the whole card, the title top left and the done count bottom left (big number, "of N done" small) (D-030).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface" style="display:grid;grid-template-columns:1fr auto;align-items:center;min-height:150px">
+      <div style="display:grid;align-content:space-between;height:100%"><p class="section-title">Today</p><p style="margin:0"><span class="metric-big" style="margin:0">4</span> <span class="mutedt" style="font-size:.875rem">of 6 done</span></p></div>
+      <svg width="110" height="110" viewBox="0 0 120 120" role="img" aria-label="ring"><circle class="ring-track" cx="60" cy="60" r="50" fill="none" stroke-width="10"/><circle class="ring-fill" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-dasharray="314" stroke-dashoffset="105" transform="rotate(-90 60 60)"/><text class="ring-text" x="60" y="70" text-anchor="middle">67%</text></svg>
+    </div>
+  </div></div>
+  <h3>Wishlist (the reference page)</h3>
+  <ul class="rules">
+    <li><span class="rid">PW1</span><span>The total is a big numeral, centred, with "RON" in <code>--tint</code> (K6). Item links are <code>--text</code> 600, not underlined; the link text <code>--secondary</code>.</span></li>
+    <li><span class="rid">PW2</span><span>Rows use subgrid columns (a container query at 34rem); on a phone a short row (no link) keeps its lines together, centred on its two stacked buttons (D-029).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface"><p class="section-title">Total</p><p class="item-total" style="margin:1rem 0 0">3.512 <span class="item-currency">RON</span></p></div>
+  </div></div>
+  <h3>Health</h3>
+  <ul class="rules">
+    <li><span class="rid">PH1</span><span>Nutrition: a 2 × 2 grid (gap 0.75rem) of flat tiles (<code>--surface-secondary</code>, radius 0.9rem, centred text): title 0.75rem uppercase <code>--secondary</code>, every value a big numeral, the target 0.78rem <code>--secondary</code> (D-029, D-031).</span></li>
+    <li><span class="rid">PH2</span><span>Weight, Steps and Water titles have no icons (D-030); their gaps around the 7-day average match (D-029, D-033). Meals show 10, then More opens a dialog.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="macro-grid">
+      <div class="macro-card"><span class="macro-title">Calories</span><span class="macro-numbers">1,640</span><span class="macro-target">of 2,400</span></div>
+      <div class="macro-card"><span class="macro-title">Protein</span><span class="macro-numbers">83</span><span class="macro-target">of 140 g</span></div>
+      <div class="macro-card"><span class="macro-title">Carbs</span><span class="macro-numbers">190</span><span class="macro-target">of 260 g</span></div>
+      <div class="macro-card"><span class="macro-title">Fat</span><span class="macro-numbers">52</span><span class="macro-target">of 70 g</span></div>
+    </div>
+  </div></div>
+  <h3>Gym</h3>
+  <ul class="rules">
+    <li><span class="rid">PG1</span><span>Training day cards: <code>--surface-secondary</code>, radius 0.85rem, padding 0.5rem 0.75rem 0.5rem 1rem, raised; the chosen day takes the <code>--highlight-open</code> wash (H1); their Start is <code>--surface-solid</code> (B9); the whole-row select is clear with min-height 44px (D-033).</span></li>
+    <li><span class="rid">PG2</span><span>Deload card: a card with the Edit button centred on the whole card (a grid spanning two rows; the head is <code>display: contents</code>) and the Deload session check under the text, its text one card padding from the bottom (D-031–D-033).</span></li>
+    <li><span class="rid">PG3</span><span>A started workout: each exercise card's title is plain text with a fold arrow box beside it (W2, W4), the muscle tag right under it; sets in <code>--highlight</code> bands; the set form is Reps, Value, Unit; Log set is full width (B2, B3); the timer is 1.25rem/600, faded to 0.5 when paused, and keeps counting while the app is closed (D-031); the session actions sit in a centred max-content column.</span></li>
+    <li><span class="rid">PG4</span><span>Routine rows and custom exercises: <code>--surface-solid</code>, radius 0.85rem, raised, with a drag handle (a dragged row gets z-index 2). My exercises: tag under the name, equipment on the next line in <code>.entry-detail</code>.</span></li>
+    <li><span class="rid">PG5</span><span>Muscle map: the stage is a <code>--highlight</code> panel 32rem tall; the back button (<code>.muscle-move</code>) is <code>--surface-secondary</code> with the card's corners, active 8%; chips are pills, a picked one <code>--tint-subtle</code> and raised; each exercise shows name, tag, then one line per split day (D-032).</span></li>
+    <li><span class="rid">PG6</span><span>History: a neutral open wash (H2), not turquoise (D-031, D-033).</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="col">
+      <div class="surface" style="display:grid;grid-template-columns:1fr auto;gap:.5rem 1rem;align-items:center">
+        <div><p class="section-title">Deload</p><p class="card-sub">Every 6th week, lighter sets.</p></div>
+        <button type="button" class="delete-icon-btn" style="grid-row:span 2" aria-label="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <label class="toggle-label" style="margin-bottom:calc(-1 * (44px - 1.5em) / 2)"><input type="checkbox">Deload session</label>
+      </div>
+      <div class="surface">
+        <div class="row" style="justify-content:space-between"><span class="session-timer">24:18</span><button type="button" class="btn-sm">Pause</button></div>
+        <p class="section-title" style="margin-top:1rem">Bench press <button type="button" class="fold lone" aria-expanded="true" aria-label="Hide"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"/></svg></button></p>
+        <div style="margin:.4rem 0 .8rem"><span class="badge badge-rest muscle-tag">Chest</span></div>
+        <div class="history-exercise" style="background:var(--highlight)">Set 1 · 8 × 70 kg</div>
+        <div class="history-exercise">Set 2 · 8 × 70 kg</div>
+        <div class="row" style="margin-top:.8rem;flex-wrap:nowrap"><input placeholder="Reps" aria-label="reps"><input placeholder="Value" aria-label="value"><select aria-label="unit"><option>kg</option></select></div>
+        <div style="margin-top:.8rem"><button type="button" class="log-set" disabled>Log set</button></div>
+      </div>
+      <div class="routine-row"><span class="drag">⋮⋮</span><div class="entry-main"><span class="entry-title">Romanian deadlift</span><span class="badge badge-rest muscle-tag" style="justify-self:start">Hamstrings</span><span class="entry-detail">Barbell</span></div><button type="button" class="delete-icon-btn" aria-label="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6l-1 14H6L5 6"/></svg></button></div>
+      <div class="muscle-stage">3D muscle map (own group colors)</div>
+      <div class="row"><button type="button" class="muscle-move">Back</button><button type="button" class="muscle-move active">Front</button></div>
+    </div>
+  </div></div>
+  <h3>Sign-in and the other centred screens</h3>
+  <ul class="rules">
+    <li><span class="rid">PS1</span><span>The card sits in the middle (the full dynamic height, the same space above and below); its dot is <code>--tint</code> (D-026); its glow is absolute (L2); Continue follows B2 and B4. The same <code>CenterCard</code> serves not found and error.</span></li>
+  </ul>
+  <div class="duo"><div class="pane">
+    <div class="surface signin-card"><p class="section-title" style="justify-content:center"><span class="dot"></span>Life Tracker</p><p class="card-sub" style="margin:0">Sign in to continue</p><button type="button" class="signin-continue">Continue</button></div>
+  </div></div>
+</section>
+
+<section id="a11y">
+  <h2>Accessibility modes</h2>
+  <ul class="rules">
+    <li><span class="rid">X6</span><span><code>prefers-contrast: more</code>: <code>--surface</code> becomes <code>--surface-solid</code>; <code>--separator</code>, <code>--edge</code> and <code>--card-edge</code> become <code>--text</code>, so every edge is a visible outline.</span></li>
+    <li><span class="rid">X7</span><span><code>prefers-reduced-transparency</code>: <code>--surface</code> becomes solid, <code>--glass-blur: none</code>, the scrims lose their blur.</span></li>
+    <li><span class="rid">X8</span><span><code>prefers-reduced-motion</code>: the theme fade and the number count-up are skipped.</span></li>
+    <li><span class="rid">X9</span><span>Every tap target is at least 44px (small buttons, close buttons, checkboxes and segments add it with a pseudo-element, without changing their look).</span></li>
+    <li><span class="rid">X10</span><span>The axe scans run in four Playwright projects (desktop, phone, desktop-light, phone-light) on every page; nothing is excluded.</span></li>
+  </ul>
+  <div class="duo"><div class="pane hc">
+    <span class="lab">prefers-contrast: more</span>
+    <div class="surface"><p class="section-title">Card</p><div class="row" style="margin-top:1rem"><button type="button" class="btn-sm">Add</button><span class="badge badge-rest">Rest</span></div></div>
+  </div></div>
+</section>
+
+<section id="motion">
+  <h2>Motion</h2>
+  <p>Nothing moves except these. A new animation needs the owner's explicit OK and becomes one of the existing ones (D-022, D-025).</p>
+  <table class="t">
+    <tr><th>What</th><th>How</th><th>Reduced motion</th></tr>
+    <tr><td>Dark ↔ light fade</td><td><code>fadeTheme()</code> (<code>app/components/theme.ts</code>) sets <code>data-theme-fade</code> on <code>&lt;html&gt;</code> for 600ms; <code>:root[data-theme-fade]</code> transitions the registered color tokens 0.5s ease; elements inherit, none has its own transition (D-025, D-026)</td><td>Skipped</td></tr>
+    <tr><td>Numbers count up</td><td><code>useAnimatedNumber</code>: ease-out cubic, 600ms from the last value; the ring 900ms from 0</td><td>Jumps</td></tr>
+    <tr><td>Not animated</td><td>The segmented and tab bar thumb (jumps), fold arrows (rotate instantly), hovers, presses, modals, toasts</td><td>—</td></tr>
+  </table>
+<pre><code>:root[data-theme-fade] {
+  transition-property: --background, --glow, --surface, /* …every registered color token… */;
+  transition-duration: .5s; transition-timing-function: ease; }</code></pre>
+</section>
+
+<section id="decisions">
+  <h2>Decisions D-020 to D-033</h2>
+  <p class="muted">The short form; the full text with every rejected option is in <code>docs/kb/decisions/general.md</code>. Later decisions win where they reverse earlier ones (marked).</p>
+  <table class="t">
+    <tr><th>ID</th><th>What was decided</th><th>Why / rejected</th></tr>
+    <tr><td>D-020</td><td>Slate surfaces, one teal-leaning turquoise accent (#1eb698 dark, #199a81 light); dark and light modes following the system or a manual switch; the functional colors one family of equal brightness.</td><td>Graphite felt flat. Rejected: warm graphite + amber, near-black + lime, blue accent, dark only, deep dull light colors, per-page accents.</td></tr>
+    <tr><td>D-021</td><td>Translucent glass cards with a 1px hairline and a soft shadow (<code>--card-edge</code>, <code>--card-shadow</code>).</td><td>Steps between page, card and field visible. Rejected: opaque flat cards, hairline only, heavy shadows.</td></tr>
+    <tr><td>D-022</td><td>"Alive" without motion: big numerals, accent only for progress / active / primary, clearer weights, status colors as fills with a word, never text; destructive = faint red fill.</td><td>Rejected: motion now, accent on every heading, recoloring the muscle map, decorative gradients, colored status text.</td></tr>
+    <tr><td>D-023</td><td>The font stays SF Mono.</td><td>Even letter widths, aligned numerals.</td></tr>
+    <tr><td>D-024</td><td>Build choices: subtle edge; numerals <code>clamp(2rem, 9vw, 2.7rem)</code>; classic green; Auto / Light / Dark in an always-shown Settings, per device (<code>lt-theme</code>); dark splash; golden light amber #cc8c0a; segmented and tab bar share one shape; small buttons neutral, selected states subtle turquoise.</td><td>Only Calories big: reversed by D-029.</td></tr>
+    <tr><td>D-025</td><td>No dot on the tab bar; one fixed glow behind every page; a 0.5s fade between modes.</td><td>Rejected: <code>background-attachment: fixed</code> (iOS), View Transitions. Tab bar colors and fade mechanism replaced by D-026.</td></tr>
+    <tr><td>D-026</td><td>Tab bar = segmented colors swapped (bar <code>--surface-solid</code>, thumb <code>--surface-secondary</code>); More menu matches; the fade animates registered tokens; sign-in centred with a <code>--tint</code> dot; tab bar corners 1.25rem.</td><td>Rejected: a transition on every element (snapped), glass tab bar.</td></tr>
+    <tr><td>D-027</td><td>Export via the share sheet and a router timeout.</td><td>Superseded by D-028 (export removed).</td></tr>
+    <tr><td>D-028</td><td>Export removed; the app opens on Tasks; secondary / small / icon / toast buttons share the opaque <code>--surface-secondary</code>, hover 8%; Sign out in the user box <code>--surface-solid</code>; tab bar thumb gets <code>--card-shadow</code>.</td><td>Rejected: <code>--surface-solid</code> buttons (sink in dark), a shadow on every button.</td></tr>
+    <tr><td>D-029</td><td>One turquoise glow; filled buttons take the card edge and shadow; segmented on the page raised; category titles are boxes; RON turquoise; range badges without the dot; links not underlined; every macro big; Meals More dialog; meal rows 3 lines.</td><td>Rejected: blue patch, shadow on clear controls, text-colored RON.</td></tr>
+    <tr><td>D-030</td><td>One raised look for every button, card and tab (segmented in cards too, active nav link); Tasks ring centred; no Health section icons; the shared spacing rules (S1–S6).</td><td>Rejected: per-card spacing tweaks.</td></tr>
+    <tr><td>D-031</td><td>Only actionable controls are raised; tags, counts and macro tiles flat; Gym round (Deload card, muscle tags one width, set form Reps / Value / Unit, neutral History wash); the timer keeps counting while closed.</td><td>Rejected: raising tags; dropping <code>extraKg</code>; auto-resume.</td></tr>
+    <tr><td>D-032</td><td>Sign-in glow absolute on iOS 26; Deload check padding; muscle map exercise lines; <code>.entry-detail</code>.</td><td>Flat grey disabled Log set: reversed by D-033.</td></tr>
+    <tr><td>D-033</td><td>Turquoise buttons in both states (mixed edge; disabled = grey secondary look with a 45% label); centred lone fold arrows; Steps bottom gap; Deload Edit centred; exercise folds by its arrow; day cards on the tile fill with Start on <code>--surface-solid</code>; <code>--highlight-open</code> for the chosen day and open History; full-width exercise select with Add under it.</td><td>Rejected: a turquoise edge on the grey disabled button, a turquoise label, simple 45% fade, <code>--tint-subtle</code> for the chosen day, changing <code>--highlight-fill</code>.</td></tr>
+  </table>
+</section>
+
+<section id="checklist">
+  <h2>Checklist for new work</h2>
+  <ul class="rules">
+    <li><span class="rid">Z1</span><span>Find the existing class or token first (this page, then <code>app/globals.css</code>); add a rule only when nothing covers it, on the shared structure (P10).</span></li>
+    <li><span class="rid">Z2</span><span>Pick the color by role (C1). Accent only for act / progress / active (P2); text only <code>--text</code> / <code>--secondary</code> (P3); a status gets a word (P4).</span></li>
+    <li><span class="rid">Z3</span><span>Can the user act on it? Raised (E2). Not? Flat (E3). A container? The card look.</span></li>
+    <li><span class="rid">Z4</span><span>Give it every state: rest, hover (in <code>@media (hover: hover)</code>), focus-visible, disabled (the opacity table), selected (the highlights table).</span></li>
+    <li><span class="rid">Z5</span><span>Check both modes, a phone width, 44px targets, and the change's Undo toast.</span></li>
+    <li><span class="rid">Z6</span><span>Run <code>npm run check</code> (the contrast test: pairs, no accent text, no literal colors, every differing token registered and faded) and the <code>@a11y</code> e2e scans (<code>npm run e2e</code>).</span></li>
+    <li><span class="rid">Z7</span><span>Update this page and the KB decision in the same change (golden rule 5).</span></li>
+  </ul>
+</section>
+
+<section id="reuse">
+  <h2>Reuse in another project</h2>
+  <p>A project-agnostic version of these rules, with general examples and the decisions as reusable reasons, is <code>docs/design/design-rules-general.html</code>: start a new project from that page. Or:</p>
+  <ol>
+    <li>Copy the token block (<a href="#color">Color tokens</a>), with <code>color-scheme: light dark</code>, the two <code>[data-theme]</code> rules and, if you want the fade, the <code>@property</code> registrations and the <code>[data-theme-fade]</code> rule.</li>
+    <li>Copy the recipes in this order: base (font, headings), surfaces and the raised recipe, buttons, fields, checkbox, segmented, badges, lists, modal and toast.</li>
+    <li>Keep the rules, change only the accent: replace <code>--tint</code>, <code>--tint-hover</code>, <code>--tint-subtle</code> and <code>--glow</code> together, then re-check K1–K4 (a contrast test like <code>tests/palette-contrast.test.ts</code> is worth copying too).</li>
+    <li>Keep the two-pane habit: review every component in light and dark side by side before calling it done.</li>
+  </ol>
+</section>
+
+<section id="history">
+  <h2>History and old files</h2>
+  <table class="t">
+    <tr><th>File</th><th>What it is</th><th>Status</th></tr>
+    <tr><td><code>docs/design/design-system.html</code></td><td>This page</td><td><b>Latest: read this one</b></td></tr>
+    <tr><td><code>docs/design/design-rules-general.html</code></td><td>The same rules made general (no project names), for new projects; version 1, 2026-11-20</td><td>A snapshot: not kept in sync with this page</td></tr>
+    <tr><td><code>docs/design/OLD-2026-11-19-palette-prototype.html</code></td><td>The clickable prototype shown before the palette build ("Life Tracker Palette"): the three choices, tokens and contrast before the build</td><td>Old: history only. Superseded where it differs (e.g. the tab bar dot, Calories-only big numeral, blue glow, turquoise small buttons, flat disabled Log set)</td></tr>
+    <tr><td><code>docs/kb/plans/color-palette.md</code></td><td>The build plan, token table and contrast pairs</td><td>Done except the iOS status bar check (steps 9–10)</td></tr>
+  </table>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+  // Draw every example twice: the light pane as written, and a dark copy beside it.
+  document.querySelectorAll('.duo').forEach(function(d){
+    var p=d.querySelector('.pane'); if(!p) return;
+    var c=p.cloneNode(true); c.classList.add('dk'); c.setAttribute('aria-hidden','true');
+    c.querySelectorAll('button,input,select,textarea,a').forEach(function(e){e.setAttribute('tabindex','-1')});
+    d.appendChild(c);
+  });
+  // Token swatches
+  var T=[
+    ['--background','#eef2f6','#0b0f14','Page color under the glow'],
+    ['--glow','rgba(25,154,129,.26)','rgba(30,182,152,.3)','The two fixed glow patches (D-029: one hue)'],
+    ['--surface','rgba(255,255,255,.6)','rgba(24,32,42,.6)','Glass card (60%), sidebar'],
+    ['--surface-solid','#ffffff','#18202a','Tab bar, More menu, segmented thumb, Start on a day card, routine rows'],
+    ['--surface-modal','#ffffff','#1c2530','Modal card, toast'],
+    ['--surface-secondary','#e4eaf1','#2e3a48','Fields, secondary / small / icon buttons, tracks, category boxes, day cards, macro tiles, tab bar thumb'],
+    ['--text','#0f1a2b','#eef3f8','All primary text, links, badge text, labels on neutral buttons'],
+    ['--secondary','#4a596b','#97a6b8','Muted text, inactive tabs and segments, chevrons, checkbox ring'],
+    ['--tint','#199a81','#1eb698','Primary button, progress, ring, active dot, focus ring, checked box, RON'],
+    ['--tint-hover','#22ab8f','#3cc9ad','Primary button hover'],
+    ['--on-tint','#04201b','#04201b','Label on turquoise (and on success / warning)'],
+    ['--tint-subtle','rgba(25,154,129,.16)','rgba(30,182,152,.18)','Info badge, picked muscle chip, chat tool line'],
+    ['--success','#259d51','#2bb95f','Good (fill / dot, with a word)'],
+    ['--warning','#cc8c0a','#e5a51f','Attention dot (with a word)'],
+    ['--warning-subtle','rgba(204,140,10,.16)','rgba(229,165,31,.18)','Warning badge fill'],
+    ['--danger','#e0444c','#ee5d63','Problem dot, over-target bar'],
+    ['--danger-subtle','rgba(224,68,76,.16)','rgba(238,93,99,.18)','Danger badge, destructive button'],
+    ['--separator','#d5dde6','#2a3441','Progress and chart tracks, chart grid'],
+    ['--card-edge','rgba(15,26,43,.08)','rgba(238,243,248,.08)','The 1px hairline of every raised thing'],
+    ['--shadow-near','rgba(15,26,43,.06)','rgba(0,0,0,.4)','First layer of --card-shadow (0 1px 2px)'],
+    ['--shadow-far','rgba(15,26,43,.28)','rgba(0,0,0,.75)','Second layer of --card-shadow (0 10px 24px -12px)'],
+    ['--highlight','rgba(15,26,43,.05)','rgba(238,243,248,.06)','Hover wash on tabs, odd History rows, set bands'],
+    ['--highlight-fill','rgba(15,26,43,.1)','rgba(238,243,248,.16)','Rest badge fill'],
+    ['--highlight-open','rgba(15,26,43,.1)','rgba(0,0,0,.3)','Chosen day, open History workout (D-033)'],
+    ['--scrim','rgba(15,26,43,.28)','rgba(0,0,0,.5)','Behind a modal (blur 20px) or the More menu (blur 8px)']
+  ];
+  var h='<table class="t"><tr><th>Token</th><th>Light</th><th>Dark</th><th>Role</th></tr>';
+  T.forEach(function(r){
+    h+='<tr><td><code>'+r[0]+'</code></td><td><span class="sw"><i><b style="background:'+r[1]+'"></b></i>'+r[1]+'</span></td><td><span class="sw"><i><b style="background:'+r[2]+'"></b></i>'+r[2]+'</span></td><td>'+r[3]+'</td></tr>';
+  });
+  h+='<tr><td><code>--card-shadow</code></td><td colspan="2"><code>0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far)</code></td><td>Every raised thing</td></tr>';
+  h+='<tr><td><code>--edge</code></td><td colspan="2"><code>transparent</code></td><td>Flat things: badges, tags, chat log</td></tr>';
+  h+='<tr><td><code>--glass-blur</code></td><td colspan="2"><code>blur(28px) saturate(160%)</code></td><td>Sidebar (none with reduced transparency)</td></tr>';
+  document.getElementById('tokens').innerHTML=h+'</table>';
+  // Page mode (this page's chrome only)
+  var root=document.documentElement, KEY='lt-design-mode';
+  function apply(m){ if(m==='light'||m==='dark') root.setAttribute('data-theme',m); else root.removeAttribute('data-theme');
+    document.querySelectorAll('[data-mode]').forEach(function(b){b.setAttribute('aria-pressed', String(b.getAttribute('data-mode')===(m||'auto')))}); }
+  var saved=null; try{saved=localStorage.getItem(KEY)}catch(e){}
+  apply(saved||'auto');
+  document.querySelectorAll('[data-mode]').forEach(function(b){b.addEventListener('click',function(){var m=b.getAttribute('data-mode');apply(m);try{ if(m==='auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY,m)}catch(e){}})});
+})();
+</script>

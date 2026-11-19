@@ -8,8 +8,8 @@ async function openWishlist(page: Page) {
   await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("an anonymous visit to the Wishlist goes to a sign-in page without serious violations", { tag: "@a11y" }, async ({ page }) => {
   await page.goto("/wishlist");
   await expect(page).toHaveURL(/\/signin$/);

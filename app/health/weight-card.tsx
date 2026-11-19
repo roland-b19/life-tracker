@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { BigNumber, Card, Field, FormModal } from "../components/blocks";
-import { ScaleIcon } from "../components/icons";
 import { EditButton, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
@@ -120,7 +119,7 @@ export function WeightCard({ today: initialToday, initial }: { today: string; in
 
   return (
     <>
-      <Card id="weight-title" title="Weight" icon={<ScaleIcon size={18} />} end={
+      <Card id="weight-title" title="Weight" end={
           current ? (
             <RowActions onEdit={openForm} onDelete={() => void handleDelete(current)} editLabel="Edit today's weight" deleteLabel="Delete today's weight" />
           ) : (

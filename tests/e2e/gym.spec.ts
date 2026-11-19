@@ -36,7 +36,7 @@ async function dismissToast(page: Page, message: string | RegExp) {
 
 // Opens the exercise (a closed exercise shows no set form) and logs one set of 5 reps at 60 kg; reps start at the day's minimum.
 async function logSet(page: Page) {
-  await page.getByRole("button", { name: EXERCISE, exact: true }).click();
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await page.getByLabel("Value").fill("60");
   await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
 }
@@ -44,8 +44,8 @@ async function logSet(page: Page) {
 const banner = (page: Page) => page.getByRole("region", { name: "Workout in progress" });
 const history = (page: Page) => page.getByRole("region", { name: "History" });
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Gym page has no serious violations, also with a day's editor open and a workout started", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openGym(page);
   await expectNoSeriousViolations(page);

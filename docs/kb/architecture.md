@@ -1,7 +1,7 @@
 ---
 summary: How Life Tracker is built: folders, request flow, auth, data model, feature flags, push and PWA, deploy variants, backups, CI and tests.
 covers: app/**, src/**, drizzle/**, drizzle.config.ts, next.config.ts, public/sw.js, worker/**, infra/**, Dockerfile, docker-compose.yml, docker/**, scripts/**, tests/**, playwright.config.ts, .github/workflows/**
-last_verified: 2026-11-18
+last_verified: 2026-11-20
 ---
 
 # Architecture
@@ -9,9 +9,9 @@ last_verified: 2026-11-18
 Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest. A separate `worker/` (Node, Docker) sends push reminders on Azure. Node 24 (`.nvmrc`).
 
 ## Parts
-- `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos, gym (largest), health (route `/health`, the home: `/` redirects to it; `/food` redirects there for good for old bookmarks and the installed app), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
+- `app/<feature>/`: a server `page.tsx` plus a `*-client.tsx`. Features: wishlist, todos (the home: `/` redirects to `/todos`, in `app/page.tsx` and in `public/sw.js`), gym (largest), health (route `/health`; `/food` redirects there for good for old bookmarks and the installed app), settings, signin. `app/components/` holds the shared UI (the Wishlist page is the reference).
 - `src/lib/`: data access and pure rules. `src/lib/rules.ts` keeps plain rules apart from zod so client bundles stay small. `src/lib/validations/*` holds zod schemas.
-- `src/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection, export).
+- `src/actions/*.ts`: server actions, one file per feature (todos, wishlist, gym, food, food-chat, claude-connection).
 - `src/server/`: auth (`requireUser()` for actions, `requirePageUser()` for pages and layouts) and db.
 - `src/db/schema.ts`: Drizzle schema; migrations in `drizzle/0000..0031`.
 - `worker/`: own `package.json` and Dockerfile; its deps stay out of the web app (tested).
@@ -42,6 +42,8 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 ## Flags, Claude, push, PWA
 - `src/lib/features.ts`: `NEXT_PUBLIC_CLAUDE_ENABLED` and `NEXT_PUBLIC_PUSH_ENABLED`, off unless `"true"`, inlined at build time (Dockerfile ARGs). Claude is on only for a local run with the `claude` CLI; push is on for Azure only.
 - Claude chat: `src/lib/claude-cli.ts` spawns the `claude` binary headless (no tools, empty temp dir, 90 s timeout, 2 concurrent children, 1 MB output cap, stdout never logged). `food-ai-chat.ts` validates the JSON reply and logs meals.
+- Settings is always shown; only its Claude card, and the page's read of the connection, sit behind the Claude flag.
+- Appearance (D-024): `app/components/appearance-card.tsx` keeps Auto / Light / Dark per device in `localStorage` `lt-theme` (`light` or `dark`; Auto is no key) and sets `data-theme` on `<html>`, which `app/globals.css` maps to `color-scheme`, so every `light-dark()` token follows. `themeScript` in `app/components/theme.ts` (not a client module, so the server root layout can import it) applies the stored choice from `<head>` before the first paint, through `InlineScript` (`app/components/inline-script.tsx`, Next's guide "Preventing flash before hydration"), which turns the script to `text/plain` when React renders it on the client so it neither runs again nor makes React warn; `<html>` has `suppressHydrationWarning` because the script changes it before React hydrates. A change of mode fades (D-025): `fadeTheme()` in the same file sets `data-theme-fade` on `<html>` for 600 ms, and `app/globals.css` animates the color tokens on `<html>` while it is set (each registered with `@property` as a `<color>`, D-026; elements follow through inheritance); the switch calls it before changing `data-theme`, and `app/providers.tsx` calls it on a system `prefers-color-scheme` change.
 - Token: the user pastes `claude setup-token` output in Settings; AES-256-GCM with `CLAUDE_TOKEN_KEY`, never returned to the client.
 - Push: the browser subscribes on Tasks (the reminder card, behind the flag); two Azure jobs run every minute from `worker/`: `enqueue.mjs` puts `{todoId,userId}` (ids only) on a Storage Queue, `send.mjs` re-reads the todo, checks the owner and sends web-push, dropping dead subscriptions.
 - PWA: `public/sw.js` has two caches: `life-tracker-v3` (static assets and the muscle model) and `life-tracker-pages-v2` (signed-in HTML, only same-day pages are served). Server actions and `/api` are never cached. `app/providers.tsx` triggers `router.refresh()` after writes. `app/components/page-cache.ts` clears the page cache on sign-out (its cache name must match `PAGES` in `public/sw.js`).
@@ -56,7 +58,7 @@ Next.js 16 (App Router) + TypeScript + Drizzle on Postgres, NextAuth v4, Vitest.
 
 ## Tests
 - Vitest, node environment, files run serially against one database. Outside CI the app role connects to the checkout's own database (`life_tracker_test` in the main folder, `life_tracker_test_<name>` in a worktree, created and migrated by `tests/global-setup.ts`, D-018), with credentials read from `.env.example` (D-006); in CI one `life_tracker` database as `postgres`, from the job's env only. Tests need Postgres (about 15 files); the rest are pure.
-- Playwright Test (D-005) in `tests/e2e/`, run by `npm run e2e` and excluded from Vitest: `playwright.config.ts` starts `next dev` on port 3100 with `AUTH_DEV=true`, the Claude flag on and a throwaway token key (D-017) against the same test database, in two Chromium projects (`desktop`, `phone` at 375 px; `phone` runs only the `@a11y` scans, the flow runs on `desktop`), one worker, no retries; `@axe-core/playwright` scans each visited page; specs: Wishlist, the `/health` weight card, Tasks (`/todos`), Gym (`/gym`), the Health Today and Shopping tabs and the shared categories card (Wishlist, Tasks Daily, Health shopping) and Settings (`/settings`, its Claude card and the data export download), with the shared sign-in, user cleanup and axe helper in `tests/e2e/helpers.ts`; each test's user is deleted afterwards. Details and gotchas: [conventions](conventions.md).
+- Playwright Test (D-005) in `tests/e2e/`, run by `npm run e2e` and excluded from Vitest: `playwright.config.ts` starts `next dev` on port 3100 with `AUTH_DEV=true`, the Claude flag on and a throwaway token key (D-017) against the same test database, in four Chromium projects (`desktop` and `phone` at 375 px in the dark scheme, `desktop-light` and `phone-light` in the light one; all but `desktop` run only the `@a11y` scans, the flows run on `desktop`), one worker, no retries; `@axe-core/playwright` scans each visited page; specs: Wishlist, the `/health` weight card, Tasks (`/todos`), Gym (`/gym`), the Health Today and Shopping tabs and the shared categories card (Wishlist, Tasks Daily, Health shopping) and Settings (`/settings`, the Appearance switch and its Claude card), with the shared sign-in, user cleanup and axe helper in `tests/e2e/helpers.ts`; each test's user is deleted afterwards. Details and gotchas: [conventions](conventions.md).
 - Guards worth knowing: `query-count.test.ts` (page query and byte budgets with two years of data), `infra-contract.test.ts` (string checks on the Bicep and scripts), `actions-anonymous` and `pages-auth` (auto-cover new files).
 
 ## Repo layout
