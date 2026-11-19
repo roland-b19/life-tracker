@@ -35,6 +35,7 @@ last_verified: 2026-11-19
 3. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
 
 ## Open questions
+- Tasks' "Carried over" badge uses `kind="carried"`, but `app/globals.css` has no `.badge-carried` rule, so it draws with no fill (found 2026-11-20 while building the design system): give it a fill, or map it to an existing kind?
 - Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
 
 ## Tracked migrations
