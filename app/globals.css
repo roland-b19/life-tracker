@@ -1061,11 +1061,14 @@ textarea:focus-visible {
 .signin-form .error { margin: 0; }
 /* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
 .signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
-/* Log set rests disabled until the set is filled in: it stays raised, in the neutral fill, and turns turquoise when it can log */
+/* Log set rests disabled until the set is filled in: flat, in the neutral fill, since it cannot be pressed yet; it turns
+   raised and turquoise once it can log (D-032) */
 button.log-set:disabled {
   opacity: 1;
   color: var(--secondary);
   background: var(--surface-secondary);
+  border-color: transparent;
+  box-shadow: none;
 }
 button.signin-continue:disabled {
   opacity: 1;
