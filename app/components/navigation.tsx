@@ -126,7 +126,7 @@ export function Navigation({ userName }: NavigationProps) {
       const { filename, text } = result;
       const file = new File([text], filename, { type: "text/plain" });
       // On a phone the share sheet saves it (Save to Files) and the page stays put. A download link there makes an iOS
-      // Home Screen app leave its page for a file viewer, and once that closes the app no longer responds (D-027).
+      // Home Screen app open a file viewer over its page and leaves a browser bar at the bottom once it closes (D-027).
       if (window.matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file] });
       } else {
