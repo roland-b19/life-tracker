@@ -482,12 +482,12 @@ export function TodosClient({
               </EmptyNote>
             ) : (
               <div className="dash-hero">
-                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
                 <div className="dash-hero-text">
                   {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
                   <BigNumber value={doneCount} of={`of ${totalCount} done`} />
                   <span className="muted">Today</span>
                 </div>
+                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
               </div>
             )}
           </Card>

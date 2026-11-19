@@ -339,8 +339,11 @@ export function ShoppingTab({
                     onChange={() => handleToggleShopping(item)}
                     label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
                   />
-                  <span>
-                    {item.name} <span className="shopping-qty">· {Number(item.amount)} {item.unit}</span>
+                  <span className="entry-main entry-stack">
+                    <span>{item.name}</span>
+                    <span>
+                      {Number(item.amount)} {item.unit}
+                    </span>
                   </span>
                 </div>
                 <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />

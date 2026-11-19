@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode } from "react";
 import { GripIcon, PencilIcon, TrashIcon } from "./icons";
+import { Modal } from "./modal";
 
 /**
  * The card around a list: the layout box the rows' bands widen into (globals.css). `wash`: every other row carries
@@ -100,6 +101,27 @@ export function useMore<T>(list: T[]) {
     </button>
   );
   return [list.slice(0, shown), more] as const;
+}
+
+/**
+ * A long list shows its first 10 rows; More (put it last inside the list's ListBox) opens the whole list in a dialog
+ * over the blurred page, drawn with the same `row` (Health's meals, D-029).
+ */
+export function useMoreDialog<T>(list: T[], title: string, row: (item: T) => ReactNode) {
+  const [open, setOpen] = useState(false);
+  const more = list.length > PAGE && (
+    <button key="more" type="button" className="btn-sm more-btn" onClick={() => setOpen(true)}>
+      More
+    </button>
+  );
+  const dialog = (
+    <Modal isOpen={open} onClose={() => setOpen(false)} title={title}>
+      <ListBox wash className="entries">
+        {list.map(row)}
+      </ListBox>
+    </Modal>
+  );
+  return [list.slice(0, PAGE), more, dialog] as const;
 }
 
 /**

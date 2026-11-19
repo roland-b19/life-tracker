@@ -90,7 +90,7 @@ describe("the palette's contrast, in both modes", () => {
   for (const [mode, name] of MODES) {
     const t = (n: string) => token(n, mode);
     const card = t("--surface-solid");
-    const glows = ["--glow-1", "--glow-2"].map((n) => over(t(n), t("--background")));
+    const glow = over(t("--glow"), t("--background"));
 
     it(`${name}: text and secondary text read on every surface`, () => {
       const backs: [string, Rgba][] = [
@@ -98,10 +98,9 @@ describe("the palette's contrast, in both modes", () => {
         ["--surface-modal", t("--surface-modal")],
         ["--surface-secondary", t("--surface-secondary")],
         ["--background", t("--background")],
-        ...glows.map((g, i): [string, Rgba] => [`--background under glow ${i + 1}`, g]),
+        ["--background under the glow", glow],
         ...["tint", "success", "warning", "danger"].map((k): [string, Rgba] => [`--${k}-subtle`, over(t(`--${k}-subtle`), card)]),
       ];
-      expect(glows).toHaveLength(2);
       for (const fg of ["--text", "--secondary"])
         for (const [label, bg] of backs) expect(contrast(t(fg), bg), `${fg} on ${label}`).toBeGreaterThanOrEqual(4.5);
     });
@@ -127,9 +126,10 @@ describe("the color rule in the CSS", () => {
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
   // D-021: the accent and the status colors are fills, never text. Only the color property is matched,
-  // not accent-color, background-color, border-color, fill or stroke.
+  // not accent-color, background-color, border-color, fill or stroke. The one exception the owner asked for (D-029) is
+  // the Wishlist total's large "RON" in the accent; the fill test above holds the accent to 3:1, enough for large text.
   it("no color: declaration takes an accent or status color", () => {
-    const colored = [...code.matchAll(/(?<![\w-])color\s*:\s*([^;}]+)/g)]
+    const colored = [...code.replace(/\.item-currency\s*\{\s*color:\s*var\(--tint\);\s*\}/, "").matchAll(/(?<![\w-])color\s*:\s*([^;}]+)/g)]
       .map((m) => m[0].trim())
       .filter((d) => /var\(--(tint|success|warning|danger)/.test(d));
     expect(colored).toEqual([]);

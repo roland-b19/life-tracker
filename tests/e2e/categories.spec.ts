@@ -85,7 +85,7 @@ const healthShopping: Surface = {
     await form.getByRole("combobox", { name: "Category", exact: true }).selectOption({ label: label(category) });
     await saveItem(page, form, `"name":"${name}"`, this.item(page, name));
   },
-  // A shopping row is one text, "<name> · 1 pcs", so the row is found by its Edit button.
+  // A shopping row's name and quantity are two lines, so the row is found by its Edit button.
   item: (page, name) => page.getByRole("button", { name: `Edit ${name}`, exact: true }),
 };
 

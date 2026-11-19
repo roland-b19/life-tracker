@@ -24,16 +24,16 @@ last_verified: 2026-11-19
 | Test database per worktree, created and migrated by a global setup; `AGENTS.md` ignored (D-018) | done |
 | Axe scans wait for the refresh a write left due (second `document-title` flake, D-019) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
-| New color palette: slate, one turquoise accent, dark and light modes with a manual switch (D-020 to D-028) | in progress, [plan](plans/color-palette.md) (approved 2026-11-19; built on `claude/palette-build-2d56b0` through step 8, waiting on the owner's iOS check, step 9) |
+| New color palette: slate, one turquoise accent, dark and light modes with a manual switch (D-020 to D-029) | in progress, [plan](plans/color-palette.md) (approved 2026-11-19; built on `claude/palette-build-2d56b0` through step 8, waiting on the owner's iOS check, step 9) |
 
 ## In progress
-- Color palette: steps 2–8, 11 and 12 built (tokens, light scans, surfaces, neutral small buttons, numerals, the Appearance switch, icons, docs), plus the owner's changes after trying it (D-025, D-026 and D-028: no navigation dot, the tab bar in the segmented colors swapped with the thumb's shadow, a fixed glow, a fade between modes, opaque secondary buttons, the app opening on Tasks), and the data export, which froze the iPhone app, removed (D-027, D-028); step 9 waits on the owner's iOS status bar check, then step 10.
+- Color palette: steps 2–8, 11 and 12 built (tokens, light scans, surfaces, neutral small buttons, numerals, the Appearance switch, icons, docs), plus the owner's changes after trying it (D-025, D-026 and D-028: no navigation dot, the tab bar in the segmented colors swapped with the thumb's shadow, a fixed glow, a fade between modes, opaque secondary buttons, the app opening on Tasks), the data export, which froze the iPhone app, removed (D-027, D-028), and the owner's per-page round (D-029: one turquoise glow, card edges on buttons and page-level tabs, category boxes, Wishlist, Tasks and Health fixes); the owner checks Gym next; step 9 waits on the owner's iOS status bar check, then step 10.
 
 ## Next steps
 1. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
 
 ## Open questions
-None.
+- Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
