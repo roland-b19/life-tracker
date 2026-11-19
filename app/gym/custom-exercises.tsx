@@ -93,7 +93,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
               <div className="entry-main entry-stack">
                 <strong>{e.name}</strong>
                 <Badge kind="rest" className="muscle-tag">{muscleLabel(e.muscleGroup)}</Badge>
-                <span className="muted">{cap(e.equipmentType)}</span>
+                <span className="muted entry-detail">{cap(e.equipmentType)}</span>
               </div>
               <RowActions onEdit={() => open(e)} onDelete={() => remove(e)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>

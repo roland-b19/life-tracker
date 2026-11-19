@@ -106,6 +106,13 @@ body::before {
 body::after {
   background: radial-gradient(75% 70% at 100% 100%, var(--glow), transparent);
 }
+/* A centered card screen (sign-in, not found, error) never scrolls, so its glow is part of the page, not fixed:
+   iOS 26 Safari draws nothing fixed under its bottom bar and fills that strip with the plain page color instead,
+   which showed as a bar under the glow. */
+body:has(.signin-page)::before,
+body:has(.signin-page)::after {
+  position: absolute;
+}
 
 /* No visible scrollbars anywhere; scrolling still works */
 * {
@@ -661,6 +668,8 @@ main {
 .deload-card { margin-bottom: 1.25rem; }
 /* The Deload session check sits right under the text, at the left (D-031) */
 .deload-card > .section-head { margin-bottom: 0; }
+/* The check keeps its 44px tap height but draws into the bottom padding, so its text sits one card padding from the edge */
+.deload-card > .toggle-label:last-child { margin-bottom: calc((1lh - 44px) / 2); }
 
 .split-day-card {
   padding: 1rem 1.25rem;
@@ -1052,6 +1061,12 @@ textarea:focus-visible {
 .signin-form .error { margin: 0; }
 /* The plain links on the not-found and error screens are real targets, not 20px lines of text. */
 .signin-form a { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; }
+/* Log set rests disabled until the set is filled in: it stays raised, in the neutral fill, and turns turquoise when it can log */
+button.log-set:disabled {
+  opacity: 1;
+  color: var(--secondary);
+  background: var(--surface-secondary);
+}
 button.signin-continue:disabled {
   opacity: 1;
   cursor: progress;
@@ -2006,12 +2021,10 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 .muscle-side .group-label { margin-bottom: 0.25rem; } /* label to row, as in every list (D-030) */
 .muscle-side .hbars { margin-top: 0.25rem; } /* same gap under the title as the exercise list */
 /* The list follows its title at the band gap, so the title sits where "Planned sets per week" does */
-.group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 4.59375rem; /* a name line and its muscle tag, 73.5px */ }
+.group-label + .list-box > .muscle-entries { margin-top: 0.25rem; --row-h: 6.04375rem; /* a name line, its muscle tag and one day line, 96.7px */ }
 .muscle-entries .entry-row > div { min-width: 0; overflow-wrap: anywhere; } /* a long exercise name wraps instead of pushing the sets out */
-.muscle-day {
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
-}
+/* A row's detail lines under its title and tag (the days an exercise is on, its equipment): smaller, muted */
+.entry-detail { font-size: 0.8rem; }
 @media (max-width: 760px) {
   .muscle-layout {
     grid-template-columns: 1fr;

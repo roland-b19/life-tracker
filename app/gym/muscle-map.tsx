@@ -422,11 +422,13 @@ export function MuscleExplorer({
                 {list.map((e) => (
                   <div key={e.exerciseId} className="entry-row">
                     <div className="entry-main entry-stack">
-                      <span>
-                        <strong>{e.exerciseName}</strong>
-                        <span className="muted muscle-day">{e.days.join(", ")}</span>
-                      </span>
+                      <strong>{e.exerciseName}</strong>
                       <Badge kind="rest" className="muscle-tag">{muscleLabel(e.muscleGroup)}</Badge>
+                      {e.days.map((day, i) => (
+                        <span key={i} className="muted entry-detail">
+                          {day}
+                        </span>
+                      ))}
                     </div>
                     <span className="muted number-tabular">
                       {e.targetSets} × {e.minReps} – {e.maxReps}
