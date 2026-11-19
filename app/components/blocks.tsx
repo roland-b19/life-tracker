@@ -250,27 +250,27 @@ export function Badge({ kind, className, children }: { kind?: string; className?
   return <span className={cx("badge", kind && `badge-${kind}`, className)}>{children}</span>;
 }
 
-/** The small tinted button of a card head or a toolbar; `icon` goes before the label. */
-export function TintButton({
+/** The small neutral button of a card head or a toolbar; `icon` goes before the label. */
+export function SmallButton({
   icon,
   className,
   children,
   ...button
 }: { icon?: ReactNode } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   return (
-    <button type="button" className={cx("btn-sm", "tint", className)} {...button}>
+    <button type="button" className={cx("btn-sm", className)} {...button}>
       {icon}
       {children}
     </button>
   );
 }
 
-/** "Add item", "Add category": the tinted button with a plus. */
+/** "Add item", "Add category": the small button with a plus. */
 export function AddButton({ children, ...button }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   return (
-    <TintButton icon={<PlusIcon size={14} />} {...button}>
+    <SmallButton icon={<PlusIcon size={14} />} {...button}>
       {children}
-    </TintButton>
+    </SmallButton>
   );
 }
 
@@ -419,7 +419,7 @@ export function FormActions({
       </button>
       <button
         type={onSubmit ? "button" : "submit"}
-        className={compact ? "btn-sm tint" : undefined}
+        className={compact ? "btn-sm" : undefined}
         disabled={busy || !canSubmit}
         onClick={onSubmit}
       >

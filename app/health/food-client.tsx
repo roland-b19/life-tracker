@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { appTime, toISODate } from "@/lib/format-date";
 import { visible } from "@/lib/validations/common";
 import { MAX_STEPS, MAX_WATER_ML } from "@/lib/validations/food";
-import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, TintButton, Toolbar } from "../components/blocks";
+import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
@@ -504,7 +504,7 @@ export function FoodClient({
               below
               actions={
                 <>
-                  <TintButton onClick={openGoals}>Edit goals</TintButton>
+                  <SmallButton onClick={openGoals}>Edit goals</SmallButton>
                   <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
                 </>
               }

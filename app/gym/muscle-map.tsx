@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, EmptyNote, GroupLabel, TintButton } from "../components/blocks";
+import { Card, EmptyNote, GroupLabel, SmallButton } from "../components/blocks";
 import { HBars } from "../components/charts";
 import { ArrowsIcon } from "../components/icons";
 import { ListBox } from "../components/lists";
@@ -305,7 +305,7 @@ function MuscleMap({
           </button>
         )}
         {/* Always rendered so the strip never shifts; it shows once the picked muscles differ from the day's */}
-        <TintButton
+        <SmallButton
           className="muscle-back"
           onClick={onGoBack}
           style={{ visibility: canGoBack ? "visible" : "hidden" }}
@@ -313,7 +313,7 @@ function MuscleMap({
           tabIndex={canGoBack ? 0 : -1}
         >
           Go back
-        </TintButton>
+        </SmallButton>
       </div>
     </div>
   );
@@ -374,14 +374,14 @@ export function MuscleExplorer({
       className="muscle-card"
       end={
         // Always rendered so the card never shifts when it appears
-        <TintButton
+        <SmallButton
           onClick={() => setSelected([])}
           style={{ visibility: selected.length ? "visible" : "hidden" }}
           aria-hidden={!selected.length}
           tabIndex={selected.length ? 0 : -1}
         >
           Show all
-        </TintButton>
+        </SmallButton>
       }
     >
       <div className="muscle-layout">

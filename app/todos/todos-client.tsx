@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, TintButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup } from "../components/blocks";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -498,7 +498,7 @@ export function TodosClient({
               <span className="push-toggle-label">
                 <BellIcon size={16} /> Task reminders
               </span>
-              <TintButton onClick={handleEnablePush}>Enable</TintButton>
+              <SmallButton onClick={handleEnablePush}>Enable</SmallButton>
             </Card>
           )}
         </DashboardAside>

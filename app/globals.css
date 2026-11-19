@@ -17,7 +17,6 @@
   --tint-hover: light-dark(#22ab8f, #3cc9ad);
   --on-tint: light-dark(#04201b, #04201b);
   --tint-subtle: light-dark(rgba(25, 154, 129, 0.16), rgba(30, 182, 152, 0.18));
-  --tint-highlight: light-dark(rgba(25, 154, 129, 0.24), rgba(30, 182, 152, 0.28));
   --success: light-dark(#259d51, #2bb95f);
   --success-subtle: light-dark(rgba(37, 157, 81, 0.16), rgba(43, 185, 95, 0.18));
   --warning: light-dark(#cc8c0a, #e5a51f);
@@ -32,8 +31,8 @@
                  0 10px 24px -12px light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
   --edge: light-dark(transparent, transparent);
   --glass-blur: blur(28px) saturate(160%);
-  /* Hover and selection highlights, all subtle: a wash on clear controls, a clearly stronger one on
-     filled controls (so it still reads over their fill), and a deeper tint on tinted buttons */
+  /* Neutral fills, all subtle: the fill of secondary and small buttons and the hover wash on clear controls, and a
+     clearly stronger one for the hover on filled controls (so it still reads over their fill) */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
   /* The dim behind a modal or the More menu */
@@ -988,10 +987,10 @@ button.signin-continue:disabled {
   cursor: progress;
 }
 
-/* Icon-only row actions (edit, delete): same tinted fill and size as the tinted text buttons */
+/* Icon-only row actions (edit, delete): the same neutral fill, edge and height as the small text buttons */
 .delete-icon-btn {
-  background: var(--tint-subtle);
-  border: none;
+  background: var(--highlight);
+  border: 1px solid var(--edge);
   color: var(--text);
   cursor: pointer;
   padding: 0;
@@ -1234,9 +1233,9 @@ button.signin-continue:disabled {
 }
 
 .toast-action-btn {
-  background: var(--tint-subtle);
+  background: var(--highlight);
   color: var(--text);
-  border: 0;
+  border: 1px solid var(--edge);
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1248,7 +1247,7 @@ button.signin-continue:disabled {
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: var(--tint-highlight);
+    background: var(--highlight-fill);
   }
 }
 
@@ -1300,12 +1299,6 @@ button.btn-sm {
   border: 1px solid var(--edge);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
-}
-
-button.btn-sm.tint {
-  color: var(--text);
-  background: var(--tint-subtle);
-  border-color: transparent;
 }
 
 /* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a raised
@@ -2266,18 +2259,15 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
    Shared polish, every page: hover fills on idle buttons, list rows as soft bands
    ========================================================================== */
 
-/* An idle (unselected or secondary) button takes a subtle highlight on hover; tinted buttons a deeper tint.
+/* An idle (unselected, secondary or small) button takes a deeper neutral fill on hover.
    With no hover shadows, every clickable object needs one of these fills. */
 @media (hover: hover) {
   button:where(:hover:not(:disabled)) { background: var(--tint-hover); } /* the plain filled button: any class rule wins */
   .split-day-card:not(.selected):hover { background-color: color-mix(in srgb, var(--surface-solid), var(--text) 6%); }
   button.secondary:hover:not(:disabled),
-  button.btn-sm:not(.tint):hover:not(:disabled) {
-    background: var(--highlight-fill);
-  }
-  button.btn-sm.tint:hover:not(:disabled),
+  button.btn-sm:hover:not(:disabled),
   .delete-icon-btn:hover:not(:disabled) {
-    background: var(--tint-highlight);
+    background: var(--highlight-fill);
   }
   button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-subtle), var(--text) 8%); }
   .muscle-chip:not(.active):hover {

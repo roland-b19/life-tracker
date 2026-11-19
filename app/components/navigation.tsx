@@ -175,7 +175,7 @@ export function Navigation({ userName }: NavigationProps) {
             <span className="user-avatar-circle">{initial}</span>
             <span>{userName}</span>
           </div>
-          <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
+          <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
             Sign out
           </button>
         </div>
@@ -197,7 +197,7 @@ export function Navigation({ userName }: NavigationProps) {
                 <span className="more-user-name">{userName}</span>
                 <span className="more-user-brand">Life Tracker</span>
               </div>
-              <button className="btn-sm tint signout-btn" type="button" onClick={signOutNow}>
+              <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
                 Sign out
               </button>
             </div>

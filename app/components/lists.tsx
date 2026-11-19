@@ -95,7 +95,7 @@ const PAGE = 10;
 export function useMore<T>(list: T[]) {
   const [shown, setShown] = useState(PAGE);
   const more = list.length > shown && (
-    <button key="more" type="button" className="btn-sm tint more-btn" onClick={() => setShown((n) => n + PAGE)}>
+    <button key="more" type="button" className="btn-sm more-btn" onClick={() => setShown((n) => n + PAGE)}>
       More
     </button>
   );

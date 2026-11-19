@@ -3,7 +3,7 @@
 import { addDays, formatDMY, toISODate } from "@/lib/format-date";
 import { weekStart } from "@/lib/gym-progress";
 import { useState } from "react";
-import { Banner, FormModal, SelectField, TintButton, Toggle } from "../components/blocks";
+import { Banner, FormModal, SelectField, SmallButton, Toggle } from "../components/blocks";
 import { PencilIcon } from "../components/icons";
 import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
@@ -78,7 +78,7 @@ export function DeloadCard({
         }
       >
         <span className="deload-actions">
-          <TintButton
+          <SmallButton
             icon={<PencilIcon size={14} />}
             disabled={busy}
             onClick={() => {
@@ -87,7 +87,7 @@ export function DeloadCard({
             }}
           >
             Edit
-          </TintButton>
+          </SmallButton>
           <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
         </span>
       </Banner>
