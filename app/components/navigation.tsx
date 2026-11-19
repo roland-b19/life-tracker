@@ -124,11 +124,20 @@ export function Navigation({ userName }: NavigationProps) {
       const result = await exportDataAction();
       if (!result.success) throw new Error(result.error);
       const { filename, text } = result;
-      const href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-      Object.assign(document.createElement("a"), { href, download: filename }).click();
-      URL.revokeObjectURL(href);
+      const file = new File([text], filename, { type: "text/plain" });
+      // On a phone the share sheet saves it (Save to Files) and the page stays put. A download link there makes an iOS
+      // Home Screen app leave its page for a file viewer, and once that closes the app no longer responds (D-027).
+      if (window.matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        const href = URL.createObjectURL(file);
+        Object.assign(document.createElement("a"), { href, download: filename }).click();
+        URL.revokeObjectURL(href);
+      }
       showToast({ message: "Exported your data", type: "success" });
-    } catch {
+    } catch (error) {
+      // Closing the share sheet without saving is a choice, not a failure.
+      if (error instanceof DOMException && error.name === "AbortError") return;
       showToast({ message: "Failed to export your data", type: "warning" });
     } finally {
       setExporting(false);

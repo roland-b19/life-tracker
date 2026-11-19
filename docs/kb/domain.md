@@ -13,7 +13,7 @@ last_verified: 2026-11-18
   - **Tasks:** spaces personal and business, daily or weekly recurrence, optional reminder time, overdue tasks carry over.
   - **Gym:** training split with days and exercises, sessions, sets, deload weeks, progress, custom exercises, a 3D muscle map.
   - **Food and health** (route `/health`, the home page; `/food` redirects there): Today (meals, water, steps), Weight, Shopping, and an Assistant tab that turns free text into logged meals.
-  - **Settings:** always shown. Appearance picks Auto (follow the system), Light or Dark for this device; with the Claude flag on, the Claude card connects a Claude token. Export of all data as plain text is the "Export data" button in the navigation menu; push reminders are set on Tasks.
+  - **Settings:** always shown. Appearance picks Auto (follow the system), Light or Dark for this device; with the Claude flag on, the Claude card connects a Claude token. Export of all data as plain text is the "Export data" button in the navigation menu (a download on a computer, the share sheet on a phone, D-027); push reminders are set on Tasks.
 - The UI has a dark and a light mode: it follows the system, or the Appearance switch in Settings (Auto, Light, Dark) kept per device. The Wishlist page is the visual reference; every page matches it. Every change has an Undo toast.
 - Out of scope: other users' data, sending health data to an AI provider.
 

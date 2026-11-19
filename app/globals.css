@@ -498,6 +498,11 @@ button.nav-link:disabled {
   gap: 0.25rem;
 }
 
+/* Each item's icon and label sit in the middle of the column, so the shorter one is centered too */
+.more-links .nav-link {
+  justify-content: center;
+}
+
 main {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom));
 }
