@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// The palette (D-020 to D-024) checked from the CSS itself: every color token in the first :root block is
+// The palette (D-020 to D-026) checked from the CSS itself: every color token in the first :root block is
 // light-dark(light, dark), so both modes are read from one place. Translucent colors are composited over
 // the solid card before the contrast is measured (WCAG 2 relative luminance).
 
@@ -140,5 +140,24 @@ describe("the color rule in the CSS", () => {
     const rest = code.replace(/:root(\[[^\]]*\])?\s*\{[^}]*\}/g, "").replace(/url\([^)]*\)/g, "url()");
     const literals = rest.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])(white|black)(?![\w-])/gi) ?? [];
     expect(literals).toEqual([]);
+  });
+
+  // D-025: the dark/light fade animates the tokens on <html>, so every color token that differs between the modes is
+  // registered as a <color> (or it would not interpolate) and listed in the fade's transition-property.
+  it("every color token that changes with the mode is registered and faded", () => {
+    const changing = [...tokens]
+      .filter(([, value]) => /^light-dark\(/.test(value.trim()))
+      .filter(([name]) => {
+        const [[light, dark]] = lightDarks(tokens.get(name)!);
+        return light !== dark;
+      })
+      .map(([name]) => name)
+      .sort();
+    const registered = [...code.matchAll(/@property\s+(--[\w-]+)\s*\{[^}]*syntax:\s*"<color>"/g)].map((m) => m[1]).sort();
+    const fade = /:root\[data-theme-fade\]\s*\{[^}]*transition-property:\s*([^;]+);/.exec(code);
+    const faded = (fade?.[1] ?? "").split(",").map((p) => p.trim()).sort();
+    expect(changing.length).toBeGreaterThan(20);
+    expect(registered).toEqual(changing);
+    expect(faded).toEqual(changing);
   });
 });

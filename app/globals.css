@@ -28,17 +28,15 @@
   /* Glass cards and floating surfaces get a hairline edge and a soft shadow; controls keep no edge.
      High contrast (below) brings the outlines back. A press changes nothing: no scale, no pulse (the user's call, 2026-11-12). */
   --card-edge: light-dark(rgba(15, 26, 43, 0.08), rgba(238, 243, 248, 0.08));
-  --card-shadow: 0 1px 2px light-dark(rgba(15, 26, 43, 0.06), rgba(0, 0, 0, 0.4)),
-                 0 10px 24px -12px light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
+  --shadow-near: light-dark(rgba(15, 26, 43, 0.06), rgba(0, 0, 0, 0.4));
+  --shadow-far: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.75));
+  --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
   --edge: light-dark(transparent, transparent);
   --glass-blur: blur(28px) saturate(160%);
   /* Neutral fills, all subtle: the fill of secondary and small buttons and the hover wash on clear controls, and a
      clearly stronger one for the hover on filled controls (so it still reads over their fill) */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
-  /* The selected item of the navigation (the tab bar, the More menu, the sidebar): a clearly darker or lighter fill
-     than the bar it sits on, with no dot (D-025) */
-  --nav-thumb: light-dark(rgba(15, 26, 43, 0.12), rgba(238, 243, 248, 0.18));
   /* The dim behind a modal or the More menu */
   --scrim: light-dark(rgba(15, 26, 43, 0.28), rgba(0, 0, 0, 0.5));
 }
@@ -51,8 +49,47 @@
   color-scheme: dark;
 }
 
-/* The glow patches: one layer each, the size of the screen, under all content. Each is drawn in currentColor, which
-   is a plain color, so the theme fade below can change it smoothly (a gradient's own colors cannot transition). */
+/* Switching between dark and light (the Appearance switch or the system) fades the colors instead of swapping them
+   at once (D-025). Each color token that differs between the modes is registered as a <color>, so it is computed to a
+   plain color in the active mode and can be animated: <html> animates the tokens themselves while theme.ts sets
+   data-theme-fade, and every element follows through inheritance, text included. Animating each element's own color
+   instead would chain (a child chases its parent's animated color) and snap when the attribute is removed. */
+@property --background { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --glow-1 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --glow-2 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-solid { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-modal { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --surface-secondary { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --text { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --secondary { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint-hover { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --tint-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --success { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --success-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --warning { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --warning-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --danger { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --danger-subtle { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --separator { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --card-edge { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --shadow-near { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --shadow-far { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --highlight-fill { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --scrim { syntax: "<color>"; inherits: true; initial-value: transparent; }
+
+:root[data-theme-fade] {
+  transition-property: --background, --glow-1, --glow-2, --surface, --surface-solid, --surface-modal,
+    --surface-secondary, --text, --secondary, --tint, --tint-hover, --tint-subtle, --success, --success-subtle,
+    --warning, --warning-subtle, --danger, --danger-subtle, --separator, --card-edge, --shadow-near, --shadow-far,
+    --highlight, --highlight-fill, --scrim;
+  transition-duration: 0.5s;
+  transition-timing-function: ease;
+}
+
+/* The glow patches: one layer each, the size of the screen, under all content */
 body::before,
 body::after {
   content: "";
@@ -65,22 +102,10 @@ body::after {
   pointer-events: none;
 }
 body::before {
-  color: var(--glow-1);
-  background: radial-gradient(75% 70% at 0% 0%, currentColor, transparent);
+  background: radial-gradient(75% 70% at 0% 0%, var(--glow-1), transparent);
 }
 body::after {
-  color: var(--glow-2);
-  background: radial-gradient(75% 70% at 100% 100%, currentColor, transparent);
-}
-
-/* Switching between dark and light (the Appearance switch or the system) fades the colors instead of swapping them
-   at once: theme.ts sets data-theme-fade on <html> for the length of the fade (D-025). */
-:root[data-theme-fade],
-:root[data-theme-fade] *,
-:root[data-theme-fade] *::before,
-:root[data-theme-fade] *::after {
-  transition: color 0.5s ease, background-color 0.5s ease, border-color 0.5s ease, outline-color 0.5s ease,
-    text-decoration-color 0.5s ease, fill 0.5s ease, stroke 0.5s ease, box-shadow 0.5s ease !important;
+  background: radial-gradient(75% 70% at 100% 100%, var(--glow-2), transparent);
 }
 
 /* No visible scrollbars anywhere; scrolling still works */
@@ -292,7 +317,7 @@ h3 {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--success);
+  background: var(--tint);
 }
 
 .app-title {
@@ -356,9 +381,9 @@ button.nav-link:disabled {
   }
 }
 
-/* The active item has the navigation's thumb, as in the tab bar */
+/* The active item has the navigation's thumb, as in the tab bar (D-026) */
 .nav-link.active {
-  background: var(--nav-thumb);
+  background: var(--surface-secondary);
   color: var(--text);
 }
 
@@ -369,13 +394,12 @@ button.nav-link:disabled {
   right: 0.75rem;
   bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 850;
-  /* The segmented control's shape on the glass (the shared rule under .segmented); content scrolls under it.
-     Its display is set here, not in the shared rule, so the desktop rule below can hide it. */
+  /* The segmented control's shape with its colors swapped (D-026): the bar is the segmented thumb's solid fill and
+     its thumb the segmented track's (below), the same as the More menu. Its display is set here, not in the shared
+     rule, so the desktop rule below can hide it. */
   display: grid;
   align-items: stretch;
-  background: var(--surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  background: var(--surface-solid);
 }
 .tabbar[data-idle]::before { opacity: 0; }
 
@@ -428,7 +452,7 @@ button.nav-link:disabled {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem;
-  background: var(--surface-modal);
+  background: var(--surface-solid); /* the tab bar's fill */
   border-radius: 1.25rem;
   transform-origin: bottom right;
 }
@@ -978,7 +1002,9 @@ textarea:focus-visible {
 /* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
 /* Sign-in: one card in the middle of the screen, built from the same parts as every page card */
 .signin-page {
-  min-height: 85vh;
+  /* The whole screen with the same space above and below, so the card sits in the middle */
+  min-height: 100dvh;
+  padding-block: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1326,7 +1352,7 @@ button.btn-sm {
 
 /* The segmented control and the tab bar share one shape: --n items on a track, kept apart by a gap, and a neutral
    thumb under the active item --i. The active label is --text; a segmented control adds a 6px --tint dot beside it,
-   the tab bar has none and a stronger thumb instead (below). */
+   the tab bar has none and swaps the colors instead (below). */
 :is(.segmented, .tabbar) {
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
   --seg-gap: 0.25rem; /* the items never touch */
@@ -1350,9 +1376,9 @@ button.btn-sm {
 }
 /* The thumb's radius, so the idle hover fill has its shape */
 :is(.segmented button, .tab-item) { border-radius: 0.7rem; }
-/* The tab bar's thumb stands out from the glass, flat like the More menu's selected item */
+/* The tab bar's thumb is the segmented track's fill, flat like the More menu's selected item */
 .tabbar::before {
-  background: var(--nav-thumb);
+  background: var(--surface-secondary);
   box-shadow: none;
 }
 
