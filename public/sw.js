@@ -35,9 +35,9 @@ self.addEventListener("fetch", (event) => {
 
   if (DEV || request.method !== "GET") return;
 
-  // The root only redirects to Health; doing it here lets the start from the Home Screen reach the cached page.
+  // The root only redirects to Tasks; doing it here lets the start from the Home Screen reach the cached page.
   if (request.mode === "navigate" && url.pathname === "/") {
-    event.respondWith(Response.redirect(new URL("/health", url.origin).href, 307));
+    event.respondWith(Response.redirect(new URL("/todos", url.origin).href, 307));
     return;
   }
   if (request.mode === "navigate" && SIGNED_IN.test(url.pathname)) {

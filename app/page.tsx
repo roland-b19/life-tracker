@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Weight moved into the Health page (/health).
+// The app starts on Tasks (/todos), the page the owner opens every day.
 export default function HomePage() {
-  redirect("/health");
+  redirect("/todos");
 }

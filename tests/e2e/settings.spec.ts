@@ -119,27 +119,6 @@ test("a signed-in user replaces the token and disconnects, with Undo for each, a
   await expect(account(page)).toBeVisible();
 });
 
-test("the export downloads the user's data and never the Claude token", async ({ signedInPage: page }) => {
-  // Hold a secret first, so the export has something it must leave out.
-  const token = fakeToken();
-  await openSettings(page);
-  await connect(page, token);
-
-  const exportButton = page.getByRole("navigation", { name: "Main Navigation" }).getByRole("button", { name: "Export data" });
-  const [download] = await Promise.all([page.waitForEvent("download"), exportButton.click()]);
-  expect(download.suggestedFilename()).toMatch(/^life-tracker-export-\d{4}-\d{2}-\d{2}\.txt$/);
-  await expect(page.getByText("Exported your data")).toBeVisible();
-
-  // Read in memory: nothing is saved outside the test's own output.
-  const chunks: Buffer[] = [];
-  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
-  const text = Buffer.concat(chunks).toString("utf8");
-  expect(text).toContain("Life Tracker: all your data");
-  expect(text).toContain("== Account (1) ==");
-  expect(text).not.toContain(token);
-  expect(text).not.toContain("sk-ant-");
-});
-
 const appearance = (page: Page) => page.getByRole("region", { name: "Appearance", exact: true });
 const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme ?? "auto");
 // The page color is the background of <html> (app/globals.css), a light-dark() token. A change of mode fades it while

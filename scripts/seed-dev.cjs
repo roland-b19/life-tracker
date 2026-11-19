@@ -223,35 +223,50 @@ async function seedFixtureDay(db, userId) {
   return `fixture day: 4 tasks on ${FIXTURE_DAY}`;
 }
 
-// [name, link, price]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover https, a bare domain and free text.
+// [name, link, price, category]; the priority follows the price (under 250 low, under 750 medium, else high). Links cover
+// https, a bare domain, free text and none; the categories leave one item under Other.
 const WISHLIST = [
-  ["Standing desk", "https://www.ikea.com/ro/ro/", 1450],
-  ["Mechanical keyboard", "emag.ro", 480],
-  ["Noise-cancelling headphones", "https://example.com/headphones", 1100],
-  ["Running shoes", "Decathlon", 320],
-  ["Desk lamp", null, 89.9],
-  ["Yoga mat", "decathlon.ro", 119],
-  ["Espresso machine", null, 899],
-  ["Water bottle", "emag", 45],
+  ["Standing desk", "https://www.ikea.com/ro/ro/", 1450, "home"],
+  ["Desk lamp", null, 89.9, "home"],
+  ["Linen bedding set", "https://www.ikea.com/ro/ro/", 340, "home"],
+  ["Robot vacuum", "emag.ro", 1290, "home"],
+  ["Mechanical keyboard", "emag.ro", 480, "tech"],
+  ["Noise-cancelling headphones", "https://example.com/headphones", 1100, "tech"],
+  ["E-reader", "https://example.com/e-reader", 699, "tech"],
+  ["USB-C hub", null, 149, "tech"],
+  ["Smart watch", "Garmin", 1650, "tech"],
+  ["Running shoes", "Decathlon", 320, "sport"],
+  ["Yoga mat", "decathlon.ro", 119, "sport"],
+  ["Adjustable dumbbells", "https://example.com/dumbbells", 890, "sport"],
+  ["Resistance bands", null, 65, "sport"],
+  ["Espresso machine", null, 899, "kitchen"],
+  ["Cast iron pan", "emag", 210, "kitchen"],
+  ["Chef's knife", "https://example.com/knife", 420, "kitchen"],
+  ["Water bottle", "emag", 45, "other"],
+  ["Weekend city break", "Booking", 1800, "other"],
 ];
 
 // Wishlist categories, in order; the seed files each item under one of them (or Other).
 const WISHLIST_CATEGORIES = ["home", "tech", "sport", "kitchen"];
-const WISHLIST_CATEGORY = { "Standing desk": "home", "Mechanical keyboard": "tech", "Noise-cancelling headphones": "tech", "Running shoes": "sport", "Desk lamp": "home", "Yoga mat": "sport", "Espresso machine": "kitchen" };
 
 async function seedWishlist(db, userId) {
-  if (!(await isEmpty(db, "wishlist_items", userId))) return "wishlist: skipped, the user has items";
   for (const [i, c] of WISHLIST_CATEGORIES.entries())
     await db.query(`INSERT INTO item_categories (user_id, scope, name, sort_order) VALUES ($1, 'wishlist', $2, $3) ON CONFLICT DO NOTHING`, [userId, c, i + 1]);
-  for (const [i, [itemName, link, price]] of WISHLIST.entries()) {
+  // Only the items the user does not have yet (by name), so a rerun or an account with its own items gets the rest.
+  const { rows } = await db.query(`SELECT name FROM wishlist_items WHERE user_id = $1`, [userId]);
+  const have = new Set(rows.map((r) => r.name));
+  let added = 0;
+  for (const [i, [itemName, link, price, category]] of WISHLIST.entries()) {
+    if (have.has(itemName)) continue;
     const priority = price >= 750 ? "high" : price >= 250 ? "medium" : "low";
     await db.query(
       `INSERT INTO wishlist_items (user_id, name, url, estimated_price, priority, category, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, now() - make_interval(days => $7))`,
-      [userId, itemName, link, price, priority, WISHLIST_CATEGORY[itemName] ?? "other", i * 3],
+      [userId, itemName, link, price, priority, category, i * 2],
     );
+    added++;
   }
-  return `wishlist: ${WISHLIST.length} items`;
+  return `wishlist: ${added} items added`;
 }
 
 // [name, muscle group, equipment]: the user's own exercises, beside the shared defaults.

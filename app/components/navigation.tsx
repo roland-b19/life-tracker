@@ -5,7 +5,6 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
-import { exportDataAction } from "@/actions/export";
 import { clearPageCache } from "./page-cache";
 
 interface NavigationProps {
@@ -116,42 +115,6 @@ export function Navigation({ userName }: NavigationProps) {
     router.refresh();
   };
 
-  const [exporting, setExporting] = useState(false);
-  // Everything the user owns as a .txt, built by the server and saved by the browser.
-  const exportData = async () => {
-    setExporting(true);
-    try {
-      const result = await exportDataAction();
-      if (!result.success) throw new Error(result.error);
-      const { filename, text } = result;
-      const file = new File([text], filename, { type: "text/plain" });
-      // On a phone the share sheet saves it (Save to Files) and the page stays put. A download link there makes an iOS
-      // Home Screen app open a file viewer over its page and leaves a browser bar at the bottom once it closes (D-027).
-      if (window.matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file] });
-      } else {
-        const href = URL.createObjectURL(file);
-        Object.assign(document.createElement("a"), { href, download: filename }).click();
-        URL.revokeObjectURL(href);
-      }
-      showToast({ message: "Exported your data", type: "success" });
-    } catch (error) {
-      // Closing the share sheet without saving is a choice, not a failure.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      showToast({ message: "Failed to export your data", type: "warning" });
-    } finally {
-      setExporting(false);
-    }
-  };
-  const exportButton = (
-    <button type="button" className="nav-link" onClick={exportData} disabled={exporting}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-      </svg>
-      <span>Export data</span>
-    </button>
-  );
-
   return (
     <>
       {/* Desktop sidebar (>= 1024px) */}
@@ -177,7 +140,6 @@ export function Navigation({ userName }: NavigationProps) {
               <span>{link.label}</span>
             </NextLink>
           ))}
-          {exportButton}
         </nav>
         <div className="side-user">
           <div className="side-user-row">
@@ -223,7 +185,6 @@ export function Navigation({ userName }: NavigationProps) {
                   <span>{link.label}</span>
                 </NextLink>
               ))}
-              {exportButton}
             </div>
           </div>
         </>

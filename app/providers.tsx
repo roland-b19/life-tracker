@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SessionProvider } from "next-auth/react";
 import { fadeTheme } from "./components/theme";
-import { withRouterTimeout } from "./components/router-fetch";
 import { ToastProvider } from "./components/toast";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -24,26 +23,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // pre-write page. After any server action ran, a back/forward therefore reloads once instead of showing old data.
     // Tabs open from the browser's cache (`staleTimes`), so a write also refreshes that cache in the background once the
     // writes stop: the page on screen keeps its own state, the other tabs come back fresh.
-    // The refresh is sent only while the page is on screen with the focus, never while iOS covers it with a sheet or a
-    // file viewer or has it in the background, where its request can be stranded and hold up the router (D-027).
-    // Otherwise it waits for the page to get the focus back or to be touched, whichever comes first.
     let wrote = false;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    const back = ["focus", "pointerdown"] as const;
-    const refresh = () => {
-      for (const t of back) window.removeEventListener(t, refresh, { capture: true });
-      if (document.visibilityState === "visible" && document.hasFocus()) router.refresh();
-      else for (const t of back) window.addEventListener(t, refresh, { capture: true });
-    };
     const realFetch = window.fetch;
-    const routerFetch = withRouterTimeout(realFetch, 10_000);
     window.fetch = (input, init) => {
       if (new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).has("next-action")) {
         wrote = true;
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(refresh, 600);
+        refreshTimer = setTimeout(() => router.refresh(), 600);
       }
-      return routerFetch(input, init);
+      return realFetch(input, init);
     };
     // The service worker opens the app from the last seen page (public/sw.js) and tells us when the server's page differs.
     // Reload for it, but only if nothing was touched yet and not twice in a row (a page that never settles would loop).
@@ -71,7 +60,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     scheme.addEventListener("change", fadeTheme);
     return () => {
       clearTimeout(refreshTimer);
-      for (const t of back) window.removeEventListener(t, refresh, { capture: true });
       window.fetch = realFetch;
       window.removeEventListener("popstate", onPop);
       scheme.removeEventListener("change", fadeTheme);

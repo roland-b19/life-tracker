@@ -12,8 +12,8 @@ last_verified: 2026-11-18
   - **Wishlist:** items with a price; the price range (low, medium, high) is derived from the price, never picked by hand.
   - **Tasks:** spaces personal and business, daily or weekly recurrence, optional reminder time, overdue tasks carry over.
   - **Gym:** training split with days and exercises, sessions, sets, deload weeks, progress, custom exercises, a 3D muscle map.
-  - **Food and health** (route `/health`, the home page; `/food` redirects there): Today (meals, water, steps), Weight, Shopping, and an Assistant tab that turns free text into logged meals.
-  - **Settings:** always shown. Appearance picks Auto (follow the system), Light or Dark for this device; with the Claude flag on, the Claude card connects a Claude token. Export of all data as plain text is the "Export data" button in the navigation menu (a download on a computer, the share sheet on a phone, D-027); push reminders are set on Tasks.
+  - **Food and health** (route `/health`; `/food` redirects there): Today (meals, water, steps), Weight, Shopping, and an Assistant tab that turns free text into logged meals.
+  - **Settings:** always shown. Appearance picks Auto (follow the system), Light or Dark for this device; with the Claude flag on, the Claude card connects a Claude token. Push reminders are set on Tasks.
 - The UI has a dark and a light mode: it follows the system, or the Appearance switch in Settings (Auto, Light, Dark) kept per device. The Wishlist page is the visual reference; every page matches it. Every change has an Undo toast.
 - Out of scope: other users' data, sending health data to an AI provider.
 
@@ -22,7 +22,6 @@ last_verified: 2026-11-18
 - Water and steps can be edited only for today and yesterday; tasks only for today and one day either side. Past days are read-only.
 - Weight is one entry per day, 20 to 500 kg.
 - Nothing is soft-deleted. Undo re-inserts the row under its old id.
-- Export holds all of a user's data but never the Claude token or push subscriptions.
 - No health data is ever sent to an AI provider. The Claude chat runs only through a local `claude` CLI, with the flag off on Vercel and Azure ([architecture](architecture.md), Flags).
 
 ## Glossary

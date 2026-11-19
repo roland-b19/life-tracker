@@ -33,8 +33,8 @@
   --card-shadow: 0 1px 2px var(--shadow-near), 0 10px 24px -12px var(--shadow-far);
   --edge: light-dark(transparent, transparent);
   --glass-blur: blur(28px) saturate(160%);
-  /* Neutral fills, all subtle: the fill of secondary and small buttons and the hover wash on clear controls, and a
-     clearly stronger one for the hover on filled controls (so it still reads over their fill) */
+  /* Neutral washes, all subtle: the hover on clear controls and the bands behind rows, and a clearly stronger one for
+     the hover on filled controls (so it still reads over their fill) */
   --highlight: light-dark(rgba(15, 26, 43, 0.05), rgba(238, 243, 248, 0.06));
   --highlight-fill: light-dark(rgba(15, 26, 43, 0.1), rgba(238, 243, 248, 0.16));
   /* The dim behind a modal or the More menu */
@@ -353,21 +353,6 @@ h3 {
   text-decoration: none;
 }
 
-button.nav-link {
-  width: 100%;
-  justify-content: flex-start;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-button.nav-link:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .nav-link svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -491,14 +476,14 @@ button.nav-link:disabled {
   flex: none;
 }
 
-/* Settings and Export data: one column as wide as the longer item, in the middle of the menu */
+/* Settings: one column in the middle of the menu */
 .more-links {
   display: grid;
   justify-content: center;
   gap: 0.25rem;
 }
 
-/* Each item's icon and label sit in the middle of the column, so the shorter one is centered too */
+/* The icon and label sit in the middle of the column */
 .more-links .nav-link {
   justify-content: center;
 }
@@ -563,6 +548,12 @@ main {
     border: 1px solid var(--edge);
     border-radius: 1rem;
     background: var(--surface-secondary);
+  }
+
+  /* On the box's --surface-secondary the button takes the bar's fill instead, like the segmented thumb on its track */
+  .side-user .signout-btn {
+    background: var(--surface-solid);
+    box-shadow: var(--card-shadow);
   }
 
   .side-user-row {
@@ -944,9 +935,11 @@ button:disabled {
   transform: none;
 }
 
+/* Secondary, small and icon buttons share one opaque fill: the tab bar's selected item and the fields (--surface-secondary),
+   so they read clearly on a card in both modes */
 button.secondary {
   color: var(--text);
-  background: var(--highlight);
+  background: var(--surface-secondary);
   border: 1px solid var(--edge);
 }
 
@@ -1050,7 +1043,7 @@ button.signin-continue:disabled {
 
 /* Icon-only row actions (edit, delete): the same neutral fill, edge and height as the small text buttons */
 .delete-icon-btn {
-  background: var(--highlight);
+  background: var(--surface-secondary);
   border: 1px solid var(--edge);
   color: var(--text);
   cursor: pointer;
@@ -1294,7 +1287,7 @@ button.signin-continue:disabled {
 }
 
 .toast-action-btn {
-  background: var(--highlight);
+  background: var(--surface-secondary);
   color: var(--text);
   border: 1px solid var(--edge);
   font-size: 0.8125rem;
@@ -1308,7 +1301,7 @@ button.signin-continue:disabled {
 
 @media (hover: hover) {
   .toast-action-btn:hover {
-    background: var(--highlight-fill);
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%);
   }
 }
 
@@ -1356,7 +1349,7 @@ button.btn-sm {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
-  background: var(--highlight);
+  background: var(--surface-secondary);
   border: 1px solid var(--edge);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
@@ -1388,10 +1381,9 @@ button.btn-sm {
 }
 /* The thumb's radius, so the idle hover fill has its shape */
 :is(.segmented button, .tab-item) { border-radius: 0.7rem; }
-/* The tab bar's thumb is the segmented track's fill, flat like the More menu's selected item */
+/* The tab bar's thumb is the segmented track's fill, with the segmented thumb's shadow */
 .tabbar::before {
   background: var(--surface-secondary);
-  box-shadow: none;
 }
 /* The tab bar floats like the More menu above it, so it has the menu's corners; the thumb's corners follow them
    inside the bar's padding and edge (1.25rem - 0.25rem - 1px), so the gap around it is even */
@@ -2332,7 +2324,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   button.secondary:hover:not(:disabled),
   button.btn-sm:hover:not(:disabled),
   .delete-icon-btn:hover:not(:disabled) {
-    background: var(--highlight-fill);
+    background: color-mix(in srgb, var(--surface-secondary), var(--text) 8%);
   }
   button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-subtle), var(--text) 8%); }
   .muscle-chip:not(.active):hover {
