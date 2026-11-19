@@ -32,7 +32,6 @@ last_verified: 2026-11-19
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. When picomatch has a fixed release, revisit the report-only dev-tool audit step (D-004).
 
 ## Open questions
 - Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
