@@ -4,8 +4,8 @@ import { formatDMY } from "@/lib/format-date";
 import { showDecimal } from "@/lib/decimal-input";
 import type { HistoryEntry } from "@/lib/gym-progress";
 import { GYM_LIMITS } from "@/lib/validations/gym";
-import { Badge, ErrorText, Field, SelectField, Toggle } from "../components/blocks";
-import { ChevronRightIcon, PlusIcon } from "../components/icons";
+import { Badge, ErrorText, Field, FoldButton, SelectField, Toggle } from "../components/blocks";
+import { PlusIcon } from "../components/icons";
 import { DeleteButton, ListBox } from "../components/lists";
 import { setText, type ActiveSessionData, type ExerciseItem, type WorkoutSetData } from "./types";
 import { MuscleTag } from "./muscle-tag";
@@ -82,9 +82,7 @@ export function ExerciseLogger({
         {/* The arrow folds the exercise, like a card's fold arrow; the name is plain text (D-033) */}
         <h3 className="exercise-title">
           {exercise.exerciseName}{" "}
-          <button type="button" className="group-toggle" aria-expanded={open} aria-label={`Show ${exercise.exerciseName}`} onClick={onToggle}>
-            <ChevronRightIcon size={14} />
-          </button>
+          <FoldButton open={open} label={`Show ${exercise.exerciseName}`} onToggle={onToggle} />
         </h3>
         <MuscleTag group={exercise.muscleGroup} />
         <span className="muted exercise-meta">

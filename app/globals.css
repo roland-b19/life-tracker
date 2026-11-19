@@ -657,10 +657,9 @@ main {
   min-width: calc(10ch + 0.4em + 1.3rem + 2px);
 }
 
-.deload-card { margin-bottom: 1.25rem; }
 /* The Deload session check sits right under the text, at the left (D-031); the Edit button is centred on the whole card,
    beside both (D-033) */
-.deload-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 0.75rem; }
+.deload-card { margin-bottom: 1.25rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 0.75rem; }
 .deload-card > .section-head { display: contents; }
 .deload-card > .section-head > :last-child { grid-column: 2; grid-row: 1 / span 2; }
 /* The check keeps its 44px tap height but draws into the bottom padding, so its text sits one card padding from the edge */
@@ -2071,7 +2070,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   font-weight: 600;
 }
 .exercise-meta { font-size: 0.875rem; }
-:is(.section-title, .exercise-title) > .group-toggle { vertical-align: middle; }
 .set-flag { margin-left: 0.5rem; }
 /* The set's checks: one column, at the left */
 .toggle-row {
@@ -2166,10 +2164,8 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
    New exercise (D-033) */
 .routine-add {
   display: grid;
-  justify-items: start;
   gap: 0.75rem;
 }
-.routine-add > label { justify-self: stretch; }
 /* New exercise, created inline in the day editor (same card style as a routine row) */
 .custom-exercise {
   display: grid;
@@ -2178,7 +2174,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   border-radius: 0.85rem;
   background: var(--surface-solid);
 }
-.custom-exercise-btn { justify-self: start; }
+:is(.routine-add > button, .custom-exercise-btn) { justify-self: start; }
 .delete-icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* Health */
@@ -2276,7 +2272,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 /* A fold arrow alone in its box (a card's, a workout exercise's): even padding, so the arrow sits centred pointing right
    and down */
-:is(.section-title, .exercise-title) > .group-toggle { padding-inline: 0.625rem; }
+:is(.section-title, .exercise-title) > .group-toggle { vertical-align: middle; padding-inline: 0.625rem; }
 
 /* Health: assistant chat */
 .chat-log {

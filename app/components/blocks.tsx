@@ -80,6 +80,15 @@ export function DashboardAside({ summaryFirst, children }: { summaryFirst?: bool
   return <div className={cx("dashboard-aside", summaryFirst && "summary-first")}>{children}</div>;
 }
 
+/** The arrow that folds a card or a workout exercise: a box alone beside the title, pointing down while open (D-033). */
+export function FoldButton({ open, label, onToggle }: { open: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button type="button" className="group-toggle" aria-expanded={open} aria-label={label} onClick={onToggle}>
+      <ChevronRightIcon size={14} />
+    </button>
+  );
+}
+
 /**
  * A titled card. `id` names the title, which labels the card. `count`: the number after the title. `sub`: the line
  * under it. `actions`: the buttons at the head's end (`below`: they drop under the title
@@ -128,9 +137,7 @@ export function Card({
       {fold && (
         <>
           {" "}
-          <button type="button" className="group-toggle" aria-expanded={!fold.folded} aria-label={`Show ${typeof title === "string" ? title.toLowerCase() : "the list"}`} onClick={fold.onToggle}>
-            <ChevronRightIcon size={14} />
-          </button>
+          <FoldButton open={!fold.folded} label={`Show ${typeof title === "string" ? title.toLowerCase() : "the list"}`} onToggle={fold.onToggle} />
         </>
       )}
     </h2>
