@@ -29,14 +29,21 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 60_000,
   },
+  // Playwright's default scheme is light, so the dark projects say so. With Auto the page follows colorScheme.
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
     {
       name: "phone",
-      // The phone target is the width, so no touch or mobile emulation. Only the axe scans depend on the width, so the
-      // phone project runs just the tests tagged @a11y; the add/undo/delete flow runs once, on desktop.
+      // The phone target is the width, so no touch or mobile emulation. Only the axe scans depend on the width and
+      // the color scheme, so the other projects run just the tests tagged @a11y; the flows run once, on desktop.
       grep: /@a11y/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 }, colorScheme: "dark" },
+    },
+    { name: "desktop-light", grep: /@a11y/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
+    {
+      name: "phone-light",
+      grep: /@a11y/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 }, colorScheme: "light" },
     },
   ],
   webServer: {

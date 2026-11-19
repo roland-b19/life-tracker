@@ -52,8 +52,8 @@ async function addItem(page: Page, name: string, amount: number) {
   await expect(itemLine(page, name, amount)).toBeVisible();
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Today and Shopping tabs have no serious violations, also with a form open", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   await addMeal(page);

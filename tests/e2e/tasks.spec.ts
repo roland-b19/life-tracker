@@ -22,8 +22,8 @@ async function addTask(page: Page, title: string, dialogName: "New task" | "New 
   await expect(page.getByText(title, { exact: true })).toBeVisible();
 }
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Tasks page has no serious violations, also with the New task form open", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   await addTask(page, taskTitle(), "New task");

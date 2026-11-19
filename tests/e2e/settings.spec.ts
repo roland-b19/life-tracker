@@ -37,8 +37,8 @@ async function dismissToast(page: Page, message: string) {
 const notConnected = (page: Page) => claudeCard(page).getByText("Not connected.");
 const account = (page: Page) => claudeCard(page).getByText("Claude account", { exact: true });
 
-// Tests tagged @a11y run on every project (desktop and phone width); the rest run on desktop only, because only the
-// axe scan depends on the width (see playwright.config.ts).
+// Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
+// axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Settings page has no serious violations, also with the connect form open and when connected", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await openSettings(page);
   await expect(notConnected(page)).toBeVisible();
