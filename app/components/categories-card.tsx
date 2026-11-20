@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
+import { useDeviceState } from "./device-state";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { undoWith, useToast } from "./toast";
@@ -20,7 +21,8 @@ export interface CategoriesApi {
   add: (name: string) => Promise<Answer>;
   rename: (from: string, to: string) => Promise<Answer<{ change: Change }>>;
   remove: (name: string) => Promise<Answer<{ change: Change }>>;
-  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<Answer>;
+  /** `keptCurrent`: the server kept `current`, because an item was filed under it after the rename. */
+  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<Answer<{ keptCurrent?: boolean }>>;
   reorder: (names: string[]) => Promise<Answer>;
 }
 
@@ -67,6 +69,17 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
+  // One save or delete at a time: a double tap, or a second tap on the row that slides up after a delete, acts once.
+  const writing = useRef(false);
+  async function once(write: () => Promise<void>) {
+    if (writing.current) return;
+    writing.current = true;
+    try {
+      await write();
+    } finally {
+      writing.current = false;
+    }
+  }
 
   const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
   const reorder = (update: string[]) => {
@@ -106,25 +119,38 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     setOpen(true);
   }
 
-  // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure undoes that.
+  // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure takes back exactly
+  // what it changed (never a name that was not on screen), so no orphan category shows.
   const revert = (name: string, current: string, change: Change, dropCurrent: boolean, at: number) =>
     undoWith(showToast, async () => {
+      // Filled in by the update below, which React has run by the time the server answers.
+      let added = false;
+      let droppedAt = -1;
       onChange((prev) => {
-        const without = dropCurrent ? prev.filter((c) => c !== current) : prev;
-        return without.includes(name) ? without : [...without.slice(0, at), name, ...without.slice(at)];
+        droppedAt = dropCurrent ? prev.indexOf(current) : -1;
+        const without = droppedAt >= 0 ? prev.filter((c) => c !== current) : prev;
+        added = !without.includes(name);
+        return added ? [...without.slice(0, at), name, ...without.slice(at)] : without;
       });
       onRefile(current, name, change.itemIds);
       const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
       onSynced?.();
       if (!back?.success) {
-        onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
+        onChange((prev) => insertAt(added ? prev.filter((c) => c !== name) : prev, current, droppedAt));
         onRefile(name, current, change.itemIds);
+      } else if (back.keptCurrent) {
+        // The server kept it right after the restored one.
+        onChange((prev) => insertAt(prev, current, prev.indexOf(name) + 1));
       }
       return back;
     });
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
+    return once(save);
+  }
+
+  async function save() {
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
@@ -140,10 +166,15 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
           message: `Added "${to}"`,
           type: "success",
           onUndo: undoWith(showToast, async () => {
-            onChange((prev) => prev.filter((c) => c !== to));
+            // Filled in by the update below; a failure puts it back only where it was, and only if it was on screen.
+            let was = -1;
+            onChange((prev) => {
+              was = prev.indexOf(to);
+              return prev.filter((c) => c !== to);
+            });
             const gone = await api.remove(to).catch(() => null);
             onSynced?.();
-            if (!gone?.success) onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
+            if (!gone?.success) onChange((prev) => insertAt(prev, to, was));
             // Items filed under it since go to the fallback, like any delete.
             else onRefile(to, builtIn);
             return gone;
@@ -182,7 +213,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     if (moved) onRefile(cat, builtIn, moved);
     const res = await api.remove(cat).catch(() => null);
     if (!res?.success) {
-      onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
+      onChange((prev) => insertAt(prev, cat, at));
       if (moved) onRefile(builtIn, cat, moved);
       onSynced?.();
       showToast({ message: `Failed to remove ${noun}`, type: "warning" });
@@ -222,7 +253,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
                 }}
               />
               <span className={`category-name${noun === "unit" ? " raw" : ""}`}>{cat}</span>
-              <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(() => remove(cat))} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
         </ListBox>
@@ -249,44 +280,26 @@ export const groupOrder = (categories: string[], items: { category: string }[]) 
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
 
-const FOLD_STORAGE = "lt-folded";
-let foldedKeys: ReadonlySet<string> | null = null; // read from storage on first use in the browser
-const foldListeners = new Set<() => void>();
-const noFolds: ReadonlySet<string> = new Set();
+/** `list` with `name` put back at `at` (clamped to the list), unless `at` is negative or the name is there already. */
+const insertAt = (list: string[], name: string, at: number) =>
+  at < 0 || list.includes(name) ? list : [...list.slice(0, at), name, ...list.slice(at)];
 
-const loadFolded = (): ReadonlySet<string> => {
-  if (!foldedKeys) {
-    try {
-      foldedKeys = new Set<string>(JSON.parse(localStorage.getItem(FOLD_STORAGE) ?? "[]"));
-    } catch {
-      foldedKeys = new Set(); // storage blocked or corrupt: folds last until the page reloads
-    }
-  }
-  return foldedKeys;
-};
-
-const toggleFolded = (key: string) => {
-  const next = new Set(loadFolded());
-  if (!next.delete(key)) next.add(key);
-  foldedKeys = next;
-  try {
-    localStorage.setItem(FOLD_STORAGE, JSON.stringify([...next]));
-  } catch {}
-  foldListeners.forEach((l) => l());
-};
-
-const subscribeFolded = (l: () => void) => {
-  foldListeners.add(l);
-  return () => void foldListeners.delete(l);
-};
+const noFolds: string[] = [];
 
 /**
- * Which category groups of a list are folded, kept in this browser so a group stays folded across pages and reloads.
- * `page` keeps pages apart; the caller keys each group by its tab too, so tabs fold independently.
+ * Which category groups of a list are folded, kept on this device (`useDeviceState`, key "lt-folded": every folded
+ * "page/group") so a group stays folded across pages and reloads. `page` keeps pages apart; the caller keys each group
+ * by its tab too, so tabs fold independently.
  */
 export function useFolded(page: string) {
-  const folded = useSyncExternalStore(subscribeFolded, loadFolded, () => noFolds);
-  return [(key: string) => folded.has(`${page}/${key}`), (key: string) => toggleFolded(`${page}/${key}`)] as const;
+  const [folded, setFolded] = useDeviceState("lt-folded", noFolds);
+  return [
+    (key: string) => folded.includes(`${page}/${key}`),
+    (key: string) => {
+      const id = `${page}/${key}`;
+      setFolded((prev) => (prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]));
+    },
+  ] as const;
 }
 
 /** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */

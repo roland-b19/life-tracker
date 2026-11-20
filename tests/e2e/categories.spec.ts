@@ -244,6 +244,51 @@ test("the Health shopping categories card adds, renames, merges and deletes, wit
   await runCategoryFlow(healthShopping, page);
 });
 
+// A double tap acts once: on Save it adds one category, on Delete it removes only that row, never the one that slides up
+// under the finger once the first tap has removed it.
+test("the categories card's buttons act once on a double tap", async ({ signedInPage: page }) => {
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  await form.getByLabel("Name", { exact: true }).fill(a);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).dblclick(), `"name":"${a}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Added "${a}"`, { exact: true })).toBeVisible();
+  await dismissToast(page);
+  await addCategory(page, b);
+  await dismissToast(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(2);
+
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${a}`, exact: true }).dblclick(), `"name":"${a}"`);
+  await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+  await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(1);
+  await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+});
+
+// The card's fold is kept on the device (useDeviceState), so it is still folded after a reload.
+test("the categories card stays folded after a reload", async ({ signedInPage: page }) => {
+  const name = `e2e-cat-${hex()}`;
+  await wishlist.open(page);
+  await addCategory(page, name);
+  await dismissToast(page);
+  const fold = card(page).getByRole("button", { name: "Show categories" });
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(card(page).getByText(name, { exact: true })).toBeHidden();
+
+  await wishlist.open(page);
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(card(page).getByText(name, { exact: true })).toBeHidden();
+  await fold.click();
+  await expect(card(page).getByText(name, { exact: true })).toBeVisible();
+  await wishlist.open(page);
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+});
+
 test("the Wishlist categories card has no serious violations, with its forms open", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await scanWithForms(wishlist, page);
 });
