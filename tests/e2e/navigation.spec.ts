@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import { Pool } from "pg";
 import { CONTROL, EDGE_PX } from "../../app/components/edge-swipe";
 import { expectNoSeriousViolations, test } from "./helpers";
 
 // The app shell: tab bar, More menu, sidebar, the 404 page and the listeners every page has (D-035, MORE-03, MORE-06,
-// MORE-11, XR-11). The phone pieces are hidden from 1024px, so the flows set a phone width themselves.
+// MORE-11, XR-11), and the sign-in form. The phone pieces are hidden from 1024px, so the flows set a phone width themselves.
 const PHONE = { width: 375, height: 812 };
 
 const tabBar = (page: Page) => page.getByRole("navigation", { name: "Mobile Navigation" });
@@ -209,16 +209,14 @@ test("a dev user name longer than 64 characters is refused with the message, not
   const names = [name, name.slice(0, 64)];
   const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
   try {
-    // The page's own session calls each set a CSRF cookie when there is none, so a click before they end could post a
-    // stale token (see helpers.ts). With the cookie set first they keep it, and the form's token always matches.
-    expect((await page.request.get("/api/auth/csrf")).ok()).toBe(true);
-    await page.goto("/signin");
+    // As soon as the form takes typing (it waits for its session check, so nothing typed is lost)
+    await page.goto("/signin", { waitUntil: "commit" });
     const field = page.getByLabel("Username");
     await field.fill(name);
     await expect(field).toHaveValue(name);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
-    await expect(page).toHaveURL(/\/signin/);
+    await expect(page).toHaveURL(/\/signin$/);
     const rows = await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
     expect(rows.rowCount).toBe(0);
   } finally {
@@ -228,6 +226,55 @@ test("a dev user name longer than 64 characters is refused with the message, not
       await admin.end();
     }
   }
+});
+
+/**
+ * Signs in through the /signin form of a fresh browser as a new dev user, typing and pressing Continue as soon as the
+ * form lets it, and checks the user is signed in as that name: the signed-in shell shows (a refused sign-in would
+ * bounce back to /signin) and the name has a user row. `act` runs before the page opens.
+ */
+async function signInThroughForm(page: Page, act?: () => Promise<unknown>) {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await act?.();
+    await page.goto("/signin", { waitUntil: "commit" });
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
+    await expect(page).toHaveURL(/\/todos$/);
+    expect((await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = $1", [name])).rowCount).toBe(1);
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+}
+
+test("a fresh browser signs in through the form as the name typed, pressing Continue as soon as it can [SIGNIN]", async ({ page }) => {
+  await signInThroughForm(page);
+});
+
+test("a sign-in whose CSRF token was refused is tried once more, and a second refusal is shown, not taken for a session [SIGNIN]", async ({
+  page,
+}) => {
+  // NextAuth's answer to a token that does not match its cookie
+  const refuse = (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: new URL("/api/auth/signin?csrf=true", route.request().url()).href }) });
+  const callback = "**/api/auth/callback/credentials";
+  // The first answer refuses the token: the form tries again and signs in
+  await signInThroughForm(page, () => page.route(callback, refuse, { times: 1 }));
+
+  // Every answer refuses it: the form says so and stays
+  await page.context().clearCookies();
+  await page.route(callback, refuse);
+  await page.goto("/signin");
+  await page.getByLabel("Username").fill(`e2e-${randomUUID().slice(0, 8)}`);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Failed to sign in")).toBeVisible();
+  await expect(page).toHaveURL(/\/signin$/);
 });
 
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {
