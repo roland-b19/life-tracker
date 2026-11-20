@@ -45,9 +45,15 @@ test("a save in one tab refreshes another tab of the same browser within 2 s [SY
   const other = await page.context().newPage();
   await openWishlist(page);
   await openWishlist(other);
-  const refreshed = other.waitForRequest((r) => isRefresh(other, r), { timeout: 2000 });
-  await addItem(page, itemName());
+  const refreshed = other.waitForRequest((r) => isRefresh(other, r));
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(itemName());
+  await page.getByLabel("Price (RON)").fill("100");
+  // The 2 s count from the write's answer, so they measure the other tab's update only, not the form fill
+  await andSettle(page, () => page.getByRole("button", { name: "Save" }).click());
+  const answered = Date.now();
   await refreshed;
+  expect(Date.now() - answered).toBeLessThan(2000);
   await other.close();
 });
 

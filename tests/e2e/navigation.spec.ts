@@ -13,6 +13,13 @@ const moreMenu = (page: Page) => page.getByRole("dialog", { name: "More" });
 const historyLength = (page: Page) => page.evaluate(() => history.length);
 const focusInMenu = (page: Page) => page.evaluate(() => !!document.activeElement?.closest("#more-menu"));
 
+/** A promise and the function that resolves it. */
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
 /** Whether the edge guard cancels a touch that starts at (x, y) on whatever is drawn there. */
 const touchCancelled = (page: Page, x: number, y: number) =>
   page.evaluate(
@@ -151,6 +158,49 @@ test("a tab whose page cannot be opened leaves the tab bar on the page on screen
   await expect(tabBar(page).getByRole("link", { name: "Tasks" })).not.toHaveAttribute("aria-current", "page");
 });
 
+test("a page that cannot be opened after another tab was pressed leaves the bar on the page still loading [XR-11]", async ({
+  signedInPage: page,
+}) => {
+  await page.setViewportSize(PHONE);
+  await page.goto("/wishlist");
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).toHaveAttribute("aria-current", "page");
+  // The page requests of Tasks (a body that is no page) and Gym (the real page) wait until the test lets them go
+  const todos = gate();
+  const gym = gate();
+  const arrived = { todos: gate(), gym: gate() };
+  for (const [path, release, arrive] of [
+    ["/todos", todos, arrived.todos],
+    ["/gym", gym, arrived.gym],
+  ] as const) {
+    await page.route(
+      (url) => url.pathname === path,
+      async (route) => {
+        const headers = route.request().headers();
+        if (!("rsc" in headers) || "next-router-prefetch" in headers || "next-router-segment-prefetch" in headers) return route.fallback();
+        arrive.resolve();
+        await release.promise;
+        return path === "/todos"
+          ? route.fulfill({ status: 200, contentType: "text/x-component", body: "<html>not a page</html>" })
+          : route.fallback();
+      },
+    );
+  }
+  await tabBar(page).getByRole("link", { name: "Tasks" }).click();
+  await arrived.todos.promise;
+  await tabBar(page).getByRole("link", { name: "Gym" }).click();
+  await arrived.gym.promise;
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+  // Tasks fails while Gym is still loading: the bar stays on Gym, not on the page on screen
+  todos.resolve();
+  await expect(page.getByText("Couldn't open the page. Try again.")).toBeVisible();
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).not.toHaveAttribute("aria-current", "page");
+  gym.resolve();
+  await expect(page).toHaveURL(/\/gym$/);
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+});
+
 test("a dev user name longer than 64 characters is refused with the message, not cut short (MORE-12)", async ({ page }) => {
   // 65 characters, new on each run
   const name = `e2e-${randomUUID().slice(0, 8)}-${"a".repeat(52)}`;
@@ -159,9 +209,10 @@ test("a dev user name longer than 64 characters is refused with the message, not
   const names = [name, name.slice(0, 64)];
   const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
   try {
+    // The page's own session calls each set a CSRF cookie when there is none, so a click before they end could post a
+    // stale token (see helpers.ts). With the cookie set first they keep it, and the form's token always matches.
+    expect((await page.request.get("/api/auth/csrf")).ok()).toBe(true);
     await page.goto("/signin");
-    // The page's own session calls set the CSRF cookie; a click before they settle posts a stale token (see helpers.ts).
-    await page.waitForLoadState("networkidle");
     const field = page.getByLabel("Username");
     await field.fill(name);
     await expect(field).toHaveValue(name);

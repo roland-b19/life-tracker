@@ -7,7 +7,7 @@ import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { CloseIcon } from "./icons";
 import { clearPageCache } from "./page-cache";
-import { PAGE_NOT_OPENED } from "../providers";
+import { usePageNotOpened } from "../providers";
 import { isPushEnabled } from "@/lib/features";
 import { deletePushSubscriptionAction } from "@/actions/todos";
 
@@ -40,22 +40,20 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  // The page a pressed link goes to, from the page it was pressed on. Until it loads the bar already shows it, instead
-  // of snapping back to this page. Once any page loads, or this one stays because the new one could not be opened, the
-  // bar shows the page on screen again.
-  const [target, setTarget] = useState<{ href: string; from: string } | null>(null);
-  const at = target?.from === pathname ? target.href : pathname;
+  // The page a pressed link goes to, from the page it was pressed on, and the last failure known then. Until it loads the
+  // bar already shows it, instead of snapping back to this page. Once any page loads, or this one stays because that
+  // page could not be opened since the press, the bar shows the page on screen again. A failure of an earlier press
+  // (another page) leaves the bar on the page still loading.
+  const notOpened = usePageNotOpened();
+  const [target, setTarget] = useState<{ href: string; from: string; seen: typeof notOpened } | null>(null);
+  const failed = notOpened !== target?.seen && notOpened?.path === target?.href;
+  const at = target?.from === pathname && !failed ? target.href : pathname;
   const go = (href: string) => {
-    setTarget({ href, from: pathname });
+    setTarget({ href, from: pathname, seen: notOpened });
     setMoreOpen(false);
   };
   // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
-  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget({ href, from: pathname }));
-  useEffect(() => {
-    const stay = () => setTarget(null);
-    window.addEventListener(PAGE_NOT_OPENED, stay);
-    return () => window.removeEventListener(PAGE_NOT_OPENED, stay);
-  }, []);
+  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget({ href, from: pathname, seen: notOpened }));
 
   // The phone More menu is a modal dialog, like Modal: focus moves into it, Tab wraps inside it, Escape and Close shut it,
   // and focus returns to the More button.
