@@ -36,9 +36,10 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
 /**
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
  * refreshes this page once the writes stop and tells the other copies, which refresh too; every copy also refreshes
- * on focus, when it becomes visible, every minute while visible, and at midnight in Bucharest (day-watch.ts). A write
- * that never got an answer says why: offline nothing was saved (open forms stay as they are); online the answer was
- * lost and the write may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
+ * on focus, when it becomes visible, every minute while visible, and at midnight in Bucharest (day-watch.ts); a refresh
+ * that came due while offline runs once the device is back online. A write that never got an answer says why: offline
+ * nothing was saved (open forms stay as they are); online the answer was lost and the write may have happened, so the
+ * page refreshes. A failed answer (non-2xx) changes nothing here.
  */
 function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
@@ -48,14 +49,17 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     let wrote = false;
     let writing = 0;
     let due = false;
+    // A refresh that came due while offline, run once the device is back online
+    let missed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
 
     const refreshNow = () => {
       clearTimeout(timer);
       due = false;
-      // Offline, Next would turn the refresh into a full page load, which fails
-      if (!navigator.onLine) return;
+      // Offline, Next would turn the refresh into a full page load, which fails: it waits for the device to be online
+      missed = !navigator.onLine;
+      if (missed) return;
       last = Date.now();
       day.seen();
       router.refresh();
@@ -129,7 +133,9 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       else day.check();
     };
     const onVisible = () => document.visibilityState === "visible" && onFocus();
+    const onOnline = () => missed && refresh();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
     const every = setInterval(() => document.visibilityState === "visible" && refresh(), EVERY);
 
@@ -144,6 +150,7 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       channel?.close();
       window.fetch = realFetch;
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("popstate", onPop);
     };

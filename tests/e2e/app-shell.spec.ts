@@ -109,6 +109,61 @@ test("a write while offline says nothing was saved and leaves the form open [X-O
   expect(refreshes).toHaveLength(0);
 });
 
+test("a refresh that comes due while offline runs once when the device is back online", async ({ signedInPage: page, browser }) => {
+  const name = itemName();
+  const context = await browser.newContext();
+  await context.addCookies(await page.context().cookies());
+  const other = await context.newPage();
+  try {
+    await page.clock.install();
+    await openWishlist(page);
+    // Another browser saves an item; this page hears nothing of it until it refreshes
+    await openWishlist(other);
+    await addItem(other, name);
+    // A page load would drop this mark
+    await page.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
+    const refreshes = countRefreshes(page);
+    await page.context().setOffline(true);
+    try {
+      // Past the 60 s refresh of an open page, which comes due while offline
+      await page.clock.runFor(61_000);
+      await settled(page);
+      expect(refreshes).toHaveLength(0);
+      // The page hears "online" before Playwright has put every part of its network back, so the page's timers wait
+      // (a refresh sent in that gap fails and Next falls back to a page load) and run only once it is back
+      await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+    } finally {
+      await page.context().setOffline(false);
+    }
+    await page.clock.runFor(100);
+    // The Wishlist keeps its rows in a plain useState until it takes useServerState (audit fixes step 19), so the new
+    // data is checked in the refresh's answer, the page payload the router puts on screen
+    await expect.poll(() => refreshes.length).toBe(1);
+    const answer = await refreshes[0].response();
+    expect(await answer?.text()).toContain(name);
+    // Once only, and without a page load
+    await page.clock.runFor(2000);
+    await settled(page);
+    expect(refreshes).toHaveLength(1);
+    expect(await page.evaluate(() => (window as unknown as { kept?: boolean }).kept)).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
+test("coming back online with no refresh due refreshes nothing", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const refreshes = countRefreshes(page);
+  await page.context().setOffline(true);
+  await settled(page);
+  await page.context().setOffline(false);
+  // Past the 600 ms a refresh could wait, and still before the 60 s refresh of an open page
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(refreshes).toHaveLength(0);
+});
+
 test("a write whose answer is lost while online says so and refreshes [XR-04]", async ({ signedInPage: page }) => {
   await openWishlist(page);
   await page.route("**/wishlist", (route) => (route.request().method() === "POST" ? route.abort() : route.fallback()));
