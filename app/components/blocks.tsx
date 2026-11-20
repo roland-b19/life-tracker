@@ -6,6 +6,7 @@ import { caretInDisplay, editedNumberText, parseNumberInput, showNumberInput } f
 import { ChevronRightIcon, PlusIcon } from "./icons";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
+import { useOnce } from "./once";
 
 /*
  * The structures every page is made of, in one place. A page picks and fills them; it never writes their markup,
@@ -496,18 +497,11 @@ export function FormModal({
   submitLabel?: string;
   children: ReactNode;
 }) {
-  // State is stale within one tick, so a fast double tap would submit twice: the lock lives until the handler settles.
-  const locked = useRef(false);
+  // One submit until the handler settles, and the rest of a double tap on Save is swallowed, so it neither submits
+  // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too.
+  const once = useOnce();
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (locked.current) return e.preventDefault();
-    locked.current = true;
-    const unlock = () => (locked.current = false);
-    try {
-      Promise.resolve(onSubmit(e)).then(unlock, unlock);
-    } catch (error) {
-      unlock();
-      throw error;
-    }
+    if (!once("form", () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>

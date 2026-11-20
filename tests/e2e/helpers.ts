@@ -108,6 +108,44 @@ export async function andSettle(page: Page, act: () => Promise<void>, body?: str
   await answered;
 }
 
+/**
+ * Resolves once the page has sent a marker request after everything it had already started. The page's requests are
+ * reported in the order it sends them, so a refresh (or a write) the page was about to send has been seen by then.
+ */
+export async function settled(page: Page) {
+  const marker = `/robots.txt?settled=${randomUUID()}`;
+  const sent = page.waitForRequest((r) => r.url().endsWith(marker));
+  await page.evaluate((url) => fetch(url).then(() => undefined, () => undefined), marker);
+  await sent;
+}
+
+/** The middle of an element's box. */
+export const center = (box: { x: number; y: number; width: number; height: number } | null) => {
+  if (!box) throw new Error("not on screen");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+// Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
+// The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
+// 25 ms), so it lands on whatever the first left there. Before that answer, the guard's per-target lock would refuse a
+// repeat on the same target and hide whether the spot swallowed it; a tap on another target, such as the next row's
+// Delete, would go through. Answers how many writes it set off. A second write starts during the second click, and a dialog
+// it opens is on the page by then, so nothing waits by time: `settled` sees a write the click sent.
+export async function burst(page: Page, { x, y }: { x: number; y: number }) {
+  let acts = 0;
+  const count = (r: Request) => {
+    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
+  };
+  page.on("request", count);
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(x, y));
+  await page.waitForTimeout(Math.max(0, 40 - (Date.now() - started)));
+  await page.mouse.click(x, y);
+  await settled(page);
+  page.off("request", count);
+  return acts;
+}
+
 async function signIn(page: Page, name: string) {
   // Sign in through NextAuth's own endpoints instead of the form: faster, and the form itself is tested in
   // navigation.spec.ts. The request context shares its cookie jar with the page.
