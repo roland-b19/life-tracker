@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page, type Request } from "@playwright/test";
-import { andSettle, headIsQuiet, isRefresh, test } from "./helpers";
+import { andSettle, headIsQuiet, isRefresh, settled, test } from "./helpers";
 
 // The app shell (app/providers.tsx): open copies stay in sync, writes without an answer say why, midnight moves the
 // page to the new day, a broken page answer says so, and the Undo toasts keep a Retry for a failed restore.
@@ -26,17 +26,6 @@ function countRefreshes(page: Page) {
   const seen: Request[] = [];
   page.on("request", (r) => isRefresh(page, r) && seen.push(r));
   return seen;
-}
-
-/**
- * Resolves once the page has sent a marker request after everything it had already started. The page's requests are
- * reported in the order it sends them, so a refresh (or a write) the page was about to send has been seen by then.
- */
-async function settled(page: Page) {
-  const marker = `/robots.txt?settled=${randomUUID()}`;
-  const sent = page.waitForRequest((r) => r.url().endsWith(marker));
-  await page.evaluate((url) => fetch(url).then(() => undefined, () => undefined), marker);
-  await sent;
 }
 
 const itemName = () => `Shell ${randomUUID().slice(0, 8)}`;
