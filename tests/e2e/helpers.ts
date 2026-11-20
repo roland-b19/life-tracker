@@ -60,7 +60,7 @@ function watchRefreshes(page: Page) {
 
 // Resolves once <head> has not changed for a whole animation frame: the refresh response has arrived by then, but React
 // commits it a few tasks later, and the commit removes and re-adds the head tags.
-function headIsQuiet() {
+export function headIsQuiet() {
   return new Promise<void>((resolve) => {
     let changed = false;
     const observer = new MutationObserver(() => (changed = true));

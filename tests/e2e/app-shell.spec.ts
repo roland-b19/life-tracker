@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page, type Request } from "@playwright/test";
-import { andSettle, isRefresh, test } from "./helpers";
+import { andSettle, headIsQuiet, isRefresh, test } from "./helpers";
 
 // The app shell (app/providers.tsx): open copies stay in sync, writes without an answer say why, midnight moves the
 // page to the new day, a broken page answer says so, and the Undo toasts keep a Retry for a failed restore.
+// Nothing waits by time: a check that something did not happen moves the page's clock past the moment it would have
+// happened (`page.clock`), then waits until the page has sent a request of its own (`settled`).
 
 async function openWishlist(page: Page) {
   await page.goto("/wishlist");
@@ -25,6 +27,17 @@ function countRefreshes(page: Page) {
   return seen;
 }
 
+/**
+ * Resolves once the page has sent a marker request after everything it had already started. The page's requests are
+ * reported in the order it sends them, so a refresh (or a write) the page was about to send has been seen by then.
+ */
+async function settled(page: Page) {
+  const marker = `/robots.txt?settled=${randomUUID()}`;
+  const sent = page.waitForRequest((r) => r.url().endsWith(marker));
+  await page.evaluate((url) => fetch(url).then(() => undefined, () => undefined), marker);
+  await sent;
+}
+
 const itemName = () => `Shell ${randomUUID().slice(0, 8)}`;
 
 test("a save in one tab refreshes another tab of the same browser within 2 s [SYNC]", async ({ signedInPage: page }) => {
@@ -42,12 +55,18 @@ test("another browser refreshes when it gets the focus back [SYNC]", async ({ si
   await context.addCookies(await page.context().cookies());
   const other = await context.newPage();
   try {
+    await other.clock.install();
     await openWishlist(other);
     await openWishlist(page);
     const refreshes = countRefreshes(other);
+    // The writing tab refreshes 600 ms after the answer, so the write's message has gone out by then
+    const ownRefresh = page.waitForRequest((r) => isRefresh(page, r));
     await addItem(page, itemName());
-    // Another browser hears nothing of the write: only its focus refreshes it (two seconds after its last load)
-    await other.waitForTimeout(2000);
+    await ownRefresh;
+    // Another browser hears nothing of the write: past the 600 ms a message would wait, and past the two seconds after
+    // its load in which a focus refreshes nothing, it has not refreshed
+    await other.clock.fastForward(2000);
+    await settled(other);
     expect(refreshes).toHaveLength(0);
     const refreshed = other.waitForRequest((r) => isRefresh(other, r), { timeout: 2000 });
     await other.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -63,15 +82,18 @@ test("an open page refreshes once at midnight in Bucharest [MIDNIGHT]", async ({
   await openWishlist(page);
   const refreshes = countRefreshes(page);
   await page.clock.fastForward(20_000);
-  await page.waitForTimeout(1000);
+  await settled(page);
   expect(refreshes).toHaveLength(0);
   await page.clock.fastForward(20_000);
   await expect.poll(() => refreshes.length).toBe(1);
-  await page.waitForTimeout(1500);
+  // And only once: the next day's timer does not fire again (still before the 60 s refresh, due at 00:00:30)
+  await page.clock.fastForward(5_000);
+  await settled(page);
   expect(refreshes).toHaveLength(1);
 });
 
 test("a write while offline says nothing was saved and leaves the form open [X-OFFLINE, PROD-01, XR-01]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openWishlist(page);
   await page.getByRole("button", { name: "Add item" }).click();
   await page.getByLabel("Name", { exact: true }).fill(itemName());
@@ -81,12 +103,14 @@ test("a write while offline says nothing was saved and leaves the form open [X-O
   try {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("You're offline. Nothing was saved.")).toBeVisible();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.waitForTimeout(1000);
-    expect(refreshes).toHaveLength(0);
+    // Past the 600 ms after which a refresh would come
+    await page.clock.fastForward(2000);
   } finally {
     await page.context().setOffline(false);
   }
+  await settled(page);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(refreshes).toHaveLength(0);
 });
 
 test("a write whose answer is lost while online says so and refreshes [XR-04]", async ({ signedInPage: page }) => {
@@ -125,10 +149,11 @@ test("an edit form open in one tab stays as it is while another tab saves [X-EDI
   await openWishlist(other);
   await other.getByRole("button", { name: `Edit ${name}` }).click();
   await other.getByLabel("Name", { exact: true }).fill(`${name} edited`);
-  const refreshed = other.waitForRequest((r) => isRefresh(other, r), { timeout: 2000 });
+  const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()), { timeout: 2000 });
   await addItem(page, itemName());
-  await refreshed;
-  await other.waitForTimeout(500);
+  // The refresh has arrived and React has put it on screen (the commit rebuilds the <head> tags)
+  await (await refreshed).finished();
+  await other.evaluate(headIsQuiet);
   await expect(other.getByRole("dialog")).toBeVisible();
   await expect(other.getByLabel("Name", { exact: true })).toHaveValue(`${name} edited`);
   await other.close();
@@ -156,7 +181,7 @@ test("a number field puts the thousand dots in, takes a dot as the decimal and s
   const writes: Request[] = [];
   page.on("request", (r) => r.method() === "POST" && "next-action" in r.headers() && writes.push(r));
   await form.getByRole("button", { name: "Save" }).click();
-  await page.waitForTimeout(500);
+  await settled(page);
   expect(writes).toHaveLength(0);
   await expect(form).toBeVisible();
 });
