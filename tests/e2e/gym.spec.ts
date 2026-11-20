@@ -292,11 +292,23 @@ test("a newer toast about the same custom exercise takes the older toast's Undo 
   await expect(undoIn(page, `Removed "${a2}"`)).toBeVisible();
 });
 
+// A double tap with the page's clock standing still (`page.clock`, installed before the page opens): the second tap comes
+// after the first write's answer (see `burst`), and a slow answer from the dev server would otherwise outlast the tap burst
+// (BURST_MS), which a real double tap, 40 ms apart, never waits for.
+async function stillBurst(page: Page, spot: { x: number; y: number }) {
+  // A moment ahead: the page's clock moves on while the call travels, and it cannot be paused in its past.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
+  const writes = await burst(page, spot);
+  await page.clock.resume();
+  return writes;
+}
+
 // A Delete acts once per tap burst (D-043): the second tap neither deletes again nor deletes the row that slid up under it.
 test("a double tap on a custom exercise's Delete deletes that one exercise only", async ({ signedInPage: page }) => {
   // The list is sorted by name within a muscle group, so a comes first and b slides up into its place.
   const id = randomUUID().slice(0, 8);
   const [a, b] = [`E2E lift A ${id}`, `E2E lift B ${id}`];
+  await page.clock.install();
   await openGym(page);
   await customExercises(page, [a, b]);
   // Chromium's scroll anchoring, which iPhone Safari does not have, would scroll the page instead of letting b slide up;
@@ -306,7 +318,7 @@ test("a double tap on a custom exercise's Delete deletes that one exercise only"
   await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
   await expect(remove).toBeInViewport();
   const removeAt = center(await remove.boundingBox());
-  expect(await burst(page, removeAt)).toBe(1);
+  expect(await stillBurst(page, removeAt)).toBe(1);
   await expect(page.getByText(`Removed "${a}"`)).toBeVisible();
   await expect(mine(page).getByText(b, { exact: true })).toBeVisible();
   // b's Delete is where the second tap landed: the guard, not a miss, kept it.
@@ -319,18 +331,13 @@ test("a double tap on a custom exercise's Delete deletes that one exercise only"
 
 test("a double tap on the day editor's Save saves once", async ({ signedInPage: page }) => {
   const name = `Upper ${randomUUID().slice(0, 8)}`;
+  await page.clock.install();
   await openGym(page);
-  // A first save warms the dev server: the burst's second tap comes after the first save's answer, and a cold first
-  // answer can take longer than the burst lasts (BURST_MS), which a real double tap never waits for.
-  const warm = await openEditor(page);
-  await andSettle(page, () => warm.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
-  await expect(warm).toBeHidden();
-  await page.keyboard.press("Shift");
   const editor = await openEditor(page);
   await editor.getByLabel("Name", { exact: true }).fill(name);
   const save = editor.getByRole("button", { name: "Save" });
   await save.scrollIntoViewIfNeeded();
-  expect(await burst(page, center(await save.boundingBox()))).toBe(1);
+  expect(await stillBurst(page, center(await save.boundingBox()))).toBe(1);
   await expect(editor).toBeHidden();
   await expect(page.getByText(`Saved "${name}"`)).toBeVisible();
 });
