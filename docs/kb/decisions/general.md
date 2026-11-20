@@ -222,3 +222,8 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Why:** The owner's pick. A fast double tap must neither repeat a write nor land on what slid under the finger (the next row's button, or the button under a form that closed). The categories card's guard does both: one write at a time, and for 500 ms the clicks on the tapped button's spot are swallowed, never a click on the toast. It becomes one shared helper; `FormModal`'s own submit lock and every "double taps act once" step of the [audit fixes plan](../plans/audit-fixes.md) use it.
 - **Rejected:** keeping only `FormModal`'s lock (a second tap on Save then opens the Edit form under the closed dialog); a guard per component (two ways for one job).
 - **Status:** active
+
+## D-044: Signals inside one tab go through React context (2026-11-20)
+- **Why:** The owner's pick. When one component must tell another in the same tab that something happened (the tab bar learns a page could not be opened, XR-11), the provider in `app/providers.tsx` holds it in a React context with a hook, the way `ToastContext` already does. One way for in-tab signals; the tree shows who listens.
+- **Rejected:** a `window` CustomEvent (a second way next to React context, and listeners nobody sees in the tree).
+- **Status:** active
