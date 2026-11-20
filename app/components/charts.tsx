@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useAnimatedNumber } from "./animated-number";
-import { formatAmount } from "../health/amount";
+import { formatAmount } from "@/lib/number-format";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
 

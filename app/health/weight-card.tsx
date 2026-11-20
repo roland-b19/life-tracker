@@ -8,7 +8,7 @@ import { useOnce } from "../components/once";
 import { useServerState } from "../components/server-state";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { sevenDayAverage } from "@/lib/weight-stats";
-import { formatAmount } from "./amount";
+import { formatAmount } from "@/lib/number-format";
 import { TrendChart } from "./trend-chart";
 
 export type WeightEntry = { id: string; date: string; kilograms: string };

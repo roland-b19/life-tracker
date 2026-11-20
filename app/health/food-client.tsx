@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { appTime } from "@/lib/format-date";
-import { formatNumber } from "@/lib/number-format";
+import { formatAmount, formatNumber } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
 import { CHANGED_ELSEWHERE, MAX_STEPS, MAX_WATER_ML, mealHasValue, type ValueChange } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
@@ -16,7 +16,6 @@ import { useDeviceState } from "../components/device-state";
 import { WeightCard, type WeightEntry } from "./weight-card";
 import { ShoppingTab, type ShoppingItemData } from "./shopping-tab";
 import { DeleteButton, EditButton, ListBox, useMoreDialog } from "../components/lists";
-import { formatAmount } from "./amount";
 import {
   setWaterAction,
   deleteMealAction,
