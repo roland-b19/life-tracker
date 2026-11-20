@@ -11,7 +11,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { progressSets, withProgress } from "@/lib/gym-progress";
 
 export default async function GymPage() {
-  const user = await requirePageUser();
+  const user = await requirePageUser("/gym");
 
   // Same year of sets the Exercise progress card draws from, so a workout's figures match its Exercise progress chart.
   const since = addDays(toISODate(), -370);

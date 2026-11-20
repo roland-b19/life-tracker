@@ -1,9 +1,20 @@
 import { z } from "zod";
-import { isoDate, uuid, visible } from "./common";
+import { isoDate, newId, uuid, visible } from "./common";
 import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
 
-/** The limits of a logged set and a note, shared by the form and the server. */
-export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500 } as const;
+/** The limits of a logged set, a note, an exercise's name and a day's name (varchar(120) and varchar(100) columns), shared by the forms and the server. */
+export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500, exerciseName: 120, dayName: 100 } as const;
+
+/**
+ * An exercise name as two names are compared: inner spaces collapsed, case and a trailing "." ignored, so "Bench  press",
+ * "bench press." and "BENCH PRESS" are one name. The server compares the same way in SQL (`nameKey` in `src/lib/gym.ts`).
+ */
+export const exerciseNameKey = (name: string) =>
+  name
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/ ?\.$/, "")
+    .toLowerCase();
 
 export const logSetSchema = z.object({
   // Only Undo sends these, to bring a deleted set back as it was (same id, same time).
@@ -45,6 +56,9 @@ export const saveDeloadWeeksSchema = z
   .object({ last: weekSunday.nullable(), next: weekSunday.nullable() })
   .refine((v) => !v.last || !v.next || v.next > v.last, { message: "The next deload must come after the last one", path: ["next"] });
 
+/** Undo of saving the deload weeks: the weeks that save removed come back and the weeks it added go. */
+export const restoreDeloadWeeksSchema = z.object({ add: z.array(weekSunday).max(60), remove: z.array(weekSunday).max(60) });
+
 export const cancelSessionSchema = z.object({ sessionId: uuid });
 
 /** Undo of cancelling a workout: the session as it was, with all its sets (same ids and times). */
@@ -59,7 +73,8 @@ export const restoreSessionSchema = z.object({
 });
 
 export const addCustomExerciseSchema = z.object({
-  name: z.string().trim().min(2).max(120).refine(visible, "Name is required"),
+  id: newId,
+  name: z.string().trim().min(2).max(GYM_LIMITS.exerciseName).refine(visible, "Name is required"),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
@@ -69,7 +84,7 @@ export const customExerciseWithIdSchema = addCustomExerciseSchema.extend({ id: u
 
 export const saveSplitDaySchema = z.object({
   id: uuid,
-  name: z.string().trim().min(1).max(100).refine(visible, "Name is required"),
+  name: z.string().trim().min(1).max(GYM_LIMITS.dayName).refine(visible, "Name is required"),
   isRest: z.boolean(),
   exercises: z
     .array(
@@ -93,3 +108,4 @@ export type FinishSessionInput = z.infer<typeof finishSessionSchema>;
 export type AddCustomExerciseInput = z.infer<typeof addCustomExerciseSchema>;
 export type CustomExerciseWithIdInput = z.infer<typeof customExerciseWithIdSchema>;
 export type SaveSplitDayInput = z.infer<typeof saveSplitDaySchema>;
+export type RestoreDeloadWeeksInput = z.infer<typeof restoreDeloadWeeksSchema>;

@@ -6,9 +6,10 @@ import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
 import { Banner, Page, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
+import { useServerState } from "../components/server-state";
 import { ActiveWorkout } from "./active-workout";
 import { CustomExercises, type CustomExercise } from "./custom-exercises";
-import { DayEditor } from "./day-editor";
+import { DayEditor, type DiscardedEdit } from "./day-editor";
 import { DeloadCard } from "./deload-card";
 import { HistoryCard } from "./history-card";
 import { MuscleExplorer } from "./muscle-map";
@@ -38,9 +39,11 @@ export function GymClient({ userName, split, deload, history, exercises, customE
     const todayMatch = days.find((d) => d.dayOfWeek === today);
     return todayMatch ? todayMatch.id : days[0]?.id ?? "";
   });
-  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
+  // Follows the server: a deload week saved for this week turns it on without a reload; a tap still sets it by hand.
+  const [isDeloadMode, setIsDeloadMode] = useServerState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false); // one saving flag: every control on the page waits for the same write
-  const [editingDay, setEditingDay] = useState<SplitDay | null>(null);
+  // The day being edited, as it was when the editor opened, and the discarded edits an Undo reopens it with.
+  const [editing, setEditing] = useState<{ day: SplitDay; resume?: DiscardedEdit } | null>(null);
   const [isFolded, toggleFolded] = useFolded("gym");
   const w = useWorkout({ openSession, days, isDeloadMode, setBusy, selectDay: setSelectedDayId });
   const { activeSession, paused } = w;
@@ -80,7 +83,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
             busy={busy}
             hasPaused={Boolean(paused)}
             onStart={(day) => void w.start(day)}
-            onEdit={setEditingDay}
+            onEdit={(day) => setEditing({ day })}
           />
           <ProgressPanel sets={progress} />
           <MuscleExplorer dayGroups={dayGroups} planned={days.flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))} />
@@ -89,7 +92,18 @@ export function GymClient({ userName, split, deload, history, exercises, customE
         </>
       )}
 
-      {editingDay && <DayEditor key={editingDay.id} day={editingDay} exercises={exercises} busy={busy} setBusy={setBusy} onClose={() => setEditingDay(null)} />}
+      {editing && (
+        <DayEditor
+          key={editing.day.id}
+          day={editing.day}
+          resume={editing.resume}
+          exercises={exercises}
+          busy={busy}
+          setBusy={setBusy}
+          onClose={() => setEditing(null)}
+          onReopen={(resume) => setEditing({ day: days.find((d) => d.id === editing.day.id) ?? editing.day, resume })}
+        />
+      )}
     </Page>
   );
 }

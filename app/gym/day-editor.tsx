@@ -1,14 +1,16 @@
 "use client";
 
 import { visible } from "@/lib/validations/common";
+import { exerciseNameKey, GYM_LIMITS } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
 import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
+import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
 import { DAY_NAMES, type DayDraft, type DraftExercise, type LibraryExercise, type SplitDay } from "./types";
-import { addCustomExerciseAction, deleteCustomExerciseAction, saveSplitDayAction } from "@/actions/gym";
+import { addCustomExerciseAction, deleteCustomExerciseAction, restoreCustomExerciseAction, saveSplitDayAction } from "@/actions/gym";
 
 const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 
@@ -16,51 +18,124 @@ const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 const toRows = (day: Pick<SplitDay, "isRest" | "exercises">) =>
   day.isRest ? [] : day.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: x.targetSets, minReps: x.minReps, maxReps: x.maxReps }));
 
-/** The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag to reorder, new exercise). Mounted only while open, so each opening starts fresh. */
+/** The form's copy of a saved day. */
+const toDraft = (day: SplitDay): DayDraft => ({
+  id: day.id,
+  dayOfWeek: day.dayOfWeek,
+  name: day.name,
+  isRest: day.isRest,
+  exercises: day.exercises.map((e) => ({
+    exerciseId: e.exerciseId,
+    targetSets: String(e.targetSets),
+    minReps: String(e.minReps),
+    maxReps: String(e.maxReps),
+  })),
+});
+
+/** An editing session that was dismissed: Undo of "Changes discarded" reopens the editor with it. */
+export interface DiscardedEdit {
+  draft: DayDraft;
+  /** The exercises created in that session, which its Cancel deletes. */
+  created: LibraryExercise[];
+}
+
+/**
+ * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
+ * arrow keys to reorder, new exercise). Mounted only while open, so each opening starts fresh, or from `resume`.
+ * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
+ * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
+ */
 export function DayEditor({
   day,
   exercises,
   busy,
   setBusy,
+  resume,
   onClose,
+  onReopen,
 }: {
   day: SplitDay;
   exercises: LibraryExercise[];
   busy: boolean;
   setBusy: (busy: boolean) => void;
+  resume?: DiscardedEdit;
   onClose: () => void;
+  onReopen: (edit: DiscardedEdit) => void;
 }) {
   const { showToast } = useToast();
-  const [draft, setDraft] = useState<DayDraft>(() => ({
-    id: day.id,
-    dayOfWeek: day.dayOfWeek,
-    name: day.name,
-    isRest: day.isRest,
-    exercises: day.exercises.map((e) => ({
-      exerciseId: e.exerciseId,
-      targetSets: String(e.targetSets),
-      minReps: String(e.minReps),
-      maxReps: String(e.maxReps),
-    })),
-  }));
+  const [draft, setDraft] = useState<DayDraft>(() => resume?.draft ?? toDraft(day));
+  const [created, setCreated] = useState<LibraryExercise[]>(() => resume?.created ?? []);
   const [errorMsg, setErrorMsg] = useState("");
   const [addId, setAddId] = useState("");
-  const dragRow = useDragSort((from, to) =>
+  const [query, setQuery] = useState("");
+  const move = (from: number, to: number) =>
     setDraft((d) => {
       const list = [...d.exercises];
       list.splice(to, 0, ...list.splice(from, 1));
       return { ...d, exercises: list };
-    }),
-  );
-  const nameOf = (id: string) => exercises.find((e) => e.id === id)?.name ?? "Exercise";
+    });
+  const dragRow = useDragSort(move);
+  const known = [...exercises, ...created.filter((c) => !exercises.some((e) => e.id === c.id))];
+  const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? "Exercise";
   const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
-  const groups = [...new Set(addable.map((e) => e.muscleGroup))];
+  // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
+  const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));
+  const groups = [...new Set(found.map((e) => e.muscleGroup))];
+  const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
 
   // New exercise form
   const [showCustom, setShowCustom] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customMuscle, setCustomMuscle] = useState<MuscleGroupKey | "other">("chest");
   const [customEquipment, setCustomEquipment] = useState<"barbell" | "dumbbell" | "cable" | "machine" | "bodyweight">("barbell");
+  // "Create and add" acts once per tap burst (D-043); the tapped button is set before its own handler runs.
+  const once = useOnce();
+  const tappedButton = useRef<Element | null>(null);
+
+  // The modal closes the same way for Cancel, Escape, a click outside and its close button; the last tap tells Cancel
+  // (the form's own Cancel, not the new exercise's) from the rest. Capture phase: it runs before the modal's handlers.
+  const cancelTapped = useRef(false);
+  useEffect(() => {
+    const note = (e: Event) => {
+      const b = e.target instanceof Element ? e.target.closest("button") : null;
+      cancelTapped.current = e.type === "click" && b?.type === "button" && !!b.parentElement?.matches(".modal-card form > .form-actions");
+    };
+    window.addEventListener("click", note, true);
+    window.addEventListener("keydown", note, true);
+    return () => {
+      window.removeEventListener("click", note, true);
+      window.removeEventListener("keydown", note, true);
+    };
+  }, []);
+
+  function close() {
+    if (cancelTapped.current) return void cancel();
+    onClose();
+    if (JSON.stringify(draft) === JSON.stringify(toDraft(day))) return;
+    const kept = { draft, created };
+    showToast({ message: "Changes discarded", touches: [`workout_split_days:${day.id}`], onUndo: () => onReopen(kept) });
+  }
+
+  // Cancel deletes the exercises created in this session (only those), with an Undo that brings them back.
+  async function cancel() {
+    onClose();
+    if (!created.length) return;
+    const answers = await Promise.all(created.map((x) => deleteCustomExerciseAction(x.id).catch(() => null)));
+    const gone = created.filter((_, i) => answers[i]?.success);
+    if (!gone.length) return;
+    showToast({
+      message: gone.length === 1 ? `Removed "${gone[0].name}"` : `Removed ${gone.length} new exercises`,
+      touches: gone.map((x) => `exercises:${x.id}`),
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const back = await Promise.all(gone.map((x) => restoreCustomExerciseAction(x).catch(() => null)));
+          return back.find((b) => !b?.success) ?? { success: true };
+        },
+        (back) => (back && !back.success ? back.error : "Failed to restore exercise"),
+      ),
+    });
+  }
 
   function patchRow(i: number, patch: Partial<DraftExercise>) {
     setDraft((d) => ({ ...d, exercises: d.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)) }));
@@ -71,9 +146,8 @@ export function DayEditor({
   }
 
   function addRow() {
-    const id = addId || addable[0]?.id;
-    if (!id) return;
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: id, ...NEW_ROW }] }));
+    if (!pick) return;
+    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: pick, ...NEW_ROW }] }));
     setAddId("");
   }
 
@@ -110,11 +184,18 @@ export function DayEditor({
         showToast({
           message: `Saved "${draft.name.trim()}"`,
           type: "success",
+          // The day's row and its routine rows.
+          touches: [`workout_split_days:${day.id}`],
           // Writes the old day back; the server refresh brings it to the list.
-          onUndo: undoWith(showToast, () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }), "Failed to undo the edit"),
+          onUndo: undoWith(
+            showToast,
+            () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }),
+            (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+          ),
         });
       } else {
-        setErrorMsg("Failed to save day");
+        // The editor stays open with the day as it was typed, so nothing is lost.
+        setErrorMsg(res.error);
       }
     } catch {
       setErrorMsg("Failed to save day");
@@ -130,32 +211,40 @@ export function DayEditor({
       setErrorMsg("The name must have at least 2 characters.");
       return;
     }
-    if (exercises.some((e) => e.name.trim().toLowerCase() === name.toLowerCase())) {
-      setErrorMsg(`"${name}" already exists.`);
+    const same = known.find((e) => exerciseNameKey(e.name) === exerciseNameKey(name));
+    if (same) {
+      setErrorMsg(`"${same.name}" already exists.`);
       return;
     }
     setErrorMsg("");
     setBusy(true);
     try {
-      const res = await addCustomExerciseAction({ name, muscleGroup: customMuscle, equipmentType: customEquipment });
+      // The id is made here (D-040), so an add sent twice is one exercise.
+      const made = { id: crypto.randomUUID(), name, muscleGroup: customMuscle, equipmentType: customEquipment };
+      const res = await addCustomExerciseAction(made);
       if (res.success) {
         // A new exercise is made for this day, so it goes straight into the routine.
         const exerciseId = res.exercise.id;
         setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
+        setCreated((list) => [...list, made]);
         setShowCustom(false);
         setCustomName("");
         showToast({
           message: `Created "${name}"`,
           type: "success",
+          touches: [`exercises:${exerciseId}`],
           // Refused once a routine or a set uses it, so Undo never deletes data.
           onUndo: undoWith(
             showToast,
             async () => {
               const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
-              if (gone?.success) setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
+              if (gone?.success) {
+                setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
+                setCreated((list) => list.filter((x) => x.id !== exerciseId));
+              }
               return gone;
             },
-            "Failed to undo: the exercise is already in use",
+            (back) => (back && !back.success ? back.error : "Failed to undo: the exercise is already in use"),
           ),
         });
       } else {
@@ -171,7 +260,7 @@ export function DayEditor({
   return (
     <FormModal
       isOpen
-      onClose={onClose}
+      onClose={close}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}
@@ -183,7 +272,7 @@ export function DayEditor({
         disabled={busy}
         type="text"
         required
-        maxLength={100}
+        maxLength={GYM_LIMITS.dayName}
         value={draft.name}
         onChange={(e) => setDraft({ ...draft, name: e.target.value })}
       />
@@ -197,7 +286,17 @@ export function DayEditor({
               const name = nameOf(row.exerciseId);
               return (
                 <div key={row.exerciseId} className="routine-row" data-sort>
-                  <DragHandle disabled={busy} label={`Drag ${name} to reorder`} {...dragRow} />
+                  <DragHandle
+                    disabled={busy}
+                    label={`Drag ${name} to reorder`}
+                    {...dragRow}
+                    onKeyDown={(e) => {
+                      const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                      if (to < 0 || to >= draft.exercises.length) return;
+                      e.preventDefault();
+                      move(i, to);
+                    }}
+                  />
                   <div className="routine-row-body">
                     <div className="routine-row-head">
                       <strong>
@@ -253,43 +352,61 @@ export function DayEditor({
 
           {addable.length > 0 && draft.exercises.length < 20 && (
             <div className="routine-add">
-              <Label text="Exercise">
-                <select disabled={busy} value={addId || addable[0].id} onChange={(e) => setAddId(e.target.value)}>
-                  {groups.map((g) => (
-                    <optgroup key={g} label={muscleLabel(g)}>
-                      {addable
-                        .filter((e) => e.muscleGroup === g)
-                        .map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.name}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </Label>
-              <button type="button" className="secondary btn-sm" onClick={addRow}>
-                <PlusIcon size={14} />
-                Add exercise
-              </button>
+              <Field
+                label="Search exercises"
+                disabled={busy}
+                type="text"
+                enterKeyHint="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter only searches; it does not submit the whole day.
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+              />
+              {found.length === 0 ? (
+                <EmptyNote>No exercise matches.</EmptyNote>
+              ) : (
+                <>
+                  <Label text="Exercise">
+                    <select disabled={busy} value={pick} onChange={(e) => setAddId(e.target.value)}>
+                      {groups.map((g) => (
+                        <optgroup key={g} label={muscleLabel(g)}>
+                          {found
+                            .filter((e) => e.muscleGroup === g)
+                            .map((e) => (
+                              <option key={e.id} value={e.id}>
+                                {e.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </Label>
+                  <button type="button" className="secondary btn-sm" onClick={addRow}>
+                    <PlusIcon size={14} />
+                    Add exercise
+                  </button>
+                </>
+              )}
             </div>
           )}
 
           {draft.exercises.length < 20 &&
             (showCustom ? (
-              <div className="custom-exercise">
+              <div className="custom-exercise" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
                 <Field
                   label="New exercise"
                   disabled={busy}
                   type="text"
-                  maxLength={100}
+                  maxLength={GYM_LIMITS.exerciseName}
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   onKeyDown={(e) => {
                     // Enter creates the exercise instead of submitting the whole day.
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      void addCustomExercise();
+                      once("create", addCustomExercise, null);
                     }
                   }}
                 />
@@ -318,7 +435,7 @@ export function DayEditor({
                 <FormActions
                   compact
                   onCancel={() => setShowCustom(false)}
-                  onSubmit={addCustomExercise}
+                  onSubmit={() => once("create", addCustomExercise, tappedButton.current)}
                   canSubmit={!busy && visible(customName)}
                   submitLabel="Create and add"
                 />

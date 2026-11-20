@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql, type SQLWrapper } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   exercises,
@@ -15,6 +15,7 @@ import {
   AddSessionInput,
   FinishSessionInput,
   LogSetInput,
+  RestoreDeloadWeeksInput,
   RestoreSessionInput,
   SaveSplitDayInput,
 } from "./validations/gym";
@@ -56,7 +57,8 @@ export async function getExercises(userId: string) {
 }
 
 /**
- * Create a custom user exercise
+ * Create a custom user exercise. With the id the device made (D-040) an add sent twice is one row: the repeat answers
+ * the row the first one made. An id that is already another user's row creates nothing and answers null.
  */
 export async function addCustomExercise(
   userId: string,
@@ -64,37 +66,51 @@ export async function addCustomExercise(
 ) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
-    // Case-insensitive, against the defaults and the user's own, so the picker never lists two of the same name.
-    if (await nameTaken(tx, userId, input.name)) throw new Refusal(`"${input.name}" already exists.`);
+    if (input.id) {
+      const [made] = await tx.select().from(exercises).where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)));
+      if (made) return made;
+    }
+    await refuseTakenName(tx, userId, input.name);
     const [created] = await tx
       .insert(exercises)
-      .values({ userId, name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType, isCustom: true })
+      .values({ id: input.id, userId, name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType, isCustom: true })
+      .onConflictDoNothing()
       .returning();
-    return created;
+    return created ?? null;
   });
 }
 
-/** One name per user across the defaults and their own, ignoring case; `except` is the exercise being edited. */
-async function nameTaken(tx: Pick<typeof db, "select">, userId: string, name: string, except?: string) {
+/** An exercise name as `exerciseNameKey` compares it, in SQL: inner spaces collapsed, case and a trailing "." ignored. */
+const nameKey = (name: SQLWrapper) => sql`lower(regexp_replace(btrim(regexp_replace(${name}, '\\s+', ' ', 'g')), ' ?\\.$', ''))`;
+
+/**
+ * One name per user across the defaults and their own, compared by `nameKey`, so the picker never lists two of the same
+ * name; `except` is the exercise being edited. The refusal names the exercise that has it.
+ */
+async function refuseTakenName(tx: Pick<typeof db, "select">, userId: string, name: string, except?: string) {
   const [same] = await tx
-    .select({ id: exercises.id })
+    .select({ name: exercises.name })
     .from(exercises)
-    .where(and(sql`lower(${exercises.name}) = lower(${name})`, or(isNull(exercises.userId), eq(exercises.userId, userId)), except ? ne(exercises.id, except) : undefined))
+    .where(and(sql`${nameKey(exercises.name)} = ${nameKey(sql`${name}::text`)}`, or(isNull(exercises.userId), eq(exercises.userId, userId)), except ? ne(exercises.id, except) : undefined))
     .limit(1);
-  return Boolean(same);
+  if (same) throw new Refusal(`"${same.name}" already exists.`);
 }
 
-/** Edit of the user's own custom exercise (also the Undo of an edit); null when it is not theirs. */
+/** Edit of the user's own custom exercise (also the Undo of an edit); null when it is not (or no longer) theirs. */
 export async function updateCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
-    if (await nameTaken(tx, userId, input.name, input.id)) throw new Refusal(`"${input.name}" already exists.`);
+    const own = and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true));
+    // A gone exercise says so before any name clash does.
+    const [mine] = await tx.select({ id: exercises.id }).from(exercises).where(own);
+    if (!mine) return null;
+    await refuseTakenName(tx, userId, input.name, input.id);
     const [row] = await tx
       .update(exercises)
       .set({ name: input.name, muscleGroup: input.muscleGroup, equipmentType: input.equipmentType })
-      .where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)))
+      .where(own)
       .returning();
-    return row ?? null;
+    return row;
   });
 }
 
@@ -102,7 +118,7 @@ export async function updateCustomExercise(userId: string, input: CustomExercise
 export async function restoreCustomExercise(userId: string, input: CustomExerciseWithIdInput) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "exercise", userId);
-    if (await nameTaken(tx, userId, input.name, input.id)) throw new Refusal(`"${input.name}" already exists.`);
+    await refuseTakenName(tx, userId, input.name, input.id);
     await tx.insert(exercises).values({ ...input, userId, isCustom: true }).onConflictDoNothing();
     const [row] = await tx.select().from(exercises).where(and(eq(exercises.id, input.id), eq(exercises.userId, userId), eq(exercises.isCustom, true)));
     return row ?? null;
@@ -110,16 +126,23 @@ export async function restoreCustomExercise(userId: string, input: CustomExercis
 }
 
 /**
- * Undo of creating a custom exercise. Refuses one a routine or a logged set already uses
- * (deleting it would cascade into them), and any exercise that is not the user's own custom one.
+ * Delete of a custom exercise (also the Undo of creating one). "in-use" when a routine or a logged set already uses it
+ * (deleting it would cascade into them), "missing" when it is not (or no longer) the user's own custom exercise. It
+ * holds the same per-user lock as `saveSplitDay`, so a day saved at the same moment either keeps the exercise (and the
+ * delete is refused) or is refused itself, never left half-saved.
  */
-export async function deleteCustomExercise(userId: string, exerciseId: string) {
-  const own = and(eq(exercises.id, exerciseId), eq(exercises.userId, userId), eq(exercises.isCustom, true));
-  const [inRoutine] = await db.select({ id: workoutSplitDayExercises.id }).from(workoutSplitDayExercises).where(eq(workoutSplitDayExercises.exerciseId, exerciseId)).limit(1);
-  const [inSet] = await db.select({ id: workoutSets.id }).from(workoutSets).where(eq(workoutSets.exerciseId, exerciseId)).limit(1);
-  if (inRoutine || inSet) return false;
-  const deleted = await db.delete(exercises).where(own).returning({ id: exercises.id });
-  return deleted.length > 0;
+export async function deleteCustomExercise(userId: string, exerciseId: string): Promise<"deleted" | "in-use" | "missing"> {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId);
+    const own = and(eq(exercises.id, exerciseId), eq(exercises.userId, userId), eq(exercises.isCustom, true));
+    const [mine] = await tx.select({ id: exercises.id }).from(exercises).where(own);
+    if (!mine) return "missing";
+    const [inRoutine] = await tx.select({ id: workoutSplitDayExercises.id }).from(workoutSplitDayExercises).where(eq(workoutSplitDayExercises.exerciseId, exerciseId)).limit(1);
+    const [inSet] = await tx.select({ id: workoutSets.id }).from(workoutSets).where(eq(workoutSets.exerciseId, exerciseId)).limit(1);
+    if (inRoutine || inSet) return "in-use";
+    await tx.delete(exercises).where(own);
+    return "deleted";
+  });
 }
 
 /**
@@ -184,11 +207,13 @@ export async function getUserSplitWithDays(userId: string) {
 
 /**
  * Replace one day of the user's routine (name, rest flag, ordered exercises).
- * Returns false when the day is not the user's or an exercise is not visible to the user.
+ * Returns false when the day is not the user's; refuses, changing nothing, when an exercise on it is not visible to the
+ * user (deleted in another tab, say). It holds the lock `deleteCustomExercise` takes, so the two never interleave.
  */
 export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Promise<boolean> {
   const list = input.isRest ? [] : input.exercises;
   return db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId);
     const [day] = await tx
       .select({ id: workoutSplitDays.id })
       .from(workoutSplitDays)
@@ -205,7 +230,7 @@ export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Pr
             or(isNull(exercises.userId), eq(exercises.userId, userId)),
           ),
         );
-      if (visible.length !== list.length) return false;
+      if (visible.length !== list.length) throw new Refusal("An exercise on this day no longer exists. Remove it and save again.");
     }
 
     await tx
@@ -531,19 +556,37 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
 }
 
 /**
- * Sets the last and the next deload week (Sundays). Both become deload weeks; every other deload week after `last` is
- * dropped. Only the plan changes: a workout is a deload workout when it was started as one (decision 2026-11-16), so
- * choosing a week never rewrites workouts already logged. Weeks before `last` are history and stay. Undo is this call
- * with the previous pair.
+ * Sets the last and the next deload week (Sundays). Both become deload weeks, and every other one from this week on is
+ * dropped (the plan). Weeks before this week are history and stay, so "Not set" or an earlier Last never deletes one:
+ * the card's Last is then still the latest of them, answered as `last`. Only the plan changes: a workout is a deload
+ * workout when it was started as one (decision 2026-11-16), so choosing a week never rewrites workouts already logged.
+ * Answers the weeks it added and removed, which Undo (`restoreDeloadWeeks`) swaps back exactly.
  */
 export async function saveDeloadWeeks(userId: string, { last, next }: { last: string | null; next: string | null }) {
+  const thisWeek = weekStart(toISODate());
   const keep = [...new Set([last, next].filter((w): w is string => !!w))];
-  const removed = [...(await deloadWeekSet(userId))].filter((w) => !keep.includes(w) && (!last || w > last));
-  await db.transaction(async (tx) => {
-    if (removed.length) await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, removed)));
-    for (const w of keep) await tx.insert(deloadWeeks).values({ userId, weekStart: w }).onConflictDoNothing();
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "deload", userId);
+    const had = (await tx.select({ week: deloadWeeks.weekStart }).from(deloadWeeks).where(eq(deloadWeeks.userId, userId))).map((r) => r.week);
+    const removed = had.filter((w) => w >= thisWeek && !keep.includes(w)).sort();
+    const added = keep.filter((w) => !had.includes(w)).sort();
+    await swapDeloadWeeks(tx, userId, added, removed);
+    const weeks = [...had.filter((w) => !removed.includes(w)), ...added].sort();
+    return { last: weeks.filter((w) => w <= thisWeek).at(-1) ?? null, added, removed };
   });
-  return { last, next };
+}
+
+/** Undo of `saveDeloadWeeks`: the weeks it removed come back and the weeks it added go (a repeated Undo changes nothing). */
+export async function restoreDeloadWeeks(userId: string, { add, remove }: RestoreDeloadWeeksInput) {
+  await db.transaction(async (tx) => {
+    await lockUser(tx, "deload", userId);
+    await swapDeloadWeeks(tx, userId, add, remove);
+  });
+}
+
+async function swapDeloadWeeks(tx: Pick<typeof db, "delete" | "insert">, userId: string, add: string[], remove: string[]) {
+  if (remove.length) await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, remove)));
+  if (add.length) await tx.insert(deloadWeeks).values(add.map((weekStart) => ({ userId, weekStart }))).onConflictDoNothing();
 }
 
 export interface HistorySession {
