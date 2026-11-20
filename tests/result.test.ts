@@ -60,6 +60,10 @@ describe("zod issues become people's messages", () => {
     expect(await messageFor(categoryNameSchema, { scope: "wishlist", name: "other" })).toBe('"other" is built in.');
   });
 
+  it("answers an empty, spaces-only or invisible category name with the schema's own message", async () => {
+    for (const name of ["", "   ", "​"]) expect(await messageFor(categoryNameSchema, { scope: "wishlist", name })).toBe("Name is required");
+  });
+
   it("never lets zod's own text through for the app's schemas", async () => {
     expect(await messageFor(categoryNameSchema, { scope: "wishlist", name: "x".repeat(51) })).toBe("Too long (max 50)");
     expect(await messageFor(categoryNameSchema, { scope: "shelf", name: "x" })).toBe("Pick one of the options");

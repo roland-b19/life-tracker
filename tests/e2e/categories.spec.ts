@@ -268,6 +268,131 @@ test("the categories card's buttons act once on a double tap", async ({ signedIn
   await expect(card(page).getByText(b, { exact: true })).toBeVisible();
 });
 
+const center = (box: { x: number; y: number; width: number; height: number } | null) => {
+  if (!box) throw new Error("not on screen");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+// Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
+// The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
+// 25 ms; a slower one would hold the card's one-write-at-a-time guard and hide the case), so it lands on whatever the
+// first left there. Answers how many writes it set off.
+async function burst(page: Page, { x, y }: { x: number; y: number }) {
+  let acts = 0;
+  const count = (r: { method: () => string; headers: () => Record<string, string> }) => {
+    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
+  };
+  page.on("request", count);
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(x, y));
+  await page.waitForTimeout(Math.max(0, 40 - (Date.now() - started)));
+  await page.mouse.click(x, y);
+  // Long enough for a second write, or a dialog the second click opened, to show.
+  await page.waitForTimeout(800);
+  page.off("request", count);
+  return acts;
+}
+
+// The second click of a burst is swallowed where the first landed: it neither deletes the row that slid up under it,
+// nor, after Save, opens the Edit form of the row under the closed dialog. Both at desktop and at phone width.
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 375, height: 812 },
+]) {
+  test(`the categories card acts once on two quick clicks, at ${size.width} wide`, async ({ signedInPage: page }) => {
+    test.slow();
+    await page.setViewportSize(size);
+    const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+    // Rows after b make the page tall enough to scroll the rows up on a phone screen.
+    const fillers = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+    await wishlist.open(page);
+    for (const name of [a, b, ...fillers]) {
+      await addCategory(page, name);
+      await dismissToast(page);
+    }
+
+    // Delete. The page is scrolled up to 100 px short of its end: on a phone that lifts the row above the toast that
+    // opens at the bottom (it would take the second click), and the page left below means the shorter list does not
+    // pull the page up under the finger.
+    const remove = page.getByRole("button", { name: `Delete category ${a}`, exact: true });
+    await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
+    await expect(remove).toBeInViewport();
+    expect(await burst(page, center(await remove.boundingBox()))).toBe(1);
+    await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
+    await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+    await dismissToast(page);
+
+    // Save, with b's Edit button lined up under it, as it was at 1280 wide when the case was found. The page cannot
+    // scroll while the form is open, so it is lined up first; the form opens without a scroll (a dispatched click).
+    const add = page.getByRole("button", { name: "Add category" });
+    const form = page.getByRole("dialog", { name: "New category" });
+    await add.click();
+    const saveBox = await form.getByRole("button", { name: "Save" }).boundingBox();
+    const save = center(saveBox);
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await expect(form).toBeHidden();
+    const edit = page.getByRole("button", { name: `Edit category ${b}`, exact: true });
+    await page.evaluate((dy) => window.scrollBy(0, dy), center(await edit.boundingBox()).y - save.y);
+    const spot = { x: center(await edit.boundingBox()).x, y: save.y };
+    expect(Math.abs(center(await edit.boundingBox()).y - spot.y)).toBeLessThan(10);
+    expect(spot.x).toBeGreaterThan(saveBox!.x);
+    expect(spot.x).toBeLessThan(saveBox!.x + saveBox!.width);
+    await add.dispatchEvent("click");
+    await form.getByLabel("Name", { exact: true }).fill(c);
+    expect(await burst(page, spot)).toBe(1);
+    await expect(page.getByText(`Added "${c}"`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await wishlist.open(page);
+    await expect(card(page).locator(".entry-row")).toHaveCount(5);
+    for (const name of [b, c, ...fillers]) await expect(card(page).getByText(name, { exact: true })).toBeVisible();
+    await expect(card(page).getByText(a, { exact: true })).toBeHidden();
+  });
+}
+
+// A refused write shows the server's own message (D-040), not a generic "Failed to ...".
+test("the categories card shows why the server refused a delete or an Undo", async ({ signedInPage: page }) => {
+  const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  await addCategory(page, a);
+  await dismissToast(page);
+
+  // A stale Undo: another tab renames the category the Undo would take back, so the server refuses it.
+  await renameCategory(page, a, b);
+  const undoButton = page.getByRole("button", { name: "Undo" });
+  await undoButton.hover(); // keeps the toast open meanwhile
+  const other = await page.context().newPage();
+  await wishlist.open(other);
+  await renameCategory(other, b, c);
+  await other.close();
+  await undo(page, "dropCurrent");
+  await expect(page.getByText(`Can't undo: "${b}" has changed since.`, { exact: true })).toBeVisible();
+  await dismissToast(page);
+
+  // Signed out: the delete is refused with the sign-in message.
+  await page.context().clearCookies();
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click(), `"name":"${b}"`);
+  await expect(page.getByText("You're signed out. Sign in again.", { exact: true })).toBeVisible();
+});
+
+// A name over the limit is kept as typed, the form says why, and nothing is saved.
+test("the categories card refuses a name over 50 characters without cutting it", async ({ signedInPage: page }) => {
+  const long = `e2e-${"x".repeat(56)}`;
+  await wishlist.open(page);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  const field = form.getByLabel("Name", { exact: true });
+  await field.fill(long);
+  await expect(field).toHaveValue(long);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${long}"`);
+  await expect(form.getByRole("alert")).toHaveText("Too long (max 50)");
+  await expect(field).toHaveValue(long);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+
+  await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
 // The card's fold is kept on the device (useDeviceState), so it is still folded after a reload.
 test("the categories card stays folded after a reload", async ({ signedInPage: page }) => {
   const name = `e2e-cat-${hex()}`;
