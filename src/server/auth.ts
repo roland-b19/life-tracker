@@ -40,3 +40,8 @@ export async function requirePageUser(path?: string): Promise<{ id: string; name
   if (!user) redirect(path ? `/signin?next=${encodeURIComponent(path)}` : "/signin");
   return user;
 }
+
+/** For a page every visitor may see (the 404 page): the signed-in user, or null. Never a guard. */
+export async function optionalPageUser(): Promise<{ id: string; name: string } | null> {
+  return currentUser();
+}

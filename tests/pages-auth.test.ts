@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ session: null as null | { user: { id?: string; name?: string | null } }, dbTouched: 0 }));
+const state = vi.hoisted(() => ({
+  session: null as null | { user: { id?: string; name?: string | null }; sid?: string },
+  live: true,
+  dbTouched: 0,
+}));
 vi.mock("next-auth", () => ({ getServerSession: async () => state.session }));
 vi.mock("@/auth", () => ({ authOptions: {} }));
 vi.mock("next/navigation", () => ({
@@ -8,6 +12,8 @@ vi.mock("next/navigation", () => ({
     throw new Error(`redirect:${to}`);
   },
 }));
+// The session row check (D-041) is its own query: stand it in, so a signed-in render still touches nothing else.
+vi.mock("@/server/sessions", () => ({ isSessionLive: async () => state.live }));
 // Any query an anonymous visitor's page makes would go through `db`: touching it at all is a failure.
 vi.mock("@/server/db", () => ({
   db: new Proxy({}, { get: () => (state.dbTouched++, () => { throw new Error("db read"); }) }),
@@ -26,6 +32,7 @@ const guarded = (loaders: Record<string, Load>) => Object.entries(loaders).filte
 
 beforeEach(() => {
   state.session = null;
+  state.live = true;
   state.dbTouched = 0;
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -52,16 +59,25 @@ describe("pages require a session", () => {
     await expect(requirePageUser()).rejects.toThrow("redirect:/signin");
   });
 
-  it("returns the signed-in user, with a default name", async () => {
+  it("a session whose row is gone, or without a sid, counts as anonymous, and keeps the page's path", async () => {
+    state.session = { user: { id: "u1", name: "Ana" }, sid: "s1" };
+    state.live = false;
+    await expect(requirePageUser("/gym")).rejects.toThrow("redirect:/signin?next=%2Fgym");
+    state.live = true;
     state.session = { user: { id: "u1", name: "Ana" } };
+    await expect(requirePageUser()).rejects.toThrow(/^redirect:\/signin$/);
+  });
+
+  it("returns the signed-in user, with a default name", async () => {
+    state.session = { user: { id: "u1", name: "Ana" }, sid: "s1" };
     await expect(requirePageUser()).resolves.toEqual({ id: "u1", name: "Ana" });
-    state.session = { user: { id: "u1", name: null } };
+    state.session = { user: { id: "u1", name: null }, sid: "s1" };
     await expect(requirePageUser()).resolves.toEqual({ id: "u1", name: "User" });
   });
 
   it("Settings renders for a signed-in user with the Claude flag off, without reading the Claude connection", async () => {
     vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "false");
-    state.session = { user: { id: "u1", name: "Ana" } };
+    state.session = { user: { id: "u1", name: "Ana" }, sid: "s1" };
     const { default: Settings } = await pageLoaders["../app/settings/page.tsx"]();
     await expect(Promise.resolve().then(() => Settings({ children: "" }))).resolves.toBeTruthy();
     expect(state.dbTouched).toBe(0);
@@ -75,6 +91,7 @@ describe("pages require a session", () => {
     for (const [file, source] of Object.entries(sources)) {
       expect(source, file).not.toMatch(/getServerSession|redirect\("\/signin"\)/);
     }
-    for (const [file] of guarded(pageLoaders)) expect(sources[file], file).toContain("requirePageUser()");
+    // With or without the page's own path (`requirePageUser("/gym")`), which the sign-in form returns to.
+    for (const [file] of guarded(pageLoaders)) expect(sources[file], file).toMatch(/requirePageUser\(("\/[^"]*")?\)/);
   });
 });

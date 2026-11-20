@@ -3,14 +3,16 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const auth = vi.hoisted(() => ({ id: "" }));
-vi.mock("next-auth", () => ({ getServerSession: async () => ({ user: { id: auth.id, name: "Load" } }) }));
+// The session carries a `sid` backed by a real `user_sessions` row: the session check is one of the counted queries.
+const auth = vi.hoisted(() => ({ id: "", sid: "" }));
+vi.mock("next-auth", () => ({ getServerSession: async () => ({ user: { id: auth.id, name: "Load" }, sid: auth.sid }) }));
 vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("redirected"); }, notFound: () => { throw new Error("notFound"); } }));
 vi.mock("@/auth", () => ({ authOptions: {} }));
 
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { seedUser } from "./auth";
+import { startSession } from "@/server/sessions";
 import { getExercises, getUserSplitWithDays } from "@/lib/gym";
 import { getShoppingCategories } from "@/lib/food";
 
@@ -30,6 +32,7 @@ let userId = "";
 beforeAll(async () => {
   userId = await seedUser(`load-${randomUUID()}`);
   auth.id = userId;
+  auth.sid = await startSession(userId, 180 * 24 * 60 * 60);
   await getUserSplitWithDays(userId); // creates the routine
   await getExercises(userId);
   // A first visit seeds the shopping categories and units once; the guard measures every visit after it.
@@ -69,13 +72,14 @@ afterAll(async () => {
 
 // Cost guards: a page view must not grow with the history, and the Neon and Vercel
 // free limits count queries, rows and bytes. Measured with two years of data; the limits leave a little room.
+// Every budget counts the session row check (D-041); /gym also leaves one for the plate weights.
 describe("a page view with two years of data stays cheap", () => {
   const pages: [string, () => Promise<{ default: () => Promise<unknown> }>, number, number][] = [
-    ["/gym", () => import("../app/gym/page"), 12, 300_000],
+    ["/gym", () => import("../app/gym/page"), 14, 300_000],
     // Weight sends at most 365 weigh-ins for its chart (the database keeps all), so the page is bounded by that, not by the history.
-    ["/health", () => import("../app/health/page"), 12, 40_000],
-    ["/todos", () => import("../app/todos/page"), 11, 20_000],
-    ["/wishlist", () => import("../app/wishlist/page"), 3, 1_000],
+    ["/health", () => import("../app/health/page"), 13, 40_000],
+    ["/todos", () => import("../app/todos/page"), 12, 20_000],
+    ["/wishlist", () => import("../app/wishlist/page"), 4, 1_000],
   ];
   for (const [route, load, maxQueries, maxBytes] of pages) {
     it(`${route}: at most ${maxQueries} queries and ${maxBytes} bytes of props`, async () => {
@@ -90,8 +94,8 @@ describe("a page view with two years of data stays cheap", () => {
     const { loadTodosViewAction } = await import("@/actions/todos");
     const { result, queries, bytes } = await measure(() => loadTodosViewAction());
     expect(result.success).toBe(true);
-    // 12 = the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history.
-    expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(12);
+    // 13 = the session check, the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history.
+    expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(13);
     expect(bytes).toBeLessThanOrEqual(20_000);
   });
 

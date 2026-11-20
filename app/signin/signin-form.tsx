@@ -26,12 +26,13 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
     setErrorMsg("");
     const result = await signIn("credentials", { name, redirect: false, callbackUrl: next }).catch(() => null);
     if (result?.ok) {
-      router.push(next);
+      // Replaces the sign-in page: Back never returns to it (D-035).
+      router.replace(next);
       router.refresh();
     } else {
       setErrorMsg(
         result?.error === "CredentialsSignin"
-          ? "Please enter a username using lower-case letters, numbers or dashes."
+          ? "Please enter a username of up to 64 lower-case letters, numbers or dashes."
           : "Failed to sign in",
       );
       setBusy(false);
@@ -66,7 +67,6 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            maxLength={64}
             required
             autoFocus
           />

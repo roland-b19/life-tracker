@@ -29,18 +29,34 @@ const loadTheme = (): Theme => {
   return theme;
 };
 
-const setTheme = (next: Theme) => {
+const applyTheme = (next: Theme) => {
   theme = next;
   fadeTheme();
   const root = document.documentElement;
   if (next === "auto") delete root.dataset.theme;
   else root.dataset.theme = next;
+  listeners.forEach((l) => l());
+};
+
+const setTheme = (next: Theme) => {
+  applyTheme(next);
   try {
     if (next === "auto") localStorage.removeItem(THEME_STORAGE);
     else localStorage.setItem(THEME_STORAGE, next);
   } catch {} // storage blocked: the choice lasts until the page reloads
-  listeners.forEach((l) => l());
 };
+
+/**
+ * Follows a choice made in another tab of this browser: `storage` fires in every other tab when the key changes (or
+ * when the whole storage is cleared: `key` null). Other devices keep their own choice. Installed for every page by
+ * `ShellListeners` in the root layout.
+ */
+export function followThemeFromOtherTabs(e: StorageEvent) {
+  if (e.key !== THEME_STORAGE && e.key !== null) return;
+  theme = null; // read the stored choice again
+  const next = loadTheme();
+  if (next !== (document.documentElement.dataset.theme ?? "auto")) applyTheme(next);
+}
 
 const subscribe = (l: () => void) => {
   listeners.add(l);
