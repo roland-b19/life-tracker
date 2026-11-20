@@ -217,3 +217,8 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Why:** The owner's answers on the functional audit. Two rows never share a name and unit: restoring, renaming or deleting a unit merges into the existing row, which takes the new category, with the toast "Merged with existing item". A merge converts g and kg, ml and l, and refuses other unit pairs with a message. Undo of a tick puts the row back in its old place. Clear bought keeps only its last batch for Undo: the next Clear bought deletes the batch before it for good. Units read in lower case ("pcs"). Deleting every category leaves none; the defaults are not added back.
 - **Rejected:** keeping every cleared row forever (it grows the table and the 5000-row revert cap); refusing all merges across units.
 - **Status:** active
+
+## D-043: One way for a double tap to act once (2026-11-20)
+- **Why:** The owner's pick. A fast double tap must neither repeat a write nor land on what slid under the finger (the next row's button, or the button under a form that closed). The categories card's guard does both: one write at a time, and for 500 ms the clicks on the tapped button's spot are swallowed, never a click on the toast. It becomes one shared helper; `FormModal`'s own submit lock and every "double taps act once" step of the [audit fixes plan](../plans/audit-fixes.md) use it.
+- **Rejected:** keeping only `FormModal`'s lock (a second tap on Save then opens the Edit form under the closed dialog); a guard per component (two ways for one job).
+- **Status:** active
