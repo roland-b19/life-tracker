@@ -8,6 +8,7 @@ import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField }
 import { useDeviceState } from "./device-state";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
+import { useOnce } from "./once";
 import { undoWith, useToast } from "./toast";
 
 /** What a list's categories are saved with. Wishlist and Tasks share one table per scope; Health's shopping list has its own. */
@@ -18,6 +19,12 @@ export interface CategoriesApi {
   noun?: string;
   /** The built-in fallback name that cannot be added, renamed or deleted ("other"; "pcs" for units). */
   builtIn?: string;
+  /**
+   * The `touches` keys of the card's Undo toasts (D-040): `category` names a category's row as "<table>:<what
+   * identifies it>" (categories have no row id: the name does it, with the scope where one table holds several lists),
+   * and `items` is the table of the items a rename or delete re-files.
+   */
+  keys: { category: (name: string) => string; items: string };
   add: (name: string) => Promise<Answer>;
   rename: (from: string, to: string) => Promise<Answer<{ change: Change }>>;
   remove: (name: string) => Promise<Answer<{ change: Change }>>;
@@ -29,6 +36,7 @@ export interface CategoriesApi {
 /** The api of a scope-based list (Wishlist, or a Tasks space). */
 export const scopedCategories = (scope: CategoryScope): CategoriesApi => ({
   id: scope,
+  keys: { category: (name) => `item_categories:${scope}/${name}`, items: scope === "wishlist" ? "wishlist_items" : "todos" },
   add: (name) => addCategoryAction({ scope, name }),
   rename: (from, to) => renameCategoryAction({ scope, from, to }),
   remove: (name) => deleteCategoryAction({ scope, name }),
@@ -69,22 +77,16 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
-  // One save or delete at a time, and one per tap burst: the rest of a double tap on the tapped button (`spot`: Save, or
-  // the row's Delete) is swallowed, so it neither repeats the write nor lands on what slid into the button's place (the
-  // next row's Delete, or the Edit button under a closing form). A tap on the toast always goes through (see swallowBurst).
-  const writing = useRef(false);
+  // A Delete acts once per tap burst (D-043): the rest of a double tap on the tapped Delete is swallowed, so it neither
+  // repeats the write nor lands on the next row's Delete, which slid into its place. Save gets the same from FormModal.
+  const once = useOnce();
   // The button last tapped in a row, set before its own handler runs.
   const tappedButton = useRef<Element | null>(null);
-  async function once(write: () => Promise<void>, spot: Element | null | undefined) {
-    if (writing.current) return;
-    writing.current = true;
-    if (spot) swallowBurst(spot.getBoundingClientRect());
-    try {
-      await write();
-    } finally {
-      writing.current = false;
-    }
-  }
+  // What an Undo toast touches: these categories' rows and the items it re-filed.
+  const touches = (names: string[], itemIds: string[] = []) => [
+    ...names.map(api.keys.category),
+    ...itemIds.map((id) => `${api.keys.items}:${id}`),
+  ];
 
   const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
   const reorder = (update: string[]) => {
@@ -107,6 +109,8 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
+      // A move saves the whole list's order.
+      touches: touches(next),
       onUndo: undoWith(
         showToast,
         async () => {
@@ -160,8 +164,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    // A tap or click on Save names the button; Enter in the field names it too, and a key repeat is no burst risk.
-    return once(save, (e.nativeEvent as SubmitEvent).submitter);
+    return save();
   }
 
   async function save() {
@@ -179,6 +182,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Added "${to}"`,
           type: "success",
+          touches: touches([to]),
           onUndo: undoWith(
             showToast,
             async () => {
@@ -211,6 +215,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Renamed "${from}" to "${to}"`,
           type: "success",
+          touches: touches([from, to], change.itemIds),
           onUndo: revert(from, to, change, !change.merged, at),
         });
       }
@@ -242,6 +247,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onSynced?.();
     showToast({
       message: `Removed "${cat}"; its items are in ${categoryLabel(builtIn)}`,
+      touches: touches([cat], change.itemIds),
       onUndo: revert(cat, builtIn, change, false, at),
     });
   }
@@ -301,36 +307,6 @@ export const groupOrder = (categories: string[], items: { category: string }[]) 
 /** What a refused write shows: the server's own message, or `fallback` when no answer came (D-040). */
 const why = (answer: Answer<object> | null, fallback: string) => (answer && !answer.success ? answer.error : fallback);
 const undoFailed = (back: Answer<object> | null) => why(back, "Failed to undo");
-
-/** How long the clicks after a write's first tap count as the same double tap (about the system's double-click time). */
-const BURST_MS = 500;
-
-/**
- * Swallows the clicks that land in `spot` (the tapped button's place) within `BURST_MS`: by then what is under the
- * finger may be the next row's Delete, or the button beneath a form that closed. The click being handled is already
- * past. A burst is only taps on that one spot, so a click elsewhere, or typing, ends it and goes through. A click in the
- * toast area always goes through and ends it too: on a phone the toast can open over the button's place, and its Undo
- * must take the very next tap.
- */
-function swallowBurst(spot: DOMRect) {
-  const end = () => {
-    clearTimeout(timer);
-    window.removeEventListener("click", stop, true);
-    window.removeEventListener("keydown", end, true);
-    window.removeEventListener("input", end, true);
-  };
-  const stop = (e: MouseEvent) => {
-    const onToast = e.target instanceof Element && e.target.closest(".toast-container") !== null;
-    const inSpot = e.clientX >= spot.left && e.clientX <= spot.right && e.clientY >= spot.top && e.clientY <= spot.bottom;
-    if (onToast || !inSpot) return end();
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  const timer = setTimeout(end, BURST_MS);
-  window.addEventListener("click", stop, true);
-  window.addEventListener("keydown", end, true);
-  window.addEventListener("input", end, true);
-}
 
 /** `list` with `name` put back at `at` (clamped to the list), unless `at` is negative or the name is there already. */
 const insertAt = (list: string[], name: string, at: number) =>

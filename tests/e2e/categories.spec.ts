@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, expectNoSeriousViolations, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -268,11 +268,6 @@ test("the categories card's buttons act once on a double tap", async ({ signedIn
   await expect(card(page).getByText(b, { exact: true })).toBeVisible();
 });
 
-const center = (box: { x: number; y: number; width: number; height: number } | null) => {
-  if (!box) throw new Error("not on screen");
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-};
-
 // Turns off Chromium's scroll anchoring, which iPhone Safari does not have: with it, a removed row above the anchor
 // scrolls the page instead of letting the next row slide up into its place, which hides the case under test.
 async function slideLikeSafari(page: Page) {
@@ -287,26 +282,6 @@ async function toastButtonAt(page: Page, probe: string, button: Locator) {
   await page.keyboard.press("Shift");
   await dismissToast(page);
   return at;
-}
-
-// Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
-// The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
-// 25 ms; a slower one would hold the card's one-write-at-a-time guard and hide the case), so it lands on whatever the
-// first left there. Answers how many writes it set off.
-async function burst(page: Page, { x, y }: { x: number; y: number }) {
-  let acts = 0;
-  const count = (r: { method: () => string; headers: () => Record<string, string> }) => {
-    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
-  };
-  page.on("request", count);
-  const started = Date.now();
-  await andSettle(page, () => page.mouse.click(x, y));
-  await page.waitForTimeout(Math.max(0, 40 - (Date.now() - started)));
-  await page.mouse.click(x, y);
-  // Long enough for a second write, or a dialog the second click opened, to show.
-  await page.waitForTimeout(800);
-  page.off("request", count);
-  return acts;
 }
 
 // The second click of a burst is swallowed where the first landed: it neither deletes the row that slid up under it,
@@ -471,6 +446,40 @@ test("the categories card takes a quick tap beside the deleted row's Delete butt
   const form = page.getByRole("dialog", { name: "Edit category" });
   await expect(form).toBeVisible();
   await expect(form.getByLabel("Name", { exact: true })).toHaveValue(b);
+});
+
+// Each Undo toast names the category rows it touches (D-040): a newer toast touching the same category takes the older
+// toast's Undo away, so the older Undo never writes over the newer change; toasts about other categories keep theirs.
+test("the categories card's older toast loses its Undo to a newer one about the same category", async ({ signedInPage: page }) => {
+  const [a, b, c, d, e] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  const toast = (message: string) => page.locator(".toast-item").filter({ hasText: message });
+  const undoIn = (message: string) => toast(message).getByRole("button", { name: "Undo" });
+  await wishlist.open(page);
+  for (const name of [a, c, d]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+
+  // The same category: rename a to b, then delete b. The closed form's Save lay over a row's Delete, so Shift ends the
+  // Save's tap burst (D-043) first; this test is about the toasts, not the guard.
+  await renameCategory(page, a, b);
+  await expect(undoIn(`Renamed "${a}" to "${b}"`)).toBeVisible();
+  await page.keyboard.press("Shift");
+  await deleteCategory(page, b);
+  await expect(undoIn(`Removed "${b}"`)).toBeVisible();
+  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still
+  // there afterwards, so its Undo is gone from a toast on screen.
+  expect(await undoIn(`Renamed "${a}" to "${b}"`).count()).toBe(0);
+  await expect(toast(`Renamed "${a}" to "${b}"`)).toBeVisible();
+  for (const message of [`Renamed "${a}"`, `Removed "${b}"`]) await toast(message).getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(dismissButton(page)).toHaveCount(0);
+
+  // Two categories: rename c to e, then delete d.
+  await renameCategory(page, c, e);
+  await page.keyboard.press("Shift");
+  await deleteCategory(page, d);
+  await expect(undoIn(`Renamed "${c}" to "${e}"`)).toBeVisible();
+  await expect(undoIn(`Removed "${d}"`)).toBeVisible();
 });
 
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
