@@ -19,7 +19,7 @@ last_verified: 2026-11-18
 
 ## Domain rules
 - Price range from price: under 250 low, under 750 medium, otherwise high (`src/lib/rules.ts`).
-- Water and steps can be edited only for today and yesterday; tasks only for today and one day either side. Past days are read-only.
+- Water, steps and weight are saved only for today (a past weigh-in can still be deleted, and its delete undone); meals for today and yesterday; tasks only for today and one day either side. Past days are read-only.
 - Weight is one entry per day, 20 to 500 kg.
 - Nothing is soft-deleted. Undo re-inserts the row under its old id.
 - No health data is ever sent to an AI provider. The Claude chat runs only through a local `claude` CLI, with the flag off on Vercel and Azure ([architecture](architecture.md), Flags).

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
-import { isoDate, uuid, visible } from "./common";
+import { isoDate, newId, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
 export const MAX_WATER_ML = 20000;
 /** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
 export const MAX_STEPS = 200000;
 
-export const logMealSchema = z.object({
+const mealFields = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required").default("Meal"),
@@ -19,14 +19,24 @@ export const logMealSchema = z.object({
   isEstimated: z.boolean().default(false).optional(),
 });
 
+/**
+ * Whether a meal holds anything once stored: its calories, or a macro that is not 0 at the one decimal the table keeps
+ * (0.04 g is stored as 0.0). The form's Save asks the same, so the page and the server never disagree.
+ */
+export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
+  meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => Math.round(grams * 10) > 0);
+
+export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0.");
+
 /** Undo of a delete: the same meal, under its old id and time. */
-export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
+export const restoreMealSchema = mealFields.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
 const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
 
 /** One weigh-in a day: saving a day that already has one replaces its kilograms. */
 export const logWeightSchema = z
   .object({
+    id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
     date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
     kilograms: z
@@ -41,19 +51,33 @@ export const logWeightSchema = z
 /** Undo of a delete: the same weigh-in, under its old id. */
 export const restoreWeightSchema = logWeightSchema.extend({ id: uuid });
 
-/** Quick taps (negative, for Undo) and exact totals on a day; both stop at the same ceiling. */
-export const addWaterSchema = z.object({ date: isoDate, amountMl: z.number().int().min(-MAX_WATER_ML).max(MAX_WATER_ML) });
-export const setWaterSchema = z.object({ date: isoDate, waterMl: z.number().int().min(0).max(MAX_WATER_ML) });
-export const updateStepsSchema = z.object({ date: isoDate, steps: z.number().int().min(0).max(MAX_STEPS) });
-
-export const updateNutritionTargetsSchema = z.object({
+const targetFields = {
   calories: z.number().int().min(500).max(10000),
   proteinGrams: z.number().int().min(20).max(500),
   carbsGrams: z.number().int().min(0).max(1000),
   fatGrams: z.number().int().min(0).max(400),
   waterMl: z.number().int().min(500).max(15000),
   steps: z.number().int().min(1000).max(MAX_STEPS),
-});
+};
+const NOTHING_TO_SAVE = "Nothing to save.";
+const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
+
+/** The daily goals: an edit sends only the ones it changes, and only those columns are written. */
+export const updateNutritionTargetsSchema = z
+  .object(targetFields)
+  .partial()
+  .refine((goals) => anySet(Object.values(goals)), NOTHING_TO_SAVE);
+
+/**
+ * The day's water or steps and its goal, from one dialog: each is sent only when it changed, and both are written or
+ * neither. The amount is the day's total (a quick tap sends the new total too), so a repeat changes nothing.
+ */
+export const setWaterSchema = z
+  .object({ date: isoDate, waterMl: z.number().int().min(0).max(MAX_WATER_ML).optional(), goal: targetFields.waterMl.optional() })
+  .refine((v) => anySet([v.waterMl, v.goal]), NOTHING_TO_SAVE);
+export const updateStepsSchema = z
+  .object({ date: isoDate, steps: z.number().int().min(0).max(MAX_STEPS).optional(), goal: targetFields.steps.optional() })
+  .refine((v) => anySet([v.steps, v.goal]), NOTHING_TO_SAVE);
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
 export const shoppingCategorySchema = categorySchema;

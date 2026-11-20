@@ -13,6 +13,7 @@ import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
 import { succeeded } from "./succeeded";
+import { SIGNED_OUT } from "@/lib/validations/result";
 
 /** One successful Claude CLI answer whose structured output is `output`. */
 function mockClaude(output: unknown) {
@@ -185,7 +186,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     const input = { message: "o banană", history: [], date: today, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
-      await expect(sendFoodChatMessageAction(input)).rejects.toThrow("Authentication required.");
+      expect(await sendFoodChatMessageAction(input)).toEqual({ success: false, error: SIGNED_OUT });
     });
 
     it("logs meals only for the signed-in owner", async () => {

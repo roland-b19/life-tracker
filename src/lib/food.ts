@@ -14,7 +14,6 @@ import {
   AddShoppingItemInput,
   LogMealInput,
   LogWeightInput,
-  MAX_WATER_ML,
   RestoreMealInput,
   RestoreWeightInput,
   UpdateShoppingItemInput,
@@ -34,34 +33,20 @@ export async function getNutritionTargets(userId: string) {
   return ensureUserNutritionTargets(userId);
 }
 
+/**
+ * Writes only the goals the edit changed; the others keep their stored value (or the column default on a first save),
+ * so an edit from an older screen never puts back goals it did not touch.
+ */
 export async function updateNutritionTargets(
   userId: string,
   input: UpdateNutritionTargetsInput,
+  tx: Pick<typeof db, "insert"> = db,
 ) {
-  const [updated] = await db
+  const changed = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+  const [updated] = await tx
     .insert(nutritionTargets)
-    .values({
-      userId,
-      calories: input.calories,
-      proteinGrams: input.proteinGrams,
-      carbsGrams: input.carbsGrams,
-      fatGrams: input.fatGrams,
-      waterMl: input.waterMl,
-      steps: input.steps,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [nutritionTargets.userId],
-      set: {
-        calories: input.calories,
-        proteinGrams: input.proteinGrams,
-        carbsGrams: input.carbsGrams,
-        fatGrams: input.fatGrams,
-        waterMl: input.waterMl,
-        steps: input.steps,
-        updatedAt: new Date(),
-      },
-    })
+    .values({ userId, ...changed, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: [nutritionTargets.userId], set: { ...changed, updatedAt: new Date() } })
     .returning();
 
   return updated;
@@ -110,10 +95,15 @@ export async function getDailyFoodSummary(userId: string, date: string) {
   };
 }
 
+/**
+ * Adds a meal under the id the device made, when it sent one: a repeat of the same add finds the row already there and
+ * answers it. An id another user's meal holds writes nothing and answers null, so it neither changes nor shows that row.
+ */
 export async function logMeal(userId: string, input: LogMealInput) {
-  const [created] = await db
+  const created = await db
     .insert(meals)
     .values({
+      id: input.id,
       userId,
       date: input.date,
       name: input.name,
@@ -123,9 +113,13 @@ export async function logMeal(userId: string, input: LogMealInput) {
       fat: input.fat.toFixed(1),
       isEstimated: input.isEstimated ?? false,
     })
-    .returning();
+    .onConflictDoNothing()
+    .returning()
+    .then((rows) => rows.at(0));
+  if (created || !input.id) return created ?? null;
 
-  return created;
+  const own = await db.select().from(meals).where(and(eq(meals.id, input.id), eq(meals.userId, userId)));
+  return own.at(0) ?? null;
 }
 
 /** Undo of a delete: the meal comes back under its old id and time. A taken id gives back undefined. */
@@ -162,7 +156,7 @@ export async function getPastFoods(userId: string, limit = 40) {
       createdAt: meals.createdAt,
     })
     .from(meals)
-    .where(and(eq(meals.userId, userId), eq(meals.forgotten, false)))
+    .where(eq(meals.userId, userId))
     .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt))
     .as("latest");
   return db.select().from(latest).orderBy(desc(latest.createdAt)).limit(limit);
@@ -182,62 +176,35 @@ export async function deleteMeal(userId: string, mealId: string, assertDay?: (da
   return deleted;
 }
 
-export async function addWater(userId: string, date: string, amountMl: number) {
-  const [updated] = await db
-    .insert(dailyMetrics)
-    .values({
-      userId,
-      date,
-      waterMl: Math.min(MAX_WATER_ML, Math.max(0, amountMl)),
-      steps: 0,
-    })
-    .onConflictDoUpdate({
-      target: [dailyMetrics.userId, dailyMetrics.date],
-      set: {
-        waterMl: sql`LEAST(${MAX_WATER_ML}, GREATEST(0, ${dailyMetrics.waterMl} + ${amountMl}))`,
-      },
-    })
-    .returning();
-
-  await pruneMetrics(userId, date);
-  return updated;
+/**
+ * Sets a day's water or steps total and/or its daily goal in one transaction: both are written or neither. Each part is
+ * written only when given, and only its own column. Answers the day's row and the goals row (null for a part not written).
+ */
+async function saveDayMetric(userId: string, date: string, metric: "waterMl" | "steps", amount?: number, goal?: number) {
+  return db.transaction(async (tx) => {
+    let metrics: typeof dailyMetrics.$inferSelect | null = null;
+    if (amount !== undefined) {
+      [metrics] = await tx
+        .insert(dailyMetrics)
+        .values({ userId, date, [metric]: amount })
+        .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { [metric]: amount } })
+        .returning();
+      await pruneMetrics(tx, userId, date);
+    }
+    const targets = goal === undefined ? null : await updateNutritionTargets(userId, { [metric]: goal }, tx);
+    return { metrics, targets };
+  });
 }
 
-export async function updateDailyWater(userId: string, date: string, waterMl: number) {
-  const [updated] = await db
-    .insert(dailyMetrics)
-    .values({ userId, date, waterMl: Math.max(0, waterMl), steps: 0 })
-    .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { waterMl: Math.max(0, waterMl) } })
-    .returning();
+export const updateDailyWater = (userId: string, date: string, waterMl?: number, goal?: number) =>
+  saveDayMetric(userId, date, "waterMl", waterMl, goal);
 
-  await pruneMetrics(userId, date);
-  return updated;
-}
-
-export async function updateDailySteps(userId: string, date: string, steps: number) {
-  const [updated] = await db
-    .insert(dailyMetrics)
-    .values({
-      userId,
-      date,
-      waterMl: 0,
-      steps: Math.max(0, steps),
-    })
-    .onConflictDoUpdate({
-      target: [dailyMetrics.userId, dailyMetrics.date],
-      set: {
-        steps: Math.max(0, steps),
-      },
-    })
-    .returning();
-
-  await pruneMetrics(userId, date);
-  return updated;
-}
+export const updateDailySteps = (userId: string, date: string, steps?: number, goal?: number) =>
+  saveDayMetric(userId, date, "steps", steps, goal);
 
 /** Health keeps water and steps for the last 7 days only (the 7-day average): older rows go when a day is written. */
-const pruneMetrics = (userId: string, date: string) =>
-  db.delete(dailyMetrics).where(and(eq(dailyMetrics.userId, userId), lt(dailyMetrics.date, addDays(date, -6))));
+const pruneMetrics = (tx: Pick<typeof db, "delete">, userId: string, date: string) =>
+  tx.delete(dailyMetrics).where(and(eq(dailyMetrics.userId, userId), lt(dailyMetrics.date, addDays(date, -6))));
 
 /** The days with water or steps logged in the last 7 days up to `today`, newest first. */
 export async function getDailyMetricsHistory(userId: string, today: string) {
@@ -551,7 +518,11 @@ export async function listWeightEntries(userId: string, since?: string) {
     .orderBy(desc(weightEntries.date));
 }
 
-/** Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row, or null when this save created the day. */
+/**
+ * Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row,
+ * or null when this save created the day. An add carries the id the device made: a repeat of it, once the day holds
+ * that row, answers the row unchanged; an id another user's row holds writes nothing and answers `entry: null`.
+ */
 export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
   return db.transaction(async (tx) => {
@@ -561,9 +532,15 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
       .from(weightEntries)
       .where(and(eq(weightEntries.userId, userId), eq(weightEntries.date, input.date)));
     if (!previous) {
-      const [entry] = await tx.insert(weightEntries).values({ userId, date: input.date, kilograms }).returning(weightColumns);
-      return { entry, previous: null };
+      const inserted = await tx
+        .insert(weightEntries)
+        .values({ id: input.id, userId, date: input.date, kilograms })
+        .onConflictDoNothing()
+        .returning(weightColumns);
+      // Nothing inserted: the id is another user's row (the day has none here), so nothing is answered.
+      return { entry: inserted.at(0) ?? null, previous: null };
     }
+    if (input.id === previous.id) return { entry: previous, previous: null };
     const [entry] = await tx
       .update(weightEntries)
       .set({ kilograms })

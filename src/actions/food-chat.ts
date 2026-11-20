@@ -19,8 +19,8 @@ const chatInputSchema = z.object({
 
 export async function sendFoodChatMessageAction(input: z.input<typeof chatInputSchema>) {
   assertClaudeEnabled();
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { message, history, date, time } = chatInputSchema.parse(input);
     // Same rule as logging a meal by hand: the Assistant may not write into older days.
     if (!metricDayEditable(date, toISODate())) throw new Refusal("Only today and yesterday can be changed.");

@@ -1,18 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
+import { SIGNED_OUT } from "@/lib/validations/result";
+import { MAX_WATER_ML, mealHasValue } from "@/lib/validations/food";
 import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
 import { dailyMetrics, weightEntries } from "@/db/schema";
 import {
   addShoppingItem,
-  addWater,
   deleteMeal,
   getDailyFoodSummary,
   getNutritionTargets,
@@ -29,11 +30,11 @@ import {
   saveWeightEntry,
   toggleShoppingItem,
   updateDailySteps,
+  updateDailyWater,
   updateNutritionTargets,
   updateShoppingItem,
 } from "@/lib/food";
 import {
-  addWaterAction,
   setWaterAction,
   clearBoughtItemsAction,
   addShoppingCategoryAction,
@@ -46,6 +47,9 @@ import {
   reorderShoppingCategoriesAction,
   restoreMealAction,
   restoreShoppingItemsAction,
+  restoreWeightAction,
+  saveWeightAction,
+  deleteWeightAction,
   revertShoppingCategoryAction,
   updateShoppingItemAction,
   toggleShoppingItemAction,
@@ -117,7 +121,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       carbs: 75,
       fat: 10,
     });
-    await addWater(userA, today, 500);
+    await updateDailyWater(userA, today, 500);
     await updateDailySteps(userA, today, 8500);
 
     // Summary for User A has these totals
@@ -137,14 +141,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   });
 
   it("prevents cross-user meal deletion", async () => {
-    const meal = await logMeal(userA, {
+    const meal = (await logMeal(userA, {
       date: "2026-11-04",
       name: "Salmon",
       calories: 500,
       protein: 40,
       carbs: 10,
       fat: 25,
-    });
+    }))!;
 
     // User B tries to delete User A's meal -> fails / returns undefined
     const deletedByB = await deleteMeal(userB, meal.id);
@@ -157,7 +161,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   it("deletes a meal and Undo brings the same row back: id, time, macros, estimate flag", async () => {
     const today = toISODate();
-    const { meal } = succeeded(await logMealAction({ date: today, name: "Salmon", calories: 500, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true }));
+    const meal = succeeded(await logMealAction({ date: today, name: "Salmon", calories: 500, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true })).meal!;
     const [before] = (await getDailyFoodSummary(userA, today)).meals;
     expect(before.id).toBe(meal.id);
     const undo = { id: meal.id, date: today, name: meal.name, calories: meal.calories, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true, createdAt: meal.createdAt.toISOString() };
@@ -174,8 +178,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
     await expect(restoreMealAction({ ...undo, date: addDays(today, -2) })).resolves.toEqual({ success: false, error: "Only today and yesterday can be changed." });
     authState.id = "";
-    await expect(restoreMealAction(undo)).rejects.toThrow("Authentication required.");
-    await expect(deleteMealAction(meal.id)).rejects.toThrow("Authentication required.");
+    expect(await restoreMealAction(undo)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await deleteMealAction(meal.id)).toEqual({ success: false, error: SIGNED_OUT });
   });
 
   it("refuses a rename onto itself, and an Undo never deletes the name it puts back", async () => {
@@ -211,7 +215,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await updateShoppingItem(userA, { itemId: item.id, name: before.name, amount: Number(before.amount), unit: before.unit, category: before.category, isBought: before.isBought, checkedAt: before.checkedAt });
     expect((await getShoppingList(userA))[0]).toEqual(before);
     authState.id = "";
-    await expect(deleteShoppingItemAction(item.id)).rejects.toThrow("Authentication required.");
+    expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
   });
 
   it("ticks and deletes a shopping item for the owner only", async () => {
@@ -221,8 +225,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: "Item not found." });
     await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: "Item not found." });
     authState.id = "";
-    await expect(toggleShoppingItemAction(item.id, true)).rejects.toThrow("Authentication required.");
-    await expect(deleteShoppingItemAction(item.id)).rejects.toThrow("Authentication required.");
+    expect(await toggleShoppingItemAction(item.id, true)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
     expect(await bought()).toBe(false); // still on A's list, untouched
     authState.id = userA;
     await toggleShoppingItemAction(item.id, true);
@@ -295,49 +299,43 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   });
 
   describe("Server Actions for Food", () => {
-    it("rejects unauthenticated requests", async () => {
+    it("answers every signed-out call with the signed-out error and writes nothing", async () => {
       authState.id = "";
-      await expect(
-        logMealAction({
-          date: "2026-11-04",
-          name: "Test",
-          calories: 100,
-          protein: 10,
-          carbs: 10,
-          fat: 2,
-        }),
-      ).rejects.toThrow("Authentication required.");
-
       const itemId = randomUUID();
-      await expect(addShoppingItemAction({ name: "Eggs" })).rejects.toThrow("Authentication required.");
-      await expect(
+      const today = toISODate();
+      const answers = await Promise.all([
+        logMealAction({ date: today, name: "Test", calories: 100, protein: 10, carbs: 10, fat: 2 }),
+        deleteMealAction(itemId),
+        restoreMealAction({ id: itemId, date: today, name: "Test", calories: 100, protein: 0, carbs: 0, fat: 0 }),
+        saveWeightAction({ date: today, kilograms: 80 }),
+        deleteWeightAction(itemId),
+        restoreWeightAction({ id: itemId, date: today, kilograms: 80 }),
+        setWaterAction({ date: today, waterMl: 250 }),
+        updateStepsAction({ date: today, steps: 5000 }),
+        updateTargetsAction({ calories: 2000 }),
+        addShoppingItemAction({ name: "Eggs" }),
+        toggleShoppingItemAction(itemId, true),
+        deleteShoppingItemAction(itemId),
+        clearBoughtItemsAction({ itemIds: [itemId] }),
         updateShoppingItemAction({ itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
-      ).rejects.toThrow("Authentication required.");
-      await expect(renameShoppingCategoryAction({ from: "dairy", to: "fridge" })).rejects.toThrow(
-        "Authentication required.",
-      );
-      await expect(restoreShoppingItemsAction({ itemIds: [itemId] })).rejects.toThrow("Authentication required.");
-      await expect(reorderShoppingCategoriesAction({ names: ["dairy"] })).rejects.toThrow("Authentication required.");
-      await expect(addShoppingCategoryAction({ name: "frozen" })).rejects.toThrow("Authentication required.");
-      await expect(deleteShoppingCategoryAction({ name: "dairy" })).rejects.toThrow("Authentication required.");
-      await expect(
+        renameShoppingCategoryAction({ from: "dairy", to: "fridge" }),
+        restoreShoppingItemsAction({ itemIds: [itemId] }),
+        reorderShoppingCategoriesAction({ names: ["dairy"] }),
+        addShoppingCategoryAction({ name: "frozen" }),
+        deleteShoppingCategoryAction({ name: "dairy" }),
         revertShoppingCategoryAction({ name: "dairy", current: "other", sortOrder: 1, itemIds: [itemId], dropCurrent: false }),
-      ).rejects.toThrow("Authentication required.");
-      // The same actions on the unit list.
-      await expect(addShoppingCategoryAction({ kind: "unit", name: "tin" })).rejects.toThrow("Authentication required.");
-      await expect(renameShoppingCategoryAction({ kind: "unit", from: "kg", to: "kilo" })).rejects.toThrow("Authentication required.");
-      await expect(deleteShoppingCategoryAction({ kind: "unit", name: "kg" })).rejects.toThrow("Authentication required.");
-      await expect(reorderShoppingCategoriesAction({ kind: "unit", names: ["kg"] })).rejects.toThrow("Authentication required.");
-      await expect(
+        // The same actions on the unit list.
+        addShoppingCategoryAction({ kind: "unit", name: "tin" }),
+        renameShoppingCategoryAction({ kind: "unit", from: "kg", to: "kilo" }),
+        deleteShoppingCategoryAction({ kind: "unit", name: "kg" }),
+        reorderShoppingCategoriesAction({ kind: "unit", names: ["kg"] }),
         revertShoppingCategoryAction({ kind: "unit", name: "kg", current: "pcs", sortOrder: 1, itemIds: [itemId], dropCurrent: false }),
-      ).rejects.toThrow("Authentication required.");
-
-      await expect(addWaterAction("2026-11-04", 250)).rejects.toThrow(
-        "Authentication required.",
+      ]);
+      for (const answer of answers) expect(answer).toEqual({ success: false, error: SIGNED_OUT });
+      const { rows } = await admin.query(
+        "SELECT (SELECT count(*) FROM meals) + (SELECT count(*) FROM weight_entries) + (SELECT count(*) FROM daily_metrics) + (SELECT count(*) FROM shopping_items) AS n",
       );
-      await expect(updateStepsAction("2026-11-04", 5000)).rejects.toThrow(
-        "Authentication required.",
-      );
+      expect(Number(rows[0].n)).toBe(0);
     });
 
     it("manages shopping categories, owner only, with \"other\" as the fixed fallback", async () => {
@@ -462,32 +460,32 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         fat: 3,
       }));
       expect(mealRes.success).toBe(true);
-      expect(mealRes.meal.name).toBe("Whey Shake");
+      expect(mealRes.meal?.name).toBe("Whey Shake");
 
-      // 2. Add water
-      const waterRes = succeeded(await addWaterAction(today, 500));
-      expect(waterRes.success).toBe(true);
-      expect(waterRes.metrics.waterMl).toBe(500);
+      // 2. Water: a tap sends the day's new total, so sending the same total twice leaves it as it was.
+      const waterRes = succeeded(await setWaterAction({ date: today, waterMl: 500 }));
+      expect(waterRes.metrics?.waterMl).toBe(500);
+      expect(waterRes.targets).toBeNull(); // the goal was not sent, so it was not written
+      expect(succeeded(await setWaterAction({ date: today, waterMl: 500 })).metrics?.waterMl).toBe(500);
 
-      // A day never holds more than the limit, however the taps add up; taking it back never goes below 0.
-      expect(succeeded(await addWaterAction(today, 20000)).metrics.waterMl).toBe(20000);
-      expect(succeeded(await addWaterAction(today, 250)).metrics.waterMl).toBe(20000);
-      expect(succeeded(await setWaterAction(today, 500)).metrics.waterMl).toBe(500);
-      expect(succeeded(await addWaterAction(today, -1000)).metrics.waterMl).toBe(0);
-      await addWaterAction(today, 500);
+      // A day never holds more than the limit, nor less than 0.
+      expect(succeeded(await setWaterAction({ date: today, waterMl: MAX_WATER_ML })).metrics?.waterMl).toBe(MAX_WATER_ML);
+      await expect(setWaterAction({ date: today, waterMl: MAX_WATER_ML + 1 })).resolves.toMatchObject({ success: false });
+      await expect(setWaterAction({ date: today, waterMl: -1 })).resolves.toMatchObject({ success: false });
+      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: "Nothing to save." });
 
       // The steps log and the steps goal share one limit.
-      expect(succeeded(await updateStepsAction(today, 150000)).metrics.steps).toBe(150000);
-      await expect(updateStepsAction(today, 200001)).resolves.toMatchObject({ success: false });
+      expect(succeeded(await updateStepsAction({ date: today, steps: 150000 })).metrics?.steps).toBe(150000);
+      await expect(updateStepsAction({ date: today, steps: 200001 })).resolves.toMatchObject({ success: false });
 
       // An impossible day and a malformed id are validation errors, not database errors.
-      await expect(addWaterAction("2026-13-45", 250)).resolves.toMatchObject({ success: false });
-      await expect(updateStepsAction("2026-02-30", 1000)).resolves.toMatchObject({ success: false });
+      await expect(setWaterAction({ date: "2026-13-45", waterMl: 250 })).resolves.toMatchObject({ success: false });
+      await expect(updateStepsAction({ date: "2026-02-30", steps: 1000 })).resolves.toMatchObject({ success: false });
 
       // 3. Update steps
-      const stepsRes = succeeded(await updateStepsAction(today, 10500));
+      const stepsRes = succeeded(await updateStepsAction({ date: today, steps: 10500 }));
       expect(stepsRes.success).toBe(true);
-      expect(stepsRes.metrics.steps).toBe(10500);
+      expect(stepsRes.metrics?.steps).toBe(10500);
 
       // 4. Update targets
       const targetRes = succeeded(await updateTargetsAction({
@@ -534,14 +532,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
 
       // 7. Delete meal
-      const delMealRes = await deleteMealAction(mealRes.meal.id);
+      const delMealRes = await deleteMealAction(mealRes.meal!.id);
       expect(delMealRes.success).toBe(true);
     });
 
     it("saves goals for the signed-in owner only and validates their ranges", async () => {
       const goals = { calories: 3000, proteinGrams: 160, carbsGrams: 280, fatGrams: 70, waterMl: 3500, steps: 12000 };
       authState.id = "";
-      await expect(updateTargetsAction(goals)).rejects.toThrow("Authentication required.");
+      expect(await updateTargetsAction(goals)).toEqual({ success: false, error: SIGNED_OUT });
 
       authState.id = userA;
       expect(succeeded(await updateTargetsAction(goals)).targets.steps).toBe(12000);
@@ -554,18 +552,106 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await getNutritionTargets(userB)).calories).toBe(2000);
     });
 
-    it("refuses to write meals, water or steps outside today and yesterday (the rule the UI already keeps)", async () => {
+    it("writes meals for today and yesterday only", async () => {
       authState.id = userA;
       const today = toISODate();
       const locked = "Only today and yesterday can be changed.";
       const meal = { name: "Oats", calories: 100, protein: 1, carbs: 1, fat: 1 };
       for (const date of [addDays(today, -2), addDays(today, 1)]) {
         await expect(logMealAction({ ...meal, date })).resolves.toEqual({ success: false, error: locked });
-        await expect(addWaterAction(date, 250)).resolves.toEqual({ success: false, error: locked });
-        await expect(updateStepsAction(date, 5000)).resolves.toEqual({ success: false, error: locked });
       }
       expect((await logMealAction({ ...meal, date: addDays(today, -1) })).success).toBe(true); // yesterday is the grace day
-      expect(succeeded(await addWaterAction(today, 250)).metrics.waterMl).toBe(250);
+    });
+
+    describe("water, steps and weight are saved for today only (Bucharest), with a fixed clock", () => {
+      afterEach(() => vi.useRealTimers());
+      const at = (instant: string) => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(new Date(instant));
+      };
+      const onlyToday = { success: false, error: "Only today can be changed." };
+      const saves = (date: string) => [
+        setWaterAction({ date, waterMl: 250 }),
+        updateStepsAction({ date, steps: 5000 }),
+        saveWeightAction({ id: randomUUID(), date, kilograms: 80 }),
+      ];
+      const written = async () => {
+        const { rows } = await admin.query(
+          "SELECT (SELECT count(*) FROM daily_metrics WHERE user_id = $1) + (SELECT count(*) FROM weight_entries WHERE user_id = $1) AS n",
+          [userA],
+        );
+        return Number(rows[0].n);
+      };
+
+      it("refuses yesterday and tomorrow, accepts today", async () => {
+        authState.id = userA;
+        at("2026-11-20T10:00:00Z"); // 12:00 in Bucharest
+        for (const answer of await Promise.all(saves("2026-11-19"))) expect(answer).toEqual(onlyToday);
+        // Tomorrow: the weigh-in's own rule (no future day) may answer first; water and steps get the today rule.
+        for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: false });
+        expect(await written()).toBe(0);
+        for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toMatchObject({ success: true });
+        expect(await written()).toBe(2); // one metrics row (water and steps) and one weigh-in
+      });
+
+      it("moves to the new day at Bucharest midnight, not UTC", async () => {
+        authState.id = userA;
+        at("2026-11-20T21:59:59Z"); // 23:59:59 in Bucharest, still the 20th
+        expect(await setWaterAction({ date: "2026-11-21", waterMl: 250 })).toEqual(onlyToday);
+        expect((await setWaterAction({ date: "2026-11-20", waterMl: 250 })).success).toBe(true);
+        at("2026-11-20T22:00:00Z"); // 00:00 in Bucharest: the 21st, though UTC still says the 20th
+        for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toEqual(onlyToday);
+        for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: true });
+      });
+
+      it("still deletes a past weigh-in, and its Undo puts it back", async () => {
+        authState.id = userA;
+        const today = toISODate();
+        const [past] = await db
+          .insert(weightEntries)
+          .values({ userId: userA, date: addDays(today, -3), kilograms: "81.20" })
+          .returning();
+        expect((await deleteWeightAction(past.id)).success).toBe(true);
+        expect(await listWeightEntries(userA)).toEqual([]);
+        const back = succeeded(await restoreWeightAction({ id: past.id, date: past.date, kilograms: 81.2 }));
+        expect(back.entry?.id).toBe(past.id);
+        expect((await listWeightEntries(userA)).map((w) => w.date)).toEqual([past.date]);
+      });
+    });
+
+    it("writes the steps and their goal together or not at all", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      // A valid amount with a goal out of range: refused, and neither is written.
+      expect((await updateStepsAction({ date: today, steps: 5000, goal: 10 })).success).toBe(false);
+      expect(await getDailyMetricsHistory(userA, today)).toEqual([]);
+      expect((await getNutritionTargets(userA)).steps).toBe(10000);
+      // A failure of the goal's write in the database takes the amount back with it (one transaction).
+      await expect(updateDailySteps(userA, today, 5000, 2 ** 31)).rejects.toThrow();
+      expect(await getDailyMetricsHistory(userA, today)).toEqual([]);
+      // Both valid: both are written.
+      const both = succeeded(await updateStepsAction({ date: today, steps: 5000, goal: 12000 }));
+      expect([both.metrics?.steps, both.targets?.steps]).toEqual([5000, 12000]);
+    });
+
+    it("writes only the fields an edit sends, so two edits of one row both stay", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      // Two partial goal edits (say, from two devices): each writes its own column only.
+      succeeded(await updateTargetsAction({ calories: 2800 }));
+      succeeded(await updateTargetsAction({ proteinGrams: 190 }));
+      expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190, carbsGrams: 300, waterMl: 3000, steps: 10000 });
+      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: "Nothing to save." });
+
+      // The day's water and its goal, each edited alone, leave the other one as it was.
+      expect(succeeded(await setWaterAction({ date: today, waterMl: 750 })).targets).toBeNull();
+      expect(succeeded(await setWaterAction({ date: today, goal: 4000 })).metrics).toBeNull();
+      expect((await getDailyFoodSummary(userA, today)).metrics.waterMl).toBe(750);
+      expect((await getNutritionTargets(userA)).waterMl).toBe(4000);
+      // The steps of the same row are not touched by a water edit.
+      succeeded(await updateStepsAction({ date: today, steps: 3000 }));
+      succeeded(await setWaterAction({ date: today, waterMl: 1000 }));
+      expect((await getDailyFoodSummary(userA, today)).metrics).toMatchObject({ waterMl: 1000, steps: 3000 });
     });
 
     it("rejects a name that is only spaces instead of storing an empty one", async () => {
@@ -574,29 +660,25 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await expect(
         logMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
       ).resolves.toMatchObject({ success: false });
-      expect(succeeded(await logMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal.name).toBe("Rice");
+      expect(succeeded(await logMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal?.name).toBe("Rice");
     });
 
     it("keeps only the last 7 days of water and steps, per owner", async () => {
       const today = toISODate();
-      authState.id = "";
-      await expect(addWaterAction(today, 250)).rejects.toThrow("Authentication required.");
-      await expect(updateStepsAction(today, 5000)).rejects.toThrow("Authentication required.");
-
       // Days older than the window are already there (as before the cleanup); writing today drops them, and only for the writer.
       const rows = [-9, -7, -6, -3, 0].map((d) => ({ date: addDays(today, d), waterMl: 100, steps: 100 }));
       await db.insert(dailyMetrics).values(rows.map((r) => ({ ...r, userId: userA })));
       await db.insert(dailyMetrics).values({ userId: userB, date: addDays(today, -9), waterMl: 5, steps: 5 });
 
       authState.id = userA;
-      await addWaterAction(today, 250);
+      await setWaterAction({ date: today, waterMl: 250 });
       expect((await getDailyMetricsHistory(userA, today)).map((r) => r.date)).toEqual([today, addDays(today, -3), addDays(today, -6)]);
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userA))).toHaveLength(3); // pruned in the table, not just hidden
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userB))).toHaveLength(1);
       expect(await getDailyMetricsHistory(userB, today)).toEqual([]);
 
       await db.insert(dailyMetrics).values({ userId: userA, date: addDays(today, -8), waterMl: 1, steps: 1 });
-      await updateStepsAction(today, 7000);
+      await updateStepsAction({ date: today, steps: 7000 });
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userA))).toHaveLength(3);
     });
 
@@ -624,6 +706,51 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       ]);
       expect(results.filter((r) => r.previous === null)).toHaveLength(1);
       expect(await db.select().from(weightEntries).where(eq(weightEntries.userId, userA))).toHaveLength(1);
+    });
+
+    it("adds a meal or a weigh-in once when the same add (same id) is sent again", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      const meal = { id: randomUUID(), date: today, name: "Oats", calories: 300, protein: 10, carbs: 50, fat: 5 };
+      const first = succeeded(await logMealAction(meal));
+      const again = succeeded(await logMealAction(meal)); // the answer was lost, the device sends it again
+      expect(again.meal?.id).toBe(first.meal?.id);
+      expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
+
+      const weigh = { id: randomUUID(), date: today, kilograms: 80.5 };
+      const added = succeeded(await saveWeightAction(weigh));
+      const repeat = succeeded(await saveWeightAction(weigh));
+      expect([added.previous, repeat.previous]).toEqual([null, null]); // the repeat is still the add, not an edit of it
+      expect(repeat.entry?.id).toBe(weigh.id);
+      expect(await listWeightEntries(userA)).toHaveLength(1);
+    });
+
+    it("never lets an id another user owns change, add or show anything", async () => {
+      const today = toISODate();
+      authState.id = userB;
+      const theirs = succeeded(await logMealAction({ id: randomUUID(), date: today, name: "Theirs", calories: 500, protein: 0, carbs: 0, fat: 0 }));
+      const theirWeight = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 }));
+
+      authState.id = userA;
+      const meal = succeeded(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 }));
+      expect(meal.meal).toBeNull(); // nothing of theirs comes back
+      const weight = succeeded(await saveWeightAction({ id: theirWeight.entry!.id, date: today, kilograms: 90 }));
+      expect(weight.entry).toBeNull();
+
+      expect((await getDailyFoodSummary(userA, today)).meals).toEqual([]);
+      expect(await listWeightEntries(userA)).toEqual([]);
+      expect((await getDailyFoodSummary(userB, today)).meals.map((m) => [m.name, m.calories])).toEqual([["Theirs", 500]]);
+      expect((await listWeightEntries(userB)).map((w) => w.kilograms)).toEqual(["70.00"]);
+    });
+
+    it("counts a meal as empty when every value rounds to 0, on the form and on the server alike", async () => {
+      expect(mealHasValue({ calories: 0, protein: 0.04, carbs: 0, fat: 0 })).toBe(false); // shows as 0,0 g
+      expect(mealHasValue({ calories: 0, protein: 0.05, carbs: 0, fat: 0 })).toBe(true); // shows as 0,1 g
+      expect(mealHasValue({ calories: 1, protein: 0, carbs: 0, fat: 0 })).toBe(true);
+      authState.id = userA;
+      const empty = { date: toISODate(), name: "Meal", calories: 0, protein: 0.04, carbs: 0.04, fat: 0 };
+      expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0." });
+      expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
   });
 });
