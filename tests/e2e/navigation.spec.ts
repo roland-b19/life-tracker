@@ -277,6 +277,60 @@ test("a sign-in whose CSRF token was refused is tried once more, and a second re
   await expect(page).toHaveURL(/\/signin$/);
 });
 
+test("a session check that never answers stops holding the sign-in form after 5 s; the sign-in then waits for its own session call [SIGNIN]", async ({
+  page,
+}) => {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  const session = "**/api/auth/session";
+  // Every session call is held, unanswered, until `hold` is turned off
+  const held: Route[] = [];
+  let hold = true;
+  try {
+    // Paused from the start: only runFor moves the time, however long the page takes to load
+    await page.clock.install({ time: new Date("2026-11-20T12:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-11-20T12:00:01Z"));
+    await page.route(session, (route) => (hold ? void held.push(route) : route.continue()));
+    await page.goto("/signin", { waitUntil: "commit" });
+    // The page's session check has gone out: the form is hydrated and its timer runs
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    const field = page.getByLabel("Username");
+    const proceed = page.getByRole("button", { name: "Continue" });
+
+    await page.clock.runFor(4_900);
+    await expect(proceed).toBeDisabled();
+    await expect(field).not.toBeEditable();
+    await page.clock.runFor(100);
+    await expect(proceed).toBeEnabled();
+    await expect(field).toBeEditable();
+    await page.clock.resume();
+
+    // The server signs the typed name in, but NextAuth's signIn answers only after its own session call, held too: the
+    // form stays on "Signing in..." and never takes the page anywhere without it
+    await field.fill(name);
+    const before = held.length;
+    const callback = page.waitForResponse("**/api/auth/callback/credentials");
+    await proceed.click();
+    expect((await callback).ok()).toBe(true);
+    await expect.poll(() => held.length).toBeGreaterThan(before);
+    expect((await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = $1", [name])).rowCount).toBe(1);
+    await expect(page.getByRole("button", { name: "Signing in..." })).toBeDisabled();
+    await expect(page).toHaveURL(/\/signin$/);
+
+    // Once the session calls answer, the sign-in finishes as the typed name
+    hold = false;
+    for (const route of held.splice(0)) await route.continue();
+    await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
+    await expect(page).toHaveURL(/\/todos$/);
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+});
+
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {
   await page.setViewportSize(PHONE);
   await page.goto("/todos");
