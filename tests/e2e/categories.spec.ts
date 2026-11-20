@@ -346,6 +346,43 @@ for (const size of [
   });
 }
 
+// The double-tap lock is per row (D-043): a tap on another row's Delete while a delete is still unanswered deletes that
+// row too. Next sends it once the first one answers, so the first delete's answer is held until both taps are in.
+test("the categories card deletes another row while a delete is unanswered", async ({ signedInPage: page }) => {
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const deleted: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "POST" || !("next-action" in r.headers())) return;
+    for (const name of [a, b]) if ((r.postData() ?? "").includes(`"name":"${name}"`)) deleted.push(name);
+  });
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${a}"`)) await held;
+    await route.fallback();
+  });
+
+  await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
+  await expect.poll(() => deleted).toEqual([a]);
+  // A keydown ends the tap burst, so only the lock could stand in the way of the next tap.
+  await page.keyboard.press("Shift");
+  await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
+  await expect(card(page).getByText(b, { exact: true })).toBeHidden();
+  release();
+  await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
+  expect(deleted).toEqual([a, b]);
+
+  await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
 // A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
 // enough to scroll the rows up to where the toast opens.
 async function onPhoneWith(page: Page, names: string[]) {

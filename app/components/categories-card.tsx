@@ -78,7 +78,8 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
   // A Delete acts once per tap burst (D-043): the rest of a double tap on the tapped Delete is swallowed, so it neither
-  // repeats the write nor lands on the next row's Delete, which slid into its place. Save gets the same from FormModal.
+  // repeats the write nor lands on the next row's Delete, which slid into its place. The lock is per category, so a
+  // later tap on another row's Delete still goes through. Save gets the same from FormModal.
   const once = useOnce();
   // The button last tapped in a row, set before its own handler runs.
   const tappedButton = useRef<Element | null>(null);
@@ -277,7 +278,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
                 }}
               />
               <span className={`category-name${noun === "unit" ? " raw" : ""}`}>{cat}</span>
-              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(() => remove(cat), tappedButton.current)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(cat, () => remove(cat), tappedButton.current)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
         </ListBox>

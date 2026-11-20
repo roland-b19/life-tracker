@@ -3,19 +3,20 @@
 import { useRef } from "react";
 
 /**
- * The one guard for a button that writes (D-043): one write at a time, and one per tap burst. `once(write, spot)` runs
- * `write` unless an earlier one has not settled yet, and answers whether it ran. `spot` is the tapped button: the rest
- * of a double tap on its place is swallowed (see swallowBurst), so it neither repeats the write nor lands on what slid
- * into the button's place (the next row's Delete, or the button under a form that closed). A tap on the toast always
- * goes through.
+ * The one guard for a button that writes (D-043): one write at a time per target, and one per tap burst.
+ * `once(target, write, spot)` runs `write` unless an earlier write for the same `target` (a row's key, or the form) has
+ * not settled yet, and answers whether it ran; a write for another target goes through, and Next sends it after the
+ * one in flight. `spot` is the tapped button: the rest of a double tap on its place is swallowed (see swallowBurst), so
+ * it neither repeats the write nor lands on what slid into the button's place (the next row's Delete, or the button
+ * under a form that closed). A tap on the toast always goes through.
  */
 export function useOnce() {
-  const writing = useRef(false);
-  return (write: () => unknown, spot: Element | null | undefined) => {
-    if (writing.current) return false;
-    writing.current = true;
+  const writing = useRef(new Set<string>());
+  return (target: string, write: () => unknown, spot: Element | null | undefined) => {
+    if (writing.current.has(target)) return false;
+    writing.current.add(target);
     if (spot) swallowBurst(spot.getBoundingClientRect());
-    const done = () => (writing.current = false);
+    const done = () => writing.current.delete(target);
     try {
       Promise.resolve(write()).then(done, done);
     } catch (error) {

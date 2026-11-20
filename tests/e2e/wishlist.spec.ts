@@ -129,11 +129,20 @@ test("a form submitted again while its save is unanswered saves once", async ({ 
   const form = page.getByRole("dialog", { name: "New item" });
   await form.getByLabel("Name", { exact: true }).fill(name);
   await form.getByLabel("Price (RON)").fill("100");
+  // Counts the form's submits, so the test knows the second one really happened.
+  await page.evaluate(() => {
+    const w = window as typeof window & { submits?: number };
+    w.submits = 0;
+    window.addEventListener("submit", () => (w.submits! += 1), true);
+  });
+  const submits = () => page.evaluate(() => (window as typeof window & { submits?: number }).submits);
   await form.getByRole("button", { name: "Save" }).click();
   await expect.poll(() => writes.length).toBe(1);
   // A keydown ends the tap burst, so only the lock stands in the way of the next submit.
   await page.keyboard.press("Shift");
   await form.locator("form").evaluate((f: HTMLFormElement) => f.requestSubmit());
+  expect(await submits()).toBe(2);
+  expect(writes).toHaveLength(1);
 
   release();
   await page.waitForResponse((r) => r.request() === writes[0]);

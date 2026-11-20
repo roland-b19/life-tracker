@@ -501,7 +501,7 @@ export function FormModal({
   // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too.
   const once = useOnce();
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!once(() => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
+    if (!once("form", () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
