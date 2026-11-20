@@ -1,5 +1,5 @@
 {
-  "id": "9c002ee7-4d55-4e7d-b54a-357bfb880767",
+  "id": "b94e70b4-a7cc-4773-971c-40f71c2c8313",
   "prevId": "f6ddee7c-da17-4075-a013-2cd8bca2157b",
   "version": "7",
   "dialect": "postgresql",
@@ -242,7 +242,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "exercise_plate_weights_kg_positive": {
+          "name": "exercise_plate_weights_kg_positive",
+          "value": "\"exercise_plate_weights\".\"kg\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.exercises": {
@@ -1251,6 +1256,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1635,7 +1647,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "workout_sessions_timer_non_negative": {
+          "name": "workout_sessions_timer_non_negative",
+          "value": "\"workout_sessions\".\"timer_seconds\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.workout_sets": {

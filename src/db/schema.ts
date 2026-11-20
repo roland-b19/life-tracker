@@ -136,6 +136,7 @@ export const workoutSessions = pgTable(
     index("workout_sessions_user_date_idx").on(table.userId, table.date),
     // One open workout (no duration yet) per user, even when two requests race.
     uniqueIndex("workout_sessions_one_open_uniq").on(table.userId).where(sql`${table.durationMinutes} is null`),
+    check("workout_sessions_timer_non_negative", sql`${table.timerSeconds} >= 0`),
   ],
 );
 
@@ -163,7 +164,10 @@ export const exercisePlateWeights = pgTable(
       .references(() => exercises.id, { onDelete: "cascade" }),
     kg: numeric("kg", { precision: 6, scale: 2 }).notNull(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.exerciseId] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.exerciseId] }),
+    check("exercise_plate_weights_kg_positive", sql`${table.kg} > 0`),
+  ],
 );
 
 export const workoutSets = pgTable(
@@ -379,7 +383,11 @@ export const todos = pgTable(
   (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
 );
 
-/** One row per signed-in device (D-041): the JWT carries its id (`sid`), and a token whose row is gone is signed out. */
+/**
+ * One row per signed-in device (D-041): the JWT carries its id (`sid`), and a token whose row is gone is signed out.
+ * `lastSeenAt` moves at most once a day while the device is used; sign-in prunes rows unseen for the token's max age,
+ * since a rolling token in daily use outlives its row's `createdAt`.
+ */
 export const userSessions = pgTable(
   "user_sessions",
   {
@@ -388,6 +396,7 @@ export const userSessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("user_sessions_user_idx").on(table.userId)],
 );
