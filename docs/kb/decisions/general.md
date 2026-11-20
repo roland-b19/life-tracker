@@ -179,7 +179,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Status:** active
 
 ## D-035: No swipe back or forward; the app moves only through its own tabs (2026-11-20)
-- **Why:** The owner does not want a swipe from the screen's left or right edge to go to the previous or next page. The tab bar and the More menu replace the history entry instead of pushing one, so there is nothing to go back to (Android's Back closes the app), and a touch that starts within 20px of the left or right edge is stopped (`preventDefault` on `touchstart`), with `overscroll-behavior-x: none` kept.
+- **Why:** The owner does not want a swipe from the screen's left or right edge to go to the previous or next page. The tab bar and the More menu replace the history entry instead of pushing one, so there is nothing to go back to (Android's Back closes the app), and a touch that starts within 20px of the left or right edge is stopped (`preventDefault` on `touchstart`) unless it starts on a control (`CONTROL` in `app/components/edge-swipe.ts`), with `overscroll-behavior-x: none` kept.
 - **Rejected:** keeping a history and only blocking the gesture (Android's Back would still walk it); a confirm before leaving (it adds a step to every move).
 - **Status:** active
 
