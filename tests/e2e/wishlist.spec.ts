@@ -108,7 +108,7 @@ for (const size of [
   });
 }
 
-// The guard's one-write-at-a-time lock (D-043) on its own: a form submitted again after the tap burst is over, while
+// The guard's per-target lock (D-043; the form is one target) on its own: a form submitted again after the tap burst is over, while
 // its first save is still unanswered, saves nothing more. The answer is held past the burst; Save and the fields are
 // disabled while saving, so the second submit is the form's own requestSubmit().
 test("a form submitted again while its save is unanswered saves once", async ({ signedInPage: page }) => {

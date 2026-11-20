@@ -127,8 +127,9 @@ export const center = (box: { x: number; y: number; width: number; height: numbe
 
 // Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
 // The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
-// 25 ms; a slower one would hold the guard's one-write-at-a-time lock and hide the case), so it lands on whatever the
-// first left there. Answers how many writes it set off. A second write starts during the second click, and a dialog
+// 25 ms), so it lands on whatever the first left there. Before that answer, the guard's per-target lock would refuse a
+// repeat on the same target and hide whether the spot swallowed it; a tap on another target, such as the next row's
+// Delete, would go through. Answers how many writes it set off. A second write starts during the second click, and a dialog
 // it opens is on the page by then, so nothing waits by time: `settled` sees a write the click sent.
 export async function burst(page: Page, { x, y }: { x: number; y: number }) {
   let acts = 0;
