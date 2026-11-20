@@ -5,6 +5,7 @@ import type { NextAuthOptions } from "next-auth";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { users } from "@/db/schema";
+import { endSession, startSession } from "@/server/sessions";
 
 if (process.env.AUTH_DEV === "true" && process.env.NODE_ENV === "production") {
   throw new Error("AUTH_DEV must not be enabled in production.");
@@ -24,7 +25,7 @@ const devProvider =
           },
           async authorize(credentials) {
             const name = credentials?.name;
-            if (typeof name !== "string" || !/^[a-zA-Z0-9._-]{1,64}$/.test(name)) {
+            if (typeof name !== "string" || !/^[a-z0-9-]{1,64}$/.test(name)) {
               return null;
             }
 
@@ -99,14 +100,14 @@ const providers =
 
 const isProduction = process.env.NODE_ENV === "production";
 
+// Azure: 4 hours. Free variant: 180 days for one personal user; the allowlist is rechecked on every session read.
+const sessionMaxAge = useGitHub ? 180 * 24 * 60 * 60 : 4 * 60 * 60;
+
 export const authOptions: NextAuthOptions = {
   providers,
   // Our own page also shows the AccessDenied result, instead of NextAuth's default error page.
   pages: { signIn: "/signin", error: "/signin" },
-  // Azure: 4 hours. Free variant: 180 days for one personal user; the allowlist is rechecked on every session read.
-  session: useGitHub
-    ? { strategy: "jwt", maxAge: 180 * 24 * 60 * 60, updateAge: 24 * 60 * 60 }
-    : { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 15 * 60 },
+  session: { strategy: "jwt", maxAge: sessionMaxAge, updateAge: useGitHub ? 24 * 60 * 60 : 15 * 60 },
   cookies: isProduction
     ? {
         sessionToken: {
@@ -151,18 +152,29 @@ export const authOptions: NextAuthOptions = {
       user.id = existingUser.id;
       return true;
     },
+    // `user` is set only at sign-in: each sign-in is a new device session (D-041).
     async jwt({ token, user, account }) {
-      if (user?.id) token.userId = user.id;
+      if (user?.id) {
+        token.userId = user.id;
+        token.sid = await startSession(user.id, sessionMaxAge);
+      }
       if (account?.provider === "github") token.githubId = account.providerAccountId;
       return token;
     },
-    // No database lookup: this runs on every page and action. The signed token is trusted for its lifetime.
+    // No database lookup here: `requireUser()` and `requirePageUser()` check the session row named by `sid`.
     async session({ session, token }) {
       if (session.user && typeof token.userId === "string") {
         const revoked = typeof token.githubId === "string" && !isOwner(token.githubId);
         session.user.id = revoked ? (undefined as unknown as string) : token.userId;
       }
+      if (typeof token.sid === "string") session.sid = token.sid;
       return session;
+    },
+  },
+  events: {
+    // Signs out this device only: the other devices keep their rows (D-041).
+    async signOut({ token }) {
+      if (typeof token?.sid === "string" && typeof token.userId === "string") await endSession(token.sid, token.userId);
     },
   },
   secret: process.env.NEXTAUTH_SECRET,

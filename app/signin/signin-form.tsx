@@ -8,8 +8,11 @@ import { clearPageCache } from "../components/page-cache";
 
 const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github: "GitHub" };
 
-/** `provider` is "dev" (username form, local only) or the id of the configured OAuth provider. */
-export function SignInForm({ provider, denied }: { provider: string; denied: boolean }) {
+/**
+ * `provider` is "dev" (username form, local only) or the id of the configured OAuth provider. `next` is the same-site
+ * path to open after sign-in (the page checks it).
+ */
+export function SignInForm({ provider, denied, next }: { provider: string; denied: boolean; next: string }) {
   const router = useRouter();
   const [name, setName] = useState("owner");
   const [errorMsg, setErrorMsg] = useState(denied ? "This account is not allowed to use this app." : "");
@@ -21,14 +24,14 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
     event.preventDefault();
     setBusy(true);
     setErrorMsg("");
-    const result = await signIn("credentials", { name, redirect: false, callbackUrl: "/" }).catch(() => null);
+    const result = await signIn("credentials", { name, redirect: false, callbackUrl: next }).catch(() => null);
     if (result?.ok) {
-      router.push("/");
+      router.push(next);
       router.refresh();
     } else {
       setErrorMsg(
         result?.error === "CredentialsSignin"
-          ? "Please enter a username using letters, numbers, dots, dashes or underscores."
+          ? "Please enter a username using lower-case letters, numbers or dashes."
           : "Failed to sign in",
       );
       setBusy(false);
@@ -46,7 +49,7 @@ export function SignInForm({ provider, denied }: { provider: string; denied: boo
             className="signin-continue"
             onClick={() => {
               setBusy(true);
-              void signIn(provider, { callbackUrl: "/" });
+              void signIn(provider, { callbackUrl: next });
             }}
           >
             {busy ? "Signing in..." : `Continue with ${PROVIDER_LABEL[provider] ?? provider}`}

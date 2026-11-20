@@ -6,6 +6,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { clearPageCache } from "./page-cache";
+import { isPushEnabled } from "@/lib/features";
+import { deletePushSubscriptionAction } from "@/actions/todos";
+
+/**
+ * Before sign-out, while the session still exists: forgets this device's reminders on the server and in the browser,
+ * so a signed-out device gets none. Other devices keep theirs (D-041).
+ */
+async function forgetThisDevicePush() {
+  if (!isPushEnabled() || !("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) return;
+  if (!(await deletePushSubscriptionAction(subscription.endpoint)).success) throw new Error("not removed");
+  await subscription.unsubscribe();
+}
 
 interface NavigationProps {
   userName: string;
@@ -105,6 +120,7 @@ export function Navigation({ userName }: NavigationProps) {
   const { showToast } = useToast();
   const signOutNow = async () => {
     try {
+      await forgetThisDevicePush();
       await signOut({ redirect: false });
     } catch {
       showToast({ message: "Failed to sign out", type: "warning" });
