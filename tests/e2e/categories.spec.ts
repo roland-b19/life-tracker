@@ -273,6 +273,22 @@ const center = (box: { x: number; y: number; width: number; height: number } | n
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
 
+// Turns off Chromium's scroll anchoring, which iPhone Safari does not have: with it, a removed row above the anchor
+// scrolls the page instead of letting the next row slide up into its place, which hides the case under test.
+async function slideLikeSafari(page: Page) {
+  await page.addStyleTag({ content: "* { overflow-anchor: none }" });
+}
+
+// Where a button of the toast (`button`) opens on this screen: a first delete, of `probe`, shows it. Shift ends that
+// delete's burst (a keydown does), so this setup step does not lean on the case under test.
+async function toastButtonAt(page: Page, probe: string, button: Locator) {
+  await deleteCategory(page, probe);
+  const at = center(await button.boundingBox());
+  await page.keyboard.press("Shift");
+  await dismissToast(page);
+  return at;
+}
+
 // Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
 // The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
 // 25 ms; a slower one would hold the card's one-write-at-a-time guard and hide the case), so it lands on whatever the
@@ -313,13 +329,18 @@ for (const size of [
 
     // Delete. The page is scrolled up to 100 px short of its end: on a phone that lifts the row above the toast that
     // opens at the bottom (it would take the second click), and the page left below means the shorter list does not
-    // pull the page up under the finger.
+    // pull the page up under the finger. Without scroll anchoring b's Delete slides up under the second click.
+    await slideLikeSafari(page);
     const remove = page.getByRole("button", { name: `Delete category ${a}`, exact: true });
     await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
     await expect(remove).toBeInViewport();
-    expect(await burst(page, center(await remove.boundingBox()))).toBe(1);
+    const removeAt = center(await remove.boundingBox());
+    expect(await burst(page, removeAt)).toBe(1);
     await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
     await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+    // b's Delete is where the second click landed: the guard, not a miss, kept it.
+    const slid = center(await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).boundingBox());
+    expect(Math.abs(slid.y - removeAt.y)).toBeLessThan(10);
     await dismissToast(page);
 
     // Save, with b's Edit button lined up under it, as it was at 1280 wide when the case was found. The page cannot
@@ -350,26 +371,25 @@ for (const size of [
   });
 }
 
-// On a phone the toast can open over the deleted row's place. The burst guard must not take its Undo: a tap on the
-// toast goes through even within the burst, and the guard covers only the tapped Delete button, not the whole row.
-test("the categories card takes a quick Undo tap after a Delete on a phone", async ({ signedInPage: page }) => {
-  test.slow();
+// A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
+// enough to scroll the rows up to where the toast opens.
+async function onPhoneWith(page: Page, names: string[]) {
   await page.setViewportSize({ width: 375, height: 812 });
-  const [a, b, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
-  // Rows after a make the page tall enough to scroll a's row under the toast.
-  const fillers = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
   await wishlist.open(page);
-  for (const name of [probe, a, b, ...fillers]) {
+  for (const name of [...names, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`]) {
     await addCategory(page, name);
     await dismissToast(page);
   }
-  const undoButton = page.getByRole("button", { name: "Undo" });
+}
 
-  // Where the toast's Undo opens: a first delete shows it.
-  await deleteCategory(page, probe);
-  const undoAt = center(await undoButton.boundingBox());
-  await page.waitForTimeout(600); // past the burst, so this setup step does not depend on the case under test
-  await dismissToast(page);
+// The case found on a phone: the toast's Undo opens over the deleted row's place, and a quick tap on it brings the
+// category back.
+test("the categories card takes a quick Undo tap after a Delete on a phone", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await onPhoneWith(page, [probe, a]);
+  const undoButton = page.getByRole("button", { name: "Undo" });
+  const undoAt = await toastButtonAt(page, probe, undoButton);
 
   // a's row lined up under the Undo, as the toast opens over it.
   const row = card(page).locator(".entry-row", { hasText: a });
@@ -392,7 +412,65 @@ test("the categories card takes a quick Undo tap after a Delete on a phone", asy
   // The server has it back too.
   await wishlist.open(page);
   await expect(card(page).getByText(a, { exact: true })).toBeVisible();
-  await expect(card(page).locator(".entry-row")).toHaveCount(5);
+  await expect(card(page).locator(".entry-row")).toHaveCount(4);
+});
+
+// A tap on the toast goes through even inside the guarded button's place: on a phone the toast's Dismiss opens right
+// over the deleted row's Delete button.
+test("the categories card takes a quick Dismiss tap over the deleted row's Delete button", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  // A row before a puts it low enough on the page for its Delete to scroll under the Dismiss.
+  await onPhoneWith(page, [probe, `e2e-cat-${hex()}`, a]);
+  const dismissAt = await toastButtonAt(page, probe, dismissButton(page));
+
+  // a's Delete lined up under the Dismiss.
+  const remove = card(page).getByRole("button", { name: `Delete category ${a}`, exact: true });
+  await page.evaluate((dy) => window.scrollBy(0, dy), center(await remove.boundingBox()).y - dismissAt.y);
+  const box = (await remove.boundingBox())!;
+  expect(dismissAt.x).toBeGreaterThan(box.x);
+  expect(dismissAt.x).toBeLessThan(box.x + box.width);
+  expect(dismissAt.y).toBeGreaterThan(box.y);
+  expect(dismissAt.y).toBeLessThan(box.y + box.height);
+
+  // Delete, then Dismiss about 50 ms later, well within the burst.
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(dismissAt.x, dismissAt.y), `"name":"${a}"`);
+  await expect(dismissButton(page)).toBeVisible();
+  await page.waitForTimeout(Math.max(0, 50 - (Date.now() - started)));
+  const dismissNow = center(await dismissButton(page).boundingBox());
+  expect(Date.now() - started).toBeLessThan(400);
+  await page.mouse.click(dismissNow.x, dismissNow.y);
+  // The mouse over the toast holds it open, so only the Dismiss can close it; the bound stays under its own 5 s anyway.
+  await expect(dismissButton(page)).toHaveCount(0, { timeout: 2_000 });
+});
+
+// The guard covers only the tapped Delete button, not the deleted row's whole place: a quick tap beside it, here on the
+// next row's Edit once it has slid up there, goes through and opens that row's form.
+test("the categories card takes a quick tap beside the deleted row's Delete button", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await onPhoneWith(page, [a, b]);
+  await slideLikeSafari(page);
+  // As in the two-quick-clicks test: 100 px short of the end lifts the row above the toast, and the shorter list does
+  // not pull the page up.
+  await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
+  const row = card(page).locator(".entry-row", { hasText: a });
+  await expect(row).toBeInViewport();
+  const editAt = center(await row.getByRole("button", { name: `Edit category ${a}`, exact: true }).boundingBox());
+  const remove = center(await row.getByRole("button", { name: `Delete category ${a}`, exact: true }).boundingBox());
+
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
+  await expect(row).toHaveCount(0);
+  // b's Edit has slid up into a's Edit's place.
+  const slid = center(await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).boundingBox());
+  expect(Math.abs(slid.y - editAt.y)).toBeLessThan(10);
+  expect(Date.now() - started).toBeLessThan(400);
+  await page.mouse.click(editAt.x, editAt.y);
+  const form = page.getByRole("dialog", { name: "Edit category" });
+  await expect(form).toBeVisible();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(b);
 });
 
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
