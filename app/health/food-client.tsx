@@ -128,8 +128,12 @@ export function FoodClient({
   const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
   const [metricGoalInput, setMetricGoalInput] = useState("");
+  // What an edit form showed when it opened: a save sends only the fields changed from these, so a refresh while the
+  // form is open (another tab's save) is not written back by fields this edit left alone (D-040).
+  const [metricBase, setMetricBase] = useState({ amount: 0, goal: 0 });
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
+  const [goalsBase, setGoalsBase] = useState<Goals>(targets);
   const { showToast } = useToast();
   // A tap that writes acts once per tap burst (D-043): one water write at a time, one delete per meal. Forms get the
   // same from FormModal.
@@ -332,8 +336,10 @@ export function FoodClient({
 
   function openMetricEdit(metric: Metric) {
     setErrorMsg("");
-    setMetricInput(String(summary.metrics[METRIC_KEY[metric]]));
-    setMetricGoalInput(String(goals[METRIC_KEY[metric]]));
+    const base = { amount: summary.metrics[METRIC_KEY[metric]], goal: goals[METRIC_KEY[metric]] };
+    setMetricBase(base);
+    setMetricInput(String(base.amount));
+    setMetricGoalInput(String(base.goal));
     setMetricEdit(metric);
     setMetricOpen(true);
   }
@@ -341,7 +347,6 @@ export function FoodClient({
   async function handleMetricSubmit(e: React.FormEvent) {
     e.preventDefault();
     const metric = metricEdit;
-    const key = METRIC_KEY[metric];
     const value = Number(metricInput);
     const goal = Number(metricGoalInput);
     const range = METRIC_GOAL[metric];
@@ -349,7 +354,7 @@ export function FoodClient({
     if (value > METRIC_MAX[metric]) return setErrorMsg(`The total must be ${formatNumber(METRIC_MAX[metric])} or less.`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}.`);
-    const before = { amount: summary.metrics[key], goal: goals[key] };
+    const before = metricBase;
     const change: MetricChange = {
       ...(value === before.amount ? {} : { amount: value }),
       ...(goal === before.goal ? {} : { goal }),
@@ -391,6 +396,7 @@ export function FoodClient({
 
   function openGoals() {
     setErrorMsg("");
+    setGoalsBase(goals);
     setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
     setGoalsOpen(true);
   }
@@ -401,10 +407,10 @@ export function FoodClient({
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
     if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${formatNumber(bad.min)} and ${formatNumber(bad.max)}.`);
     // Only the goals this edit changed are sent, so an older tab never writes back goals it did not touch (D-040).
-    const changed = NUTRITION_GOALS.filter((g) => next[g.key] !== goals[g.key]).map((g) => g.key);
+    const changed = NUTRITION_GOALS.filter((g) => next[g.key] !== goalsBase[g.key]).map((g) => g.key);
     if (changed.length === 0) return setGoalsOpen(false);
     const patch: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, next[key]]));
-    const previous: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, goals[key]]));
+    const previous: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, goalsBase[key]]));
     setErrorMsg("");
     const saved = updateTargetsAction(patch).catch(() => null);
     const res = await saved;

@@ -1,18 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { andSettle, expectNoSeriousViolations, test } from "./helpers";
+import { Pool } from "pg";
+import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
 
-// The page opens on the Today tab, so a reload (which also starts there) goes through here too. On a phone the
-// Shopping tab shows its short label "Shop", hence the pattern.
+// The open tab is kept per device (HTODAY-17), so a reload opens the tab picked last: each open picks its tab. A click
+// before the page has hydrated is lost, so the pick is tried until the tab is selected. On a phone the Shopping tab
+// shows its short label "Shop", hence the pattern.
+const TABS = { Today: "Today", Shopping: /^Shop(ping)?$/ } as const;
+
 async function openHealth(page: Page, tab: "Today" | "Shopping") {
   await page.goto("/health");
   await expect(page).toHaveURL(/\/health$/);
-  if (tab === "Shopping") {
-    await page.getByRole("tab", { name: /^Shop(ping)?$/ }).click();
-    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
-  } else {
-    await expect(page.getByRole("button", { name: "Add meal" })).toBeVisible();
-  }
+  const pick = page.getByRole("tab", { name: TABS[tab] });
+  await expect(async () => {
+    await pick.click();
+    await expect(pick).toHaveAttribute("aria-selected", "true", { timeout: 1000 });
+  }).toPass();
+  await expect(page.getByRole("button", { name: tab === "Today" ? "Add meal" : "Add item" })).toBeVisible();
 }
 
 async function dismissToast(page: Page, message: string) {
@@ -20,8 +24,10 @@ async function dismissToast(page: Page, message: string) {
   await expect(page.getByText(message)).toBeHidden();
 }
 
-// The meal form has no name field; the server names the meal "Meal". Its numbers are two lines under the name.
+// The meal form has no name field; the server names the meal "Meal". Its numbers are two lines under the name; its
+// Delete names the meal, its time and its calories (HTODAY-12).
 const MEAL_NUMBERS = "450 kcal · P 30";
+const deleteMeal = (kcal: string) => new RegExp(`^Delete Meal of \\d\\d:\\d\\d, ${kcal.replace(".", "\\.")} kcal$`);
 
 async function addMeal(page: Page) {
   await page.getByRole("button", { name: "Add meal" }).click();
@@ -85,12 +91,12 @@ test("a signed-in user logs and deletes a meal, with Undo for each, also after a
   // Log a meal: the row, the toast and the Nutrition card (the goals are the defaults).
   await expect(empty).toBeVisible();
   await addMeal(page);
-  await expect(nutrition).toContainText(/Calories\s*450\s*\/ 3350 kcal/);
+  await expect(nutrition).toContainText(/Calories\s*450\s*\/ 3\.350 kcal/);
 
   // Undo the log: the meal is gone, also after a reload.
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
   await expect(empty).toBeVisible();
-  await expect(nutrition).toContainText(/Calories\s*0\s*\/ 3350 kcal/);
+  await expect(nutrition).toContainText(/Calories\s*0\s*\/ 3\.350 kcal/);
   await openHealth(page, "Today");
   await expect(empty).toBeVisible();
 
@@ -101,17 +107,17 @@ test("a signed-in user logs and deletes a meal, with Undo for each, also after a
   await expect(meal).toBeVisible();
 
   // Delete it, then Undo the delete: the same meal comes back, also after a reload.
-  await andSettle(page, () => page.getByRole("button", { name: "Delete Meal" }).click());
+  await andSettle(page, () => page.getByRole("button", { name: deleteMeal("450") }).click());
   await expect(empty).toBeVisible();
   await expect(page.getByText('Removed "Meal"')).toBeVisible();
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
   await expect(meal).toBeVisible();
-  await expect(nutrition).toContainText(/Calories\s*450\s*\/ 3350 kcal/);
+  await expect(nutrition).toContainText(/Calories\s*450\s*\/ 3\.350 kcal/);
   await openHealth(page, "Today");
   await expect(meal).toBeVisible();
 
   // Delete it for good: the database lost it.
-  await andSettle(page, () => page.getByRole("button", { name: "Delete Meal" }).click());
+  await andSettle(page, () => page.getByRole("button", { name: deleteMeal("450") }).click());
   await expect(empty).toBeVisible();
   await openHealth(page, "Today");
   await expect(empty).toBeVisible();
@@ -121,7 +127,7 @@ test("a signed-in user edits the nutrition goals, with Undo, also after a reload
   await openHealth(page, "Today");
 
   const nutrition = page.getByRole("region", { name: "Nutrition" });
-  const goals = (calories: number, protein: number, carbs: number, fat: number) =>
+  const goals = (calories: string, protein: number, carbs: number, fat: number) =>
     Promise.all([
       expect(nutrition.getByText(`/ ${calories} kcal`, { exact: true })).toBeVisible(),
       expect(nutrition.getByText(`/ ${protein}g`, { exact: true })).toBeVisible(),
@@ -138,23 +144,23 @@ test("a signed-in user edits the nutrition goals, with Undo, also after a reload
     await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
     await expect(form).toBeHidden();
     await expect(page.getByText("Saved nutrition goals")).toBeVisible();
-    await goals(2800, 150, 250, 70);
+    await goals("2.800", 150, 250, 70);
   };
 
   // The defaults.
-  await goals(3350, 170, 300, 80);
+  await goals("3.350", 170, 300, 80);
 
   // Save new goals; Undo puts the defaults back, also after a reload.
   await saveGoals();
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
-  await goals(3350, 170, 300, 80);
+  await goals("3.350", 170, 300, 80);
   await openHealth(page, "Today");
-  await goals(3350, 170, 300, 80);
+  await goals("3.350", 170, 300, 80);
 
   // Save them again: they are still the new ones after a reload.
   await saveGoals();
   await openHealth(page, "Today");
-  await goals(2800, 150, 250, 70);
+  await goals("2.800", 150, 250, 70);
 });
 
 test("a signed-in user adds water, sets water and steps with their goals, with Undo, also after a reload", async ({ signedInPage: page }) => {
@@ -163,70 +169,69 @@ test("a signed-in user adds water, sets water and steps with their goals, with U
   const water = page.getByRole("region", { name: "Water" });
   const steps = page.getByRole("region", { name: "Steps" });
 
-  await expect(water).toContainText("0 / 3000 ml");
-  await expect(steps).toContainText("0 / 10000");
+  await expect(water).toContainText("0 / 3.000 ml");
+  await expect(steps).toContainText("0 / 10.000");
 
   // A quick tap adds at once; Undo takes exactly that back, also after a reload.
   await andSettle(page, () => water.getByRole("button", { name: "+250 ml" }).click());
   await expect(page.getByText("Added 250 ml")).toBeVisible();
-  await expect(water).toContainText("250 / 3000 ml");
+  await expect(water).toContainText("250 / 3.000 ml");
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
-  await expect(water).toContainText("0 / 3000 ml");
+  await expect(water).toContainText("0 / 3.000 ml");
   await openHealth(page, "Today");
-  await expect(water).toContainText("0 / 3000 ml");
+  await expect(water).toContainText("0 / 3.000 ml");
 
   // Tap again: 250 is what the database holds after a reload.
   await andSettle(page, () => water.getByRole("button", { name: "+250 ml" }).click());
   await dismissToast(page, "Added 250 ml");
   await openHealth(page, "Today");
-  await expect(water).toContainText("250 / 3000 ml");
+  await expect(water).toContainText("250 / 3.000 ml");
 
-  // Set the total and the goal. The goal is the second write, so the piece of body names that one: the toast shows
-  // only after both are saved.
+  // Set the total and the goal: one write sends both (XR-09).
   await water.getByRole("button", { name: "Edit water and goal" }).click();
   const waterForm = page.getByRole("dialog", { name: "Edit water" });
   await expect(waterForm.getByLabel("Water today (ml)")).toHaveValue("250");
   await waterForm.getByLabel("Water today (ml)").fill("1200");
   await waterForm.getByLabel("Daily goal (ml)").fill("2500");
-  await andSettle(page, () => waterForm.getByRole("button", { name: "Save" }).click(), `"waterMl":2500`);
+  await andSettle(page, () => waterForm.getByRole("button", { name: "Save" }).click());
   await expect(waterForm).toBeHidden();
-  await expect(page.getByText("Water set to 1200 ml, goal 2500 ml")).toBeVisible();
-  await expect(water).toContainText("1200 / 2500 ml");
+  await expect(page.getByText("Water set to 1.200 ml, goal 2.500 ml")).toBeVisible();
+  await expect(water).toContainText("1.200 / 2.500 ml");
   await openHealth(page, "Today");
-  await expect(water).toContainText("1200 / 2500 ml");
+  await expect(water).toContainText("1.200 / 2.500 ml");
 
   // Undo of an edit needs its toast, so edit once more and Undo it: total and goal both go back.
   await water.getByRole("button", { name: "Edit water and goal" }).click();
   await waterForm.getByLabel("Water today (ml)").fill("1800");
   await waterForm.getByLabel("Daily goal (ml)").fill("3500");
-  await andSettle(page, () => waterForm.getByRole("button", { name: "Save" }).click(), `"waterMl":3500`);
-  await expect(page.getByText("Water set to 1800 ml, goal 3500 ml")).toBeVisible();
-  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click(), `"waterMl":2500`);
-  await expect(water).toContainText("1200 / 2500 ml");
+  await andSettle(page, () => waterForm.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByText("Water set to 1.800 ml, goal 3.500 ml")).toBeVisible();
+  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
+  await expect(water).toContainText("1.200 / 2.500 ml");
   await openHealth(page, "Today");
-  await expect(water).toContainText("1200 / 2500 ml");
+  await expect(water).toContainText("1.200 / 2.500 ml");
 
   // Steps: set the total and the goal, then Undo.
   await steps.getByRole("button", { name: "Edit steps and goal" }).click();
   const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
   await stepsForm.getByLabel("Steps today").fill("8000");
   await stepsForm.getByLabel("Daily goal (steps)").fill("12000");
-  await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click(), `"steps":12000`);
+  await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click());
   await expect(stepsForm).toBeHidden();
-  await expect(page.getByText("Steps set to 8000, goal 12000")).toBeVisible();
-  await expect(steps).toContainText("8000 / 12000");
+  await expect(page.getByText("Steps set to 8.000, goal 12.000")).toBeVisible();
+  await expect(steps).toContainText("8.000 / 12.000");
   await openHealth(page, "Today");
-  await expect(steps).toContainText("8000 / 12000");
+  await expect(steps).toContainText("8.000 / 12.000");
 
   await steps.getByRole("button", { name: "Edit steps and goal" }).click();
   await stepsForm.getByLabel("Steps today").fill("9500");
   await stepsForm.getByLabel("Daily goal (steps)").fill("15000");
-  await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click(), `"steps":15000`);
-  await expect(page.getByText("Steps set to 9500, goal 15000")).toBeVisible();
-  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click(), `"steps":12000`);
-  await expect(steps).toContainText("8000 / 12000");
+  await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByText("Steps set to 9.500, goal 15.000")).toBeVisible();
+  await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
+  await expect(steps).toContainText("8.000 / 12.000");
   await openHealth(page, "Today");
-  await expect(steps).toContainText("8000 / 12000");
+  await expect(steps).toContainText("8.000 / 12.000");
 });
 
 test("a signed-in user adds, edits, ticks, clears and deletes a shopping item, with Undo for each, also after a reload", async ({ signedInPage: page }) => {
@@ -294,4 +299,210 @@ test("a signed-in user adds, edits, ticks, clears and deletes a shopping item, w
   await expect(page.getByText("Your shopping list is empty.")).toBeVisible();
   await openHealth(page, "Shopping");
   await expect(page.getByText("Your shopping list is empty.")).toBeVisible();
+});
+
+test("a signed-out visit to /health goes to the sign-in form, which comes back to /health [PATH]", async ({ page }) => {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await page.goto("/health", { waitUntil: "commit" });
+    await expect(page).toHaveURL(/\/signin\?next=%2Fhealth$/);
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/health$/);
+    await expect(page.getByRole("button", { name: "Add meal" })).toBeVisible();
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+});
+
+test("the meal form keeps Save off until a value survives rounding, shows the server's refusal and reads the app's number format [HTODAY-06, HTODAY-04, HTODAY-05, HTODAY-13]", async ({
+  signedInPage: page,
+}) => {
+  await openHealth(page, "Today");
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const form = page.getByRole("dialog", { name: "New meal" });
+  const save = form.getByRole("button", { name: "Save" });
+  const field = (label: string) => form.getByLabel(label);
+  await expect(save).toBeDisabled();
+
+  // Protein is kept to one decimal: 0,04 rounds to nothing, 0,05 to 0,1.
+  await field("Protein (g)").fill("0,04");
+  await expect(save).toBeDisabled();
+  await field("Protein (g)").fill("0,05");
+  await expect(save).toBeEnabled();
+
+  // A negative number is no value either; with a macro beside it, the form sends it and shows what the server said.
+  await field("Protein (g)").fill("");
+  await field("Calories (kcal)").fill("-100");
+  await expect(save).toBeDisabled();
+  await field("Protein (g)").fill("30");
+  await andSettle(page, () => save.click());
+  await expect(form.getByText("Must be at least 0")).toBeVisible();
+  await expect(page.getByText("Failed to add meal")).toHaveCount(0);
+
+  // Thousands with a dot, decimals with a comma, in the fields and on the screen.
+  await field("Calories (kcal)").fill("1.500");
+  await field("Protein (g)").fill("30,5");
+  await andSettle(page, () => save.click());
+  await expect(form).toBeHidden();
+  await expect(page.getByText("Added meal (1.500 kcal)")).toBeVisible();
+  await expect(page.getByText("1.500 kcal · P 30,5", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Nutrition" })).toContainText(/Calories\s*1\.500\s*\/ 3\.350 kcal/);
+  await expect(page.getByRole("button", { name: deleteMeal("1.500") })).toBeVisible();
+});
+
+// Each Undo toast names the rows it touches (D-040): a newer toast about the same meal takes the older toast's Undo away,
+// so that Undo never writes over the newer change; a toast about another row keeps its Undo.
+test("a newer toast about the same meal takes the older toast's Undo; the water toast keeps its own [TOUCHES]", async ({ signedInPage: page }) => {
+  const toast = (message: string) => page.locator(".toast-item").filter({ hasText: message });
+  const undoIn = (message: string) => toast(message).getByRole("button", { name: "Undo" });
+  await openHealth(page, "Today");
+  await addMeal(page);
+  await expect(undoIn("Added meal (450 kcal)")).toBeVisible();
+  // Shift ends the last tap burst (D-043); this test is about the toasts, not the guard.
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("region", { name: "Water" }).getByRole("button", { name: "+250 ml" }).click());
+  await expect(undoIn("Added 250 ml")).toBeVisible();
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: deleteMeal("450") }).click());
+  await expect(undoIn('Removed "Meal"')).toBeVisible();
+  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still
+  // there afterwards, so its Undo is gone from a toast on screen.
+  expect(await undoIn("Added meal (450 kcal)").count()).toBe(0);
+  await expect(toast("Added meal (450 kcal)")).toBeVisible();
+  await expect(undoIn("Added 250 ml")).toBeVisible();
+});
+
+test("a double tap on the meal Save or on a water add writes once [D-043]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  await addMeal(page);
+  await dismissToast(page, "Added meal (450 kcal)");
+
+  // The first meal's Delete is lined up under Save of the next meal's form, so a second tap that got through would
+  // delete it. The page cannot scroll while the form is open, so it is lined up first, and the form then opens without
+  // a scroll (a dispatched click).
+  const openForm = page.getByRole("button", { name: "Add meal" });
+  const form = page.getByRole("dialog", { name: "New meal" });
+  await openForm.click();
+  const saveBox = await form.getByRole("button", { name: "Save" }).boundingBox();
+  const save = center(saveBox);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  const under = page.getByRole("button", { name: deleteMeal("450") });
+  await page.evaluate((dy) => window.scrollBy(0, dy), center(await under.boundingBox()).y - save.y);
+  const spot = { x: center(await under.boundingBox()).x, y: save.y };
+  expect(Math.abs(center(await under.boundingBox()).y - spot.y)).toBeLessThan(10);
+  expect(spot.x).toBeGreaterThan(saveBox!.x);
+  expect(spot.x).toBeLessThan(saveBox!.x + saveBox!.width);
+
+  await openForm.dispatchEvent("click");
+  await form.getByLabel("Calories (kcal)").fill("300");
+  expect(await burst(page, spot)).toBe(1);
+  await expect(page.getByText("Added meal (300 kcal)")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // Both meals are there, and their Delete buttons say which is which (HTODAY-12).
+  await expect(under).toHaveCount(1);
+  await expect(page.getByRole("button", { name: deleteMeal("300") })).toHaveCount(1);
+
+  // A double tap on a water add adds once.
+  await page.keyboard.press("Shift");
+  const water = page.getByRole("region", { name: "Water" });
+  const add = water.getByRole("button", { name: "+250 ml" });
+  await add.scrollIntoViewIfNeeded();
+  expect(await burst(page, center(await add.boundingBox()))).toBe(1);
+  await expect(water).toContainText("250 / 3.000 ml");
+  await openHealth(page, "Today");
+  await expect(water).toContainText("250 / 3.000 ml");
+});
+
+test("a meal deleted in one tab leaves another tab after its refresh, without a reload [SERVER-STATE]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  await addMeal(page);
+  const other = await page.context().newPage();
+  try {
+    await openHealth(other, "Today");
+    await expect(other.getByText(MEAL_NUMBERS, { exact: true })).toBeVisible();
+    // A mark on the window: a reload would drop it.
+    await other.evaluate(() => Object.assign(window, { kept: true }));
+    await page.keyboard.press("Shift");
+    await andSettle(page, () => page.getByRole("button", { name: deleteMeal("450") }).click());
+    await expect(other.getByText("No meals logged today.")).toBeVisible();
+    expect(await other.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
+  } finally {
+    await other.close();
+  }
+});
+
+test("the open tab is kept on this device after a reload, and not on another device [HTODAY-17]", async ({ signedInPage: page, browser }) => {
+  await openHealth(page, "Shopping");
+  await page.reload();
+  await expect(page.getByRole("tab", { name: TABS.Shopping })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  await expect(page).toHaveURL(/\/health$/);
+
+  // Another browser with the same session opens on Today.
+  const context = await browser.newContext();
+  try {
+    await context.addCookies(await page.context().cookies());
+    const other = await context.newPage();
+    await other.goto("/health");
+    await expect(other.getByRole("button", { name: "Add meal" })).toBeVisible();
+    await expect(other.getByRole("tab", { name: TABS.Today })).toHaveAttribute("aria-selected", "true");
+  } finally {
+    await context.close();
+  }
+});
+
+// An edit sends only the fields it changed (D-040): a form opened before another tab's save does not write that save
+// back with the old values it still shows, so both changes stay.
+test("two tabs editing different goals, or steps and its goal, both keep their change [HTODAY-07]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const other = await page.context().newPage();
+  try {
+    await openHealth(other, "Today");
+
+    // This tab opens its goals form; the other tab then saves new calories, which this tab's refresh brings in.
+    await page.getByRole("button", { name: "Edit goals" }).click();
+    const form = page.getByRole("dialog", { name: "Edit goals" });
+    await expect(form.getByLabel("Calories (kcal)")).toHaveValue("3.350");
+    await other.getByRole("button", { name: "Edit goals" }).click();
+    const otherForm = other.getByRole("dialog", { name: "Edit goals" });
+    await otherForm.getByLabel("Calories (kcal)").fill("2800");
+    await andSettle(other, () => otherForm.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText("Saved nutrition goals")).toBeVisible();
+    await expect(page.getByText("/ 2.800 kcal", { exact: true })).toBeAttached();
+    // This tab changes the protein only.
+    await form.getByLabel("Protein (g)").fill("150");
+    await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+    await expect(page.getByText("Saved nutrition goals")).toBeVisible();
+
+    // The same with steps: this tab's form is open while the other tab sets the goal; this tab sets the amount.
+    const steps = (p: Page) => p.getByRole("region", { name: "Steps" });
+    await steps(page).getByRole("button", { name: "Edit steps and goal" }).click();
+    const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
+    await expect(stepsForm.getByLabel("Daily goal (steps)")).toHaveValue("10.000");
+    await steps(other).getByRole("button", { name: "Edit steps and goal" }).click();
+    const otherSteps = other.getByRole("dialog", { name: "Edit steps" });
+    await otherSteps.getByLabel("Daily goal (steps)").fill("12000");
+    await andSettle(other, () => otherSteps.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText("Steps goal set to 12.000")).toBeVisible();
+    await expect(page.getByText("/ 12.000", { exact: true })).toBeAttached();
+    await stepsForm.getByLabel("Steps today").fill("8000");
+    await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click());
+    await expect(page.getByText("Steps set to 8.000", { exact: true })).toBeVisible();
+
+    // The database kept both changes of each pair.
+    await openHealth(page, "Today");
+    const nutrition = page.getByRole("region", { name: "Nutrition" });
+    await expect(nutrition.getByText("/ 2.800 kcal", { exact: true })).toBeVisible();
+    await expect(nutrition.getByText("/ 150g", { exact: true })).toBeVisible();
+    await expect(steps(page)).toContainText("8.000 / 12.000");
+  } finally {
+    await other.close();
+  }
 });
