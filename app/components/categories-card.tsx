@@ -69,11 +69,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
-  // One save or delete at a time, and one per tap burst: the rest of a double tap on `spot` is swallowed, so it neither
-  // repeats the write nor lands on what slid under the finger (the next row's Delete, or the Edit button under a closing form).
+  // One save or delete at a time, and one per tap burst: the rest of a double tap on the tapped button (`spot`: Save, or
+  // the row's Delete) is swallowed, so it neither repeats the write nor lands on what slid into the button's place (the
+  // next row's Delete, or the Edit button under a closing form). A tap on the toast always goes through (see swallowBurst).
   const writing = useRef(false);
-  // The row last tapped, set before its Delete's own handler runs.
-  const tappedRow = useRef<Element | null>(null);
+  // The button last tapped in a row, set before its own handler runs.
+  const tappedButton = useRef<Element | null>(null);
   async function once(write: () => Promise<void>, spot: Element | null | undefined) {
     if (writing.current) return;
     writing.current = true;
@@ -258,7 +259,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         <ListBox wash className="entries">
           {categories.length === 0 && <EmptyNote>No {noun === "unit" ? "units" : "categories"} yet.</EmptyNote>}
           {categories.map((cat, i) => (
-            <div key={cat} className="entry-row" data-sort onClickCapture={(e) => (tappedRow.current = e.currentTarget)}>
+            <div key={cat} className="entry-row" data-sort onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
               <DragHandle
                 label={`Drag ${cat} to reorder`}
                 {...dragRow}
@@ -270,7 +271,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
                 }}
               />
               <span className={`category-name${noun === "unit" ? " raw" : ""}`}>{cat}</span>
-              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(() => remove(cat), tappedRow.current)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(() => remove(cat), tappedButton.current)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
         </ListBox>
@@ -305,9 +306,11 @@ const undoFailed = (back: Answer<object> | null) => why(back, "Failed to undo");
 const BURST_MS = 500;
 
 /**
- * Swallows the clicks that land in `spot` within `BURST_MS`: by then what is under the finger may be the next row, or
- * the button beneath a form that closed. The click being handled is already past. A burst is only taps on that one spot,
- * so a click elsewhere (the toast's Undo) or typing ends it and goes through.
+ * Swallows the clicks that land in `spot` (the tapped button's place) within `BURST_MS`: by then what is under the
+ * finger may be the next row's Delete, or the button beneath a form that closed. The click being handled is already
+ * past. A burst is only taps on that one spot, so a click elsewhere, or typing, ends it and goes through. A click in the
+ * toast area always goes through and ends it too: on a phone the toast can open over the button's place, and its Undo
+ * must take the very next tap.
  */
 function swallowBurst(spot: DOMRect) {
   const end = () => {
@@ -317,8 +320,9 @@ function swallowBurst(spot: DOMRect) {
     window.removeEventListener("input", end, true);
   };
   const stop = (e: MouseEvent) => {
+    const onToast = e.target instanceof Element && e.target.closest(".toast-container") !== null;
     const inSpot = e.clientX >= spot.left && e.clientX <= spot.right && e.clientY >= spot.top && e.clientY <= spot.bottom;
-    if (!inSpot) return end();
+    if (onToast || !inSpot) return end();
     e.preventDefault();
     e.stopPropagation();
   };

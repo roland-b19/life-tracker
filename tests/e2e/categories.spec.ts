@@ -350,6 +350,51 @@ for (const size of [
   });
 }
 
+// On a phone the toast can open over the deleted row's place. The burst guard must not take its Undo: a tap on the
+// toast goes through even within the burst, and the guard covers only the tapped Delete button, not the whole row.
+test("the categories card takes a quick Undo tap after a Delete on a phone", async ({ signedInPage: page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 375, height: 812 });
+  const [a, b, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  // Rows after a make the page tall enough to scroll a's row under the toast.
+  const fillers = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [probe, a, b, ...fillers]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const undoButton = page.getByRole("button", { name: "Undo" });
+
+  // Where the toast's Undo opens: a first delete shows it.
+  await deleteCategory(page, probe);
+  const undoAt = center(await undoButton.boundingBox());
+  await page.waitForTimeout(600); // past the burst, so this setup step does not depend on the case under test
+  await dismissToast(page);
+
+  // a's row lined up under the Undo, as the toast opens over it.
+  const row = card(page).locator(".entry-row", { hasText: a });
+  await page.evaluate((dy) => window.scrollBy(0, dy), center(await row.boundingBox()).y - undoAt.y);
+  const rowBox = (await row.boundingBox())!;
+  expect(undoAt.y).toBeGreaterThan(rowBox.y);
+  expect(undoAt.y).toBeLessThan(rowBox.y + rowBox.height);
+
+  // Delete, then Undo about 100 ms later, well within the burst.
+  const remove = center(await row.getByRole("button", { name: `Delete category ${a}`, exact: true }).boundingBox());
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
+  await expect(undoButton).toBeVisible();
+  await page.waitForTimeout(Math.max(0, 100 - (Date.now() - started)));
+  const undoNow = center(await undoButton.boundingBox());
+  expect(Date.now() - started).toBeLessThan(400);
+  await andSettle(page, () => page.mouse.click(undoNow.x, undoNow.y), "dropCurrent");
+  await expect(card(page).getByText(a, { exact: true })).toBeVisible();
+
+  // The server has it back too.
+  await wishlist.open(page);
+  await expect(card(page).getByText(a, { exact: true })).toBeVisible();
+  await expect(card(page).locator(".entry-row")).toHaveCount(5);
+});
+
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
 test("the categories card shows why the server refused a delete or an Undo", async ({ signedInPage: page }) => {
   const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
