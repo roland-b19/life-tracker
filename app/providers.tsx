@@ -37,9 +37,9 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
  * refreshes this page once the writes stop and tells the other copies, which refresh too; every copy also refreshes
  * on focus, when it becomes visible, every minute while visible, and at midnight in Bucharest (day-watch.ts); a refresh
- * that came due while offline runs once the device is back online. A write that never got an answer says why: offline
- * nothing was saved (open forms stay as they are); online the answer was lost and the write may have happened, so the
- * page refreshes. A failed answer (non-2xx) changes nothing here.
+ * that came due while offline runs once the device is back online and the server answers. A write that never got an
+ * answer says why: offline nothing was saved (open forms stay as they are); online the answer was lost and the write
+ * may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
  */
 function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
@@ -49,20 +49,38 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     let wrote = false;
     let writing = 0;
     let due = false;
-    // A refresh that came due while offline, run once the device is back online
+    // A refresh that came due while offline, run once the device is back online and the server answers
     let missed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
+    const realFetch = window.fetch;
 
     const refreshNow = () => {
       clearTimeout(timer);
       due = false;
       // Offline, Next would turn the refresh into a full page load, which fails: it waits for the device to be online
-      missed = !navigator.onLine;
-      if (missed) return;
+      if (!navigator.onLine) {
+        missed = true;
+        return;
+      }
+      if (missed) return check();
       last = Date.now();
       day.seen();
       router.refresh();
+    };
+    // "Online" can come before the server is reachable (a network still settling, a captive portal), and a refresh that
+    // fails becomes a full page load that drops an open form: after a missed refresh the server must answer a small
+    // request first (`/api/health`, which the service worker never answers). Until it does, the next focus, minute or
+    // "online" tries again.
+    const check = () => {
+      realFetch("/api/health", { cache: "no-store" }).then(
+        (res) => {
+          if (!res.ok || !missed) return;
+          missed = false;
+          refresh();
+        },
+        () => {},
+      );
     };
     // A refresh while a write is on its way could show the screen from before it: it waits for the answer.
     const refresh = (delay = 0) => {
@@ -75,7 +93,6 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CHANNEL);
     channel?.addEventListener("message", (e) => e.data?.type === "wrote" && refresh(AFTER_WRITES));
 
-    const realFetch = window.fetch;
     const write = async (input: RequestInfo | URL, init?: RequestInit) => {
       writing++;
       clearTimeout(timer);
