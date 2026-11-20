@@ -109,9 +109,8 @@ export async function andSettle(page: Page, act: () => Promise<void>, body?: str
 }
 
 async function signIn(page: Page, name: string) {
-  // Sign in through NextAuth's own endpoints instead of the form. On /signin two parallel /api/auth/session calls each
-  // set a CSRF cookie, so a click that comes too early posts a stale token and no session is created. Here the token and
-  // its cookie come from one request, and the request context shares its cookie jar with the page.
+  // Sign in through NextAuth's own endpoints instead of the form: faster, and the form itself is tested in
+  // navigation.spec.ts. The request context shares its cookie jar with the page.
   const { csrfToken } = await (await page.request.get("/api/auth/csrf")).json();
   const response = await page.request.post("/api/auth/callback/credentials", {
     form: { csrfToken, name, json: "true" },
