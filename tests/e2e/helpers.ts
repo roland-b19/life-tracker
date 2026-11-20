@@ -3,33 +3,45 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
-// After a server action the app refreshes the router 600 ms after the last one (app/providers.tsx). A refresh rebuilds
-// the tags React hoists into <head>, the <title> among them, so a scan that lands in the middle of one sees a page
-// without a title (axe `document-title`) although the title was there a moment before. `watchRefreshes` follows the
-// actions and the refreshes of a page, so a scan can wait for the refresh that is still due.
-const refreshesDue = new WeakMap<Page, { due: boolean }>();
+// After a server action answers HTTP 2xx the app refreshes the router 600 ms after the last answer, and it also
+// refreshes on focus, when it becomes visible and every minute (app/providers.tsx). A refresh rebuilds the tags React
+// hoists into <head>, the <title> among them, so a scan that lands in the middle of one sees a page without a title
+// (axe `document-title`) although the title was there a moment before. `watchRefreshes` follows the actions and the
+// refreshes of a page, so a scan can wait for the refresh that is still due and for the ones under way. A write that
+// failed or never got an answer refreshes nothing, so it makes nothing due.
+const refreshesDue = new WeakMap<Page, { due: boolean; running: Set<Request> }>();
+
+/** A router refresh of the page on screen: a page payload request (`rsc`) for the same path, not a prefetch. */
+export function isRefresh(page: Page, request: Request) {
+  const headers = request.headers();
+  return (
+    request.method() === "GET" &&
+    "rsc" in headers &&
+    !("next-router-prefetch" in headers) &&
+    !("next-router-segment-prefetch" in headers) &&
+    new URL(request.url()).pathname === new URL(page.url()).pathname
+  );
+}
 
 function watchRefreshes(page: Page) {
-  const state = { due: false };
+  const state = { due: false, running: new Set<Request>() };
   let writes = 0;
   // The refresh requests that started after the last write, with the write count they saw.
   const covering = new Map<Request, number>();
-  page.on("request", (request) => {
-    const headers = request.headers();
-    if (request.method() === "POST" && "next-action" in headers) {
+  page.on("response", (response) => {
+    const request = response.request();
+    if (request.method() === "POST" && "next-action" in request.headers() && response.ok()) {
       writes++;
       state.due = true;
-    } else if (
-      state.due &&
-      request.method() === "GET" &&
-      "rsc" in headers &&
-      !("next-router-prefetch" in headers) &&
-      new URL(request.url()).pathname === new URL(page.url()).pathname
-    ) {
-      covering.set(request, writes);
     }
   });
+  page.on("request", (request) => {
+    if (!isRefresh(page, request)) return;
+    state.running.add(request);
+    if (state.due) covering.set(request, writes);
+  });
   const ended = (request: Request) => {
+    state.running.delete(request);
     const seen = covering.get(request);
     covering.delete(request);
     // A later write schedules another refresh, so this one does not settle it.
@@ -40,6 +52,7 @@ function watchRefreshes(page: Page) {
   // A new document drops the timer of the old one.
   page.on("load", () => {
     state.due = false;
+    state.running.clear();
     covering.clear();
   });
   refreshesDue.set(page, state);
@@ -70,7 +83,11 @@ function headIsQuiet() {
 // and a title; `next dev` also streams the title in after the content on a first load, so a title can be missing then too.
 export async function expectNoSeriousViolations(page: Page) {
   const state = refreshesDue.get(page);
-  if (state) await expect.poll(() => state.due, { message: "the refresh after the last server action" }).toBe(false);
+  if (state) {
+    await expect
+      .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
+      .toBe(false);
+  }
   await page.evaluate(headIsQuiet);
   await expect(page).toHaveTitle(/.+/);
   const { violations } = await new AxeBuilder({ page }).analyze();
