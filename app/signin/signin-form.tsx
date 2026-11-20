@@ -26,7 +26,8 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
     setErrorMsg("");
     const result = await signIn("credentials", { name, redirect: false, callbackUrl: next }).catch(() => null);
     if (result?.ok) {
-      router.push(next);
+      // Replaces the sign-in page: Back never returns to it (D-035).
+      router.replace(next);
       router.refresh();
     } else {
       setErrorMsg(

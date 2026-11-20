@@ -48,17 +48,53 @@ describe("GitHub sign-in with an owner allowlist", () => {
     expect(await db.select().from(users).where(eq(users.subject, otherId))).toHaveLength(0);
   });
 
-  it("stops trusting a token once its GitHub id leaves the allowlist, with no database query", async () => {
-    const { authOptions } = await load();
-    const session = (userId?: string, githubId?: string) =>
+  it("stops trusting a token once its GitHub id leaves the allowlist, and passes the sid on, with no database query", async () => {
+    const { authOptions, db } = await load();
+    const queries = (["select", "insert", "update", "delete", "execute"] as const).map((m) => vi.spyOn(db, m));
+    const session = (userId?: string, githubId?: string, sid?: string) =>
       authOptions.callbacks!.session!({
         session: { user: { name: "x" }, expires: "" },
-        token: { userId, githubId },
-      } as never) as unknown as Promise<{ user: { id?: string } }>;
+        token: { userId, githubId, sid },
+      } as never) as unknown as Promise<{ user: { id?: string }; sid?: string }>;
 
-    expect((await session(randomUUID(), ownerId)).user.id).toBeTruthy();
+    const sid = randomUUID();
+    const owner = await session(randomUUID(), ownerId, sid);
+    expect(owner.user.id).toBeTruthy();
+    expect(owner.sid).toBe(sid);
     expect((await session(randomUUID(), otherId)).user.id).toBeUndefined();
     expect((await session(undefined, undefined)).user.id).toBeUndefined();
+    for (const query of queries) expect(query).not.toHaveBeenCalled();
+  });
+
+  it("starts a session row at sign-in only, and signing out ends only that row (X-SESSION)", async () => {
+    const { authOptions, db } = await load();
+    const { userSessions } = await import("@/db/schema");
+    const user = { id: "" } as User;
+    await authOptions.callbacks!.signIn!({ user, account: githubAccount(ownerId) } as never);
+    const jwt = (token: Record<string, unknown>, signingIn: boolean) =>
+      authOptions.callbacks!.jwt!({
+        token,
+        user: signingIn ? user : undefined,
+        account: signingIn ? githubAccount(ownerId) : null,
+      } as never) as Promise<{ userId?: string; sid?: string; githubId?: string }>;
+    const rows = async () =>
+      (await db.select().from(userSessions).where(eq(userSessions.userId, user.id))).map((r) => r.id);
+    const before = await rows();
+
+    const phone = await jwt({}, true);
+    const laptop = await jwt({}, true);
+    expect(phone).toMatchObject({ userId: user.id, githubId: ownerId });
+    expect(phone.sid).toBeTruthy();
+    expect(laptop.sid).not.toBe(phone.sid);
+    expect(await rows()).toEqual(expect.arrayContaining([phone.sid, laptop.sid]));
+    // A token refresh keeps its sid and adds no row.
+    expect((await jwt({ ...phone }, false)).sid).toBe(phone.sid);
+    expect(await rows()).toHaveLength(before.length + 2);
+
+    await authOptions.events!.signOut!({ token: phone, session: undefined } as never);
+    const after = await rows();
+    expect(after).not.toContain(phone.sid);
+    expect(after).toContain(laptop.sid);
   });
 
   it("is a 180-day session, and Azure keeps 4 hours", async () => {
@@ -80,5 +116,33 @@ describe("GitHub sign-in with an owner allowlist", () => {
     await expect(load()).rejects.toThrow("AUTH_GITHUB_ID and AUTH_GITHUB_SECRET");
     env.AUTH_PROVIDER = "google";
     await expect(load()).rejects.toThrow("AUTH_PROVIDER");
+  });
+});
+
+describe("dev sign-in (MORE-12)", () => {
+  afterEach(() => {
+    for (const key of KEYS) delete env[key];
+  });
+
+  it("accepts only lower-case letters, digits and dashes, and the e2e fixture's names still pass", async () => {
+    env.AUTH_DEV = "true";
+    env.AUTH_PROVIDER = "github";
+    env.AUTH_GITHUB_ID = "id";
+    env.AUTH_GITHUB_SECRET = "secret";
+    env.OWNER_ALLOWLIST = "1";
+    const { authOptions, db, users } = await load();
+    const dev = authOptions.providers.find((p) => p.id === "credentials") as unknown as {
+      options: { authorize: (credentials: { name?: unknown }) => Promise<{ id: string; name: string } | null> };
+    };
+    const authorize = (name: unknown) => dev.options.authorize({ name });
+
+    for (const bad of ["Roland", "a b", "<b>x</b>", "x_y", "ă", "", "a".repeat(65), 42]) {
+      expect(await authorize(bad)).toBeNull();
+    }
+    const name = `e2e-${randomUUID().slice(0, 8)}`;
+    const user = await authorize(name);
+    expect(user?.name).toBe(name);
+    const rows = await db.select().from(users).where(eq(users.subject, name));
+    expect(rows.map((r) => r.issuer)).toEqual(["dev"]);
   });
 });
