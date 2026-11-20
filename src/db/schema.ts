@@ -126,6 +126,10 @@ export const workoutSessions = pgTable(
     durationMinutes: integer("duration_minutes"),
     isDeload: boolean("is_deload").default(false).notNull(),
     notes: varchar("notes", { length: 500 }),
+    // The workout timer lives on the server (D-039): seconds counted before the last pause, and when it last started
+    // running (null while paused), so every device shows the same time and it keeps counting while the app is closed.
+    timerSeconds: integer("timer_seconds").default(0).notNull(),
+    timerRunningSince: timestamp("timer_running_since", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -145,6 +149,21 @@ export const deloadWeeks = pgTable(
     weekStart: date("week_start").notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.weekStart] })],
+);
+
+/** What one plate weighs, per exercise, so plate-loaded sets chart in kg (D-038). */
+export const exercisePlateWeights = pgTable(
+  "exercise_plate_weights",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exerciseId: uuid("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    kg: numeric("kg", { precision: 6, scale: 2 }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.exerciseId] })],
 );
 
 export const workoutSets = pgTable(
@@ -345,7 +364,7 @@ export const todos = pgTable(
     space: varchar("space", { length: 20 }).default("personal").notNull(), // 'personal' | 'business'
     title: varchar("title", { length: 150 }).notNull(),
     isRecurring: boolean("is_recurring").default(false).notNull(),
-    recurrencePattern: varchar("recurrence_pattern", { length: 20 }).default("none").notNull(), // 'daily' | 'weekly' | 'none'
+    recurrencePattern: varchar("recurrence_pattern", { length: 20 }).default("none").notNull(), // 'daily' | 'none'
     dueDate: date("due_date").notNull(),
     reminderTime: varchar("reminder_time", { length: 10 }), // e.g. "09:00"
     isCompleted: boolean("is_completed").default(false).notNull(),
@@ -358,6 +377,19 @@ export const todos = pgTable(
     category: varchar("category", { length: 50 }).default("other").notNull(),
   },
   (table) => [index("todos_user_space_due_idx").on(table.userId, table.space, table.dueDate)],
+);
+
+/** One row per signed-in device (D-041): the JWT carries its id (`sid`), and a token whose row is gone is signed out. */
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("user_sessions_user_idx").on(table.userId)],
 );
 
 export const pushSubscriptions = pgTable(
