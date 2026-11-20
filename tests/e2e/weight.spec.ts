@@ -67,6 +67,8 @@ test("a signed-in user adds, edits and deletes today's weight, with Undo for the
   await expect(page.getByText("Added 72,4 kg")).toBeVisible();
   await expect(today("72,4")).toBeVisible();
   await expect(card.getByText("7-day average · 72,4 kg")).toBeVisible();
+  // The chart's value axis writes its numbers in the app's format too, with a decimal comma (D-037).
+  await expect(card.locator(".line-y span")).toHaveText(["72,4"]);
 
   // Edit it: the form opens with the saved value. Drop the "Added" toast first so only one Undo exists.
   await page.getByRole("button", { name: "Dismiss notification" }).click();

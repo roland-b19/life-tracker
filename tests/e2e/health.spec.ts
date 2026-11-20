@@ -506,3 +506,67 @@ test("two tabs editing different goals, or steps and its goal, both keep their c
     await other.close();
   }
 });
+
+// A change carries the value its screen showed (D-040): another device that still shows the old value is refused, sees
+// why and then the current value, and the database keeps the first device's change.
+test("a stale device's water tap, steps or goal save is refused and then shows the current value [D-040]", async ({ signedInPage: page, browser }) => {
+  const CHANGED = "This changed on another device. Check the new value and try again.";
+  const device = await browser.newContext();
+  try {
+    await device.addCookies(await page.context().cookies());
+    const other = await device.newPage();
+    await openHealth(page, "Today");
+    await openHealth(other, "Today");
+    const water = (p: Page) => p.getByRole("region", { name: "Water" });
+    const steps = (p: Page) => p.getByRole("region", { name: "Steps" });
+
+    // Water: this device adds 250 ml; the other one, still showing 0, adds too.
+    await expect(water(other)).toContainText("0 / 3.000 ml");
+    await andSettle(page, () => water(page).getByRole("button", { name: "+250 ml" }).click());
+    await expect(water(page)).toContainText("250 / 3.000 ml");
+    await expect(water(other)).toContainText("0 / 3.000 ml");
+    await andSettle(other, () => water(other).getByRole("button", { name: "+250 ml" }).click());
+    await expect(other.getByText(CHANGED)).toBeVisible();
+    await expect(water(other)).toContainText("250 / 3.000 ml");
+    await dismissToast(other, CHANGED);
+
+    // Steps: the other device's form is open while this one saves 8.000; its own save from 0 is refused.
+    await steps(other).getByRole("button", { name: "Edit steps and goal" }).click();
+    const otherSteps = other.getByRole("dialog", { name: "Edit steps" });
+    await expect(otherSteps.getByLabel("Steps today")).toHaveValue("0");
+    await steps(page).getByRole("button", { name: "Edit steps and goal" }).click();
+    const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
+    await stepsForm.getByLabel("Steps today").fill("8000");
+    await andSettle(page, () => stepsForm.getByRole("button", { name: "Save" }).click());
+    await expect(page.getByText("Steps set to 8.000", { exact: true })).toBeVisible();
+    await otherSteps.getByLabel("Steps today").fill("5000");
+    await andSettle(other, () => otherSteps.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText(CHANGED)).toBeVisible();
+    await expect(otherSteps).toBeHidden();
+    await expect(steps(other)).toContainText("8.000 / 10.000");
+    await dismissToast(other, CHANGED);
+
+    // A goal: the other device's goals form shows 3.350 kcal while this one saves 2.800; its save of 3.000 is refused.
+    await other.getByRole("button", { name: "Edit goals" }).click();
+    const otherGoals = other.getByRole("dialog", { name: "Edit goals" });
+    await expect(otherGoals.getByLabel("Calories (kcal)")).toHaveValue("3.350");
+    await page.getByRole("button", { name: "Edit goals" }).click();
+    const goalsForm = page.getByRole("dialog", { name: "Edit goals" });
+    await goalsForm.getByLabel("Calories (kcal)").fill("2800");
+    await andSettle(page, () => goalsForm.getByRole("button", { name: "Save" }).click());
+    await expect(page.getByText("Saved nutrition goals")).toBeVisible();
+    await otherGoals.getByLabel("Calories (kcal)").fill("3000");
+    await andSettle(other, () => otherGoals.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText(CHANGED)).toBeVisible();
+    await expect(otherGoals).toBeHidden();
+    await expect(other.getByText("/ 2.800 kcal", { exact: true })).toBeVisible();
+
+    // The database kept the first device's changes.
+    await openHealth(page, "Today");
+    await expect(water(page)).toContainText("250 / 3.000 ml");
+    await expect(steps(page)).toContainText("8.000 / 10.000");
+    await expect(page.getByRole("region", { name: "Nutrition" }).getByText("/ 2.800 kcal", { exact: true })).toBeVisible();
+  } finally {
+    await device.close();
+  }
+});
