@@ -794,8 +794,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         success: false,
         error: "This meal could not be saved.",
       });
-      const weight = succeeded(await saveWeightAction({ id: theirWeight.entry!.id, date: today, kilograms: 90 }));
-      expect(weight.entry).toBeNull();
+      expect(await saveWeightAction({ id: theirWeight.entry.id, date: today, kilograms: 90 })).toEqual({
+        success: false,
+        error: "This weight could not be saved.",
+      });
 
       expect((await getDailyFoodSummary(userA, today)).meals).toEqual([]);
       expect(await listWeightEntries(userA)).toEqual([]);

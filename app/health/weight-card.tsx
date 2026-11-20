@@ -84,7 +84,6 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save weight");
     const { entry, previous } = res;
-    if (!entry) return setErrorMsg("Failed to save weight");
     setOpen(false);
     upsert(entry);
     if (!previous) {
@@ -114,7 +113,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
           upsert(previous);
           const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
           // The saved row is the one the database has now: a new id if the day was deleted elsewhere in the meantime.
-          if (back?.success && back.entry) upsert(back.entry);
+          if (back?.success) upsert(back.entry);
           else upsert(entry);
           return back;
         },

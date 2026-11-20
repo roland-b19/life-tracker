@@ -87,13 +87,15 @@ export async function restoreMealAction(rawInput: unknown) {
   });
 }
 
-/** Sets today's weight (creates or changes it). */
+/** Sets today's weight (creates or changes it); an id another user holds is refused, like a meal's. */
 export async function saveWeightAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const input = logWeightSchema.parse(rawInput);
     assertToday(input.date);
-    return saveWeightEntry(userId, input);
+    const { entry, previous } = await saveWeightEntry(userId, input);
+    if (!entry) throw new Refusal("This weight could not be saved.");
+    return { entry, previous };
   });
 }
 
