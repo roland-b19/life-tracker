@@ -989,8 +989,9 @@ button.danger {
   box-shadow: none;
 }
 
-/* Fields show focus with their own edge (above); only buttons get the keyboard ring */
-button:focus-visible {
+/* Fields show focus with their own edge (above); only buttons, and the More menu's link styled as one, get the keyboard ring */
+button:focus-visible,
+.more-links .nav-link:focus-visible {
   outline: 2px solid var(--tint);
   outline-offset: 2px;
 }

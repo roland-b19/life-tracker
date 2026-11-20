@@ -149,7 +149,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane button.log-set{width:100%}
 .pane .delete-icon-btn{background:var(--surface-secondary);color:var(--text);padding:0;border-radius:.85rem;width:44px;height:44px;min-height:0}
 .pane .delete-icon-btn:disabled{opacity:.35;cursor:default}
-.pane button[data-s="focus"],.pane button:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane button[data-s="focus"],.pane button:focus-visible,.pane .more .nav-link:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
 .pane button:where([data-s="hover"]){background:var(--tint-hover)}
 .pane button.secondary[data-s="hover"],.pane button.btn-sm[data-s="hover"],.pane .delete-icon-btn[data-s="hover"]{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
 .pane button.danger[data-s="hover"]{background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
@@ -670,7 +670,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
   <ul class="rules">
     <li><span class="rid">Y1</span><span>Hover exists only under <code>@media (hover: hover)</code>, so a phone never keeps a stuck hover.</span></li>
     <li><span class="rid">Y2</span><span>The hover steps: turquoise → <code>--tint-hover</code>; neutral fills (secondary, small, icon, toast Undo and close, modal close, category boxes, idle muscle chips, an unselected day card) → <code>color-mix(--surface-secondary, --text 8%)</code>; danger → <code>color-mix(--danger-subtle, --text 8%)</code>; fields and the sort select → 5%; idle tabs and segments → <code>--highlight</code> wash with <code>--text</code>; idle nav links → <code>--surface-secondary</code> with <code>--text</code>; the round close buttons also turn their icon to <code>--text</code>.</span></li>
-    <li><span class="rid">Y3</span><span>Focus: buttons and checkboxes get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover). The sort select shows the ring for the keyboard only (not after a pointer press, <code>data-pointer</code>).</span></li>
+    <li><span class="rid">Y3</span><span>Focus: buttons, checkboxes and the More menu's Settings link (styled as a button) get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover). The sort select shows the ring for the keyboard only (not after a pointer press, <code>data-pointer</code>).</span></li>
     <li><span class="rid">Y4</span><span>Rows have no hover highlight. Press has no effect (B11).</span></li>
   </ul>
   <div class="duo"><div class="pane">

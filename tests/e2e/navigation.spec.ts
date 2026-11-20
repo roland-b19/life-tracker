@@ -52,6 +52,57 @@ test("a touch that starts within 20px of the left or right edge is cancelled, on
   expect(await cancelled(PHONE.width / 2)).toBe(false);
 });
 
+test("a tap on the outer pixels of a control at the edge still works; the edge background stays cancelled (SWIPE)", async ({ signedInPage, browser }) => {
+  // A touch screen of its own, signed in as the fixture's user.
+  const context = await browser.newContext({
+    storageState: await signedInPage.context().storageState(),
+    hasTouch: true,
+    viewport: PHONE,
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(new URL("/todos", signedInPage.url()).href);
+    const edgeTap = async (label: string, role: "link" | "button", side: "left" | "right") => {
+      const box = (await tabBar(page).getByRole(role, { name: label }).boundingBox())!;
+      const x = side === "left" ? box.x + 2 : box.x + box.width - 2;
+      expect(side === "left" ? x < 20 : x > PHONE.width - 20).toBe(true);
+      await page.touchscreen.tap(x, box.y + box.height / 2);
+    };
+
+    await edgeTap("Gym", "link", "left");
+    await expect(page).toHaveURL(/\/gym$/);
+    await edgeTap("More", "button", "right");
+    await expect(moreMenu(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    const backgroundCancelled = await page.evaluate(() => {
+      const target = document.elementFromPoint(5, 300)!;
+      if (target.closest("a, button, input, select, textarea, label, summary, [role=button], [role=tab], [tabindex]")) {
+        return "control";
+      }
+      const touch = new Touch({ identifier: 1, target, clientX: 5, clientY: 300 });
+      const event = new TouchEvent("touchstart", { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(backgroundCancelled).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a dev user name longer than 64 characters is refused with the message, not cut short (MORE-12)", async ({ page }) => {
+  await page.goto("/signin");
+  // The page's own session calls set the CSRF cookie; a click before they settle posts a stale token (see helpers.ts).
+  await page.waitForLoadState("networkidle");
+  const field = page.getByLabel("Username");
+  await field.fill(`e2e-${"a".repeat(61)}`);
+  await expect(field).toHaveValue(`e2e-${"a".repeat(61)}`);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
+  await expect(page).toHaveURL(/\/signin/);
+});
+
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {
   await page.setViewportSize(PHONE);
   await page.goto("/todos");
@@ -69,6 +120,11 @@ test("the phone More menu is a modal dialog: focus moves in, stays in, and retur
     await page.keyboard.press("Shift+Tab");
     expect(await focusInMenu(page)).toBe(true);
   }
+  // The Settings link, styled as a button, gets the buttons' 2px keyboard ring.
+  const settings = moreMenu(page).getByRole("link", { name: "Settings" });
+  while (!(await settings.evaluate((el) => el === document.activeElement))) await page.keyboard.press("Tab");
+  await expect(settings).toHaveCSS("outline-style", "solid");
+  await expect(settings).toHaveCSS("outline-width", "2px");
   await page.keyboard.press("Escape");
   await expect(moreMenu(page)).toBeHidden();
   await expect(more).toBeFocused();
