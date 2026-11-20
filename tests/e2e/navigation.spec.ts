@@ -1,14 +1,37 @@
-import { expect, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { expect, type Page, type Route } from "@playwright/test";
+import { Pool } from "pg";
+import { CONTROL, EDGE_PX } from "../../app/components/edge-swipe";
 import { expectNoSeriousViolations, test } from "./helpers";
 
 // The app shell: tab bar, More menu, sidebar, the 404 page and the listeners every page has (D-035, MORE-03, MORE-06,
-// MORE-11). The phone pieces are hidden from 1024px, so the flows set a phone width themselves.
+// MORE-11, XR-11), and the sign-in form. The phone pieces are hidden from 1024px, so the flows set a phone width themselves.
 const PHONE = { width: 375, height: 812 };
 
 const tabBar = (page: Page) => page.getByRole("navigation", { name: "Mobile Navigation" });
 const moreMenu = (page: Page) => page.getByRole("dialog", { name: "More" });
 const historyLength = (page: Page) => page.evaluate(() => history.length);
 const focusInMenu = (page: Page) => page.evaluate(() => !!document.activeElement?.closest("#more-menu"));
+
+/** A promise and the function that resolves it. */
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+/** Whether the edge guard cancels a touch that starts at (x, y) on whatever is drawn there. */
+const touchCancelled = (page: Page, x: number, y: number) =>
+  page.evaluate(
+    ([clientX, clientY]) => {
+      const target = document.elementFromPoint(clientX, clientY)!;
+      const touch = new Touch({ identifier: 1, target, clientX, clientY });
+      const event = new TouchEvent("touchstart", { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    },
+    [x, y],
+  );
 
 test("the tab bar, the More menu and the sidebar replace the history entry: there is no Back to walk (SWIPE)", async ({ signedInPage: page }) => {
   await page.setViewportSize(PHONE);
@@ -75,32 +98,183 @@ test("a tap on the outer pixels of a control at the edge still works; the edge b
     await expect(moreMenu(page)).toBeVisible();
     await page.keyboard.press("Escape");
 
-    const backgroundCancelled = await page.evaluate(() => {
-      const target = document.elementFromPoint(5, 300)!;
-      if (target.closest("a, button, input, select, textarea, label, summary, [role=button], [role=tab], [tabindex]")) {
-        return "control";
-      }
-      const touch = new Touch({ identifier: 1, target, clientX: 5, clientY: 300 });
-      const event = new TouchEvent("touchstart", { touches: [touch], changedTouches: [touch], bubbles: true, cancelable: true });
-      target.dispatchEvent(event);
-      return event.defaultPrevented;
-    });
-    expect(backgroundCancelled).toBe(true);
+    expect(await page.evaluate((control) => !!document.elementFromPoint(5, 300)!.closest(control), CONTROL)).toBe(false);
+    expect(await touchCancelled(page, 5, 300)).toBe(true);
   } finally {
     await context.close();
   }
 });
 
+test("the outer pixels of the open modal card and More menu at the edge are guarded; a button there is not (SWIPE)", async ({
+  signedInPage: page,
+}) => {
+  await page.setViewportSize(PHONE);
+  await page.goto("/wishlist");
+  // A touch on the tab bar's More button at the right edge goes through, so its tap works
+  const more = (await tabBar(page).getByRole("button", { name: "More" }).boundingBox())!;
+  const moreEdge = Math.floor(more.x + more.width) - 2;
+  expect(moreEdge).toBeGreaterThan(PHONE.width - EDGE_PX);
+  expect(await touchCancelled(page, moreEdge, more.y + more.height / 2)).toBe(false);
+
+  // The modal card and the More menu take focus by script only (tabIndex -1), so they are no control: their edge pixels
+  // inside the zone are guarded
+  const edgePixels = async (box: { x: number; y: number; width: number; height: number }) => {
+    const left = Math.ceil(box.x) + 1;
+    const right = Math.floor(box.x + box.width) - 2;
+    expect(left).toBeLessThan(EDGE_PX);
+    expect(right).toBeGreaterThan(PHONE.width - EDGE_PX);
+    for (const x of [left, right]) expect(await touchCancelled(page, x, box.y + box.height / 2)).toBe(true);
+  };
+  await page.getByRole("button", { name: "Add item" }).click();
+  const card = page.locator(".modal-card");
+  await expect(card).toBeVisible();
+  await edgePixels((await card.boundingBox())!);
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+
+  await tabBar(page).getByRole("button", { name: "More" }).click();
+  await expect(moreMenu(page)).toBeVisible();
+  await edgePixels((await moreMenu(page).boundingBox())!);
+});
+
+test("a tab whose page cannot be opened leaves the tab bar on the page on screen [XR-11]", async ({ signedInPage: page }) => {
+  await page.setViewportSize(PHONE);
+  await page.goto("/wishlist");
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).toHaveAttribute("aria-current", "page");
+  // The page request of the navigation (not a prefetch) answers HTTP 200 with a body that is no page: Next stays put.
+  // (A 500 or a failed request makes Next load the page in full instead, so the bar and the page agree.)
+  await page.route(
+    (url) => url.pathname === "/todos",
+    (route) => {
+      const headers = route.request().headers();
+      if (!("rsc" in headers) || "next-router-prefetch" in headers || "next-router-segment-prefetch" in headers) return route.fallback();
+      return route.fulfill({ status: 200, contentType: "text/x-component", body: "<html>not a page</html>" });
+    },
+  );
+  await tabBar(page).getByRole("link", { name: "Tasks" }).click();
+  await expect(page.getByText("Couldn't open the page. Try again.")).toBeVisible();
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).toHaveAttribute("aria-current", "page");
+  await expect(tabBar(page).getByRole("link", { name: "Tasks" })).not.toHaveAttribute("aria-current", "page");
+});
+
+test("a page that cannot be opened after another tab was pressed leaves the bar on the page still loading [XR-11]", async ({
+  signedInPage: page,
+}) => {
+  await page.setViewportSize(PHONE);
+  await page.goto("/wishlist");
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).toHaveAttribute("aria-current", "page");
+  // The page requests of Tasks (a body that is no page) and Gym (the real page) wait until the test lets them go
+  const todos = gate();
+  const gym = gate();
+  const arrived = { todos: gate(), gym: gate() };
+  for (const [path, release, arrive] of [
+    ["/todos", todos, arrived.todos],
+    ["/gym", gym, arrived.gym],
+  ] as const) {
+    await page.route(
+      (url) => url.pathname === path,
+      async (route) => {
+        const headers = route.request().headers();
+        if (!("rsc" in headers) || "next-router-prefetch" in headers || "next-router-segment-prefetch" in headers) return route.fallback();
+        arrive.resolve();
+        await release.promise;
+        return path === "/todos"
+          ? route.fulfill({ status: 200, contentType: "text/x-component", body: "<html>not a page</html>" })
+          : route.fallback();
+      },
+    );
+  }
+  await tabBar(page).getByRole("link", { name: "Tasks" }).click();
+  await arrived.todos.promise;
+  await tabBar(page).getByRole("link", { name: "Gym" }).click();
+  await arrived.gym.promise;
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+  // Tasks fails while Gym is still loading: the bar stays on Gym, not on the page on screen
+  todos.resolve();
+  await expect(page.getByText("Couldn't open the page. Try again.")).toBeVisible();
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+  await expect(tabBar(page).getByRole("link", { name: "Wishlist" })).not.toHaveAttribute("aria-current", "page");
+  gym.resolve();
+  await expect(page).toHaveURL(/\/gym$/);
+  await expect(tabBar(page).getByRole("link", { name: "Gym" })).toHaveAttribute("aria-current", "page");
+});
+
 test("a dev user name longer than 64 characters is refused with the message, not cut short (MORE-12)", async ({ page }) => {
+  // 65 characters, new on each run
+  const name = `e2e-${randomUUID().slice(0, 8)}-${"a".repeat(52)}`;
+  expect(name).toHaveLength(65);
+  // Neither the name nor the name cut to 64 characters gets a user row
+  const names = [name, name.slice(0, 64)];
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    // As soon as the form takes typing (it waits for its session check, so nothing typed is lost)
+    await page.goto("/signin", { waitUntil: "commit" });
+    const field = page.getByLabel("Username");
+    await field.fill(name);
+    await expect(field).toHaveValue(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
+    await expect(page).toHaveURL(/\/signin$/);
+    const rows = await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
+    expect(rows.rowCount).toBe(0);
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
+    } finally {
+      await admin.end();
+    }
+  }
+});
+
+/**
+ * Signs in through the /signin form of a fresh browser as a new dev user, typing and pressing Continue as soon as the
+ * form lets it, and checks the user is signed in as that name: the signed-in shell shows (a refused sign-in would
+ * bounce back to /signin) and the name has a user row. `act` runs before the page opens.
+ */
+async function signInThroughForm(page: Page, act?: () => Promise<unknown>) {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await act?.();
+    await page.goto("/signin", { waitUntil: "commit" });
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
+    await expect(page).toHaveURL(/\/todos$/);
+    expect((await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = $1", [name])).rowCount).toBe(1);
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+}
+
+test("a fresh browser signs in through the form as the name typed, pressing Continue as soon as it can [SIGNIN]", async ({ page }) => {
+  await signInThroughForm(page);
+});
+
+test("a sign-in whose CSRF token was refused is tried once more, and a second refusal is shown, not taken for a session [SIGNIN]", async ({
+  page,
+}) => {
+  // NextAuth's answer to a token that does not match its cookie
+  const refuse = (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: new URL("/api/auth/signin?csrf=true", route.request().url()).href }) });
+  const callback = "**/api/auth/callback/credentials";
+  // The first answer refuses the token: the form tries again and signs in
+  await signInThroughForm(page, () => page.route(callback, refuse, { times: 1 }));
+
+  // Every answer refuses it: the form says so and stays
+  await page.context().clearCookies();
+  await page.route(callback, refuse);
   await page.goto("/signin");
-  // The page's own session calls set the CSRF cookie; a click before they settle posts a stale token (see helpers.ts).
-  await page.waitForLoadState("networkidle");
-  const field = page.getByLabel("Username");
-  await field.fill(`e2e-${"a".repeat(61)}`);
-  await expect(field).toHaveValue(`e2e-${"a".repeat(61)}`);
+  await page.getByLabel("Username").fill(`e2e-${randomUUID().slice(0, 8)}`);
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
-  await expect(page).toHaveURL(/\/signin/);
+  await expect(page.getByText("Failed to sign in")).toBeVisible();
+  await expect(page).toHaveURL(/\/signin$/);
 });
 
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {

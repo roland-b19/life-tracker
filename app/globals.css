@@ -1006,6 +1006,7 @@ textarea:focus-visible {
   margin: 0.75rem 0 0;
   color: var(--text);
   font-size: 0.875rem;
+  font-weight: 400; /* a number field's error sits inside its label (weight 600) and must not read as a label */
 }
 
 /* Rows carry 0.5rem padding; the list's outer margins subtract it, so a row's text sits 1rem below the block above it, like

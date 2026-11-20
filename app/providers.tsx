@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionProvider } from "next-auth/react";
 import { watchDay } from "./components/day-watch";
@@ -10,6 +10,12 @@ import { ToastProvider, useToast } from "./components/toast";
 const OFFLINE = "You're offline. Nothing was saved.";
 const LOST_REPLY = "Couldn't confirm the change. Reloaded.";
 const PAGE_BROKEN = "Couldn't open the page. Try again.";
+
+/** The last page that could not be opened (its path), while the one on screen stays; a new object for each failure. */
+type NotOpened = { path: string } | null;
+const PageNotOpenedContext = createContext<NotOpened>(null);
+/** The last page that could not be opened: the tab bar shows the page on screen again if it was going there. */
+export const usePageNotOpened = () => useContext(PageNotOpenedContext);
 
 // The open copies of the app (tabs, windows, the installed app) tell each other about a write on this channel.
 const CHANNEL = "life-tracker";
@@ -34,7 +40,7 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
  * that never got an answer says why: offline nothing was saved (open forms stay as they are); online the answer was
  * lost and the write may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
  */
-function AppShell() {
+function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
   const { showToast } = useToast();
   useEffect(() => {
@@ -92,13 +98,17 @@ function AppShell() {
         if (writing === 0 && due) refresh(AFTER_WRITES);
       }
     };
-    const navigate = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const navigate = async (input: RequestInfo | URL, init: RequestInit | undefined, path: string) => {
       const res = await realFetch(input, init);
       if (res.ok && res.headers.get("content-type")?.startsWith("text/x-component")) {
         res
           .clone()
           .text()
-          .then((text) => !isPagePayload(text) && showToast({ message: PAGE_BROKEN, type: "warning" }))
+          .then((text) => {
+            if (isPagePayload(text)) return;
+            showToast({ message: PAGE_BROKEN, type: "warning" });
+            onPageNotOpened({ path });
+          })
           .catch(() => {});
       }
       return res;
@@ -109,7 +119,7 @@ function AppShell() {
       // A page request for another page (not a prefetch, not a refresh of this one)
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
       if (headers.has("rsc") && !headers.has("next-router-prefetch") && !headers.has("next-router-segment-prefetch") && url.pathname !== location.pathname) {
-        return navigate(input, init);
+        return navigate(input, init, url.pathname);
       }
       return realFetch(input, init);
     };
@@ -137,11 +147,12 @@ function AppShell() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("popstate", onPop);
     };
-  }, [router, showToast]);
+  }, [router, showToast, onPageNotOpened]);
   return null;
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [notOpened, setNotOpened] = useState<NotOpened>(null);
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       // In dev, chunk URLs are not content-hashed, so the worker must not cache them (stale-module errors).
@@ -219,8 +230,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <ToastProvider>
-        <AppShell />
-        {children}
+        <AppShell onPageNotOpened={setNotOpened} />
+        <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
       </ToastProvider>
     </SessionProvider>
   );

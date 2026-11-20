@@ -4,8 +4,9 @@ import { andSettle, headIsQuiet, isRefresh, test } from "./helpers";
 
 // The app shell (app/providers.tsx): open copies stay in sync, writes without an answer say why, midnight moves the
 // page to the new day, a broken page answer says so, and the Undo toasts keep a Retry for a failed restore.
-// Nothing waits by time: a check that something did not happen moves the page's clock past the moment it would have
-// happened (`page.clock`), then waits until the page has sent a request of its own (`settled`).
+// Nothing waits by time: a check that something did not happen runs the page's clock past the moment it would have
+// happened (`page.clock.runFor`, which also fires the timers set on the way, unlike `fastForward`), then waits until the
+// page has sent a request of its own (`settled`).
 
 async function openWishlist(page: Page) {
   await page.goto("/wishlist");
@@ -44,9 +45,15 @@ test("a save in one tab refreshes another tab of the same browser within 2 s [SY
   const other = await page.context().newPage();
   await openWishlist(page);
   await openWishlist(other);
-  const refreshed = other.waitForRequest((r) => isRefresh(other, r), { timeout: 2000 });
-  await addItem(page, itemName());
+  const refreshed = other.waitForRequest((r) => isRefresh(other, r));
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(itemName());
+  await page.getByLabel("Price (RON)").fill("100");
+  // The 2 s count from the write's answer, so they measure the other tab's update only, not the form fill
+  await andSettle(page, () => page.getByRole("button", { name: "Save" }).click());
+  const answered = Date.now();
   await refreshed;
+  expect(Date.now() - answered).toBeLessThan(2000);
   await other.close();
 });
 
@@ -65,7 +72,7 @@ test("another browser refreshes when it gets the focus back [SYNC]", async ({ si
     await ownRefresh;
     // Another browser hears nothing of the write: past the 600 ms a message would wait, and past the two seconds after
     // its load in which a focus refreshes nothing, it has not refreshed
-    await other.clock.fastForward(2000);
+    await other.clock.runFor(2000);
     await settled(other);
     expect(refreshes).toHaveLength(0);
     const refreshed = other.waitForRequest((r) => isRefresh(other, r), { timeout: 2000 });
@@ -81,13 +88,13 @@ test("an open page refreshes once at midnight in Bucharest [MIDNIGHT]", async ({
   await page.clock.install({ time: new Date("2026-11-20T21:59:30Z") });
   await openWishlist(page);
   const refreshes = countRefreshes(page);
-  await page.clock.fastForward(20_000);
+  await page.clock.runFor(20_000);
   await settled(page);
   expect(refreshes).toHaveLength(0);
-  await page.clock.fastForward(20_000);
+  await page.clock.runFor(20_000);
   await expect.poll(() => refreshes.length).toBe(1);
   // And only once: the next day's timer does not fire again (still before the 60 s refresh, due at 00:00:30)
-  await page.clock.fastForward(5_000);
+  await page.clock.runFor(5_000);
   await settled(page);
   expect(refreshes).toHaveLength(1);
 });
@@ -104,7 +111,7 @@ test("a write while offline says nothing was saved and leaves the form open [X-O
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("You're offline. Nothing was saved.")).toBeVisible();
     // Past the 600 ms after which a refresh would come
-    await page.clock.fastForward(2000);
+    await page.clock.runFor(2000);
   } finally {
     await page.context().setOffline(false);
   }
@@ -149,7 +156,7 @@ test("an edit form open in one tab stays as it is while another tab saves [X-EDI
   await openWishlist(other);
   await other.getByRole("button", { name: `Edit ${name}` }).click();
   await other.getByLabel("Name", { exact: true }).fill(`${name} edited`);
-  const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()), { timeout: 2000 });
+  const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()));
   await addItem(page, itemName());
   // The refresh has arrived and React has put it on screen (the commit rebuilds the <head> tags)
   await (await refreshed).finished();
@@ -177,6 +184,9 @@ test("a number field puts the thousand dots in, takes a dot as the decimal and s
   await field.pressSequentially("x");
   await expect(field).toHaveValue("12.340x");
   await expect(form.getByRole("alert")).toHaveText("Must be a number");
+  // It reads like the app's other errors, not like the label it sits in
+  await expect(form.getByRole("alert")).toHaveCSS("font-weight", "400");
+  await expect(form.getByRole("alert")).toHaveCSS("font-size", "14px");
   await expect(field).toHaveAccessibleName("Weight today (kg)");
   const writes: Request[] = [];
   page.on("request", (r) => r.method() === "POST" && "next-action" in r.headers() && writes.push(r));

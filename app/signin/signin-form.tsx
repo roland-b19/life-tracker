@@ -1,12 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { CenterCard, ErrorText, Field } from "../components/blocks";
 import { clearPageCache } from "../components/page-cache";
 
 const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github: "GitHub" };
+
+/**
+ * A sign-in whose CSRF token no longer matched its cookie: NextAuth answers with its sign-in page and `csrf=true`
+ * instead of a session (the page's first session calls each set a new cookie while there is none).
+ */
+const csrfRefused = (url: string | null | undefined) => !!url && new URL(url, location.href).searchParams.has("csrf");
 
 /**
  * `provider` is "dev" (username form, local only) or the id of the configured OAuth provider. `next` is the same-site
@@ -17,6 +23,10 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
   const [name, setName] = useState("owner");
   const [errorMsg, setErrorMsg] = useState(denied ? "This account is not allowed to use this app." : "");
   const [busy, setBusy] = useState(false);
+  // Until the page is hydrated and its session check has answered, the form waits: a tap before would submit the page
+  // natively (the name in the URL), text typed before would be reset, and the CSRF cookie could still change under it.
+  // The status leaves "loading" only on the client, after the check, so it covers hydration too.
+  const ready = useSession().status !== "loading";
   // Whoever signs in next never sees pages kept for the previous session.
   useEffect(() => void clearPageCache(), []);
 
@@ -24,8 +34,11 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
     event.preventDefault();
     setBusy(true);
     setErrorMsg("");
-    const result = await signIn("credentials", { name, redirect: false, callbackUrl: next }).catch(() => null);
-    if (result?.ok) {
+    const attempt = () => signIn("credentials", { name, redirect: false, callbackUrl: next }).catch(() => null);
+    let result = await attempt();
+    // Once more with the cookie as it is now; a second refusal shows as a failure
+    if (result?.ok && csrfRefused(result.url)) result = await attempt();
+    if (result?.ok && !result.error && !csrfRefused(result.url)) {
       // Replaces the sign-in page: Back never returns to it (D-035).
       router.replace(next);
       router.refresh();
@@ -46,7 +59,7 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
           {errorMsg && <ErrorText>{errorMsg}</ErrorText>}
           <button
             type="button"
-            disabled={busy}
+            disabled={!ready || busy}
             className="signin-continue"
             onClick={() => {
               setBusy(true);
@@ -62,6 +75,7 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
             label="Username"
             name="name"
             disabled={busy}
+            readOnly={!ready}
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoComplete="username"
@@ -71,8 +85,8 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
             autoFocus
           />
           {errorMsg && <ErrorText>{errorMsg}</ErrorText>}
-          {/* Only disabled while signing in, so it keeps its full colour instead of the greyed disabled look */}
-          <button type="submit" disabled={busy} className="signin-continue">
+          {/* Disabled until the form is ready and while signing in; it keeps its full colour instead of the greyed disabled look */}
+          <button type="submit" disabled={!ready || busy} className="signin-continue">
             {busy ? "Signing in..." : "Continue"}
           </button>
         </form>
