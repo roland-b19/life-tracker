@@ -6,8 +6,8 @@ import { categoryNameSchema, renameCategorySchema, reorderCategoriesSchema, reve
 import { Refusal, respond } from "@/lib/validations/result";
 
 export async function addCategoryAction(rawInput: unknown) {
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { scope, name } = categoryNameSchema.parse(rawInput);
     if (!(await addCategory(userId, scope, name))) throw new Refusal(`"${name}" already exists.`);
     return { name };
@@ -15,8 +15,8 @@ export async function addCategoryAction(rawInput: unknown) {
 }
 
 export async function renameCategoryAction(rawInput: unknown) {
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { scope, from, to } = renameCategorySchema.parse(rawInput);
     const change = await renameCategory(userId, scope, from, to);
     if (!change) throw new Refusal("Category not found.");
@@ -25,8 +25,8 @@ export async function renameCategoryAction(rawInput: unknown) {
 }
 
 export async function deleteCategoryAction(rawInput: unknown) {
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { scope, name } = categoryNameSchema.parse(rawInput);
     const change = await deleteCategory(userId, scope, name);
     if (!change) throw new Refusal("Category not found.");
@@ -35,17 +35,18 @@ export async function deleteCategoryAction(rawInput: unknown) {
 }
 
 export async function revertCategoryAction(rawInput: unknown) {
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { scope, ...input } = revertCategorySchema.parse(rawInput);
-    await revertCategory(userId, scope, input);
-    return {};
+    const done = await revertCategory(userId, scope, input);
+    if (!done) throw new Refusal(`Can't undo: "${input.current}" has changed since.`);
+    return done;
   });
 }
 
 export async function reorderCategoriesAction(rawInput: unknown) {
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { scope, names } = reorderCategoriesSchema.parse(rawInput);
     await reorderCategories(userId, scope, names);
     return {};

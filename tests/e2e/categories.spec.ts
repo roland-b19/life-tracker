@@ -244,6 +244,299 @@ test("the Health shopping categories card adds, renames, merges and deletes, wit
   await runCategoryFlow(healthShopping, page);
 });
 
+// A double tap acts once: on Save it adds one category, on Delete it removes only that row, never the one that slides up
+// under the finger once the first tap has removed it.
+test("the categories card's buttons act once on a double tap", async ({ signedInPage: page }) => {
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  await form.getByLabel("Name", { exact: true }).fill(a);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).dblclick(), `"name":"${a}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Added "${a}"`, { exact: true })).toBeVisible();
+  await dismissToast(page);
+  await addCategory(page, b);
+  await dismissToast(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(2);
+
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${a}`, exact: true }).dblclick(), `"name":"${a}"`);
+  await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+  await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(1);
+  await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+});
+
+const center = (box: { x: number; y: number; width: number; height: number } | null) => {
+  if (!box) throw new Error("not on screen");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+// Turns off Chromium's scroll anchoring, which iPhone Safari does not have: with it, a removed row above the anchor
+// scrolls the page instead of letting the next row slide up into its place, which hides the case under test.
+async function slideLikeSafari(page: Page) {
+  await page.addStyleTag({ content: "* { overflow-anchor: none }" });
+}
+
+// Where a button of the toast (`button`) opens on this screen: a first delete, of `probe`, shows it. Shift ends that
+// delete's burst (a keydown does), so this setup step does not lean on the case under test.
+async function toastButtonAt(page: Page, probe: string, button: Locator) {
+  await deleteCategory(page, probe);
+  const at = center(await button.boundingBox());
+  await page.keyboard.press("Shift");
+  await dismissToast(page);
+  return at;
+}
+
+// Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
+// The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
+// 25 ms; a slower one would hold the card's one-write-at-a-time guard and hide the case), so it lands on whatever the
+// first left there. Answers how many writes it set off.
+async function burst(page: Page, { x, y }: { x: number; y: number }) {
+  let acts = 0;
+  const count = (r: { method: () => string; headers: () => Record<string, string> }) => {
+    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
+  };
+  page.on("request", count);
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(x, y));
+  await page.waitForTimeout(Math.max(0, 40 - (Date.now() - started)));
+  await page.mouse.click(x, y);
+  // Long enough for a second write, or a dialog the second click opened, to show.
+  await page.waitForTimeout(800);
+  page.off("request", count);
+  return acts;
+}
+
+// The second click of a burst is swallowed where the first landed: it neither deletes the row that slid up under it,
+// nor, after Save, opens the Edit form of the row under the closed dialog. Both at desktop and at phone width.
+for (const size of [
+  { width: 1280, height: 720 },
+  { width: 375, height: 812 },
+]) {
+  test(`the categories card acts once on two quick clicks, at ${size.width} wide`, async ({ signedInPage: page }) => {
+    test.slow();
+    await page.setViewportSize(size);
+    const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+    // Rows after b make the page tall enough to scroll the rows up on a phone screen.
+    const fillers = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+    await wishlist.open(page);
+    for (const name of [a, b, ...fillers]) {
+      await addCategory(page, name);
+      await dismissToast(page);
+    }
+
+    // Delete. The page is scrolled up to 100 px short of its end: on a phone that lifts the row above the toast that
+    // opens at the bottom (it would take the second click), and the page left below means the shorter list does not
+    // pull the page up under the finger. Without scroll anchoring b's Delete slides up under the second click.
+    await slideLikeSafari(page);
+    const remove = page.getByRole("button", { name: `Delete category ${a}`, exact: true });
+    await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
+    await expect(remove).toBeInViewport();
+    const removeAt = center(await remove.boundingBox());
+    expect(await burst(page, removeAt)).toBe(1);
+    await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
+    await expect(card(page).getByText(b, { exact: true })).toBeVisible();
+    // b's Delete is where the second click landed: the guard, not a miss, kept it.
+    const slid = center(await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).boundingBox());
+    expect(Math.abs(slid.y - removeAt.y)).toBeLessThan(10);
+    await dismissToast(page);
+
+    // Save, with b's Edit button lined up under it, as it was at 1280 wide when the case was found. The page cannot
+    // scroll while the form is open, so it is lined up first; the form opens without a scroll (a dispatched click).
+    const add = page.getByRole("button", { name: "Add category" });
+    const form = page.getByRole("dialog", { name: "New category" });
+    await add.click();
+    const saveBox = await form.getByRole("button", { name: "Save" }).boundingBox();
+    const save = center(saveBox);
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await expect(form).toBeHidden();
+    const edit = page.getByRole("button", { name: `Edit category ${b}`, exact: true });
+    await page.evaluate((dy) => window.scrollBy(0, dy), center(await edit.boundingBox()).y - save.y);
+    const spot = { x: center(await edit.boundingBox()).x, y: save.y };
+    expect(Math.abs(center(await edit.boundingBox()).y - spot.y)).toBeLessThan(10);
+    expect(spot.x).toBeGreaterThan(saveBox!.x);
+    expect(spot.x).toBeLessThan(saveBox!.x + saveBox!.width);
+    await add.dispatchEvent("click");
+    await form.getByLabel("Name", { exact: true }).fill(c);
+    expect(await burst(page, spot)).toBe(1);
+    await expect(page.getByText(`Added "${c}"`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await wishlist.open(page);
+    await expect(card(page).locator(".entry-row")).toHaveCount(5);
+    for (const name of [b, c, ...fillers]) await expect(card(page).getByText(name, { exact: true })).toBeVisible();
+    await expect(card(page).getByText(a, { exact: true })).toBeHidden();
+  });
+}
+
+// A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
+// enough to scroll the rows up to where the toast opens.
+async function onPhoneWith(page: Page, names: string[]) {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await wishlist.open(page);
+  for (const name of [...names, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+}
+
+// The case found on a phone: the toast's Undo opens over the deleted row's place, and a quick tap on it brings the
+// category back.
+test("the categories card takes a quick Undo tap after a Delete on a phone", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await onPhoneWith(page, [probe, a]);
+  const undoButton = page.getByRole("button", { name: "Undo" });
+  const undoAt = await toastButtonAt(page, probe, undoButton);
+
+  // a's row lined up under the Undo, as the toast opens over it.
+  const row = card(page).locator(".entry-row", { hasText: a });
+  await page.evaluate((dy) => window.scrollBy(0, dy), center(await row.boundingBox()).y - undoAt.y);
+  const rowBox = (await row.boundingBox())!;
+  expect(undoAt.y).toBeGreaterThan(rowBox.y);
+  expect(undoAt.y).toBeLessThan(rowBox.y + rowBox.height);
+
+  // Delete, then Undo about 100 ms later, well within the burst.
+  const remove = center(await row.getByRole("button", { name: `Delete category ${a}`, exact: true }).boundingBox());
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
+  await expect(undoButton).toBeVisible();
+  await page.waitForTimeout(Math.max(0, 100 - (Date.now() - started)));
+  const undoNow = center(await undoButton.boundingBox());
+  expect(Date.now() - started).toBeLessThan(400);
+  await andSettle(page, () => page.mouse.click(undoNow.x, undoNow.y), "dropCurrent");
+  await expect(card(page).getByText(a, { exact: true })).toBeVisible();
+
+  // The server has it back too.
+  await wishlist.open(page);
+  await expect(card(page).getByText(a, { exact: true })).toBeVisible();
+  await expect(card(page).locator(".entry-row")).toHaveCount(4);
+});
+
+// A tap on the toast goes through even inside the guarded button's place: on a phone the toast's Dismiss opens right
+// over the deleted row's Delete button.
+test("the categories card takes a quick Dismiss tap over the deleted row's Delete button", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, probe] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  // A row before a puts it low enough on the page for its Delete to scroll under the Dismiss.
+  await onPhoneWith(page, [probe, `e2e-cat-${hex()}`, a]);
+  const dismissAt = await toastButtonAt(page, probe, dismissButton(page));
+
+  // a's Delete lined up under the Dismiss.
+  const remove = card(page).getByRole("button", { name: `Delete category ${a}`, exact: true });
+  await page.evaluate((dy) => window.scrollBy(0, dy), center(await remove.boundingBox()).y - dismissAt.y);
+  const box = (await remove.boundingBox())!;
+  expect(dismissAt.x).toBeGreaterThan(box.x);
+  expect(dismissAt.x).toBeLessThan(box.x + box.width);
+  expect(dismissAt.y).toBeGreaterThan(box.y);
+  expect(dismissAt.y).toBeLessThan(box.y + box.height);
+
+  // Delete, then Dismiss about 50 ms later, well within the burst.
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(dismissAt.x, dismissAt.y), `"name":"${a}"`);
+  await expect(dismissButton(page)).toBeVisible();
+  await page.waitForTimeout(Math.max(0, 50 - (Date.now() - started)));
+  const dismissNow = center(await dismissButton(page).boundingBox());
+  expect(Date.now() - started).toBeLessThan(400);
+  await page.mouse.click(dismissNow.x, dismissNow.y);
+  // The mouse over the toast holds it open, so only the Dismiss can close it; the bound stays under its own 5 s anyway.
+  await expect(dismissButton(page)).toHaveCount(0, { timeout: 2_000 });
+});
+
+// The guard covers only the tapped Delete button, not the deleted row's whole place: a quick tap beside it, here on the
+// next row's Edit once it has slid up there, goes through and opens that row's form.
+test("the categories card takes a quick tap beside the deleted row's Delete button", async ({ signedInPage: page }) => {
+  test.slow();
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await onPhoneWith(page, [a, b]);
+  await slideLikeSafari(page);
+  // As in the two-quick-clicks test: 100 px short of the end lifts the row above the toast, and the shorter list does
+  // not pull the page up.
+  await page.evaluate(() => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight - 100)));
+  const row = card(page).locator(".entry-row", { hasText: a });
+  await expect(row).toBeInViewport();
+  const editAt = center(await row.getByRole("button", { name: `Edit category ${a}`, exact: true }).boundingBox());
+  const remove = center(await row.getByRole("button", { name: `Delete category ${a}`, exact: true }).boundingBox());
+
+  const started = Date.now();
+  await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
+  await expect(row).toHaveCount(0);
+  // b's Edit has slid up into a's Edit's place.
+  const slid = center(await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).boundingBox());
+  expect(Math.abs(slid.y - editAt.y)).toBeLessThan(10);
+  expect(Date.now() - started).toBeLessThan(400);
+  await page.mouse.click(editAt.x, editAt.y);
+  const form = page.getByRole("dialog", { name: "Edit category" });
+  await expect(form).toBeVisible();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(b);
+});
+
+// A refused write shows the server's own message (D-040), not a generic "Failed to ...".
+test("the categories card shows why the server refused a delete or an Undo", async ({ signedInPage: page }) => {
+  const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  await addCategory(page, a);
+  await dismissToast(page);
+
+  // A stale Undo: another tab renames the category the Undo would take back, so the server refuses it.
+  await renameCategory(page, a, b);
+  const undoButton = page.getByRole("button", { name: "Undo" });
+  await undoButton.hover(); // keeps the toast open meanwhile
+  const other = await page.context().newPage();
+  await wishlist.open(other);
+  await renameCategory(other, b, c);
+  await other.close();
+  await undo(page, "dropCurrent");
+  await expect(page.getByText(`Can't undo: "${b}" has changed since.`, { exact: true })).toBeVisible();
+  await dismissToast(page);
+
+  // Signed out: the delete is refused with the sign-in message.
+  await page.context().clearCookies();
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click(), `"name":"${b}"`);
+  await expect(page.getByText("You're signed out. Sign in again.", { exact: true })).toBeVisible();
+});
+
+// A name over the limit is kept as typed, the form says why, and nothing is saved.
+test("the categories card refuses a name over 50 characters without cutting it", async ({ signedInPage: page }) => {
+  const long = `e2e-${"x".repeat(56)}`;
+  await wishlist.open(page);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  const field = form.getByLabel("Name", { exact: true });
+  await field.fill(long);
+  await expect(field).toHaveValue(long);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${long}"`);
+  await expect(form.getByRole("alert")).toHaveText("Too long (max 50)");
+  await expect(field).toHaveValue(long);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+
+  await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
+// The card's fold is kept on the device (useDeviceState), so it is still folded after a reload.
+test("the categories card stays folded after a reload", async ({ signedInPage: page }) => {
+  const name = `e2e-cat-${hex()}`;
+  await wishlist.open(page);
+  await addCategory(page, name);
+  await dismissToast(page);
+  const fold = card(page).getByRole("button", { name: "Show categories" });
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(card(page).getByText(name, { exact: true })).toBeHidden();
+
+  await wishlist.open(page);
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(card(page).getByText(name, { exact: true })).toBeHidden();
+  await fold.click();
+  await expect(card(page).getByText(name, { exact: true })).toBeVisible();
+  await wishlist.open(page);
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+});
+
 test("the Wishlist categories card has no serious violations, with its forms open", { tag: "@a11y" }, async ({ signedInPage: page }) => {
   await scanWithForms(wishlist, page);
 });

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { itemCategories, todos, wishlistItems } from "@/db/schema";
 import type { CategoryScope } from "./validations/categories";
@@ -103,10 +103,30 @@ export async function deleteCategory(userId: string, scope: CategoryScope, name:
   });
 }
 
+/** Whether any item of the user's list, history included, is still filed under `category`. */
+async function inUse(tx: Pick<typeof db, "select">, userId: string, scope: CategoryScope, category: string) {
+  const [row] =
+    scope === "wishlist"
+      ? await tx
+          .select({ id: wishlistItems.id })
+          .from(wishlistItems)
+          .where(and(eq(wishlistItems.userId, userId), eq(wishlistItems.category, category)))
+          .limit(1)
+      : await tx
+          .select({ id: todos.id })
+          .from(todos)
+          .where(and(eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, category)))
+          .limit(1);
+  return !!row;
+}
+
 /**
  * Undoes a rename or delete: the category comes back at its old place and exactly the items that were moved are
- * re-filed from `current` ("other" after a delete, the new name after a rename). An item the user has moved
- * since stays where it is. A rename that created `current` removes that category again.
+ * re-filed from `current` ("other" after a delete, the new name after a rename). An item the user has moved since
+ * stays where it is. When another category now holds the old place, the restored one takes it and the ones from there
+ * on move down by one, so no two share a number. A rename that created `current` removes that category again, unless
+ * an item is still filed under it (one added there since): then it stays (`keptCurrent`), so no item loses its category.
+ * Returns null and changes nothing when `current` is gone (renamed or deleted since), so no orphan category comes back.
  */
 export async function revertCategory(
   userId: string,
@@ -114,8 +134,19 @@ export async function revertCategory(
   input: { name: string; current: string; sortOrder: number; itemIds: string[]; dropCurrent: boolean; before?: { id: string; placedAt: string }[] },
 ) {
   const { name, current, sortOrder, dropCurrent, itemIds, before = [] } = input;
-  await db.transaction(async (tx) => {
-    await tx.insert(itemCategories).values({ userId, scope, name, sortOrder }).onConflictDoNothing();
+  const list = and(eq(itemCategories.userId, userId), eq(itemCategories.scope, scope));
+  return db.transaction(async (tx): Promise<{ keptCurrent: boolean } | null> => {
+    if (current !== "other" && (await tx.select().from(itemCategories).where(own(userId, scope, current))).length === 0) return null;
+    const [back] = await tx.select().from(itemCategories).where(own(userId, scope, name));
+    if (!back) {
+      const [taken] = await tx.select().from(itemCategories).where(and(list, eq(itemCategories.sortOrder, sortOrder))).limit(1);
+      if (taken)
+        await tx
+          .update(itemCategories)
+          .set({ sortOrder: sql`${itemCategories.sortOrder} + 1` })
+          .where(and(list, gte(itemCategories.sortOrder, sortOrder)));
+      await tx.insert(itemCategories).values({ userId, scope, name, sortOrder }).onConflictDoNothing();
+    }
     if (itemIds.length > 0) {
       if (scope === "wishlist")
         await tx
@@ -132,7 +163,10 @@ export async function revertCategory(
           await tx.update(todos).set({ placedAt: new Date(b.placedAt) }).where(and(eq(todos.id, b.id), eq(todos.userId, userId), eq(todos.space, scope), eq(todos.category, name)));
     }
     // Never the category just put back: a revert that names the same category twice must not delete it.
-    if (dropCurrent && current !== "other" && current !== name) await tx.delete(itemCategories).where(own(userId, scope, current));
+    if (!dropCurrent || current === "other" || current === name) return { keptCurrent: false };
+    if (await inUse(tx, userId, scope, current)) return { keptCurrent: true };
+    await tx.delete(itemCategories).where(own(userId, scope, current));
+    return { keptCurrent: false };
   });
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
+import { useDeviceState } from "./device-state";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { undoWith, useToast } from "./toast";
@@ -20,7 +21,8 @@ export interface CategoriesApi {
   add: (name: string) => Promise<Answer>;
   rename: (from: string, to: string) => Promise<Answer<{ change: Change }>>;
   remove: (name: string) => Promise<Answer<{ change: Change }>>;
-  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<Answer>;
+  /** `keptCurrent`: the server kept `current`, because an item was filed under it after the rename. */
+  revert: (input: { name: string; current: string; dropCurrent: boolean } & Change) => Promise<Answer<{ keptCurrent?: boolean }>>;
   reorder: (names: string[]) => Promise<Answer>;
 }
 
@@ -67,6 +69,22 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
   const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
+  // One save or delete at a time, and one per tap burst: the rest of a double tap on the tapped button (`spot`: Save, or
+  // the row's Delete) is swallowed, so it neither repeats the write nor lands on what slid into the button's place (the
+  // next row's Delete, or the Edit button under a closing form). A tap on the toast always goes through (see swallowBurst).
+  const writing = useRef(false);
+  // The button last tapped in a row, set before its own handler runs.
+  const tappedButton = useRef<Element | null>(null);
+  async function once(write: () => Promise<void>, spot: Element | null | undefined) {
+    if (writing.current) return;
+    writing.current = true;
+    if (spot) swallowBurst(spot.getBoundingClientRect());
+    try {
+      await write();
+    } finally {
+      writing.current = false;
+    }
+  }
 
   const [card, keepPlace] = useKeepPlace<HTMLElement>(categories);
   const reorder = (update: string[]) => {
@@ -83,18 +101,22 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     const res = await api.reorder(next).catch(() => null);
     if (!res?.success) {
       reorder(previous);
-      showToast({ message: `Failed to move ${noun}`, type: "warning" });
+      showToast({ message: why(res, `Failed to move ${noun}`), type: "warning" });
       return;
     }
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
-      onUndo: undoWith(showToast, async () => {
-        reorder(previous);
-        const back = await api.reorder(previous).catch(() => null);
-        if (!back?.success) reorder(next);
-        return back;
-      }),
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          reorder(previous);
+          const back = await api.reorder(previous).catch(() => null);
+          if (!back?.success) reorder(next);
+          return back;
+        },
+        undoFailed,
+      ),
     });
   }
   const dragRow = useDragSort(move);
@@ -106,25 +128,43 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     setOpen(true);
   }
 
-  // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure undoes that.
+  // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure takes back exactly
+  // what it changed (never a name that was not on screen), so no orphan category shows.
   const revert = (name: string, current: string, change: Change, dropCurrent: boolean, at: number) =>
-    undoWith(showToast, async () => {
-      onChange((prev) => {
-        const without = dropCurrent ? prev.filter((c) => c !== current) : prev;
-        return without.includes(name) ? without : [...without.slice(0, at), name, ...without.slice(at)];
-      });
-      onRefile(current, name, change.itemIds);
-      const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
-      onSynced?.();
-      if (!back?.success) {
-        onChange((prev) => (current === builtIn ? prev.filter((c) => c !== name) : prev.map((c) => (c === name ? current : c))));
-        onRefile(name, current, change.itemIds);
-      }
-      return back;
-    });
+    undoWith(
+      showToast,
+      async () => {
+        // Filled in by the update below, which React has run by the time the server answers.
+        let added = false;
+        let droppedAt = -1;
+        onChange((prev) => {
+          droppedAt = dropCurrent ? prev.indexOf(current) : -1;
+          const without = droppedAt >= 0 ? prev.filter((c) => c !== current) : prev;
+          added = !without.includes(name);
+          return added ? [...without.slice(0, at), name, ...without.slice(at)] : without;
+        });
+        onRefile(current, name, change.itemIds);
+        const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
+        onSynced?.();
+        if (!back?.success) {
+          onChange((prev) => insertAt(added ? prev.filter((c) => c !== name) : prev, current, droppedAt));
+          onRefile(name, current, change.itemIds);
+        } else if (back.keptCurrent) {
+          // The server kept it right after the restored one.
+          onChange((prev) => insertAt(prev, current, prev.indexOf(name) + 1));
+        }
+        return back;
+      },
+      undoFailed,
+    );
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
+    // A tap or click on Save names the button; Enter in the field names it too, and a key repeat is no burst risk.
+    return once(save, (e.nativeEvent as SubmitEvent).submitter);
+  }
+
+  async function save() {
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
@@ -139,15 +179,24 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         showToast({
           message: `Added "${to}"`,
           type: "success",
-          onUndo: undoWith(showToast, async () => {
-            onChange((prev) => prev.filter((c) => c !== to));
-            const gone = await api.remove(to).catch(() => null);
-            onSynced?.();
-            if (!gone?.success) onChange((prev) => (prev.includes(to) ? prev : [...prev, to]));
-            // Items filed under it since go to the fallback, like any delete.
-            else onRefile(to, builtIn);
-            return gone;
-          }),
+          onUndo: undoWith(
+            showToast,
+            async () => {
+              // Filled in by the update below; a failure puts it back only where it was, and only if it was on screen.
+              let was = -1;
+              onChange((prev) => {
+                was = prev.indexOf(to);
+                return prev.filter((c) => c !== to);
+              });
+              const gone = await api.remove(to).catch(() => null);
+              onSynced?.();
+              if (!gone?.success) onChange((prev) => insertAt(prev, to, was));
+              // Items filed under it since go to the fallback, like any delete.
+              else onRefile(to, builtIn);
+              return gone;
+            },
+            undoFailed,
+          ),
         });
       } else {
         const res = await api.rename(from, to);
@@ -182,10 +231,10 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     if (moved) onRefile(cat, builtIn, moved);
     const res = await api.remove(cat).catch(() => null);
     if (!res?.success) {
-      onChange((prev) => (prev.includes(cat) ? prev : [...prev.slice(0, at), cat, ...prev.slice(at)]));
+      onChange((prev) => insertAt(prev, cat, at));
       if (moved) onRefile(builtIn, cat, moved);
       onSynced?.();
-      showToast({ message: `Failed to remove ${noun}`, type: "warning" });
+      showToast({ message: why(res, `Failed to remove ${noun}`), type: "warning" });
       return;
     }
     const change = res.change;
@@ -210,7 +259,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         <ListBox wash className="entries">
           {categories.length === 0 && <EmptyNote>No {noun === "unit" ? "units" : "categories"} yet.</EmptyNote>}
           {categories.map((cat, i) => (
-            <div key={cat} className="entry-row" data-sort>
+            <div key={cat} className="entry-row" data-sort onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
               <DragHandle
                 label={`Drag ${cat} to reorder`}
                 {...dragRow}
@@ -222,7 +271,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
                 }}
               />
               <span className={`category-name${noun === "unit" ? " raw" : ""}`}>{cat}</span>
-              <RowActions onEdit={() => openForm(cat)} onDelete={() => remove(cat)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
+              <RowActions onEdit={() => openForm(cat)} onDelete={() => once(() => remove(cat), tappedButton.current)} editLabel={`Edit ${noun} ${cat}`} deleteLabel={`Delete ${noun} ${cat}`} />
             </div>
           ))}
         </ListBox>
@@ -237,7 +286,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         busy={busy}
         canSubmit={!!name.trim()}
       >
-        <Field label="Name" type="text" maxLength={50} disabled={busy} value={name} onChange={(e) => setName(e.target.value)} required />
+        <Field label="Name" type="text" disabled={busy} value={name} onChange={(e) => setName(e.target.value)} required />
         {from && <p className="muted move-hint">Its items move along. An existing name merges the two.</p>}
       </FormModal>
     </>
@@ -249,44 +298,60 @@ export const groupOrder = (categories: string[], items: { category: string }[]) 
   ...new Set([...categories, ...items.map((i) => i.category).filter((c) => c !== "other"), "other"]),
 ];
 
-const FOLD_STORAGE = "lt-folded";
-let foldedKeys: ReadonlySet<string> | null = null; // read from storage on first use in the browser
-const foldListeners = new Set<() => void>();
-const noFolds: ReadonlySet<string> = new Set();
+/** What a refused write shows: the server's own message, or `fallback` when no answer came (D-040). */
+const why = (answer: Answer<object> | null, fallback: string) => (answer && !answer.success ? answer.error : fallback);
+const undoFailed = (back: Answer<object> | null) => why(back, "Failed to undo");
 
-const loadFolded = (): ReadonlySet<string> => {
-  if (!foldedKeys) {
-    try {
-      foldedKeys = new Set<string>(JSON.parse(localStorage.getItem(FOLD_STORAGE) ?? "[]"));
-    } catch {
-      foldedKeys = new Set(); // storage blocked or corrupt: folds last until the page reloads
-    }
-  }
-  return foldedKeys;
-};
-
-const toggleFolded = (key: string) => {
-  const next = new Set(loadFolded());
-  if (!next.delete(key)) next.add(key);
-  foldedKeys = next;
-  try {
-    localStorage.setItem(FOLD_STORAGE, JSON.stringify([...next]));
-  } catch {}
-  foldListeners.forEach((l) => l());
-};
-
-const subscribeFolded = (l: () => void) => {
-  foldListeners.add(l);
-  return () => void foldListeners.delete(l);
-};
+/** How long the clicks after a write's first tap count as the same double tap (about the system's double-click time). */
+const BURST_MS = 500;
 
 /**
- * Which category groups of a list are folded, kept in this browser so a group stays folded across pages and reloads.
- * `page` keeps pages apart; the caller keys each group by its tab too, so tabs fold independently.
+ * Swallows the clicks that land in `spot` (the tapped button's place) within `BURST_MS`: by then what is under the
+ * finger may be the next row's Delete, or the button beneath a form that closed. The click being handled is already
+ * past. A burst is only taps on that one spot, so a click elsewhere, or typing, ends it and goes through. A click in the
+ * toast area always goes through and ends it too: on a phone the toast can open over the button's place, and its Undo
+ * must take the very next tap.
+ */
+function swallowBurst(spot: DOMRect) {
+  const end = () => {
+    clearTimeout(timer);
+    window.removeEventListener("click", stop, true);
+    window.removeEventListener("keydown", end, true);
+    window.removeEventListener("input", end, true);
+  };
+  const stop = (e: MouseEvent) => {
+    const onToast = e.target instanceof Element && e.target.closest(".toast-container") !== null;
+    const inSpot = e.clientX >= spot.left && e.clientX <= spot.right && e.clientY >= spot.top && e.clientY <= spot.bottom;
+    if (onToast || !inSpot) return end();
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const timer = setTimeout(end, BURST_MS);
+  window.addEventListener("click", stop, true);
+  window.addEventListener("keydown", end, true);
+  window.addEventListener("input", end, true);
+}
+
+/** `list` with `name` put back at `at` (clamped to the list), unless `at` is negative or the name is there already. */
+const insertAt = (list: string[], name: string, at: number) =>
+  at < 0 || list.includes(name) ? list : [...list.slice(0, at), name, ...list.slice(at)];
+
+const noFolds: string[] = [];
+
+/**
+ * Which category groups of a list are folded, kept on this device (`useDeviceState`, key "lt-folded": every folded
+ * "page/group") so a group stays folded across pages and reloads. `page` keeps pages apart; the caller keys each group
+ * by its tab too, so tabs fold independently.
  */
 export function useFolded(page: string) {
-  const folded = useSyncExternalStore(subscribeFolded, loadFolded, () => noFolds);
-  return [(key: string) => folded.has(`${page}/${key}`), (key: string) => toggleFolded(`${page}/${key}`)] as const;
+  const [folded, setFolded] = useDeviceState("lt-folded", noFolds);
+  return [
+    (key: string) => folded.includes(`${page}/${key}`),
+    (key: string) => {
+      const id = `${page}/${key}`;
+      setFolded((prev) => (prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]));
+    },
+  ] as const;
 }
 
 /** A category title in a grouped list: press it to fold or unfold the group's rows; the arrow after the text shows which. */
