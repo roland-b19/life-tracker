@@ -298,7 +298,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane .item-currency{color:var(--tint)}
 .pane .item-link{color:var(--text);font-weight:600;text-decoration:none}
 .pane .dot{width:7px;height:7px;border-radius:50%;background:var(--tint);display:inline-block}
-.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem}
+.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem;font-weight:400}
 .pane .signin-card{max-width:22rem;margin:0 auto;text-align:center;display:grid;gap:.9rem}
 .pane.hc{--surface:var(--surface-solid);--separator:var(--text);--edge:var(--text);--card-edge:var(--text)}
 .pane.rt{--surface:var(--surface-solid);--glass-blur:none}
@@ -427,7 +427,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
     <li><span class="rid">K2</span><span><code>--on-tint</code> (dark, the same in both modes) on <code>--tint</code>, <code>--tint-hover</code>, <code>--success</code>, <code>--warning</code>: at least 4.5:1. Never put <code>--on-tint</code> on <code>--danger</code> (4.2:1 in light).</span></li>
     <li><span class="rid">K3</span><span>Colored fills at least <b>3:1</b> on the card and the page. One exception: light <code>--warning</code> #cc8c0a (2.9:1 on the card), the owner's choice; the status word carries the meaning, and the test holds it to 2.5.</span></li>
     <li><span class="rid">K4</span><span>No colored fill on <code>--surface-secondary</code> (2.9:1 in light): a track is <code>--separator</code> or a <code>-subtle</code> fill.</span></li>
-    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes <code>--tint</code>, <code>--success</code>, <code>--warning</code> or <code>--danger</code> (fills, borders, <code>fill</code>, <code>stroke</code> may). Links are <code>--text</code>, weight 600, not underlined (D-029). Error text is <code>--text</code> 0.875rem, never red.</span></li>
+    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes <code>--tint</code>, <code>--success</code>, <code>--warning</code> or <code>--danger</code> (fills, borders, <code>fill</code>, <code>stroke</code> may). Links are <code>--text</code>, weight 600, not underlined (D-029). Error text is <code>--text</code> 0.875rem weight 400, never red, also a number field's error under the field inside its label (weight 600).</span></li>
     <li><span class="rid">K6</span><span>The one exception to K5: <code>.item-currency</code>, the "RON" beside the Wishlist total, is <code>--tint</code> (large text, 3:1 as a fill), at the owner's request (D-029).</span></li>
   </ul>
   <div class="duo"><div class="pane">

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { CloseIcon } from "./icons";
 import { clearPageCache } from "./page-cache";
+import { PAGE_NOT_OPENED } from "../providers";
 import { isPushEnabled } from "@/lib/features";
 import { deletePushSubscriptionAction } from "@/actions/todos";
 
@@ -39,15 +40,22 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  // The page a pressed link goes to. Until it loads the bar already shows it, instead of snapping back to this page.
-  const [target, setTarget] = useState<string | null>(null);
-  const at = target ?? pathname;
+  // The page a pressed link goes to, from the page it was pressed on. Until it loads the bar already shows it, instead
+  // of snapping back to this page. Once any page loads, or this one stays because the new one could not be opened, the
+  // bar shows the page on screen again.
+  const [target, setTarget] = useState<{ href: string; from: string } | null>(null);
+  const at = target?.from === pathname ? target.href : pathname;
   const go = (href: string) => {
-    setTarget(href);
+    setTarget({ href, from: pathname });
     setMoreOpen(false);
   };
   // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
-  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget(href));
+  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget({ href, from: pathname }));
+  useEffect(() => {
+    const stay = () => setTarget(null);
+    window.addEventListener(PAGE_NOT_OPENED, stay);
+    return () => window.removeEventListener(PAGE_NOT_OPENED, stay);
+  }, []);
 
   // The phone More menu is a modal dialog, like Modal: focus moves into it, Tab wraps inside it, Escape and Close shut it,
   // and focus returns to the More button.

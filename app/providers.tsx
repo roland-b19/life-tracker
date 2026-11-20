@@ -11,6 +11,9 @@ const OFFLINE = "You're offline. Nothing was saved.";
 const LOST_REPLY = "Couldn't confirm the change. Reloaded.";
 const PAGE_BROKEN = "Couldn't open the page. Try again.";
 
+/** Sent on `window` when a page could not be opened and the one on screen stays (the tab bar shows it again). */
+export const PAGE_NOT_OPENED = "life-tracker:page-not-opened";
+
 // The open copies of the app (tabs, windows, the installed app) tell each other about a write on this channel.
 const CHANNEL = "life-tracker";
 // The refresh after writes waits this long after the last answer, so a burst of writes refreshes once.
@@ -98,7 +101,11 @@ function AppShell() {
         res
           .clone()
           .text()
-          .then((text) => !isPagePayload(text) && showToast({ message: PAGE_BROKEN, type: "warning" }))
+          .then((text) => {
+            if (isPagePayload(text)) return;
+            showToast({ message: PAGE_BROKEN, type: "warning" });
+            window.dispatchEvent(new Event(PAGE_NOT_OPENED));
+          })
           .catch(() => {});
       }
       return res;

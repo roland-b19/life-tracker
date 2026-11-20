@@ -2,12 +2,7 @@
 
 import { useEffect } from "react";
 import { followThemeFromOtherTabs } from "./appearance-card";
-
-/** How close to the left or right screen edge a touch counts as the start of a swipe back or forward. */
-const EDGE_PX = 20;
-
-/** Controls a touch may start on even at the edge: cancelling it would cancel the tap too. */
-const CONTROL = "a, button, input, select, textarea, label, summary, [role=button], [role=tab], [tabindex]";
+import { CONTROL, EDGE_PX } from "./edge-swipe";
 
 /**
  * Listeners every page needs, mounted once in the root layout:
