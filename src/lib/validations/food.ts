@@ -62,21 +62,32 @@ const targetFields = {
 const NOTHING_TO_SAVE = "Nothing to save.";
 const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
 
-/** The daily goals: an edit sends only the ones it changes, and only those columns are written. */
-export const updateNutritionTargetsSchema = z
-  .object(targetFields)
-  .partial()
-  .refine((goals) => anySet(Object.values(goals)), NOTHING_TO_SAVE);
+/** The answer when a stored number is no longer the one the screen showed: another device changed it first. */
+export const CHANGED_ELSEWHERE = "This changed on another device. Check the new value and try again.";
+
+/**
+ * One number an edit changes: the value the screen showed (`from`) and the new one (`to`). The server writes `to` only
+ * while the stored value still equals `from`, so a change made on another device in between is never lost (D-040).
+ */
+export type ValueChange = { from: number; to: number };
+const valueChange = (to: z.ZodNumber) => z.object({ from: z.number().int().min(0).max(2 ** 31 - 1), to }).strict();
+
+const goalChanges = Object.fromEntries(
+  Object.entries(targetFields).map(([key, range]) => [key, valueChange(range).optional()]),
+) as { [K in keyof typeof targetFields]: z.ZodOptional<ReturnType<typeof valueChange>> };
+
+/** The daily goals: an edit sends only the ones it changes, each with the value it showed, and only those are written. */
+export const updateNutritionTargetsSchema = z.object(goalChanges).refine((goals) => anySet(Object.values(goals)), NOTHING_TO_SAVE);
 
 /**
  * The day's water or steps and its goal, from one dialog: each is sent only when it changed, and both are written or
- * neither. The amount is the day's total (a quick tap sends the new total too), so a repeat changes nothing.
+ * neither. The amount is the day's total (a quick tap sends the total it showed and the new one).
  */
 export const setWaterSchema = z
-  .object({ date: isoDate, waterMl: z.number().int().min(0).max(MAX_WATER_ML).optional(), goal: targetFields.waterMl.optional() })
+  .object({ date: isoDate, waterMl: valueChange(z.number().int().min(0).max(MAX_WATER_ML)).optional(), goal: valueChange(targetFields.waterMl).optional() })
   .refine((v) => anySet([v.waterMl, v.goal]), NOTHING_TO_SAVE);
 export const updateStepsSchema = z
-  .object({ date: isoDate, steps: z.number().int().min(0).max(MAX_STEPS).optional(), goal: targetFields.steps.optional() })
+  .object({ date: isoDate, steps: valueChange(z.number().int().min(0).max(MAX_STEPS)).optional(), goal: valueChange(targetFields.steps).optional() })
   .refine((v) => anySet([v.steps, v.goal]), NOTHING_TO_SAVE);
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */

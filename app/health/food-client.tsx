@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { appTime } from "@/lib/format-date";
 import { formatNumber } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
-import { MAX_STEPS, MAX_WATER_ML, mealHasValue } from "@/lib/validations/food";
+import { CHANGED_ELSEWHERE, MAX_STEPS, MAX_WATER_ML, mealHasValue, type ValueChange } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -91,8 +91,12 @@ const METRIC_MAX = { water: MAX_WATER_ML, steps: MAX_STEPS };
 const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: MAX_STEPS } };
 const METRIC_KEY = { water: "waterMl", steps: "steps" } as const;
 type Metric = keyof typeof METRIC_KEY;
-/** What the water or steps dialog changed: only these are sent, and its Undo sends back only these. */
-type MetricChange = { amount?: number; goal?: number };
+/**
+ * What the water or steps dialog changed, each as the value it showed and the new one: only these are sent, and its Undo
+ * sends back only these, reversed.
+ */
+type MetricChange = { amount?: ValueChange; goal?: ValueChange };
+const reversed = (change?: ValueChange) => change && { from: change.to, to: change.from };
 
 // The open tab is kept on this device (D-041); a stored tab the page does not have shows Today.
 const TAB_KEY = "lt-health-tab";
@@ -128,8 +132,8 @@ export function FoodClient({
   const [metricOpen, setMetricOpen] = useState(false);
   const [metricInput, setMetricInput] = useState("");
   const [metricGoalInput, setMetricGoalInput] = useState("");
-  // What an edit form showed when it opened: a save sends only the fields changed from these, so a refresh while the
-  // form is open (another tab's save) is not written back by fields this edit left alone (D-040).
+  // What an edit form showed when it opened: a save sends only the fields changed from these, each with the value it
+  // showed, so a refresh while the form is open (another tab's save) is neither written back nor overwritten (D-040).
   const [metricBase, setMetricBase] = useState({ amount: 0, goal: 0 });
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
@@ -249,7 +253,6 @@ export function FoodClient({
     const saved = logMealAction({ id: crypto.randomUUID(), date: todayDate, ...entered }).catch(() => null);
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to add meal");
-    if (!res.meal) return setErrorMsg("Failed to add meal");
     const meal = res.meal as MealData;
     applyMeal(meal, 1);
     setMealCalories("");
@@ -274,7 +277,7 @@ export function FoodClient({
     ...(change.amount === undefined ? [] : [`daily_metrics:${todayDate}:${METRIC_KEY[metric]}`]),
     ...(change.goal === undefined ? [] : [`nutrition_targets:${METRIC_KEY[metric]}`]),
   ];
-  // Sends only what changed; the server writes both or neither.
+  // Sends only what changed; the server writes both or neither, and neither when another device changed one first.
   const writeMetric = (metric: Metric, change: MetricChange) => {
     const goal = change.goal === undefined ? {} : { goal: change.goal };
     return (
@@ -282,6 +285,13 @@ export function FoodClient({
         ? setWaterAction({ date: todayDate, ...(change.amount === undefined ? {} : { waterMl: change.amount }), ...goal })
         : updateStepsAction({ date: todayDate, ...(change.amount === undefined ? {} : { steps: change.amount }), ...goal })
     ).catch(() => null);
+  };
+  // A refused edit form: a value another device changed first closes it with the reason, so the refresh shows the
+  // current value; any other reason stays in the form.
+  const refuseForm = (error: string, close: () => void) => {
+    if (error !== CHANGED_ELSEWHERE) return setErrorMsg(error);
+    close();
+    showToast({ message: error, type: "warning" });
   };
   // Puts on the screen what the server saved.
   const showSaved = (metric: Metric, res: Awaited<ReturnType<typeof writeMetric>>) => {
@@ -293,12 +303,12 @@ export function FoodClient({
   // What the screen shows for a change: the amount and goal it sets.
   const showChange = (metric: Metric, change: MetricChange) => {
     const key = METRIC_KEY[metric];
-    if (change.amount !== undefined) setMetric(key, change.amount);
-    if (change.goal !== undefined) putGoals({ [key]: change.goal });
+    if (change.amount !== undefined) setMetric(key, change.amount.to);
+    if (change.goal !== undefined) putGoals({ [key]: change.goal.to });
   };
 
-  // A tap sets the day's new total at once and shows its toast; a refused save puts the old total back. The total, not
-  // the amount added, is sent, so a repeat of the same request changes nothing.
+  // A tap sets the day's new total at once and shows its toast; a refused save puts the old total back. The total it
+  // showed and the new one are sent, not the amount added, so a repeat or a stale screen changes nothing (D-040).
   function addWater(tap: number) {
     const previous = summary.metrics.waterMl;
     const total = Math.min(previous + tap, MAX_WATER_ML);
@@ -307,7 +317,7 @@ export function FoodClient({
       return;
     }
     setMetric("waterMl", total);
-    const saved = writeMetric("water", { amount: total });
+    const saved = writeMetric("water", { amount: { from: previous, to: total } });
     void saved.then((res) => {
       if (res?.success) return;
       setSummary((prev) => (prev.metrics.waterMl === total ? { ...prev, metrics: { ...prev.metrics, waterMl: previous } } : prev));
@@ -316,19 +326,19 @@ export function FoodClient({
     showToast({
       message: `Added ${formatNumber(total - previous)} ml`,
       type: "success",
-      touches: metricKeys("water", { amount: total }),
+      touches: metricKeys("water", { amount: { from: previous, to: total } }),
       saved,
       onUndo: undoWith(
         showToast,
         async () => {
           if (!(await saved)?.success) return true; // the add never happened
           setMetric("waterMl", previous);
-          const back = await writeMetric("water", { amount: previous });
+          const back = await writeMetric("water", { amount: { from: total, to: previous } });
           if (back?.success) showSaved("water", back);
           else setMetric("waterMl", total);
           return back;
         },
-        "Failed to undo the edit",
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
     return saved;
@@ -356,18 +366,15 @@ export function FoodClient({
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}.`);
     const before = metricBase;
     const change: MetricChange = {
-      ...(value === before.amount ? {} : { amount: value }),
-      ...(goal === before.goal ? {} : { goal }),
+      ...(value === before.amount ? {} : { amount: { from: before.amount, to: value } }),
+      ...(goal === before.goal ? {} : { goal: { from: before.goal, to: goal } }),
     };
     if (change.amount === undefined && change.goal === undefined) return setMetricOpen(false);
-    const undo: MetricChange = {
-      ...(change.amount === undefined ? {} : { amount: before.amount }),
-      ...(change.goal === undefined ? {} : { goal: before.goal }),
-    };
+    const undo: MetricChange = { amount: reversed(change.amount), goal: reversed(change.goal) };
     setErrorMsg("");
     const saved = writeMetric(metric, change);
     const res = await saved;
-    if (!res?.success) return setErrorMsg(res?.error ?? `Failed to save ${metric}`);
+    if (!res?.success) return refuseForm(res?.error ?? `Failed to save ${metric}`, () => setMetricOpen(false));
     showSaved(metric, res);
     setMetricOpen(false);
     const name = metric === "water" ? "Water" : "Steps";
@@ -389,7 +396,7 @@ export function FoodClient({
           else showChange(metric, change);
           return back;
         },
-        "Failed to undo the edit",
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
   }
@@ -406,15 +413,17 @@ export function FoodClient({
     const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
     if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${formatNumber(bad.min)} and ${formatNumber(bad.max)}.`);
-    // Only the goals this edit changed are sent, so an older tab never writes back goals it did not touch (D-040).
+    // Only the goals this edit changed are sent, each with the value the form showed, so an older tab never writes back
+    // goals it did not touch nor overwrites one another device changed (D-040).
     const changed = NUTRITION_GOALS.filter((g) => next[g.key] !== goalsBase[g.key]).map((g) => g.key);
     if (changed.length === 0) return setGoalsOpen(false);
     const patch: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, next[key]]));
     const previous: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, goalsBase[key]]));
+    const fromTo = (from: Partial<Goals>, to: Partial<Goals>) => Object.fromEntries(changed.map((key) => [key, { from: from[key], to: to[key] }]));
     setErrorMsg("");
-    const saved = updateTargetsAction(patch).catch(() => null);
+    const saved = updateTargetsAction(fromTo(previous, patch)).catch(() => null);
     const res = await saved;
-    if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save goals");
+    if (!res?.success) return refuseForm(res?.error ?? "Failed to save goals", () => setGoalsOpen(false));
     putGoals(patch);
     setGoalsOpen(false);
     showToast({
@@ -426,11 +435,11 @@ export function FoodClient({
         showToast,
         async () => {
           putGoals(previous);
-          const back = await updateTargetsAction(previous).catch(() => null);
+          const back = await updateTargetsAction(fromTo(patch, previous)).catch(() => null);
           if (!back?.success) putGoals(patch);
           return back;
         },
-        "Failed to undo the edit",
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
   }

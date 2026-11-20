@@ -18,7 +18,10 @@ import {
   RestoreWeightInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
+  CHANGED_ELSEWHERE,
+  type ValueChange,
 } from "./validations/food";
+import { Refusal } from "./validations/result";
 import {
   ensureUserNutritionTargets,
   ensureUserSampleRecipes,
@@ -34,21 +37,23 @@ export async function getNutritionTargets(userId: string) {
 }
 
 /**
- * Writes only the goals the edit changed; the others keep their stored value (or the column default on a first save),
- * so an edit from an older screen never puts back goals it did not touch.
+ * Writes only the goals the edit changed, and only while each still holds the value the edit showed (`from`); the others
+ * keep their stored value. A missing row counts as the column defaults, which the screen showed. When any changed goal no
+ * longer matches (another device changed it first), nothing is written and the edit is refused.
  */
-export async function updateNutritionTargets(
-  userId: string,
-  input: UpdateNutritionTargetsInput,
-  tx: Pick<typeof db, "insert"> = db,
-) {
-  const changed = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
-  const [updated] = await tx
-    .insert(nutritionTargets)
-    .values({ userId, ...changed, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: [nutritionTargets.userId], set: { ...changed, updatedAt: new Date() } })
-    .returning();
+export function updateNutritionTargets(userId: string, input: UpdateNutritionTargetsInput, tx?: Pick<typeof db, "insert" | "update">) {
+  return tx ? writeTargets(tx, userId, input) : db.transaction((own) => writeTargets(own, userId, input));
+}
 
+async function writeTargets(tx: Pick<typeof db, "insert" | "update">, userId: string, input: UpdateNutritionTargetsInput) {
+  const changes = Object.entries(input).filter((entry): entry is [keyof typeof input, ValueChange] => entry[1] !== undefined);
+  await tx.insert(nutritionTargets).values({ userId }).onConflictDoNothing();
+  const [updated] = await tx
+    .update(nutritionTargets)
+    .set({ ...Object.fromEntries(changes.map(([key, change]) => [key, change.to])), updatedAt: new Date() })
+    .where(and(eq(nutritionTargets.userId, userId), ...changes.map(([key, change]) => eq(nutritionTargets[key], change.from))))
+    .returning();
+  if (!updated) throw new Refusal(CHANGED_ELSEWHERE);
   return updated;
 }
 
@@ -143,7 +148,10 @@ export async function restoreMeal(userId: string, input: RestoreMealInput) {
   return restored;
 }
 
-/** Foods logged before, newest first, one entry per name: the assistant's context. */
+/**
+ * Foods logged before, newest first, one entry per name: the assistant's context. Meals marked `forgotten` (the removed
+ * forget feature set it before c23e0cb; nothing writes it now) stay out of it.
+ */
 export async function getPastFoods(userId: string, limit = 40) {
   const latest = db
     .selectDistinctOn([sql`lower(${meals.name})`], {
@@ -156,7 +164,7 @@ export async function getPastFoods(userId: string, limit = 40) {
       createdAt: meals.createdAt,
     })
     .from(meals)
-    .where(eq(meals.userId, userId))
+    .where(and(eq(meals.userId, userId), eq(meals.forgotten, false)))
     .orderBy(sql`lower(${meals.name})`, desc(meals.createdAt))
     .as("latest");
   return db.select().from(latest).orderBy(desc(latest.createdAt)).limit(limit);
@@ -178,17 +186,21 @@ export async function deleteMeal(userId: string, mealId: string, assertDay?: (da
 
 /**
  * Sets a day's water or steps total and/or its daily goal in one transaction: both are written or neither. Each part is
- * written only when given, and only its own column. Answers the day's row and the goals row (null for a part not written).
+ * written only when given, only its own column, and only while it still holds the value the screen showed (`from`; a
+ * day with no row holds 0). Otherwise nothing is written and the save is refused. Answers the day's row and the goals
+ * row (null for a part not written).
  */
-async function saveDayMetric(userId: string, date: string, metric: "waterMl" | "steps", amount?: number, goal?: number) {
+async function saveDayMetric(userId: string, date: string, metric: "waterMl" | "steps", amount?: ValueChange, goal?: ValueChange) {
   return db.transaction(async (tx) => {
     let metrics: typeof dailyMetrics.$inferSelect | null = null;
     if (amount !== undefined) {
+      await tx.insert(dailyMetrics).values({ userId, date }).onConflictDoNothing();
       [metrics] = await tx
-        .insert(dailyMetrics)
-        .values({ userId, date, [metric]: amount })
-        .onConflictDoUpdate({ target: [dailyMetrics.userId, dailyMetrics.date], set: { [metric]: amount } })
+        .update(dailyMetrics)
+        .set({ [metric]: amount.to })
+        .where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.date, date), eq(dailyMetrics[metric], amount.from)))
         .returning();
+      if (!metrics) throw new Refusal(CHANGED_ELSEWHERE);
       await pruneMetrics(tx, userId, date);
     }
     const targets = goal === undefined ? null : await updateNutritionTargets(userId, { [metric]: goal }, tx);
@@ -196,10 +208,10 @@ async function saveDayMetric(userId: string, date: string, metric: "waterMl" | "
   });
 }
 
-export const updateDailyWater = (userId: string, date: string, waterMl?: number, goal?: number) =>
+export const updateDailyWater = (userId: string, date: string, waterMl?: ValueChange, goal?: ValueChange) =>
   saveDayMetric(userId, date, "waterMl", waterMl, goal);
 
-export const updateDailySteps = (userId: string, date: string, steps?: number, goal?: number) =>
+export const updateDailySteps = (userId: string, date: string, steps?: ValueChange, goal?: ValueChange) =>
   saveDayMetric(userId, date, "steps", steps, goal);
 
 /** Health keeps water and steps for the last 7 days only (the 7-day average): older rows go when a day is written. */

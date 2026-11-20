@@ -118,7 +118,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
           else upsert(entry);
           return back;
         },
-        "Failed to undo the edit",
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
   }

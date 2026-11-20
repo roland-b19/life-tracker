@@ -148,7 +148,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("puts food context in the prompt, never steps or weight", async () => {
     const other = await seedUser(`chat-prompt-${randomUUID()}`);
     await logMeal(other, { date: ctx.date, name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
-    await updateDailySteps(other, ctx.date, 98765);
+    await updateDailySteps(other, ctx.date, { from: 0, to: 98765 });
 
     const prompt = await buildFoodChatPrompt(other, ctx);
 

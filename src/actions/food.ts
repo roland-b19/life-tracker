@@ -56,13 +56,15 @@ function assertToday(date: string) {
   if (date !== toISODate()) throw new Refusal("Only today can be changed.");
 }
 
-/** Adds a meal; a repeat of the same add (same id) answers the meal already there, a foreign id answers `meal: null`. */
+/** Adds a meal; a repeat of the same add (same id) answers the meal already there, an id another user holds is refused. */
 export async function logMealAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = logMealSchema.parse(rawInput);
     assertWritableDay(parsed.date);
-    return { meal: await logMeal(userId, parsed) };
+    const meal = await logMeal(userId, parsed);
+    if (!meal) throw new Refusal("This meal could not be saved.");
+    return { meal };
   });
 }
 
@@ -114,7 +116,10 @@ export async function restoreWeightAction(rawInput: unknown) {
   });
 }
 
-/** Sets today's water total and/or the water goal, together or not at all; a quick tap sends the new total. */
+/**
+ * Sets today's water total and/or the water goal, together or not at all, each only while it still holds the value the
+ * screen showed (else refused with CHANGED_ELSEWHERE); a quick tap sends the total it showed and the new one.
+ */
 export async function setWaterAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
@@ -124,7 +129,7 @@ export async function setWaterAction(rawInput: unknown) {
   });
 }
 
-/** Sets today's steps and/or the steps goal, together or not at all. */
+/** Sets today's steps and/or the steps goal, together or not at all, each only while it still holds the value the screen showed. */
 export async function updateStepsAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
@@ -134,7 +139,7 @@ export async function updateStepsAction(rawInput: unknown) {
   });
 }
 
-/** Saves the goals the edit changed, and only those. */
+/** Saves the goals the edit changed, and only those, while each still holds the value the edit showed. */
 export async function updateTargetsAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();

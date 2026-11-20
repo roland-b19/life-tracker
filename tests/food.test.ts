@@ -7,7 +7,7 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
-import { MAX_WATER_ML, mealHasValue } from "@/lib/validations/food";
+import { CHANGED_ELSEWHERE, MAX_WATER_ML, mealHasValue } from "@/lib/validations/food";
 import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
@@ -93,12 +93,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   it("allows user to update nutrition targets", async () => {
     const updated = await updateNutritionTargets(userA, {
-      calories: 3500,
-      proteinGrams: 180,
-      carbsGrams: 320,
-      fatGrams: 85,
-      waterMl: 3500,
-      steps: 12000,
+      calories: { from: 3350, to: 3500 },
+      proteinGrams: { from: 170, to: 180 },
+      carbsGrams: { from: 300, to: 320 },
+      fatGrams: { from: 80, to: 85 },
+      waterMl: { from: 3000, to: 3500 },
+      steps: { from: 10000, to: 12000 },
     });
 
     expect(updated.calories).toBe(3500);
@@ -121,8 +121,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       carbs: 75,
       fat: 10,
     });
-    await updateDailyWater(userA, today, 500);
-    await updateDailySteps(userA, today, 8500);
+    await updateDailyWater(userA, today, { from: 0, to: 500 });
+    await updateDailySteps(userA, today, { from: 0, to: 8500 });
 
     // Summary for User A has these totals
     const summaryA = await getDailyFoodSummary(userA, today);
@@ -195,6 +195,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const foods = await getPastFoods(userA, 3);
     expect(foods.map((f) => f.name.toLowerCase())).toEqual(["food 0", "food 4", "food 3"]);
     expect(foods[0].calories).toBe(250);
+  });
+
+  it("leaves meals the old forget feature hid out of past foods", async () => {
+    await logMeal(userA, { date: "2026-10-31", name: "Hidden", calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await logMeal(userA, { date: "2026-10-31", name: "Shown", calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await admin.query("UPDATE meals SET forgotten = true WHERE user_id = $1 AND name = 'Hidden'", [userA]);
+    expect((await getPastFoods(userA)).map((f) => f.name)).toEqual(["Shown"]);
   });
 
   it("deletes a shopping item softly, and Undo brings it back exactly, bought state included", async () => {
@@ -310,9 +317,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         saveWeightAction({ date: today, kilograms: 80 }),
         deleteWeightAction(itemId),
         restoreWeightAction({ id: itemId, date: today, kilograms: 80 }),
-        setWaterAction({ date: today, waterMl: 250 }),
-        updateStepsAction({ date: today, steps: 5000 }),
-        updateTargetsAction({ calories: 2000 }),
+        setWaterAction({ date: today, waterMl: { from: 0, to: 250 } }),
+        updateStepsAction({ date: today, steps: { from: 0, to: 5000 } }),
+        updateTargetsAction({ calories: { from: 3350, to: 2000 } }),
         addShoppingItemAction({ name: "Eggs" }),
         toggleShoppingItemAction(itemId, true),
         deleteShoppingItemAction(itemId),
@@ -462,39 +469,40 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(mealRes.success).toBe(true);
       expect(mealRes.meal?.name).toBe("Whey Shake");
 
-      // 2. Water: a tap sends the day's new total, so sending the same total twice leaves it as it was.
-      const waterRes = succeeded(await setWaterAction({ date: today, waterMl: 500 }));
+      // 2. Water: a tap sends the total it showed and the new one, so a repeat of the same tap no longer matches and
+      // changes nothing.
+      const waterRes = succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } }));
       expect(waterRes.metrics?.waterMl).toBe(500);
       expect(waterRes.targets).toBeNull(); // the goal was not sent, so it was not written
-      expect(succeeded(await setWaterAction({ date: today, waterMl: 500 })).metrics?.waterMl).toBe(500);
+      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual({ success: false, error: CHANGED_ELSEWHERE });
+      expect((await getDailyFoodSummary(userA, today)).metrics.waterMl).toBe(500);
+      // A bare total (no value it showed) is not a valid change.
+      await expect(setWaterAction({ date: today, waterMl: 750 })).resolves.toMatchObject({ success: false });
 
       // A day never holds more than the limit, nor less than 0.
-      expect(succeeded(await setWaterAction({ date: today, waterMl: MAX_WATER_ML })).metrics?.waterMl).toBe(MAX_WATER_ML);
-      await expect(setWaterAction({ date: today, waterMl: MAX_WATER_ML + 1 })).resolves.toMatchObject({ success: false });
-      await expect(setWaterAction({ date: today, waterMl: -1 })).resolves.toMatchObject({ success: false });
+      expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 500, to: MAX_WATER_ML } })).metrics?.waterMl).toBe(MAX_WATER_ML);
+      await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: MAX_WATER_ML + 1 } })).resolves.toMatchObject({ success: false });
+      await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: -1 } })).resolves.toMatchObject({ success: false });
       await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: "Nothing to save." });
 
       // The steps log and the steps goal share one limit.
-      expect(succeeded(await updateStepsAction({ date: today, steps: 150000 })).metrics?.steps).toBe(150000);
-      await expect(updateStepsAction({ date: today, steps: 200001 })).resolves.toMatchObject({ success: false });
+      expect(succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 150000 } })).metrics?.steps).toBe(150000);
+      await expect(updateStepsAction({ date: today, steps: { from: 150000, to: 200001 } })).resolves.toMatchObject({ success: false });
 
       // An impossible day and a malformed id are validation errors, not database errors.
-      await expect(setWaterAction({ date: "2026-13-45", waterMl: 250 })).resolves.toMatchObject({ success: false });
-      await expect(updateStepsAction({ date: "2026-02-30", steps: 1000 })).resolves.toMatchObject({ success: false });
+      await expect(setWaterAction({ date: "2026-13-45", waterMl: { from: 0, to: 250 } })).resolves.toMatchObject({ success: false });
+      await expect(updateStepsAction({ date: "2026-02-30", steps: { from: 0, to: 1000 } })).resolves.toMatchObject({ success: false });
 
       // 3. Update steps
-      const stepsRes = succeeded(await updateStepsAction({ date: today, steps: 10500 }));
+      const stepsRes = succeeded(await updateStepsAction({ date: today, steps: { from: 150000, to: 10500 } }));
       expect(stepsRes.success).toBe(true);
       expect(stepsRes.metrics?.steps).toBe(10500);
 
       // 4. Update targets
       const targetRes = succeeded(await updateTargetsAction({
-        calories: 3400,
-        proteinGrams: 175,
-        carbsGrams: 310,
-        fatGrams: 80,
-        waterMl: 3000,
-        steps: 10000,
+        calories: { from: 3350, to: 3400 },
+        proteinGrams: { from: 170, to: 175 },
+        carbsGrams: { from: 300, to: 310 },
       }));
       expect(targetRes.success).toBe(true);
       expect(targetRes.targets.calories).toBe(3400);
@@ -537,17 +545,25 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     });
 
     it("saves goals for the signed-in owner only and validates their ranges", async () => {
-      const goals = { calories: 3000, proteinGrams: 160, carbsGrams: 280, fatGrams: 70, waterMl: 3500, steps: 12000 };
+      // Each goal from the default the screen showed (a user with no goals row yet holds the defaults).
+      const goals = {
+        calories: { from: 3350, to: 3000 },
+        proteinGrams: { from: 170, to: 160 },
+        carbsGrams: { from: 300, to: 280 },
+        fatGrams: { from: 80, to: 70 },
+        waterMl: { from: 3000, to: 3500 },
+        steps: { from: 10000, to: 12000 },
+      };
       authState.id = "";
       expect(await updateTargetsAction(goals)).toEqual({ success: false, error: SIGNED_OUT });
 
       authState.id = userA;
       expect(succeeded(await updateTargetsAction(goals)).targets.steps).toBe(12000);
-      await expect(updateTargetsAction({ ...goals, waterMl: 100 })).resolves.toMatchObject({ success: false });
+      await expect(updateTargetsAction({ waterMl: { from: 3500, to: 100 } })).resolves.toMatchObject({ success: false });
 
       // Another user's save writes their own row: the owner's goals stay as they were.
       authState.id = userB;
-      await updateTargetsAction({ ...goals, calories: 2000 });
+      succeeded(await updateTargetsAction({ ...goals, calories: { from: 3350, to: 2000 } }));
       expect((await getNutritionTargets(userA)).calories).toBe(3000);
       expect((await getNutritionTargets(userB)).calories).toBe(2000);
     });
@@ -571,8 +587,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       };
       const onlyToday = { success: false, error: "Only today can be changed." };
       const saves = (date: string) => [
-        setWaterAction({ date, waterMl: 250 }),
-        updateStepsAction({ date, steps: 5000 }),
+        setWaterAction({ date, waterMl: { from: 0, to: 250 } }),
+        updateStepsAction({ date, steps: { from: 0, to: 5000 } }),
         saveWeightAction({ id: randomUUID(), date, kilograms: 80 }),
       ];
       const written = async () => {
@@ -597,8 +613,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       it("moves to the new day at Bucharest midnight, not UTC", async () => {
         authState.id = userA;
         at("2026-11-20T21:59:59Z"); // 23:59:59 in Bucharest, still the 20th
-        expect(await setWaterAction({ date: "2026-11-21", waterMl: 250 })).toEqual(onlyToday);
-        expect((await setWaterAction({ date: "2026-11-20", waterMl: 250 })).success).toBe(true);
+        expect(await setWaterAction({ date: "2026-11-21", waterMl: { from: 0, to: 250 } })).toEqual(onlyToday);
+        expect((await setWaterAction({ date: "2026-11-20", waterMl: { from: 0, to: 250 } })).success).toBe(true);
         at("2026-11-20T22:00:00Z"); // 00:00 in Bucharest: the 21st, though UTC still says the 20th
         for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toEqual(onlyToday);
         for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: true });
@@ -623,35 +639,76 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
       const today = toISODate();
       // A valid amount with a goal out of range: refused, and neither is written.
-      expect((await updateStepsAction({ date: today, steps: 5000, goal: 10 })).success).toBe(false);
+      const steps = { from: 0, to: 5000 };
+      expect((await updateStepsAction({ date: today, steps, goal: { from: 10000, to: 10 } })).success).toBe(false);
       expect(await getDailyMetricsHistory(userA, today)).toEqual([]);
       expect((await getNutritionTargets(userA)).steps).toBe(10000);
       // A failure of the goal's write in the database takes the amount back with it (one transaction).
-      await expect(updateDailySteps(userA, today, 5000, 2 ** 31)).rejects.toThrow();
+      await expect(updateDailySteps(userA, today, steps, { from: 10000, to: 2 ** 31 })).rejects.toThrow();
       expect(await getDailyMetricsHistory(userA, today)).toEqual([]);
       // Both valid: both are written.
-      const both = succeeded(await updateStepsAction({ date: today, steps: 5000, goal: 12000 }));
+      const both = succeeded(await updateStepsAction({ date: today, steps, goal: { from: 10000, to: 12000 } }));
       expect([both.metrics?.steps, both.targets?.steps]).toEqual([5000, 12000]);
     });
 
     it("writes only the fields an edit sends, so two edits of one row both stay", async () => {
       authState.id = userA;
       const today = toISODate();
-      // Two partial goal edits (say, from two devices): each writes its own column only.
-      succeeded(await updateTargetsAction({ calories: 2800 }));
-      succeeded(await updateTargetsAction({ proteinGrams: 190 }));
+      // Two partial goal edits from the same screen (say, from two devices): each writes its own column only.
+      succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
+      succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190, carbsGrams: 300, waterMl: 3000, steps: 10000 });
       await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: "Nothing to save." });
 
       // The day's water and its goal, each edited alone, leave the other one as it was.
-      expect(succeeded(await setWaterAction({ date: today, waterMl: 750 })).targets).toBeNull();
-      expect(succeeded(await setWaterAction({ date: today, goal: 4000 })).metrics).toBeNull();
+      expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 750 } })).targets).toBeNull();
+      expect(succeeded(await setWaterAction({ date: today, goal: { from: 3000, to: 4000 } })).metrics).toBeNull();
       expect((await getDailyFoodSummary(userA, today)).metrics.waterMl).toBe(750);
       expect((await getNutritionTargets(userA)).waterMl).toBe(4000);
       // The steps of the same row are not touched by a water edit.
-      succeeded(await updateStepsAction({ date: today, steps: 3000 }));
-      succeeded(await setWaterAction({ date: today, waterMl: 1000 }));
+      succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 3000 } }));
+      succeeded(await setWaterAction({ date: today, waterMl: { from: 750, to: 1000 } }));
       expect((await getDailyFoodSummary(userA, today)).metrics).toMatchObject({ waterMl: 1000, steps: 3000 });
+    });
+
+    it("refuses a water, steps or goal change from a screen that shows an old value, and writes nothing", async () => {
+      authState.id = userA;
+      const today = toISODate();
+      const refused = { success: false, error: CHANGED_ELSEWHERE };
+      const day = async () => (await getDailyFoodSummary(userA, today)).metrics;
+
+      // Water: device A adds to an empty day; device B, still showing 0, adds too and is refused. A's total stays.
+      succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 250 } }));
+      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual(refused);
+      expect((await day()).waterMl).toBe(250);
+      // From the value stored, it saves.
+      expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 250, to: 750 } })).metrics?.waterMl).toBe(750);
+      // An Undo sends back from the value its change wrote: after another device changed it, the Undo is refused too.
+      succeeded(await setWaterAction({ date: today, waterMl: { from: 750, to: 1250 } })); // the other device, after a refresh
+      expect(await setWaterAction({ date: today, waterMl: { from: 750, to: 250 } })).toEqual(refused); // Undo of the add to 750
+      expect((await day()).waterMl).toBe(1250);
+      expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 1250, to: 750 } })).metrics?.waterMl).toBe(750);
+
+      // Steps: a stale amount refuses the whole save, its goal too (both or neither), and so does a stale goal.
+      succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 4000 } }));
+      expect(await updateStepsAction({ date: today, steps: { from: 0, to: 6000 }, goal: { from: 10000, to: 12000 } })).toEqual(refused);
+      expect(await updateStepsAction({ date: today, steps: { from: 4000, to: 6000 }, goal: { from: 9000, to: 12000 } })).toEqual(refused);
+      expect((await day()).steps).toBe(4000);
+      expect((await getNutritionTargets(userA)).steps).toBe(10000);
+      const both = succeeded(await updateStepsAction({ date: today, steps: { from: 4000, to: 6000 }, goal: { from: 10000, to: 12000 } }));
+      expect([both.metrics?.steps, both.targets?.steps]).toEqual([6000, 12000]);
+
+      // Goals: device A changes calories; device B, still showing the old calories, changes them too and is refused,
+      // with its protein in the same save; B's edit of protein alone still saves (the edits touch different goals).
+      succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
+      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 } })).toEqual(refused);
+      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 }, proteinGrams: { from: 170, to: 190 } })).toEqual(refused);
+      expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 170 });
+      succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
+      expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190 });
+      // The water goal from the water dialog is checked the same way.
+      expect(await setWaterAction({ date: today, goal: { from: 2500, to: 4000 } })).toEqual(refused);
+      expect((await getNutritionTargets(userA)).waterMl).toBe(3000);
     });
 
     it("rejects a name that is only spaces instead of storing an empty one", async () => {
@@ -671,14 +728,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       await db.insert(dailyMetrics).values({ userId: userB, date: addDays(today, -9), waterMl: 5, steps: 5 });
 
       authState.id = userA;
-      await setWaterAction({ date: today, waterMl: 250 });
+      succeeded(await setWaterAction({ date: today, waterMl: { from: 100, to: 250 } }));
       expect((await getDailyMetricsHistory(userA, today)).map((r) => r.date)).toEqual([today, addDays(today, -3), addDays(today, -6)]);
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userA))).toHaveLength(3); // pruned in the table, not just hidden
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userB))).toHaveLength(1);
       expect(await getDailyMetricsHistory(userB, today)).toEqual([]);
 
       await db.insert(dailyMetrics).values({ userId: userA, date: addDays(today, -8), waterMl: 1, steps: 1 });
-      await updateStepsAction({ date: today, steps: 7000 });
+      succeeded(await updateStepsAction({ date: today, steps: { from: 100, to: 7000 } }));
       expect(await db.select().from(dailyMetrics).where(eq(dailyMetrics.userId, userA))).toHaveLength(3);
     });
 
@@ -732,8 +789,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const theirWeight = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 }));
 
       authState.id = userA;
-      const meal = succeeded(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 }));
-      expect(meal.meal).toBeNull(); // nothing of theirs comes back
+      // Refused with a reason that names nothing of theirs.
+      expect(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 })).toEqual({
+        success: false,
+        error: "This meal could not be saved.",
+      });
       const weight = succeeded(await saveWeightAction({ id: theirWeight.entry!.id, date: today, kilograms: 90 }));
       expect(weight.entry).toBeNull();
 
