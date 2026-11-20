@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
-import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
+import { expect, type Page, type Request } from "@playwright/test";
+import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
 
 async function openWishlist(page: Page) {
   await page.goto("/wishlist");
@@ -107,3 +107,41 @@ for (const size of [
     expect(Math.abs(center(await edit.boundingBox()).y - spot.y)).toBeLessThan(10);
   });
 }
+
+// The guard's one-write-at-a-time lock (D-043) on its own: a form submitted again after the tap burst is over, while
+// its first save is still unanswered, saves nothing more. The answer is held past the burst; Save and the fields are
+// disabled while saving, so the second submit is the form's own requestSubmit().
+test("a form submitted again while its save is unanswered saves once", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  const writes: Request[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${name}"`)) writes.push(r);
+  });
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && "next-action" in route.request().headers()) await held;
+    await route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill("100");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  // A keydown ends the tap burst, so only the lock stands in the way of the next submit.
+  await page.keyboard.press("Shift");
+  await form.locator("form").evaluate((f: HTMLFormElement) => f.requestSubmit());
+
+  release();
+  await page.waitForResponse((r) => r.request() === writes[0]);
+  // Server actions are sent one at a time, so a second save would go out right after the first answer, well before
+  // the refresh the page makes 600 ms after its last answer; `settled` then covers anything sent before that.
+  await page.waitForRequest((r) => isRefresh(page, r));
+  await settled(page);
+  expect(writes).toHaveLength(1);
+  await expect(page.getByText(`Added "${name}" (100 RON)`)).toHaveCount(1);
+  await expect(page.getByText(name, { exact: true })).toHaveCount(1);
+});
