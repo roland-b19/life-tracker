@@ -125,8 +125,8 @@ export function ShoppingTab({
   /**
    * Adds an item; the server adds the amount to the same item (name and unit) when it is already on the list, which then
    * takes the new category (D-042) and the add's id. The id comes from the form (addId), so a repeat of the same add
-   * after a lost answer adds nothing (D-040): the server answers the row the first one made, which shows without an Undo
-   * (whether that add merged is no longer known).
+   * after a lost answer adds nothing (D-040): the server answers the row the first one made, and the toast says it was
+   * already added, without an Undo (whether that add merged is no longer known).
    */
   async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
     setBusy(true);
@@ -143,7 +143,7 @@ export function ShoppingTab({
       upsertShop(item);
       showToast(
         res.repeated
-          ? { message: `Added "${item.name}"`, type: "success", touches: touches([item.id]), saved }
+          ? { message: `Already added "${item.name}"`, type: "success", touches: touches([item.id]), saved }
           : !before
           ? {
               message: `Added "${item.name}"`,
@@ -178,7 +178,7 @@ export function ShoppingTab({
                   }
                   return back;
                 },
-                (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+                (back) => (back && !back.success ? back.error : "Failed to undo the merge"),
               ),
             },
       );
@@ -285,10 +285,12 @@ export function ShoppingTab({
         "Failed to undo the edit",
       ),
     });
+    // An item no longer on the list (merged or deleted on another device) leaves the screen, with the server's reason.
     void saved.then((res) => {
       if (res?.success) return;
-      setBought(!next, item.checkedAt);
-      warn("Failed to update item");
+      if (res?.error === SHOPPING_ITEM_GONE) dropShop(item.id);
+      else setBought(!next, item.checkedAt);
+      warn(res?.error ?? "Failed to update item");
     });
     return saved;
   }
@@ -317,8 +319,8 @@ export function ShoppingTab({
     });
     void saved.then((res) => {
       if (res?.success) return;
-      upsertShop(item);
-      warn("Failed to remove item");
+      if (res?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
+      warn(res?.error ?? "Failed to remove item");
     });
     return saved;
   }

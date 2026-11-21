@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, settled, test } from "./helpers";
 
 // The open tab is kept per device (HTODAY-17), so a reload opens the tab picked last: each open picks its tab. A click
 // before the page has hydrated is lost, so the pick is tried until the tab is selected. On a phone the Shopping tab
@@ -519,6 +519,9 @@ test("Save again after a lost answer adds the item once, also when the add merge
   await page.keyboard.press("Shift");
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
   await expect(form).toBeHidden();
+  // The repeat says so, and has no Undo (whether the first add merged is no longer known).
+  await expect(page.getByText(`Already added "${name}"`, { exact: true })).toBeVisible();
+  expect(await undoIn(page, `Already added "${name}"`).count()).toBe(0);
   await expect(shoppingRow(page, name)).toHaveCount(1);
   await expect(shoppingRow(page, name)).toContainText("2 pcs");
   expect(await sql("SELECT amount FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name])).toEqual([{ amount: "2.00" }]);
@@ -540,6 +543,7 @@ test("Save again after a lost answer logs the meal once [D-040]", async ({ signe
   await page.keyboard.press("Shift");
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"calories":${kcal}`);
   await expect(form).toBeHidden();
+  await expect(page.getByText("Already saved", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: deleteMeal(String(kcal)) })).toHaveCount(1);
   const id = /"id":"([0-9a-f-]{36})"/.exec(sent())?.[1];
   expect(id).toBeTruthy();
@@ -548,6 +552,50 @@ test("Save again after a lost answer logs the meal once [D-040]", async ({ signe
     [id, kcal],
   );
   expect(rows).toEqual([{ count: "1" }]);
+});
+
+/** The signed-in user's id, for the SQL that checks or seeds their rows. */
+async function userId(page: Page) {
+  const { user } = await (await page.request.get("/api/auth/session")).json();
+  return user.id as string;
+}
+
+// Opens the weight form and saves `kilograms`; that answer is lost (the page reloads, the form stays), and Save again.
+async function saveWeightTwice(page: Page, kilograms: string) {
+  const form = page.getByRole("dialog", { name: "Edit weight" });
+  await loseAnswerOnce(page, `"kilograms":${kilograms}`);
+  await page.getByRole("region", { name: "Weight", exact: true }).getByRole("button", { name: "Edit today's weight" }).click();
+  await form.getByLabel("Weight today (kg)").fill(kilograms);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
+  await expect(form).toBeVisible();
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"kilograms":${kilograms}`);
+  await expect(form).toBeHidden();
+}
+
+// The weight form makes its id when it opens (D-040), so Save again after a lost answer finds the day's row the first
+// save made: one row, and a toast that says it was already saved, without an Undo.
+test("Save again after a lost answer adds the weigh-in once [D-040]", async ({ signedInPage: page }) => {
+  const user = await userId(page);
+  await openHealth(page, "Today");
+  await saveWeightTwice(page, "77");
+  await expect(page.getByText("Already saved", { exact: true })).toBeVisible();
+  expect(await undoIn(page, "Already saved").count()).toBe(0);
+  expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "77.00" }]);
+});
+
+// After a lost answer the day already holds the new value, so the second save's `previous` is that value: the Undo
+// writes back what the form showed when it opened instead.
+test("Undo of a weight edit saved again after a lost answer puts back the value the form opened with [D-040]", async ({ signedInPage: page }) => {
+  const user = await userId(page);
+  await sql("INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, (now() AT TIME ZONE 'Europe/Bucharest')::date, 80)", [user]);
+  await openHealth(page, "Today");
+  await saveWeightTwice(page, "81");
+  await expect(undoIn(page, "Weight set to")).toBeVisible();
+  expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "81.00" }]);
+  await andSettle(page, () => undoIn(page, "Weight set to").click());
+  expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "80.00" }]);
 });
 
 // The merge's Undo puts the old row back; when the merged item was deleted meanwhile, the server's refusal says why.
@@ -568,6 +616,34 @@ test("Undo of a merge onto an item deleted meanwhile says the item is gone [D-04
   await expect(shoppingRow(page, name)).toHaveCount(0);
 });
 
+// A merging add takes the add's id, so the row it replaced is gone (D-042). A page that still shows that row (another
+// browser, which hears nothing of the write) gets the server's reason when it ticks it, and the row leaves.
+test("a tick on a row another browser merged away says the item is no longer on the list [HSHOP-16]", async ({ signedInPage: page, browser }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await addItem(page, name, 1);
+  const context = await browser.newContext();
+  try {
+    await context.addCookies(await page.context().cookies());
+    const other = await context.newPage();
+    await openHealth(other, "Shopping");
+    await other.getByRole("button", { name: "Add item" }).click();
+    const form = other.getByRole("dialog", { name: "New shopping item" });
+    await form.getByLabel("Name").fill(name);
+    await andSettle(other, () => form.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText("Merged with existing item")).toBeVisible();
+  } finally {
+    await context.close();
+  }
+
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${name} as bought`, exact: true }).click());
+  await expect(page.getByText("This item is no longer on the list.", { exact: true })).toBeVisible();
+  expect(await sql("SELECT amount, is_bought FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name])).toEqual([
+    { amount: "2.00", is_bought: false },
+  ]);
+});
+
 // Clear bought deletes for good what was taken off the list before it, so an older delete's toast loses its Undo.
 test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async ({ signedInPage: page }) => {
   await openHealth(page, "Shopping");
@@ -585,6 +661,29 @@ test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async (
   // Counted at once, while the toast is still on screen (see the meal [TOUCHES] test below).
   expect(await undoIn(page, `Removed "${gone}"`).count()).toBe(0);
   await expect(page.locator(".toast-item").filter({ hasText: `Removed "${gone}"` })).toBeVisible();
+});
+
+// Two clicks in one task reach the handler before the page re-renders, so only the guard (D-043) stops the second clear.
+test("two clicks on Clear bought in one task clear once [D-043]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await addItem(page, name, 1);
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${name} as bought`, exact: true }).click());
+  await settled(page);
+  let writes = 0;
+  page.on("request", (r) => {
+    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes('"itemIds"')) writes++;
+  });
+  await andSettle(page, () =>
+    page.getByRole("button", { name: "Clear bought" }).evaluate((b: HTMLElement) => {
+      b.click();
+      b.click();
+    }),
+  );
+  await settled(page);
+  expect(writes).toBe(1);
+  await expect(page.locator(".toast-item").filter({ hasText: "Cleared 1 bought item" })).toHaveCount(1);
 });
 
 // A unit shows as stored ("pcs"), also in the toast of a unit delete [HSHOP-14].

@@ -150,11 +150,11 @@ describe("weight authorization", () => {
     expect(await listWeightEntries(ownerId)).toEqual([mine.entry, { id: past.id, date: past.date, kilograms: "80.00" }]);
     expect(await listWeightEntries(otherId)).toEqual([theirs.entry]);
 
-    // A fresh id is a normal edit of today's row; a replay of the add (the row's own id) answers it unchanged.
+    // A fresh id is a normal edit of today's row; a replay of the add (the row's own id) answers it unchanged, as a repeat.
     const edited = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 79.5 });
-    expect(edited).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: mine.entry });
+    expect(edited).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: mine.entry, repeated: false });
     const replay = await saveWeightAction({ id: mine.entry.id, date: today, kilograms: 81 });
-    expect(replay).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: null });
+    expect(replay).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: null, repeated: true });
     expect(await listWeightEntries(ownerId)).toEqual([{ ...mine.entry, kilograms: "79.50" }, { id: past.id, date: past.date, kilograms: "80.00" }]);
     expect(await listWeightEntries(otherId)).toEqual([theirs.entry]);
   });

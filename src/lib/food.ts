@@ -104,7 +104,8 @@ export async function getDailyFoodSummary(userId: string, date: string) {
 
 /**
  * Adds a meal under the id the device made, when it sent one: a repeat of the same add finds the row already there and
- * answers it. An id another user's meal holds writes nothing and answers null, so it neither changes nor shows that row.
+ * answers it, with `repeated`. An id another user's meal holds writes nothing and answers a null meal, so it neither
+ * changes nor shows that row.
  */
 export async function logMeal(userId: string, input: LogMealInput) {
   const created = await db
@@ -123,10 +124,10 @@ export async function logMeal(userId: string, input: LogMealInput) {
     .onConflictDoNothing()
     .returning()
     .then((rows) => rows.at(0));
-  if (created || !input.id) return created ?? null;
+  if (created || !input.id) return { meal: created ?? null, repeated: false };
 
   const own = await db.select().from(meals).where(and(eq(meals.id, input.id), eq(meals.userId, userId)));
-  return own.at(0) ?? null;
+  return { meal: own.at(0) ?? null, repeated: own.length > 0 };
 }
 
 /** Undo of a delete: the meal comes back under its old id and time. A taken id gives back undefined. */
@@ -337,8 +338,8 @@ export async function unmergeShoppingItem(userId: string, input: UnmergeShopping
 }
 
 /** Whether another item on the list already has this name and unit (any case): the add form merges those, so an edit must not make two. */
-export async function hasDuplicateShoppingItem(userId: string, input: { itemId: string; name: string; unit: string }) {
-  const [row] = await db
+async function hasDuplicateShoppingItem(q: Pick<typeof db, "select">, userId: string, input: { itemId: string; name: string; unit: string }) {
+  const [row] = await q
     .select({ id: shoppingItems.id })
     .from(shoppingItems)
     .where(
@@ -353,19 +354,24 @@ export async function hasDuplicateShoppingItem(userId: string, input: { itemId: 
   return Boolean(row);
 }
 
-/** An edit; a category or unit past its list's cap refuses the whole edit. */
+/**
+ * An edit. An item no longer on the list (deleted, or merged into another row, on another device) is refused with
+ * SHOPPING_ITEM_GONE before anything else is checked; a name and unit another item has, or a category or unit past its
+ * list's cap, refuses the whole edit.
+ */
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
   return db.transaction(async (tx) => {
     await lockShopping(tx, userId);
+    const [listed] = await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId)));
+    if (!listed) throw new Refusal(SHOPPING_ITEM_GONE);
+    if (await hasDuplicateShoppingItem(tx, userId, input)) throw new Refusal(`"${input.name}" is already on the list with this unit.`);
     const [updated] = await tx
       .update(shoppingItems)
       .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
       .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
       .returning();
-    if (updated) {
-      await ensureShoppingCategory(userId, input.category, "category", tx);
-      await ensureShoppingCategory(userId, input.unit, "unit", tx);
-    }
+    await ensureShoppingCategory(userId, input.category, "category", tx);
+    await ensureShoppingCategory(userId, input.unit, "unit", tx);
     return updated;
   });
 }
@@ -396,15 +402,24 @@ const ownCategory = (userId: string, name: string, kind: ShoppingKind) =>
   and(eq(DIMS[kind].table.userId, userId), eq(DIMS[kind].table.name, name));
 
 /**
+ * Whether the user's list already holds `name`; when it does not and the list is full, the name could not be added, so
+ * this refuses: a list never holds more than MAX_SHOPPING_NAMES.
+ */
+async function listedOrRoom(q: Pick<typeof db, "select">, userId: string, name: string, kind: ShoppingKind) {
+  const { table } = DIMS[kind];
+  const names = await q.select({ name: table.name }).from(table).where(eq(table.userId, userId));
+  if (names.some((n) => n.name === name)) return true;
+  if (names.length >= MAX_SHOPPING_NAMES) throw new Refusal(`You can have at most ${MAX_SHOPPING_NAMES} ${kind === "unit" ? "units" : "categories"}.`);
+  return false;
+}
+
+/**
  * Adds a name at the end of the user's list unless it is there already or is the built-in fallback ("other", "pcs");
- * answers whether it added it. A new name past the list's cap is refused, so the list never holds more.
+ * answers whether it added it. A new name past the list's cap is refused (listedOrRoom).
  */
 async function ensureShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category", q: Pick<typeof db, "insert" | "select"> = db) {
   const { table, fallback } = DIMS[kind];
-  if (name === fallback) return false;
-  const names = await q.select({ name: table.name }).from(table).where(eq(table.userId, userId));
-  if (names.some((n) => n.name === name)) return false;
-  if (names.length >= MAX_SHOPPING_NAMES) throw new Refusal(`You can have at most ${MAX_SHOPPING_NAMES} ${kind === "unit" ? "units" : "categories"}.`);
+  if (name === fallback || (await listedOrRoom(q, userId, name, kind))) return false;
   const added = await q
     .insert(table)
     .values({
@@ -591,8 +606,8 @@ export async function revertShoppingCategory(userId: string, input: RevertShoppi
   return db.transaction(async (tx): Promise<{ keptCurrent: boolean } | null> => {
     await lockShopping(tx, userId);
     if (current !== fallback && (await tx.select().from(table).where(ownCategory(userId, current, kind))).length === 0) return null;
-    const [back] = await tx.select().from(table).where(ownCategory(userId, name, kind));
-    if (!back) {
+    // A name put back past the cap is refused, like a new one.
+    if (!(await listedOrRoom(tx, userId, name, kind))) {
       const [taken] = await tx.select().from(table).where(and(list, eq(table.sortOrder, sortOrder))).limit(1);
       if (taken) await tx.update(table).set({ sortOrder: sql`${table.sortOrder} + 1` }).where(and(list, gte(table.sortOrder, sortOrder)));
       await tx.insert(table).values({ userId, name, sortOrder }).onConflictDoNothing();
@@ -732,9 +747,9 @@ export async function listWeightEntries(userId: string, since?: string) {
 /**
  * Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row,
  * or null when this save created the day. A save from the weight form carries the fresh id the device made (D-040): a
- * repeat of it, once the day holds that row, answers the row unchanged. An id another weigh-in already holds (another
- * user's, or one of the caller's other days) writes nothing and answers `entry: null`, whether or not the day has a
- * weigh-in yet. The Undo of an edit (`app/health/weight-card.tsx`) sends no id: it writes the old value back to the
+ * repeat of it, once the day holds that row, answers the row unchanged, with `repeated`. An id another weigh-in already
+ * holds (another user's, or one of the caller's other days) writes nothing and answers `entry: null`, whether or not the
+ * day has a weigh-in yet. The Undo of an edit (`app/health/weight-card.tsx`) sends no id: it writes the old value back to the
  * day's row, or to a new row with a database-made id when the day was deleted meanwhile. Skipping the id check is safe
  * for it: there is no id that could be taken, the write is keyed by the user and the day (the update is filtered by
  * `userId`), and it sets an absolute value, so a repeat changes nothing more.
@@ -754,20 +769,20 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
         .onConflictDoNothing()
         .returning(weightColumns);
       // Nothing inserted: another weigh-in holds the id (the day has none here), so nothing is answered.
-      return { entry: inserted.at(0) ?? null, previous: null };
+      return { entry: inserted.at(0) ?? null, previous: null, repeated: false };
     }
-    if (input.id === previous.id) return { entry: previous, previous: null };
+    if (input.id === previous.id) return { entry: previous, previous: null, repeated: true };
     if (input.id) {
       // An edit carries a fresh id (D-040); one another weigh-in already holds (any user's, any day) is refused.
       const [taken] = await tx.select({ id: weightEntries.id }).from(weightEntries).where(eq(weightEntries.id, input.id));
-      if (taken) return { entry: null, previous: null };
+      if (taken) return { entry: null, previous: null, repeated: false };
     }
     const [entry] = await tx
       .update(weightEntries)
       .set({ kilograms })
       .where(and(eq(weightEntries.id, previous.id), eq(weightEntries.userId, userId)))
       .returning(weightColumns);
-    return { entry, previous };
+    return { entry, previous, repeated: false };
   });
 }
 

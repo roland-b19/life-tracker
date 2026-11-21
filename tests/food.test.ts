@@ -151,7 +151,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       protein: 40,
       carbs: 10,
       fat: 25,
-    }))!;
+    })).meal!;
 
     // User B tries to delete User A's meal -> fails / returns undefined
     const deletedByB = await deleteMeal(userB, meal.id);
@@ -233,8 +233,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const item = await addItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "pantry" });
     const bought = async () => (await getShoppingList(userA)).find((i) => i.id === item.id)?.isBought;
     authState.id = userB;
-    await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: "Item not found." });
-    await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: "Item not found." });
+    await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
+    await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
     authState.id = "";
     expect(await toggleShoppingItemAction(item.id, true)).toEqual({ success: false, error: SIGNED_OUT });
     expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
@@ -285,7 +285,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
-    expect(await updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).toBeUndefined();
+    await expect(updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).rejects.toThrow(SHOPPING_ITEM_GONE);
     expect(await renameShoppingCategory(userB, "oils", "x")).toBeNull();
     expect((await restoreShoppingItems(userB, [oil.id])).items).toHaveLength(0);
   });
@@ -505,7 +505,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const ticked = succeeded(await toggleShoppingItemAction(apple.id, true));
       expect(await names()).toEqual(["Banana", "Apple"]);
       authState.id = userB;
-      expect(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).toEqual(refused("Item not found."));
+      expect(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).toEqual(refused(SHOPPING_ITEM_GONE));
       authState.id = "";
       expect(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).toEqual(refused(SIGNED_OUT));
       authState.id = userA;
@@ -581,6 +581,17 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await revertShoppingCategoryAction({ name: "c1", current: "other", sortOrder: 1, itemIds, dropCurrent: false })).toEqual(
         refused("Too many (max 5000)"),
       );
+      // The Undo of a delete puts the name back, so past the cap it is refused like a new name: never 201 names.
+      for (const kind of ["category", "unit"] as const) {
+        const word = kind === "unit" ? "units" : "categories";
+        const prefix = kind === "unit" ? "u" : "c";
+        const { change } = succeeded(await deleteShoppingCategoryAction({ kind, name: `${prefix}2` }));
+        succeeded(await addShoppingCategoryAction({ kind, name: "newcomer" }));
+        const undo = { kind, name: `${prefix}2`, current: kind === "unit" ? "pcs" : "other", ...change!, dropCurrent: false };
+        expect(await revertShoppingCategoryAction(undo)).toEqual(refused(`You can have at most 200 ${word}.`));
+        expect(await getShoppingCategories(userA, kind)).toHaveLength(200);
+        expect(await getShoppingCategories(userA, kind)).not.toContain(`${prefix}2`);
+      }
     });
 
     it("never seeds a list again once emptied: \"meat\" can then be added [HSHOP-15]", async () => {
@@ -638,6 +649,21 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       succeeded(await deleteShoppingItemAction(item.id));
       expect(await updateShoppingItemAction(edit)).toEqual(refused(SHOPPING_ITEM_GONE));
       expect((await admin.query("SELECT amount FROM shopping_items WHERE id = $1", [item.id])).rows[0].amount).toBe("1.00");
+    });
+
+    it("answers a tick, delete or edit of an item merged or deleted since that it is no longer on the list, before any other check [HSHOP-16]", async () => {
+      // A stale page: the row was merged into another (an edit to its name and unit, on another device) and is gone.
+      const { item: jam } = succeeded(await addShoppingItemAction({ name: "Jam" }));
+      const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea" }));
+      succeeded(await deleteShoppingItemAction(jam.id));
+      expect(await toggleShoppingItemAction(jam.id, true)).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await deleteShoppingItemAction(jam.id)).toEqual(refused(SHOPPING_ITEM_GONE));
+      // The edit names an item still on the list (Tea, pcs), yet the item's absence is what it says.
+      expect(await updateShoppingItemAction({ itemId: jam.id, name: "Tea", amount: 1, unit: "pcs", category: "other" })).toEqual(
+        refused(SHOPPING_ITEM_GONE),
+      );
+      expect(await list()).toEqual(["Tea 1 pcs other"]);
+      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" })).toMatchObject({ success: true });
     });
   });
 
@@ -882,8 +908,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       ).resolves.toMatchObject({ success: false });
       await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual({ success: false, error: "Item not found." });
       expect(succeeded(await clearBoughtItemsAction({ itemIds: [item.id] })).deletedCount).toBe(0);
-      await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: "Item not found." });
-      await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: "Item not found." });
+      await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
+      await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
       expect((await renameShoppingCategoryAction({ from: "fridge", to: "x" })).success).toBe(false);
       authState.id = userA;
 
@@ -1120,12 +1146,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const first = succeeded(await logMealAction(meal));
       const again = succeeded(await logMealAction(meal)); // the answer was lost, the device sends it again
       expect(again.meal?.id).toBe(first.meal?.id);
+      expect([first.repeated, again.repeated]).toEqual([false, true]); // the page says "Already saved", without an Undo
       expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
 
       const weigh = { id: randomUUID(), date: today, kilograms: 80.5 };
       const added = succeeded(await saveWeightAction(weigh));
       const repeat = succeeded(await saveWeightAction(weigh));
       expect([added.previous, repeat.previous]).toEqual([null, null]); // the repeat is still the add, not an edit of it
+      expect([added.repeated, repeat.repeated]).toEqual([false, true]);
       expect(repeat.entry?.id).toBe(weigh.id);
       expect(await listWeightEntries(userA)).toHaveLength(1);
     });

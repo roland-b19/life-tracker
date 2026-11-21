@@ -32,7 +32,6 @@ import {
   deleteShoppingCategory,
   deleteShoppingItem,
   deleteWeightEntry,
-  hasDuplicateShoppingItem,
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
@@ -59,15 +58,18 @@ function assertToday(date: string) {
   if (date !== toISODate()) throw new Refusal("Only today can be changed.");
 }
 
-/** Adds a meal; a repeat of the same add (same id) answers the meal already there, an id another user holds is refused. */
+/**
+ * Adds a meal; a repeat of the same add (same id) answers the meal already there with `repeated`, an id another user
+ * holds is refused.
+ */
 export async function logMealAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = logMealSchema.parse(rawInput);
     assertWritableDay(parsed.date);
-    const meal = await logMeal(userId, parsed);
+    const { meal, repeated } = await logMeal(userId, parsed);
     if (!meal) throw new Refusal("This meal could not be saved.");
-    return { meal };
+    return { meal, repeated };
   });
 }
 
@@ -92,16 +94,17 @@ export async function restoreMealAction(rawInput: unknown) {
 
 /**
  * Sets today's weight (creates or changes it). An id another weigh-in already holds (another user's, or one of the
- * caller's other days) is refused like a meal's, whether or not today has a weigh-in yet; a replay of the same save is not.
+ * caller's other days) is refused like a meal's, whether or not today has a weigh-in yet; a replay of the same save is not,
+ * and answers `repeated`.
  */
 export async function saveWeightAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const input = logWeightSchema.parse(rawInput);
     assertToday(input.date);
-    const { entry, previous } = await saveWeightEntry(userId, input);
+    const { entry, previous, repeated } = await saveWeightEntry(userId, input);
     if (!entry) throw new Refusal("This weight could not be saved.");
-    return { entry, previous };
+    return { entry, previous, repeated };
   });
 }
 
@@ -176,7 +179,7 @@ export async function toggleShoppingItemAction(itemId: string, isBought: boolean
     const userId = await requireUser();
     const input = toggleShoppingItemSchema.parse({ itemId, isBought, checkedAt });
     const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
-    if (!item) throw new Refusal("Item not found.");
+    if (!item) throw new Refusal(SHOPPING_ITEM_GONE);
     return { item };
   });
 }
@@ -185,7 +188,7 @@ export async function deleteShoppingItemAction(itemId: string) {
   return respond(async () => {
     const userId = await requireUser();
     const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
-    if (!deleted) throw new Refusal("Item not found.");
+    if (!deleted) throw new Refusal(SHOPPING_ITEM_GONE);
     return { deleted };
   });
 }
@@ -212,11 +215,7 @@ export async function restoreShoppingItemsAction(rawInput: unknown) {
 export async function updateShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const parsed = updateShoppingItemSchema.parse(rawInput);
-    if (await hasDuplicateShoppingItem(userId, parsed)) throw new Refusal(`"${parsed.name}" is already on the list with this unit.`);
-    const item = await updateShoppingItem(userId, parsed);
-    if (!item) throw new Refusal(SHOPPING_ITEM_GONE);
-    return { item };
+    return { item: await updateShoppingItem(userId, updateShoppingItemSchema.parse(rawInput)) };
   });
 }
 

@@ -268,6 +268,8 @@ export function FoodClient({
     setMealCarbs("");
     setMealFat("");
     setIsMealModalOpen(false);
+    // A Save again after a lost answer finds the meal the first one logged (D-040): it says so, without an Undo.
+    if (res.repeated) return showToast({ message: "Already saved", type: "success", touches: mealKeys([meal]), saved });
     showToast({
       message: `Added meal (${formatNumber(meal.calories)} kcal)`,
       type: "success",

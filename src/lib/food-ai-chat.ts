@@ -16,7 +16,7 @@ interface FoodChatContext {
   time: string;
 }
 
-type LoggedMeal = Awaited<ReturnType<typeof logMeal>>;
+type LoggedMeal = Awaited<ReturnType<typeof logMeal>>["meal"];
 
 // What the model must answer with; the CLI enforces it, the app checks it again below.
 const RESPONSE_SCHEMA = {
@@ -156,7 +156,7 @@ export async function sendFoodChatMessage(
     }
     const calories = "calories" in meal && typeof meal.calories === "number" ? Math.round(meal.calories) : undefined;
     const parsed = logMealSchema.safeParse({ ...meal, calories, date: ctx.date });
-    if (parsed.success) logged.push(await logMeal(userId, { ...parsed.data, isEstimated: true }));
+    if (parsed.success) logged.push((await logMeal(userId, { ...parsed.data, isEstimated: true })).meal);
     else leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
   }
   let reply = answer.reply.trim() || "Done.";
