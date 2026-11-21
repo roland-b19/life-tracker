@@ -532,8 +532,9 @@ export async function listWeightEntries(userId: string, since?: string) {
 
 /**
  * Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row,
- * or null when this save created the day. An add carries the id the device made: a repeat of it, once the day holds
- * that row, answers the row unchanged; an id another user's row holds writes nothing and answers `entry: null`.
+ * or null when this save created the day. A save carries the fresh id the device made (D-040): a repeat of it, once the
+ * day holds that row, answers the row unchanged. An id another weigh-in already holds (another user's, or one of the
+ * caller's other days) writes nothing and answers `entry: null`, whether or not the day has a weigh-in yet.
  */
 export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
@@ -549,10 +550,15 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
         .values({ id: input.id, userId, date: input.date, kilograms })
         .onConflictDoNothing()
         .returning(weightColumns);
-      // Nothing inserted: the id is another user's row (the day has none here), so nothing is answered.
+      // Nothing inserted: another weigh-in holds the id (the day has none here), so nothing is answered.
       return { entry: inserted.at(0) ?? null, previous: null };
     }
     if (input.id === previous.id) return { entry: previous, previous: null };
+    if (input.id) {
+      // An edit carries a fresh id (D-040); one another weigh-in already holds (any user's, any day) is refused.
+      const [taken] = await tx.select({ id: weightEntries.id }).from(weightEntries).where(eq(weightEntries.id, input.id));
+      if (taken) return { entry: null, previous: null };
+    }
     const [entry] = await tx
       .update(weightEntries)
       .set({ kilograms })

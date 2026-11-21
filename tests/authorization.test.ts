@@ -132,6 +132,33 @@ describe("weight authorization", () => {
     expect(await listWeightEntries(ownerId)).toEqual([created.entry]);
   });
 
+  it("refuses a taken weigh-in id when today already has a weigh-in, and still saves a fresh id or a replay", async () => {
+    const ownerId = authState.id;
+    const today = toISODate();
+    const otherId = await seedUser(`g-${randomUUID()}`);
+    authState.id = otherId;
+    const theirs = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 });
+    if (!theirs.success) throw new Error("save failed");
+
+    authState.id = ownerId;
+    const [past] = await db.insert(weightEntries).values({ userId: ownerId, date: addDays(today, -1), kilograms: "80.00" }).returning();
+    const mine = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 });
+    if (!mine.success) throw new Error("save failed");
+    const refused = { success: false, error: "This weight could not be saved." };
+    expect(await saveWeightAction({ id: theirs.entry.id, date: today, kilograms: 90 })).toEqual(refused);
+    expect(await saveWeightAction({ id: past.id, date: today, kilograms: 90 })).toEqual(refused); // the owner's other day
+    expect(await listWeightEntries(ownerId)).toEqual([mine.entry, { id: past.id, date: past.date, kilograms: "80.00" }]);
+    expect(await listWeightEntries(otherId)).toEqual([theirs.entry]);
+
+    // A fresh id is a normal edit of today's row; a replay of the add (the row's own id) answers it unchanged.
+    const edited = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 79.5 });
+    expect(edited).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: mine.entry });
+    const replay = await saveWeightAction({ id: mine.entry.id, date: today, kilograms: 81 });
+    expect(replay).toEqual({ success: true, entry: { ...mine.entry, kilograms: "79.50" }, previous: null });
+    expect(await listWeightEntries(ownerId)).toEqual([{ ...mine.entry, kilograms: "79.50" }, { id: past.id, date: past.date, kilograms: "80.00" }]);
+    expect(await listWeightEntries(otherId)).toEqual([theirs.entry]);
+  });
+
   it("does not let another user delete or change a row", async () => {
     const ownerId = authState.id;
     const today = toISODate();

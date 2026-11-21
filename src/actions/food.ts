@@ -87,7 +87,10 @@ export async function restoreMealAction(rawInput: unknown) {
   });
 }
 
-/** Sets today's weight (creates or changes it); an id another user holds is refused, like a meal's. */
+/**
+ * Sets today's weight (creates or changes it). An id another weigh-in already holds (another user's, or one of the
+ * caller's other days) is refused like a meal's, whether or not today has a weigh-in yet; a replay of the same save is not.
+ */
 export async function saveWeightAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
