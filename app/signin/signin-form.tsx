@@ -15,6 +15,12 @@ const PROVIDER_LABEL: Record<string, string> = { "azure-ad": "Microsoft", github
 const csrfRefused = (url: string | null | undefined) => !!url && new URL(url, location.href).searchParams.has("csrf");
 
 /**
+ * How long the form waits for its session check before it lets the user try anyway: a check that never answers (a slow
+ * or unreachable server) must not leave the page unusable. A CSRF token refused after that gets the one retry.
+ */
+const SESSION_CHECK_WAIT_MS = 5_000;
+
+/**
  * `provider` is "dev" (username form, local only) or the id of the configured OAuth provider. `next` is the same-site
  * path to open after sign-in (the page checks it).
  */
@@ -25,8 +31,16 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
   const [busy, setBusy] = useState(false);
   // Until the page is hydrated and its session check has answered, the form waits: a tap before would submit the page
   // natively (the name in the URL), text typed before would be reset, and the CSRF cookie could still change under it.
-  // The status leaves "loading" only on the client, after the check, so it covers hydration too.
-  const ready = useSession().status !== "loading";
+  // The status leaves "loading" only on the client, after the check, and the timer runs only there, so both cover
+  // hydration too. A check still unanswered after SESSION_CHECK_WAIT_MS stops holding the form.
+  const checking = useSession().status === "loading";
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    if (!checking) return;
+    const timer = setTimeout(() => setWaited(true), SESSION_CHECK_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [checking]);
+  const ready = !checking || waited;
   // Whoever signs in next never sees pages kept for the previous session.
   useEffect(() => void clearPageCache(), []);
 
