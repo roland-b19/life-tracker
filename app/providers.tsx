@@ -1,13 +1,182 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionProvider } from "next-auth/react";
+import { watchDay } from "./components/day-watch";
 import { fadeTheme } from "./components/theme";
-import { ToastProvider } from "./components/toast";
+import { ToastProvider, useToast } from "./components/toast";
+
+const OFFLINE = "You're offline. Nothing was saved.";
+const LOST_REPLY = "Couldn't confirm the change. Reloaded.";
+const PAGE_BROKEN = "Couldn't open the page. Try again.";
+
+/** The last page that could not be opened (its path), while the one on screen stays; a new object for each failure. */
+type NotOpened = { path: string } | null;
+const PageNotOpenedContext = createContext<NotOpened>(null);
+/** The last page that could not be opened: the tab bar shows the page on screen again if it was going there. */
+export const usePageNotOpened = () => useContext(PageNotOpenedContext);
+
+// The open copies of the app (tabs, windows, the installed app) tell each other about a write on this channel.
+const CHANNEL = "life-tracker";
+// The refresh after writes waits this long after the last answer, so a burst of writes refreshes once.
+const AFTER_WRITES = 600;
+// A focus within this long of the last refresh (or of the page load) refreshes nothing: the page is fresh.
+const FRESH = 2000;
+// An open page on screen refreshes this often.
+const EVERY = 60_000;
+
+// A page payload (React Server Components) is rows like `0:...`, each ending in a newline, after an optional marker
+// byte ('#' or '~'). Next does nothing with a navigation answer that is HTTP 200 but not one of these.
+const isPagePayload = (text: string) => /^[#~]?[0-9a-f]+:/.test(text) && text.endsWith("\n");
+
+const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
+  new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+
+/**
+ * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
+ * refreshes this page once the writes stop and tells the other copies, which refresh too; every copy also refreshes
+ * on focus, when it becomes visible, every minute while visible, and at midnight in Bucharest (day-watch.ts); a refresh
+ * that came due while offline runs once the device is back online and the server answers. A write that never got an
+ * answer says why: offline nothing was saved (open forms stay as they are); online the answer was lost and the write
+ * may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
+ */
+function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  useEffect(() => {
+    // Back/forward replays the cached page from before a write, so after any write it reloads once instead.
+    let wrote = false;
+    let writing = 0;
+    let due = false;
+    // A refresh that came due while offline, run once the device is back online and the server answers
+    let missed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let last = Date.now();
+    const realFetch = window.fetch;
+
+    const refreshNow = () => {
+      clearTimeout(timer);
+      due = false;
+      // Offline, Next would turn the refresh into a full page load, which fails: it waits for the device to be online
+      if (!navigator.onLine) {
+        missed = true;
+        return;
+      }
+      if (missed) return check();
+      last = Date.now();
+      day.seen();
+      router.refresh();
+    };
+    // "Online" can come before the server is reachable (a network still settling, a captive portal), and a refresh that
+    // fails becomes a full page load that drops an open form: after a missed refresh the server must answer a small
+    // request first (`/api/health`, which the service worker never answers). Until it does, the next focus, minute or
+    // "online" tries again.
+    const check = () => {
+      realFetch("/api/health", { cache: "no-store" }).then(
+        (res) => {
+          if (!res.ok || !missed) return;
+          missed = false;
+          refresh();
+        },
+        () => {},
+      );
+    };
+    // A refresh while a write is on its way could show the screen from before it: it waits for the answer.
+    const refresh = (delay = 0) => {
+      clearTimeout(timer);
+      if (writing > 0) due = true;
+      else timer = setTimeout(refreshNow, delay);
+    };
+    const day = watchDay(() => refresh());
+
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CHANNEL);
+    channel?.addEventListener("message", (e) => e.data?.type === "wrote" && refresh(AFTER_WRITES));
+
+    const write = async (input: RequestInfo | URL, init?: RequestInit) => {
+      writing++;
+      clearTimeout(timer);
+      try {
+        const res = await realFetch(input, init);
+        if (res.ok) {
+          wrote = true;
+          due = true;
+          channel?.postMessage({ type: "wrote" });
+        }
+        return res;
+      } catch (err) {
+        if ((err as Error)?.name !== "AbortError") {
+          if (!navigator.onLine) {
+            showToast({ message: OFFLINE, type: "warning" });
+          } else {
+            showToast({ message: LOST_REPLY, type: "warning" });
+            due = true;
+          }
+        }
+        throw err;
+      } finally {
+        writing--;
+        if (writing === 0 && due) refresh(AFTER_WRITES);
+      }
+    };
+    const navigate = async (input: RequestInfo | URL, init: RequestInit | undefined, path: string) => {
+      const res = await realFetch(input, init);
+      if (res.ok && res.headers.get("content-type")?.startsWith("text/x-component")) {
+        res
+          .clone()
+          .text()
+          .then((text) => {
+            if (isPagePayload(text)) return;
+            showToast({ message: PAGE_BROKEN, type: "warning" });
+            onPageNotOpened({ path });
+          })
+          .catch(() => {});
+      }
+      return res;
+    };
+    window.fetch = (input, init) => {
+      const headers = headersOf(input, init);
+      if (headers.has("next-action")) return write(input, init);
+      // A page request for another page (not a prefetch, not a refresh of this one)
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      if (headers.has("rsc") && !headers.has("next-router-prefetch") && !headers.has("next-router-segment-prefetch") && url.pathname !== location.pathname) {
+        return navigate(input, init, url.pathname);
+      }
+      return realFetch(input, init);
+    };
+
+    const onFocus = () => {
+      if (Date.now() - last >= FRESH) refresh();
+      else day.check();
+    };
+    const onVisible = () => document.visibilityState === "visible" && onFocus();
+    const onOnline = () => missed && refresh();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    const every = setInterval(() => document.visibilityState === "visible" && refresh(), EVERY);
+
+    const onPop = () => {
+      if (wrote) window.location.reload();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(every);
+      day.stop();
+      channel?.close();
+      window.fetch = realFetch;
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [router, showToast, onPageNotOpened]);
+  return null;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const [notOpened, setNotOpened] = useState<NotOpened>(null);
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       // In dev, chunk URLs are not content-hashed, so the worker must not cache them (stale-module errors).
@@ -19,21 +188,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const blockPinch = (e: Event) => e.preventDefault();
     document.addEventListener("gesturestart", blockPinch);
 
-    // Most writes no longer re-render the page (the client keeps its own state), but back/forward replays the cached,
-    // pre-write page. After any server action ran, a back/forward therefore reloads once instead of showing old data.
-    // Tabs open from the browser's cache (`staleTimes`), so a write also refreshes that cache in the background once the
-    // writes stop: the page on screen keeps its own state, the other tabs come back fresh.
-    let wrote = false;
-    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    const realFetch = window.fetch;
-    window.fetch = (input, init) => {
-      if (new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).has("next-action")) {
-        wrote = true;
-        clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => router.refresh(), 600);
-      }
-      return realFetch(input, init);
-    };
     // The service worker opens the app from the last seen page (public/sw.js) and tells us when the server's page differs.
     // Reload for it, but only if nothing was touched yet and not twice in a row (a page that never settles would loop).
     let touched = false;
@@ -51,23 +205,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, touch, { once: true, capture: true });
     sw?.addEventListener("message", onSw);
     sw?.controller?.postMessage({ type: "stale-check", url: window.location.href });
-    const onPop = () => {
-      if (wrote) window.location.reload();
-    };
-    window.addEventListener("popstate", onPop);
     // A system switch between dark and light fades too (it shows only in Auto; with a forced mode nothing changes).
     const scheme = matchMedia("(prefers-color-scheme: dark)");
     scheme.addEventListener("change", fadeTheme);
     return () => {
-      clearTimeout(refreshTimer);
-      window.fetch = realFetch;
-      window.removeEventListener("popstate", onPop);
       scheme.removeEventListener("change", fadeTheme);
       sw?.removeEventListener("message", onSw);
       for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, touch, { capture: true });
       document.removeEventListener("gesturestart", blockPinch);
     };
-  }, [router]);
+  }, []);
 
   // A double-tap or double-click in a field selects everything in it. The browser's own double-tap selects one word and
   // stops at spaces, commas and other punctuation, so a value like "1,5 kg" could never be selected whole.
@@ -106,7 +253,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionProvider>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        <AppShell onPageNotOpened={setNotOpened} />
+        <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
+      </ToastProvider>
     </SessionProvider>
   );
 }

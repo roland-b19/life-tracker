@@ -455,6 +455,10 @@ h3 {
   transform-origin: bottom right;
 }
 
+.more-menu:focus {
+  outline: none; /* the menu takes focus when it opens, like .modal-card; there is nothing to point at */
+}
+
 .more-user {
   display: flex;
   align-items: center;
@@ -985,8 +989,9 @@ button.danger {
   box-shadow: none;
 }
 
-/* Fields show focus with their own edge (above); only buttons get the keyboard ring */
-button:focus-visible {
+/* Fields show focus with their own edge (above); only buttons, and the More menu's link styled as one, get the keyboard ring */
+button:focus-visible,
+.more-links .nav-link:focus-visible {
   outline: 2px solid var(--tint);
   outline-offset: 2px;
 }
@@ -1001,6 +1006,7 @@ textarea:focus-visible {
   margin: 0.75rem 0 0;
   color: var(--text);
   font-size: 0.875rem;
+  font-weight: 400; /* a number field's error sits inside its label (weight 600) and must not read as a label */
 }
 
 /* Rows carry 0.5rem padding; the list's outer margins subtract it, so a row's text sits 1rem below the block above it, like
@@ -1038,8 +1044,10 @@ textarea:focus-visible {
   gap: 1rem;
   padding: 0.5rem 0;
 }
-/* A long name with no spaces (a 120-char meal) wraps instead of widening the whole page and the tab bar. */
-.entry-row > div { min-width: 0; overflow-wrap: anywhere; }
+/* A long name with no spaces (a 120-char meal) wraps instead of widening the whole page and the tab bar: in a row's
+   text block, and in the stacked name of a meal or shopping item (.entry-main). */
+.entry-row > div,
+.entry-main { min-width: 0; overflow-wrap: anywhere; }
 
 /* The Past foods sheet: the rows sit the same distance from the title as from the bottom edge (the header's own bottom padding is pulled back), and a long list scrolls inside the sheet instead of making it taller. */
 /* Sign-in: one card in the middle of the screen, built from the same parts as every page card */
@@ -2334,6 +2342,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   background: var(--tint-subtle);
   color: var(--text);
   font-size: 0.8125rem;
+  overflow-wrap: anywhere; /* a long meal name wraps */
 }
 .chat-form {
   display: flex;

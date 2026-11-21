@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from "react";
-import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
+import { caretInDisplay, editedNumberText, parseNumberInput, showNumberInput } from "@/lib/number-format";
 import { ChevronRightIcon, PlusIcon } from "./icons";
 import { Modal } from "./modal";
 import { Navigation } from "./navigation";
+import { useOnce } from "./once";
 
 /*
  * The structures every page is made of, in one place. A page picks and fills them; it never writes their markup,
@@ -299,34 +300,69 @@ export function Label({ text, className, children }: { text: ReactNode; classNam
   );
 }
 
-/**
- * A captioned text input (any input attribute goes through). A `type="number"` field is a text field that takes a
- * decimal comma or dot (inputMode "numeric": whole numbers only): the browser's number input accepts no comma and
- * lets iOS select only one word. `onChange` always gets a dot-decimal value; the field shows a comma.
- */
+/** A captioned text input (any input attribute goes through). A `type="number"` field is a `NumberField`. */
 export function Field({ label, labelClassName, type, onChange, value, ...input }: { label: ReactNode; labelClassName?: string } & InputHTMLAttributes<HTMLInputElement>) {
-  if (type !== "number") {
-    return (
-      <Label text={label} className={labelClassName}>
-        <input type={type} onChange={onChange} value={value} {...input} />
-      </Label>
-    );
-  }
-  const integer = input.inputMode === "numeric";
+  if (type === "number") return <NumberField label={label} labelClassName={labelClassName} onChange={onChange} value={value} {...input} />;
   return (
     <Label text={label} className={labelClassName}>
+      <input type={type} onChange={onChange} value={value} {...input} />
+    </Label>
+  );
+}
+
+/**
+ * A number field: a text field in the app's number format (number-format.ts), because the browser's number input
+ * takes no comma and lets iOS select only one word. inputMode "numeric": whole numbers only. A dot or a comma typed is
+ * the decimal, thousand dots go in as you type, and `onChange` gets the machine value ("1234.5"). Anything else stays
+ * as typed, shows its error under the field, is passed on as it is and blocks the form's submit.
+ */
+function NumberField({ label, labelClassName, onChange, value, ...input }: { label: ReactNode; labelClassName?: string } & InputHTMLAttributes<HTMLInputElement>) {
+  const id = useId();
+  const integer = input.inputMode === "numeric";
+  const given = value === undefined ? undefined : String(value);
+  const [shown, setShown] = useState(() => ({ value: given ?? "", text: showNumberInput(given ?? ""), error: "" }));
+  // A value the page sets (a form opened on a row, a reset) replaces the text
+  if (given !== undefined && given !== shown.value) setShown({ value: given, text: showNumberInput(given), error: "" });
+  const field = useRef<HTMLInputElement>(null);
+  const caret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (caret.current !== null && field.current === document.activeElement) field.current?.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  }, [shown]);
+  useEffect(() => field.current?.setCustomValidity(shown.error), [shown.error]);
+  return (
+    <label className={labelClassName}>
+      <span id={`${id}-label`}>{label}</span>
       <input
+        ref={field}
         type="text"
         inputMode={integer ? "numeric" : "decimal"}
         autoComplete="off"
         {...input}
-        value={value === undefined ? undefined : integer ? String(value) : showDecimal(String(value))}
+        aria-labelledby={`${id}-label`}
+        aria-invalid={shown.error ? true : undefined}
+        aria-describedby={shown.error ? `${id}-error` : undefined}
+        value={shown.text}
         onChange={(e) => {
-          e.target.value = cleanNumberInput(e.target.value, integer);
+          const el = e.target;
+          const edit = e.nativeEvent as InputEvent;
+          // A deletion inserts nothing; a paste may not say what it inserted, so its text is read whole
+          const inserted = edit.inputType?.startsWith("delete") ? null : (edit.data ?? el.value);
+          const edited = editedNumberText(el.value, inserted, el.selectionStart ?? el.value.length);
+          const read = parseNumberInput(edited.text, { integer });
+          const next = read.ok ? { value: read.value, text: read.display, error: "" } : { value: el.value, text: el.value, error: read.error };
+          caret.current = read.ok ? caretInDisplay(read.display, edited.caret) : null;
+          setShown(next);
+          el.value = next.value;
           onChange?.(e);
         }}
       />
-    </Label>
+      {shown.error && (
+        <span id={`${id}-error`} className="error" role="alert">
+          {shown.error}
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -461,18 +497,11 @@ export function FormModal({
   submitLabel?: string;
   children: ReactNode;
 }) {
-  // State is stale within one tick, so a fast double tap would submit twice: the lock lives until the handler settles.
-  const locked = useRef(false);
+  // One submit until the handler settles, and the rest of a double tap on Save is swallowed, so it neither submits
+  // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too.
+  const once = useOnce();
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (locked.current) return e.preventDefault();
-    locked.current = true;
-    const unlock = () => (locked.current = false);
-    try {
-      Promise.resolve(onSubmit(e)).then(unlock, unlock);
-    } catch (error) {
-      unlock();
-      throw error;
-    }
+    if (!once("form", () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>

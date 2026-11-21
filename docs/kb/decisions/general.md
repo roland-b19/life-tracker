@@ -179,7 +179,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Status:** active
 
 ## D-035: No swipe back or forward; the app moves only through its own tabs (2026-11-20)
-- **Why:** The owner does not want a swipe from the screen's left or right edge to go to the previous or next page. The tab bar and the More menu replace the history entry instead of pushing one, so there is nothing to go back to (Android's Back closes the app), and a touch that starts within 20px of the left or right edge is stopped (`preventDefault` on `touchstart`), with `overscroll-behavior-x: none` kept.
+- **Why:** The owner does not want a swipe from the screen's left or right edge to go to the previous or next page. The tab bar and the More menu replace the history entry instead of pushing one, so there is nothing to go back to (Android's Back closes the app), and a touch that starts within 20px of the left or right edge is stopped (`preventDefault` on `touchstart`) unless it starts on a control (`CONTROL` in `app/components/edge-swipe.ts`), with `overscroll-behavior-x: none` kept.
 - **Rejected:** keeping a history and only blocking the gesture (Android's Back would still walk it); a confirm before leaving (it adds a step to every move).
 - **Status:** active
 
@@ -216,4 +216,19 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 ## D-042: Shopping units merge, convert and keep only the last clear (2026-11-20)
 - **Why:** The owner's answers on the functional audit. Two rows never share a name and unit: restoring, renaming or deleting a unit merges into the existing row, which takes the new category, with the toast "Merged with existing item". A merge converts g and kg, ml and l, and refuses other unit pairs with a message. Undo of a tick puts the row back in its old place. Clear bought keeps only its last batch for Undo: the next Clear bought deletes the batch before it for good. Units read in lower case ("pcs"). Deleting every category leaves none; the defaults are not added back.
 - **Rejected:** keeping every cleared row forever (it grows the table and the 5000-row revert cap); refusing all merges across units.
+- **Status:** active
+
+## D-043: One way for a double tap to act once (2026-11-20)
+- **Why:** The owner's pick. A fast double tap must neither repeat a write nor land on what slid under the finger (the next row's button, or the button under a form that closed). The categories card's guard does both: one write at a time per target (a row's key, or the form), so a tap on another row still writes, as every other write in the app is queued; and for 500 ms the clicks on the tapped button's spot are swallowed, never a click on the toast. It becomes one shared helper; `FormModal`'s own submit lock and every "double taps act once" step of the [audit fixes plan](../plans/audit-fixes.md) use it.
+- **Rejected:** keeping only `FormModal`'s lock (a second tap on Save then opens the Edit form under the closed dialog); a guard per component (two ways for one job).
+- **Status:** active
+
+## D-044: Signals inside one tab go through React context (2026-11-20)
+- **Why:** The owner's pick. When one component must tell another in the same tab that something happened (the tab bar learns a page could not be opened, XR-11), the provider in `app/providers.tsx` holds it in a React context with a hook, the way `ToastContext` already does. One way for in-tab signals; the tree shows who listens.
+- **Rejected:** a `window` CustomEvent (a second way next to React context, and listeners nobody sees in the tree).
+- **Status:** active
+
+## D-045: Accepted edges of the audit fixes (2026-11-20)
+- **Why:** The owner left these calls to the orchestrator. Kept as built: a repeated add of a category after a lost answer says "already exists" (categories are keyed by name, so no id can be made on the device; the refresh shows the truth); the 20px edge guard (D-035) also stops a vertical drag that starts there on plain background, controls excepted; tab and sidebar links replace the history entry; session rows are pruned one day after the token's max age; push cleanup never holds up sign-out; the client session shows its `sid`; if a first Tasks press fails while a second tab press is pending, the tab bar may show the first tab; with the session route hung after a successful sign-in, "Signing in..." stays until it answers (the server is signed in; a reload shows it). Parts C and D key Undo toasts by row id, never by a name, so a name such as `*` cannot act as a wildcard key. Agent worktrees get no `.env` (`.worktreeinclude` is gone): it can hold a live URL.
+- **Rejected:** a second timeout around NextAuth's own sign-in call (a second waiting path next to the 5 s one); an id column for categories now (a migration for a rare double add); escaping names in `touches` keys (row ids make it moot).
 - **Status:** active

@@ -32,7 +32,7 @@ last_verified: 2026-11-20
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; part M (migration `0032`) merged and run on live; part A built and verified, its PR next; parts B and C building; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -46,4 +46,6 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-None.
+- `requireUser()` before `respond` (conventions, writes from the UI): `src/actions/claude-connection.ts`, `food-chat.ts`, `food.ts`, `gym.ts`, `todos.ts`, `wishlist.ts`. Each part of the [audit fixes](plans/audit-fixes.md) moves its own files; step 21 greps that none is left.
+- A page or layout without its path (`requirePageUser()`, `RequireSession` without `path`): all five pages and layouts. Parts B–E pass them.
+- `src/lib/decimal-input.ts` (D-037): `app/health/weight-card.tsx`, `app/gym/exercise-logger.tsx`, `app/gym/types.ts`, `tests/format-date.test.ts`. Step 21 deletes it.

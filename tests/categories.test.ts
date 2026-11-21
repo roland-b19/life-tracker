@@ -4,13 +4,15 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 import { db } from "@/server/db";
-import { todos } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { itemCategories, todos } from "@/db/schema";
+import { and, asc, eq } from "drizzle-orm";
 import { getCategories } from "@/lib/categories";
 import { addWishlistItem, getWishlist } from "@/lib/wishlist";
 import { addTodo, getDailyTodos, toggleTodo } from "@/lib/todos";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import { addDays, toISODate } from "@/lib/format-date";
+import type { CategoryScope } from "@/lib/validations/categories";
+import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 
 describe("Categories: lists, items and multi-user isolation", () => {
@@ -178,6 +180,143 @@ describe("Categories: lists, items and multi-user isolation", () => {
     authState.id = userA;
     expect(await reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).toEqual({ success: false, error: "Names must be unique." });
     authState.id = "";
-    await expect(reorderCategoriesAction({ scope: "personal", names: ["first"] })).rejects.toThrow();
+    expect(await reorderCategoriesAction({ scope: "personal", names: ["first"] })).toEqual({ success: false, error: SIGNED_OUT });
+    authState.id = userA;
+    expect(await list()).toEqual(["third", "first", "second"]);
   });
 });
+
+describe("Categories: signed-out callers, repeated adds and Undo", () => {
+  // A fresh owner per test, so the lists hold only what the test made.
+  const owner = async () => (authState.id = await seedUser(`categories-${randomUUID()}`));
+  const rows = (userId: string, scope: CategoryScope) =>
+    db
+      .select({ name: itemCategories.name, sortOrder: itemCategories.sortOrder })
+      .from(itemCategories)
+      .where(and(eq(itemCategories.userId, userId), eq(itemCategories.scope, scope)))
+      .orderBy(asc(itemCategories.sortOrder), asc(itemCategories.name));
+  const names = async (userId: string, scope: CategoryScope) => (await getCategories(userId, [scope]))[scope];
+
+  it("every categories action answers a signed-out caller with the refusal and changes nothing", async () => {
+    const userA = await owner();
+    await addCategoryAction({ scope: "wishlist", name: "kept" });
+    const before = await rows(userA, "wishlist");
+    authState.id = "";
+    const calls = [
+      addCategoryAction({ scope: "wishlist", name: "new" }),
+      renameCategoryAction({ scope: "wishlist", from: "kept", to: "x" }),
+      deleteCategoryAction({ scope: "wishlist", name: "kept" }),
+      revertCategoryAction({ scope: "wishlist", name: "kept", current: "other", sortOrder: 1, itemIds: [], dropCurrent: false }),
+      reorderCategoriesAction({ scope: "wishlist", names: ["kept"] }),
+      // Even with input that would fail validation, the session check answers first.
+      addCategoryAction(undefined),
+    ];
+    for (const answer of await Promise.all(calls)) expect(answer).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await rows(userA, "wishlist")).toEqual(before);
+  });
+
+  it("add: owner allowed, a repeated add of the same name makes one row, another user's add stays in their own list", async () => {
+    const userA = await owner();
+    succeeded(await addCategoryAction({ scope: "wishlist", name: "twice" }));
+    const again = await Promise.all([addCategoryAction({ scope: "wishlist", name: "twice" }), addCategoryAction({ scope: "wishlist", name: "Twice " })]);
+    for (const answer of again) expect(answer).toEqual({ success: false, error: '"twice" already exists.' });
+    expect(await rows(userA, "wishlist")).toEqual([{ name: "twice", sortOrder: 1 }]);
+
+    const userB = await owner();
+    succeeded(await addCategoryAction({ scope: "wishlist", name: "twice" }));
+    expect(await names(userB, "wishlist")).toEqual(["twice"]);
+    expect(await rows(userA, "wishlist")).toEqual([{ name: "twice", sortOrder: 1 }]);
+  });
+
+  it("rename and delete: owner allowed, another user denied", async () => {
+    const userA = await owner();
+    await addCategoryAction({ scope: "personal", name: "mine" });
+    await owner();
+    expect(await renameCategoryAction({ scope: "personal", from: "mine", to: "theirs" })).toEqual({ success: false, error: "Category not found." });
+    expect(await deleteCategoryAction({ scope: "personal", name: "mine" })).toEqual({ success: false, error: "Category not found." });
+    expect(await names(userA, "personal")).toEqual(["mine"]);
+
+    authState.id = userA;
+    succeeded(await renameCategoryAction({ scope: "personal", from: "mine", to: "ours" }));
+    expect(await names(userA, "personal")).toEqual(["ours"]);
+    succeeded(await deleteCategoryAction({ scope: "personal", name: "ours" }));
+    expect(await names(userA, "personal")).toEqual([]);
+  });
+
+  it("revert: another user cannot undo the owner's rename; the owner can", async () => {
+    const userA = await owner();
+    await addCategoryAction({ scope: "wishlist", name: "old" });
+    const item = await addWishlistItem(userA, { name: "Pen", estimatedPrice: 2, category: "old" });
+    const ren = succeeded(await renameCategoryAction({ scope: "wishlist", from: "old", to: "new" }));
+    const undo = { scope: "wishlist", name: "old", current: "new", dropCurrent: !ren.change.merged, ...ren.change };
+
+    const userB = await owner();
+    expect(await revertCategoryAction(undo)).toEqual({ success: false, error: `Can't undo: "new" has changed since.` });
+    expect(await names(userB, "wishlist")).toEqual([]);
+    expect(await names(userA, "wishlist")).toEqual(["new"]);
+
+    authState.id = userA;
+    expect(await revertCategoryAction(undo)).toEqual({ success: true, keptCurrent: false });
+    expect(await names(userA, "wishlist")).toEqual(["old"]);
+    expect((await getWishlist(userA)).find((i) => i.id === item.id)?.category).toBe("old");
+  });
+
+  it("Undo of a delete puts the category back at its old place and moves the ones from there down by one", async () => {
+    const userA = await owner();
+    for (const name of ["a", "b", "c"]) await addCategoryAction({ scope: "business", name });
+    const del = succeeded(await deleteCategoryAction({ scope: "business", name: "b" }));
+    // Moving a category closes the gap, so another one now holds b's old place.
+    succeeded(await reorderCategoriesAction({ scope: "business", names: ["a", "c"] }));
+    expect(await rows(userA, "business")).toEqual([
+      { name: "a", sortOrder: 1 },
+      { name: "c", sortOrder: 2 },
+    ]);
+
+    succeeded(await revertCategoryAction({ scope: "business", name: "b", current: "other", dropCurrent: false, ...del.change }));
+    expect(await rows(userA, "business")).toEqual([
+      { name: "a", sortOrder: 1 },
+      { name: "b", sortOrder: 2 },
+      { name: "c", sortOrder: 3 },
+    ]);
+  });
+
+  it("a stale Undo of a rename, after the new name was renamed or deleted again, changes nothing and leaves no orphan", async () => {
+    const userA = await owner();
+    await addCategoryAction({ scope: "wishlist", name: "books" });
+    const item = await addWishlistItem(userA, { name: "Novel", estimatedPrice: 10, category: "books" });
+    const catOf = async () => (await getWishlist(userA)).find((i) => i.id === item.id)?.category;
+
+    const first = succeeded(await renameCategoryAction({ scope: "wishlist", from: "books", to: "reading" }));
+    succeeded(await renameCategoryAction({ scope: "wishlist", from: "reading", to: "novels" }));
+    const stale = { scope: "wishlist", name: "books", current: "reading", dropCurrent: !first.change.merged, ...first.change };
+    expect(await revertCategoryAction(stale)).toEqual({ success: false, error: `Can't undo: "reading" has changed since.` });
+    expect(await names(userA, "wishlist")).toEqual(["novels"]);
+    expect(await catOf()).toBe("novels");
+
+    const second = succeeded(await renameCategoryAction({ scope: "wishlist", from: "novels", to: "shelf" }));
+    succeeded(await deleteCategoryAction({ scope: "wishlist", name: "shelf" }));
+    expect(
+      await revertCategoryAction({ scope: "wishlist", name: "novels", current: "shelf", dropCurrent: !second.change.merged, ...second.change }),
+    ).toEqual({ success: false, error: `Can't undo: "shelf" has changed since.` });
+    expect(await names(userA, "wishlist")).toEqual([]);
+    expect(await catOf()).toBe("other");
+  });
+
+  it("Undo of a rename keeps the new name when an item was filed under it since, so no item loses its category", async () => {
+    const userA = await owner();
+    await addCategoryAction({ scope: "wishlist", name: "tools" });
+    const moved = await addWishlistItem(userA, { name: "Saw", estimatedPrice: 15, category: "tools" });
+    const ren = succeeded(await renameCategoryAction({ scope: "wishlist", from: "tools", to: "gear" }));
+    const added = await addWishlistItem(userA, { name: "Rope", estimatedPrice: 8, category: "gear" });
+
+    expect(await revertCategoryAction({ scope: "wishlist", name: "tools", current: "gear", dropCurrent: !ren.change.merged, ...ren.change })).toEqual({
+      success: true,
+      keptCurrent: true,
+    });
+    const catOf = async (id: string) => (await getWishlist(userA)).find((i) => i.id === id)?.category;
+    expect(await catOf(moved.id)).toBe("tools");
+    expect(await catOf(added.id)).toBe("gear");
+    expect(await names(userA, "wishlist")).toEqual(["tools", "gear"]);
+  });
+});
+

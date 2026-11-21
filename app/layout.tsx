@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import { InlineScript } from "./components/inline-script";
 import { themeScript } from "./components/theme";
+import { ShellListeners } from "./components/shell-listeners";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <Providers>{children}</Providers>
+        <ShellListeners />
       </body>
     </html>
   );

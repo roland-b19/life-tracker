@@ -3,12 +3,24 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { CheckIcon, CloseIcon } from "./icons";
 
+/** What an Undo is handed: the rows its toast touches, which a Retry of a failed restore keeps. */
+type UndoFrom = { touches?: string[] };
+
 interface Toast {
   id: string;
   message: string;
   type?: "info" | "success" | "warning";
   /** Shows an Undo button that runs this. */
-  onUndo?: () => void;
+  onUndo?: (from: UndoFrom) => void;
+  /** Shows a Retry button that runs this: a restore that failed (undoWith). */
+  onRetry?: () => void;
+  /**
+   * The rows the change behind the toast touched, as "<table>:<row id>" or "<table>:*" for a whole list. A newer toast
+   * that touches one of them takes this toast's Undo and Retry away, so an older Undo never writes over a newer change.
+   */
+  touches?: string[];
+  /** The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. */
+  saved?: Promise<Written>;
   duration?: number;
 }
 
@@ -18,18 +30,35 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+/** Whether two `touches` lists name a row in common ("<table>:*" names every row of its table). */
+export function touchesOverlap(a: string[] = [], b: string[] = []) {
+  // A key with no ":" is its whole table name
+  const table = (key: string) => key.split(":")[0];
+  return a.some((x) => b.some((y) => x === y || ((x.endsWith(":*") || y.endsWith(":*")) && table(x) === table(y))));
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-
-  const showToast = useCallback((toastData: Omit<Toast, "id">) => {
-    const id = Math.random().toString(36).slice(2);
-    const newToast: Toast = { ...toastData, id };
-    setToasts((prev) => [...prev, newToast]);
-  }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const showToast = useCallback(
+    (toastData: Omit<Toast, "id">) => {
+      const id = Math.random().toString(36).slice(2);
+      const newToast: Toast = { ...toastData, id };
+      setToasts((prev) => [
+        ...prev.map((t) => (touchesOverlap(t.touches, newToast.touches) ? { ...t, onUndo: undefined, onRetry: undefined } : t)),
+        newToast,
+      ]);
+      toastData.saved?.then(
+        (answer) => !succeeded(answer) && removeToast(id),
+        () => removeToast(id),
+      );
+    },
+    [removeToast],
+  );
 
   return (
     <ToastContext.Provider value={{ showToast }}>
@@ -47,11 +76,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   className="toast-action-btn"
                   onClick={() => {
-                    t.onUndo?.();
+                    t.onUndo?.({ touches: t.touches });
                     removeToast(t.id);
                   }}
                 >
                   Undo
+                </button>
+              )}
+              {t.onRetry && (
+                <button
+                  type="button"
+                  className="toast-action-btn"
+                  onClick={() => {
+                    t.onRetry?.();
+                    removeToast(t.id);
+                  }}
+                >
+                  Retry
                 </button>
               )}
               <button
@@ -128,12 +169,15 @@ export function useToast() {
   return context;
 }
 
-/** What an Undo write answers: a server action's `{ success }`, a plain yes or no, or nothing when it threw. */
+/** What a write answers: a server action's `{ success }`, a plain yes or no, or nothing when it threw. */
 type Written = boolean | { success?: boolean } | null | undefined;
+
+const succeeded = (back: Written) => back === true || (!!back && typeof back === "object" && !!back.success);
 
 /**
  * An Undo that writes the old state back. The screen goes back first inside `write`, which puts it right again when the
- * write fails; a write that throws or does not answer success shows `failed` (or what it returns for the answer) as a warning.
+ * write fails; a write that throws or does not answer success shows `failed` (or what it returns for the answer) as a
+ * warning with a Retry that runs the restore again, and that touches what the Undo's toast touched.
  * A `write` that has already told the user why it did nothing returns `true`.
  */
 export function undoWith<R extends Written>(
@@ -141,9 +185,15 @@ export function undoWith<R extends Written>(
   write: () => Promise<R>,
   failed: string | ((back: Exclude<R, true> | null) => string) = "Failed to undo",
 ) {
-  return async () => {
+  const undo = async (from?: UndoFrom) => {
     const back = await write().catch(() => null);
-    if (back === true || (back && typeof back === "object" && back.success)) return;
-    showToast({ message: typeof failed === "function" ? failed(back as Exclude<R, true> | null) : failed, type: "warning" });
+    if (succeeded(back)) return;
+    showToast({
+      message: typeof failed === "function" ? failed(back as Exclude<R, true> | null) : failed,
+      type: "warning",
+      touches: from?.touches,
+      onRetry: () => void undo(from),
+    });
   };
+  return undo;
 }

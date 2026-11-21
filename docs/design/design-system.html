@@ -149,7 +149,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane button.log-set{width:100%}
 .pane .delete-icon-btn{background:var(--surface-secondary);color:var(--text);padding:0;border-radius:.85rem;width:44px;height:44px;min-height:0}
 .pane .delete-icon-btn:disabled{opacity:.35;cursor:default}
-.pane button[data-s="focus"],.pane button:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
+.pane button[data-s="focus"],.pane button:focus-visible,.pane .more .nav-link:focus-visible{outline:2px solid var(--tint);outline-offset:2px}
 .pane button:where([data-s="hover"]){background:var(--tint-hover)}
 .pane button.secondary[data-s="hover"],.pane button.btn-sm[data-s="hover"],.pane .delete-icon-btn[data-s="hover"]{background:color-mix(in srgb, var(--surface-secondary), var(--text) 8%)}
 .pane button.danger[data-s="hover"]{background:color-mix(in srgb, var(--danger-subtle), var(--text) 8%)}
@@ -227,7 +227,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane .surface .entries{--band-out:calc(var(--card-pad) + 1px - .5rem)}
 .pane .entry{display:flex;align-items:center;gap:1rem;padding:.5rem var(--band-out);border-radius:.75rem}
 .pane .entries > .entry:nth-child(even){background:color-mix(in srgb, var(--text) 3%, transparent)}
-.pane .entry-main{flex:1;min-width:0;display:grid;gap:.1rem}
+.pane .entry-main{flex:1;min-width:0;display:grid;gap:.1rem;overflow-wrap:anywhere}
 .pane .entry-title{font-weight:600}
 .pane .entry-meta{font-size:.875rem;color:var(--secondary)}
 .pane .entry-detail{font-size:.8rem;color:var(--secondary)}
@@ -272,7 +272,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane .chat-log{display:flex;flex-direction:column;gap:.75rem;background:var(--surface-secondary);border:1px solid var(--edge);border-radius:.9rem;padding:.9rem}
 .pane .chat-bubble{background:var(--surface);border-radius:1.1rem 1.1rem 1.1rem .3rem;padding:.6rem .85rem;max-width:85%;font-size:.9375rem}
 .pane .chat-bubble.user{align-self:flex-end;background:var(--tint);color:var(--on-tint);border-radius:1.1rem 1.1rem .3rem 1.1rem}
-.pane .chat-tool{background:var(--tint-subtle);border-radius:.6rem;padding:.25rem .6rem;font-size:.8rem;align-self:flex-start}
+.pane .chat-tool{background:var(--tint-subtle);border-radius:.6rem;padding:.25rem .6rem;font-size:.8rem;align-self:flex-start;overflow-wrap:anywhere}
 
 /* gym + page pieces */
 .pane .split-day-card{display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem .5rem 1rem;background:var(--surface-secondary);border:1px solid var(--card-edge);box-shadow:var(--card-shadow);border-radius:.85rem}
@@ -298,7 +298,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pane .item-currency{color:var(--tint)}
 .pane .item-link{color:var(--text);font-weight:600;text-decoration:none}
 .pane .dot{width:7px;height:7px;border-radius:50%;background:var(--tint);display:inline-block}
-.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem}
+.pane .error{margin:.75rem 0 0;color:var(--text);font-size:.875rem;font-weight:400}
 .pane .signin-card{max-width:22rem;margin:0 auto;text-align:center;display:grid;gap:.9rem}
 .pane.hc{--surface:var(--surface-solid);--separator:var(--text);--edge:var(--text);--card-edge:var(--text)}
 .pane.rt{--surface:var(--surface-solid);--glass-blur:none}
@@ -427,7 +427,7 @@ table.t th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:va
     <li><span class="rid">K2</span><span><code>--on-tint</code> (dark, the same in both modes) on <code>--tint</code>, <code>--tint-hover</code>, <code>--success</code>, <code>--warning</code>: at least 4.5:1. Never put <code>--on-tint</code> on <code>--danger</code> (4.2:1 in light).</span></li>
     <li><span class="rid">K3</span><span>Colored fills at least <b>3:1</b> on the card and the page. One exception: light <code>--warning</code> #cc8c0a (2.9:1 on the card), the owner's choice; the status word carries the meaning, and the test holds it to 2.5.</span></li>
     <li><span class="rid">K4</span><span>No colored fill on <code>--surface-secondary</code> (2.9:1 in light): a track is <code>--separator</code> or a <code>-subtle</code> fill.</span></li>
-    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes <code>--tint</code>, <code>--success</code>, <code>--warning</code> or <code>--danger</code> (fills, borders, <code>fill</code>, <code>stroke</code> may). Links are <code>--text</code>, weight 600, not underlined (D-029). Error text is <code>--text</code> 0.875rem, never red.</span></li>
+    <li><span class="rid">K5</span><span>No <code>color:</code> declaration takes <code>--tint</code>, <code>--success</code>, <code>--warning</code> or <code>--danger</code> (fills, borders, <code>fill</code>, <code>stroke</code> may). Links are <code>--text</code>, weight 600, not underlined (D-029). Error text is <code>--text</code> 0.875rem weight 400, never red, also a number field's error under the field inside its label (weight 600).</span></li>
     <li><span class="rid">K6</span><span>The one exception to K5: <code>.item-currency</code>, the "RON" beside the Wishlist total, is <code>--tint</code> (large text, 3:1 as a fill), at the owner's request (D-029).</span></li>
   </ul>
   <div class="duo"><div class="pane">
@@ -670,7 +670,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
   <ul class="rules">
     <li><span class="rid">Y1</span><span>Hover exists only under <code>@media (hover: hover)</code>, so a phone never keeps a stuck hover.</span></li>
     <li><span class="rid">Y2</span><span>The hover steps: turquoise → <code>--tint-hover</code>; neutral fills (secondary, small, icon, toast Undo and close, modal close, category boxes, idle muscle chips, an unselected day card) → <code>color-mix(--surface-secondary, --text 8%)</code>; danger → <code>color-mix(--danger-subtle, --text 8%)</code>; fields and the sort select → 5%; idle tabs and segments → <code>--highlight</code> wash with <code>--text</code>; idle nav links → <code>--surface-secondary</code> with <code>--text</code>; the round close buttons also turn their icon to <code>--text</code>.</span></li>
-    <li><span class="rid">Y3</span><span>Focus: buttons and checkboxes get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover). The sort select shows the ring for the keyboard only (not after a pointer press, <code>data-pointer</code>).</span></li>
+    <li><span class="rid">Y3</span><span>Focus: buttons, checkboxes and the More menu's Settings link (styled as a button) get a 2px <code>--tint</code> outline, offset 2px, on <code>:focus-visible</code>. Fields show no ring: their fill steps to 8% (one step past hover). The sort select shows the ring for the keyboard only (not after a pointer press, <code>data-pointer</code>).</span></li>
     <li><span class="rid">Y4</span><span>Rows have no hover highlight. Press has no effect (B11).</span></li>
   </ul>
   <div class="duo"><div class="pane">
@@ -746,10 +746,11 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
   <ul class="rules">
     <li><span class="rid">V1</span><span><b>Tab bar</b> (phone): the segmented colors swapped. Bar <code>--surface-solid</code>, opaque, no blur, radius 1.25rem, raised; selected item thumb <code>--surface-secondary</code>, radius 0.9375rem, with edge and <code>--card-shadow</code> (D-026, D-028, D-029).</span></li>
     <li><span class="rid">V2</span><span>Tab items: icon over label, min-height 3.5rem, 0.6875rem/600, <code>--secondary</code>; active <code>--text</code>, <b>no dot</b> (D-025). Idle hover: <code>--highlight</code>.</span></li>
-    <li><span class="rid">V3</span><span><b>More menu</b>: <code>--surface-solid</code> like the bar, radius 1.25rem, on a <code>--scrim</code> with an 8px blur. Its Settings link is a raised button in one centred column (D-026, D-030).</span></li>
+    <li><span class="rid">V3</span><span><b>More menu</b>: <code>--surface-solid</code> like the bar, radius 1.25rem, on a <code>--scrim</code> with an 8px blur. Its Settings link is a raised button in one centred column (D-026, D-030). It is a modal dialog (<code>aria-modal</code>): focus moves into it, Tab stays inside, and Escape or its Close button (<code>.modal-close-btn</code>, last in the user row after Sign out) closes it, focus going back to More.</span></li>
     <li><span class="rid">V4</span><span><b>Sidebar</b> (≥1024px): 248px, glass <code>--surface</code> with the blur, <code>--card-edge</code> right border. Nav links min-height 2.75rem, radius 0.75rem, <code>--secondary</code> 0.9375rem/500; active (and More menu links) <code>--surface-secondary</code> + <code>--text</code> + edge + shadow; hover <code>--surface-secondary</code>.</span></li>
     <li><span class="rid">V5</span><span>Brand mark 1.75rem, radius 0.55rem, <code>--tint</code> with <code>--on-tint</code>. User box <code>--surface-secondary</code>, radius 1rem, raised; its Sign out takes <code>--surface-solid</code> (B9). Avatar 2rem circle. The sync dot (<code>.cloud-pulse-dot</code>) is 7px <code>--tint</code>.</span></li>
     <li><span class="rid">V6</span><span>The app opens on Tasks (D-028).</span></li>
+    <li><span class="rid">V7</span><span>No Back or swipe between pages (D-035): every tab bar, More menu and sidebar link, sign-in and sign-out replace the history entry, and a touch that starts within 20px of the left or right screen edge is cancelled. A signed-in 404 page keeps the navigation.</span></li>
   </ul>
   <div class="duo"><div class="pane">
     <div class="col">
@@ -766,7 +767,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
           <a class="nav-link active" href="#nav">Tasks</a><a class="nav-link" href="#nav">Gym</a><a class="nav-link" href="#nav">Health</a>
           <div class="side-user"><span class="avatar">A</span><button type="button" class="btn-sm">Sign out</button></div>
         </div>
-        <div class="more" style="min-width:150px"><a class="nav-link" href="#nav">Settings</a></div>
+        <div class="more" style="min-width:150px"><div class="row" style="gap:.5rem;align-items:center"><span class="avatar">A</span><button type="button" class="btn-sm">Sign out</button><button type="button" class="modal-close-btn" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div><a class="nav-link" href="#nav">Settings</a></div>
       </div>
     </div>
   </div></div>
@@ -796,7 +797,7 @@ button.danger    { color: var(--text); background: var(--danger-subtle); }
     <li><span class="rid">R1</span><span><code>.entries</code>: gap 0.25rem. Rows (<code>.entry-row</code>, <code>.todo-row</code>, <code>.shopping-row</code>) have 0.5rem vertical padding; <code>.entry-row</code> gap 1rem.</span></li>
     <li><span class="rid">R2</span><span>Bands: every even row gets <code>color-mix(in srgb, var(--text) 3%, transparent)</code>, radius 0.75rem; the band reaches out <code>--band-out</code> (0.75rem; inside a card <code>calc(var(--card-pad) + 1px - .5rem)</code>, so the row text keeps the card's padding line). No hover highlight on rows.</span></li>
     <li><span class="rid">R3</span><span>Row text: title 600 <code>--text</code>; meta 0.875rem <code>--secondary</code>; detail lines (<code>.entry-detail</code>, 0.8rem <code>--secondary</code>) for a muscle map exercise's days and a custom exercise's equipment (D-032).</span></li>
-    <li><span class="rid">R4</span><span>A meal row is three lines (name; kcal · P; C · F), a shopping row two (name; amount and unit), no dot after the name (D-029).</span></li>
+    <li><span class="rid">R4</span><span>A meal row is three lines (name; kcal · P; C · F), a shopping row two (name; amount and unit), no dot after the name (D-029). A long name with no spaces wraps (<code>overflow-wrap: anywhere</code> on <code>.entry-main</code> and a row's text block, and on the chat's added-meal line), never widening the page.</span></li>
     <li><span class="rid">R5</span><span>Long lists: 10 rows, then a centred More button under the last row (<code>useMore</code> adds 10 inline; <code>useMoreDialog</code> opens the full list in a modal; both exist, pending the owner's choice).</span></li>
     <li><span class="rid">R6</span><span>Empty list: <code>.empty-note</code>, <code>--secondary</code> 0.9375rem, centred, padding 1.5rem 0, keeping one row height (<code>--row-h</code>, 3.75rem).</span></li>
     <li><span class="rid">R7</span><span>Group label: 0.75rem/700, 0.06em, uppercase, <code>--secondary</code>, 0.25rem above its rows.</span></li>

@@ -1,11 +1,37 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
+import { CloseIcon } from "./icons";
 import { clearPageCache } from "./page-cache";
+import { usePageNotOpened } from "../providers";
+import { isPushEnabled } from "@/lib/features";
+import { deletePushSubscriptionAction } from "@/actions/todos";
+
+/**
+ * Before sign-out, while the session still exists: forgets this device's reminders on the server and in the browser,
+ * so a signed-out device gets none. Other devices keep theirs (D-041). Best effort: it never blocks signing out. If the
+ * server delete fails, the browser's unsubscribe still ends the subscription, and the worker deletes its row on the
+ * push service's 410 (`worker/lib.mjs`).
+ */
+async function forgetThisDevicePush() {
+  try {
+    if (!isPushEnabled() || !("serviceWorker" in navigator)) return;
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    if (!subscription) return;
+    await deletePushSubscriptionAction(subscription.endpoint).catch(() => undefined);
+    await subscription.unsubscribe();
+  } catch {
+    // Nothing more to do on this device; sign-out goes on.
+  }
+}
+
+// What Tab can reach inside the More menu.
+const FOCUSABLE = "a[href], button:not([disabled])";
 
 interface NavigationProps {
   userName: string;
@@ -14,21 +40,48 @@ interface NavigationProps {
 export function Navigation({ userName }: NavigationProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  // The page a pressed link goes to. Until it loads the bar already shows it, instead of snapping back to this page.
-  const [target, setTarget] = useState<string | null>(null);
-  const at = target ?? pathname;
+  // The page a pressed link goes to, from the page it was pressed on, and the last failure known then. Until it loads the
+  // bar already shows it, instead of snapping back to this page. Once any page loads, or this one stays because that
+  // page could not be opened since the press, the bar shows the page on screen again. A failure of an earlier press
+  // (another page) leaves the bar on the page still loading.
+  const notOpened = usePageNotOpened();
+  const [target, setTarget] = useState<{ href: string; from: string; seen: typeof notOpened } | null>(null);
+  const failed = notOpened !== target?.seen && notOpened?.path === target?.href;
+  const at = target?.from === pathname && !failed ? target.href : pathname;
   const go = (href: string) => {
-    setTarget(href);
+    setTarget({ href, from: pathname, seen: notOpened });
     setMoreOpen(false);
   };
   // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
-  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget(href));
+  const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget({ href, from: pathname, seen: notOpened }));
 
+  // The phone More menu is a modal dialog, like Modal: focus moves into it, Tab wraps inside it, Escape and Close shut it,
+  // and focus returns to the More button.
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const moreMenu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!moreOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpen(false);
+    const menu = moreMenu.current;
+    const opener = moreButton.current;
+    menu?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return setMoreOpen(false);
+      if (e.key !== "Tab" || !menu) return;
+      const stops = [...menu.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      const inside = menu.contains(document.activeElement);
+      const wrapBack = e.shiftKey && (!inside || document.activeElement === first || document.activeElement === menu);
+      const wrapForward = !e.shiftKey && (!inside || document.activeElement === last);
+      if (!wrapBack && !wrapForward) return;
+      e.preventDefault();
+      (wrapBack ? last : first)?.focus();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, [moreOpen]);
 
   const getPageTitle = () => {
@@ -104,6 +157,7 @@ export function Navigation({ userName }: NavigationProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const signOutNow = async () => {
+    await forgetThisDevicePush();
     try {
       await signOut({ redirect: false });
     } catch {
@@ -111,7 +165,8 @@ export function Navigation({ userName }: NavigationProps) {
       return;
     }
     await clearPageCache();
-    router.push("/signin");
+    // Replaces this page: Back never returns to a signed-in page (D-035).
+    router.replace("/signin");
     router.refresh();
   };
 
@@ -133,6 +188,7 @@ export function Navigation({ userName }: NavigationProps) {
               key={link.href}
               href={link.href}
               prefetch
+              replace
               className={`nav-link ${link.isActive ? "active" : ""}`}
               aria-current={link.isActive ? "page" : undefined}
             >
@@ -157,11 +213,12 @@ export function Navigation({ userName }: NavigationProps) {
         <h1 className="app-title">{getPageTitle()}</h1>
       </header>
 
-      {/* Phone and tablet: floating tab bar with a More menu */}
+      {/* Phone and tablet: floating tab bar with a More menu. Every link here and in the sidebar replaces the history
+          entry: there is no Back or swipe between pages (D-035). */}
       {moreOpen && (
         <>
           <div className="more-scrim" onClick={() => setMoreOpen(false)} />
-          <div className="more-menu" id="more-menu" role="dialog" aria-label="More">
+          <div className="more-menu" id="more-menu" role="dialog" aria-modal="true" aria-label="More" tabIndex={-1} ref={moreMenu}>
             <div className="more-user">
               <span className="user-avatar-circle">{initial}</span>
               <div className="more-user-text">
@@ -171,12 +228,16 @@ export function Navigation({ userName }: NavigationProps) {
               <button className="btn-sm signout-btn" type="button" onClick={signOutNow}>
                 Sign out
               </button>
+              <button type="button" className="modal-close-btn" onClick={() => setMoreOpen(false)} aria-label="Close menu">
+                <CloseIcon size={13} />
+              </button>
             </div>
             <div className="more-links">
               {overflow.map((link) => (
                 <NextLink
                   key={link.href}
                   href={link.href}
+                  replace
                   className={`nav-link ${link.isActive ? "active" : ""}`}
                   aria-current={link.isActive ? "page" : undefined}
                   onClick={() => goFromMenu(link.href)}
@@ -200,6 +261,7 @@ export function Navigation({ userName }: NavigationProps) {
             key={link.href}
             href={link.href}
             prefetch
+            replace
             className={`tab-item ${link.isActive ? "active" : ""}`}
             aria-current={link.isActive ? "page" : undefined}
             onClick={() => go(link.href)}
@@ -209,6 +271,7 @@ export function Navigation({ userName }: NavigationProps) {
           </NextLink>
         ))}
         <button
+          ref={moreButton}
           type="button"
           className={`tab-item ${moreActive || moreOpen ? "active" : ""}`}
           aria-expanded={moreOpen}

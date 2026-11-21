@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 // Sets DATABASE_URL the way the Vitest tests get it: the job's database in CI, otherwise the local test database.
 import "./tests/setup";
 
-const PORT = 3100;
+// E2E_PORT lets parallel worktrees run their specs at once, each with its own dev server.
+const PORT = Number(process.env.E2E_PORT) || 3100;
 const BASE_URL = `http://localhost:${PORT}`;
 const databaseUrl = process.env.DATABASE_URL!;
 

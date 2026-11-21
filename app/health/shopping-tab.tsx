@@ -26,6 +26,7 @@ const shoppingNames = (kind: "category" | "unit"): CategoriesApi => ({
   id: kind === "unit" ? "units" : "shopping",
   noun: kind,
   builtIn: kind === "unit" ? "pcs" : "other",
+  keys: { category: (name) => `${kind === "unit" ? "shopping_units" : "shopping_categories"}:${name}`, items: "shopping_items" },
   add: (name) => addShoppingCategoryAction({ kind, name }),
   rename: (from, to) => renameShoppingCategoryAction({ kind, from, to }),
   remove: (name) => deleteShoppingCategoryAction({ kind, name }),

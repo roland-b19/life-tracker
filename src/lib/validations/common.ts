@@ -8,3 +8,10 @@ export const visible = (text: string) => /[^\s\u200B-\u200D\u2060\uFEFF]/.test(t
 
 /** Any 8-4-4-4-12 hex id Postgres accepts for a uuid column; stops a malformed id from reaching the driver as a 500. */
 export const uuid = z.guid("Invalid id");
+
+/**
+ * An add's own id, made on the device (`crypto.randomUUID()`) and optional (D-040). The insert uses it with
+ * `on conflict do nothing` and answers success either way, so an add sent twice (a double tap, a retry after a lost
+ * reply) is one row. Without it the database makes the id.
+ */
+export const newId = uuid.optional();
