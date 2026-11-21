@@ -40,6 +40,8 @@ async function logSet(page: Page) {
   await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await page.getByLabel("Value").fill("60");
   await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
+  // Ends Log set's tap burst (D-043): the next step may scroll its button onto the spot Log set had on screen.
+  await page.keyboard.press("Shift");
 }
 
 const banner = (page: Page) => page.getByRole("region", { name: "Workout in progress" });
@@ -882,6 +884,7 @@ test("a double tap on Log set or on a set's Delete writes once", async ({ signed
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
   await expect(page.getByText(/Set 2: 5 × 60 kg/)).toBeVisible();
+  await page.keyboard.press("Shift");
 
   // Set 2's Delete slides up under the second tap.
   await page.addStyleTag({ content: "* { overflow-anchor: none }" });
