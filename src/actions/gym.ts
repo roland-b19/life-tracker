@@ -12,6 +12,7 @@ import {
   restoreDeloadWeeksSchema,
   restoreSessionSchema,
   saveDeloadWeeksSchema,
+  saveSessionNotesSchema,
   saveSplitDaySchema,
   sessionIdSchema,
 } from "@/lib/validations/gym";
@@ -31,6 +32,7 @@ import {
   restoreWorkoutSession,
   saveDeloadWeeks,
   saveSplitDay,
+  saveWorkoutNotes,
   setWorkoutTimer,
   EXERCISE_GONE,
   WORKOUT_GONE,
@@ -84,6 +86,16 @@ export async function finishSessionAction(rawInput: unknown) {
     const finished = await finishWorkoutSession(userId, finishSessionSchema.parse(rawInput));
     if (!finished) throw new Refusal(WORKOUT_GONE);
     return finished;
+  });
+}
+
+/** Save an open workout's notes as they change (D-040: the notes the screen showed and the new ones); answers the notes saved. */
+export async function saveSessionNotesAction(rawInput: unknown) {
+  return respond(async () => {
+    const userId = await requireUser();
+    const saved = await saveWorkoutNotes(userId, saveSessionNotesSchema.parse(rawInput));
+    if (!saved) throw new Refusal(WORKOUT_GONE);
+    return saved;
   });
 }
 

@@ -22,6 +22,7 @@ import {
   getWorkoutSessionDetails,
   logWorkoutSet,
   EXERCISE_GONE,
+  NOTES_CHANGED,
   WORKOUT_FINISHED,
   WORKOUT_GONE,
 } from "@/lib/gym";
@@ -40,10 +41,11 @@ import {
   restoreDeloadWeeksAction,
   restoreSessionAction,
   saveDeloadWeeksAction,
+  saveSessionNotesAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { exerciseNameKey, type LogSetInput } from "@/lib/validations/gym";
+import { exerciseNameKey, NOT_NEGATIVE, TWO_DECIMALS, type LogSetInput } from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
@@ -310,7 +312,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("is refused, naming today's workout, whether it is running, paused or finished, and nothing changes", async () => {
       const [upper, legs] = [await dayNamed("Upper (chest)"), await dayNamed("Legs (hamstrings)")];
-      const refused = { success: false, error: 'Today already has a workout: "Upper (chest)". Open it to keep going.' };
+      const refused = { success: false, error: 'Today already has a workout: "Upper (chest)". Pick that day to keep going.' };
       const first = succeeded(await startOn(upper.id));
       expect(first).toMatchObject({ from: "new", splitDayName: "Upper (chest)", session: { splitDayId: upper.id } });
       const sessionId = first.session.id;
@@ -335,7 +337,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("is refused with a plain message when today's workout has no day (from before D-039)", async () => {
       const { rows } = await admin.query("INSERT INTO workout_sessions (user_id, date) VALUES ($1, $2) RETURNING id", [userA, TODAY]);
       const before = await sessionsOf(userA);
-      expect(await startOn((await dayNamed("Legs (hamstrings)")).id)).toEqual({ success: false, error: "Today already has a workout. Open it to keep going." });
+      expect(await startOn((await dayNamed("Legs (hamstrings)")).id)).toEqual({ success: false, error: "Today already has a workout." });
       expect(await sessionsOf(userA)).toEqual(before);
       expect(before.map((s) => s.id)).toEqual([rows[0].id]);
     });
@@ -392,10 +394,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const ex = (await trainingDay(userA)).exercises[0].exerciseId;
     const session = await begin(userA);
     succeeded(await logSetAction(setOf(session.id, ex)));
-    const first = succeeded(await finishSessionAction({ sessionId: session.id, notes: "first" }));
+    succeeded(await saveSessionNotesAction({ sessionId: session.id, notes: { from: null, to: "first" } }));
+    const first = succeeded(await finishSessionAction({ sessionId: session.id }));
     expect(first.deleted).toBe(false);
     const finished = { success: false, error: WORKOUT_FINISHED };
-    expect(await finishSessionAction({ sessionId: session.id, notes: "second" })).toEqual(finished);
+    expect(await finishSessionAction({ sessionId: session.id })).toEqual(finished);
+    expect(await saveSessionNotesAction({ sessionId: session.id, notes: { from: "first", to: "second" } })).toEqual(finished);
     expect(await logSetAction(setOf(session.id, ex, { setOrder: 2 }))).toEqual(finished);
     expect(await logSetAction(setOf(session.id, ex, { setOrder: 2, id: randomUUID() }))).toEqual(finished);
     expect(await setCount(session.id)).toBe(1);
@@ -424,10 +428,86 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(succeeded(await log(1, `  ${"a".repeat(255)}  `)).set.notes).toBe("a".repeat(255));
     expect(await log(2, "a".repeat(256))).toEqual({ success: false, error: "Too long (max 255)" });
     expect(succeeded(await log(2, "   ")).set.notes).toBeNull();
-    expect(await finishSessionAction({ sessionId: session.id, notes: "b".repeat(501) })).toEqual({ success: false, error: "Too long (max 500)" });
-    expect(succeeded(await finishSessionAction({ sessionId: session.id, notes: "   " })).session.notes).toBeNull();
-    succeeded(await reopenSessionAction({ sessionId: session.id }));
-    expect(succeeded(await finishSessionAction({ sessionId: session.id, notes: ` ${"b".repeat(500)}\n` })).session.notes).toBe("b".repeat(500));
+    const save = (from: string | null, to: string) => saveSessionNotesAction({ sessionId: session.id, notes: { from, to } });
+    expect(await save(null, "b".repeat(501))).toEqual({ success: false, error: "Too long (max 500)" });
+    expect(succeeded(await save(null, ` ${"b".repeat(500)}\n`)).notes).toBe("b".repeat(500));
+    expect(succeeded(await save("b".repeat(500), "   ")).notes).toBeNull();
+    expect(await save(null, "  ")).toEqual({ success: false, error: "Nothing to save." });
+  });
+
+  describe("workout notes are saved with the open workout, sending the notes shown and the new ones (GYMB-03, GYMB-14, D-040)", () => {
+    const notesOf = async (sessionId: string) => (await admin.query("SELECT notes FROM workout_sessions WHERE id = $1", [sessionId])).rows[0]?.notes;
+
+    it("saves while the stored notes are the ones shown, refuses a change made elsewhere, and Finish keeps them", async () => {
+      const session = await begin(userA);
+      const save = (from: string | null, to: string | null) => saveSessionNotesAction({ sessionId: session.id, notes: { from, to } });
+      expect(succeeded(await save(null, "  felt strong ")).notes).toBe("felt strong");
+      // Another device still showing no notes: refused, and the notes stay
+      expect(await save(null, "tired")).toEqual({ success: false, error: NOTES_CHANGED });
+      expect(await save("something else", "tired")).toEqual({ success: false, error: NOTES_CHANGED });
+      expect(await notesOf(session.id)).toBe("felt strong");
+      // Its Undo: the saved notes back to the ones before
+      expect(succeeded(await save("felt strong", null)).notes).toBeNull();
+      succeeded(await save(null, "felt strong"));
+      succeeded(await logSetAction(setOf(session.id, (await trainingDay(userA)).exercises[0].exerciseId)));
+      expect(succeeded(await finishSessionAction({ sessionId: session.id })).session.notes).toBe("felt strong");
+      expect(await save("felt strong", "later")).toEqual({ success: false, error: WORKOUT_FINISHED });
+      expect(await notesOf(session.id)).toBe("felt strong");
+    });
+
+    it("refuses another user's workout and a signed-out caller, and their notes stay", async () => {
+      const session = await begin(userA);
+      succeeded(await saveSessionNotesAction({ sessionId: session.id, notes: { from: null, to: "mine" } }));
+      const input = { sessionId: session.id, notes: { from: "mine", to: "not theirs" } };
+      authState.id = userB;
+      expect(await saveSessionNotesAction(input)).toEqual({ success: false, error: WORKOUT_GONE });
+      authState.id = "";
+      expect(await saveSessionNotesAction(input)).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await notesOf(session.id)).toBe("mine");
+      authState.id = userA; // the owner may
+      expect(succeeded(await saveSessionNotesAction(input)).notes).toBe("not theirs");
+    });
+  });
+
+  describe("the server numbers a new set, so a log sends only what the device knows (GYMB-02, D-040)", () => {
+    it("gives each exercise's next number, after a deleted last set too, and Undo of a delete keeps its own", async () => {
+      const [a, b] = (await trainingDay(userA)).exercises.map((e) => e.exerciseId);
+      const session = await begin(userA);
+      // No set number unless told: the device sends only what it knows
+      const log = async (exerciseId: string, more: Partial<LogSetInput> = {}) =>
+        succeeded(await logSetAction(setOf(session.id, exerciseId, { id: randomUUID(), setOrder: undefined, ...more }))).set;
+      expect((await log(a)).setOrder).toBe(1);
+      const second = await log(a);
+      expect(second.setOrder).toBe(2);
+      expect((await log(b)).setOrder).toBe(1);
+      const third = await log(a);
+      expect(third.setOrder).toBe(3);
+      succeeded(await deleteSetAction(second.id));
+      expect((await log(a)).setOrder).toBe(4); // the highest plus one: a deleted middle set is not reused
+      succeeded(await deleteSetAction(third.id));
+      expect((await log(a, { id: second.id, setOrder: 2 })).setOrder).toBe(2); // Undo of the delete brings set 2 back as it was
+    });
+
+    it("refuses a 51st set of one exercise", async () => {
+      const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+      const session = await begin(userA);
+      await admin.query(
+        "INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value) SELECT $1, $2, $3, n, 8, 'kg', 40 FROM generate_series(1, 50) n",
+        [session.id, userA, ex],
+      );
+      expect(await logSetAction(setOf(session.id, ex, { setOrder: undefined }))).toEqual({ success: false, error: "At most 50 sets of one exercise in a workout." });
+      expect(await setCount(session.id)).toBe(50);
+    });
+  });
+
+  it("refuses a negative weight and one with more than two decimals, with the set form's words (GYMB-07, GYMB-09)", async () => {
+    const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+    const session = await begin(userA);
+    expect(await logSetAction(setOf(session.id, ex, { loadValue: -5 }))).toEqual({ success: false, error: NOT_NEGATIVE });
+    expect(await logSetAction(setOf(session.id, ex, { loadValue: 42.125 }))).toEqual({ success: false, error: TWO_DECIMALS });
+    expect(await logSetAction(setOf(session.id, ex, { extraKg: -1 }))).toEqual({ success: false, error: NOT_NEGATIVE });
+    expect(await setCount(session.id)).toBe(0);
+    expect(succeeded(await logSetAction(setOf(session.id, ex, { loadValue: 42.25 }))).set.loadValue).toBe("42.25");
   });
 
   it("takes a set's time only within its workout, and saves a bodyweight set with no extra kg", async () => {
@@ -469,7 +549,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const calls = () => [
       pauseSessionAction({ sessionId }),
       resumeSessionAction({ sessionId }),
-      finishSessionAction({ sessionId, notes: "not theirs" }),
+      finishSessionAction({ sessionId }),
+      saveSessionNotesAction({ sessionId, notes: { from: null, to: "not theirs" } }),
       cancelSessionAction({ sessionId }),
       reopenSessionAction({ sessionId }),
       logSetAction(setOf(sessionId, ex, { setOrder: 2 })),
@@ -503,6 +584,19 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     authState.id = userA; // the owner may
     expect(succeeded(await deleteSetAction(set.id)).deleted.id).toBe(set.id);
     expect(await row()).toEqual([]);
+  });
+
+  it("deleteSetAction refuses a set of a finished workout: it is history (D-039); another user and a signed-out caller learn nothing", async () => {
+    const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+    const session = await begin(userA);
+    const set = succeeded(await logSetAction(setOf(session.id, ex))).set;
+    succeeded(await finishSessionAction({ sessionId: session.id }));
+    expect(await deleteSetAction(set.id)).toEqual({ success: false, error: WORKOUT_FINISHED });
+    authState.id = userB;
+    expect(await deleteSetAction(set.id)).toEqual({ success: false, error: "Set not found." });
+    authState.id = "";
+    expect(await deleteSetAction(set.id)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await setCount(session.id)).toBe(1);
   });
 
   describe("a set logged with a custom exercise while it is deleted (both orders, and at once)", () => {
@@ -914,6 +1008,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const id = randomUUID();
       const denied = async (run: Promise<unknown>) => expect(await run).toEqual({ success: false, error: SIGNED_OUT });
       await denied(finishSessionAction({ sessionId: id }));
+      await denied(saveSessionNotesAction({ sessionId: id, notes: { from: null, to: "x" } }));
       await denied(pauseSessionAction({ sessionId: id }));
       await denied(resumeSessionAction({ sessionId: id }));
       await denied(cancelSessionAction({ sessionId: id }));
@@ -979,17 +1074,18 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       );
       expect(logRes.set.reps).toBe(8);
 
-      // 3. Finish session
+      // 3. Delete set (only while the workout is open), and log another
+      const deleteRes = await deleteSetAction(logRes.set.id);
+      expect(deleteRes.success).toBe(true);
+      succeeded(await logSetAction({ sessionId: startRes.session.id, exerciseId: exercise.id, reps: 8, loadType: "kg", loadValue: 42.5 }));
+
+      // 4. Finish session
       const finishRes = succeeded(
         await finishSessionAction({
           sessionId: startRes.session.id,
         }),
       );
       expect(finishRes.session.durationMinutes).toBe(1); // counted by the server: under a minute counts as one
-
-      // 4. Delete set
-      const deleteRes = await deleteSetAction(logRes.set.id);
-      expect(deleteRes.success).toBe(true);
     });
   });
   describe("cancelSessionAction and the open workout", () => {
@@ -1144,7 +1240,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("Undo of Finish clears the duration and keeps the notes", async () => {
       const { id } = await finished(userA, TODAY, null);
-      succeeded(await finishSessionAction({ sessionId: id, notes: "felt strong" }));
+      succeeded(await saveSessionNotesAction({ sessionId: id, notes: { from: null, to: "felt strong" } }));
+      succeeded(await finishSessionAction({ sessionId: id }));
       expect((await getWorkoutSessionDetails(userA, id))?.session.notes).toBe("felt strong");
       const { timer } = succeeded(await reopenSessionAction({ sessionId: id }));
       expect(timer.running).toBe(true); // the timer runs on from the time it had

@@ -18,6 +18,17 @@ export function formatNumber(value: number | string, decimals = 0): string {
 }
 
 /**
+ * A measured amount (grams, kilograms) in the app's number format with at most `decimals` decimals and no trailing
+ * zeros: 72.4 shows "72,4", 80 shows "80", 1500.25 shows "1.500,25".
+ */
+export function formatAmount(value: number | string, decimals: number): string {
+  const n = Number(value);
+  let shown = decimals;
+  while (shown > 0 && Math.round(n * 10 ** shown) % 10 === 0) shown--;
+  return formatNumber(n, shown);
+}
+
+/**
  * The text a number field shows for a value the page gave it ("72.40" shows "72,40", "1500" shows "1.500"). Text that
  * is not a machine number (a wrong entry the field kept) is shown as it is.
  */

@@ -14,10 +14,12 @@ import {
   CustomExerciseWithIdInput,
   AddSessionInput,
   FinishSessionInput,
+  GYM_LIMITS,
   LogSetInput,
   NAME_SPACES,
   RestoreDeloadWeeksInput,
   RestoreSessionInput,
+  SaveSessionNotesInput,
   SaveSplitDayInput,
   SET_TIME_SKEW_MS,
 } from "./validations/gym";
@@ -314,7 +316,7 @@ export async function addWorkoutSession(userId: string, input: AddSessionInput) 
       const [other] = same.splitDayId
         ? await tx.select({ name: workoutSplitDays.name }).from(workoutSplitDays).where(eq(workoutSplitDays.id, same.splitDayId))
         : [];
-      throw new Refusal(other ? `Today already has a workout: "${other.name}". Open it to keep going.` : "Today already has a workout. Open it to keep going.");
+      throw new Refusal(other ? `Today already has a workout: "${other.name}". Pick that day to keep going.` : "Today already has a workout.");
     }
     const reopen = async (set: Partial<typeof workoutSessions.$inferInsert>) =>
       (await tx.update(workoutSessions).set(set).where(eq(workoutSessions.id, same.id)).returning())[0];
@@ -377,10 +379,30 @@ export async function finishWorkoutSession(userId: string, input: FinishSessionI
     }
     const [session] = await tx
       .update(workoutSessions)
-      .set({ durationMinutes: workoutMinutes(timer.seconds), timerSeconds: timer.seconds, timerRunningSince: null, notes: input.notes ?? null })
+      .set({ durationMinutes: workoutMinutes(timer.seconds), timerSeconds: timer.seconds, timerRunningSince: null })
       .where(mine)
       .returning();
     return { session, timer: workoutTimer(session), deleted: false };
+  });
+}
+
+/** What a change of the notes answers when the stored notes are no longer the ones the screen showed (D-040). */
+export const NOTES_CHANGED = "These notes changed on another device. Check them and try again.";
+
+/**
+ * Save an open workout's notes (D-040): `to` is written only while the stored notes still equal `from`. A finished
+ * workout's are history (D-039); null when the workout is not the user's. Answers the notes as saved (trimmed, or null).
+ */
+export async function saveWorkoutNotes(userId: string, input: SaveSessionNotesInput) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // a Finish at the same moment lands before the save or after it, never between
+    const mine = and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId));
+    const [row] = await tx.select({ notes: workoutSessions.notes, durationMinutes: workoutSessions.durationMinutes }).from(workoutSessions).where(mine);
+    if (!row) return null;
+    if (row.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    if ((row.notes ?? "") !== (input.notes.from ?? "")) throw new Refusal(NOTES_CHANGED);
+    const [saved] = await tx.update(workoutSessions).set({ notes: input.notes.to ?? null }).where(mine).returning({ notes: workoutSessions.notes });
+    return saved;
   });
 }
 
@@ -549,6 +571,16 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
     const flagAnomaly = input.flagAnomaly || below;
     const anomalyReason = input.anomalyReason ?? (below ? "too_heavy" : null);
     const extraKg = input.loadType === "bodyweight" ? 0 : input.extraKg;
+    // A new set takes the next number of its exercise in this workout; Undo of a delete brings its own back.
+    let setOrder = input.setOrder;
+    if (setOrder === undefined) {
+      const [last] = await tx
+        .select({ max: sql<number | null>`max(${workoutSets.setOrder})` })
+        .from(workoutSets)
+        .where(and(eq(workoutSets.sessionId, input.sessionId), eq(workoutSets.exerciseId, input.exerciseId)));
+      setOrder = (last?.max ?? 0) + 1;
+      if (setOrder > GYM_LIMITS.sets) throw new Refusal(`At most ${GYM_LIMITS.sets} sets of one exercise in a workout.`);
+    }
 
     const [createdSet] = await tx
       .insert(workoutSets)
@@ -558,7 +590,7 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
         sessionId: input.sessionId,
         userId,
         exerciseId: input.exerciseId,
-        setOrder: input.setOrder,
+        setOrder,
         reps: input.reps,
         loadType: input.loadType,
         loadValue: input.loadValue.toFixed(2),
@@ -577,14 +609,22 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
 }
 
 /**
- * Delete a workout set
+ * Delete a set of the user's open workout. A finished workout's sets are history (D-039) and are refused; undefined when
+ * the set is not the user's (or already gone).
  */
 export async function deleteWorkoutSet(userId: string, setId: string) {
-  const [deleted] = await db
-    .delete(workoutSets)
-    .where(and(eq(workoutSets.id, setId), eq(workoutSets.userId, userId)))
-    .returning();
-  return deleted;
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // a Finish at the same moment lands before the delete (refused) or after it
+    const [found] = await tx
+      .select({ durationMinutes: workoutSessions.durationMinutes })
+      .from(workoutSets)
+      .innerJoin(workoutSessions, eq(workoutSets.sessionId, workoutSessions.id))
+      .where(and(eq(workoutSets.id, setId), eq(workoutSets.userId, userId)));
+    if (!found) return undefined;
+    if (found.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    const [deleted] = await tx.delete(workoutSets).where(and(eq(workoutSets.id, setId), eq(workoutSets.userId, userId))).returning();
+    return deleted;
+  });
 }
 
 /**

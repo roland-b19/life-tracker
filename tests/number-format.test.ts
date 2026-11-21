@@ -4,6 +4,7 @@ import {
   NOT_WHOLE,
   caretInDisplay,
   editedNumberText,
+  formatAmount,
   formatNumber,
   parseNumberInput,
   showNumberInput,
@@ -20,6 +21,17 @@ describe("formatNumber", () => {
   it("never shows a minus zero or a wrong value", () => {
     expect(formatNumber(-0.01, 1)).toBe("0,0");
     expect(formatNumber("abc")).toBe("");
+  });
+});
+
+describe("formatAmount", () => {
+  it("shows at most the given decimals, without trailing zeros, in the app's format [D-037]", () => {
+    expect(formatAmount(72.4, 2)).toBe("72,4");
+    expect(formatAmount(80, 2)).toBe("80");
+    expect(formatAmount(1500.25, 2)).toBe("1.500,25");
+    expect(formatAmount("72.40", 2)).toBe("72,4");
+    expect(formatAmount(12.5, 1)).toBe("12,5");
+    expect(formatAmount(12500, 2)).toBe("12.500");
   });
 });
 
