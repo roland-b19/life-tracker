@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { compareShopping } from "@/lib/check-order";
+import { formatAmount, formatNumber } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
+import { MAX_CLEARED, SHOPPING_ITEM_GONE } from "@/lib/validations/food";
 import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, SmallButton } from "../components/blocks";
 import { undoWith, useToast } from "../components/toast";
+import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
 import { ListBox, RowActions } from "../components/lists";
 import { CategoriesCard, CategoryField, GroupedList, useFolded, type CategoriesApi } from "../components/categories-card";
 import {
@@ -47,6 +51,9 @@ export interface ShoppingItemData {
   checkedAt: Date | string | null;
 }
 
+/** What a shopping toast touches (D-040): the items' rows. */
+const touches = (ids: string[]) => ids.map((id) => `shopping_items:${id}`);
+
 /** The Shopping tab: its list, its two Categories cards and its form. It stays mounted when another tab shows, so an edit still in flight keeps its state. */
 export function ShoppingTab({
   active,
@@ -61,11 +68,18 @@ export function ShoppingTab({
 }) {
   const { showToast } = useToast();
   const warn = (message: string) => showToast({ message, type: "warning" });
-  const [shoppingList, setShoppingList] = useState(initialItems);
-  const [categories, setCategories] = useState(initialCategories);
-  const [units, setUnits] = useState(initialUnits);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<ShoppingItemData | null>(null);
+  // The edit form closes when another device deletes its item.
+  const [shoppingList, setShoppingList] = useServerState(initialItems, {
+    editing: isShopModalOpen ? (editingShop?.id ?? null) : null,
+    onDeleted: () => setIsShopModalOpen(false),
+  });
+  const [categories, setCategories] = useServerState(initialCategories);
+  const [units, setUnits] = useServerState(initialUnits);
+  // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
+  const once = useOnce();
+  const tappedButton = useRef<Element | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // Shopping input state
@@ -101,23 +115,29 @@ export function ShoppingTab({
     setShoppingList((prev) => (prev.some((i) => i.id === item.id) ? prev.map((i) => (i.id === item.id ? item : i)) : [...prev, item]));
   const dropShop = (id: string) => setShoppingList((prev) => prev.filter((i) => i.id !== id));
 
-  /** Adds an item; the server adds the amount to the same item when it is already on the list. */
+  /**
+   * Adds an item; the server adds the amount to the same item (name and unit) when it is already on the list, which then
+   * takes the new category (D-042). The id is made here, so a repeat of the same add after a lost answer adds nothing (D-040).
+   */
   async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
     setBusy(true);
     try {
-      const res = await addShoppingItemAction(input);
-      if (!res.success) {
-        setErrorMsg(res.error);
+      const saved = addShoppingItemAction({ id: crypto.randomUUID(), ...input }).catch(() => null);
+      const res = await saved;
+      if (!res?.success) {
+        setErrorMsg(res?.error ?? "Failed to add item");
         return false;
       }
       const item = res.item as ShoppingItemData;
-      const before = shoppingList.find((i) => i.id === item.id);
+      const before = res.before as ShoppingItemData | null;
       upsertShop(item);
       showToast(
         !before
           ? {
               message: `Added "${item.name}"`,
               type: "success",
+              touches: touches([item.id]),
+              saved,
               onUndo: undoWith(showToast, async () => {
                 dropShop(item.id);
                 const gone = await deleteShoppingItemAction(item.id).then((r) => r.success, () => false);
@@ -126,8 +146,10 @@ export function ShoppingTab({
               }),
             }
           : {
-              message: `"${item.name}" is now ${Number(item.amount)} ${item.unit}`,
+              message: "Merged with existing item",
               type: "success",
+              touches: touches([item.id]),
+              saved,
               onUndo: undoWith(
                 showToast,
                 async () => {
@@ -146,9 +168,6 @@ export function ShoppingTab({
             },
       );
       return true;
-    } catch {
-      setErrorMsg("Failed to add item");
-      return false;
     } finally {
       setBusy(false);
     }
@@ -162,16 +181,13 @@ export function ShoppingTab({
     e.preventDefault();
     const input = {
       name: shopName.trim(),
-      amount: shopAmount.trim() === "" ? 1 : parseFloat(shopAmount),
+      // The number field hands over the machine value ("1.5"); empty means one.
+      amount: shopAmount.trim() === "" ? 1 : Number(shopAmount),
       unit: shopUnit.trim() || "pcs",
       category: shopCategory.trim().toLowerCase() || "other",
     };
     if (!visible(input.name)) return;
-    // Same limits as addShoppingItemSchema, so a refusal always has a message on screen.
-    if (input.name.length > 120) return setErrorMsg("The name must be 120 characters or less.");
-    if (!(input.amount >= 0.01 && input.amount <= 1000)) return setErrorMsg("The amount must be between 0.01 and 1000.");
-    if (input.unit.length > 30) return setErrorMsg("The unit must be 30 characters or less.");
-    if (input.category.length > 50) return setErrorMsg("The category must be 50 characters or less.");
+    // The server checks the limits; its message shows in the form, which keeps what was typed.
     setErrorMsg("");
 
     if (!editingShop) {
@@ -181,14 +197,23 @@ export function ShoppingTab({
     const before = editingShop;
     setBusy(true);
     try {
-      const res = await updateShoppingItemAction({ ...input, itemId: before.id });
-      if (!res.success) return setErrorMsg(res.error);
+      const saved = updateShoppingItemAction({ ...input, itemId: before.id }).catch(() => null);
+      const res = await saved;
+      if (!res?.success) {
+        if (res?.error !== SHOPPING_ITEM_GONE) return setErrorMsg(res?.error ?? "Failed to save item");
+        // Deleted on another device: the form closes and the row leaves.
+        setIsShopModalOpen(false);
+        dropShop(before.id);
+        return warn(res.error);
+      }
       const item = res.item as ShoppingItemData;
       replaceShop(item);
       setIsShopModalOpen(false);
       showToast({
         message: `Saved "${item.name}"`,
         type: "success",
+        touches: touches([item.id]),
+        saved,
         // Writes the old values back; if that fails the edit stays, so the screen matches the database.
         onUndo: undoWith(
           showToast,
@@ -201,8 +226,6 @@ export function ShoppingTab({
           "Failed to undo the edit",
         ),
       });
-    } catch {
-      setErrorMsg("Failed to save item");
     } finally {
       setBusy(false);
     }
@@ -215,93 +238,106 @@ export function ShoppingTab({
   const refileUnit = (from: string, to: string, only?: string[]) =>
     setShoppingList((prev) => prev.map((i) => (i.unit === from && (!only || only.includes(i.id)) ? { ...i, unit: to } : i)));
 
+  // What a restore answered: the rows now on the list. A row that merged into one with its name and unit leaves the screen (D-042).
+  function showRestored(ids: string[], items: ShoppingItemData[], merged: number) {
+    const back = new Set(items.map((i) => i.id));
+    setShoppingList((prev) => [...prev.filter((i) => !ids.includes(i.id) && !back.has(i.id)), ...items]);
+    if (merged > 0) showToast({ message: "Merged with existing item", type: "success", touches: touches([...back]) });
+  }
+
+  /** Undo of a tick sends the time the box had before, so the row goes back to its old place. */
   function handleToggleShopping(item: ShoppingItemData) {
     const next = !item.isBought;
-    const setBought = (isBought: boolean) =>
-      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt: new Date() } : i)));
-    setBought(next);
-    const saved = toggleShoppingItemAction(item.id, next).then(
-      (r) => r.success,
-      () => false,
-    );
+    const setBought = (isBought: boolean, checkedAt: Date | string | null) =>
+      setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt } : i)));
+    setBought(next, new Date());
+    const saved = toggleShoppingItemAction(item.id, next).catch(() => null);
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
+      touches: touches([item.id]),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
-          setBought(!next);
-          if (!(await saved)) return true; // the failure path below put it back
-          const back = await toggleShoppingItemAction(item.id, !next).then((r) => r.success, () => false);
-          if (!back) setBought(next);
+          setBought(!next, item.checkedAt);
+          const done = await saved;
+          if (!done?.success) return true; // the failure path below put it back
+          const back = await toggleShoppingItemAction(item.id, !next, item.checkedAt).catch(() => null);
+          if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
         },
         "Failed to undo the edit",
       ),
     });
-    void saved.then((ok) => {
-      if (ok) return;
-      setBought(!next);
+    void saved.then((res) => {
+      if (res?.success) return;
+      setBought(!next, item.checkedAt);
       warn("Failed to update item");
     });
+    return saved;
   }
 
   function handleDeleteShoppingItem(item: ShoppingItemData) {
     // The row leaves at once; the server delete runs alongside, so the tap never waits on the network.
     dropShop(item.id);
-    const deleted = deleteShoppingItemAction(item.id).then(
-      (r) => r.success,
-      () => false,
-    );
+    const saved = deleteShoppingItemAction(item.id).catch(() => null);
     showToast({
       message: `Removed "${item.name}"`,
+      touches: touches([item.id]),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await deleted)) return true; // the failure path below puts it back
+          if (!(await saved)?.success) return true; // the failure path below puts it back
           upsertShop(item);
           const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
-          if (!back?.success) dropShop(item.id);
+          if (back?.success) showRestored([item.id], back.items as ShoppingItemData[], back.merged);
+          else dropShop(item.id);
           return back;
         },
         "Failed to restore item",
       ),
     });
-    void deleted.then((ok) => {
-      if (ok) return;
+    void saved.then((res) => {
+      if (res?.success) return;
       upsertShop(item);
       warn("Failed to remove item");
     });
+    return saved;
   }
 
-  // Like a delete: the rows leave and the toast shows at once; a failed clear puts them back.
+  // Like a delete: the rows leave and the toast shows at once; a failed clear puts them back. More than one clear takes
+  // is refused before anything changes.
   function handleClearBought() {
     const cleared = shoppingList.filter((i) => i.isBought);
     if (!cleared.length) return;
-    const ids = new Set(cleared.map((c) => c.id));
-    const done = clearBoughtItemsAction({ itemIds: [...ids] }).then(
-      (r) => r.success,
-      () => false,
-    );
-    const drop = () => setShoppingList((prev) => prev.filter((i) => !ids.has(i.id)));
-    const putBack = () => setShoppingList((prev) => [...prev.filter((i) => !ids.has(i.id)), ...cleared]);
+    if (cleared.length > MAX_CLEARED) return warn(`Clear bought takes at most ${formatNumber(MAX_CLEARED)} items at once; untick some first.`);
+    const ids = cleared.map((c) => c.id);
+    const saved = clearBoughtItemsAction({ itemIds: ids }).catch(() => null);
+    const gone = new Set(ids);
+    const drop = () => setShoppingList((prev) => prev.filter((i) => !gone.has(i.id)));
+    const putBack = () => setShoppingList((prev) => [...prev.filter((i) => !gone.has(i.id)), ...cleared]);
     drop();
     showToast({
       message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
+      touches: touches(ids),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
           putBack();
-          if (!(await done)) return true; // the clear never happened
-          const back = await restoreShoppingItemsAction({ itemIds: [...ids] }).catch(() => null);
-          if (!back?.success) drop();
+          if (!(await saved)?.success) return true; // the clear never happened
+          const back = await restoreShoppingItemsAction({ itemIds: ids }).catch(() => null);
+          if (back?.success) showRestored(ids, back.items as ShoppingItemData[], back.merged);
+          else drop();
           return back;
         },
         "Failed to restore items",
       ),
     });
-    void done.then((ok) => {
-      if (ok) return;
+    void saved.then((res) => {
+      if (res?.success) return;
       putBack();
       warn("Failed to clear bought items");
     });
@@ -333,29 +369,41 @@ export function ShoppingTab({
             isFolded={isShopFolded}
             onToggle={toggleShop}
             row={(item) => (
-              <div className="shopping-row">
+              <div className="shopping-row" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
                 <div className={`shopping-item-name ${item.isBought ? "bought" : ""}`}>
                   <Checkbox
                     checked={item.isBought}
-                    onChange={() => handleToggleShopping(item)}
+                    onChange={() => once(`shopping:${item.id}`, () => handleToggleShopping(item), tappedButton.current)}
                     label={`Mark ${item.name} as ${item.isBought ? "not bought" : "bought"}`}
                   />
                   <span className="entry-main entry-stack">
                     <span>{item.name}</span>
                     <span>
-                      {Number(item.amount)} {item.unit}
+                      {formatAmount(item.amount, 2)} {item.unit}
                     </span>
                   </span>
                 </div>
-                <RowActions onEdit={() => openShopForm(item)} onDelete={() => handleDeleteShoppingItem(item)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
+                <RowActions onEdit={() => openShopForm(item)} onDelete={() => once(`shopping:${item.id}`, () => handleDeleteShoppingItem(item), tappedButton.current)} editLabel={`Edit ${item.name}`} deleteLabel={`Delete ${item.name}`} />
               </div>
             )}
           />
         </ListBox>
       </Card>
 
-      <CategoriesCard api={shoppingCategories} categories={categories} onChange={setCategories} onRefile={refile} />
-      <CategoriesCard api={shoppingUnitsApi} categories={units} onChange={setUnits} onRefile={refileUnit} />
+      <CategoriesCard
+        api={shoppingCategories}
+        categories={categories}
+        onChange={setCategories}
+        onRefile={refile}
+        idsIn={(c) => shoppingList.filter((i) => i.category === c).map((i) => i.id)}
+      />
+      <CategoriesCard
+        api={shoppingUnitsApi}
+        categories={units}
+        onChange={setUnits}
+        onRefile={refileUnit}
+        idsIn={(u) => shoppingList.filter((i) => i.unit === u).map((i) => i.id)}
+      />
     </Dashboard>
       )}
 
@@ -368,14 +416,11 @@ export function ShoppingTab({
         busy={busy}
         canSubmit={visible(shopName)}
       >
-        <Field label="Name" type="text" maxLength={120} disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
+        <Field label="Name" type="text" disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
         <FieldPair>
           <Field
             label="Amount"
             type="number"
-            step="any"
-            min="0.01"
-            max="1000"
             inputMode="decimal"
             disabled={busy}
             value={shopAmount}

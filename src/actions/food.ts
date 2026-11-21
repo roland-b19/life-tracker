@@ -17,6 +17,7 @@ import {
   restoreShoppingItemsSchema,
   revertShoppingCategorySchema,
   setWaterSchema,
+  SHOPPING_ITEM_GONE,
   toggleShoppingItemSchema,
   updateNutritionTargetsSchema,
   updateShoppingItemSchema,
@@ -155,15 +156,16 @@ export async function updateTargetsAction(rawInput: unknown) {
 export async function addShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    return { item: await addShoppingItem(userId, addShoppingItemSchema.parse(rawInput)) };
+    return addShoppingItem(userId, addShoppingItemSchema.parse(rawInput));
   });
 }
 
-export async function toggleShoppingItemAction(itemId: string, isBought: boolean) {
+/** A tick; its Undo also sends the time the box had before (`checkedAt`), so the row goes back to its place. */
+export async function toggleShoppingItemAction(itemId: string, isBought: boolean, checkedAt?: Date | string | null) {
   return respond(async () => {
     const userId = await requireUser();
-    const input = toggleShoppingItemSchema.parse({ itemId, isBought });
-    const item = await toggleShoppingItem(userId, input.itemId, input.isBought);
+    const input = toggleShoppingItemSchema.parse({ itemId, isBought, checkedAt });
+    const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
     if (!item) throw new Refusal("Item not found.");
     return { item };
   });
@@ -191,9 +193,9 @@ export async function restoreShoppingItemsAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
-    const items = await restoreShoppingItems(userId, itemIds);
-    if (items.length === 0) throw new Refusal("Item not found.");
-    return { items };
+    const restored = await restoreShoppingItems(userId, itemIds);
+    if (restored.items.length === 0) throw new Refusal("Item not found.");
+    return restored;
   });
 }
 
@@ -203,7 +205,7 @@ export async function updateShoppingItemAction(rawInput: unknown) {
     const parsed = updateShoppingItemSchema.parse(rawInput);
     if (await hasDuplicateShoppingItem(userId, parsed)) throw new Refusal(`"${parsed.name}" is already on the list with this unit.`);
     const item = await updateShoppingItem(userId, parsed);
-    if (!item) throw new Refusal("This item is no longer on the list.");
+    if (!item) throw new Refusal(SHOPPING_ITEM_GONE);
     return { item };
   });
 }
@@ -250,7 +252,8 @@ export async function revertShoppingCategoryAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { kind, ...input } = revertShoppingCategorySchema.parse(rawInput);
-    await revertShoppingCategory(userId, input, kind);
-    return {};
+    const done = await revertShoppingCategory(userId, input, kind);
+    if (!done) throw new Refusal(`Can't undo: "${input.current}" has changed since.`);
+    return done;
   });
 }
