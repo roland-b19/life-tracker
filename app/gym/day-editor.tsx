@@ -3,7 +3,7 @@
 import { visible } from "@/lib/validations/common";
 import { exerciseNameKey, GYM_LIMITS } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
 import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
@@ -94,25 +94,13 @@ export function DayEditor({
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
 
-  // The modal closes the same way for Cancel, Escape, a click outside and its close button; the last tap tells Cancel
-  // (the form's own Cancel, not the new exercise's) from the rest. Capture phase: it runs before the modal's handlers.
-  const cancelTapped = useRef(false);
-  useEffect(() => {
-    const note = (e: Event) => {
-      const b = e.target instanceof Element ? e.target.closest("button") : null;
-      cancelTapped.current = e.type === "click" && b?.type === "button" && !!b.parentElement?.matches(".modal-card form > .form-actions");
-    };
-    window.addEventListener("click", note, true);
-    window.addEventListener("keydown", note, true);
-    return () => {
-      window.removeEventListener("click", note, true);
-      window.removeEventListener("keydown", note, true);
-    };
-  }, []);
+  // Cancel runs `cancel` and then `close`, like Escape, a click outside and the close button; this tells `close` the
+  // exercises are being dealt with, so it does not also offer the discarded changes back.
+  const cancelled = useRef(false);
 
   function close() {
-    if (cancelTapped.current) return void cancel();
     onClose();
+    if (cancelled.current) return void (cancelled.current = false);
     if (JSON.stringify(draft) === JSON.stringify(toDraft(day))) return;
     const kept = { draft, created };
     showToast({ message: "Changes discarded", touches: [`workout_split_days:${day.id}`], onUndo: () => onReopen(kept) });
@@ -120,7 +108,7 @@ export function DayEditor({
 
   // Cancel deletes the exercises created in this session (only those), with an Undo that brings them back.
   async function cancel() {
-    onClose();
+    cancelled.current = true;
     if (!created.length) return;
     const answers = await Promise.all(created.map((x) => deleteCustomExerciseAction(x.id).catch(() => null)));
     const gone = created.filter((_, i) => answers[i]?.success);
@@ -263,6 +251,7 @@ export function DayEditor({
     <FormModal
       isOpen
       onClose={close}
+      onCancel={() => void cancel()}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}
