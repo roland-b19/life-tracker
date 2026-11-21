@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page, type Request } from "@playwright/test";
+import { Pool } from "pg";
 import { andSettle, headIsQuiet, isRefresh, settled, test } from "./helpers";
 
 // The app shell (app/providers.tsx): open copies stay in sync, writes without an answer say why, midnight moves the
-// page to the new day, a broken page answer says so, and the Undo toasts keep a Retry for a failed restore.
+// page to the new day, a refresh missed offline runs once the server answers again, a broken page answer says so, and
+// the Undo toasts keep a Retry for a failed restore.
 // Nothing waits by time: a check that something did not happen runs the page's clock past the moment it would have
 // happened (`page.clock.runFor`, which also fires the timers set on the way, unlike `fastForward`), then waits until the
 // page has sent a request of its own (`settled`).
@@ -29,6 +31,29 @@ function countRefreshes(page: Page) {
 }
 
 const itemName = () => `Shell ${randomUUID().slice(0, 8)}`;
+
+/**
+ * Takes this one page offline and back through Chromium's network emulation (what DevTools' Offline does). Unlike
+ * `context.setOffline`, which can let the page hear "online" before every part of its network is back, the page's
+ * network and `navigator.onLine` change in one step, so a test sees the app's behavior and not that gap.
+ */
+async function network(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Network.enable");
+  return (online: boolean) =>
+    cdp.send("Network.emulateNetworkConditions", { offline: !online, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+}
+
+/** The server checks the page sends before a refresh it missed while offline. */
+function countChecks(page: Page) {
+  const seen: Request[] = [];
+  page.on("request", (r) => new URL(r.url()).pathname === "/api/health" && seen.push(r));
+  return seen;
+}
+
+// A page load would drop this mark
+const markPage = (page: Page) => page.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
+const isKept = (page: Page) => page.evaluate(() => (window as unknown as { kept?: boolean }).kept === true);
 
 test("a save in one tab refreshes another tab of the same browser within 2 s [SYNC]", async ({ signedInPage: page }) => {
   const other = await page.context().newPage();
@@ -106,6 +131,104 @@ test("a write while offline says nothing was saved and leaves the form open [X-O
   }
   await settled(page);
   await expect(page.getByRole("dialog")).toBeVisible();
+  expect(refreshes).toHaveLength(0);
+});
+
+test("a refresh that comes due while offline runs once, on screen, when the device is back online", async ({ signedInPage: page }) => {
+  const before = `Shell ex ${randomUUID().slice(0, 8)}`;
+  const after = `Renamed ex ${randomUUID().slice(0, 8)}`;
+  const { user } = await (await page.request.get("/api/auth/session")).json();
+  // Another device renames the exercise; the owner role writes it straight to the local test database
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await admin.query("INSERT INTO exercises (user_id, name, muscle_group, equipment_type, is_custom) VALUES ($1, $2, 'chest', 'barbell', true)", [
+      user.id,
+      before,
+    ]);
+    await page.clock.install();
+    await page.goto("/gym");
+    // "My exercises" shows the page's data as it comes, so a refresh shows on screen
+    const mine = page.getByRole("region", { name: "My exercises" });
+    await expect(mine.getByText(before, { exact: true })).toBeVisible();
+    await markPage(page);
+    const refreshes = countRefreshes(page);
+    const checks = countChecks(page);
+    const setOnline = await network(page);
+    await setOnline(false);
+    await admin.query("UPDATE exercises SET name = $1 WHERE user_id = $2 AND name = $3", [after, user.id, before]);
+    // Past the 60 s refresh of an open page, which comes due while offline
+    await page.clock.runFor(61_000);
+    await settled(page);
+    expect(refreshes).toHaveLength(0);
+    await setOnline(true);
+    await expect(mine.getByText(after, { exact: true })).toBeVisible();
+    expect(checks).toHaveLength(1);
+    expect(refreshes).toHaveLength(1);
+    // Offline and back again with nothing due: no second check and no second refresh
+    await setOnline(false);
+    await settled(page);
+    await setOnline(true);
+    // Past the 600 ms a refresh could wait, and still before the next 60 s refresh
+    await page.clock.runFor(2000);
+    await settled(page);
+    expect(checks).toHaveLength(1);
+    expect(refreshes).toHaveLength(1);
+    expect(await isKept(page)).toBe(true);
+  } finally {
+    await admin.end();
+  }
+});
+
+test("back online, a refresh waits until the server answers, so an open form keeps its text", async ({ signedInPage: page }) => {
+  const name = itemName();
+  await page.clock.install();
+  await openWishlist(page);
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await markPage(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await page.clock.runFor(61_000);
+  await settled(page);
+  // The device says it is online, but the server is not reachable yet: a refresh sent now would fail, and Next would
+  // turn it into a full page load
+  await page.route("**/*", (route) => route.abort("internetdisconnected"));
+  await setOnline(true);
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(checks).toHaveLength(1);
+  expect(refreshes).toHaveLength(0);
+  expect(await isKept(page)).toBe(true);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
+  // The next trigger, with the server answering, refreshes once
+  await page.unroute("**/*");
+  await setOnline(false);
+  await settled(page);
+  await setOnline(true);
+  await expect.poll(() => refreshes.length).toBe(1);
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(checks).toHaveLength(2);
+  expect(refreshes).toHaveLength(1);
+  expect(await isKept(page)).toBe(true);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
+});
+
+test("coming back online with no refresh due refreshes nothing", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await settled(page);
+  await setOnline(true);
+  // Past the 600 ms a refresh could wait, and still before the 60 s refresh of an open page
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(checks).toHaveLength(0);
   expect(refreshes).toHaveLength(0);
 });
 

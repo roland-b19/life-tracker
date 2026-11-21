@@ -12,6 +12,11 @@ describe("touchesOverlap [X-UNDO-STACK, XR-02, XR-07, HTODAY-08, MORE-10]", () =
     expect(touchesOverlap(["meals:7"], ["meals:*"])).toBe(true);
     expect(touchesOverlap(["meals:*"], ["water_logs:*"])).toBe(false);
   });
+  it("reads a key with no \":\" as its whole table name, never as a cut-off one", () => {
+    expect(touchesOverlap(["meal:*"], ["meals"])).toBe(false);
+    expect(touchesOverlap(["meals"], ["meal:*"])).toBe(false);
+    expect(touchesOverlap(["meals:*"], ["meals"])).toBe(true);
+  });
   it("never matches a toast that names nothing", () => {
     expect(touchesOverlap(undefined, ["meals:7"])).toBe(false);
     expect(touchesOverlap(["meals:7"], undefined)).toBe(false);

@@ -32,7 +32,8 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 /** Whether two `touches` lists name a row in common ("<table>:*" names every row of its table). */
 export function touchesOverlap(a: string[] = [], b: string[] = []) {
-  const table = (key: string) => key.slice(0, key.indexOf(":"));
+  // A key with no ":" is its whole table name
+  const table = (key: string) => key.split(":")[0];
   return a.some((x) => b.some((y) => x === y || ((x.endsWith(":*") || y.endsWith(":*")) && table(x) === table(y))));
 }
 
