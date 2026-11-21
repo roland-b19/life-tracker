@@ -76,7 +76,9 @@ export function DayEditor({
     });
   const dragRow = useDragSort(move);
   const known = [...exercises, ...created.filter((c) => !exercises.some((e) => e.id === c.id))];
-  const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? "Exercise";
+  // The names as the editor opened: a row whose exercise is deleted elsewhere keeps the name the user knows.
+  const [seen] = useState(() => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]));
+  const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? seen.get(id) ?? "Exercise";
   const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
   // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
   const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));

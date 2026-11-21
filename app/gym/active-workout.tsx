@@ -5,14 +5,41 @@ import { GYM_LIMITS } from "@/lib/validations/gym";
 import { Card, Field, SmallButton } from "../components/blocks";
 import { ListBox } from "../components/lists";
 import { emptyInput, ExerciseLogger } from "./exercise-logger";
-import type { SplitDay } from "./types";
-import type { useWorkout } from "./use-workout";
-import { formatClock } from "./workout-timer";
+import type { ExerciseItem, SplitDay, WorkoutSetData } from "./types";
+import { formatClock, type useWorkout } from "./use-workout";
 
-/** The workout in hand: its exercises with their set forms, the notes, and Finish, Exit or Cancel. */
+/**
+ * The exercises of a workout with no day (older data), taken from its own sets, never from the day picked on the
+ * page: each one's target is what was logged.
+ */
+export function setExercises(sets: WorkoutSetData[]): ExerciseItem[] {
+  const ids = [...new Set(sets.map((s) => s.exerciseId))];
+  return ids.map((exerciseId, orderIndex) => {
+    const own = sets.filter((s) => s.exerciseId === exerciseId);
+    const reps = own.map((s) => s.reps);
+    return {
+      id: exerciseId,
+      exerciseId,
+      exerciseName: own[0].exerciseName ?? "Exercise",
+      muscleGroup: own[0].muscleGroup ?? "other",
+      equipmentType: own[0].equipmentType ?? "barbell",
+      targetSets: own.length,
+      minReps: Math.min(...reps),
+      maxReps: Math.max(...reps),
+      orderIndex,
+    };
+  });
+}
+
+/**
+ * The workout in hand: its exercises with their set forms, the server's clock with Pause and Resume, the notes, and
+ * Finish, Exit or Cancel. `day` is the workout's own day; a workout without one lists the exercises of its sets.
+ */
 export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof useWorkout>; day: SplitDay | undefined; history: HistoryEntry[]; busy: boolean }) {
   const session = w.activeSession;
   if (!session) return null;
+  const items = day ? day.exercises : setExercises(session.sets);
+  const running = session.timer.running;
   return (
     <Card
       id="active-session-title"
@@ -20,15 +47,17 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
       sub={session.isDeload ? "Deload" : undefined}
       actions={
         <>
-          <span className={`session-timer number-tabular${w.timerPaused ? " paused" : ""}`} role="timer" aria-label="Workout time">
-            {formatClock(w.timer.shown)}
+          <span className={`session-timer number-tabular${running ? "" : " paused"}`} role="timer" aria-label="Workout time">
+            {formatClock(w.clock)}
           </span>
-          <SmallButton onClick={() => w.setTimerPaused((p) => !p)}>{w.timerPaused ? "Resume" : "Pause"}</SmallButton>
+          <SmallButton disabled={busy} onClick={(e) => w.toggleTimer(e.currentTarget)}>
+            {running ? "Pause" : "Resume"}
+          </SmallButton>
         </>
       }
     >
       <ListBox wash className="entries">
-        {day?.exercises.map((exercise) => {
+        {items.map((exercise) => {
           const id = exercise.exerciseId;
           const input = w.inputStates[id] || emptyInput(exercise);
           return (
@@ -53,13 +82,13 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
         <Field
           label="Session notes (optional)"
           type="text"
-          maxLength={GYM_LIMITS.notes}
+          maxLength={GYM_LIMITS.sessionNotes}
           disabled={busy}
           value={w.sessionNotes}
           onChange={(e) => w.setSessionNotes(e.target.value)}
         />
         <div className="session-actions">
-          <button type="button" className="secondary" disabled={busy} onClick={() => void w.finish()}>
+          <button type="button" className="secondary" disabled={busy} onClick={(e) => w.finish(e.currentTarget)}>
             Finish workout
           </button>
           {w.confirmCancel ? (

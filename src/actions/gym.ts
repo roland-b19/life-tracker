@@ -4,7 +4,6 @@ import { requireUser } from "@/server/auth";
 import { addDays, toISODate } from "@/lib/format-date";
 import { uuid } from "@/lib/validations/common";
 import {
-  cancelSessionSchema,
   addCustomExerciseSchema,
   customExerciseWithIdSchema,
   addSessionSchema,
@@ -14,6 +13,7 @@ import {
   restoreSessionSchema,
   saveDeloadWeeksSchema,
   saveSplitDaySchema,
+  sessionIdSchema,
 } from "@/lib/validations/gym";
 import { Refusal, respond } from "@/lib/validations/result";
 import {
@@ -31,6 +31,9 @@ import {
   restoreWorkoutSession,
   saveDeloadWeeks,
   saveSplitDay,
+  setWorkoutTimer,
+  EXERCISE_GONE,
+  WORKOUT_GONE,
 } from "@/lib/gym";
 
 /** A workout is made today; a day either side covers the user's timezone and a page left open past midnight. */
@@ -39,49 +42,74 @@ function nearToday(date: string, daysBack = 1) {
   return date >= addDays(today, -daysBack) && date <= addDays(today, 1);
 }
 
-/** What a custom exercise that is gone (deleted in another tab, say) answers. */
-const EXERCISE_GONE = "This exercise no longer exists.";
-
+/**
+ * Start a workout on a training day (D-039): one per day, so a day that already has one gets it back, open and timing.
+ * Answers the workout with its sets and timer, and `from`: how it was found, which Undo reverses.
+ */
 export async function startSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = addSessionSchema.parse(rawInput);
     if (!nearToday(parsed.date)) throw new Refusal("A workout can only be started for today.");
-    const session = await addWorkoutSession(userId, parsed);
-    return { session };
+    const started = await addWorkoutSession(userId, parsed);
+    if (!started) throw new Refusal("This workout could not be started.");
+    return started;
   });
 }
 
+/** Pause the workout's timer (also Exit, finish later); answers the timer. */
+export async function pauseSessionAction(rawInput: unknown) {
+  return respond(async () => {
+    const userId = await requireUser();
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, false);
+    if (!timer) throw new Refusal(WORKOUT_GONE);
+    return { timer };
+  });
+}
+
+/** Resume the workout's timer; answers the timer. */
+export async function resumeSessionAction(rawInput: unknown) {
+  return respond(async () => {
+    const userId = await requireUser();
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, true);
+    if (!timer) throw new Refusal(WORKOUT_GONE);
+    return { timer };
+  });
+}
+
+/** Finish: the server counts the duration. A workout with no sets is deleted instead (`deleted`), and Undo restores it. */
 export async function finishSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const session = await finishWorkoutSession(userId, finishSessionSchema.parse(rawInput));
-    if (!session) throw new Refusal("Workout not found.");
-    return { session };
+    const finished = await finishWorkoutSession(userId, finishSessionSchema.parse(rawInput));
+    if (!finished) throw new Refusal(WORKOUT_GONE);
+    return finished;
   });
 }
 
+/** Cancel: the workout and its sets go; answers its timer, which Undo puts back. */
 export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId } = cancelSessionSchema.parse(rawInput);
+    const { sessionId } = sessionIdSchema.parse(rawInput);
     const deleted = await cancelWorkoutSession(userId, sessionId);
-    if (!deleted) throw new Refusal("Workout not found.");
-    return {};
+    if (!deleted) throw new Refusal(WORKOUT_GONE);
+    return { timer: deleted.timer };
   });
 }
 
-/** Undo of Finish: the workout is open again. */
+/** Undo of Finish: the workout is open again and its timer runs on; answers the timer. */
 export async function reopenSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId } = cancelSessionSchema.parse(rawInput);
-    if (!(await reopenWorkoutSession(userId, sessionId))) throw new Refusal("Workout not found.");
-    return {};
+    const { sessionId } = sessionIdSchema.parse(rawInput);
+    const reopened = await reopenWorkoutSession(userId, sessionId);
+    if (!reopened) throw new Refusal(WORKOUT_GONE);
+    return reopened;
   });
 }
 
-/** Undo of Cancel: the workout and its sets come back (open, with new ids). */
+/** Undo of Cancel, and of a Finish that deleted an empty workout: the workout comes back open, with its sets, ids and timer. */
 export async function restoreSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();

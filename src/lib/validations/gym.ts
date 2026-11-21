@@ -2,8 +2,30 @@ import { z } from "zod";
 import { isoDate, newId, uuid, visible } from "./common";
 import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
 
-/** The limits of a logged set, a note, an exercise's name and a day's name (varchar(120) and varchar(100) columns), shared by the forms and the server. */
-export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500, exerciseName: 120, dayName: 100 } as const;
+/**
+ * The limits of a logged set, a set's and a workout's note, an exercise's name and a day's name (the varchar(255),
+ * varchar(500), varchar(120) and varchar(100) columns), shared by the forms and the server.
+ */
+export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, setNotes: 255, sessionNotes: 500, exerciseName: 120, dayName: 100 } as const;
+
+/** How far a set's time may sit outside its workout (before its start, after now): the device's clock may run a little off. */
+export const SET_TIME_SKEW_MS = 60_000;
+
+/** A note: trimmed, at most `max` characters, and null when nothing visible is left. */
+const note = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((s) => (visible(s) ? s : null))
+    .nullish();
+
+/**
+ * The spaces an exercise name collapses, as one regular expression for both sides: `exerciseNameKey` here and `nameKey`
+ * in `src/lib/gym.ts`, which hands this same text to Postgres. A list, not `\s`: JavaScript's `\s` takes every Unicode
+ * space and Postgres's takes a different set (not the no-break space), so the two would split one name into two.
+ */
+export const NAME_SPACES = "[ \\t\\n\\v\\f\\r\\u00a0]+";
 
 /**
  * An exercise name as two names are compared: inner spaces collapsed, case and a trailing "." ignored, so "Bench  press",
@@ -11,15 +33,16 @@ export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, notes: 500, exerc
  */
 export const exerciseNameKey = (name: string) =>
   name
-    .replace(/\s+/g, " ")
-    .trim()
+    .replace(new RegExp(NAME_SPACES, "g"), " ")
+    .replace(/^ | $/g, "")
     .replace(/ ?\.$/, "")
     .toLowerCase();
 
 export const logSetSchema = z.object({
-  // Only Undo sends these, to bring a deleted set back as it was (same id, same time).
-  id: uuid.optional(),
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future").optional(),
+  // The device makes the id (D-040); Undo also sends the time, to bring a deleted set back as it was. The server checks
+  // the time falls within the workout.
+  id: newId,
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + SET_TIME_SKEW_MS, "Date cannot be in the future").optional(),
   sessionId: uuid,
   exerciseId: uuid,
   setOrder: z.number().int().min(1).max(50),
@@ -32,21 +55,21 @@ export const logSetSchema = z.object({
   isGoodForm: z.boolean().default(true),
   flagAnomaly: z.boolean().default(false),
   anomalyReason: z.enum(["too_heavy", "pain", "form", "other"]).optional().nullable(),
-  notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
+  notes: note(GYM_LIMITS.setNotes),
 });
 
+// The day is optional here so that a missing one is refused with words of its own, not zod's "Required".
 export const addSessionSchema = z.object({
+  id: newId,
   date: isoDate,
   splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean().default(false),
-  notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
 });
 
-// The duration is required: a workout without one would read as still open.
+// The server counts the duration from the workout's own timer (D-039).
 export const finishSessionSchema = z.object({
   sessionId: uuid,
-  durationMinutes: z.number().int().min(1).max(600),
-  notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
+  notes: note(GYM_LIMITS.sessionNotes),
 });
 
 const weekSunday = isoDate.refine((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 0, "A deload week starts on a Sunday");
@@ -59,16 +82,22 @@ export const saveDeloadWeeksSchema = z
 /** Undo of saving the deload weeks: the weeks that save removed come back and the weeks it added go. */
 export const restoreDeloadWeeksSchema = z.object({ add: z.array(weekSunday).max(60), remove: z.array(weekSunday).max(60) });
 
-export const cancelSessionSchema = z.object({ sessionId: uuid });
+/** One workout by id: Cancel, Pause, Resume and the Undo of Finish. */
+export const sessionIdSchema = z.object({ sessionId: uuid });
 
-/** Undo of cancelling a workout: the session as it was, with all its sets (same ids and times). */
+/**
+ * Undo of cancelling a workout, or of a Finish that deleted an empty one: the session as it was, with all its sets (same
+ * ids and times) and its timer (the seconds counted, and whether it was running).
+ */
 export const restoreSessionSchema = z.object({
   id: uuid.optional(),
   createdAt: logSetSchema.shape.createdAt,
   date: isoDate,
   splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean(),
-  notes: z.string().max(GYM_LIMITS.notes).optional().nullable(),
+  notes: note(GYM_LIMITS.sessionNotes),
+  timerSeconds: z.number().int().min(0).max(1_000_000).default(0),
+  timerRunning: z.boolean().default(false),
   sets: z.array(logSetSchema.omit({ sessionId: true })).max(300),
 });
 

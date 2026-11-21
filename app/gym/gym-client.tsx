@@ -16,7 +16,7 @@ import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
 import { TrainingDays } from "./training-days";
 import type { ActiveSessionData, DeloadInfo, LibraryExercise, SplitDay } from "./types";
-import { useWorkout } from "./use-workout";
+import { formatClock, useWorkout } from "./use-workout";
 
 interface GymClientProps {
   userName: string;
@@ -63,7 +63,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
       <DeloadCard deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
 
       {activeSession ? (
-        <ActiveWorkout w={w} day={currentDay} history={history} busy={busy} />
+        <ActiveWorkout w={w} day={days.find((d) => d.id === activeSession.splitDayId)} history={history} busy={busy} />
       ) : (
         <>
           {paused && (
@@ -71,9 +71,9 @@ export function GymClient({ userName, split, deload, history, exercises, customE
               label="Workout in progress"
               className="resume-bar"
               title="Workout in progress"
-              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
+              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged · ${formatClock(w.clock)}`}
             >
-              <SmallButton onClick={w.resume}>Resume</SmallButton>
+              <SmallButton disabled={busy} onClick={w.resume}>Resume</SmallButton>
             </Banner>
           )}
           <TrainingDays
@@ -82,7 +82,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
             onSelect={setSelectedDayId}
             busy={busy}
             hasPaused={Boolean(paused)}
-            onStart={(day) => void w.start(day)}
+            onStart={w.start}
             onEdit={(day) => setEditing({ day })}
           />
           <ProgressPanel sets={progress} />

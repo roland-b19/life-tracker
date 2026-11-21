@@ -15,9 +15,11 @@ import {
   AddSessionInput,
   FinishSessionInput,
   LogSetInput,
+  NAME_SPACES,
   RestoreDeloadWeeksInput,
   RestoreSessionInput,
   SaveSplitDayInput,
+  SET_TIME_SKEW_MS,
 } from "./validations/gym";
 import { Refusal } from "./validations/result";
 import { setLoad } from "./gym-progress";
@@ -80,8 +82,9 @@ export async function addCustomExercise(
   });
 }
 
-/** An exercise name as `exerciseNameKey` compares it, in SQL: inner spaces collapsed, case and a trailing "." ignored. */
-const nameKey = (name: SQLWrapper) => sql`lower(regexp_replace(btrim(regexp_replace(${name}, '\\s+', ' ', 'g')), ' ?\\.$', ''))`;
+/** An exercise name as `exerciseNameKey` compares it, in SQL with the same space list: inner spaces collapsed, case and a trailing "." ignored. */
+const nameKey = (name: SQLWrapper) =>
+  sql`lower(regexp_replace(regexp_replace(regexp_replace(${name}, ${NAME_SPACES}::text, ' ', 'g'), '^ | $', '', 'g'), ' ?\\.$', ''))`;
 
 /**
  * One name per user across the defaults and their own, compared by `nameKey`, so the picker never lists two of the same
@@ -247,6 +250,13 @@ export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Pr
   });
 }
 
+/** What a set, a Finish, a Pause or a Resume on a finished workout answers (D-039): it is history now. */
+export const WORKOUT_FINISHED = "This workout is already finished.";
+/** What a workout that is not the user's (or no longer there) answers: the same words whoever owns it. */
+export const WORKOUT_GONE = "Workout not found.";
+/** What a custom exercise that is gone (deleted in another tab, say) answers. */
+export const EXERCISE_GONE = "This exercise no longer exists.";
+
 /** One open workout (no duration) per user, as the database index says: a second one is refused here with a message, not left to a constraint error. */
 async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, exceptId?: string) {
   const [open] = await tx
@@ -258,74 +268,155 @@ async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, excep
 }
 
 /**
- * Create a new workout session
+ * A workout's timer at `now` (D-039): the seconds counted before the last pause plus the running stretch since
+ * `timerRunningSince`. "Now" is the server's clock, so every device shows the same time.
  */
-export async function addWorkoutSession(
-  userId: string,
-  input: AddSessionInput,
-) {
-  if (input.splitDayId) {
-    const [day] = await db
-      .select({ id: workoutSplitDays.id })
+export function workoutTimer(row: { timerSeconds: number; timerRunningSince: Date | null }, now = new Date()) {
+  const since = row.timerRunningSince;
+  const stretch = since ? Math.max(0, Math.floor((now.getTime() - since.getTime()) / 1000)) : 0;
+  return { seconds: row.timerSeconds + stretch, running: since !== null };
+}
+
+/** The saved duration: whole minutes of the timer, at least 1, at most 600. */
+const workoutMinutes = (seconds: number) => Math.min(600, Math.max(1, Math.round(seconds / 60)));
+
+/** How Start found the day: a new workout, today's open one (running, or paused and now running) or today's finished one, reopened. */
+export type StartedFrom = "new" | "running" | "paused" | "finished";
+
+/**
+ * Start a workout (D-039): one per day, on a training day of the user's own routine. Start on a day that already has a
+ * workout reopens it and its timer runs again; another workout still open (an earlier day's) is refused. With the id the
+ * device made (D-040) a Start sent twice is one row; an id that is another user's creates nothing and answers null.
+ */
+export async function addWorkoutSession(userId: string, input: AddSessionInput) {
+  if (!input.splitDayId) throw new Refusal("Pick a training day to start a workout.");
+  const dayId = input.splitDayId;
+  const started = await db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // two Start taps (or two tabs) at once must not both pass the checks below
+    const [day] = await tx
+      .select({ id: workoutSplitDays.id, isRest: workoutSplitDays.isRest })
       .from(workoutSplitDays)
-      .where(and(eq(workoutSplitDays.id, input.splitDayId), eq(workoutSplitDays.userId, userId)));
-    if (!day) throw new Error("Split day not found or unauthorized");
-  }
-  return db.transaction(async (tx) => {
-    await lockUser(tx, "session", userId); // two Start taps (or two tabs) at once must not both pass the check below
+      .where(and(eq(workoutSplitDays.id, dayId), eq(workoutSplitDays.userId, userId)));
+    if (!day) throw new Refusal("This day is no longer in your routine.");
+    if (day.isRest) throw new Refusal("A rest day has no workout. Pick a training day.");
+    const now = new Date();
+    // Days from before this rule may hold two workouts: the open one first, else the latest.
+    const [same] = await tx
+      .select()
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.userId, userId), or(eq(workoutSessions.date, input.date), input.id ? eq(workoutSessions.id, input.id) : undefined)))
+      .orderBy(sql`${workoutSessions.durationMinutes} is null desc`, desc(workoutSessions.createdAt))
+      .limit(1);
+    const reopen = async (set: Partial<typeof workoutSessions.$inferInsert>) =>
+      (await tx.update(workoutSessions).set(set).where(eq(workoutSessions.id, same.id)).returning())[0];
+    if (same && same.durationMinutes === null) {
+      if (same.timerRunningSince) return { session: same, from: "running" as StartedFrom };
+      return { session: await reopen({ timerRunningSince: now }), from: "paused" as StartedFrom };
+    }
     await refuseIfOpen(tx, userId);
-    const [session] = await tx
+    if (same) return { session: await reopen({ durationMinutes: null, timerRunningSince: now }), from: "finished" as StartedFrom };
+    const [made] = await tx
       .insert(workoutSessions)
-      .values({ userId, date: input.date, splitDayId: input.splitDayId ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .values({ id: input.id, userId, date: input.date, splitDayId: day.id, isDeload: input.isDeload, timerSeconds: 0, timerRunningSince: now })
+      .onConflictDoNothing()
       .returning();
-    return session;
+    return made ? { session: made, from: "new" as StartedFrom } : null;
+  });
+  if (!started) return null;
+  const details = await getWorkoutSessionDetails(userId, started.session.id);
+  return details && { ...details, from: started.from };
+}
+
+/**
+ * Pause (`run` false) or resume (`run` true) a workout's timer; null when the workout is not the user's. A repeat (a
+ * second device, a double tap) changes nothing and answers the timer as it is.
+ */
+export async function setWorkoutTimer(userId: string, sessionId: string, run: boolean) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId);
+    const [row] = await tx.select().from(workoutSessions).where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)));
+    if (!row) return null;
+    if (row.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    const now = new Date();
+    if (run === (row.timerRunningSince !== null)) return workoutTimer(row, now);
+    const [next] = await tx
+      .update(workoutSessions)
+      .set(run ? { timerRunningSince: now } : { timerSeconds: workoutTimer(row, now).seconds, timerRunningSince: null })
+      .where(eq(workoutSessions.id, row.id))
+      .returning();
+    return workoutTimer(next, now);
   });
 }
 
 /**
- * Finish a workout session
+ * Finish a workout: the server counts the duration from its timer and keeps the day it was started on (one finished
+ * after midnight stays on its day). A workout with no sets is deleted instead (D-039), answered with `deleted` and the
+ * row as it was, so Undo can put it back. A second Finish is refused; null when the workout is not the user's.
  */
-export async function finishWorkoutSession(
-  userId: string,
-  input: FinishSessionInput,
-) {
-  const mine = and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId));
-  const [updated] = await db
-    .update(workoutSessions)
-    .set({ durationMinutes: input.durationMinutes, notes: input.notes ?? null })
-    .where(and(mine, isNull(workoutSessions.durationMinutes)))
-    .returning();
-  if (updated) return updated;
-  // A repeated Finish (a second tab, a double tap) keeps the first duration; undefined when the workout is not the user's.
-  const [done] = await db.select().from(workoutSessions).where(mine);
-  return done;
+export async function finishWorkoutSession(userId: string, input: FinishSessionInput) {
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // a set logged at the same moment lands before the Finish or is refused
+    const mine = and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId));
+    const [row] = await tx.select().from(workoutSessions).where(mine);
+    if (!row) return null;
+    if (row.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    const timer = workoutTimer(row);
+    const [set] = await tx.select({ id: workoutSets.id }).from(workoutSets).where(eq(workoutSets.sessionId, row.id)).limit(1);
+    if (!set) {
+      await tx.delete(workoutSessions).where(mine);
+      return { session: row, timer, deleted: true };
+    }
+    const [session] = await tx
+      .update(workoutSessions)
+      .set({ durationMinutes: workoutMinutes(timer.seconds), timerSeconds: timer.seconds, timerRunningSince: null, notes: input.notes ?? null })
+      .where(mine)
+      .returning();
+    return { session, timer: workoutTimer(session), deleted: false };
+  });
 }
 
 /**
- * Open a finished workout again (Undo of Finish): the duration goes back to null, its notes stay. Owner only.
+ * Open a finished workout again (Undo of Finish): the duration goes back to null, its notes stay and its timer runs on
+ * from the time it had. Answers its timer; owner only (null otherwise); a workout already open answers as it is.
  */
 export async function reopenWorkoutSession(userId: string, sessionId: string) {
   return db.transaction(async (tx) => {
     await lockUser(tx, "session", userId);
+    const [row] = await tx.select().from(workoutSessions).where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)));
+    if (!row) return null;
+    if (row.durationMinutes === null) return { timer: workoutTimer(row) };
     await refuseIfOpen(tx, userId, sessionId); // Undo of Finish after starting another workout would break the one-open rule
-    const [reopened] = await tx
+    const [open] = await tx
       .update(workoutSessions)
-      .set({ durationMinutes: null })
-      .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
-      .returning({ id: workoutSessions.id });
-    return reopened;
+      .set({ durationMinutes: null, timerRunningSince: new Date() })
+      .where(eq(workoutSessions.id, row.id))
+      .returning();
+    return { timer: workoutTimer(open) };
   });
 }
 
+/** Whether a set's time falls within its workout: from its start to now, give or take `SET_TIME_SKEW_MS`. */
+const withinWorkout = (at: Date, start: Date, now = Date.now()) =>
+  at.getTime() >= start.getTime() - SET_TIME_SKEW_MS && at.getTime() <= now + SET_TIME_SKEW_MS;
+
 /**
- * Put back a cancelled workout (Undo of Cancel) as an open one, with its sets under their own ids and times. Returns null when an
- * exercise is not visible to the user; a split day that is not theirs is dropped, not linked.
+ * Put back a cancelled workout (Undo of Cancel), or one a Finish deleted because it had no sets, as an open one with its
+ * sets under their own ids and times and its timer as it was. Returns null when an exercise is not visible to the user,
+ * a set's time is outside the workout or the day already has another workout (D-039); a split day that is not theirs is
+ * dropped, not linked.
  */
 export async function restoreWorkoutSession(userId: string, input: RestoreSessionInput) {
   const ids = [...new Set(input.sets.map((s) => s.exerciseId))];
   const sessionId = await db.transaction(async (tx) => {
+    await lockUser(tx, "exercise", userId); // the order `logWorkoutSet` takes them in: exercise, then session
     await lockUser(tx, "session", userId);
     await refuseIfOpen(tx, userId);
+    const [sameDay] = await tx
+      .select({ id: workoutSessions.id })
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.date, input.date)))
+      .limit(1);
+    if (sameDay) return null;
     if (ids.length) {
       const visible = await tx
         .select({ id: exercises.id })
@@ -333,6 +424,8 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
         .where(and(inArray(exercises.id, ids), or(isNull(exercises.userId), eq(exercises.userId, userId))));
       if (visible.length !== ids.length) return null;
     }
+    const start = input.createdAt ?? new Date();
+    if (input.sets.some((s) => s.createdAt && !withinWorkout(s.createdAt, start))) return null;
     const [day] = input.splitDayId
       ? await tx
           .select({ id: workoutSplitDays.id })
@@ -347,7 +440,17 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
     }
     const [session] = await tx
       .insert(workoutSessions)
-      .values({ ...(input.id && { id: input.id }), ...(input.createdAt && { createdAt: input.createdAt }), userId, date: input.date, splitDayId: day?.id ?? null, isDeload: input.isDeload, notes: input.notes ?? null })
+      .values({
+        ...(input.id && { id: input.id }),
+        createdAt: start,
+        userId,
+        date: input.date,
+        splitDayId: day?.id ?? null,
+        isDeload: input.isDeload,
+        notes: input.notes ?? null,
+        timerSeconds: input.timerSeconds,
+        timerRunningSince: input.timerRunning ? new Date() : null,
+      })
       .onConflictDoNothing()
       .returning({ id: workoutSessions.id });
     if (!session) return null;
@@ -370,19 +473,20 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
 }
 
 /**
- * Delete a workout the user started but does not want (its sets go with it). Owner only.
+ * Delete a workout the user started but does not want (its sets go with it). Owner only. Answers its timer at that
+ * moment, which Undo puts back.
  */
 export async function cancelWorkoutSession(userId: string, sessionId: string) {
   const [deleted] = await db
     .delete(workoutSessions)
     .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
-    .returning({ id: workoutSessions.id });
-  return deleted;
+    .returning();
+  return deleted && { id: deleted.id, timer: workoutTimer(deleted) };
 }
 
 /**
  * The workout the user left without finishing: the one session with no duration (the database allows one per user).
- * shortcut: "unfinished" is a null duration, so the Finish button insists on one. Upgrade: a finished_at column.
+ * shortcut: "unfinished" is a null duration, so a Finish always stores one. Upgrade: a finished_at column.
  */
 export async function getOpenWorkoutSession(userId: string) {
   const [open] = await db
@@ -397,58 +501,70 @@ export async function getOpenWorkoutSession(userId: string) {
 }
 
 /**
- * Log a workout set with automatic '!!' anomaly detection
+ * Log a workout set with automatic '!!' anomaly detection. Only into the user's own open workout (D-039), at a time
+ * within it, with an exercise the user can see. With the id the device made (D-040) a set sent twice is one row: the
+ * repeat answers the row the first one made; an id that is another user's row creates nothing and answers null.
+ * A bodyweight set is saved with no extra kg: the set form has none (D-031).
  */
 export async function logWorkoutSet(userId: string, input: LogSetInput) {
-  // The session and exercise checks are independent, so they share one round trip.
-  const [session, [exercise]] = await Promise.all([
-    db
+  return db.transaction(async (tx) => {
+    // The lock `deleteCustomExercise` takes: a custom exercise deleted at the same moment either stays (this set uses
+    // it) or is gone before the check below. Then the lock Finish takes: a set never lands in a workout finished meanwhile.
+    await lockUser(tx, "exercise", userId);
+    await lockUser(tx, "session", userId);
+    if (input.id) {
+      const [made] = await tx.select().from(workoutSets).where(and(eq(workoutSets.id, input.id), eq(workoutSets.userId, userId)));
+      if (made) return made;
+    }
+    const [session] = await tx
       // The day's target for this exercise comes from the database, never from the request: a client cannot switch the flag off.
-      .select({ id: workoutSessions.id, minReps: workoutSplitDayExercises.minReps })
+      .select({ id: workoutSessions.id, createdAt: workoutSessions.createdAt, durationMinutes: workoutSessions.durationMinutes, minReps: workoutSplitDayExercises.minReps })
       .from(workoutSessions)
       .leftJoin(
         workoutSplitDayExercises,
         and(eq(workoutSplitDayExercises.splitDayId, workoutSessions.splitDayId), eq(workoutSplitDayExercises.exerciseId, input.exerciseId)),
       )
       .where(and(eq(workoutSessions.id, input.sessionId), eq(workoutSessions.userId, userId)))
-      .limit(1),
-    db
+      .limit(1);
+    if (!session) throw new Refusal(WORKOUT_GONE);
+    if (session.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    const [exercise] = await tx
       .select({ id: exercises.id })
       .from(exercises)
-      .where(and(eq(exercises.id, input.exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId)))),
-  ]);
-  if (session.length === 0) throw new Error("Workout session not found or unauthorized");
-  if (!exercise) throw new Error("Exercise not found or unauthorized");
+      .where(and(eq(exercises.id, input.exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId))));
+    if (!exercise) throw new Refusal(EXERCISE_GONE);
+    if (input.createdAt && !withinWorkout(input.createdAt, session.createdAt)) throw new Refusal("A set's time must fall within its workout.");
 
-  // Automatic anomaly check: if reps < target min reps
-  const below = session[0].minReps !== null && input.reps < session[0].minReps;
-  const flagAnomaly = input.flagAnomaly || below;
-  const anomalyReason = input.anomalyReason ?? (below ? "too_heavy" : null);
+    // Automatic anomaly check: if reps < target min reps
+    const below = session.minReps !== null && input.reps < session.minReps;
+    const flagAnomaly = input.flagAnomaly || below;
+    const anomalyReason = input.anomalyReason ?? (below ? "too_heavy" : null);
+    const extraKg = input.loadType === "bodyweight" ? 0 : input.extraKg;
 
-  const [createdSet] = await db
-    .insert(workoutSets)
-    .values({
-      ...(input.id && { id: input.id }),
-      ...(input.createdAt && { createdAt: input.createdAt }),
-      sessionId: input.sessionId,
-      userId,
-      exerciseId: input.exerciseId,
-      setOrder: input.setOrder,
-      reps: input.reps,
-      loadType: input.loadType,
-      loadValue: input.loadValue.toFixed(2),
-      extraKg: input.extraKg ? input.extraKg.toFixed(2) : "0.00",
-      isFailure: input.isFailure,
-      isPartial: input.isPartial,
-      isGoodForm: input.isGoodForm,
-      flagAnomaly,
-      anomalyReason,
-      notes: input.notes ?? null,
-    })
-    .onConflictDoNothing() // an Undo id that is taken (by anyone) writes nothing
-    .returning();
-
-  return createdSet;
+    const [createdSet] = await tx
+      .insert(workoutSets)
+      .values({
+        ...(input.id && { id: input.id }),
+        ...(input.createdAt && { createdAt: input.createdAt }),
+        sessionId: input.sessionId,
+        userId,
+        exerciseId: input.exerciseId,
+        setOrder: input.setOrder,
+        reps: input.reps,
+        loadType: input.loadType,
+        loadValue: input.loadValue.toFixed(2),
+        extraKg: extraKg.toFixed(2),
+        isFailure: input.isFailure,
+        isPartial: input.isPartial,
+        isGoodForm: input.isGoodForm,
+        flagAnomaly,
+        anomalyReason,
+        notes: input.notes ?? null,
+      })
+      .onConflictDoNothing() // an id that is another user's row writes nothing
+      .returning();
+    return createdSet ?? null;
+  });
 }
 
 /**
@@ -500,10 +616,7 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
     .where(and(eq(workoutSets.sessionId, sessionId), eq(workoutSets.userId, userId)))
     .orderBy(workoutSets.exerciseId, workoutSets.setOrder);
 
-  return {
-    session,
-    sets,
-  };
+  return { session, sets, timer: workoutTimer(session) };
 }
 
 /** Every deload week (the Sunday that starts it): the weeks the user chose. A single deload session does not make its week one. */

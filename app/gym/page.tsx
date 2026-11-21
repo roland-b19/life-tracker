@@ -34,6 +34,7 @@ export default async function GymPage() {
       openSession={
         open && {
           id: open.session.id,
+          timer: open.timer,
           createdAt: open.session.createdAt,
           date: open.session.date,
           isDeload: open.session.isDeload,
@@ -43,6 +44,9 @@ export default async function GymPage() {
             id: s.id,
             createdAt: s.createdAt,
             exerciseId: s.exerciseId,
+            exerciseName: s.exerciseName,
+            muscleGroup: s.muscleGroup,
+            equipmentType: s.equipmentType,
             setOrder: s.setOrder,
             reps: s.reps,
             loadType: s.loadType,

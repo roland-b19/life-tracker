@@ -58,6 +58,10 @@ export interface DeloadInfo {
 export interface WorkoutSetData {
   id: string;
   exerciseId: string;
+  /** The exercise as the set names it: a workout with no day (older data) lists its exercises from its sets. */
+  exerciseName?: string;
+  muscleGroup?: string;
+  equipmentType?: string;
   setOrder: number;
   reps: number;
   loadType: string;
@@ -72,8 +76,15 @@ export interface WorkoutSetData {
   createdAt?: Date | string;
 }
 
+/** A workout's timer as the server counted it when it answered (D-039): the seconds so far, and whether it runs on. */
+export interface WorkoutTimer {
+  seconds: number;
+  running: boolean;
+}
+
 export interface ActiveSessionData {
   id: string;
+  timer: WorkoutTimer;
   createdAt?: Date | string;
   date: string;
   isDeload: boolean;

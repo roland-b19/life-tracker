@@ -23,7 +23,7 @@ export function TrainingDays({
   onSelect: (id: string) => void;
   busy: boolean;
   hasPaused: boolean; // a workout left open: starting another waits until it is resumed or finished
-  onStart: (day: SplitDay) => void;
+  onStart: (day: SplitDay, button: Element) => void; // the tapped button: the rest of a double tap on it is swallowed (D-043)
   onEdit: (day: SplitDay) => void;
 }) {
   const [isFolded, toggleFolded] = useFolded("gym");
@@ -50,9 +50,9 @@ export function TrainingDays({
                     <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused}
-                      onClick={() => {
+                      onClick={(e) => {
                         onSelect(day.id);
-                        onStart(day);
+                        onStart(day, e.currentTarget);
                       }}
                     >
                       Start
@@ -85,7 +85,7 @@ export function TrainingDays({
                     <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused || day.exercises.length === 0}
-                      onClick={() => onStart(day)}
+                      onClick={(e) => onStart(day, e.currentTarget)}
                     >
                       Start
                     </SmallButton>
