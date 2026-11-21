@@ -15,6 +15,7 @@ import {
   saveSessionNotesSchema,
   saveSplitDaySchema,
   sessionIdSchema,
+  SET_GONE,
 } from "@/lib/validations/gym";
 import { Refusal, respond } from "@/lib/validations/result";
 import {
@@ -146,7 +147,7 @@ export async function deleteSetAction(setId: string) {
   return respond(async () => {
     const userId = await requireUser();
     const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
-    if (!deleted) throw new Refusal("Set not found.");
+    if (!deleted) throw new Refusal(SET_GONE);
     return { deleted };
   });
 }

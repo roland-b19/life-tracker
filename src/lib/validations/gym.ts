@@ -13,6 +13,8 @@ export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, sets: 50, setNote
 export const NOT_NEGATIVE = "Can't be negative";
 /** What a weight with more than two decimals answers (the columns keep two), in the set form and on the server. */
 export const TWO_DECIMALS = "Maximum two decimal places.";
+/** What deleting a set that is no longer there answers: the client then has nothing to put back. */
+export const SET_GONE = "Set not found.";
 /** Whether a number has at most two decimals. */
 export const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
 /** A set's weight: at least 0, at most `max`, with at most two decimals. */

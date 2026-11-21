@@ -49,6 +49,8 @@ import { exerciseNameKey, NOT_NEGATIVE, TWO_DECIMALS, type LogSetInput } from "@
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
+import { canLog, emptyInput, inputProblem, outlierBest, ZERO_LOAD, type SetInput } from "@/../app/gym/exercise-logger";
+import { setText } from "@/../app/gym/types";
 
 const TODAY = toISODate();
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -1392,6 +1394,49 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(first).toEqual({ week: "2026-11-01", change: null });
       expect(second.change).toBeCloseTo(5);
       expect(dayProgress(sets, "other")).toEqual([]);
+    });
+  });
+
+  describe("the set form (GYMB-07, GYMB-08, GYMB-18, GYMC-09, GYMB-09)", () => {
+    const exercise = { id: "x", exerciseId: "x", exerciseName: "Bench", muscleGroup: "chest", equipmentType: "barbell", targetSets: 3, minReps: 8, maxReps: 12, orderIndex: 0 };
+    const form = (change: Partial<SetInput>): SetInput => ({ ...emptyInput(exercise), ...change });
+
+    it("starts every check unchecked (GYMB-18)", () => {
+      expect(emptyInput(exercise)).toMatchObject({ isFailure: false, isPartial: false, isGoodForm: false, loadValue: "" });
+    });
+
+    it("says why a value cannot be logged, in the server's words (GYMB-07, GYMB-08)", () => {
+      expect(inputProblem(form({ loadValue: "-5" }))).toBe(NOT_NEGATIVE);
+      expect(inputProblem(form({ loadValue: "2.555" }))).toBe(TWO_DECIMALS);
+      expect(inputProblem(form({ loadValue: "100000" }))).toBe("Value can be at most 1.000.");
+      expect(inputProblem(form({ loadValue: "0" }))).toBe(ZERO_LOAD);
+      expect(inputProblem(form({ loadValue: "0", loadType: "plates" }))).toBe(ZERO_LOAD);
+      expect(canLog(form({ loadValue: "0" }))).toBe(false);
+      // A bodyweight set takes 0 (no extra weight); an empty field stays quiet; text is the number field's own error.
+      expect(inputProblem(form({ loadValue: "0", loadType: "bodyweight" }))).toBe("");
+      expect(canLog(form({ loadValue: "0", loadType: "bodyweight" }))).toBe(true);
+      expect(inputProblem(form({ loadValue: "" }))).toBe("");
+      expect(inputProblem(form({ loadValue: "abc" }))).toBe("");
+      expect(canLog(form({ loadValue: "abc" }))).toBe(false);
+      expect(canLog(form({ loadValue: "62.5" }))).toBe(true);
+    });
+
+    it("asks twice for a load more than 50% above the best in the same unit (GYMC-09, D-038)", () => {
+      const sets = [{ loadType: "kg", load: 60 }, { loadType: "kg", load: 80 }, { loadType: "plates", load: 300 }];
+      expect(outlierBest(121, "kg", sets)).toBe(80);
+      expect(outlierBest(120, "kg", sets)).toBeNull(); // exactly 50% above is not an outlier
+      expect(outlierBest(13, "plates", [{ loadType: "plates", load: 8 }, { loadType: "kg", load: 2 }])).toBe(8);
+      expect(outlierBest(500, "kg", [])).toBeNull(); // nothing to compare with yet
+      expect(outlierBest(500, "kg", [{ loadType: "plates", load: 8 }])).toBeNull();
+    });
+
+    it("writes a set in the app's number format (GYMB-09, GYMB-19)", () => {
+      expect(setText({ reps: 5, loadType: "kg", load: 60 })).toBe("5 × 60 kg");
+      expect(setText({ reps: 8, loadType: "kg", load: 12.5 })).toBe("8 × 12,5 kg");
+      expect(setText({ reps: 1, loadType: "kg", load: 1000 })).toBe("1 × 1.000 kg");
+      expect(setText({ reps: 10, loadType: "plates", load: 7 })).toBe("10 × 7 plates");
+      expect(setText({ reps: 12, loadType: "bodyweight", load: 7.5 })).toBe("12 × BW + 7,5 kg");
+      expect(setText({ reps: 12, loadType: "bodyweight", load: 0 })).toBe("12 × BW");
     });
   });
 });

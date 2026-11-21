@@ -40,6 +40,7 @@ export default async function GymPage() {
           isDeload: open.session.isDeload,
           splitDayId: open.session.splitDayId,
           splitDayName: open.splitDayName ?? undefined,
+          notes: open.session.notes,
           sets: open.sets.map((s) => ({
             id: s.id,
             createdAt: s.createdAt,

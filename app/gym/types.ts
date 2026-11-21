@@ -1,4 +1,4 @@
-import { showDecimal } from "@/lib/decimal-input";
+import { formatAmount } from "@/lib/number-format";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -90,14 +90,15 @@ export interface ActiveSessionData {
   isDeload: boolean;
   splitDayId?: string | null;
   splitDayName?: string;
+  /** The workout's notes as the server holds them (saved on their own, D-040). */
+  notes?: string | null;
   sets: WorkoutSetData[];
 }
 
-/** "8 × 52.5 kg": one logged set as the user reads it (the extra kg is already in `load`). */
+/** "8 × 52,5 kg": one logged set as the user reads it, in the app's number format (D-037; the extra kg is already in `load`). */
 export function setText(x: { reps: number; loadType: string; load: number }) {
-  const n = Math.round(x.load * 100) / 100;
-  const l = showDecimal(String(n));
+  const l = formatAmount(x.load, 2);
   const w =
-    x.loadType === "bodyweight" ? (n > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
+    x.loadType === "bodyweight" ? (x.load > 0 ? `BW + ${l} kg` : "BW") : `${l} ${x.loadType === "plates" ? "plates" : "kg"}`;
   return `${x.reps} × ${w}`;
 }

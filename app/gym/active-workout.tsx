@@ -33,12 +33,15 @@ export function setExercises(sets: WorkoutSetData[]): ExerciseItem[] {
 
 /**
  * The workout in hand: its exercises with their set forms, the server's clock with Pause and Resume, the notes, and
- * Finish, Exit or Cancel. `day` is the workout's own day; a workout without one lists the exercises of its sets.
+ * Finish, Exit or Cancel. `day` is the workout's own day; a workout without one lists the exercises of its sets, and
+ * so does an exercise left the day with sets logged in this workout (they stay on screen, deletable).
  */
 export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof useWorkout>; day: SplitDay | undefined; history: HistoryEntry[]; busy: boolean }) {
   const session = w.activeSession;
   if (!session) return null;
-  const items = day ? day.exercises : setExercises(session.sets);
+  const items = day
+    ? [...day.exercises, ...setExercises(session.sets.filter((s) => !day.exercises.some((e) => e.exerciseId === s.exerciseId)))]
+    : setExercises(session.sets);
   const running = session.timer.running;
   return (
     <Card
@@ -71,8 +74,8 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
               busy={busy}
               onToggle={() => w.setOpenEx((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]))}
               onPatch={(change) => w.setInputStates((prev) => ({ ...prev, [id]: { ...input, ...change } }))}
-              onLog={() => void w.logSet(exercise)}
-              onDeleteSet={w.deleteSet}
+              onLog={(spot) => w.logSet(exercise, spot)}
+              onDeleteSet={(set, spot) => w.deleteSet(set, spot)}
             />
           );
         })}
@@ -86,6 +89,7 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
           disabled={busy}
           value={w.sessionNotes}
           onChange={(e) => w.setSessionNotes(e.target.value)}
+          onBlur={() => void w.saveNotes()}
         />
         <div className="session-actions">
           <button type="button" className="secondary" disabled={busy} onClick={(e) => w.finish(e.currentTarget)}>
@@ -97,13 +101,13 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
               <button type="button" className="secondary" disabled={busy} onClick={() => w.setConfirmCancel(false)}>
                 Keep
               </button>
-              <button type="button" className="danger" disabled={busy} onClick={() => void w.cancel()}>
+              <button type="button" className="danger" disabled={busy} onClick={(e) => w.cancel(e.currentTarget)}>
                 Delete
               </button>
             </>
           ) : (
             <>
-              <button type="button" className="secondary" disabled={busy} onClick={w.exit}>
+              <button type="button" className="secondary" disabled={busy} onClick={(e) => w.exit(e.currentTarget)}>
                 Exit, finish later
               </button>
               <button type="button" className="secondary" disabled={busy} onClick={() => w.setConfirmCancel(true)}>
