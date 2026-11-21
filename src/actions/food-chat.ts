@@ -31,6 +31,7 @@ export async function sendFoodChatMessageAction(input: z.input<typeof chatInputS
     return {
       reply: result.reply,
       meals: result.meals,
+      leftOut: result.leftOut,
       freshSummary: result.meals.length ? await getDailyFoodSummary(userId, date) : null,
     };
   });

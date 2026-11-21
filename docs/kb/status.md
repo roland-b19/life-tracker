@@ -43,6 +43,7 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 
 ## Open questions
 - Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
+- The `recipes` and `recipe_ingredients` tables (and their seeded rows) have no reader or writer left, and nothing sets `meals.forgotten` (read only, it keeps old hidden meals hidden) (audit fixes, steps 15 and 16): drop them? Dropping is a non-additive migration, so it waits for the owner.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.

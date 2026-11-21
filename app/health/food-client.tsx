@@ -151,6 +151,7 @@ export function FoodClient({
       role: "user" | "assistant";
       text: string;
       meals?: MealData[];
+      leftOut?: string[];
     }>
   >([]);
   const [chatInput, setChatInput] = useState("");
@@ -470,7 +471,7 @@ export function FoodClient({
       });
       if (!res.success) return takeBack(res.error);
       const meals = res.meals.filter((m) => m !== null) as MealData[];
-      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) {
         showToast({
@@ -629,6 +630,11 @@ export function FoodClient({
                   <div key={m.id} className="chat-tool number-tabular">
                     <strong>Added:</strong> {m.name} · {formatNumber(m.calories)} kcal · {formatAmount(m.protein, 1)}g P ·{" "}
                     {formatAmount(m.carbs, 1)}g C · {formatAmount(m.fat, 1)}g F
+                  </div>
+                ))}
+                {msg.leftOut?.map((line) => (
+                  <div key={line} className="chat-tool">
+                    <strong>Left out:</strong> {line}
                   </div>
                 ))}
               </div>

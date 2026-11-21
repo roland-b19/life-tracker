@@ -4,7 +4,6 @@ import {
   dailyMetrics,
   meals,
   nutritionTargets,
-  recipes,
   shoppingCategories,
   shoppingItems,
   shoppingUnits,
@@ -22,10 +21,7 @@ import {
   type ValueChange,
 } from "./validations/food";
 import { Refusal } from "./validations/result";
-import {
-  ensureUserNutritionTargets,
-  ensureUserSampleRecipes,
-} from "./food-seed";
+import { ensureUserNutritionTargets } from "./food-seed";
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
@@ -496,23 +492,6 @@ export async function restoreShoppingItems(userId: string, itemIds: string[]) {
     .set({ clearedAt: null })
     .where(and(eq(shoppingItems.userId, userId), inArray(shoppingItems.id, itemIds)))
     .returning();
-}
-
-/** The user's recipes, which the food assistant can read. */
-export async function getUserRecipes(userId: string) {
-  await ensureUserSampleRecipes(userId);
-  return db
-    .select({
-      id: recipes.id,
-      name: recipes.name,
-      description: recipes.description,
-      calories: recipes.calories,
-      protein: recipes.protein,
-      carbs: recipes.carbs,
-      fat: recipes.fat,
-    })
-    .from(recipes)
-    .where(eq(recipes.userId, userId));
 }
 
 const weightColumns = {
