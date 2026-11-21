@@ -691,9 +691,13 @@ export async function listWeightEntries(userId: string, since?: string) {
 
 /**
  * Sets the day's weight: creates the weigh-in, or changes the one the day already has. `previous` is that earlier row,
- * or null when this save created the day. A save carries the fresh id the device made (D-040): a repeat of it, once the
- * day holds that row, answers the row unchanged. An id another weigh-in already holds (another user's, or one of the
- * caller's other days) writes nothing and answers `entry: null`, whether or not the day has a weigh-in yet.
+ * or null when this save created the day. A save from the weight form carries the fresh id the device made (D-040): a
+ * repeat of it, once the day holds that row, answers the row unchanged. An id another weigh-in already holds (another
+ * user's, or one of the caller's other days) writes nothing and answers `entry: null`, whether or not the day has a
+ * weigh-in yet. The Undo of an edit (`app/health/weight-card.tsx`) sends no id: it writes the old value back to the
+ * day's row, or to a new row with a database-made id when the day was deleted meanwhile. Skipping the id check is safe
+ * for it: there is no id that could be taken, the write is keyed by the user and the day (the update is filtered by
+ * `userId`), and it sets an absolute value, so a repeat changes nothing more.
  */
 export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
