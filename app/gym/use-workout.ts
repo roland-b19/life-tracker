@@ -2,6 +2,7 @@
 
 import { toISODate } from "@/lib/format-date";
 import type { RestoreSessionInput } from "@/lib/validations/gym";
+import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -97,6 +98,10 @@ export function useWorkout({
     setActiveSession((prev) => (prev?.id === id ? { ...prev, timer } : prev));
     setPaused((prev) => (prev?.id === id ? { ...prev, timer } : prev));
   };
+  // Selects the workout's own day on the page, when the routine still has it.
+  const showDay = (dayId: string | null | undefined) => {
+    if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
+  };
   // A write of the workout's own (Start, Pause or Resume, Finish, Exit): one at a time, with the page's saving flag.
   const write = (run: () => Promise<void>, failed: string, spot?: Element | null) =>
     once(
@@ -115,30 +120,32 @@ export function useWorkout({
     );
 
   // Start on a day that already has a workout gets that one back (D-039); `from` says how, and Undo reverses just that.
+  // The screen shows the workout the server answered (its day and sets), never just the day that was tapped.
   function start(day: SplitDay, spot?: Element | null) {
     if (day.isRest) return;
     write(async () => {
       const res = await startSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode });
       if (!res.success) return warn(res.error);
-      const { session, sets, timer, from } = res;
+      const { session, sets, timer, from, splitDayName: name } = res;
       const started: ActiveSessionData = {
         id: session.id,
         timer,
         createdAt: session.createdAt,
         date: session.date,
         isDeload: session.isDeload,
-        splitDayId: day.id,
-        splitDayName: day.name,
+        splitDayId: session.splitDayId,
+        splitDayName: name,
         sets,
       };
+      showDay(session.splitDayId);
       setActiveSession(started);
       setPaused(null);
       setSessionNotes(session.notes ?? "");
       const touches = touchesOf(session.id);
-      if (from === "running") return showToast({ message: `"${day.name}" is already under way`, type: "success" });
+      if (from === "running") return showToast({ message: `"${name}" is already under way`, type: "success" });
       if (from === "paused") {
         return showToast({
-          message: `Resumed "${day.name}"`,
+          message: `Resumed "${name}"`,
           type: "success",
           touches,
           onUndo: undoWith(showToast, async () => {
@@ -150,7 +157,7 @@ export function useWorkout({
       }
       if (from === "finished") {
         return showToast({
-          message: `Reopened "${day.name}"`,
+          message: `Reopened "${name}"`,
           type: "success",
           touches,
           onUndo: undoWith(showToast, async () => {
@@ -169,7 +176,7 @@ export function useWorkout({
         });
       }
       showToast({
-        message: `Started "${day.name}"`,
+        message: `Started "${name}"`,
         type: "success",
         touches,
         // Only while nothing is logged: Undo must not delete sets.
@@ -349,15 +356,15 @@ export function useWorkout({
     write(async () => {
       const res = await resumeSessionAction({ sessionId: session.id });
       if (!res.success) return warn(res.error);
-      const dayId = session.splitDayId;
-      if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
+      showDay(session.splitDayId);
       setActiveSession({ ...session, timer: res.timer });
       setPaused(null);
     }, "Failed to resume the workout");
   }
 
-  // Undo hands a workout back as it was, unless another one was started in the meantime.
-  function takeBack(back: () => Promise<ActiveSessionData | null>, snap: SessionSnapshot, failed: string) {
+  // Undo hands a workout back as it was, unless another one was started in the meantime. A refusal shows the server's
+  // own words (D-040); `failed` only when no answer came.
+  function takeBack(back: () => Promise<Answer<{ session: ActiveSessionData }>>, snap: SessionSnapshot, failed: string) {
     return undoWith(
       showToast,
       async () => {
@@ -365,20 +372,20 @@ export function useWorkout({
           warn("Finish or leave the current workout first");
           return true;
         }
-        const restored = await back().catch(() => null);
-        if (!restored) return false;
-        if (restored.splitDayId && days.some((d) => d.id === restored.splitDayId)) selectDay(restored.splitDayId);
+        const res = await back();
+        if (!res.success) return res;
+        showDay(res.session.splitDayId);
         setSessionNotes(snap.notes);
-        setActiveSession(restored);
-        return true;
+        setActiveSession(res.session);
+        return res;
       },
-      failed,
+      (back) => (back && !back.success ? back.error : failed),
     );
   }
 
   /** Undo of Cancel, and of a Finish that deleted an empty workout: the workout comes back with its ids, sets and timer. */
   function restore(snap: SessionSnapshot, timer: WorkoutTimer) {
-    return async () => {
+    return async (): Promise<Answer<{ session: ActiveSessionData }>> => {
       const res = await restoreSessionAction({
         id: snap.session.id,
         createdAt: snap.session.createdAt,
@@ -405,17 +412,20 @@ export function useWorkout({
           notes: x.notes,
         })),
       });
-      if (!res.success) return null;
+      if (!res.success) return res;
       const { session, sets } = res.details;
       return {
-        id: session.id,
-        timer: res.details.timer,
-        createdAt: session.createdAt,
-        date: session.date,
-        isDeload: session.isDeload,
-        splitDayId: session.splitDayId,
-        splitDayName: snap.session.splitDayName,
-        sets,
+        success: true,
+        session: {
+          id: session.id,
+          timer: res.details.timer,
+          createdAt: session.createdAt,
+          date: session.date,
+          isDeload: session.isDeload,
+          splitDayId: session.splitDayId,
+          splitDayName: snap.session.splitDayName,
+          sets,
+        },
       };
     };
   }
@@ -453,7 +463,8 @@ export function useWorkout({
       if (!done.success) return warn(done.error);
       setActiveSession(null);
       setSessionNotes("");
-      const touches = touchesOf(session.id);
+      // The sets too: a set's Undo after Finish would take a set out of a finished workout.
+      const touches = touchesOf(session.id, session.sets);
       if (done.deleted) {
         return showToast({
           message: "No sets logged: the workout was removed",
@@ -469,7 +480,7 @@ export function useWorkout({
         onUndo: takeBack(
           async () => {
             const res = await reopenSessionAction({ sessionId: session.id });
-            return res.success ? { ...session, timer: res.timer } : null;
+            return res.success ? { success: true, session: { ...session, timer: res.timer } } : res;
           },
           snap,
           "Failed to reopen the workout",

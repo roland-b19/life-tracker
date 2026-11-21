@@ -304,6 +304,43 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect((await sessionsOf(userA)).map((s) => [s.id, s.duration_minutes])).toEqual([[input.id, null]]);
   });
 
+  describe("Start on another day while today has a workout (D-039: one per date)", () => {
+    const dayNamed = async (name: string) => (await getUserSplitWithDays(userA))!.days.find((d) => d.name === name)!;
+    const startOn = (splitDayId: string) => startSessionAction({ id: randomUUID(), date: TODAY, isDeload: false, splitDayId });
+
+    it("is refused, naming today's workout, whether it is running, paused or finished, and nothing changes", async () => {
+      const [upper, legs] = [await dayNamed("Upper (chest)"), await dayNamed("Legs (hamstrings)")];
+      const refused = { success: false, error: 'Today already has a workout: "Upper (chest)". Open it to keep going.' };
+      const first = succeeded(await startOn(upper.id));
+      expect(first).toMatchObject({ from: "new", splitDayName: "Upper (chest)", session: { splitDayId: upper.id } });
+      const sessionId = first.session.id;
+      const refusedAndUnchanged = async () => {
+        const before = await sessionsOf(userA);
+        expect(await startOn(legs.id)).toEqual(refused);
+        expect(await sessionsOf(userA)).toEqual(before);
+        expect(before.map((s) => [s.id, s.split_day_id])).toEqual([[sessionId, upper.id]]);
+      };
+      await refusedAndUnchanged(); // running
+      succeeded(await pauseSessionAction({ sessionId }));
+      await refusedAndUnchanged(); // paused
+      succeeded(await logSetAction(setOf(sessionId, upper.exercises[0].exerciseId)));
+      succeeded(await finishSessionAction({ sessionId }));
+      await refusedAndUnchanged(); // finished
+      expect(await setCount(sessionId)).toBe(1);
+
+      // Its own day still reopens it, under that day's name.
+      expect(succeeded(await startOn(upper.id))).toMatchObject({ from: "finished", splitDayName: "Upper (chest)", session: { id: sessionId, splitDayId: upper.id } });
+    });
+
+    it("is refused with a plain message when today's workout has no day (from before D-039)", async () => {
+      const { rows } = await admin.query("INSERT INTO workout_sessions (user_id, date) VALUES ($1, $2) RETURNING id", [userA, TODAY]);
+      const before = await sessionsOf(userA);
+      expect(await startOn((await dayNamed("Legs (hamstrings)")).id)).toEqual({ success: false, error: "Today already has a workout. Open it to keep going." });
+      expect(await sessionsOf(userA)).toEqual(before);
+      expect(before.map((s) => s.id)).toEqual([rows[0].id]);
+    });
+  });
+
   describe("the workout timer lives on the server (D-039)", () => {
     // Only Date is faked: the database driver's own timers keep running.
     beforeEach(() => {
@@ -449,6 +486,23 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(succeeded(await resumeSessionAction({ sessionId })).timer.running).toBe(true);
     succeeded(await logSetAction(setOf(sessionId, ex, { setOrder: 2 })));
     expect(succeeded(await finishSessionAction({ sessionId })).deleted).toBe(false);
+  });
+
+  it("deleteSetAction refuses another user's set id and a signed-out caller, and their set stays as it was", async () => {
+    const session = await begin(userA);
+    const set = succeeded(await logSetAction(setOf(session.id, (await trainingDay(userA)).exercises[0].exerciseId))).set;
+    const row = async () => (await admin.query("SELECT * FROM workout_sets WHERE id = $1", [set.id])).rows;
+    const before = await row();
+    authState.id = userB;
+    expect(await deleteSetAction(set.id)).toEqual({ success: false, error: "Set not found." });
+    authState.id = "";
+    expect(await deleteSetAction(set.id)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await row()).toEqual(before);
+    expect(before).toHaveLength(1);
+
+    authState.id = userA; // the owner may
+    expect(succeeded(await deleteSetAction(set.id)).deleted.id).toBe(set.id);
+    expect(await row()).toEqual([]);
   });
 
   describe("a set logged with a custom exercise while it is deleted (both orders, and at once)", () => {

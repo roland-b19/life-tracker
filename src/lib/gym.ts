@@ -284,9 +284,10 @@ const workoutMinutes = (seconds: number) => Math.min(600, Math.max(1, Math.round
 export type StartedFrom = "new" | "running" | "paused" | "finished";
 
 /**
- * Start a workout (D-039): one per day, on a training day of the user's own routine. Start on a day that already has a
- * workout reopens it and its timer runs again; another workout still open (an earlier day's) is refused. With the id the
- * device made (D-040) a Start sent twice is one row; an id that is another user's creates nothing and answers null.
+ * Start a workout (D-039): one per day, on a training day of the user's own routine. Start on the day of today's workout
+ * reopens it and its timer runs again; Start on another day while today has a workout is refused, naming that workout's
+ * day, and so is another workout still open (an earlier day's). With the id the device made (D-040) a Start sent twice
+ * is one row; an id that is another user's creates nothing and answers null. Answers the workout with its day's name.
  */
 export async function addWorkoutSession(userId: string, input: AddSessionInput) {
   if (!input.splitDayId) throw new Refusal("Pick a training day to start a workout.");
@@ -294,11 +295,12 @@ export async function addWorkoutSession(userId: string, input: AddSessionInput) 
   const started = await db.transaction(async (tx) => {
     await lockUser(tx, "session", userId); // two Start taps (or two tabs) at once must not both pass the checks below
     const [day] = await tx
-      .select({ id: workoutSplitDays.id, isRest: workoutSplitDays.isRest })
+      .select({ id: workoutSplitDays.id, name: workoutSplitDays.name, isRest: workoutSplitDays.isRest })
       .from(workoutSplitDays)
       .where(and(eq(workoutSplitDays.id, dayId), eq(workoutSplitDays.userId, userId)));
     if (!day) throw new Refusal("This day is no longer in your routine.");
     if (day.isRest) throw new Refusal("A rest day has no workout. Pick a training day.");
+    const answer = (session: typeof workoutSessions.$inferSelect, from: StartedFrom) => ({ session, from, splitDayName: day.name });
     const now = new Date();
     // Days from before this rule may hold two workouts: the open one first, else the latest.
     const [same] = await tx
@@ -307,24 +309,31 @@ export async function addWorkoutSession(userId: string, input: AddSessionInput) 
       .where(and(eq(workoutSessions.userId, userId), or(eq(workoutSessions.date, input.date), input.id ? eq(workoutSessions.id, input.id) : undefined)))
       .orderBy(sql`${workoutSessions.durationMinutes} is null desc`, desc(workoutSessions.createdAt))
       .limit(1);
+    // One workout per date: Start on another day must not switch today's workout to it, nor show it as that day.
+    if (same && same.splitDayId !== day.id) {
+      const [other] = same.splitDayId
+        ? await tx.select({ name: workoutSplitDays.name }).from(workoutSplitDays).where(eq(workoutSplitDays.id, same.splitDayId))
+        : [];
+      throw new Refusal(other ? `Today already has a workout: "${other.name}". Open it to keep going.` : "Today already has a workout. Open it to keep going.");
+    }
     const reopen = async (set: Partial<typeof workoutSessions.$inferInsert>) =>
       (await tx.update(workoutSessions).set(set).where(eq(workoutSessions.id, same.id)).returning())[0];
     if (same && same.durationMinutes === null) {
-      if (same.timerRunningSince) return { session: same, from: "running" as StartedFrom };
-      return { session: await reopen({ timerRunningSince: now }), from: "paused" as StartedFrom };
+      if (same.timerRunningSince) return answer(same, "running");
+      return answer(await reopen({ timerRunningSince: now }), "paused");
     }
     await refuseIfOpen(tx, userId);
-    if (same) return { session: await reopen({ durationMinutes: null, timerRunningSince: now }), from: "finished" as StartedFrom };
+    if (same) return answer(await reopen({ durationMinutes: null, timerRunningSince: now }), "finished");
     const [made] = await tx
       .insert(workoutSessions)
       .values({ id: input.id, userId, date: input.date, splitDayId: day.id, isDeload: input.isDeload, timerSeconds: 0, timerRunningSince: now })
       .onConflictDoNothing()
       .returning();
-    return made ? { session: made, from: "new" as StartedFrom } : null;
+    return made ? answer(made, "new") : null;
   });
   if (!started) return null;
   const details = await getWorkoutSessionDetails(userId, started.session.id);
-  return details && { ...details, from: started.from };
+  return details && { ...details, from: started.from, splitDayName: started.splitDayName };
 }
 
 /**

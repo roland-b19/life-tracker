@@ -648,3 +648,86 @@ test("a day save refused for an exercise deleted elsewhere keeps that row's name
   await expect(editor.getByText(`8. ${name}`)).toBeVisible();
   await expect(editor.getByRole("button", { name: `Remove ${name}` })).toBeVisible();
 });
+
+// D-039: one workout per date. Start on another day while today has one is refused, and the screen never shows today's
+// workout under the day that was tapped.
+test("Start on another day after today's workout is finished is refused, and the screen stays as it was, also after a reload", async ({ signedInPage: page }) => {
+  const other = "Legs (hamstrings)";
+  const refused = `Today already has a workout: "${DAY}". Open it to keep going.`;
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await logSet(page);
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(page.getByText(/^Finished the workout/)).toBeVisible();
+
+  await andSettle(page, () => page.getByRole("region", { name: "Training days" }).getByRole("button", { name: `Start ${other}`, exact: true }).click());
+  await expect(page.getByText(refused)).toBeVisible();
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Finish workout" })).toBeHidden();
+  await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
+  await openGym(page);
+  await expect(banner(page)).toBeHidden();
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+  await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
+  const userId = await userIdOf(page);
+  const { rows } = await asAdmin((admin) =>
+    admin.query("SELECT d.name, s.duration_minutes IS NOT NULL AS finished FROM workout_sessions s JOIN workout_split_days d ON d.id = s.split_day_id WHERE s.user_id = $1", [userId]),
+  );
+  expect(rows).toEqual([{ name: DAY, finished: true }]);
+});
+
+// D-040: an Undo the server refuses says why, in the server's words; its Retry stays.
+test("Undo of a workout removed for having no sets, refused because another page started one, shows the server's reason", async ({ signedInPage: page }) => {
+  const removed = "No sets logged: the workout was removed";
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(page.getByText(removed)).toBeVisible();
+  const other = await page.context().newPage();
+  await openGym(other);
+  await startWorkout(other, DAY);
+  await other.close();
+
+  await andSettle(page, () => undoIn(page, removed).click());
+  const warning = toast(page, "A workout is already open. Resume or finish it first.");
+  await expect(warning).toBeVisible();
+  await expect(warning.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(page.getByText("Failed to restore the workout")).toBeHidden();
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+});
+
+// D-040: a newer change to the workout takes the Undo away from the older toasts that touch it.
+test("Pause takes the Started toast's Undo away, and Resume the Paused toast's", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  const started = `Started "${DAY}"`;
+  await expect(undoIn(page, started)).toBeVisible();
+
+  await andSettle(page, () => page.getByRole("button", { name: "Pause", exact: true }).click());
+  await expect(undoIn(page, "Paused the timer")).toBeVisible();
+  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
+  expect(await undoIn(page, started).count()).toBe(0);
+  await expect(toast(page, started)).toBeVisible();
+  await page.keyboard.press("Shift"); // ends the Pause's tap burst (D-043): Resume is on the same spot
+
+  await andSettle(page, () => page.getByRole("button", { name: "Resume", exact: true }).click());
+  await expect(undoIn(page, "Resumed the timer")).toBeVisible();
+  expect(await undoIn(page, "Paused the timer").count()).toBe(0);
+  await expect(toast(page, "Paused the timer")).toBeVisible();
+});
+
+// D-039: a finished workout takes no set changes, so Finish takes the Undo away from its sets' toasts.
+test("Finish takes the Undo away from an Added set toast", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await logSet(page);
+  await expect(undoIn(page, "Added set 1")).toBeVisible();
+
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(undoIn(page, "Finished the workout")).toBeVisible();
+  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
+  expect(await undoIn(page, "Added set 1").count()).toBe(0);
+  await expect(toast(page, "Added set 1")).toBeVisible();
+});
