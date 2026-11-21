@@ -76,7 +76,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
           if (back?.success) upsert(entry);
           return back;
         },
-        "Failed to restore weight",
+        (back) => (back && !back.success ? back.error : "Failed to restore weight"),
       ),
     });
     return saved;
@@ -107,7 +107,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
           const gone = await deleteWeightAction(entry.id).catch(() => null);
           if (!gone) upsert(entry); // `success: false` means it is already gone, so the screen is right without it
           return gone;
-        }),
+        }, (back) => (back && !back.success ? back.error : "Failed to undo")),
       });
       return;
     }
@@ -122,8 +122,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
         showToast,
         async () => {
           upsert(before);
-          const back = await saveWeightAction({ date: before.date, kilograms: Number(before.kilograms) }).catch(() => null);
-          // The saved row is the one the database has now: a new id if the day was deleted elsewhere in the meantime.
+          // `from` is the value this edit saved: if another device changed or deleted the day since, the server refuses.
+          const back = await saveWeightAction({ date: before.date, kilograms: Number(before.kilograms), from: Number(entry.kilograms) }).catch(() => null);
           if (back?.success) upsert(back.entry);
           else upsert(entry);
           return back;

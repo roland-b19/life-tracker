@@ -311,6 +311,16 @@ export async function addShoppingItem(userId: string, input: AddShoppingItemInpu
 }
 
 /**
+ * The row an item write found on the user's list. Every write to one item (tick, delete, edit, the Undo of a merge)
+ * passes its row through here: an item no longer on the list (deleted or merged away on another device, cleared, or
+ * not the user's) is refused with SHOPPING_ITEM_GONE, the same for all of them.
+ */
+function stillListed<T>(row: T | undefined): T {
+  if (!row) throw new Refusal(SHOPPING_ITEM_GONE);
+  return row;
+}
+
+/**
  * Undo of a merging add: takes the merged row (`itemId`) off and puts the row it replaced back under its old id, with
  * its old values. Refused when the merged row has left the list or no longer has that name and unit.
  */
@@ -318,11 +328,7 @@ export async function unmergeShoppingItem(userId: string, input: UnmergeShopping
   return db.transaction(async (tx) => {
     await lockShopping(tx, userId);
     const { before } = input;
-    const [merged] = await tx
-      .select()
-      .from(shoppingItems)
-      .where(and(eq(shoppingItems.id, input.itemId), onList(userId)));
-    if (!merged) throw new Refusal(SHOPPING_ITEM_GONE);
+    const merged = stillListed((await tx.select().from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId))))[0]);
     if (merged.name.toLowerCase() !== before.name.toLowerCase() || merged.unit !== before.unit)
       throw new Refusal(`Can't undo: "${merged.name}" has changed since.`);
     await tx.delete(shoppingItems).where(eq(shoppingItems.id, merged.id));
@@ -362,8 +368,7 @@ async function hasDuplicateShoppingItem(q: Pick<typeof db, "select">, userId: st
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
   return db.transaction(async (tx) => {
     await lockShopping(tx, userId);
-    const [listed] = await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId)));
-    if (!listed) throw new Refusal(SHOPPING_ITEM_GONE);
+    stillListed((await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId))))[0]);
     if (await hasDuplicateShoppingItem(tx, userId, input)) throw new Refusal(`"${input.name}" is already on the list with this unit.`);
     const [updated] = await tx
       .update(shoppingItems)
@@ -606,12 +611,6 @@ export async function revertShoppingCategory(userId: string, input: RevertShoppi
   return db.transaction(async (tx): Promise<{ keptCurrent: boolean } | null> => {
     await lockShopping(tx, userId);
     if (current !== fallback && (await tx.select().from(table).where(ownCategory(userId, current, kind))).length === 0) return null;
-    // A name put back past the cap is refused, like a new one.
-    if (!(await listedOrRoom(tx, userId, name, kind))) {
-      const [taken] = await tx.select().from(table).where(and(list, eq(table.sortOrder, sortOrder))).limit(1);
-      if (taken) await tx.update(table).set({ sortOrder: sql`${table.sortOrder} + 1` }).where(and(list, gte(table.sortOrder, sortOrder)));
-      await tx.insert(table).values({ userId, name, sortOrder }).onConflictDoNothing();
-    }
     for (const m of merges) {
       const [merged] = await tx
         .update(shoppingItems)
@@ -640,11 +639,20 @@ export async function revertShoppingCategory(userId: string, input: RevertShoppi
     const moved = itemIds.filter((id) => !into.has(id));
     if (moved.length > 0) await moveShoppingItems(tx, userId, current, name, kind, moved, new Map(amounts.map((a) => [a.id, a.amount])));
     // Never the name just put back: a revert that names the same one twice must not delete it.
-    if (!dropCurrent || current === fallback || current === name) return { keptCurrent: false };
-    const [used] = await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.userId, userId), eq(column, current))).limit(1);
-    if (used) return { keptCurrent: true };
-    await tx.delete(table).where(ownCategory(userId, current, kind));
-    return { keptCurrent: false };
+    let keptCurrent = false;
+    if (dropCurrent && current !== fallback && current !== name) {
+      const [used] = await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.userId, userId), eq(column, current))).limit(1);
+      if (used) keptCurrent = true;
+      else await tx.delete(table).where(ownCategory(userId, current, kind));
+    }
+    // A name put back past the cap is refused, like a new one. It is checked once `current` is gone, so only an Undo
+    // that makes the list grow can hit it: a rename's Undo puts one name back for another.
+    if (!(await listedOrRoom(tx, userId, name, kind))) {
+      const [taken] = await tx.select().from(table).where(and(list, eq(table.sortOrder, sortOrder))).limit(1);
+      if (taken) await tx.update(table).set({ sortOrder: sql`${table.sortOrder} + 1` }).where(and(list, gte(table.sortOrder, sortOrder)));
+      await tx.insert(table).values({ userId, name, sortOrder }).onConflictDoNothing();
+    }
+    return { keptCurrent };
   });
 }
 
@@ -656,7 +664,7 @@ export async function toggleShoppingItem(userId: string, itemId: string, isBough
     .where(and(eq(shoppingItems.id, itemId), onList(userId)))
     .returning();
 
-  return updated;
+  return stillListed(updated);
 }
 
 /** Takes an item off the list; the row stays (until the next Clear bought) so Undo (restoreShoppingItems) brings it back exactly, bought state included. */
@@ -667,7 +675,7 @@ export async function deleteShoppingItem(userId: string, itemId: string) {
     .where(and(eq(shoppingItems.id, itemId), onList(userId)))
     .returning();
 
-  return deleted;
+  return stillListed(deleted);
 }
 
 /**
@@ -749,10 +757,11 @@ export async function listWeightEntries(userId: string, since?: string) {
  * or null when this save created the day. A save from the weight form carries the fresh id the device made (D-040): a
  * repeat of it, once the day holds that row, answers the row unchanged, with `repeated`. An id another weigh-in already
  * holds (another user's, or one of the caller's other days) writes nothing and answers `entry: null`, whether or not the
- * day has a weigh-in yet. The Undo of an edit (`app/health/weight-card.tsx`) sends no id: it writes the old value back to the
- * day's row, or to a new row with a database-made id when the day was deleted meanwhile. Skipping the id check is safe
- * for it: there is no id that could be taken, the write is keyed by the user and the day (the update is filtered by
- * `userId`), and it sets an absolute value, so a repeat changes nothing more.
+ * day has a weigh-in yet. The Undo of an edit (`app/health/weight-card.tsx`) sends no id and `from`, the value it undoes:
+ * it writes the old value back only while the day's row still holds `from`, and is refused with CHANGED_ELSEWHERE when
+ * the day was changed or deleted since. Skipping the id check is safe for it: there is no id that could be taken, the
+ * write is keyed by the user and the day (the update is filtered by `userId`), and it sets an absolute value, so a
+ * repeat changes nothing more.
  */
 export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
@@ -763,6 +772,7 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
       .from(weightEntries)
       .where(and(eq(weightEntries.userId, userId), eq(weightEntries.date, input.date)));
     if (!previous) {
+      if (input.from !== undefined) throw new Refusal(CHANGED_ELSEWHERE); // an Undo whose day was deleted since
       const inserted = await tx
         .insert(weightEntries)
         .values({ id: input.id, userId, date: input.date, kilograms })
@@ -780,8 +790,15 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
     const [entry] = await tx
       .update(weightEntries)
       .set({ kilograms })
-      .where(and(eq(weightEntries.id, previous.id), eq(weightEntries.userId, userId)))
+      .where(
+        and(
+          eq(weightEntries.id, previous.id),
+          eq(weightEntries.userId, userId),
+          input.from === undefined ? undefined : eq(weightEntries.kilograms, input.from.toFixed(2)),
+        ),
+      )
       .returning(weightColumns);
+    if (!entry) throw new Refusal(CHANGED_ELSEWHERE); // an Undo whose day holds another value now
     return { entry, previous, repeated: false };
   });
 }

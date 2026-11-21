@@ -17,7 +17,6 @@ import {
   restoreShoppingItemsSchema,
   revertShoppingCategorySchema,
   setWaterSchema,
-  SHOPPING_ITEM_GONE,
   toggleShoppingItemSchema,
   unmergeShoppingItemSchema,
   updateNutritionTargetsSchema,
@@ -179,7 +178,6 @@ export async function toggleShoppingItemAction(itemId: string, isBought: boolean
     const userId = await requireUser();
     const input = toggleShoppingItemSchema.parse({ itemId, isBought, checkedAt });
     const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
-    if (!item) throw new Refusal(SHOPPING_ITEM_GONE);
     return { item };
   });
 }
@@ -188,7 +186,6 @@ export async function deleteShoppingItemAction(itemId: string) {
   return respond(async () => {
     const userId = await requireUser();
     const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
-    if (!deleted) throw new Refusal(SHOPPING_ITEM_GONE);
     return { deleted };
   });
 }

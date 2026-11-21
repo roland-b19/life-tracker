@@ -592,6 +592,17 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         expect(await getShoppingCategories(userA, kind)).toHaveLength(200);
         expect(await getShoppingCategories(userA, kind)).not.toContain(`${prefix}2`);
       }
+      // A rename's Undo puts one name back for another, so at the cap it still goes through: the list never grows.
+      for (const kind of ["category", "unit"] as const) {
+        const prefix = kind === "unit" ? "u" : "c";
+        const { change } = succeeded(await renameShoppingCategoryAction({ kind, from: `${prefix}1`, to: "zren" }));
+        succeeded(await revertShoppingCategoryAction({ kind, name: `${prefix}1`, current: "zren", ...change!, dropCurrent: !change!.merged }));
+        const names = await getShoppingCategories(userA, kind);
+        expect(names).toHaveLength(200);
+        expect(names).toContain(`${prefix}1`);
+        expect(names).not.toContain("zren");
+      }
+      expect(await list()).toEqual(["Tea 1 pcs c1"]);
     });
 
     it("never seeds a list again once emptied: \"meat\" can then be added [HSHOP-15]", async () => {
@@ -652,7 +663,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     });
 
     it("answers a tick, delete or edit of an item merged or deleted since that it is no longer on the list, before any other check [HSHOP-16]", async () => {
-      // A stale page: the row was merged into another (an edit to its name and unit, on another device) and is gone.
+      // A stale page: the row was deleted (on another device) and is gone; a row merged away is gone the same way.
       const { item: jam } = succeeded(await addShoppingItemAction({ name: "Jam" }));
       const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea" }));
       succeeded(await deleteShoppingItemAction(jam.id));
@@ -1156,6 +1167,32 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect([added.repeated, repeat.repeated]).toEqual([false, true]);
       expect(repeat.entry?.id).toBe(weigh.id);
       expect(await listWeightEntries(userA)).toHaveLength(1);
+    });
+
+    it("undoes a weight edit only while the day still holds the value the edit saved, for its owner only [D-040]", async () => {
+      const today = toISODate();
+      const changed = { success: false, error: CHANGED_ELSEWHERE };
+      authState.id = userA;
+      succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 80 }));
+      succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 })); // the edit the Undo takes back
+      const undo = { date: today, kilograms: 80, from: 81 };
+      // Another user's Undo finds no day of theirs at 81: refused, and nothing is added for them or changed for the owner.
+      authState.id = userB;
+      expect(await saveWeightAction(undo)).toEqual(changed);
+      expect(await listWeightEntries(userB)).toEqual([]);
+      // Another device set 85 since: the owner's Undo is refused and the 85 stays.
+      authState.id = userA;
+      succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 85 }));
+      expect(await saveWeightAction(undo)).toEqual(changed);
+      expect((await listWeightEntries(userA)).map((w) => w.kilograms)).toEqual(["85.00"]);
+      // Back at 81, the same Undo writes 80.
+      succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 }));
+      expect(succeeded(await saveWeightAction(undo)).entry.kilograms).toBe("80.00");
+      // A day deleted since is not made again.
+      const { entry } = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 }));
+      succeeded(await deleteWeightAction(entry.id));
+      expect(await saveWeightAction(undo)).toEqual(changed);
+      expect(await listWeightEntries(userA)).toEqual([]);
     });
 
     it("never lets an id another user owns change, add or show anything", async () => {

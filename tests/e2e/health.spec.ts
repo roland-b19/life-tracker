@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Browser, type Page, type Request, type Response } from "@playwright/test";
 import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, settled, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
 
 // The open tab is kept per device (HTODAY-17), so a reload opens the tab picked last: each open picks its tab. A click
 // before the page has hydrated is lost, so the pick is tried until the tab is selected. On a phone the Shopping tab
@@ -598,6 +598,37 @@ test("Undo of a weight edit saved again after a lost answer puts back the value 
   expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "80.00" }]);
 });
 
+// The Undo of a weight edit carries the value the edit saved (D-040): when another device changed the day since, the
+// Undo is refused with the reason and the other device's value stays.
+test("Undo of a weight edit another device changed since is refused and keeps the newer value [D-040]", async ({ signedInPage: page, browser }) => {
+  const user = await userId(page);
+  await sql("INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, (now() AT TIME ZONE 'Europe/Bucharest')::date, 80)", [user]);
+  const saveWeight = async (p: Page, kilograms: string) => {
+    await p.getByRole("region", { name: "Weight", exact: true }).getByRole("button", { name: "Edit today's weight" }).click();
+    const form = p.getByRole("dialog", { name: "Edit weight" });
+    await form.getByLabel("Weight today (kg)").fill(kilograms);
+    await andSettle(p, () => form.getByRole("button", { name: "Save" }).click());
+    await expect(form).toBeHidden();
+  };
+  const device = await browser.newContext();
+  try {
+    await device.addCookies(await page.context().cookies());
+    const other = await device.newPage();
+    await openHealth(page, "Today");
+    await openHealth(other, "Today");
+    await saveWeight(page, "81");
+    const undo = undoIn(page, "Weight set to");
+    await undo.hover(); // the toast stays while the mouse is on it
+    await saveWeight(other, "85");
+    expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "85.00" }]);
+    await andSettle(page, () => undo.click());
+    await expect(page.getByText("This changed on another device. Check the new value and try again.")).toBeVisible();
+    expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "85.00" }]);
+  } finally {
+    await device.close();
+  }
+});
+
 // The merge's Undo puts the old row back; when the merged item was deleted meanwhile, the server's refusal says why.
 test("Undo of a merge onto an item deleted meanwhile says the item is gone [D-040]", async ({ signedInPage: page }) => {
   await openHealth(page, "Shopping");
@@ -616,12 +647,50 @@ test("Undo of a merge onto an item deleted meanwhile says the item is gone [D-04
   await expect(shoppingRow(page, name)).toHaveCount(0);
 });
 
-// A merging add takes the add's id, so the row it replaced is gone (D-042). A page that still shows that row (another
-// browser, which hears nothing of the write) gets the server's reason when it ticks it, and the row leaves.
-test("a tick on a row another browser merged away says the item is no longer on the list [HSHOP-16]", async ({ signedInPage: page, browser }) => {
+// An Undo the server refuses says why (D-040): the Undo of an edit on an item deleted meanwhile names the reason.
+test("Undo of a shopping edit on an item deleted meanwhile says the item is gone [D-040]", async ({ signedInPage: page }) => {
   await openHealth(page, "Shopping");
   const name = itemName();
+  await addItem(page, name, 2);
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Edit shopping item" });
+  await form.getByLabel("Amount").fill("3");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(undoIn(page, `Saved "${name}"`)).toBeVisible();
+
+  expect(await sql("DELETE FROM shopping_items WHERE name = $1 RETURNING id", [name])).toHaveLength(1);
+  await andSettle(page, () => undoIn(page, `Saved "${name}"`).click());
+  await expect(page.getByText("This item is no longer on the list.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Failed to undo the edit")).toHaveCount(0);
+});
+
+// Resolves once a router refresh the page started after a write's answer has come back (the app refreshes 600 ms after
+// the last answer). Set it up before the write; a test that then changes the data elsewhere awaits it first, so the
+// page's own refresh can never show that change.
+function refreshAfterWrite(page: Page) {
+  let answered = false;
+  const started = new Set<Request>();
+  const onResponse = (response: Response) => {
+    const request = response.request();
+    if (request.method() === "POST" && "next-action" in request.headers() && response.ok()) answered = true;
+  };
+  const onRequest = (request: Request) => {
+    if (answered && isRefresh(page, request)) started.add(request);
+  };
+  page.on("response", onResponse);
+  page.on("request", onRequest);
+  return page.waitForEvent("requestfinished", (request) => started.has(request)).finally(() => {
+    page.off("response", onResponse);
+    page.off("request", onRequest);
+  });
+}
+
+// A merging add takes the add's id, so the row it replaced is gone (D-042). This adds `name` on the page, then the same
+// item in another browser, which merges into it: the page, which hears nothing of that write, still shows the old row.
+async function mergeAwayElsewhere(page: Page, browser: Browser, name: string) {
+  const refreshed = refreshAfterWrite(page);
   await addItem(page, name, 1);
+  await refreshed; // a refresh that lands after the merge would show the merged row, and the page would not be stale
   const context = await browser.newContext();
   try {
     await context.addCookies(await page.context().cookies());
@@ -635,14 +704,38 @@ test("a tick on a row another browser merged away says the item is no longer on 
   } finally {
     await context.close();
   }
+}
 
-  await page.keyboard.press("Shift");
-  await andSettle(page, () => page.getByRole("button", { name: `Mark ${name} as bought`, exact: true }).click());
-  await expect(page.getByText("This item is no longer on the list.", { exact: true })).toBeVisible();
-  expect(await sql("SELECT amount, is_bought FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name])).toEqual([
-    { amount: "2.00", is_bought: false },
-  ]);
-});
+// What the stale page does to the row the other browser merged away. Each runs in its own test: a refusal refreshes
+// the page, which would show the merged row to the next one.
+const STALE_WRITES: Record<string, (page: Page, name: string) => Promise<void>> = {
+  "a tick": (page, name) => andSettle(page, () => page.getByRole("button", { name: `Mark ${name} as bought`, exact: true }).click()),
+  "a delete": (page, name) => andSettle(page, () => page.getByRole("button", { name: `Delete ${name}`, exact: true }).click()),
+  "an edit's Save": async (page, name) => {
+    await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const form = page.getByRole("dialog", { name: "Edit shopping item" });
+    await form.getByLabel("Amount").fill("3");
+    await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+    await expect(form).toBeHidden();
+  },
+};
+
+// The page gets the server's reason, never another refusal (the edit names an item now on the list, yet the item's
+// absence is what it hears), and the database keeps the merged row as it was.
+for (const [write, act] of Object.entries(STALE_WRITES)) {
+  test(`${write} on a row another browser merged away says the item is no longer on the list [HSHOP-16]`, async ({ signedInPage: page, browser }) => {
+    await openHealth(page, "Shopping");
+    const name = itemName();
+    await mergeAwayElsewhere(page, browser, name);
+    await page.keyboard.press("Shift");
+    await act(page, name);
+    await expect(page.getByText("This item is no longer on the list.", { exact: true })).toBeVisible();
+    await expect(page.getByText(`"${name}" is already on the list with this unit.`)).toHaveCount(0);
+    expect(await sql("SELECT amount, is_bought FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name])).toEqual([
+      { amount: "2.00", is_bought: false },
+    ]);
+  });
+}
 
 // Clear bought deletes for good what was taken off the list before it, so an older delete's toast loses its Undo.
 test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async ({ signedInPage: page }) => {

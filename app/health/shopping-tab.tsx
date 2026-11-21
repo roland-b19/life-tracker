@@ -150,12 +150,17 @@ export function ShoppingTab({
               type: "success",
               touches: touches([item.id]),
               saved,
-              onUndo: undoWith(showToast, async () => {
-                dropShop(item.id);
-                const gone = await deleteShoppingItemAction(item.id).then((r) => r.success, () => false);
-                if (!gone) upsertShop(item);
-                return gone;
-              }),
+              onUndo: undoWith(
+                showToast,
+                async () => {
+                  dropShop(item.id);
+                  const gone = await deleteShoppingItemAction(item.id).catch(() => null);
+                  // An item already off the list (deleted or merged on another device) stays off the screen.
+                  if (!gone?.success && gone?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
+                  return gone;
+                },
+                (back) => (back && !back.success ? back.error : "Failed to undo"),
+              ),
             }
           : {
               message: "Merged with existing item",
@@ -238,7 +243,7 @@ export function ShoppingTab({
             if (!back?.success) replaceShop(item);
             return back;
           },
-          "Failed to undo the edit",
+          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
         ),
       });
     } finally {
@@ -282,7 +287,7 @@ export function ShoppingTab({
           if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
         },
-        "Failed to undo the edit",
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
     // An item no longer on the list (merged or deleted on another device) leaves the screen, with the server's reason.
@@ -314,7 +319,7 @@ export function ShoppingTab({
           else dropShop(item.id);
           return back;
         },
-        "Failed to restore item",
+        (back) => (back && !back.success ? back.error : "Failed to restore item"),
       ),
     });
     void saved.then((res) => {
@@ -354,7 +359,7 @@ export function ShoppingTab({
           else drop();
           return back;
         },
-        "Failed to restore items",
+        (back) => (back && !back.success ? back.error : "Failed to restore items"),
       ),
     });
     void saved.then((res) => {

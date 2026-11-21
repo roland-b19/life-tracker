@@ -37,22 +37,24 @@ const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
 const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
 const TWO_DECIMALS = "Maximum two decimal places.";
 
-/** One weigh-in a day: saving a day that already has one replaces its kilograms. */
+const weightKilograms = z.number("Please enter a valid weight.").min(20, WEIGHT_RANGE).max(500, WEIGHT_RANGE).refine(twoDecimals, TWO_DECIMALS);
+
+/**
+ * One weigh-in a day: saving a day that already has one replaces its kilograms. The Undo of an edit also sends `from`,
+ * the value it undoes: it writes only while the day still holds that value (D-040).
+ */
 export const logWeightSchema = z
   .object({
     id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
     date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
-    kilograms: z
-      .number("Please enter a valid weight.")
-      .min(20, WEIGHT_RANGE)
-      .max(500, WEIGHT_RANGE)
-      .refine(twoDecimals, TWO_DECIMALS),
+    kilograms: weightKilograms,
+    from: weightKilograms.optional(),
   })
   .strict();
 
 /** Undo of a delete: the same weigh-in, under its old id. */
-export const restoreWeightSchema = logWeightSchema.extend({ id: uuid });
+export const restoreWeightSchema = logWeightSchema.omit({ from: true }).extend({ id: uuid });
 
 const targetFields = {
   calories: z.number().int().min(500).max(10000),

@@ -201,15 +201,24 @@ export function FoodClient({
     });
   }
 
-  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. `removed` gets the ids that went. */
+  /**
+   * Undo of a log: the meals leave the day at once; one the server refuses to delete comes back, and the toast says the
+   * first refusal's reason. `removed` gets the ids that went.
+   */
   const undoLogged = (logged: MealData[], removed?: (ids: Set<string>) => void) =>
-    undoWith(showToast, async () => {
-      logged.forEach((m) => applyMeal(m, -1));
-      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then((r) => r.success, () => false)));
-      logged.filter((_, i) => !results[i]).forEach((m) => applyMeal(m, 1));
-      removed?.(new Set(logged.filter((_, i) => results[i]).map((m) => m.id)));
-      return results.every(Boolean);
-    });
+    undoWith(
+      showToast,
+      async () => {
+        logged.forEach((m) => applyMeal(m, -1));
+        const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).catch(() => null)));
+        const gone = results.map((r) => r?.success === true);
+        logged.filter((_, i) => !gone[i]).forEach((m) => applyMeal(m, 1));
+        removed?.(new Set(logged.filter((_, i) => gone[i]).map((m) => m.id)));
+        const first = gone.indexOf(false);
+        return first === -1 ? true : results[first];
+      },
+      (back) => (back && !back.success ? back.error : "Failed to undo"),
+    );
 
   /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
   function handleDeleteMeal(meal: MealData) {
@@ -243,7 +252,7 @@ export function FoodClient({
           if (back?.success) applyMeal(meal, 1);
           return back;
         },
-        "Failed to restore meal",
+        (back) => (back && !back.success ? back.error : "Failed to restore meal"),
       ),
     });
     return saved;
