@@ -15,11 +15,13 @@ import {
   LogWeightInput,
   RestoreMealInput,
   RestoreWeightInput,
+  UnmergeShoppingItemInput,
   UpdateShoppingItemInput,
   UpdateNutritionTargetsInput,
   CHANGED_ELSEWHERE,
   MAX_SHOPPING_AMOUNT,
   MAX_SHOPPING_NAMES,
+  SHOPPING_ITEM_GONE,
   type RevertShoppingCategoryInput,
   type ValueChange,
 } from "./validations/food";
@@ -259,8 +261,9 @@ export async function getShoppingList(userId: string) {
 /**
  * Adds an item, or adds its amount to the same item (same name and unit) already on the list, which then takes the new
  * category (D-042); a bought one starts over at the new amount. `before` is the row as it was before a merge (null for a
- * new row), so Undo can put it back. The add carries the id the device made (D-040): a repeat answers the row it made;
- * an id another user's row holds writes nothing and is refused. A merge past the amount cap is refused.
+ * new row), so Undo (unmergeShoppingItem) can put it back. The add carries the id the device made (D-040), and a merged
+ * row takes it too (the old row goes), so a repeat of the add finds its row and adds nothing: it answers that row with
+ * `repeated`. An id another user's row holds writes nothing and is refused. A merge past the amount cap is refused.
  */
 export async function addShoppingItem(userId: string, input: AddShoppingItemInput) {
   return db.transaction(async (tx) => {
@@ -268,7 +271,7 @@ export async function addShoppingItem(userId: string, input: AddShoppingItemInpu
     if (input.id) {
       const [made] = await tx.select().from(shoppingItems).where(eq(shoppingItems.id, input.id));
       if (made && made.userId !== userId) throw new Refusal(ITEM_NOT_SAVED);
-      if (made) return { item: made, before: null };
+      if (made) return { item: made, before: null, repeated: true };
     }
     await ensureShoppingCategory(userId, input.category, "category", tx);
     await ensureShoppingCategory(userId, input.unit, "unit", tx);
@@ -281,12 +284,19 @@ export async function addShoppingItem(userId: string, input: AddShoppingItemInpu
     if (same) {
       const amount = same.isBought ? input.amount : round2(Number(same.amount) + input.amount);
       if (amount > MAX_SHOPPING_AMOUNT) throw tooMuch(same.name, amount, same.unit);
+      const merged = { amount: amount.toFixed(2), category: input.category, isBought: false, checkedAt: new Date() };
+      if (!input.id) {
+        const [item] = await tx.update(shoppingItems).set(merged).where(eq(shoppingItems.id, same.id)).returning();
+        return { item, before: same, repeated: false };
+      }
+      await tx.delete(shoppingItems).where(eq(shoppingItems.id, same.id));
       const [item] = await tx
-        .update(shoppingItems)
-        .set({ amount: amount.toFixed(2), category: input.category, isBought: false, checkedAt: new Date() })
-        .where(eq(shoppingItems.id, same.id))
+        .insert(shoppingItems)
+        .values({ ...merged, id: input.id, userId, name: same.name, unit: same.unit, createdAt: same.createdAt })
+        .onConflictDoNothing()
         .returning();
-      return { item, before: same };
+      if (!item) throw new Refusal(ITEM_NOT_SAVED); // the id was taken in between
+      return { item, before: same, repeated: false };
     }
 
     const [item] = await tx
@@ -295,7 +305,34 @@ export async function addShoppingItem(userId: string, input: AddShoppingItemInpu
       .onConflictDoNothing()
       .returning();
     if (!item) throw new Refusal(ITEM_NOT_SAVED); // the id was taken in between
-    return { item, before: null };
+    return { item, before: null, repeated: false };
+  });
+}
+
+/**
+ * Undo of a merging add: takes the merged row (`itemId`) off and puts the row it replaced back under its old id, with
+ * its old values. Refused when the merged row has left the list or no longer has that name and unit.
+ */
+export async function unmergeShoppingItem(userId: string, input: UnmergeShoppingItemInput) {
+  return db.transaction(async (tx) => {
+    await lockShopping(tx, userId);
+    const { before } = input;
+    const [merged] = await tx
+      .select()
+      .from(shoppingItems)
+      .where(and(eq(shoppingItems.id, input.itemId), onList(userId)));
+    if (!merged) throw new Refusal(SHOPPING_ITEM_GONE);
+    if (merged.name.toLowerCase() !== before.name.toLowerCase() || merged.unit !== before.unit)
+      throw new Refusal(`Can't undo: "${merged.name}" has changed since.`);
+    await tx.delete(shoppingItems).where(eq(shoppingItems.id, merged.id));
+    const [item] = await tx
+      .insert(shoppingItems)
+      .values({ ...before, amount: before.amount.toFixed(2), userId, createdAt: merged.createdAt })
+      .onConflictDoNothing()
+      .returning();
+    if (!item) throw new Refusal(ITEM_NOT_SAVED);
+    await ensureShoppingCategory(userId, item.category, "category", tx);
+    return { item };
   });
 }
 
@@ -316,24 +353,21 @@ export async function hasDuplicateShoppingItem(userId: string, input: { itemId: 
   return Boolean(row);
 }
 
+/** An edit; a category or unit past its list's cap refuses the whole edit. */
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
-  const [updated] = await db
-    .update(shoppingItems)
-    .set({
-      name: input.name,
-      amount: input.amount.toFixed(2),
-      unit: input.unit,
-      category: input.category,
-      ...(input.isBought !== undefined && { isBought: input.isBought }),
-      ...(input.checkedAt !== undefined && { checkedAt: input.checkedAt }),
-    })
-    .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
-    .returning();
-  if (updated) {
-    await ensureShoppingCategory(userId, input.category);
-    await ensureShoppingCategory(userId, input.unit, "unit");
-  }
-  return updated;
+  return db.transaction(async (tx) => {
+    await lockShopping(tx, userId);
+    const [updated] = await tx
+      .update(shoppingItems)
+      .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
+      .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
+      .returning();
+    if (updated) {
+      await ensureShoppingCategory(userId, input.category, "category", tx);
+      await ensureShoppingCategory(userId, input.unit, "unit", tx);
+    }
+    return updated;
+  });
 }
 
 /**
@@ -361,18 +395,26 @@ type Tx = Pick<typeof db, "update" | "select">;
 const ownCategory = (userId: string, name: string, kind: ShoppingKind) =>
   and(eq(DIMS[kind].table.userId, userId), eq(DIMS[kind].table.name, name));
 
-/** Adds a name at the end of the user's list unless it is there already or is the built-in fallback ("other", "pcs"). */
-async function ensureShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category", q: Pick<typeof db, "insert"> = db) {
+/**
+ * Adds a name at the end of the user's list unless it is there already or is the built-in fallback ("other", "pcs");
+ * answers whether it added it. A new name past the list's cap is refused, so the list never holds more.
+ */
+async function ensureShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category", q: Pick<typeof db, "insert" | "select"> = db) {
   const { table, fallback } = DIMS[kind];
-  if (name === fallback) return;
-  await q
+  if (name === fallback) return false;
+  const names = await q.select({ name: table.name }).from(table).where(eq(table.userId, userId));
+  if (names.some((n) => n.name === name)) return false;
+  if (names.length >= MAX_SHOPPING_NAMES) throw new Refusal(`You can have at most ${MAX_SHOPPING_NAMES} ${kind === "unit" ? "units" : "categories"}.`);
+  const added = await q
     .insert(table)
     .values({
       userId,
       name,
       sortOrder: sql`(select coalesce(max(${table.sortOrder}), 0) + 1 from ${table} where ${table.userId} = ${userId})`,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ name: table.name });
+  return added.length > 0;
 }
 
 /** The user's names in order, without the fallback. */
@@ -419,12 +461,10 @@ export async function reorderShoppingCategories(userId: string, names: string[],
 
 /** Returns false when the user already has a name like that; refuses a name past the list's cap. */
 export async function addShoppingCategory(userId: string, name: string, kind: ShoppingKind = "category") {
-  const { table } = DIMS[kind];
-  const names = await db.select({ name: table.name }).from(table).where(eq(table.userId, userId));
-  if (names.some((n) => n.name === name)) return false;
-  if (names.length >= MAX_SHOPPING_NAMES) throw new Refusal(`You can have at most ${MAX_SHOPPING_NAMES} ${kind === "unit" ? "units" : "categories"}.`);
-  await ensureShoppingCategory(userId, name, kind);
-  return true;
+  return db.transaction(async (tx) => {
+    await lockShopping(tx, userId);
+    return ensureShoppingCategory(userId, name, kind, tx);
+  });
 }
 
 /** What a shopping rename or delete changed. A unit change also reports the rows it merged and the amounts it converted. */

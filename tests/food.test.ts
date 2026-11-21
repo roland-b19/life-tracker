@@ -51,6 +51,7 @@ import {
   saveWeightAction,
   deleteWeightAction,
   revertShoppingCategoryAction,
+  unmergeShoppingItemAction,
   updateShoppingItemAction,
   toggleShoppingItemAction,
   updateStepsAction,
@@ -218,11 +219,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     authState.id = userA;
     await restoreShoppingItemsAction({ itemIds: [item.id] });
     expect((await getShoppingList(userA))[0]).toEqual(before);
-    // "Add again" onto a bought item starts it over; Undo puts amount, bought flag and time back.
-    const again = await addItem(userA, { name: "Milk", amount: 1, unit: "l", category: "dairy" });
-    expect(again.isBought).toBe(false);
-    await updateShoppingItem(userA, { itemId: item.id, name: before.name, amount: Number(before.amount), unit: before.unit, category: before.category, isBought: before.isBought, checkedAt: before.checkedAt });
-    expect((await getShoppingList(userA))[0]).toEqual(before);
+    // "Add again" onto a bought item starts it over; Undo puts the row back as it was: id, amount, bought flag and time.
+    const again = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Milk", amount: 1, unit: "l", category: "dairy" }));
+    expect(again.item.isBought).toBe(false);
+    expect(again.before).toEqual(before);
+    succeeded(await unmergeShoppingItemAction({ itemId: again.item.id, before: { ...before, amount: Number(before.amount) } }));
+    expect(await getShoppingList(userA)).toEqual([before]);
     authState.id = "";
     expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
   });
@@ -334,6 +336,50 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = "";
       expect(await addShoppingItemAction({ id: randomUUID(), name: "Rice" })).toEqual(refused(SIGNED_OUT));
       expect(await rowCount(userA)).toBe(1);
+    });
+
+    it("a merging add takes the add's id, so the same add sent again adds nothing; Undo puts the old row back under its id [D-040]", async () => {
+      const { item: old } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Eggs", amount: 1, category: "dairy" }));
+      const add = { id: randomUUID(), name: "eggs", amount: 1, category: "produce" };
+      const merged = succeeded(await addShoppingItemAction(add));
+      expect(merged.item).toMatchObject({ id: add.id, name: "Eggs", amount: "2.00", category: "produce", createdAt: old.createdAt });
+      expect(merged.before).toEqual(old);
+      // The answer was lost and the device sends the same add again: 2, not 3.
+      expect(succeeded(await addShoppingItemAction(add))).toMatchObject({ item: { id: add.id, amount: "2.00" }, before: null, repeated: true });
+      expect(await list()).toEqual(["Eggs 2 pcs produce"]);
+      expect(await rowCount(userA)).toBe(1);
+
+      const undo = { itemId: add.id, before: { ...old, amount: Number(old.amount) } };
+      authState.id = userB;
+      expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
+      authState.id = "";
+      expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SIGNED_OUT));
+      expect(await list()).toEqual(["Eggs 2 pcs produce"]);
+      authState.id = userA;
+      expect(succeeded(await unmergeShoppingItemAction(undo)).item).toEqual(old);
+      expect(await getShoppingList(userA)).toEqual([old]);
+      expect(await rowCount(userA)).toBe(1);
+      expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE)); // a second Undo changes nothing
+      expect(await getShoppingList(userA)).toEqual([old]);
+    });
+
+    it("refuses the Undo of a merge once the item is deleted or renamed, in words, and changes nothing", async () => {
+      const { item: old } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
+      const undoOf = async () => {
+        const { item, before } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
+        return { itemId: item.id, before: { ...before!, amount: Number(before!.amount) } };
+      };
+      const undo = await undoOf();
+      succeeded(await deleteShoppingItemAction(undo.itemId));
+      expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await list()).toEqual([]);
+      expect((await admin.query("SELECT id FROM shopping_items WHERE id = $1", [old.id])).rows).toEqual([]);
+
+      succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
+      const renamed = await undoOf();
+      succeeded(await updateShoppingItemAction({ itemId: renamed.itemId, name: "Green tea", amount: 2, unit: "pcs", category: "other" }));
+      expect(await unmergeShoppingItemAction(renamed)).toEqual(refused('Can\'t undo: "Green tea" has changed since.'));
+      expect(await list()).toEqual(["Green tea 2 pcs other"]);
     });
 
     it("merges an add into the same item, which takes the new category; past 1.000 it refuses with the amount [HSHOP-12]", async () => {
@@ -516,6 +562,21 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       succeeded(await reorderShoppingCategoriesAction({ names: names.slice(1).reverse() }));
       expect((await getShoppingCategories(userA))[0]).toBe("c200");
       expect(await addShoppingCategoryAction({ name: "one more" })).toEqual(refused("You can have at most 200 categories."));
+      // An item's new category or unit is added to its list, so past the cap the add or edit is refused, and writes nothing.
+      expect(await addShoppingItemAction({ name: "Tea", category: "one more" })).toEqual(refused("You can have at most 200 categories."));
+      expect(await rowCount(userA)).toBe(0);
+      const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea", category: "c1" }));
+      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "pcs", category: "one more" })).toEqual(
+        refused("You can have at most 200 categories."),
+      );
+      await admin.query("INSERT INTO shopping_units (user_id, name, sort_order) SELECT $1, 'u' || g, g FROM generate_series(1, 200) g", [userA]);
+      expect(await addShoppingItemAction({ name: "Rice", unit: "sack" })).toEqual(refused("You can have at most 200 units."));
+      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "sack", category: "c1" })).toEqual(
+        refused("You can have at most 200 units."),
+      );
+      expect(await list()).toEqual(["Tea 1 pcs c1"]);
+      expect(await getShoppingCategories(userA)).toHaveLength(200);
+      expect(await getShoppingCategories(userA, "unit")).toHaveLength(200);
       const itemIds = Array.from({ length: 5001 }, () => randomUUID());
       expect(await revertShoppingCategoryAction({ name: "c1", current: "other", sortOrder: 1, itemIds, dropCurrent: false })).toEqual(
         refused("Too many (max 5000)"),
@@ -601,6 +662,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         deleteShoppingItemAction(itemId),
         clearBoughtItemsAction({ itemIds: [itemId] }),
         updateShoppingItemAction({ itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
+        unmergeShoppingItemAction({ itemId, before: { id: randomUUID(), name: "Eggs", amount: 1, unit: "pcs", category: "dairy", isBought: false, checkedAt: null } }),
         renameShoppingCategoryAction({ from: "dairy", to: "fridge" }),
         restoreShoppingItemsAction({ itemIds: [itemId] }),
         reorderShoppingCategoriesAction({ names: ["dairy"] }),

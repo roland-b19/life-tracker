@@ -471,6 +471,138 @@ test("editing an item that a category delete moved takes the delete's Undo [TOUC
   await expect(page.locator(".toast-item").filter({ hasText: removed })).toBeVisible();
 });
 
+// The first write that carries `marker` reaches the server, which writes, but its answer is lost on the way back (the
+// page sees a network error). Answers what that write sent.
+async function loseAnswerOnce(page: Page, marker: string) {
+  let sent = "";
+  await page.route(
+    (url) => url.pathname === "/health",
+    async (route) => {
+      const request = route.request();
+      const body = request.postData() ?? "";
+      if (sent || request.method() !== "POST" || !("next-action" in request.headers()) || !body.includes(marker)) return route.fallback();
+      sent = body;
+      await route.fetch();
+      await route.abort();
+    },
+  );
+  return () => sent;
+}
+
+async function sql<T>(query: string, values: unknown[]) {
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    return (await admin.query(query, values)).rows as T[];
+  } finally {
+    await admin.end();
+  }
+}
+
+// The add form makes its id when it opens and keeps it, so Save again after a lost answer sends the same add, which the
+// server answers with the row the first one made (D-040), also when that add merged into a row already on the list.
+test("Save again after a lost answer adds the item once, also when the add merged [D-040]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await addItem(page, name, 1);
+  await dismissToast(page, `Added "${name}"`);
+  await loseAnswerOnce(page, `"name":"${name}"`);
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New shopping item" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByLabel("Amount").fill("1");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
+  await expect(form).toBeVisible();
+
+  // Shift ends the tap burst (D-043): this Save is a second one, on purpose.
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
+  await expect(form).toBeHidden();
+  await expect(shoppingRow(page, name)).toHaveCount(1);
+  await expect(shoppingRow(page, name)).toContainText("2 pcs");
+  expect(await sql("SELECT amount FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name])).toEqual([{ amount: "2.00" }]);
+});
+
+test("Save again after a lost answer logs the meal once [D-040]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  // A number no other meal test uses, to find this meal's write.
+  const kcal = 500 + Math.floor(Math.random() * 400);
+  const sent = await loseAnswerOnce(page, `"calories":${kcal}`);
+
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const form = page.getByRole("dialog", { name: "New meal" });
+  await form.getByLabel("Calories (kcal)").fill(String(kcal));
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
+  await expect(form).toBeVisible();
+
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"calories":${kcal}`);
+  await expect(form).toBeHidden();
+  await expect(page.getByRole("button", { name: deleteMeal(String(kcal)) })).toHaveCount(1);
+  const id = /"id":"([0-9a-f-]{36})"/.exec(sent())?.[1];
+  expect(id).toBeTruthy();
+  const rows = await sql<{ count: string }>(
+    "SELECT count(*) FROM meals WHERE calories = $2 AND user_id = (SELECT user_id FROM meals WHERE id = $1)",
+    [id, kcal],
+  );
+  expect(rows).toEqual([{ count: "1" }]);
+});
+
+// The merge's Undo puts the old row back; when the merged item was deleted meanwhile, the server's refusal says why.
+test("Undo of a merge onto an item deleted meanwhile says the item is gone [D-040]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await addItem(page, name, 1);
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New shopping item" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByLabel("Amount").fill("1");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(undoIn(page, "Merged with existing item")).toBeVisible();
+
+  expect(await sql("DELETE FROM shopping_items WHERE name = $1 RETURNING id", [name])).toHaveLength(1);
+  await andSettle(page, () => undoIn(page, "Merged with existing item").click());
+  await expect(page.getByText("This item is no longer on the list.", { exact: true })).toBeVisible();
+  await expect(shoppingRow(page, name)).toHaveCount(0);
+});
+
+// Clear bought deletes for good what was taken off the list before it, so an older delete's toast loses its Undo.
+test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const base = itemName();
+  const [gone, bought] = [`${base} a`, `${base} b`];
+  for (const n of [gone, bought]) await addItem(page, n, 1);
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Delete ${gone}`, exact: true }).click());
+  await expect(undoIn(page, `Removed "${gone}"`)).toBeVisible();
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${bought} as bought`, exact: true }).click());
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: "Clear bought" }).click());
+  await expect(page.getByText("Cleared 1 bought item")).toBeVisible();
+  // Counted at once, while the toast is still on screen (see the meal [TOUCHES] test below).
+  expect(await undoIn(page, `Removed "${gone}"`).count()).toBe(0);
+  await expect(page.locator(".toast-item").filter({ hasText: `Removed "${gone}"` })).toBeVisible();
+});
+
+// A unit shows as stored ("pcs"), also in the toast of a unit delete [HSHOP-14].
+test("deleting a unit says its items are in pcs, in lower case [HSHOP-14]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New shopping item" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByRole("combobox", { name: "Unit" }).selectOption("jar");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(shoppingRow(page, name)).toContainText("1 jar");
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: "Delete unit jar", exact: true }).click());
+  await expect(page.getByText('Removed "jar"; its items are in pcs', { exact: true })).toBeVisible();
+  await expect(shoppingRow(page, name)).toContainText("1 pcs");
+});
+
 test("a signed-out visit to /health goes to the sign-in form, which comes back to /health [PATH]", async ({ page }) => {
   const name = `e2e-${randomUUID().slice(0, 8)}`;
   const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });

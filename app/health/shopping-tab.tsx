@@ -22,6 +22,7 @@ import {
   revertShoppingCategoryAction,
   restoreShoppingItemsAction,
   toggleShoppingItemAction,
+  unmergeShoppingItemAction,
   updateShoppingItemAction,
 } from "@/actions/food";
 
@@ -80,6 +81,11 @@ export function ShoppingTab({
   // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
+  // The id the open add form's item gets (D-040): made when the form opens and kept until the add is answered, so a
+  // second Save after a lost answer sends the same id and adds nothing.
+  const addId = useRef("");
+  // Items deleted one by one since the last Clear bought: it purges them for good, so its toast takes their Undos too.
+  const offList = useRef(new Set<string>());
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
   // Shopping input state
@@ -108,6 +114,7 @@ export function ShoppingTab({
     setShopAmount(item ? String(Number(item.amount)) : "1");
     setShopUnit(item?.unit ?? "pcs");
     setShopCategory(item?.category ?? "other");
+    if (!item) addId.current = crypto.randomUUID();
     setIsShopModalOpen(true);
   }
 
@@ -117,12 +124,14 @@ export function ShoppingTab({
 
   /**
    * Adds an item; the server adds the amount to the same item (name and unit) when it is already on the list, which then
-   * takes the new category (D-042). The id is made here, so a repeat of the same add after a lost answer adds nothing (D-040).
+   * takes the new category (D-042) and the add's id. The id comes from the form (addId), so a repeat of the same add
+   * after a lost answer adds nothing (D-040): the server answers the row the first one made, which shows without an Undo
+   * (whether that add merged is no longer known).
    */
   async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
     setBusy(true);
     try {
-      const saved = addShoppingItemAction({ id: crypto.randomUUID(), ...input }).catch(() => null);
+      const saved = addShoppingItemAction({ id: addId.current, ...input }).catch(() => null);
       const res = await saved;
       if (!res?.success) {
         setErrorMsg(res?.error ?? "Failed to add item");
@@ -130,9 +139,12 @@ export function ShoppingTab({
       }
       const item = res.item as ShoppingItemData;
       const before = res.before as ShoppingItemData | null;
+      if (before) dropShop(before.id);
       upsertShop(item);
       showToast(
-        !before
+        res.repeated
+          ? { message: `Added "${item.name}"`, type: "success", touches: touches([item.id]), saved }
+          : !before
           ? {
               message: `Added "${item.name}"`,
               type: "success",
@@ -148,22 +160,25 @@ export function ShoppingTab({
           : {
               message: "Merged with existing item",
               type: "success",
-              touches: touches([item.id]),
+              touches: touches([item.id, before.id]),
               saved,
+              // The row the add replaced comes back under its own id; a refusal (the item deleted or changed since) says why.
               onUndo: undoWith(
                 showToast,
                 async () => {
+                  dropShop(item.id);
                   upsertShop(before);
-                  const back = await updateShoppingItemAction({
-                    ...toShopInput(before),
-                    itemId: before.id,
-                    isBought: before.isBought,
-                    checkedAt: before.checkedAt,
+                  const back = await unmergeShoppingItemAction({
+                    itemId: item.id,
+                    before: { ...toShopInput(before), id: before.id, isBought: before.isBought, checkedAt: before.checkedAt },
                   }).catch(() => null);
-                  if (!back?.success) upsertShop(item);
+                  if (!back?.success) {
+                    dropShop(before.id);
+                    if (back?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
+                  }
                   return back;
                 },
-                "Failed to undo the edit",
+                (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
               ),
             },
       );
@@ -281,6 +296,7 @@ export function ShoppingTab({
   function handleDeleteShoppingItem(item: ShoppingItemData) {
     // The row leaves at once; the server delete runs alongside, so the tap never waits on the network.
     dropShop(item.id);
+    offList.current.add(item.id);
     const saved = deleteShoppingItemAction(item.id).catch(() => null);
     showToast({
       message: `Removed "${item.name}"`,
@@ -308,12 +324,15 @@ export function ShoppingTab({
   }
 
   // Like a delete: the rows leave and the toast shows at once; a failed clear puts them back. More than one clear takes
-  // is refused before anything changes.
+  // is refused before anything changes. The server deletes for good what was taken off the list before (the last
+  // batch, the items deleted since), so the toast touches those too and their older toasts lose their Undo.
   function handleClearBought() {
     const cleared = shoppingList.filter((i) => i.isBought);
     if (!cleared.length) return;
     if (cleared.length > MAX_CLEARED) return warn(`Clear bought takes at most ${formatNumber(MAX_CLEARED)} items at once; untick some first.`);
     const ids = cleared.map((c) => c.id);
+    const purged = [...offList.current].filter((id) => !shoppingList.some((i) => i.id === id));
+    offList.current = new Set(ids);
     const saved = clearBoughtItemsAction({ itemIds: ids }).catch(() => null);
     const gone = new Set(ids);
     const drop = () => setShoppingList((prev) => prev.filter((i) => !gone.has(i.id)));
@@ -321,7 +340,7 @@ export function ShoppingTab({
     drop();
     showToast({
       message: `Cleared ${cleared.length} bought item${cleared.length === 1 ? "" : "s"}`,
-      touches: touches(ids),
+      touches: touches([...ids, ...purged]),
       saved,
       onUndo: undoWith(
         showToast,
@@ -339,8 +358,10 @@ export function ShoppingTab({
     void saved.then((res) => {
       if (res?.success) return;
       putBack();
+      for (const id of purged) offList.current.add(id); // not purged after all
       warn("Failed to clear bought items");
     });
+    return saved;
   }
 
   return (
@@ -354,7 +375,10 @@ export function ShoppingTab({
         below
         actions={
           <>
-            <SmallButton disabled={shoppingList.every((i) => !i.isBought)} onClick={handleClearBought}>
+            <SmallButton
+              disabled={shoppingList.every((i) => !i.isBought)}
+              onClick={(e) => once("shopping:clear", handleClearBought, e.currentTarget)}
+            >
               Clear bought
             </SmallButton>
             <AddButton onClick={() => openShopForm(null)}>Add item</AddButton>

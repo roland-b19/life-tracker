@@ -144,6 +144,14 @@ export function FoodClient({
   // The button last tapped, set before its own handler runs.
   const tappedButton = useRef<Element | null>(null);
   const noteTap = (e: React.MouseEvent) => (tappedButton.current = (e.target as Element).closest("button"));
+  // The id the open meal form's meal gets (D-040): made when the form opens and kept until the add is answered, so a
+  // second Save after a lost answer sends the same id and adds nothing.
+  const mealId = useRef("");
+  const openMealForm = () => {
+    setErrorMsg("");
+    mealId.current = crypto.randomUUID();
+    setIsMealModalOpen(true);
+  };
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -249,8 +257,8 @@ export function FoodClient({
     if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setErrorMsg("Protein, carbs and fat must each be 1.000 g or less.");
 
     setErrorMsg("");
-    // The id is made here, so a repeat of the same save after a lost answer adds nothing (D-040).
-    const saved = logMealAction({ id: crypto.randomUUID(), date: todayDate, ...entered }).catch(() => null);
+    // The id comes from the form (mealId), so a repeat of the same save after a lost answer adds nothing (D-040).
+    const saved = logMealAction({ id: mealId.current, date: todayDate, ...entered }).catch(() => null);
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to add meal");
     const meal = res.meal as MealData;
@@ -553,7 +561,7 @@ export function FoodClient({
               actions={
                 <>
                   <SmallButton onClick={openGoals}>Edit goals</SmallButton>
-                  <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                  <AddButton onClick={openMealForm}>Add meal</AddButton>
                 </>
               }
             >
@@ -632,8 +640,9 @@ export function FoodClient({
                     {formatAmount(m.carbs, 1)}g C · {formatAmount(m.fat, 1)}g F
                   </div>
                 ))}
-                {msg.leftOut?.map((line) => (
-                  <div key={line} className="chat-tool">
+                {msg.leftOut?.map((line, i) => (
+                  // The same line can be left out twice, so the place is the key.
+                  <div key={i} className="chat-tool">
                     <strong>Left out:</strong> {line}
                   </div>
                 ))}

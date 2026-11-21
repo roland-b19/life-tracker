@@ -115,11 +115,12 @@ const shoppingItemFields = z.object({
 
 export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
 
-export const updateShoppingItemSchema = shoppingItemFields.extend({
+export const updateShoppingItemSchema = shoppingItemFields.extend({ itemId: uuid });
+
+/** Undo of an add that merged: the merged row (`itemId`) and the row it replaced, as it was. */
+export const unmergeShoppingItemSchema = z.object({
   itemId: uuid,
-  // Only Undo sends these, to put back the bought state an "add again" reset.
-  isBought: z.boolean().optional(),
-  checkedAt: z.coerce.date().nullable().optional(),
+  before: shoppingItemFields.extend({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable() }),
 });
 
 /** The two lists of names the user manages on the shopping list; "other" and "pcs" are their built-in fallbacks. */
@@ -179,4 +180,5 @@ export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type AddShoppingItemInput = z.infer<typeof addShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;
+export type UnmergeShoppingItemInput = z.infer<typeof unmergeShoppingItemSchema>;
 export type RevertShoppingCategoryInput = Omit<z.infer<typeof revertShoppingCategorySchema>, "kind">;

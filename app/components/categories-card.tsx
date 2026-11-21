@@ -247,7 +247,8 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onRefile(cat, builtIn);
     onSynced?.();
     showToast({
-      message: `Removed "${cat}"; its items are in ${categoryLabel(builtIn)}`,
+      // Units show as stored ("pcs"); categories with a capital.
+      message: `Removed "${cat}"; its items are in ${noun === "unit" ? builtIn : categoryLabel(builtIn)}`,
       touches: touches([cat], change.itemIds),
       onUndo: revert(cat, builtIn, change, false, at),
     });

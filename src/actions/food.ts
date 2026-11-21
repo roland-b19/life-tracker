@@ -19,6 +19,7 @@ import {
   setWaterSchema,
   SHOPPING_ITEM_GONE,
   toggleShoppingItemSchema,
+  unmergeShoppingItemSchema,
   updateNutritionTargetsSchema,
   updateShoppingItemSchema,
   updateStepsSchema,
@@ -41,6 +42,7 @@ import {
   revertShoppingCategory,
   saveWeightEntry,
   toggleShoppingItem,
+  unmergeShoppingItem,
   updateDailySteps,
   updateDailyWater,
   updateNutritionTargets,
@@ -157,6 +159,14 @@ export async function addShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     return addShoppingItem(userId, addShoppingItemSchema.parse(rawInput));
+  });
+}
+
+/** Undo of an add that merged into an item on the list: that item comes back as it was, under its own id. */
+export async function unmergeShoppingItemAction(rawInput: unknown) {
+  return respond(async () => {
+    const userId = await requireUser();
+    return unmergeShoppingItem(userId, unmergeShoppingItemSchema.parse(rawInput));
   });
 }
 

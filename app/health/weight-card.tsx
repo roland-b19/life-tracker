@@ -33,6 +33,9 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
+  // The id a new day's weigh-in gets (D-040): made when the form opens and kept until the save is answered, so a second
+  // Save after a lost answer sends the same id and the server answers the row the first one made.
+  const addId = useRef("");
 
   const average = sevenDayAverage(entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })), today);
   // A day has one weigh-in, so a row replaces the one on its day.
@@ -42,6 +45,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     setErrorMsg("");
     setKilograms(current?.kilograms ?? "");
     setEditing(current?.id ?? null);
+    addId.current = crypto.randomUUID();
     setOpen(true);
   }
 
@@ -79,8 +83,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     setErrorMsg("");
     const value = Number(kilograms);
     // The screen can be behind the database (another device): the server creates the day or changes the row it already
-    // has. The id is made here, so a repeat of the same add after a lost answer adds nothing (D-040).
-    const saved = saveWeightAction({ id: crypto.randomUUID(), date: today, kilograms: value }).catch(() => null);
+    // has. The id comes from the form (addId), so a repeat of the same add after a lost answer adds nothing (D-040).
+    const saved = saveWeightAction({ id: addId.current, date: today, kilograms: value }).catch(() => null);
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save weight");
     const { entry, previous } = res;
