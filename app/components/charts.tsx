@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { formatAmount } from "@/lib/number-format";
 import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
@@ -98,7 +99,7 @@ export function LineChart({
   const path = line.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
   const ticks = !values.length ? [] : hi === lo ? [lo] : [hi, (hi + lo) / 2, lo];
   const grid = ticks.length ? ticks.map(y) : [pad, height / 2, height - pad];
-  const fmt = (n: number) => String(Math.round(n * 100) / 100);
+  const fmt = (n: number) => formatAmount(n, 2); // the app's number format (D-037): "7,5", "101,55", "12.500"
   // The value axis is as wide as its longest label (the font is monospace), so the plot starts right after it
   const labelChars = Math.max(1, ...ticks.map((t) => fmt(t).length));
   return (

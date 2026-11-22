@@ -11,7 +11,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { FoodClient } from "./food-client";
 
 export default async function FoodPage() {
-  const user = await requirePageUser();
+  const user = await requirePageUser("/health");
 
   const today = toISODate();
 

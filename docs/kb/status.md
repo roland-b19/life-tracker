@@ -1,6 +1,6 @@
 ---
 summary: Where the project stands: roadmap, work in progress, next steps, open questions and tracked migrations.
-last_verified: 2026-11-20
+last_verified: 2026-11-22
 ---
 
 # Status
@@ -32,7 +32,7 @@ last_verified: 2026-11-20
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; part M (migration `0032`) merged and run on live; part A built and verified, its PR next; parts B and C building; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A and C merged (#169, #170, #171), M run on live; part B (steps 9–13) built, verified and reviewed (2 rounds), in its PR; part D (steps 18–20) building, then part E; accepted edges in D-045 and D-046; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -43,9 +43,9 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 
 ## Open questions
 - Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
+- The `recipes` and `recipe_ingredients` tables (and their seeded rows) have no reader or writer left, and nothing sets `meals.forgotten` (read only, it keeps old hidden meals hidden) (audit fixes, steps 15 and 16): drop them? Dropping is a non-additive migration, so it waits for the owner.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- `requireUser()` before `respond` (conventions, writes from the UI): `src/actions/food-chat.ts`, `food.ts`, `gym.ts`. Each part of the [audit fixes](plans/audit-fixes.md) moves its own files; step 21 greps that none is left.
-- A page or layout without its path (`requirePageUser()`, `RequireSession` without `path`): the one left (`/gym`) once part C is in. Part B passes it.
-- `src/lib/decimal-input.ts` (D-037): `app/health/weight-card.tsx`, `app/gym/exercise-logger.tsx`, `app/gym/types.ts`, `tests/format-date.test.ts`. Step 21 deletes it.
+- `requireUser()` before `respond` and a page or layout without its path: no usage left (parts B, C and D moved theirs); step 21 greps again and ends both deprecated marks in the conventions.
+- `src/lib/decimal-input.ts` (D-037): `tests/format-date.test.ts` (the Gym files moved in part B, the weight card in part C). Step 21 deletes it.

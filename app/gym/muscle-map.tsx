@@ -332,6 +332,9 @@ interface PlannedExercise {
   dayName: string;
 }
 
+/** A day's target for an exercise: "3 × 8 – 12". */
+const range = (e: PlannedExercise) => `${e.targetSets} × ${e.minReps} – ${e.maxReps}`;
+
 const sameGroups = (a: MuscleGroupKey[], b: MuscleGroupKey[]) => a.length === b.length && a.every((g) => b.includes(g));
 
 /** 3D model + group chips; the muscles picked list the exercises of the user's split that train them. The day on screen picks its own muscles to start with. */
@@ -358,13 +361,13 @@ export function MuscleExplorer({
       .filter((e) => e.muscleGroup === g)
       .reduce((n, e) => n + e.targetSets, 0);
   const otherSets = planned.filter((e) => !MUSCLE_GROUP_KEYS.includes(e.muscleGroup as MuscleGroupKey)).reduce((n, e) => n + e.targetSets, 0);
-  // One row per exercise even when it is on several days of the split.
-  const list: (PlannedExercise & { days: string[] })[] = [];
+  // One row per exercise even when it is on several days of the split, each day with its own sets and reps.
+  const list: (PlannedExercise & { days: PlannedExercise[] })[] = [];
   for (const e of planned) {
     if (!selected.includes(e.muscleGroup as MuscleGroupKey)) continue;
     const row = list.find((r) => r.exerciseId === e.exerciseId);
-    if (row) row.days.push(e.dayName);
-    else list.push({ ...e, days: [e.dayName] });
+    if (row) row.days.push(e);
+    else list.push({ ...e, days: [e] });
   }
   const title = selected.length === 1 ? `${MUSCLE_GROUP_LABEL[selected[0]]} workouts` : "Workouts for the picked muscles";
 
@@ -420,22 +423,24 @@ export function MuscleExplorer({
                 {list.length === 0 && (
                   <EmptyNote key="empty">No exercise in your split trains {selected.length === 1 ? "this muscle" : "these muscles"}.</EmptyNote>
                 )}
-                {list.map((e) => (
-                  <div key={e.exerciseId} className="entry-row">
-                    <div className="entry-main entry-stack">
-                      <strong>{e.exerciseName}</strong>
-                      <MuscleTag group={e.muscleGroup} />
-                      {e.days.map((day, i) => (
-                        <span key={i} className="muted entry-detail">
-                          {day}
-                        </span>
-                      ))}
+                {list.map((e) => {
+                  // Days with one target show it once at the row's end; days with different targets show each its own.
+                  const one = e.days.every((d) => range(d) === range(e));
+                  return (
+                    <div key={e.exerciseId} className="entry-row">
+                      <div className="entry-main entry-stack">
+                        <strong>{e.exerciseName}</strong>
+                        <MuscleTag group={e.muscleGroup} />
+                        {e.days.map((day, i) => (
+                          <span key={i} className="muted entry-detail">
+                            {one ? day.dayName : <>{day.dayName} · <span className="number-tabular">{range(day)}</span></>}
+                          </span>
+                        ))}
+                      </div>
+                      {one && <span className="muted number-tabular">{range(e)}</span>}
                     </div>
-                    <span className="muted number-tabular">
-                      {e.targetSets} × {e.minReps} – {e.maxReps}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </ListBox>
             </div>
           ) : (

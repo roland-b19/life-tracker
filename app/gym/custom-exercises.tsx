@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL } from "@/lib/gym-muscles";
 import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
+import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
 import { deleteCustomExerciseAction, restoreCustomExerciseAction, updateCustomExerciseAction } from "@/actions/gym";
+import { GYM_LIMITS } from "@/lib/validations/gym";
 import { MuscleTag } from "./muscle-tag";
 
 export interface CustomExercise {
@@ -29,6 +31,11 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   // A deleted row leaves at once; the refreshed page then no longer holds it.
   const [gone, setGone] = useState<string[]>([]);
   const shown = exercises.filter((e) => !gone.includes(e.id));
+  // A Delete acts once per tap burst (D-043), locked per exercise, as in the categories card; Save gets the same from FormModal.
+  const once = useOnce();
+  // The button last tapped in a row, set before its own handler runs.
+  const tappedButton = useRef<Element | null>(null);
+  const touches = (id: string) => [`exercises:${id}`];
 
   function open(e: CustomExercise) {
     setEditing(e);
@@ -53,7 +60,9 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
       showToast({
         message: `Saved "${name}"`,
         type: "success",
-        onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), "Failed to undo the edit"),
+        touches: touches(before.id),
+        // Refused, with the reason, when another exercise has taken the old name since.
+        onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
       });
     } catch {
       setErrorMsg("Failed to save exercise");
@@ -72,6 +81,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     }
     showToast({
       message: `Removed "${e.name}"`,
+      touches: touches(e.id),
       onUndo: undoWith(
         showToast,
         async () => {
@@ -79,7 +89,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
           if (back?.success) setGone((g) => g.filter((id) => id !== e.id));
           return back;
         },
-        "Failed to restore exercise",
+        (back) => (back && !back.success ? back.error : "Failed to restore exercise"),
       ),
     });
   }
@@ -90,20 +100,20 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         <ListBox wash className="entries">
           {shown.length === 0 && <EmptyNote>No custom exercises yet.</EmptyNote>}
           {shown.map((e) => (
-            <div key={e.id} className="entry-row">
+            <div key={e.id} className="entry-row" onClickCapture={(ev) => (tappedButton.current = (ev.target as Element).closest("button"))}>
               <div className="entry-main entry-stack">
                 <strong>{e.name}</strong>
                 <MuscleTag group={e.muscleGroup} />
                 <span className="muted entry-detail">{cap(e.equipmentType)}</span>
               </div>
-              <RowActions onEdit={() => open(e)} onDelete={() => remove(e)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
+              <RowActions onEdit={() => open(e)} onDelete={() => once(e.id, () => remove(e), tappedButton.current)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>
           ))}
         </ListBox>
       </Card>
 
       <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} busy={busy} canSubmit={visible(form.name)}>
-        <Field label="Name" type="text" required maxLength={100} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <Field label="Name" type="text" required maxLength={GYM_LIMITS.exerciseName} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <FieldPair>
           <SelectField
             label="Muscle group"

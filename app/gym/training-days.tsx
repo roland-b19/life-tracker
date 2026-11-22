@@ -1,6 +1,6 @@
 "use client";
 
-import { toISODate, weekday } from "@/lib/format-date";
+import { weekday } from "@/lib/format-date";
 import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { PencilIcon } from "../components/icons";
@@ -10,6 +10,7 @@ import { MuscleTag } from "./muscle-tag";
 
 /** The week's training days (pick one, or Start it) and, beside them, the picked day's routine with Edit and Start. */
 export function TrainingDays({
+  today,
   days,
   selectedId,
   onSelect,
@@ -18,16 +19,17 @@ export function TrainingDays({
   onStart,
   onEdit,
 }: {
+  today: string; // the server's day, so the server and the browser mark the same day
   days: SplitDay[];
   selectedId: string;
   onSelect: (id: string) => void;
   busy: boolean;
   hasPaused: boolean; // a workout left open: starting another waits until it is resumed or finished
-  onStart: (day: SplitDay) => void;
+  onStart: (day: SplitDay, button: Element) => void; // the tapped button: the rest of a double tap on it is swallowed (D-043)
   onEdit: (day: SplitDay) => void;
 }) {
   const [isFolded, toggleFolded] = useFolded("gym");
-  const todayDayOfWeek = weekday(toISODate()); // 0 = Sun, 1 = Mon, ..., in the app timezone
+  const todayDayOfWeek = weekday(today); // 0 = Sun, 1 = Mon, ...
   return (
     <Dashboard>
       <DashboardMain>
@@ -50,9 +52,9 @@ export function TrainingDays({
                     <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused}
-                      onClick={() => {
+                      onClick={(e) => {
                         onSelect(day.id);
-                        onStart(day);
+                        onStart(day, e.currentTarget);
                       }}
                     >
                       Start
@@ -85,7 +87,7 @@ export function TrainingDays({
                     <SmallButton
                       aria-label={`Start ${day.name}`}
                       disabled={busy || hasPaused || day.exercises.length === 0}
-                      onClick={() => onStart(day)}
+                      onClick={(e) => onStart(day, e.currentTarget)}
                     >
                       Start
                     </SmallButton>
