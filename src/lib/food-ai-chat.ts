@@ -17,7 +17,7 @@ interface FoodChatContext {
   time: string;
 }
 
-type LoggedMeal = Awaited<ReturnType<typeof logMeal>>["meal"];
+type LoggedMeal = NonNullable<Awaited<ReturnType<typeof logMeal>>["meal"]>;
 
 // What the model must answer with; the CLI enforces it, the app checks it again below.
 const RESPONSE_SCHEMA = {
@@ -181,9 +181,11 @@ export async function sendFoodChatMessage(
       continue;
     }
     // A meal id already saved (sent twice in this answer, or an older meal's) adds nothing (D-040), so it is not listed
-    // again: the answer's list, and its Undo, hold only the meals this answer added.
+    // again: the answer's list, and its Undo, hold only the meals this answer added. An id another user's meal holds
+    // saves nothing, so it is left out, as logging by hand refuses it.
     const { meal: saved, repeated } = await logMeal(userId, { ...parsed.data, isEstimated: true });
-    if (!repeated) logged.push(saved);
+    if (!saved) leftOut.push(`${label}: this meal could not be saved`);
+    else if (!repeated) logged.push(saved);
   }
   let reply = answer.reply.trim() || "Done.";
   if (reply.length > MAX_REPLY) {

@@ -276,7 +276,7 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     const result = await sendFoodChatMessage(owner, "Am mâncat o supă", [], ctx);
 
-    expect(result.meals.map((m) => m?.id)).toEqual([id]);
+    expect(result.meals.map((m) => m.id)).toEqual([id]);
     expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.id).sort()).toEqual([id, older.id].sort());
   });
 
@@ -361,6 +361,24 @@ describe("Food assistant: context prompt and structured answer", () => {
       expect(res.leftOut).toEqual([]);
       expect(res.freshSummary?.meals.map((m) => m.name)).toEqual(["1 banană"]);
       expect((await getDailyFoodSummary(stranger, today)).meals).toHaveLength(0);
+    });
+
+    it("never lists, changes or shows another user's meal sent under its id, and says it was left out", async () => {
+      const owner = await seedUser(`chat-owner-${randomUUID()}`);
+      const stranger = await seedUser(`chat-stranger-${randomUUID()}`);
+      const theirs = (await logMeal(stranger, { date: today, name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal!;
+      const strangerBefore = await getDailyFoodSummary(stranger, today);
+      process.env.AUTH_DEV = "true";
+      mockClaude({ reply: "Gata.", meals: [{ id: theirs.id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 }] });
+      authState.id = owner;
+
+      const res = succeeded(await sendFoodChatMessageAction(input));
+
+      expect(res.meals).toEqual([]);
+      expect(res.leftOut).toEqual(["Supă: this meal could not be saved"]);
+      expect(res.freshSummary).toBeNull();
+      expect(await getDailyFoodSummary(stranger, today)).toEqual(strangerBefore);
+      expect((await getDailyFoodSummary(owner, today)).meals).toEqual([]);
     });
 
     it("writes only into today or yesterday, like logging by hand", async () => {

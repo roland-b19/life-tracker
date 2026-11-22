@@ -526,7 +526,7 @@ export function FoodClient({
         time: appTime(),
       });
       if (!res.success) return takeBack(res.error);
-      const meals = res.meals.filter((m) => m !== null) as MealData[];
+      const { meals } = res;
       setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) {
