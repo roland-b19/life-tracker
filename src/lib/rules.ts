@@ -3,7 +3,7 @@ import { addDays } from "./format-date";
 // Plain rules the browser needs as well as the server. They live here, away from the zod schemas, so client code
 // that imports them does not pull the whole validation library into the page's JavaScript.
 
-/** Water and steps can be added or changed for today and yesterday only; older days are history. */
+/** Meals (by hand or from the assistant's chat) can be added or changed for today and yesterday only; older days are history. */
 export const metricDayEditable = (date: string, today: string) => date <= today && date >= addDays(today, -1);
 
 export type Priority = "low" | "medium" | "high";
