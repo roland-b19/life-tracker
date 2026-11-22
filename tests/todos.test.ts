@@ -663,6 +663,52 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(times[1] - times[2]).toBe(1);
     });
 
+    it("leaves alone a task another device ticks or carries over while the carry-over waits for its lock [TASK-12]", async () => {
+      const today = toISODate();
+      const yesterday = addDays(today, -1);
+      const make = async (title: string) => {
+        const task = await add(userA, { space: "personal", title, dueDate: yesterday, isRecurring: false, recurrencePattern: "none" });
+        await admin.query("UPDATE todos SET created_at = now() - interval '1 day' WHERE id = $1", [task.id]);
+        return task;
+      };
+      const ticked = await make("Ticked elsewhere");
+      const carried = await make("Carried elsewhere");
+      const placedThere = new Date("2026-01-01T00:00:00Z");
+      // Another device ticks one task and carries the other over, and commits only once this page load's carry-over,
+      // which picked both as overdue, waits on their row locks.
+      const other = await admin.connect();
+      try {
+        await other.query("BEGIN");
+        await other.query("UPDATE todos SET is_completed = true, completed_at = now() WHERE id = $1", [ticked.id]);
+        await other.query("UPDATE todos SET due_date = $2, is_carried_over = true, placed_at = $3 WHERE id = $1", [
+          carried.id,
+          today,
+          placedThere,
+        ]);
+        const load = getDailyTodos(userA, "personal", today, today);
+        await expect
+          .poll(async () => {
+            const { rows } = await admin.query(
+              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+            );
+            return rows[0].n;
+          })
+          .toBeGreaterThan(0);
+        await other.query("COMMIT");
+        await load;
+      } finally {
+        other.release();
+      }
+      const row = async (id: string) =>
+        (
+          await admin.query("SELECT is_completed, is_carried_over, due_date::text AS due, placed_at FROM todos WHERE id = $1", [id])
+        ).rows[0];
+      // The ticked task stays done on its own day, not carried.
+      expect(await row(ticked.id)).toMatchObject({ is_completed: true, is_carried_over: false, due: yesterday });
+      // The task the other device carried keeps the place it gave it: it is not carried a second time.
+      expect((await row(carried.id)).placed_at.getTime()).toBe(placedThere.getTime());
+    });
+
     it("shows a daily task from its first day on, and keeps a task added to a past day there", async () => {
       const today = toISODate();
       const yesterday = addDays(today, -1);

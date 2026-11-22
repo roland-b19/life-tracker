@@ -79,7 +79,8 @@ export async function getDailyTodos(
       sql`${todos.createdAt} < ((${todos.dueDate} + 1)::timestamp at time zone ${APP_TZ})`,
     );
     // Carried tasks land on top as one block, 1 ms apart, the oldest due date the newest place, so compareTodos puts the
-    // oldest first (D-036); whatever is added or moved later goes above them.
+    // oldest first (D-036); whatever is added or moved later goes above them. `overdue` is checked again on the row
+    // itself: a row another device ticks or carries meanwhile is re-read after its lock, and then left alone.
     const ranked = db
       .select({
         id: todos.id,
@@ -96,7 +97,7 @@ export async function getDailyTodos(
         placedAt: sql`${new Date().toISOString()}::timestamptz - (${ranked.rank} - 1) * interval '1 millisecond'`,
       })
       .from(ranked)
-      .where(eq(todos.id, ranked.id));
+      .where(and(eq(todos.id, ranked.id), overdue));
   }
 
   // 2. Fetch all tasks relevant for targetDate: one-off tasks with dueDate = targetDate, and repeating tasks due that day.
