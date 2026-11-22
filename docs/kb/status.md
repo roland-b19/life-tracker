@@ -46,6 +46,6 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- `requireUser()` before `respond` (conventions, writes from the UI): `src/actions/claude-connection.ts`, `food-chat.ts`, `food.ts`, `gym.ts`, `todos.ts`, `wishlist.ts`. Each part of the [audit fixes](plans/audit-fixes.md) moves its own files; step 21 greps that none is left.
+- `requireUser()` before `respond` (conventions, writes from the UI): `src/actions/food-chat.ts`, `food.ts`, `gym.ts`. Each part of the [audit fixes](plans/audit-fixes.md) moves its own files; step 21 greps that none is left.
 - A page or layout without its path (`requirePageUser()`, `RequireSession` without `path`): the one left (`/gym`) once part C is in. Part B passes it.
 - `src/lib/decimal-input.ts` (D-037): `app/health/weight-card.tsx`, `app/gym/exercise-logger.tsx`, `app/gym/types.ts`, `tests/format-date.test.ts`. Step 21 deletes it.
