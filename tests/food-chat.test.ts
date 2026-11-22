@@ -9,6 +9,7 @@ vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
+import { logMealSchema } from "@/lib/validations/food";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
@@ -152,14 +153,38 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect(result.meals.map((m) => m?.name)).toEqual(["Iaurt"]);
     // One phrase per line that names the field once, also where the schema's own words name it.
     expect(result.leftOut).toEqual([
-      "Pâine: fat must be at least 0",
-      "Supă: calories is required",
+      "Pâine: protein, carbs and fat can't be negative",
+      "Supă: calories must be a number",
       "Meal 3: not a meal",
       "Tort întreg: calories must be 10.000 or less",
       "Unt: protein, carbs and fat must each be 1.000 g or less",
       "Paste: protein must be a number",
     ]);
     expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["Iaurt"]);
+  });
+
+  // Every key a meal can carry (the schema's own, the date aside: the server sets it) gets a line in plain words: no
+  // camelCase key, and a non-number says "must be a number" in every number field.
+  it("names every meal key in plain words when it leaves a meal out", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-keys-${randomUUID()}`);
+    const valid = { name: "Iaurt", calories: 120, protein: 10, carbs: 8, fat: 5 };
+    const bad: Record<string, unknown> = { name: "", calories: "multe", protein: "multe", carbs: "multe", fat: "multe", isEstimated: "da", id: "nu-e-un-id" };
+    expect(Object.keys(bad).sort()).toEqual(Object.keys(logMealSchema.shape).filter((key) => key !== "date").sort());
+    mockClaude({ reply: "Ok.", meals: Object.entries(bad).map(([key, value]) => ({ ...valid, [key]: value })) });
+
+    const result = await sendFoodChatMessage(owner, "iaurt", [], ctx);
+
+    expect(result.leftOut).toEqual([
+      "Meal 1: name is required",
+      "Iaurt: calories must be a number",
+      "Iaurt: protein must be a number",
+      "Iaurt: carbs must be a number",
+      "Iaurt: fat must be a number",
+      "Iaurt: estimate is not valid",
+      "Iaurt: invalid id",
+    ]);
+    for (const line of result.leftOut) expect(line).not.toMatch(/[a-z][A-Z]/);
   });
 
   it("saves the first 10 valid meals of a longer answer and says the rest were left out", async () => {

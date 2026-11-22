@@ -12,13 +12,15 @@ export const MAX_STEPS = 200000;
 export const MEAL_LIMITS = { calories: 10000, macroGrams: 1000 } as const;
 export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less`;
 export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less`;
-const macroGrams = z.number().min(0).max(MEAL_LIMITS.macroGrams, MEAL_MACROS_TOO_HIGH);
+export const MEAL_CALORIES_NEGATIVE = "Calories can't be negative";
+export const MEAL_MACROS_NEGATIVE = "Protein, carbs and fat can't be negative";
+const macroGrams = z.number().min(0, MEAL_MACROS_NEGATIVE).max(MEAL_LIMITS.macroGrams, MEAL_MACROS_TOO_HIGH);
 
 const mealFields = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required").default("Meal"),
-  calories: z.number().int().min(0).max(MEAL_LIMITS.calories, MEAL_CALORIES_TOO_HIGH),
+  calories: z.number().int().min(0, MEAL_CALORIES_NEGATIVE).max(MEAL_LIMITS.calories, MEAL_CALORIES_TOO_HIGH),
   protein: macroGrams,
   carbs: macroGrams,
   fat: macroGrams,

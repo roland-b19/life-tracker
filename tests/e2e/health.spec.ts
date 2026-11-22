@@ -1,3 +1,4 @@
+import { MEAL_CALORIES_NEGATIVE, MEAL_MACROS_NEGATIVE } from "../../src/lib/validations/food";
 import { randomUUID } from "node:crypto";
 import { expect, type Browser, type Page } from "@playwright/test";
 import { Pool } from "pg";
@@ -865,13 +866,13 @@ test("the meal form keeps Save off until a value survives rounding, shows the se
   await field("Protein (g)").fill("0,05");
   await expect(save).toBeEnabled();
 
-  // A negative number is no value either; with a macro beside it, the form sends it and shows what the server said.
+  // A negative number is no value either; with a macro beside it, the form refuses it in the server's words.
   await field("Protein (g)").fill("");
   await field("Calories (kcal)").fill("-100");
   await expect(save).toBeDisabled();
   await field("Protein (g)").fill("30");
-  await andSettle(page, () => save.click());
-  await expect(form.getByText("Must be at least 0")).toBeVisible();
+  await save.click();
+  await expect(form.getByText(MEAL_CALORIES_NEGATIVE, { exact: true })).toBeVisible();
   await expect(page.getByText("Failed to add meal")).toHaveCount(0);
 
   // Thousands with a dot, decimals with a comma, in the fields and on the screen.
@@ -1146,4 +1147,138 @@ test("a stale device's water tap, steps or goal save is refused and then shows t
   } finally {
     await device.close();
   }
+});
+
+// Each form says what is wrong in words that name the field, with no full stop, as the server would; a negative meal
+// value is refused before anything is sent.
+test("the water, steps and meal forms refuse a value out of range in words that name the field, and send nothing", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const writes: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && "next-action" in r.headers()) writes.push(r.postData() ?? "");
+  });
+
+  await page.getByRole("region", { name: "Water" }).getByRole("button", { name: "Edit water and goal" }).click();
+  const waterForm = page.getByRole("dialog", { name: "Edit water" });
+  await waterForm.getByLabel("Water today (ml)").fill("20001");
+  await waterForm.getByRole("button", { name: "Save" }).click();
+  await expect(waterForm.getByRole("alert")).toHaveText("The total must be between 0 and 20.000");
+  await waterForm.getByLabel("Water today (ml)").fill("500");
+  await waterForm.getByLabel("Daily goal (ml)").fill("100");
+  await waterForm.getByRole("button", { name: "Save" }).click();
+  await expect(waterForm.getByRole("alert")).toHaveText("The goal must be between 500 and 15.000");
+  await waterForm.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("region", { name: "Steps" }).getByRole("button", { name: "Edit steps and goal" }).click();
+  const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
+  await stepsForm.getByLabel("Steps today").fill("-2");
+  await stepsForm.getByRole("button", { name: "Save" }).click();
+  await expect(stepsForm.getByRole("alert")).toHaveText("The total must be between 0 and 200.000");
+  await stepsForm.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const mealForm = page.getByRole("dialog", { name: "New meal" });
+  await mealForm.getByLabel("Protein (g)").fill("10");
+  await mealForm.getByLabel("Fat (g)").fill("-1");
+  await mealForm.getByRole("button", { name: "Save" }).click();
+  await expect(mealForm.getByRole("alert")).toHaveText(MEAL_MACROS_NEGATIVE);
+  await mealForm.getByLabel("Fat (g)").fill("");
+  await mealForm.getByLabel("Calories (kcal)").fill("-5");
+  await mealForm.getByRole("button", { name: "Save" }).click();
+  await expect(mealForm.getByRole("alert")).toHaveText(MEAL_CALORIES_NEGATIVE);
+  await mealForm.getByRole("button", { name: "Cancel" }).click();
+
+  expect(writes).toEqual([]);
+  await openHealth(page, "Today");
+  await expect(page.getByRole("region", { name: "Water" })).toContainText("0 / 3.000 ml");
+  await expect(page.getByRole("region", { name: "Steps" })).toContainText("0 / 10.000");
+  await expect(page.getByRole("button", { name: /^Delete Meal of / })).toHaveCount(0);
+});
+
+// Holds the water edit save that sets the total to `to` until `release` is called, then lets it through or loses it.
+async function holdWaterSave(page: Page, to: number) {
+  let release: (lose: boolean) => void = () => {};
+  const held = new Promise<boolean>((resolve) => (release = resolve));
+  let answered: () => void = () => {};
+  const done = new Promise<void>((resolve) => (answered = resolve));
+  await page.route("**/health", async (route) => {
+    if (route.request().method() !== "POST" || !(route.request().postData() ?? "").includes(`"to":${to}`)) return route.fallback();
+    if (await held) await route.abort();
+    else await route.fallback();
+    answered();
+  });
+  return { release, done };
+}
+
+// A quick water tap sends the total on screen as the value it changes (D-040): while a water edit's save is unanswered
+// that total is about to change, so the taps wait for the answer instead of being refused as changed elsewhere.
+test("the water taps wait while a water edit's save is unanswered, then add to the saved total [D-043]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const water = page.getByRole("region", { name: "Water" });
+  const form = page.getByRole("dialog", { name: "Edit water" });
+  const save = await holdWaterSave(page, 1000);
+  await water.getByRole("button", { name: "Edit water and goal" }).click();
+  await form.getByLabel("Water today (ml)").fill("1000");
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await expect(water.getByRole("button", { name: "+250 ml" })).toBeDisabled();
+  await expect(water.getByRole("button", { name: "+500 ml" })).toBeDisabled();
+
+  save.release(false);
+  await save.done;
+  await page.unroute("**/health");
+  await expect(page.getByText("Water set to 1.000 ml", { exact: true })).toBeVisible();
+  await andSettle(page, () => water.getByRole("button", { name: "+250 ml" }).click());
+  await expect(water).toContainText("1.250 / 3.000 ml");
+  await expect(page.getByText("This changed on another device")).toHaveCount(0);
+  await openHealth(page, "Today");
+  await expect(water).toContainText("1.250 / 3.000 ml");
+});
+
+// Water and steps share one dialog, and the Today tab one form error: a water save lost after its form was closed shows
+// nothing in the steps or meal form opened meanwhile, and shows in its own form while that one is open.
+test("a lost water save shows its error only in the water form, not in the steps or meal form opened meanwhile", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const water = page.getByRole("region", { name: "Water" });
+  const waterForm = page.getByRole("dialog", { name: "Edit water" });
+  const startWaterSave = async (to: number) => {
+    const save = await holdWaterSave(page, to);
+    await water.getByRole("button", { name: "Edit water and goal" }).click();
+    await waterForm.getByLabel("Water today (ml)").fill(String(to));
+    await waterForm.getByRole("button", { name: "Save" }).click();
+    return save;
+  };
+
+  // The steps form, opened while the water save is out, waits for it and then shows no error of its own.
+  let save = await startWaterSave(1000);
+  await waterForm.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("region", { name: "Steps" }).getByRole("button", { name: "Edit steps and goal" }).click();
+  const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
+  await expect(stepsForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  save.release(true);
+  await save.done;
+  await page.unroute("**/health");
+  await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(stepsForm.getByRole("alert")).toHaveCount(0);
+  await stepsForm.getByRole("button", { name: "Cancel" }).click();
+
+  // The meal form, the same.
+  save = await startWaterSave(1100);
+  await waterForm.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const mealForm = page.getByRole("dialog", { name: "New meal" });
+  save.release(true);
+  await save.done;
+  await page.unroute("**/health");
+  await expect(water.getByRole("button", { name: "+250 ml" })).toBeEnabled();
+  await expect(mealForm.getByRole("alert")).toHaveCount(0);
+  await mealForm.getByRole("button", { name: "Cancel" }).click();
+
+  // Kept open, the water form shows its own failure.
+  save = await startWaterSave(1200);
+  save.release(true);
+  await save.done;
+  await page.unroute("**/health");
+  await expect(waterForm.getByRole("alert")).toHaveText("Failed to save water");
 });

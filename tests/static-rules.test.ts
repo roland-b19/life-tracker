@@ -5,8 +5,10 @@ import { NOT_WHOLE } from "@/lib/number-format";
 import {
   GOAL_RANGES,
   logMealSchema,
+  MEAL_CALORIES_NEGATIVE,
   MEAL_CALORIES_TOO_HIGH,
   MEAL_LIMITS,
+  MEAL_MACROS_NEGATIVE,
   MEAL_MACROS_TOO_HIGH,
   updateNutritionTargetsSchema,
 } from "@/lib/validations/food";
@@ -44,10 +46,19 @@ describe("the Health form's limits and words are the schema's [U5]", () => {
     expect(MEAL_MACROS_TOO_HIGH).toBe("Protein, carbs and fat must each be 1.000 g or less");
   });
 
+  it("refuses a negative meal value with words that name the field, and the form checks it with the same words", () => {
+    expect(refusal({ ...meal, calories: -1 })).toBe(MEAL_CALORIES_NEGATIVE);
+    for (const macro of ["protein", "carbs", "fat"]) expect(refusal({ ...meal, [macro]: -0.1 })).toBe(MEAL_MACROS_NEGATIVE);
+    expect(MEAL_CALORIES_NEGATIVE).toBe("Calories can't be negative");
+    expect(MEAL_MACROS_NEGATIVE).toBe("Protein, carbs and fat can't be negative");
+    expect(foodClient).toContain("return setErrorMsg(MEAL_CALORIES_NEGATIVE)");
+    expect(foodClient).toContain("return setErrorMsg(MEAL_MACROS_NEGATIVE)");
+  });
+
   // Field messages end with no full stop ("Name is required", "Must be at least 0"); the messages this form took from
   // the schema and number-format follow them.
   it("ends the form's limit and number messages with no full stop, as every field message does", () => {
-    for (const message of [MEAL_CALORIES_TOO_HIGH, MEAL_MACROS_TOO_HIGH, NOT_WHOLE]) expect(message).not.toMatch(/\.$/);
+    for (const message of [MEAL_CALORIES_TOO_HIGH, MEAL_MACROS_TOO_HIGH, MEAL_CALORIES_NEGATIVE, MEAL_MACROS_NEGATIVE, NOT_WHOLE]) expect(message).not.toMatch(/\.$/);
     expect(foodClient).toContain("`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}`");
   });
 

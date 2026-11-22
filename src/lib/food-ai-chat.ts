@@ -52,15 +52,18 @@ const MAX_REPLY = 2000;
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
+/** The word a left-out line uses for a meal key that is not a plain word already. */
+const FIELD_WORDS: Record<string, string> = { isEstimated: "estimate" };
+
 /**
  * Why a meal was left out, from its first validation issue, as one phrase that names the field once: the schema's own
- * words when they name it ("calories must be 10.000 or less"), else the field and zod's words ("fat must be at least 0",
- * "name is required"). The only issue with no field is "all zero".
+ * words when they name it ("calories must be 10.000 or less"), else the field, in plain words, and zod's words
+ * ("protein must be a number", "estimate is not valid"). The only issue with no field is "all zero".
  */
 function whyLeftOut(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue.path.length) return "every value rounds to 0";
-  const field = issue.path.join(".");
+  const field = issue.path.map((key) => FIELD_WORDS[String(key)] ?? String(key)).join(".");
   const message = issue.message;
   if (new RegExp(`\\b${field}\\b`, "i").test(message)) return lowerFirst(message);
   if (message === "Required") return `${field} is required`;
@@ -168,7 +171,10 @@ export async function sendFoodChatMessage(
       leftOut.push(`${label}: not a meal`);
       continue;
     }
-    const calories = "calories" in meal && typeof meal.calories === "number" ? Math.round(meal.calories) : undefined;
+    // Whole calories, as the form takes them; anything but a number goes to the schema as it came, so text says
+    // "must be a number" as in the other number fields.
+    const sent = "calories" in meal ? meal.calories : undefined;
+    const calories = typeof sent === "number" ? Math.round(sent) : sent;
     const parsed = logMealSchema.safeParse({ ...meal, calories, date: ctx.date });
     if (parsed.success) logged.push((await logMeal(userId, { ...parsed.data, isEstimated: true })).meal);
     else leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);

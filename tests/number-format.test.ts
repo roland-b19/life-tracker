@@ -12,6 +12,9 @@ import {
 } from "@/lib/number-format";
 import { kgDelta, setKg } from "@/lib/gym-progress";
 import { addWishlistItemSchema } from "@/lib/validations/wishlist";
+import { logMealSchema, MEAL_CALORIES_NEGATIVE, setWaterSchema, updateNutritionTargetsSchema, updateStepsSchema } from "@/lib/validations/food";
+import { logSetSchema, REPS_RANGE, ROUTINE_RANGE, saveSplitDaySchema } from "@/lib/validations/gym";
+import "@/lib/validations/result";
 import { sevenDayAverage } from "@/lib/weight-stats";
 
 describe("formatNumber", () => {
@@ -114,5 +117,34 @@ describe("rounding stays as it was [U4]", () => {
   it("keeps a wish's price in cents, as stored", () => {
     const price = (estimatedPrice: number) => addWishlistItemSchema.shape.estimatedPrice.parse(estimatedPrice);
     expect([price(12.345), price(249.999), price(0.285), price(1.005), price(1200.5)]).toEqual([12.35, 250, 0.28, 1, 1200.5]);
+  });
+});
+
+// A whole-number field takes a minus (a total or a goal is typed, not picked), so "-2" reaches the action; each schema
+// behind such a field refuses it in words for people, never zod's own text ("Too small: expected number to be >=0").
+describe("a negative whole number: the field passes it on and the server refuses it in words", () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const firstMessage = (schema: { safeParse: (input: unknown) => { error?: { issues: { message: string }[] } } }, input: object) =>
+    schema.safeParse(input).error?.issues[0]?.message;
+
+  it("parses -2 in a whole-number field as -2", () => {
+    expect(parseNumberInput("-2", { integer: true })).toEqual({ ok: true, value: "-2", display: "-2" });
+  });
+
+  it.each([
+    ["a meal's calories", logMealSchema, { date: "2026-11-01", calories: -2, protein: 1, carbs: 0, fat: 0 }, MEAL_CALORIES_NEGATIVE],
+    ["the water total", setWaterSchema, { date: "2026-11-01", waterMl: { from: 0, to: -2 } }, "Must be at least 0"],
+    ["the water total it showed", setWaterSchema, { date: "2026-11-01", waterMl: { from: -2, to: 0 } }, "Must be at least 0"],
+    ["the water goal", setWaterSchema, { date: "2026-11-01", goal: { from: 3000, to: -2 } }, "Must be at least 500"],
+    ["the steps total", updateStepsSchema, { date: "2026-11-01", steps: { from: 0, to: -2 } }, "Must be at least 0"],
+    ["the steps goal", updateStepsSchema, { date: "2026-11-01", goal: { from: 10000, to: -2 } }, "Must be at least 1000"],
+    ["a nutrition goal", updateNutritionTargetsSchema, { calories: { from: 2000, to: -2 } }, "Must be at least 500"],
+    ["a set's reps", logSetSchema, { sessionId: id, exerciseId: id, reps: -2, loadType: "kg", loadValue: 50 }, REPS_RANGE],
+    ["a routine's sets", saveSplitDaySchema, { id, name: "Push", isRest: false, exercises: [{ exerciseId: id, targetSets: -2, minReps: 8, maxReps: 12 }] }, ROUTINE_RANGE],
+    ["a routine's reps", saveSplitDaySchema, { id, name: "Push", isRest: false, exercises: [{ exerciseId: id, targetSets: 3, minReps: -2, maxReps: 12 }] }, ROUTINE_RANGE],
+  ])("%s", (_field, schema, input, message) => {
+    const refused = firstMessage(schema, input);
+    expect(refused).toBe(message);
+    expect(refused).not.toMatch(/Too small|expected/);
   });
 });
