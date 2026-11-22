@@ -18,7 +18,7 @@ export const setLoad = (loadType: string, value: number | string, extra: number 
 export type PlateWeights = Record<string, number>;
 
 /** What the progress figures need besides the sets (D-038): the plate weights, and the deload weeks they leave out. */
-export interface ProgressRules {
+interface ProgressRules {
   plates: PlateWeights;
   /** Deload weeks, as the Sunday that starts each (`deloadWeeksIn`). */
   deload: Set<string>;

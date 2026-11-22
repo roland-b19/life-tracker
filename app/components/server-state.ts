@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useToast } from "./toast";
 
-export const ITEM_DELETED = "This item was deleted.";
+const ITEM_DELETED = "This item was deleted.";
 
 /** The ids of the rows in `before` that `after` no longer has. Values that are not lists of rows have none. */
 export function rowsGone(before: unknown, after: unknown): string[] {

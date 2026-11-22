@@ -489,7 +489,7 @@ export async function addShoppingCategory(userId: string, name: string, kind: Sh
 }
 
 /** What a shopping rename or delete changed. A unit change also reports the rows it merged and the amounts it converted. */
-export type ShoppingChange = CategoryChange & {
+type ShoppingChange = CategoryChange & {
   /** A row (`id`) merged into another (`into`) whose values before are kept here: Undo puts both back. */
   merges?: { id: string; into: string; amount: number; category: string; isBought: boolean }[];
   /** The amounts a g/kg or ml/l change converted, as they were: Undo writes them back. */

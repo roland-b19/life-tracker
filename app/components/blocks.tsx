@@ -58,8 +58,8 @@ export function CenterCard({
 }
 
 /** The control bar under the navigation. `dash`: as wide as the dashboard below it. */
-export function Toolbar({ dash, className, children }: { dash?: boolean; className?: string; children: ReactNode }) {
-  return <div className={cx("toolbar", dash && "dash", className)}>{children}</div>;
+export function Toolbar({ dash, children }: { dash?: boolean; children: ReactNode }) {
+  return <div className={cx("toolbar", dash && "dash")}>{children}</div>;
 }
 
 /** Controls that sit together in a toolbar. */
@@ -67,9 +67,9 @@ export function ToolbarGroup({ children }: { children: ReactNode }) {
   return <div className="toolbar-group">{children}</div>;
 }
 
-/** The two-column page layout (`even`: two equal columns, no main/aside): `DashboardMain` is the wide column, `DashboardAside` the narrow one. */
-export function Dashboard({ even, className, children }: { even?: boolean; className?: string; children: ReactNode }) {
-  return <div className={cx(even ? "dashboard-grid-even" : "dashboard-grid", className)}>{children}</div>;
+/** The two-column page layout: `DashboardMain` is the wide column, `DashboardAside` the narrow one. */
+export function Dashboard({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cx("dashboard-grid", className)}>{children}</div>;
 }
 
 export function DashboardMain({ children }: { children: ReactNode }) {
@@ -164,19 +164,14 @@ export function Card({
   );
 }
 
-/**
- * A slim card: a title and a line under it, and one control at its end (a switch, a Resume button). `id` names the
- * title; without it `label` names the card.
- */
+/** A slim card: a title and a line under it, and one control at its end (a switch, a Resume button). `label` names the card. */
 export function Banner({
-  id,
   label,
   title,
   sub,
   className,
   children,
 }: {
-  id?: string;
   label?: string;
   title: ReactNode;
   sub: ReactNode;
@@ -184,9 +179,9 @@ export function Banner({
   children: ReactNode;
 }) {
   return (
-    <section className={cx("surface", className)} aria-labelledby={id} aria-label={id ? undefined : label}>
+    <section className={cx("surface", className)} aria-label={label}>
       <div>
-        <h2 id={id} className="section-title">
+        <h2 className="section-title">
           {title}
         </h2>
         <p className="muted card-sub">{sub}</p>
@@ -226,8 +221,8 @@ export function GroupLabel({ children }: { children: ReactNode }) {
 }
 
 /** What a list shows when it has nothing to list. */
-export function EmptyNote({ className, children }: { className?: string; children: ReactNode }) {
-  return <p className={cx("empty-note", className)}>{children}</p>;
+export function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="empty-note">{children}</p>;
 }
 
 /** A big figure with what it is out of (`of`), as on a goal card. */

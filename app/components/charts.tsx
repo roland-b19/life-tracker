@@ -6,15 +6,8 @@ import { useAnimatedNumber } from "./animated-number";
 
 /** Small dependency-free chart primitives. Every chart has a text summary for screen readers. */
 
-export function ProgressRing({
-  percent,
-  label,
-  size = 132,
-}: {
-  percent: number;
-  label: string;
-  size?: number;
-}) {
+export function ProgressRing({ percent, label }: { percent: number; label: string }) {
+  const size = 132;
   const stroke = 12;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -71,17 +64,10 @@ export function HBars({ rows }: { rows: HBarRow[] }) {
  * A line and nothing else (no dots). A `null` value is a day with no entry: the line skips it, so a window of days
  * with few entries still draws; a single entry is a flat line across and none leaves the empty grid.
  */
-export function LineChart({
-  points,
-  summary,
-  height = 140,
-}: {
-  points: { label: string; value: number | null; at?: number }[];
-  summary: string;
-  height?: number;
-}) {
+export function LineChart({ points, summary }: { points: { label: string; value: number | null; at?: number }[]; summary: string }) {
   if (points.length < 2) return null;
   const w = 600;
+  const height = 140;
   const pad = 8;
   const values = points.flatMap((p) => (p.value === null ? [] : [p.value]));
   const lo = values.length ? Math.min(...values) : 0;

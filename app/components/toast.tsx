@@ -9,7 +9,7 @@ type UndoFrom = { touches?: string[] };
 interface Toast {
   id: string;
   message: string;
-  type?: "info" | "success" | "warning";
+  type?: "success" | "warning";
   /** Shows an Undo button that runs this. */
   onUndo?: (from: UndoFrom) => void;
   /** Shows a Retry button that runs this: a restore that failed (undoWith). */
@@ -21,7 +21,6 @@ interface Toast {
   touches?: string[];
   /** The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. */
   saved?: Promise<Written>;
-  duration?: number;
 }
 
 interface ToastContextValue {
@@ -111,11 +110,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const DURATION = 5000; // how long a toast stays on screen
 const LINGER = 1500; // after the pointer or focus leaves, a nearly expired toast still stays this long
 
 /** Counts down its toast's time, paused while the mouse is over it or focus is inside it. */
 function ToastItem({ toast, onExpire, children }: { toast: Toast; onExpire: (id: string) => void; children: React.ReactNode }) {
-  const left = useRef(toast.duration ?? 5000);
+  const left = useRef(DURATION);
   const since = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const held = useRef({ hover: false, focus: false });

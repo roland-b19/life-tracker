@@ -46,7 +46,7 @@ export function parseMessage(text) {
 export const buildPayload = (taskTitle) => JSON.stringify({ title: "Reminder", body: taskTitle, url: "/todos" });
 
 /** A push service answers 404 or 410 when the browser dropped the subscription: delete our row. */
-export const isGoneStatus = (code) => code === 404 || code === 410;
+const isGoneStatus = (code) => code === 404 || code === 410;
 
 /** A message seen this many times is dropped, so one broken reminder cannot loop forever. */
 export const MAX_ATTEMPTS = 5;

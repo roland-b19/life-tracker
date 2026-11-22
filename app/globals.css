@@ -262,20 +262,6 @@ h3 {
   }
 }
 
-.dashboard-grid-even {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.25rem;
-}
-
-@media (min-width: 992px) {
-  .dashboard-grid-even {
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    align-items: start;
-  }
-}
-
 .dashboard-main {
   display: flex;
   flex-direction: column;
