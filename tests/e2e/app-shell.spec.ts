@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page, type Request } from "@playwright/test";
-import { Pool } from "pg";
-import { andSettle, headIsQuiet, isRefresh, settled, test } from "./helpers";
+import {
+  addItem,
+  andSettle,
+  asOwner,
+  dismissToast,
+  headIsQuiet,
+  holdWrites,
+  isRefresh,
+  itemName,
+  openWishlist,
+  pauseClock,
+  recordStates,
+  settled,
+  signedInUserId,
+  test,
+  wishlistItemState,
+} from "./helpers";
 
 // The app shell (app/providers.tsx): open copies stay in sync, writes without an answer say why, midnight moves the
 // page to the new day, a refresh missed offline runs once the server answers again, a broken page answer says so, and
@@ -10,27 +25,12 @@ import { andSettle, headIsQuiet, isRefresh, settled, test } from "./helpers";
 // happened (`page.clock.runFor`, which also fires the timers set on the way, unlike `fastForward`), then waits until the
 // page has sent a request of its own (`settled`).
 
-async function openWishlist(page: Page) {
-  await page.goto("/wishlist");
-  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
-}
-
-async function addItem(page: Page, name: string) {
-  await page.getByRole("button", { name: "Add item" }).click();
-  await page.getByLabel("Name", { exact: true }).fill(name);
-  await page.getByLabel("Price (RON)").fill("100");
-  await andSettle(page, () => page.getByRole("button", { name: "Save" }).click());
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
-}
-
 /** The router refreshes of a page from now on. */
 function countRefreshes(page: Page) {
   const seen: Request[] = [];
   page.on("request", (r) => isRefresh(page, r) && seen.push(r));
   return seen;
 }
-
-const itemName = () => `Shell ${randomUUID().slice(0, 8)}`;
 
 /**
  * Takes this one page offline and back through Chromium's network emulation (what DevTools' Offline does): the page's
@@ -53,7 +53,7 @@ async function network(page: Page) {
  * first, so the timer the "online" handler sets runs only after a request of the page's own has got through.
  */
 async function backOnline(page: Page, setOnline: (online: boolean) => Promise<unknown>) {
-  await stopClock(page);
+  await pauseClock(page);
   await setOnline(true);
   const marker = `/robots.txt?online=${randomUUID()}`;
   await expect.poll(() => page.evaluate((url) => fetch(url, { cache: "no-store" }).then((r) => r.ok, () => false), marker)).toBe(true);
@@ -153,46 +153,40 @@ test("a write while offline says nothing was saved and leaves the form open [X-O
 test("a refresh that comes due while offline runs once, on screen, when the device is back online", async ({ signedInPage: page }) => {
   const before = `Shell ex ${randomUUID().slice(0, 8)}`;
   const after = `Renamed ex ${randomUUID().slice(0, 8)}`;
-  const { user } = await (await page.request.get("/api/auth/session")).json();
+  const userId = await signedInUserId(page);
   // Another device renames the exercise; the owner role writes it straight to the local test database
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-  try {
-    await admin.query("INSERT INTO exercises (user_id, name, muscle_group, equipment_type, is_custom) VALUES ($1, $2, 'chest', 'barbell', true)", [
-      user.id,
-      before,
-    ]);
-    await page.clock.install();
-    await page.goto("/gym");
-    // "My exercises" shows the page's data as it comes, so a refresh shows on screen
-    const mine = page.getByRole("region", { name: "My exercises" });
-    await expect(mine.getByText(before, { exact: true })).toBeVisible();
-    await markPage(page);
-    const refreshes = countRefreshes(page);
-    const checks = countChecks(page);
-    const setOnline = await network(page);
-    await setOnline(false);
-    await admin.query("UPDATE exercises SET name = $1 WHERE user_id = $2 AND name = $3", [after, user.id, before]);
-    // Past the 60 s refresh of an open page, which comes due while offline
-    await page.clock.runFor(61_000);
-    await settled(page);
-    expect(refreshes).toHaveLength(0);
-    await backOnline(page, setOnline);
-    await expect(mine.getByText(after, { exact: true })).toBeVisible();
-    expect(checks).toHaveLength(1);
-    expect(refreshes).toHaveLength(1);
-    // Offline and back again with nothing due: no second check and no second refresh
-    await setOnline(false);
-    await settled(page);
-    await setOnline(true);
-    // Past the 600 ms a refresh could wait, and still before the next 60 s refresh
-    await page.clock.runFor(2000);
-    await settled(page);
-    expect(checks).toHaveLength(1);
-    expect(refreshes).toHaveLength(1);
-    expect(await isKept(page)).toBe(true);
-  } finally {
-    await admin.end();
-  }
+  await asOwner((db) =>
+    db.query("INSERT INTO exercises (user_id, name, muscle_group, equipment_type, is_custom) VALUES ($1, $2, 'chest', 'barbell', true)", [userId, before]),
+  );
+  await page.clock.install();
+  await page.goto("/gym");
+  // "My exercises" shows the page's data as it comes, so a refresh shows on screen
+  const mine = page.getByRole("region", { name: "My exercises" });
+  await expect(mine.getByText(before, { exact: true })).toBeVisible();
+  await markPage(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await asOwner((db) => db.query("UPDATE exercises SET name = $1 WHERE user_id = $2 AND name = $3", [after, userId, before]));
+  // Past the 60 s refresh of an open page, which comes due while offline
+  await page.clock.runFor(61_000);
+  await settled(page);
+  expect(refreshes).toHaveLength(0);
+  await backOnline(page, setOnline);
+  await expect(mine.getByText(after, { exact: true })).toBeVisible();
+  expect(checks).toHaveLength(1);
+  expect(refreshes).toHaveLength(1);
+  // Offline and back again with nothing due: no second check and no second refresh
+  await setOnline(false);
+  await settled(page);
+  await setOnline(true);
+  // Past the 600 ms a refresh could wait, and still before the next 60 s refresh
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(checks).toHaveLength(1);
+  expect(refreshes).toHaveLength(1);
+  expect(await isKept(page)).toBe(true);
 });
 
 test("back online, a refresh waits until the server answers, so an open form keeps its text", async ({ signedInPage: page }) => {
@@ -264,18 +258,6 @@ test("a write whose answer is lost while online says so and refreshes [XR-04]", 
 // A tap on a link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
 // (the page it would open is the copy from before the write). The tests below hold the answer of a Wishlist write.
 
-/** Holds the answers of the Wishlist's writes from now on until `release`; `answered` resolves on the first answer. */
-async function holdWrites(page: Page) {
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/wishlist", async (route) => {
-    if (route.request().method() === "POST") await held;
-    await route.fallback();
-  });
-  const answered = page.waitForResponse((r) => r.request().method() === "POST");
-  return { release, answered };
-}
-
 /** A page request of a navigation to another page: not a prefetch, not a refresh of the page on screen. */
 function isOpen(page: Page, request: Request) {
   const headers = request.headers();
@@ -303,18 +285,13 @@ async function waitForRefresh(refresh: Promise<Request>) {
   await request.frame().page().evaluate(headIsQuiet);
 }
 
-/** Stops the page's clock (installed before the page loaded) a moment from now: from here on no timer fires. */
-async function stopClock(page: Page) {
-  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
-}
-
 // A write that never answers lets the tap through after 10 s, so the app is never stuck on one page.
 test("a tap on a link while a write is unanswered waits for the answer, at most 10 s [WISH-13]", async ({ signedInPage: page }) => {
   await page.clock.install();
   await openWishlist(page);
   const name = itemName();
   await addItem(page, name);
-  const { release, answered } = await holdWrites(page);
+  const release = await holdWrites(page);
   const opens = countOpens(page);
   await page.getByRole("button", { name: `Delete ${name}` }).click();
   await expect(page.getByText(name, { exact: true })).toBeHidden();
@@ -326,8 +303,7 @@ test("a tap on a link while a write is unanswered waits for the answer, at most 
   await expect(page).toHaveURL(/\/wishlist$/);
   await page.clock.runFor(1_000);
   await expect(page).toHaveURL(/\/todos$/);
-  release();
-  await answered;
+  await andSettle(page, async () => release());
 });
 
 test("a tap that waits goes through as soon as the refresh after the answer starts, with no timer [WISH-13]", async ({ signedInPage: page }) => {
@@ -339,8 +315,8 @@ test("a tap that waits goes through as soon as the refresh after the answer star
   await waitForRefresh(addRefresh);
   // Neither the 600 ms after an answer nor the 10 s cap can fire now: only the answer can start the refresh, and only
   // the refresh can let the tap through
-  await stopClock(page);
-  const { release, answered } = await holdWrites(page);
+  await pauseClock(page);
+  const release = await holdWrites(page);
   const events: string[] = [];
   page.on("response", (r) => r.request().method() === "POST" && events.push("answer"));
   page.on("request", (r) => {
@@ -352,8 +328,7 @@ test("a tap that waits goes through as soon as the refresh after the answer star
   await page.getByRole("navigation", { name: "Main Navigation" }).getByRole("link", { name: "Tasks" }).click();
   await settled(page);
   expect(events).toEqual([]);
-  release();
-  await answered;
+  await andSettle(page, async () => release());
   // The refresh starts on the answer itself
   await expect.poll(() => events.slice(0, 2)).toEqual(["answer", "refresh"]);
   // And the tap goes through once that refresh has started
@@ -365,7 +340,7 @@ test("of several taps on links while a write is unanswered, only the latest goes
   await openWishlist(page);
   const name = itemName();
   await addItem(page, name);
-  const { release, answered } = await holdWrites(page);
+  const release = await holdWrites(page);
   const opens = countOpens(page);
   await page.getByRole("button", { name: `Delete ${name}` }).click();
   await expect(page.getByText(name, { exact: true })).toBeHidden();
@@ -376,8 +351,7 @@ test("of several taps on links while a write is unanswered, only the latest goes
   await nav.getByRole("link", { name: "Gym" }).dispatchEvent("click");
   await settled(page);
   expect(opens).toEqual([]);
-  release();
-  await answered;
+  await andSettle(page, async () => release());
   await expect(page).toHaveURL(/\/(todos|health|gym)$/);
   expect(new URL(page.url()).pathname).toBe("/gym");
   await settled(page);
@@ -399,7 +373,7 @@ async function tapThenType(
   await openWishlist(page);
   const name = itemName();
   await addItem(page, name);
-  const { release, answered } = await holdWrites(page);
+  const release = await holdWrites(page);
   const opens = countOpens(page);
   await press(page.getByRole("button", { name: `Delete ${name}` }));
   await expect(page.getByText(name, { exact: true })).toBeHidden();
@@ -410,8 +384,7 @@ async function tapThenType(
   const typed = itemName();
   await type(form.getByLabel("Name", { exact: true }), typed);
   const refreshed = page.waitForRequest((r) => isRefresh(page, r));
-  release();
-  await answered;
+  await andSettle(page, async () => release());
   // The refresh after the answer still comes; once it has, a replayed tap would have gone out
   await (await refreshed).response();
   await settled(page);
@@ -466,22 +439,10 @@ test("after a refresh missed offline, a tap waits for the refresh once the serve
   const addRefresh = page.waitForRequest((r) => isRefresh(page, r));
   await addItem(page, name);
   await waitForRefresh(addRefresh);
-  await stopClock(page);
+  await pauseClock(page);
   await markPage(page);
   // Each state from now on: the item list with the item or without it while the Wishlist is on screen, else the page
-  await page.evaluate((item) => {
-    const seen: string[] = [];
-    const sample = () => {
-      const list = [...document.querySelectorAll("section")].find((s) => /^Items\b/.test(s.querySelector("h2")?.textContent ?? ""));
-      if (location.pathname === "/wishlist" && !list) return;
-      const state = location.pathname !== "/wishlist" ? location.pathname : list?.textContent?.includes(item) ? "item" : "none";
-      if (seen.at(-1) !== state) seen.push(state);
-    };
-    sample();
-    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
-    Object.assign(window, { seenItems: seen });
-  }, name);
-  const seen = () => page.evaluate(() => (window as unknown as { seenItems: string[] }).seenItems);
+  const seen = await recordStates(page, wishlistItemState, name);
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${name}` }).click());
   await expect(page.getByText(name, { exact: true })).toBeHidden();
   // The device goes offline before the refresh after the answer, which is missed
@@ -593,7 +554,7 @@ test("a restore that fails keeps a Retry, which restores [XR-08]", async ({ sign
   const name = itemName();
   await openWishlist(page);
   await addItem(page, name);
-  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await dismissToast(page);
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${name}` }).click());
   await expect(page.getByText(name, { exact: true })).toBeHidden();
   // The restore's answer is a server error
