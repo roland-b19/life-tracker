@@ -10,8 +10,8 @@ export const MAX_WATER_ML = 20000;
 export const MAX_STEPS = 200000;
 /** The most one meal can hold; the Health form checks the same limits, with these words, before it saves. */
 export const MEAL_LIMITS = { calories: 10000, macroGrams: 1000 } as const;
-export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less.`;
-export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less.`;
+export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less`;
+export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less`;
 const macroGrams = z.number().min(0).max(MEAL_LIMITS.macroGrams, MEAL_MACROS_TOO_HIGH);
 
 const mealFields = z.object({

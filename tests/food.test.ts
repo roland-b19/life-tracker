@@ -8,6 +8,7 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
+import { NOT_WHOLE } from "@/lib/number-format";
 import {
   CHANGED_ELSEWHERE,
   GOAL_RANGES,
@@ -1257,6 +1258,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0." });
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
+
+    it("refuses a meal over a limit in one sentence that names the field once [U5]", async () => {
+      authState.id = userA;
+      const meal = { date: toISODate(), name: "Meal", calories: 100, protein: 0, carbs: 0, fat: 0 };
+      expect(await logMealAction({ ...meal, calories: 10001 })).toEqual({ success: false, error: "Calories must be 10.000 or less" });
+      expect(await logMealAction({ ...meal, fat: 1000.5 })).toEqual({ success: false, error: "Protein, carbs and fat must each be 1.000 g or less" });
+      expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
+    });
   });
 });
 
@@ -1271,8 +1280,16 @@ describe("the Health form's limits and words are the schema's [U5]", () => {
       expect(refusal({ ...meal, [macro]: MEAL_LIMITS.macroGrams })).toBeUndefined();
       expect(refusal({ ...meal, [macro]: MEAL_LIMITS.macroGrams + 0.1 })).toBe(MEAL_MACROS_TOO_HIGH);
     }
-    expect(MEAL_CALORIES_TOO_HIGH).toBe("Calories must be 10.000 or less.");
-    expect(MEAL_MACROS_TOO_HIGH).toBe("Protein, carbs and fat must each be 1.000 g or less.");
+    expect(MEAL_CALORIES_TOO_HIGH).toBe("Calories must be 10.000 or less");
+    expect(MEAL_MACROS_TOO_HIGH).toBe("Protein, carbs and fat must each be 1.000 g or less");
+  });
+
+  // Most field messages in src/lib/validations end with no full stop ("Name is required", "Must be at least 0"); the
+  // messages this form took from the schema and number-format follow them.
+  it("ends the form's limit and number messages with no full stop, as most field messages do", () => {
+    for (const message of [MEAL_CALORIES_TOO_HIGH, MEAL_MACROS_TOO_HIGH, NOT_WHOLE]) expect(message).not.toMatch(/\.$/);
+    const client = readFileSync("app/health/food-client.tsx", "utf8");
+    expect(client).toContain("`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}`");
   });
 
   it("takes each goal's range from GOAL_RANGES", () => {

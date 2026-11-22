@@ -389,7 +389,7 @@ export function FoodClient({
     const goal = Number(metricGoalInput);
     const range = METRIC_GOAL[metric];
     if (!Number.isInteger(value)) return setErrorMsg(NOT_WHOLE);
-    if (value < 0 || value > METRIC_MAX[metric]) return setErrorMsg(`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}.`);
+    if (value < 0 || value > METRIC_MAX[metric]) return setErrorMsg(`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}.`);
     const before = metricBase;
