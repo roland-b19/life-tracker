@@ -32,7 +32,7 @@ last_verified: 2026-11-22
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B, C, D and E merged (#169, #170, #172, #171, #173, #174), M run on live; the milestone audit's cleanup (unused props, exports and KB drift) is done; the audit leftovers that need no owner decision are being fixed (F1 gym merged first, then F2 and F3); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B, C, D and E merged (#169, #170, #172, #171, #173, #174), M run on live; the milestone audit's cleanup (unused props, exports and KB drift) is done; the audit leftovers that need no owner decision are being fixed (F1 gym merged, F2 shared UI and health in its PR, then F3); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -42,6 +42,7 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 - Animations.
 
 ## Open questions
+- The theme toast's Undo names no `touches` (it changes no row; `tests/toast.test.ts` lets it pass): keep that exception, or give it a key? Found by the F2 review 2026-11-22; the owner decides.
 - Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
 - The `recipes` and `recipe_ingredients` tables (and their seeded rows) have no reader or writer left, and nothing sets `meals.forgotten` (read only, it keeps old hidden meals hidden) (audit fixes, steps 15 and 16): drop them? Dropping is a non-additive migration, so it waits for the owner.
 
