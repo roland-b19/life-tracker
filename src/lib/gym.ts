@@ -30,8 +30,8 @@ import {
 import { Refusal } from "./validations/result";
 import { setLoad } from "./gym-progress";
 import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit, lockUser } from "./gym-seed";
-import { addDays, toISODate } from "./format-date";
-import { weekStart, weeksBetween } from "./gym-progress";
+import { addDays, toISODate, weekStart } from "./format-date";
+import { weeksBetween } from "./gym-progress";
 
 interface DeloadStatus {
   /** x in "Week x of N": 1 to cycleLength, counted from the week after the last deload. */

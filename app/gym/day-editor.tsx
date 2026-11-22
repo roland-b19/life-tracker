@@ -1,7 +1,7 @@
 "use client";
 
 import { visible } from "@/lib/validations/common";
-import { exerciseNameKey, GYM_LIMITS } from "@/lib/validations/gym";
+import { EXERCISE_NAME_MIN, exerciseNameKey, GYM_LIMITS, MIN_OVER_MAX, NAME_REQUIRED, NAME_TOO_SHORT, ROUTINE_RANGE } from "@/lib/validations/gym";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
@@ -31,6 +31,20 @@ const toDraft = (day: SplitDay): DayDraft => ({
     maxReps: String(e.maxReps),
   })),
 });
+
+/**
+ * What stops a day from being saved, in the server's words ("" when nothing does): the routine's numbers (whole, within
+ * the limits), min reps at or below max reps, and a name. A row's problem starts with its exercise's name.
+ */
+export function dayProblem(name: string, rows: { exerciseId: string; targetSets: number; minReps: number; maxReps: number }[], nameOf: (id: string) => string) {
+  const whole = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max;
+  const wrong = rows.find((r) => !whole(r.targetSets, GYM_LIMITS.targetSets) || !whole(r.minReps, GYM_LIMITS.targetReps) || !whole(r.maxReps, GYM_LIMITS.targetReps));
+  if (wrong) return `${nameOf(wrong.exerciseId)}: ${ROUTINE_RANGE}`;
+  const bad = rows.find((r) => r.minReps > r.maxReps);
+  if (bad) return `${nameOf(bad.exerciseId)}: ${MIN_OVER_MAX}`;
+  if (!visible(name)) return NAME_REQUIRED;
+  return "";
+}
 
 /** An editing session that was dismissed: Undo of "Changes discarded" reopens the editor with it. */
 export interface DiscardedEdit {
@@ -103,7 +117,15 @@ export function DayEditor({
     if (cancelled.current) return void (cancelled.current = false);
     if (JSON.stringify(draft) === JSON.stringify(toDraft(day))) return;
     const kept = { draft, created };
-    showToast({ message: "Changes discarded", touches: [`workout_split_days:${day.id}`], onUndo: () => onReopen(kept) });
+    showToast({
+      message: "Changes discarded",
+      touches: [`workout_split_days:${day.id}`],
+      // Nothing to write: the editor reopens with the edits.
+      onUndo: undoWith(showToast, async () => {
+        onReopen(kept);
+        return true;
+      }),
+    });
   }
 
   // Cancel deletes the exercises created in this session (only those), with an Undo that brings them back.
@@ -149,20 +171,9 @@ export function DayEditor({
       minReps: Number(x.minReps),
       maxReps: Number(x.maxReps),
     }));
-    // Same limits as saveSplitDaySchema: sets 1-10, reps 1-100, whole numbers.
-    const whole = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max;
-    const wrong = rows.find((r) => !whole(r.targetSets, 10) || !whole(r.minReps, 100) || !whole(r.maxReps, 100));
-    if (wrong) {
-      setErrorMsg(`Please enter sets from 1 to 10 and reps from 1 to 100 for ${nameOf(wrong.exerciseId)}.`);
-      return;
-    }
-    const bad = rows.find((r) => r.minReps > r.maxReps);
-    if (bad) {
-      setErrorMsg(`Please keep min reps at or below max reps for ${nameOf(bad.exerciseId)}.`);
-      return;
-    }
-    if (!visible(draft.name)) {
-      setErrorMsg("Please enter a name for the day.");
+    const problem = dayProblem(draft.name, rows, nameOf);
+    if (problem) {
+      setErrorMsg(problem);
       return;
     }
     setErrorMsg("");
@@ -197,8 +208,8 @@ export function DayEditor({
   async function addCustomExercise() {
     const name = customName.trim();
     if (!visible(name)) return;
-    if (name.length < 2) {
-      setErrorMsg("The name must have at least 2 characters.");
+    if (name.length < EXERCISE_NAME_MIN) {
+      setErrorMsg(NAME_TOO_SHORT);
       return;
     }
     const same = known.find((e) => exerciseNameKey(e.name) === exerciseNameKey(name));
