@@ -26,8 +26,7 @@ const FRESH = 2000;
 // An open page on screen refreshes this often.
 const EVERY = 60_000;
 // A tap on a link waits at most this long for the unanswered writes, the refresh they left due, or the server check of
-// a refresh missed offline, and a refresh held back for the next one, so nothing that never answers can keep the app on
-// one page or a refresh pending.
+// a refresh missed offline, so nothing that never answers can keep the app on one page.
 const HOLD = 10_000;
 
 // A page payload (React Server Components) is rows like `0:...`, each ending in a newline, after an optional marker
@@ -36,6 +35,13 @@ const isPagePayload = (text: string) => /^[#~]?[0-9a-f]+:/.test(text) && text.en
 
 const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
   new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+
+// Each refresh of the page on screen carries its number (`x-refresh`), and the server page can render it back. Next
+// sends a write without waiting for a refresh on its way and applies that refresh after the write's own change, so a
+// page can tell a server value rendered before a write's answer (its refresh number is at most the one sent by then).
+let sent = 0;
+/** The number of the last refresh sent: a page rendered for a higher one was rendered after this moment. */
+export const refreshesSent = () => sent;
 
 /**
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
@@ -48,10 +54,6 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
  * tap on a link while a write is unanswered, or before the refresh it (or another copy's write, or a refresh missed
  * offline) left due, waits: the refresh runs at once after the answer, and the tap goes through as soon as the refresh
  * has started, so the page it opens is fetched again and shows the write. Any other tap or key meanwhile forgets it.
- * Next sends a write without waiting for a refresh on its way and applies that refresh only once the write's own change
- * is on screen, so a refresh the server rendered before a write would put back what the write changed (a workout just
- * started would leave the screen). A refresh that a write overlapped is held back until the next refresh has started,
- * which replaces it.
  */
 function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
@@ -60,9 +62,6 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     // Back/forward replays the cached page from before a write, so after any write it reloads once instead.
     let wrote = false;
     let writing = 0;
-    // Writes started so far, and the refreshes held back for the next one
-    let started = 0;
-    const heldBack: (() => void)[] = [];
     let due = false;
     // A refresh that came due while offline, run once the device is back online and the server answers
     let missed = false;
@@ -143,7 +142,6 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
 
     const write = async (input: RequestInfo | URL, init?: RequestInit) => {
       writing++;
-      started++;
       clearTimeout(timer);
       try {
         const res = await realFetch(input, init);
@@ -173,25 +171,6 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
         }
       }
     };
-    // A refresh of this page whose answer may be from before a write (one started, or unanswered, while it was on its way)
-    // is held back until the next refresh has started (at most HOLD), and a refresh comes due for that; its whole answer
-    // is read first, as the server may render it at any point until its end.
-    const refreshPage = async (input: RequestInfo | URL, init: RequestInit | undefined) => {
-      const seen = writing > 0 ? -1 : started;
-      const res = await realFetch(input, init);
-      await res
-        .clone()
-        .arrayBuffer()
-        .catch(() => {});
-      if (seen === started) return res;
-      due = true;
-      if (writing === 0) refresh(AFTER_WRITES);
-      await new Promise<void>((resume) => {
-        heldBack.push(resume);
-        setTimeout(resume, HOLD);
-      });
-      return res;
-    };
     const navigate = async (input: RequestInfo | URL, init: RequestInit | undefined, path: string) => {
       const res = await realFetch(input, init);
       if (res.ok && res.headers.get("content-type")?.startsWith("text/x-component")) {
@@ -216,9 +195,8 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
         if (url.pathname !== location.pathname) return navigate(input, init, url.pathname);
         // A refresh of this page: Next dropped its copies of the pages before sending it, so a waiting tap can go.
         if (held) queueMicrotask(release);
-        const res = refreshPage(input, init);
-        for (const resume of heldBack.splice(0)) resume();
-        return res;
+        headers.set("x-refresh", String(++sent));
+        return realFetch(input, { ...init, headers });
       }
       return realFetch(input, init);
     };

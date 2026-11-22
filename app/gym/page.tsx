@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { requirePageUser } from "@/server/auth";
 import {
   getDeloadStatus,
@@ -26,6 +27,8 @@ export default async function GymPage() {
     getWorkoutHistory(user.id, since),
     getPlateWeights(user.id),
   ]);
+  // The refresh this page is rendered for (`app/providers.tsx`; 0 when it is not a refresh).
+  const refresh = Number((await headers()).get("x-refresh")) || 0;
   const names = new Map(exercises.map((e) => [e.id, e.name]));
   const sets = progressSets(workouts, open && { ...open.session, splitDayName: open.splitDayName, sets: open.sets }, names);
   const history = withProgress(workouts, sets, { plates: plateWeights, deload: deloadWeeksIn(deload.weeks, sets) });
@@ -38,6 +41,7 @@ export default async function GymPage() {
       split={split}
       deload={deload}
       history={history}
+      refresh={refresh}
       openSession={
         open && {
           id: open.session.id,

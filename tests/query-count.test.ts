@@ -8,6 +8,8 @@ const auth = vi.hoisted(() => ({ id: "", sid: "" }));
 vi.mock("next-auth", () => ({ getServerSession: async () => ({ user: { id: auth.id, name: "Load" }, sid: auth.sid }) }));
 vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("redirected"); }, notFound: () => { throw new Error("notFound"); } }));
 vi.mock("@/auth", () => ({ authOptions: {} }));
+// A page view outside a request: no request headers (the Gym page reads its refresh number from them).
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db";

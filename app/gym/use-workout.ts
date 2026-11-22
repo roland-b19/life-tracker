@@ -5,6 +5,7 @@ import { NOTES_CHANGED, SET_GONE, SETS_LOGGED, sessionNote, type RestoreSessionI
 import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
+import { refreshesSent } from "../providers";
 import { useServerState } from "../components/server-state";
 import { undoWith, useToast } from "../components/toast";
 import { emptyInput, canLog, UNCHECKED, type SetInput } from "./exercise-logger";
@@ -63,12 +64,14 @@ function useClock(timer: WorkoutTimer | undefined) {
  */
 export function useWorkout({
   openSession,
+  refresh,
   days,
   isDeloadMode,
   setBusy,
   selectDay,
 }: {
   openSession: ActiveSessionData | null;
+  refresh: number;
   days: SplitDay[];
   isDeloadMode: boolean;
   setBusy: (busy: boolean) => void;
@@ -77,19 +80,33 @@ export function useWorkout({
   const { showToast } = useToast();
   const once = useOnce();
   const warn = (message: string) => showToast({ message, type: "warning" });
+  // A server value rendered for a refresh sent before the answer of the last write that put a workout in hand (`take`)
+  // may be from before that write, and Next can apply it after the write's change: it is set aside, and the page keeps
+  // the last later one (`server`), until a refresh sent after the answer (one always follows a write) brings a newer one.
+  const [floor, setFloor] = useState(-1);
+  const fresh = refresh > floor;
+  const [server, setServer] = useState(openSession);
+  if (fresh && server !== openSession) setServer(openSession);
   // The open workout is the server's (D-034): a refresh replaces it (its timer and sets, paused or logged on another
   // device). `handId` says it is the workout in hand; otherwise it is the banner's, left without finishing (Exit, or a
   // reload), whose sets stay saved and which Resume brings back.
-  const [open, setOpen] = useServerState(openSession);
+  const [open, setOpen] = useServerState(server);
   const [handId, setHandId] = useState<string | null>(null);
   const activeSession = open && open.id === handId ? open : null;
   const paused = open && open.id !== handId ? open : null;
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionNotes, setSessionNotes] = useState("");
+  /** Puts the workout in hand, after its write's answer: server values rendered before now are set aside (above). */
+  const take = (id: string) => {
+    setHandId(id);
+    setFloor(refreshesSent());
+  };
   // A workout in hand that the server no longer has open (finished or cancelled on another device) leaves the screen,
-  // and a toast says so; as in `useServerState`, the state changes while rendering and the toast follows.
+  // and a toast says so; as in `useServerState`, the state changes while rendering and the toast follows. A later server
+  // value without it ends it too when the one before had none either (no change for `useServerState`).
   const [ended, setEnded] = useState<{ id: string } | null>(null);
-  if (handId && open?.id !== handId) {
+  if (handId && (open?.id !== handId || (fresh && openSession?.id !== handId))) {
+    if (fresh) setOpen(openSession);
     setHandId(null);
     setConfirmCancel(false);
     setSessionNotes("");
@@ -121,10 +138,10 @@ export function useWorkout({
     if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
   };
   useEffect(() => {
-    if (!notesStale.current || !openSession || openSession.id !== live.current?.id) return;
+    if (!notesStale.current || !server || server.id !== live.current?.id) return;
     notesStale.current = false;
-    savedNotes.current = openSession.notes ?? "";
-  }, [openSession]);
+    savedNotes.current = server.notes ?? "";
+  }, [server]);
 
   const dropSet = (id: string) => setOpen((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {
@@ -177,7 +194,7 @@ export function useWorkout({
       };
       showDay(session.splitDayId);
       setOpen(started);
-      setHandId(started.id);
+      take(started.id);
       showNotes(session.notes);
       const touches = touchesOf(session.id);
       if (from === "running") return showToast({ message: `"${name}" is already under way`, type: "success" });
@@ -445,7 +462,7 @@ export function useWorkout({
       if (!res.success) return warn(res.error);
       showDay(session.splitDayId);
       setOpen({ ...session, timer: res.timer });
-      setHandId(session.id);
+      take(session.id);
       showNotes(session.notes);
     }, "Failed to resume the workout", spot);
   }
@@ -465,7 +482,7 @@ export function useWorkout({
         showDay(res.session.splitDayId);
         showNotes(res.session.notes);
         setOpen(res.session);
-        setHandId(res.session.id);
+        take(res.session.id);
         return res;
       },
       (back) => (back && !back.success ? back.error : failed),
