@@ -1775,6 +1775,23 @@ for (const { write, act, onRefresh } of STALE_WRITES) {
   }
 }
 
+// The tab bar shows only below 1024 px, so on a wider window Delete keeps no room for it. At the page's end the question,
+// taller than "Cancel workout", pushes Delete past the window's bottom edge: opening it scrolls just enough to show Delete,
+// not the phone's extra room for the bar (which would put it about 6rem higher).
+test("on a desktop, Delete of the Cancel question at the page's end scrolls only into view", async ({ signedInPage: page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.getByRole("button", { name: "Cancel workout" }).click();
+  const del = page.getByRole("button", { name: "Delete", exact: true });
+  await expect(del).toBeInViewport();
+  const box = (await del.boundingBox())!;
+  expect(box.y + box.height).toBeGreaterThan(800 - 2);
+  expect(box.y + box.height).toBeLessThanOrEqual(800 + 1);
+});
+
 // On a phone the question that replaces "Cancel workout" is taller than that button, so its Delete would land under the
 // tab bar: opening it scrolls it above the bar, and a tap at Delete's place on the screen deletes the workout.
 test("on a phone, Delete of the Cancel question shows above the tab bar and a tap there deletes the workout", async ({ signedInPage: page }) => {
