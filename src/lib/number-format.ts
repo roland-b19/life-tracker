@@ -38,7 +38,7 @@ export function showNumberInput(value: string): string {
   return m[1] + group(m[2]) + (m[3] === undefined ? "" : `,${m[3]}`);
 }
 
-export type ParsedNumber = { ok: true; value: string; display: string } | { ok: false; error: string };
+type ParsedNumber = { ok: true; value: string; display: string } | { ok: false; error: string };
 
 /**
  * Reads what someone typed in a number field. A comma, or a dot that is not a thousand dot, is the decimal separator;

@@ -5,7 +5,6 @@ export const DUE_REMINDERS_SQL: string;
 export const encodeMessage: (m: { todoId: string; userId: string }) => string;
 export function parseMessage(text: string): { todoId: string; userId: string } | null;
 export const buildPayload: (taskTitle: string) => string;
-export const isGoneStatus: (code: number) => boolean;
 export const MAX_ATTEMPTS: number;
 export function deliverReminder(
   deps: {

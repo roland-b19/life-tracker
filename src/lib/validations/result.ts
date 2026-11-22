@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 /** An expected failure (bad input, a rule of the page, a row that is not there): the user may read its message. */
 export class Refusal extends Error {}
 
-export type Failure = { success: false; error: string };
+type Failure = { success: false; error: string };
 
 /** A server action's answer: what it returned, or the refusal's message. */
 export type Answer<T extends object = object> = ({ success: true } & T) | Failure;

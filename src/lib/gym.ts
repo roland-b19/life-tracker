@@ -282,7 +282,7 @@ async function refuseIfOpen(tx: Pick<typeof db, "select">, userId: string, excep
  * A workout's timer at `now` (D-039): the seconds counted before the last pause plus the running stretch since
  * `timerRunningSince`. "Now" is the server's clock, so every device shows the same time.
  */
-export function workoutTimer(row: { timerSeconds: number; timerRunningSince: Date | null }, now = new Date()) {
+function workoutTimer(row: { timerSeconds: number; timerRunningSince: Date | null }, now = new Date()) {
   const since = row.timerRunningSince;
   const stretch = since ? Math.max(0, Math.floor((now.getTime() - since.getTime()) / 1000)) : 0;
   return { seconds: row.timerSeconds + stretch, running: since !== null };
@@ -292,7 +292,7 @@ export function workoutTimer(row: { timerSeconds: number; timerRunningSince: Dat
 const workoutMinutes = (seconds: number) => Math.min(600, Math.max(1, Math.round(seconds / 60)));
 
 /** How Start found the day: a new workout, today's open one (running, or paused and now running) or today's finished one, reopened. */
-export type StartedFrom = "new" | "running" | "paused" | "finished";
+type StartedFrom = "new" | "running" | "paused" | "finished";
 
 /**
  * Start a workout (D-039): one per day, on a training day of the user's own routine. Start on the day of today's workout
