@@ -7,7 +7,7 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
-import { CHANGED_ELSEWHERE, MAX_WATER_ML, mealHasValue, SHOPPING_ITEM_GONE } from "@/lib/validations/food";
+import { CHANGED_ELSEWHERE, MAX_WATER_ML, mealHasValue, SHOPPING_ITEM_GONE, WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
 import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
@@ -1180,6 +1180,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userB;
       expect(await saveWeightAction(undo)).toEqual(changed);
       expect(await listWeightEntries(userB)).toEqual([]);
+      expect((await listWeightEntries(userA)).map((w) => w.kilograms)).toEqual(["81.00"]);
       // Another device set 85 since: the owner's Undo is refused and the 85 stays.
       authState.id = userA;
       succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 85 }));
@@ -1192,6 +1193,22 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const { entry } = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 }));
       succeeded(await deleteWeightAction(entry.id));
       expect(await saveWeightAction(undo)).toEqual(changed);
+      expect(await listWeightEntries(userA)).toEqual([]);
+    });
+
+    it("answers WEIGHT_ENTRY_GONE to a delete of a weigh-in no longer there, and to another user's [D-040]", async () => {
+      const today = toISODate();
+      const gone = { success: false, error: WEIGHT_ENTRY_GONE };
+      authState.id = userA;
+      const { entry } = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 80 }));
+      // Another user's delete finds nothing of theirs: the same answer, and the owner's weigh-in stays.
+      authState.id = userB;
+      expect(await deleteWeightAction(entry.id)).toEqual(gone);
+      authState.id = userA;
+      expect(await listWeightEntries(userA)).toEqual([entry]);
+      // The owner's delete, then a second one (another device's, or a repeat): the second is the "gone" refusal.
+      succeeded(await deleteWeightAction(entry.id));
+      expect(await deleteWeightAction(entry.id)).toEqual(gone);
       expect(await listWeightEntries(userA)).toEqual([]);
     });
 

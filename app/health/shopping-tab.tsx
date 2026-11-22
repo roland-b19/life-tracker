@@ -366,7 +366,7 @@ export function ShoppingTab({
       if (res?.success) return;
       putBack();
       for (const id of purged) offList.current.add(id); // not purged after all
-      warn("Failed to clear bought items");
+      warn(res?.error ?? "Failed to clear bought items");
     });
     return saved;
   }

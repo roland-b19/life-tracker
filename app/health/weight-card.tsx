@@ -9,6 +9,7 @@ import { useServerState } from "../components/server-state";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { sevenDayAverage } from "@/lib/weight-stats";
 import { formatAmount } from "@/lib/number-format";
+import { WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
 import { TrendChart } from "./trend-chart";
 
 export type WeightEntry = { id: string; date: string; kilograms: string };
@@ -57,21 +58,22 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   function handleDelete(entry: WeightEntry) {
     setEntries((list) => list.filter((e) => e.id !== entry.id));
     const saved = deleteWeightAction(entry.id).catch(() => null);
-    void saved.then((gone) => {
-      // `success: false` means another device already deleted it, so the screen is right as it is; only a thrown error needs the rollback.
-      if (gone) return;
-      upsert(entry);
-      showToast({ message: "Failed to remove weight", type: "warning" });
+    // A weigh-in another device already deleted stays off the screen; any other refusal, or no answer, puts it back.
+    // Either way the server's reason shows and the toast goes with its Undo.
+    void saved.then((res) => {
+      if (res?.success) return;
+      if (res?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
+      showToast({ message: res?.error ?? "Failed to remove weight", type: "warning" });
     });
     showToast({
       message: `Removed ${kg(entry.kilograms)} kg`,
       type: "success",
       touches: touches(entry),
-      saved: saved.then((gone) => gone !== null),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)) return true; // the delete never happened
+          if (!(await saved)?.success) return true; // the delete never happened; the failure path above said why
           const back = await restoreWeightAction({ id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) }).catch(() => null);
           if (back?.success) upsert(entry);
           return back;
@@ -105,7 +107,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
         onUndo: undoWith(showToast, async () => {
           setEntries((list) => list.filter((e) => e.id !== entry.id));
           const gone = await deleteWeightAction(entry.id).catch(() => null);
-          if (!gone) upsert(entry); // `success: false` means it is already gone, so the screen is right without it
+          // A weigh-in already deleted on another device stays off the screen; any other refusal puts it back.
+          if (!gone?.success && gone?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
           return gone;
         }, (back) => (back && !back.success ? back.error : "Failed to undo")),
       });

@@ -111,7 +111,7 @@ export async function saveWeightAction(rawInput: unknown) {
 export async function deleteWeightAction(entryId: string) {
   return respond(async () => {
     const userId = await requireUser();
-    if ((await deleteWeightEntry(userId, uuid.parse(entryId))) === undefined) throw new Refusal("Weight entry not found.");
+    await deleteWeightEntry(userId, uuid.parse(entryId));
     return {};
   });
 }

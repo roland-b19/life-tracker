@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Browser, type Page, type Request, type Response } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, refreshesDone, settled, test } from "./helpers";
 
 // The open tab is kept per device (HTODAY-17), so a reload opens the tab picked last: each open picks its tab. A click
 // before the page has hydrated is lost, so the pick is tried until the tab is selected. On a phone the Shopping tab
@@ -554,6 +554,8 @@ test("Save again after a lost answer logs the meal once [D-040]", async ({ signe
   expect(rows).toEqual([{ count: "1" }]);
 });
 
+const weightCard = (page: Page) => page.getByRole("region", { name: "Weight", exact: true });
+
 /** The signed-in user's id, for the SQL that checks or seeds their rows. */
 async function userId(page: Page) {
   const { user } = await (await page.request.get("/api/auth/session")).json();
@@ -564,7 +566,7 @@ async function userId(page: Page) {
 async function saveWeightTwice(page: Page, kilograms: string) {
   const form = page.getByRole("dialog", { name: "Edit weight" });
   await loseAnswerOnce(page, `"kilograms":${kilograms}`);
-  await page.getByRole("region", { name: "Weight", exact: true }).getByRole("button", { name: "Edit today's weight" }).click();
+  await weightCard(page).getByRole("button", { name: "Edit today's weight" }).click();
   await form.getByLabel("Weight today (kg)").fill(kilograms);
   await form.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
@@ -604,7 +606,7 @@ test("Undo of a weight edit another device changed since is refused and keeps th
   const user = await userId(page);
   await sql("INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, (now() AT TIME ZONE 'Europe/Bucharest')::date, 80)", [user]);
   const saveWeight = async (p: Page, kilograms: string) => {
-    await p.getByRole("region", { name: "Weight", exact: true }).getByRole("button", { name: "Edit today's weight" }).click();
+    await weightCard(p).getByRole("button", { name: "Edit today's weight" }).click();
     const form = p.getByRole("dialog", { name: "Edit weight" });
     await form.getByLabel("Weight today (kg)").fill(kilograms);
     await andSettle(p, () => form.getByRole("button", { name: "Save" }).click());
@@ -664,33 +666,66 @@ test("Undo of a shopping edit on an item deleted meanwhile says the item is gone
   await expect(page.getByText("Failed to undo the edit")).toHaveCount(0);
 });
 
-// Resolves once a router refresh the page started after a write's answer has come back (the app refreshes 600 ms after
-// the last answer). Set it up before the write; a test that then changes the data elsewhere awaits it first, so the
-// page's own refresh can never show that change.
-function refreshAfterWrite(page: Page) {
-  let answered = false;
-  const started = new Set<Request>();
-  const onResponse = (response: Response) => {
-    const request = response.request();
-    if (request.method() === "POST" && "next-action" in request.headers() && response.ok()) answered = true;
-  };
-  const onRequest = (request: Request) => {
-    if (answered && isRefresh(page, request)) started.add(request);
-  };
-  page.on("response", onResponse);
-  page.on("request", onRequest);
-  return page.waitForEvent("requestfinished", (request) => started.has(request)).finally(() => {
-    page.off("response", onResponse);
-    page.off("request", onRequest);
-  });
+const SIGNED_OUT = "You're signed out. Sign in again.";
+
+// Signs the page out once its own refreshes are done, and holds every refresh after that: the app refreshes 600 ms after
+// any answer, and a signed-out refresh goes to the sign-in form, so holding it keeps on screen what the refusal left.
+async function signOutHere(page: Page) {
+  await refreshesDone(page);
+  await page.route((url) => url.pathname === "/health", (route) => (isRefresh(page, route.request()) ? undefined : route.fallback()));
+  await page.context().clearCookies();
 }
+
+// A refused write shows the server's reason (D-040), not a fixed failure text, and changes nothing.
+test("Clear bought when signed out says so and clears nothing [D-040]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  await addItem(page, name, 1);
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${name} as bought`, exact: true }).click());
+  await signOutHere(page);
+  await andSettle(page, () => page.getByRole("button", { name: "Clear bought" }).click());
+  await expect(page.getByText(SIGNED_OUT, { exact: true })).toBeVisible();
+  await expect(page.getByText("Failed to clear bought items")).toHaveCount(0);
+  await expect(shoppingRow(page, name)).toBeVisible();
+  expect(await sql("SELECT is_bought, cleared_at FROM shopping_items WHERE name = $1", [name])).toEqual([{ is_bought: true, cleared_at: null }]);
+});
+
+// Only "already deleted" counts as a weight delete done: any other refusal puts the weigh-in back with the reason.
+test("a weight delete refused when signed out keeps the weigh-in on screen and says why [D-040]", async ({ signedInPage: page }) => {
+  const user = await userId(page);
+  await sql("INSERT INTO weight_entries (user_id, date, kilograms) VALUES ($1, (now() AT TIME ZONE 'Europe/Bucharest')::date, 80)", [user]);
+  await openHealth(page, "Today");
+  await expect(weightCard(page)).toContainText("7-day average · 80 kg");
+  await signOutHere(page);
+  await andSettle(page, () => weightCard(page).getByRole("button", { name: "Delete today's weight" }).click());
+  await expect(page.getByText(SIGNED_OUT, { exact: true })).toBeVisible();
+  await expect(weightCard(page)).toContainText("7-day average · 80 kg");
+  await expect(page.getByText("Removed 80 kg")).toHaveCount(0); // the toast goes with its Undo
+  expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "80.00" }]);
+});
+
+test("Undo of a weigh-in add refused when signed out keeps the weigh-in on screen and says why [D-040]", async ({ signedInPage: page }) => {
+  const user = await userId(page);
+  await openHealth(page, "Today");
+  await weightCard(page).getByRole("button", { name: "Edit today's weight" }).click();
+  const form = page.getByRole("dialog", { name: "Edit weight" });
+  await form.getByLabel("Weight today (kg)").fill("77");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  const undo = undoIn(page, "Added 77 kg");
+  await undo.hover(); // the toast stays while the mouse is on it
+  await signOutHere(page);
+  await andSettle(page, () => undo.click());
+  await expect(page.getByText(SIGNED_OUT, { exact: true })).toBeVisible();
+  await expect(weightCard(page)).toContainText("7-day average · 77 kg");
+  expect(await sql("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user])).toEqual([{ kilograms: "77.00" }]);
+});
 
 // A merging add takes the add's id, so the row it replaced is gone (D-042). This adds `name` on the page, then the same
 // item in another browser, which merges into it: the page, which hears nothing of that write, still shows the old row.
 async function mergeAwayElsewhere(page: Page, browser: Browser, name: string) {
-  const refreshed = refreshAfterWrite(page);
   await addItem(page, name, 1);
-  await refreshed; // a refresh that lands after the merge would show the merged row, and the page would not be stale
+  await refreshesDone(page); // a refresh that lands after the merge would show the merged row, and the page would not be stale
   const context = await browser.newContext();
   try {
     await context.addCookies(await page.context().cookies());

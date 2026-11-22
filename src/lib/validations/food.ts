@@ -106,6 +106,11 @@ export const MAX_SHOPPING_NAMES = 200;
 export const MAX_CLEARED = 5000;
 /** The answer to an edit of an item that has left the list (deleted on another device): the form closes. */
 export const SHOPPING_ITEM_GONE = "This item is no longer on the list.";
+/**
+ * The answer to a delete of a weigh-in that is no longer there (deleted on another device, or not the user's): the one
+ * refusal the weight card counts as done, like SHOPPING_ITEM_GONE on the shopping list.
+ */
+export const WEIGHT_ENTRY_GONE = "This weigh-in was already deleted.";
 
 const shoppingAmount = z.number().min(0.01).max(MAX_SHOPPING_AMOUNT).refine(twoDecimals, TWO_DECIMALS);
 const shoppingItemFields = z.object({

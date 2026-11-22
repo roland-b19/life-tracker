@@ -22,6 +22,7 @@ import {
   MAX_SHOPPING_AMOUNT,
   MAX_SHOPPING_NAMES,
   SHOPPING_ITEM_GONE,
+  WEIGHT_ENTRY_GONE,
   type RevertShoppingCategoryInput,
   type ValueChange,
 } from "./validations/food";
@@ -803,12 +804,16 @@ export async function saveWeightEntry(userId: string, input: LogWeightInput) {
   });
 }
 
+/**
+ * Deletes one weigh-in. One that is no longer there (deleted on another device, or not the user's) is refused with
+ * WEIGHT_ENTRY_GONE, the one refusal the weight card counts as done.
+ */
 export async function deleteWeightEntry(userId: string, id: string) {
   const [deleted] = await db
     .delete(weightEntries)
     .where(and(eq(weightEntries.id, id), eq(weightEntries.userId, userId)))
     .returning({ id: weightEntries.id });
-  return deleted;
+  if (!deleted) throw new Refusal(WEIGHT_ENTRY_GONE);
 }
 
 /** Undo of a delete: the weigh-in comes back under its old id. A taken id or day gives back undefined. */
