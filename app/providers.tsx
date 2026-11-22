@@ -25,6 +25,9 @@ const AFTER_WRITES = 600;
 const FRESH = 2000;
 // An open page on screen refreshes this often.
 const EVERY = 60_000;
+// A tap on a link waits at most this long for a write's answer, so a write that never gets one cannot keep the app on
+// one page.
+const HOLD = 10_000;
 
 // A page payload (React Server Components) is rows like `0:...`, each ending in a newline, after an optional marker
 // byte ('#' or '~'). Next does nothing with a navigation answer that is HTTP 200 but not one of these.
@@ -40,6 +43,10 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
  * that came due while offline runs once the device is back online and the server answers. A write that never got an
  * answer says why: offline nothing was saved (open forms stay as they are); online the answer was lost and the write
  * may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
+ * The browser keeps a copy of the pages already seen (`staleTimes` in next.config.ts), and only a refresh drops it. So a
+ * tap on a link while a write is unanswered, or before the refresh it (or another copy's write) left due, waits: the
+ * refresh runs at once after the answer, and the tap goes through as soon as the refresh has started, so the page it opens
+ * is fetched again and shows the write.
  */
 function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
@@ -53,17 +60,39 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     let missed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
+    // The link a tap waits on (the latest one), and the timer that lets it through after HOLD
+    let held: HTMLAnchorElement | null = null;
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let passing = false;
     const realFetch = window.fetch;
+
+    // Taps the link that waited again, now that nothing it could open is older than the last write.
+    const release = () => {
+      const link = held;
+      held = null;
+      clearTimeout(holdTimer);
+      if (!link?.isConnected) return;
+      passing = true;
+      try {
+        link.click();
+      } finally {
+        passing = false;
+      }
+    };
 
     const refreshNow = () => {
       clearTimeout(timer);
       due = false;
       // Offline, Next would turn the refresh into a full page load, which fails: it waits for the device to be online
+      // Without a refresh the tap goes through at once: offline the copy is all there is.
       if (!navigator.onLine) {
         missed = true;
-        return;
+        return release();
       }
-      if (missed) return check();
+      if (missed) {
+        check();
+        return release();
+      }
       last = Date.now();
       day.seen();
       router.refresh();
@@ -91,7 +120,11 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     const day = watchDay(() => refresh());
 
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CHANNEL);
-    channel?.addEventListener("message", (e) => e.data?.type === "wrote" && refresh(AFTER_WRITES));
+    channel?.addEventListener("message", (e) => {
+      if (e.data?.type !== "wrote") return;
+      due = true;
+      refresh(AFTER_WRITES);
+    });
 
     const write = async (input: RequestInfo | URL, init?: RequestInit) => {
       writing++;
@@ -116,7 +149,12 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
         throw err;
       } finally {
         writing--;
-        if (writing === 0 && due) refresh(AFTER_WRITES);
+        if (writing === 0) {
+          // A tap that waits for this answer refreshes now instead of after the burst
+          if (due && held) refreshNow();
+          else if (due) refresh(AFTER_WRITES);
+          else release();
+        }
       }
     };
     const navigate = async (input: RequestInfo | URL, init: RequestInit | undefined, path: string) => {
@@ -139,11 +177,29 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       if (headers.has("next-action")) return write(input, init);
       // A page request for another page (not a prefetch, not a refresh of this one)
       const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-      if (headers.has("rsc") && !headers.has("next-router-prefetch") && !headers.has("next-router-segment-prefetch") && url.pathname !== location.pathname) {
-        return navigate(input, init, url.pathname);
+      if (headers.has("rsc") && !headers.has("next-router-prefetch") && !headers.has("next-router-segment-prefetch")) {
+        if (url.pathname !== location.pathname) return navigate(input, init, url.pathname);
+        // A refresh of this page: Next dropped its copies of the pages before sending it, so a waiting tap can go.
+        if (held) queueMicrotask(release);
       }
       return realFetch(input, init);
     };
+
+    // A tap on a link of this app while the copies may be older than the last write (see above). A tap with a modifier
+    // (new tab or window) or on a link that leaves the app goes through.
+    const onClick = (e: MouseEvent) => {
+      if (passing || !(writing > 0 || due) || e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!(link instanceof HTMLAnchorElement) || link.origin !== location.origin || link.hasAttribute("download")) return;
+      if (link.target && link.target !== "_self") return;
+      e.preventDefault();
+      held = link;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(release, HOLD);
+      if (writing === 0) refreshNow();
+    };
+    window.addEventListener("click", onClick, true);
 
     const onFocus = () => {
       if (Date.now() - last >= FRESH) refresh();
@@ -162,10 +218,12 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     window.addEventListener("popstate", onPop);
     return () => {
       clearTimeout(timer);
+      clearTimeout(holdTimer);
       clearInterval(every);
       day.stop();
       channel?.close();
       window.fetch = realFetch;
+      window.removeEventListener("click", onClick, true);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
