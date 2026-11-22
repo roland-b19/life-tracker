@@ -900,6 +900,44 @@ test("Undo of an added set another page already deleted adds no row back", async
   expect(await setCount(await userIdOf(page))).toBe(1);
 });
 
+// D-046: Undo of a deleted set whose number a set logged meanwhile took shows it under the number the server gave it.
+test("Undo of a deleted set 3 after a new set 3 was logged shows it as set 4, without a reload", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await logSet(page);
+  for (const kg of ["60", "70"]) {
+    await page.getByLabel("Value").fill(kg);
+    await page.keyboard.press("Shift"); // ends the last tap's burst (D-043)
+    await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
+  }
+  await expect(page.getByText(/Set 3: 5 × 70 kg/)).toBeVisible();
+  await andSettle(page, () => page.getByRole("button", { name: `Delete set 3 of ${EXERCISE}` }).click());
+  await expect(page.getByText(/Set 3: 5 × 70 kg/)).toBeHidden();
+  await page.getByLabel("Value").fill("80");
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click());
+  await expect(page.getByText(/Set 3: 5 × 80 kg/)).toBeVisible();
+
+  await andSettle(page, () => undoIn(page, "Removed set 3").click());
+  await expect(page.getByText(/Set 4: 5 × 70 kg/)).toBeVisible();
+  await expect(page.getByText(/Set 3: 5 × 80 kg/)).toBeVisible();
+  await expect(page.getByText(/Set 3: 5 × 70 kg/)).toBeHidden();
+  const userId = await userIdOf(page);
+  const { rows } = await asAdmin((admin) =>
+    admin.query(
+      "SELECT ws.set_order, ws.load_value FROM workout_sets ws JOIN workout_sessions s ON s.id = ws.session_id WHERE s.user_id = $1 ORDER BY ws.set_order",
+      [userId],
+    ),
+  );
+  expect(rows).toEqual([
+    { set_order: 1, load_value: "60.00" },
+    { set_order: 2, load_value: "60.00" },
+    { set_order: 3, load_value: "80.00" },
+    { set_order: 4, load_value: "70.00" },
+  ]);
+});
+
 // GYMB-07, GYMB-08, GYMB-18: the set form says why a value cannot be logged, and each new set starts with the checks off.
 test("the set form explains a value it refuses, and each new set starts with its checks unchecked", async ({ signedInPage: page }) => {
   await openGym(page);

@@ -69,7 +69,7 @@ export const exerciseNameKey = (name: string) =>
 
 const setFields = z.object({
   // The device makes the id (D-040); Undo also sends the time and the set's number, to bring a deleted set back as it
-  // was (the next free number when a set logged meanwhile took its own). The server checks the time falls within the
+  // was (the number after the highest when a set logged meanwhile took its own). The server checks the time falls within the
   // workout, and numbers a new set itself (D-040: a log sends only what the device knows, so two devices never pick one number).
   id: newId,
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + SET_TIME_SKEW_MS, "Date cannot be in the future").optional(),

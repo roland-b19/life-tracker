@@ -492,7 +492,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await log(a, { id: second.id, setOrder: 2 })).setOrder).toBe(2); // Undo of the delete brings set 2 back as it was
     });
 
-    it("Undo of a delete whose number a set logged meanwhile took gives it the next free number", async () => {
+    it("Undo of a delete whose number a set logged meanwhile took gives it the number after the highest", async () => {
       const ex = (await trainingDay(userA)).exercises[0].exerciseId;
       const session = await begin(userA);
       const log = async (more: Partial<LogSetInput> = {}) =>
@@ -505,6 +505,24 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await log({ id: third.id, createdAt: third.createdAt, setOrder: 3 })).setOrder).toBe(4); // the Undo
       const numbers = await admin.query("SELECT set_order FROM workout_sets WHERE session_id = $1 ORDER BY set_order", [session.id]);
       expect(numbers.rows.map((r) => r.set_order)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("ten sets written at once after sets 1 and 2, an Undo among them, take the numbers 3 to 12 with none repeated", async () => {
+      const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+      const session = await begin(userA);
+      const log = async (more: Partial<LogSetInput> = {}) =>
+        succeeded(await logSetAction(setOf(session.id, ex, { id: randomUUID(), setOrder: undefined, ...more }))).set;
+      await log();
+      await log();
+      const third = await log();
+      succeeded(await deleteSetAction(third.id));
+      // The numbers are read under the workout lock: read before it, writes at the same moment see one highest number and repeat it.
+      await Promise.all([
+        ...Array.from({ length: 9 }, () => log()),
+        log({ id: third.id, createdAt: third.createdAt, setOrder: 3 }), // the Undo of the delete
+      ]);
+      const numbers = await admin.query("SELECT set_order FROM workout_sets WHERE session_id = $1 ORDER BY set_order", [session.id]);
+      expect(numbers.rows.map((r) => r.set_order)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
     });
 
     it("refuses a 51st set of one exercise", async () => {
