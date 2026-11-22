@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, itemName, test, toast, undoIn } from "./helpers";
+import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -31,11 +31,7 @@ async function saveItem(page: Page, form: Locator, piece: string, row: Locator) 
 }
 
 const wishlist: Surface = {
-  async open(page) {
-    await page.goto("/wishlist");
-    await expect(page).toHaveURL(/\/wishlist$/);
-    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
-  },
+  open: openWishlist,
   async addItem(page, name, category) {
     await page.getByRole("button", { name: "Add item" }).click();
     const form = page.getByRole("dialog", { name: "New item" });
@@ -354,13 +350,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
     if (r.method() !== "POST" || !("next-action" in r.headers())) return;
     for (const name of [a, b]) if ((r.postData() ?? "").includes(`"name":"${name}"`)) deleted.push(name);
   });
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/wishlist", async (route) => {
-    const r = route.request();
-    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${a}"`)) await held;
-    await route.fallback();
-  });
+  const release = await holdWrites(page, `"name":"${a}"`);
 
   await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
   await expect.poll(() => deleted).toEqual([a]);
@@ -368,7 +358,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await page.keyboard.press("Shift");
   await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
   await expect(card(page).getByText(b, { exact: true })).toBeHidden();
-  release();
+  await andSettle(page, async () => release(), `"name":"${a}"`);
   await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
   expect(deleted).toEqual([a, b]);

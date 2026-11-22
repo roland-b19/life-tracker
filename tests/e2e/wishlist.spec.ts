@@ -14,6 +14,7 @@ import {
   loseAnswerOnce,
   openWishlist,
   recordStates,
+  refreshesDone,
   settled,
   signInThroughForm,
   test,
@@ -159,8 +160,7 @@ test("a form submitted again while its save is unanswered saves once", async ({ 
   expect(await submits()).toBe(2);
   expect(writes).toHaveLength(1);
 
-  release();
-  await page.waitForResponse((r) => r.request() === writes[0]);
+  await andSettle(page, async () => release(), `"name":"${name}"`);
   // Server actions are sent one at a time, so a second save would go out right after the first answer, well before
   // the refresh the page makes 600 ms after its last answer; `settled` then covers anything sent before that.
   await page.waitForRequest((r) => isRefresh(page, r));
@@ -423,9 +423,8 @@ test("an edit's Undo puts back on screen only the fields it undoes, so another t
   }
   await form.getByLabel("Name", { exact: true }).fill(`${name} v2`);
   // The refresh the rename leaves due has landed before the Undo, so nothing but the Undo changes the row meanwhile.
-  const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name} v2"`);
-  await refreshed;
+  await refreshesDone(page);
   await settled(page);
   await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
   // The Undo's answer is held: the screen shows the old name and keeps the other tab's price.
