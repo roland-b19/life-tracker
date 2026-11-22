@@ -35,6 +35,9 @@ export function formatClock(total: number) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
+/** What the page says when the workout in hand was finished or cancelled on another device (D-034). */
+export const WORKOUT_ENDED_ELSEWHERE = "This workout was finished or cancelled on another device.";
+
 /**
  * The seconds a workout's clock shows: the server's count (D-039) plus the time since it answered, ticking while the
  * timer runs. Every device asks the same row, so they show the same time.
@@ -74,11 +77,30 @@ export function useWorkout({
   const { showToast } = useToast();
   const once = useOnce();
   const warn = (message: string) => showToast({ message, type: "warning" });
-  const [activeSession, setActiveSession] = useState<ActiveSessionData | null>(null);
-  // A workout left without finishing (Exit, or a reload): its sets stay saved and Resume brings it back.
-  const [paused, setPaused] = useState<ActiveSessionData | null>(openSession);
+  // The open workout is the server's (D-034): a refresh replaces it (its timer and sets, paused or logged on another
+  // device). `handId` says it is the workout in hand; otherwise it is the banner's, left without finishing (Exit, or a
+  // reload), whose sets stay saved and which Resume brings back.
+  const [open, setOpen] = useServerState(openSession);
+  const [handId, setHandId] = useState<string | null>(null);
+  const activeSession = open && open.id === handId ? open : null;
+  const paused = open && open.id !== handId ? open : null;
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionNotes, setSessionNotes] = useState("");
+  // A workout in hand that the server no longer has open (finished or cancelled on another device) leaves the screen,
+  // and a toast says so; as in `useServerState`, the state changes while rendering and the toast follows.
+  const [ended, setEnded] = useState<{ id: string } | null>(null);
+  if (handId && open?.id !== handId) {
+    setHandId(null);
+    setConfirmCancel(false);
+    setSessionNotes("");
+    setEnded({ id: handId });
+  }
+  const toldEnded = useRef(ended);
+  useEffect(() => {
+    if (!ended || toldEnded.current === ended) return;
+    toldEnded.current = ended;
+    showToast({ message: WORKOUT_ENDED_ELSEWHERE, type: "warning" });
+  }, [ended, showToast]);
   // The notes as the server holds them, and the save in flight: a save sends only the change from them (D-040).
   const savedNotes = useRef("");
   const notesSave = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -93,27 +115,25 @@ export function useWorkout({
   });
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
   // next save changes from, so the device is not refused again; the field keeps what was typed.
-  const [serverOpen] = useServerState(openSession);
   const notesStale = useRef(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
   const notesAnswered = (res: Answer | null) => {
     if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
   };
   useEffect(() => {
-    if (!notesStale.current || !serverOpen || serverOpen.id !== live.current?.id) return;
+    if (!notesStale.current || !openSession || openSession.id !== live.current?.id) return;
     notesStale.current = false;
-    savedNotes.current = serverOpen.notes ?? "";
-  }, [serverOpen]);
+    savedNotes.current = openSession.notes ?? "";
+  }, [openSession]);
 
-  const dropSet = (id: string) => setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
+  const dropSet = (id: string) => setOpen((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {
-    setActiveSession((prev) =>
+    setOpen((prev) =>
       prev && { ...prev, sets: [...prev.sets.filter((s) => s.id !== set.id), set].sort((a, b) => a.setOrder - b.setOrder) },
     );
   };
   const setTimer = (id: string, timer: WorkoutTimer) => {
-    setActiveSession((prev) => (prev?.id === id ? { ...prev, timer } : prev));
-    setPaused((prev) => (prev?.id === id ? { ...prev, timer } : prev));
+    setOpen((prev) => (prev?.id === id ? { ...prev, timer } : prev));
   };
   // Selects the workout's own day on the page, when the routine still has it.
   const showDay = (dayId: string | null | undefined) => {
@@ -156,8 +176,8 @@ export function useWorkout({
         sets,
       };
       showDay(session.splitDayId);
-      setActiveSession(started);
-      setPaused(null);
+      setOpen(started);
+      setHandId(started.id);
       showNotes(session.notes);
       const touches = touchesOf(session.id);
       if (from === "running") return showToast({ message: `"${name}" is already under way`, type: "success" });
@@ -185,8 +205,8 @@ export function useWorkout({
             }
             const res = await finishSessionAction({ sessionId: session.id });
             if (res.success) {
-              setActiveSession(null);
-              setPaused((p) => (p?.id === session.id ? null : p));
+              setOpen((o) => (o?.id === session.id ? null : o));
+              setHandId(null);
               setSessionNotes("");
             }
             return res;
@@ -210,8 +230,8 @@ export function useWorkout({
             const gone = await cancelSessionAction({ sessionId: session.id, onlyEmpty: true }).catch(() => null);
             if (gone?.success) {
               setConfirmCancel(false);
-              setActiveSession(null);
-              setPaused((p) => (p?.id === session.id ? null : p));
+              setOpen((o) => (o?.id === session.id ? null : o));
+              setHandId(null);
               setSessionNotes("");
             }
             return gone;
@@ -285,7 +305,7 @@ export function useWorkout({
         notes: res.set.notes,
         createdAt: res.set.createdAt,
       };
-      setActiveSession((prev) => prev && { ...prev, sets: [...prev.sets, logged] });
+      setOpen((prev) => (prev?.id === session.id ? { ...prev, sets: [...prev.sets, logged] } : prev));
       setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...state, ...UNCHECKED } }));
       showToast({
         message: res.set.flagAnomaly
@@ -411,9 +431,9 @@ export function useWorkout({
       if (!(await saveNotes())) return;
       const res = await pauseSessionAction({ sessionId: session.id });
       if (!res.success) return warn(res.error);
-      setPaused({ ...session, timer: res.timer, notes: savedNotes.current || null });
+      setOpen({ ...session, timer: res.timer, notes: savedNotes.current || null });
       setConfirmCancel(false);
-      setActiveSession(null);
+      setHandId(null);
     }, "Failed to leave the workout", spot);
   }
 
@@ -424,8 +444,8 @@ export function useWorkout({
       const res = await resumeSessionAction({ sessionId: session.id });
       if (!res.success) return warn(res.error);
       showDay(session.splitDayId);
-      setActiveSession({ ...session, timer: res.timer });
-      setPaused(null);
+      setOpen({ ...session, timer: res.timer });
+      setHandId(session.id);
       showNotes(session.notes);
     }, "Failed to resume the workout", spot);
   }
@@ -444,7 +464,8 @@ export function useWorkout({
         if (!res.success) return res;
         showDay(res.session.splitDayId);
         showNotes(res.session.notes);
-        setActiveSession(res.session);
+        setOpen(res.session);
+        setHandId(res.session.id);
         return res;
       },
       (back) => (back && !back.success ? back.error : failed),
@@ -504,12 +525,14 @@ export function useWorkout({
     const session = activeSession;
     if (!session) return;
     write(async () => {
-      if (!(await saveNotes())) return;
+      // A refusal (of the notes or of the Cancel) closes the Keep/Delete question too: the toast says why.
+      if (!(await saveNotes())) return setConfirmCancel(false);
       const snap = { ...session, notes: savedNotes.current || null };
       const res = await cancelSessionAction({ sessionId: session.id });
-      if (!res.success) return warn(res.error);
       setConfirmCancel(false);
-      setActiveSession(null);
+      if (!res.success) return warn(res.error);
+      setOpen(null);
+      setHandId(null);
       setSessionNotes("");
       showToast({
         message: "Cancelled the workout",
@@ -530,7 +553,8 @@ export function useWorkout({
       const snap = { ...session, notes: savedNotes.current || null };
       const done = await finishSessionAction({ sessionId: session.id });
       if (!done.success) return warn(done.error);
-      setActiveSession(null);
+      setOpen(null);
+      setHandId(null);
       setSessionNotes("");
       // The sets too: a set's Undo after Finish would take a set out of a finished workout.
       const touches = touchesOf(session.id, session.sets);

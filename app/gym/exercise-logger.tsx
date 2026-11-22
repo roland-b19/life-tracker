@@ -2,8 +2,8 @@
 
 import { formatDMY } from "@/lib/format-date";
 import { setLoad, type HistoryEntry } from "@/lib/gym-progress";
-import { formatAmount, formatNumber } from "@/lib/number-format";
-import { GYM_LIMITS, NOT_NEGATIVE, TWO_DECIMALS, twoDecimals, ZERO_LOAD } from "@/lib/validations/gym";
+import { formatAmount } from "@/lib/number-format";
+import { AT_MOST_LOAD, GYM_LIMITS, NOT_NEGATIVE, REPS_RANGE, TWO_DECIMALS, twoDecimals, ZERO_LOAD } from "@/lib/validations/gym";
 import { useRef, useState } from "react";
 import { Badge, ErrorText, Field, FoldButton, SelectField, Toggle } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
@@ -39,15 +39,15 @@ export function emptyInput(e: ExerciseItem): SetInput {
 }
 
 /**
- * What stops a set from being logged, in the form's words ("" when nothing does); the limits are the server's. Text
+ * What stops a set from being logged, in the server's words ("" when nothing does); the limits are the server's. Text
  * that is not a number is the number field's own error.
  */
 export function inputProblem(i: SetInput) {
   const reps = Number(i.reps), load = Number(i.loadValue || 0);
-  if (i.reps && (!Number.isInteger(reps) || reps < 1 || reps > GYM_LIMITS.reps)) return `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}.`;
+  if (i.reps && (!Number.isInteger(reps) || reps < 1 || reps > GYM_LIMITS.reps)) return REPS_RANGE;
   if (!Number.isFinite(load)) return "";
   if (load < 0) return NOT_NEGATIVE;
-  if (load > GYM_LIMITS.load) return `Value can be at most ${formatNumber(GYM_LIMITS.load)}.`;
+  if (load > GYM_LIMITS.load) return AT_MOST_LOAD;
   if (!twoDecimals(load)) return TWO_DECIMALS;
   if (i.loadValue !== "" && load === 0 && i.loadType !== "bodyweight") return ZERO_LOAD;
   return "";

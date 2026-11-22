@@ -2,8 +2,6 @@ import { addDays, weekStart } from "./format-date";
 import { formatAmount } from "./number-format";
 import type { HistorySession, HistorySet } from "./gym";
 
-export { weekStart };
-
 /** Whole calendar weeks (Sunday to Sunday) from one date's week to another's: negative when `to` is earlier. */
 export function weeksBetween(from: string, to: string): number {
   const sunday = (d: string) => Date.parse(`${weekStart(d)}T00:00:00Z`);

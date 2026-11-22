@@ -1,7 +1,7 @@
 "use client";
 
-import { addDays, formatDMY } from "@/lib/format-date";
-import { weekStart } from "@/lib/gym-progress";
+import { addDays, formatDMY, weekStart } from "@/lib/format-date";
+import { DELOAD_ORDER } from "@/lib/validations/gym";
 import { useState } from "react";
 import { Card, FormModal, SelectField, Toggle } from "../components/blocks";
 import { EditButton } from "../components/lists";
@@ -20,6 +20,9 @@ function deloadOptions(today: string, step: 1 | -1, current: string, none: strin
   weeks.sort();
   return [{ value: "", label: none }, ...weeks.map((w) => ({ value: w, label: `${formatDMY(w)} - ${formatDMY(addDays(w, 6))}${w === first ? " (this week)" : ""}` }))];
 }
+
+/** What stops the deload weeks from being saved, in the server's words ("" when nothing does): the next after the last. */
+export const deloadProblem = (last: string, next: string) => (last && next && next <= last ? DELOAD_ORDER : "");
 
 /** Where the deload cycle stands, the "Deload session" switch, and the dialog that sets the last and next deload week. */
 export function DeloadCard({
@@ -45,8 +48,9 @@ export function DeloadCard({
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!draft) return;
-    if (draft.last && draft.next && draft.next <= draft.last) {
-      setErrorMsg("The next deload must come after the last one");
+    const problem = deloadProblem(draft.last, draft.next);
+    if (problem) {
+      setErrorMsg(problem);
       return;
     }
     setBusy(true);
