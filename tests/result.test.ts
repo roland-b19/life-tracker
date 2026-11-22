@@ -106,4 +106,9 @@ describe("a refusal or check several actions give is written once [U6]", () => {
   ])("%s", (words, home) => {
     expect(writtenIn(words)).toEqual([home]);
   });
+
+  it("rounds to decimals only in roundTo (src/lib/number-format.ts) [U4]", () => {
+    const rounding = /Math\.round\([^;]*\)\s*\/\s*(10+|factor)\b/;
+    expect(Object.entries(sources).filter(([, text]) => rounding.test(text)).map(([file]) => file)).toEqual(["../src/lib/number-format.ts"]);
+  });
 });

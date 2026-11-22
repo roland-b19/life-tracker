@@ -1,5 +1,5 @@
 import { addDays, weekStart } from "./format-date";
-import { formatAmount } from "./number-format";
+import { formatAmount, roundTo } from "./number-format";
 import type { HistorySession, HistorySet } from "./gym";
 
 /** Whole calendar weeks (Sunday to Sunday) from one date's week to another's: negative when `to` is earlier. */
@@ -31,14 +31,13 @@ export function deloadWeeksIn(chosen: string[], sets: HistorySet[]): Set<string>
 }
 
 const inDeloadWeek = (date: string, deload: Set<string>) => deload.has(weekStart(date));
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * A set's kg for the progress figures, or null when it has none (D-038): a plate set counts once its exercise has a
  * plate weight, a bodyweight set by the kg it adds, and only when it adds some.
  */
 export function setKg(s: Pick<HistorySet, "exerciseId" | "loadType" | "load">, plates: PlateWeights): number | null {
-  if (s.loadType === "plates") return plates[s.exerciseId] ? round2(s.load * plates[s.exerciseId]) : null;
+  if (s.loadType === "plates") return plates[s.exerciseId] ? roundTo(s.load * plates[s.exerciseId], 2) : null;
   if (s.loadType === "bodyweight") return s.load > 0 ? s.load : null;
   return s.load;
 }
@@ -150,7 +149,7 @@ export function progressSets(history: HistorySession[], open: OpenWorkout | null
 /** A weight change as the user reads it, in the app's number format (D-037): "+2,5 kg", "−1 kg", "0 kg". */
 export const kgDelta = (n: number | null) => {
   if (n === null) return "—";
-  const r = Math.round(n * 100) / 100;
+  const r = roundTo(n, 2);
   return `${r > 0 ? "+" : r < 0 ? "−" : ""}${formatAmount(Math.abs(r), 2)} kg`;
 };
 

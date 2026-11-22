@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, logMeal } from "./food";
 import { logMealSchema } from "./validations/food";
+import { roundTo } from "./number-format";
 import { runClaude } from "./claude-cli";
 import { getClaudeToken } from "./claude-connection";
 
@@ -75,9 +76,8 @@ function mealLabel(meal: unknown, index: number): string {
   return typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : `Meal ${index + 1}`;
 }
 
-const num = (v: string | number) => Math.round(Number(v) * 10) / 10;
 const macros = (m: { calories: number; protein: string | number; carbs: string | number; fat: string | number }) =>
-  `${m.calories} kcal, P ${num(m.protein)} g, C ${num(m.carbs)} g, F ${num(m.fat)} g`;
+  `${m.calories} kcal, P ${roundTo(Number(m.protein), 1)} g, C ${roundTo(Number(m.carbs), 1)} g, F ${roundTo(Number(m.fat), 1)} g`;
 const list = (lines: string[]) => (lines.length ? lines.map((l) => `  - ${l}`).join("\n") : "  - none");
 
 /**

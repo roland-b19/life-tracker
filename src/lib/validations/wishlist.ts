@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
+import { roundTo } from "@/lib/number-format";
 import { FUTURE_DATE, newId, uuid, visible } from "./common";
 
 /** The refusal for an item that is not there (deleted on another device, or another user's): the client drops its row. */
@@ -17,7 +18,7 @@ const wishlistFields = z.object({
     .min(0.01, "Price must be at least 0.01")
     .max(10000000, "Price exceeds maximum threshold")
     // Cents, as stored: the priority must be derived from the price the row actually holds (249.999 is stored as 250.00).
-    .transform((n) => Math.round(n * 100) / 100),
+    .transform((n) => roundTo(n, 2)),
   category: categorySchema.default("other"),
 });
 

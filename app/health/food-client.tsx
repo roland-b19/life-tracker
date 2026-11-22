@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { appTime } from "@/lib/format-date";
-import { formatAmount, formatNumber, NOT_WHOLE } from "@/lib/number-format";
+import { formatAmount, formatNumber, NOT_WHOLE, roundTo } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
 import {
   CHANGED_ELSEWHERE,
@@ -194,7 +194,6 @@ export function FoodClient({
     if (message) showToast({ message, type: "warning" });
   };
 
-  const round1 = (n: number) => Math.round(n * 10) / 10;
   const mealKeys = (meals: MealData[]) => meals.map((m) => `meals:${m.id}`);
 
   // sign 1 adds the meal to the day, -1 removes it; either is a no-op when the day already is that way.
@@ -206,9 +205,9 @@ export function FoodClient({
         meals: sign === 1 ? [...prev.meals, meal].sort((a, b) => +new Date(a.createdAt ?? 0) - +new Date(b.createdAt ?? 0)) : prev.meals.filter((m) => m.id !== meal.id),
         totals: {
           calories: Math.max(0, prev.totals.calories + sign * meal.calories),
-          protein: Math.max(0, round1(prev.totals.protein + sign * parseFloat(meal.protein))),
-          carbs: Math.max(0, round1(prev.totals.carbs + sign * parseFloat(meal.carbs))),
-          fat: Math.max(0, round1(prev.totals.fat + sign * parseFloat(meal.fat))),
+          protein: Math.max(0, roundTo(prev.totals.protein + sign * Number(meal.protein), 1)),
+          carbs: Math.max(0, roundTo(prev.totals.carbs + sign * Number(meal.carbs), 1)),
+          fat: Math.max(0, roundTo(prev.totals.fat + sign * Number(meal.fat), 1)),
         },
       };
     });
@@ -256,9 +255,9 @@ export function FoodClient({
             date: meal.date,
             name: meal.name,
             calories: meal.calories,
-            protein: parseFloat(meal.protein),
-            carbs: parseFloat(meal.carbs),
-            fat: parseFloat(meal.fat),
+            protein: Number(meal.protein),
+            carbs: Number(meal.carbs),
+            fat: Number(meal.fat),
             isEstimated: meal.isEstimated ?? false,
             createdAt: meal.createdAt ? new Date(meal.createdAt).toISOString() : undefined,
           }).catch(() => null);

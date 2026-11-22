@@ -7,8 +7,12 @@ import {
   formatAmount,
   formatNumber,
   parseNumberInput,
+  roundTo,
   showNumberInput,
 } from "@/lib/number-format";
+import { kgDelta, setKg } from "@/lib/gym-progress";
+import { addWishlistItemSchema } from "@/lib/validations/wishlist";
+import { sevenDayAverage } from "@/lib/weight-stats";
 
 describe("formatNumber", () => {
   it("puts a dot between thousands and a comma before the decimals [NUM]", () => {
@@ -88,5 +92,27 @@ describe("editedNumberText", () => {
     expect(caretInDisplay("15.000", 5)).toBe(6);
     expect(caretInDisplay("1.500,", 5)).toBe(6);
     expect(caretInDisplay("1.500", 1)).toBe(1);
+  });
+});
+
+describe("roundTo", () => {
+  it("rounds half away from zero on the decimal it keeps, as Math.round does", () => {
+    expect([roundTo(0.1 + 0.2, 1), roundTo(1234.565, 2), roundTo(4.45, 1), roundTo(-2.5, 0), roundTo(-1.25, 1), roundTo(7, 2)]).toEqual([0.3, 1234.57, 4.5, -2, -1.2, 7]);
+  });
+});
+
+// U4: the places that round a value; each keeps the output it had before they shared one helper.
+describe("rounding stays as it was [U4]", () => {
+  it("rounds a weight change, a plate set's kg and the 7-day average to two decimals", () => {
+    expect([kgDelta(2.675), kgDelta(1234.565), kgDelta(-0.004), kgDelta(0.285)]).toEqual(["+2,68 kg", "+1.234,57 kg", "0 kg", "+0,28 kg"]);
+    expect(setKg({ exerciseId: "e", loadType: "plates", load: 3 }, { e: 2.27 })).toBe(6.81);
+    expect(setKg({ exerciseId: "e", loadType: "plates", load: 3 }, { e: 1.1 })).toBe(3.3);
+    const day = (date: string, kilograms: number) => ({ date, kilograms });
+    expect(sevenDayAverage([day("2026-11-08", 78.4), day("2026-11-09", 78.45), day("2026-11-10", 78.47)], "2026-11-10")).toBe(78.44);
+  });
+
+  it("keeps a wish's price in cents, as stored", () => {
+    const price = (estimatedPrice: number) => addWishlistItemSchema.shape.estimatedPrice.parse(estimatedPrice);
+    expect([price(12.345), price(249.999), price(0.285), price(1.005), price(1200.5)]).toEqual([12.35, 250, 0.28, 1, 1200.5]);
   });
 });

@@ -8,6 +8,7 @@ import { authState, seedUser } from "./auth";
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { TWO_DECIMALS } from "@/lib/validations/common";
+import { buildFoodChatPrompt } from "@/lib/food-ai-chat";
 import {
   CHANGED_ELSEWHERE,
   MAX_WATER_ML,
@@ -117,6 +118,17 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     // User B still gets default targets
     const targetsB = await getNutritionTargets(userB);
     expect(targetsB.calories).toBe(3350);
+  });
+
+  it("sums a day's macros to one decimal and lists them so in the assistant's prompt [U4]", async () => {
+    const today = "2026-11-04";
+    for (const [name, protein] of [["A", 0.1], ["B", 0.2], ["C", 33.3], ["D", 33.3], ["E", 33.3]] as const) {
+      await logMeal(userA, { date: today, name, calories: 100, protein, carbs: protein, fat: 2.5 });
+    }
+    expect((await getDailyFoodSummary(userA, today)).totals).toEqual({ calories: 500, protein: 100.2, carbs: 100.2, fat: 12.5 });
+    const prompt = await buildFoodChatPrompt(userA, { date: today, time: "12:00" });
+    expect(prompt).toContain("totals 500 kcal, P 100.2 g, C 100.2 g, F 12.5 g");
+    expect(prompt).toContain("A, 100 kcal, P 0.1 g, C 0.1 g, F 2.5 g");
   });
 
   it("enforces multi-user isolation on meals and daily metrics", async () => {
