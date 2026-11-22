@@ -299,30 +299,26 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
 
       const today = toISODate();
-      const addRes = await addTodoAction({
+      const addRes = succeeded(await addTodoAction({
         space: "personal",
         title: "Action Test Task",
         dueDate: today,
         reminderTime: "14:30",
         isRecurring: false,
-      });
-
-      if (!addRes.success) throw new Error(addRes.error);
+      }));
       expect(addRes.todo.title).toBe("Action Test Task");
       expect(addRes.todo.reminderTime).toBe("14:30");
 
-      const toggleRes = await toggleTodoAction({
+      succeeded(await toggleTodoAction({
         id: addRes.todo.id,
         isCompleted: true,
-      });
-      succeeded(toggleRes);
+      }));
 
       const listRes = await getDailyTodos(userA, "personal", today);
       expect(listRes.todos).toHaveLength(1);
       expect(listRes.todos[0].isCompleted).toBe(true);
 
       const deleteRes = succeeded(await deleteTodoAction(addRes.todo.id));
-      succeeded(deleteRes);
       expect(deleteRes.deleted).toBe(true);
 
       vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
@@ -331,7 +327,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         p256dhKey: "sample-p256dh-val",
         authKey: "sample-auth-val",
       }));
-      succeeded(subRes);
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
     });
 
@@ -380,23 +375,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const habit = (dueDate: string) => ({ space: "personal", title: "Stretch", dueDate, isRecurring: true, recurrencePattern: "daily" });
       await expect(addTodoAction(habit(addDays(today, -400)))).resolves.toEqual(refused("Tasks can only be added or changed for today."));
       await expect(addTodoAction(habit(addDays(today, 400)))).resolves.toEqual(refused("Tasks can only be added or changed for today."));
-      const made = await addTodoAction(habit(addDays(today, -1)));
-      succeeded(made);
+      const made = succeeded(await addTodoAction(habit(addDays(today, -1))));
       // Undo of deleting a long-running habit keeps its real first day.
-      if (!made.success) throw new Error(made.error);
       const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date() };
       succeeded(await restoreTodoAction(old));
     });
 
     it("puts a one-off task added for a day already over on today, so it shows and carries over", async () => {
       const today = toISODate();
-      const made = await addTodoAction({ space: "personal", title: "Late", dueDate: addDays(today, -1), isRecurring: false });
-      if (!made.success) throw new Error(made.error);
+      const made = succeeded(await addTodoAction({ space: "personal", title: "Late", dueDate: addDays(today, -1), isRecurring: false }));
       expect(made.todo.dueDate).toBe(today);
       expect((await getDailyTodos(userA, "personal", today)).todos.map((t) => t.title)).toEqual(["Late"]);
       // A repeating task keeps its first day.
-      const habit = await addTodoAction({ space: "personal", title: "Habit", dueDate: addDays(today, -1), isRecurring: true, recurrencePattern: "daily" });
-      if (!habit.success) throw new Error(habit.error);
+      const habit = succeeded(await addTodoAction({ space: "personal", title: "Habit", dueDate: addDays(today, -1), isRecurring: true, recurrencePattern: "daily" }));
       expect(habit.todo.dueDate).toBe(addDays(today, -1));
     });
 
@@ -435,8 +426,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       const today = toISODate();
       expect(await addTodoAction({ space: "personal", title: "   ", dueDate: today, isRecurring: false })).toEqual(refused("Title is required"));
-      const ok = await addTodoAction({ space: "personal", title: "  Pay rent  ", dueDate: today, isRecurring: false });
-      if (!ok.success) throw new Error(ok.error);
+      const ok = succeeded(await addTodoAction({ space: "personal", title: "  Pay rent  ", dueDate: today, isRecurring: false }));
       expect(ok.todo.title).toBe("Pay rent");
       expect(await updateTodoAction({ id: ok.todo.id, title: "\n\t " })).toEqual(refused("Title is required"));
       expect(await addTodoAction({ space: "personal", title: "x".repeat(151), dueDate: today, isRecurring: false })).toEqual(refused("Too long (max 150)"));
@@ -446,10 +436,9 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       const today = toISODate();
 
-      const habit = await addTodoAction({
+      const habit = succeeded(await addTodoAction({
         space: "personal", title: "Walk", dueDate: today, isRecurring: true, recurrencePattern: "daily",
-      });
-      if (!habit.success) throw new Error(habit.error);
+      }));
       succeeded(await toggleTodoAction({ id: habit.todo.id, isCompleted: true }));
       expect((await getDailyTodos(userA, "personal", today)).todos.find((t) => t.id === habit.todo.id)?.isCompleted).toBe(true);
       const later = await add(userA, { space: "personal", title: "Later", dueDate: addDays(today, 3), isRecurring: true, recurrencePattern: "daily" });
@@ -744,8 +733,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const spaces = ["personal", "business"] as const;
       for (const space of spaces) {
         for (const isRecurring of [false, true]) {
-          const res = await addTodoAction({ space, title: "Plan", dueDate: today, isRecurring, recurrencePattern: isRecurring ? "daily" : "none" });
-          succeeded(res);
+          succeeded(await addTodoAction({ space, title: "Plan", dueDate: today, isRecurring, recurrencePattern: isRecurring ? "daily" : "none" }));
         }
       }
       for (const space of spaces) {

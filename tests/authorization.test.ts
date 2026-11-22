@@ -64,9 +64,8 @@ describe("weight authorization", () => {
   it("allows the owner and answers anonymous callers with the signed-out error", async () => {
     const ownerId = authState.id;
     const today = toISODate();
-    const saved = await saveWeightAction({ date: today, kilograms: 80 });
-    expect(saved).toMatchObject({ success: true, previous: null, entry: { date: today, kilograms: "80.00" } });
-    if (!saved.success) throw new Error("save failed");
+    const saved = succeeded(await saveWeightAction({ date: today, kilograms: 80 }));
+    expect(saved).toMatchObject({ previous: null, entry: { date: today, kilograms: "80.00" } });
 
     authState.id = "";
     const signedOut = refused(SIGNED_OUT);
@@ -95,14 +94,12 @@ describe("weight authorization", () => {
   it("restores a deleted weigh-in as the same row, and never over another user's row", async () => {
     const ownerId = authState.id;
     const today = toISODate();
-    const created = await saveWeightAction({ date: today, kilograms: 82.4 });
-    if (!created.success) throw new Error("save failed");
+    const created = succeeded(await saveWeightAction({ date: today, kilograms: 82.4 }));
     const original = await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id));
     succeeded(await deleteWeightAction(created.entry.id));
     expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([]);
 
-    const restored = await restoreWeightAction({ ...created.entry, kilograms: Number(created.entry.kilograms) });
-    succeeded(restored);
+    succeeded(await restoreWeightAction({ ...created.entry, kilograms: Number(created.entry.kilograms) }));
     expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([
       { ...original[0], createdAt: expect.any(Date) },
     ]);
@@ -118,8 +115,7 @@ describe("weight authorization", () => {
   it("refuses a weigh-in under an id another user holds, and writes nothing", async () => {
     const ownerId = authState.id;
     const today = toISODate();
-    const created = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 });
-    if (!created.success) throw new Error("save failed");
+    const created = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 }));
     expect(created).toMatchObject({ entry: { date: today, kilograms: "81.00" }, previous: null });
 
     const otherId = await seedUser(`f-${randomUUID()}`);
@@ -137,13 +133,11 @@ describe("weight authorization", () => {
     const today = toISODate();
     const otherId = await seedUser(`g-${randomUUID()}`);
     authState.id = otherId;
-    const theirs = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 });
-    if (!theirs.success) throw new Error("save failed");
+    const theirs = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 }));
 
     authState.id = ownerId;
     const [past] = await db.insert(weightEntries).values({ userId: ownerId, date: addDays(today, -1), kilograms: "80.00" }).returning();
-    const mine = await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 });
-    if (!mine.success) throw new Error("save failed");
+    const mine = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 }));
     const notSaved = refused("This weight could not be saved.");
     expect(await saveWeightAction({ id: theirs.entry.id, date: today, kilograms: 90 })).toEqual(notSaved);
     expect(await saveWeightAction({ id: past.id, date: today, kilograms: 90 })).toEqual(notSaved); // the owner's other day
@@ -162,8 +156,7 @@ describe("weight authorization", () => {
   it("does not let another user delete or change a row", async () => {
     const ownerId = authState.id;
     const today = toISODate();
-    const created = await saveWeightAction({ date: today, kilograms: 81 });
-    if (!created.success) throw new Error("save failed");
+    const created = succeeded(await saveWeightAction({ date: today, kilograms: 81 }));
     const otherId = await seedUser(`b-${randomUUID()}`);
     authState.id = otherId;
 
@@ -180,9 +173,8 @@ describe("weight authorization", () => {
 
   it("sets the day's weight instead of adding a second row, and reports what it replaced", async () => {
     const today = toISODate();
-    const first = await saveWeightAction({ date: today, kilograms: 82 });
-    const second = await saveWeightAction({ date: today, kilograms: 79.5 });
-    if (!first.success || !second.success) throw new Error("save failed");
+    const first = succeeded(await saveWeightAction({ date: today, kilograms: 82 }));
+    const second = succeeded(await saveWeightAction({ date: today, kilograms: 79.5 }));
     expect(second.entry.id).toBe(first.entry.id);
     expect(second.previous).toEqual(first.entry);
     expect(await listWeightEntries(authState.id)).toEqual([{ id: first.entry.id, date: today, kilograms: "79.50" }]);

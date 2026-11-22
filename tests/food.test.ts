@@ -870,7 +870,6 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         carbs: 5,
         fat: 3,
       }));
-      succeeded(mealRes);
       expect(mealRes.meal?.name).toBe("Whey Shake");
 
       // 2. Water: a tap sends the total it showed and the new one, so a repeat of the same tap no longer matches and
@@ -899,7 +898,6 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       // 3. Update steps
       const stepsRes = succeeded(await updateStepsAction({ date: today, steps: { from: 150000, to: 10500 } }));
-      succeeded(stepsRes);
       expect(stepsRes.metrics?.steps).toBe(10500);
 
       // 4. Update targets
@@ -908,14 +906,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         proteinGrams: { from: 170, to: 175 },
         carbsGrams: { from: 300, to: 310 },
       }));
-      succeeded(targetRes);
       expect(targetRes.targets.calories).toBe(3400);
 
       // 5. Shopping: add, edit, rename, clear and undo
       const { item } = succeeded(await addShoppingItemAction({ name: "Eggs", amount: 6, category: "Dairy" }));
       expect(item.category).toBe("dairy");
-      const editRes = await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" });
-      expect(editRes.success && Number(editRes.item.amount)).toBe(10);
+      const editRes = succeeded(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" }));
+      expect(Number(editRes.item.amount)).toBe(10);
       succeeded(await renameShoppingCategoryAction({ from: "dairy", to: "fridge" }));
       expect(await updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
       expect(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
@@ -944,8 +941,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
 
       // 7. Delete meal
-      const delMealRes = await deleteMealAction(mealRes.meal!.id);
-      succeeded(delMealRes);
+      succeeded(await deleteMealAction(mealRes.meal!.id));
     });
 
     it("saves goals for the signed-in owner only and validates their ranges", async () => {

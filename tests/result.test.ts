@@ -114,3 +114,11 @@ describe("a refusal or check several actions give is written once [U6]", () => {
     expect(Object.entries(sources).filter(([, text]) => rounding.test(text)).map(([file]) => file)).toEqual(["../src/lib/number-format.ts"]);
   });
 });
+
+// Action result (D-010): a test narrows an action's answer with `succeeded()` (tests/succeeded.ts), never by hand.
+it("narrows an action's answer in the tests only through succeeded() [D-010]", () => {
+  const tests = import.meta.glob("./**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+  const byHand = /if \(!\w+\.success\b|\b(\w+)\.success (\?|&&)[^;]*\b\1\./;
+  expect(Object.keys(tests).length).toBeGreaterThan(30);
+  expect(Object.entries(tests).filter(([, text]) => byHand.test(text)).map(([file]) => file)).toEqual(["./succeeded.ts"]);
+});

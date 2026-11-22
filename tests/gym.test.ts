@@ -198,7 +198,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("lets the owner rename, reorder and retarget a day", async () => {
       const day = await firstTrainingDay(userA);
       const [first, second] = day.exercises;
-      const res = await saveSplitDayAction({
+      succeeded(await saveSplitDayAction({
         id: day.id,
         name: "Push",
         isRest: false,
@@ -206,8 +206,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
           { exerciseId: second.exerciseId, targetSets: 3, minReps: 6, maxReps: 10 },
           { exerciseId: first.exerciseId, targetSets: 2, minReps: 5, maxReps: 8 },
         ],
-      });
-      succeeded(res);
+      }));
 
       const after = (await getUserSplitWithDays(userA))!.days.find((d) => d.id === day.id)!;
       expect(after.name).toBe("Push");
@@ -1218,8 +1217,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(logRes.set.reps).toBe(8);
 
       // 3. Delete set (only while the workout is open), and log another
-      const deleteRes = await deleteSetAction(logRes.set.id);
-      succeeded(deleteRes);
+      succeeded(await deleteSetAction(logRes.set.id));
       succeeded(await logSetAction({ sessionId: startRes.session.id, exerciseId: exercise.id, reps: 8, loadType: "kg", loadValue: 42.5 }));
 
       // 4. Finish session
@@ -1415,10 +1413,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(old.id);
       expect(await startSessionAction(await startInput(userA))).toEqual(refused("A workout is already open. Resume or finish it first."));
       succeeded(await finishSessionAction({ sessionId: old.id }));
-      const started = await startSessionAction(await startInput(userA));
-      succeeded(started);
+      const started = succeeded(await startSessionAction(await startInput(userA)));
       expect(await reopenSessionAction({ sessionId: old.id })).toEqual(refused("A workout is already open. Resume or finish it first."));
-      expect(await getOpenWorkoutSession(userA)).toMatchObject({ session: { id: started.success ? started.session.id : "" } });
+      expect(await getOpenWorkoutSession(userA)).toMatchObject({ session: { id: started.session.id } });
       expect(await restoreSessionAction({ date: TODAY, isDeload: false, sets: [] })).toEqual(refused("A workout is already open. Resume or finish it first."));
     });
 
