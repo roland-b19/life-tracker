@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { Refusal, respond, SIGNED_OUT } from "@/lib/validations/result";
@@ -88,19 +86,19 @@ describe("newId: an add's id made on the device", () => {
 });
 
 describe("a refusal several actions give is written once [U6]", () => {
-  const sources = (dir: string): string[] =>
-    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? sources(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
-    );
+  const sources = import.meta.glob(["../src/**/*.{ts,tsx}", "../app/**/*.{ts,tsx}"], { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >;
   // Gym still words its own duplicate name; it moves to alreadyExists with the gym pages.
-  const files = [...sources("src"), ...sources("app")].filter((f) => !/gym/.test(f));
-  const writtenIn = (words: string) => files.filter((f) => readFileSync(f, "utf8").includes(words));
+  const files = Object.entries(sources).filter(([file]) => !/gym/.test(file));
+  const writtenIn = (words: string) => files.filter(([, text]) => text.includes(words)).map(([file]) => file);
 
   it.each([
-    ["Category not found.", "src/lib/validations/categories.ts"],
-    ["has changed since.", "src/lib/validations/result.ts"],
-    ["already exists.", "src/lib/validations/result.ts"],
-    ["Only today and yesterday can be changed.", "src/lib/validations/food.ts"],
+    ["Category not found.", "../src/lib/validations/categories.ts"],
+    ["has changed since.", "../src/lib/validations/result.ts"],
+    ["already exists.", "../src/lib/validations/result.ts"],
+    ["Only today and yesterday can be changed.", "../src/lib/validations/food.ts"],
   ])("%s", (words, home) => {
     expect(writtenIn(words)).toEqual([home]);
   });
