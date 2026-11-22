@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { getTableName } from "drizzle-orm";
 import { touchesOverlap } from "@/../app/components/toast";
+import { pushSubscriptions } from "@/db/schema";
 
 describe("touchesOverlap [X-UNDO-STACK, XR-02, XR-07, HTODAY-08, MORE-10]", () => {
   it("matches the same row", () => {
@@ -48,5 +50,24 @@ describe("every Undo toast in app/ names the rows it touches [D-040]", () => {
     };
     visit(source);
     expect(missing, "lines of toasts with an Undo and no touches").toEqual([]);
+  });
+});
+
+describe('the "Reminders enabled" toast names the subscription row it saved [D-040]', () => {
+  it("touches the push_subscriptions row the save answered", () => {
+    const file = "app/todos/todos-client.tsx";
+    const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const found: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const value = (name: string) =>
+          node.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && p.name.getText(source) === name)?.initializer.getText(source);
+        if (value("message") === '"Reminders enabled"') found.push(value("touches") ?? "none");
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    // The saved row's id, under the table the Undo deletes it from.
+    expect(found).toEqual([`[\`${getTableName(pushSubscriptions)}:\${res.subscription.id}\`]`]);
   });
 });
