@@ -1,8 +1,8 @@
+import { TWO_DECIMALS } from "../../src/lib/validations/common";
+import { WORKOUT_ENDED_ELSEWHERE, WORKOUT_FINISHED, WORKOUT_GONE, ZERO_LOAD } from "../../src/lib/validations/gym";
 import { randomUUID } from "node:crypto";
 import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
-import { TWO_DECIMALS } from "../../src/lib/validations/common";
-import { WORKOUT_ENDED_ELSEWHERE, ZERO_LOAD } from "../../src/lib/validations/gym";
 import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, isRefresh, refreshesDone, settled, test } from "./helpers";
 
 // A new user gets the default split (Upper / Lower 5-Day) when the page first loads. The day the page selects at load
@@ -532,16 +532,7 @@ test("a set logged on one device into a workout another device finished is refus
   const userId = await userIdOf(page);
   expect(await setCount(userId)).toBe(1);
   await logSet(other);
-  const finished = toast(other, "This workout is already finished.");
-  await expect(finished).toBeVisible();
-  expect(await setCount(userId)).toBe(1);
-
-  // A set of a finished workout is not deleted either: the row comes back, with the server's reason.
-  await finished.getByRole("button", { name: "Dismiss notification" }).click();
-  await expect(finished).toBeHidden();
-  await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
-  await expect(finished).toBeVisible();
-  await expect(other.getByText(SET_LINE)).toBeVisible();
+  await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
   expect(await setCount(userId)).toBe(1);
   await other.context().close();
 });
@@ -560,9 +551,9 @@ test("Cancel on one device of a workout another device finished is refused, clos
   await expect(page.getByText(/^Finished the workout/)).toBeVisible();
   await other.getByRole("button", { name: "Cancel workout" }).click();
   await andSettle(other, () => other.getByRole("button", { name: "Delete", exact: true }).click());
-  await expect(toast(other, "This workout is already finished.")).toBeVisible();
+  await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
   await expect(other.getByText("Delete this workout and its sets?")).toBeHidden();
-  await expect(other.getByRole("button", { name: "Cancel workout" })).toBeVisible();
+  await expect(other.getByRole("button", { name: "Cancel workout" })).toBeHidden();
   await expect(other.getByText("Cancelled the workout")).toBeHidden();
   expect(await setCount(await userIdOf(page))).toBe(1);
   await other.context().close();
@@ -1663,4 +1654,97 @@ test("a double tap on the banner's Resume resumes once", async ({ signedInPage: 
   await expect(resume).toBeVisible();
   expect(await guardedBurst(page, resume)).toEqual({ writes: 1, clicks: 1 });
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+});
+
+// A write refused because the workout ended elsewhere (finished: WORKOUT_FINISHED; cancelled: WORKOUT_GONE) takes the
+// workout off the screen at once, with one toast; the refresh that follows the write shows no second one. The other
+// device's clock stands still, so the workout leaves before any refresh; the clock then runs again for the refresh. A
+// set's Delete in a cancelled workout finds no set (SET_GONE), so that workout leaves at the next refresh instead.
+const ENDINGS = ["finished", "cancelled"] as const;
+const STALE_WRITES: { write: string; act: (other: Page) => Promise<void>; endings?: readonly (typeof ENDINGS)[number][] }[] = [
+  {
+    write: "Cancel",
+    act: async (other) => {
+      await other.getByRole("button", { name: "Cancel workout" }).click();
+      await andSettle(other, () => other.getByRole("button", { name: "Delete", exact: true }).click());
+    },
+  },
+  { write: "Finish", act: (other) => andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click()) },
+  { write: "a logged set", act: logSet },
+  {
+    write: "a set's Delete",
+    act: async (other) => {
+      await other.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+      await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
+    },
+    endings: ["finished"],
+  },
+];
+for (const { write, act, endings = ENDINGS } of STALE_WRITES) {
+  for (const ended of endings) {
+    test(`${write} of a workout ${ended} on another device takes it off the screen at once, with one toast [D-039]`, async ({ signedInPage: page, browser }) => {
+      await openGym(page);
+      await startWorkout(page, DAY);
+      await logSet(page);
+      const other = await otherDevice(browser, page);
+      await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+      await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
+      if (ended === "finished") {
+        await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+      } else {
+        await page.getByRole("button", { name: "Cancel workout" }).click();
+        await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+      }
+      const userId = await userIdOf(page);
+      const sets = await setCount(userId);
+
+      await act(other);
+      await expect(other.getByRole("timer", { name: "Workout time" })).toBeHidden();
+      await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
+      const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()));
+      await other.clock.resume();
+      await refreshed;
+      await other.evaluate(headIsQuiet);
+      await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
+      await expect(toast(other, WORKOUT_FINISHED)).toHaveCount(0);
+      await expect(toast(other, WORKOUT_GONE)).toHaveCount(0);
+      await expect(other.getByRole("timer", { name: "Workout time" })).toBeHidden();
+      expect(await setCount(userId)).toBe(sets);
+      await other.context().close();
+    });
+  }
+}
+
+// On a phone the question that replaces "Cancel workout" is taller than that button, so its Delete would land under the
+// tab bar: opening it scrolls it above the bar, and a tap at Delete's place on the screen deletes the workout.
+test("on a phone, Delete of the Cancel question shows above the tab bar and a tap there deletes the workout", async ({ signedInPage: page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await logSet(page);
+  const toasts = page.locator(".toast-item");
+  while (await toasts.count()) await toasts.first().getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(toasts).toHaveCount(0);
+  // What a tap at a point of the screen lands on.
+  const hit = (at: { x: number; y: number }) => page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest("button, a")?.textContent, at);
+
+  // "Cancel workout" just above the tab bar, where a thumb finds it at the end of the workout.
+  const cancel = page.getByRole("button", { name: "Cancel workout" });
+  await cancel.scrollIntoViewIfNeeded();
+  const barTop = (await page.getByRole("navigation", { name: "Mobile Navigation" }).boundingBox())!.y;
+  const before = (await cancel.boundingBox())!;
+  await page.evaluate((dy) => window.scrollBy(0, dy), before.y + before.height - (barTop - 8));
+  const at = center(await cancel.boundingBox());
+  expect(await hit(at)).toBe("Cancel workout");
+  await page.mouse.click(at.x, at.y);
+
+  const del = page.getByRole("button", { name: "Delete", exact: true });
+  await expect(del).toBeVisible();
+  const spot = center(await del.boundingBox());
+  expect(await hit(spot)).toBe("Delete");
+  await andSettle(page, () => page.mouse.click(spot.x, spot.y));
+  await expect(page).toHaveURL(/\/gym$/);
+  await expect(toast(page, "Cancelled the workout")).toBeVisible();
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+  expect(await setCount(await userIdOf(page))).toBe(0);
 });

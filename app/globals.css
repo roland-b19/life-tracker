@@ -2092,6 +2092,9 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   gap: 0.75rem;
 }
 .session-actions > span { width: 0; min-width: 100%; text-align: center; } /* the question wraps inside the buttons' width */
+/* Cancel's question is taller than the button it replaces: its Delete scrolls into view clear of the tab bar, by the
+   room main keeps for the bar at the page's end */
+.session-actions .danger { scroll-margin-bottom: calc(6rem + env(safe-area-inset-bottom)); }
 
 /* Gym: training days */
 .split-day-list {

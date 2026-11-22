@@ -32,6 +32,12 @@ export function setExercises(sets: WorkoutSetData[]): ExerciseItem[] {
 }
 
 /**
+ * Scrolls a control that has just appeared into view, clear of the phone's tab bar (its `scroll-margin-bottom`). One
+ * function for every render, so React calls it when the control appears, not on each tick of the clock.
+ */
+const showAboveTabBar = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest" });
+
+/**
  * The workout in hand: its exercises with their set forms, the server's clock with Pause and Resume, the notes, and
  * Finish, Exit or Cancel. `day` is the workout's own day; a workout without one lists the exercises of its sets, and
  * so does an exercise left the day with sets logged in this workout (they stay on screen, deletable).
@@ -101,7 +107,7 @@ export function ActiveWorkout({ w, day, history, busy }: { w: ReturnType<typeof 
               <button type="button" className="secondary" disabled={busy} onClick={() => w.setConfirmCancel(false)}>
                 Keep
               </button>
-              <button type="button" className="danger" disabled={busy} onClick={(e) => w.cancel(e.currentTarget)}>
+              <button ref={showAboveTabBar} type="button" className="danger" disabled={busy} onClick={(e) => w.cancel(e.currentTarget)}>
                 Delete
               </button>
             </>
