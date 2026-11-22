@@ -1,5 +1,4 @@
-import { and, eq, exists, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, eq, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { pushSubscriptions, todos } from "@/db/schema";
 import { ensureCategory } from "./categories";
@@ -45,9 +44,6 @@ interface DailyTodosResult {
   stats: TodoStats;
 }
 
-// The same table again, to compare a task with the others on its list.
-const other = alias(todos, "other");
-
 /** Repeating tasks due on `day`: every day from their first day (dueDate) on. */
 const repeatsOn = (day: string) => and(eq(todos.isRecurring, true), lte(todos.dueDate, day));
 
@@ -69,11 +65,9 @@ export async function getDailyTodos(
 ): Promise<DailyTodosResult> {
   // 1. Rollover: carry unfinished one-off tasks from past dates to today.
   // Never when reading a past day (it shows that day as it was), and never into a future day being planned:
-  // an overdue task belongs to today, not to whatever day is on screen. One that today already has
-  // (same title, one-off; a daily task of that name is another list) is dropped, since today's copy replaces it:
-  // left behind, it would jump onto the next day once today's copy is ticked.
+  // an overdue task belongs to today, not to whatever day is on screen. A task with the title of one today already has
+  // is carried too: two tasks with one title are both kept (D-036).
   // A task added to a day that was already over (dev builds) stays on that day.
-  // shortcut: two overdue tasks with one title both roll over together, dedupe them here if that shows up.
   if (targetDate >= today) {
     const overdue = and(
       eq(todos.userId, userId),
@@ -84,26 +78,25 @@ export async function getDailyTodos(
       // Midnight in the app's timezone (the same one toISODate uses), not the database session's (UTC).
       sql`${todos.createdAt} < ((${todos.dueDate} + 1)::timestamp at time zone ${APP_TZ})`,
     );
-    const todayHasIt = db
-      .select({ id: other.id })
-      .from(other)
-      .where(
-        and(
-          eq(other.userId, userId),
-          eq(other.space, space),
-          sql`lower(${other.title}) = lower(${todos.title})`,
-          and(eq(other.isRecurring, false), eq(other.dueDate, today)),
-        ),
-      );
-    await db.delete(todos).where(and(overdue, exists(todayHasIt)));
+    // Carried tasks land on top as one block, 1 ms apart, the oldest due date the newest place, so compareTodos puts the
+    // oldest first (D-036); whatever is added or moved later goes above them.
+    const ranked = db
+      .select({
+        id: todos.id,
+        rank: sql<number>`row_number() over (order by ${todos.dueDate}, ${todos.createdAt}, ${todos.id})`.as("rank"),
+      })
+      .from(todos)
+      .where(overdue)
+      .as("ranked");
     await db
       .update(todos)
       .set({
         dueDate: today,
         isCarriedOver: true,
-        placedAt: new Date(), // carried tasks land on top; whatever is added or moved later goes above them
+        placedAt: sql`${new Date().toISOString()}::timestamptz - (${ranked.rank} - 1) * interval '1 millisecond'`,
       })
-      .where(and(overdue, notExists(todayHasIt)));
+      .from(ranked)
+      .where(eq(todos.id, ranked.id));
   }
 
   // 2. Fetch all tasks relevant for targetDate: one-off tasks with dueDate = targetDate, and repeating tasks due that day.
@@ -130,36 +123,6 @@ export async function getDailyTodos(
   };
 }
 
-/**
- * Whether the list a task would join already has another one with the same title (any case), in its own space:
- * a one-off task meets the one-off tasks of its day, a repeating (Daily) task the other Daily tasks.
- * `exceptId` is the task itself (rename, move, restore).
- * shortcut: two adds racing can both pass, add a unique index if that ever matters.
- */
-export async function hasDuplicateTodo(
-  userId: string,
-  task: Pick<AddTodoInput, "title" | "isRecurring" | "dueDate"> & { space: string },
-  exceptId?: string | string[],
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: todos.id })
-    .from(todos)
-    .where(
-      and(
-        eq(todos.userId, userId),
-        eq(todos.space, task.space),
-        sql`lower(${todos.title}) = lower(${task.title})`,
-        exceptId ? notInArray(todos.id, [exceptId].flat()) : undefined,
-        // Daily and Today never meet: a daily task only meets the other daily ones, a one-off only the one-offs of its day.
-        task.isRecurring
-          ? eq(todos.isRecurring, true)
-          : and(eq(todos.isRecurring, false), eq(todos.dueDate, task.dueDate)),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
-}
-
 /** The user's task, or undefined. */
 export async function findTodo(userId: string, todoId: string) {
   const [row] = await db
@@ -169,13 +132,22 @@ export async function findTodo(userId: string, todoId: string) {
   return row;
 }
 
-export async function addTodo(userId: string, input: AddTodoInput): Promise<TodoItem> {
+/** A one-off task is never filed: only the Daily list shows categories, so it always has "other" (D-036). */
+const categoryFor = (isRecurring: boolean, category: string | undefined) => (isRecurring && category) || "other";
+
+/**
+ * Adds a task under the id the device made, when it sent one: a repeat of the same add finds the row already there and
+ * answers it, with `repeated`. An id another user's task holds writes nothing and answers a null task, so it neither
+ * changes nor shows that row.
+ */
+export async function addTodo(userId: string, input: AddTodoInput & { id?: string }): Promise<{ todo: TodoItem | null; repeated: boolean }> {
   const isRecurring = Boolean(input.isRecurring);
   const recurrencePattern = patternFor(isRecurring, input.recurrencePattern);
 
   const [created] = await db
     .insert(todos)
     .values({
+      id: input.id,
       userId,
       space: input.space,
       title: input.title,
@@ -185,14 +157,19 @@ export async function addTodo(userId: string, input: AddTodoInput): Promise<Todo
       reminderTime: input.reminderTime ?? null,
       isCompleted: false,
       isCarriedOver: false,
-      category: input.category ?? "other",
+      category: categoryFor(isRecurring, input.category),
       placedAt: new Date(), // the app's clock, like the carry-over's: the database default could order a new task under a carried one
     })
+    .onConflictDoNothing()
     .returning();
+  if (created) {
+    await ensureCategory(userId, input.space, created.category);
+    return { todo: { ...created, space: created.space as TodoSpace }, repeated: false };
+  }
+  if (!input.id) return { todo: null, repeated: false };
 
-  await ensureCategory(userId, input.space, created.category);
-
-  return { ...created, space: created.space as TodoSpace };
+  const own = await findTodo(userId, input.id);
+  return { todo: own ? { ...own, space: own.space as TodoSpace } : null, repeated: Boolean(own) };
 }
 
 /** Puts a deleted task back as it was. An id that is already taken is left alone and returns null. */
@@ -212,7 +189,7 @@ export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): P
       isCompleted: input.isCompleted,
       completedAt: input.completedAt ?? (input.isCompleted ? new Date() : null),
       isCarriedOver: input.isCarriedOver,
-      category: input.category,
+      category: categoryFor(input.isRecurring, input.category),
       createdAt: input.createdAt,
       placedAt: input.placedAt ?? input.createdAt,
     })
@@ -247,14 +224,22 @@ export async function toggleTodo(userId: string, input: ToggleTodoInput): Promis
   return true;
 }
 
-/** Edits a task in place. Null when the task is not the user's. */
+/**
+ * Edits a task in place: only the fields the edit sent (the ones it changed, D-040), so another tab's change to another
+ * field stays. A one-off task keeps "other" as its category. Null when the task is not the user's.
+ */
 export async function updateTodo(userId: string, input: UpdateTodoInput): Promise<TodoItem | null> {
   const task = await findTodo(userId, input.id);
   if (!task) return null;
-  const changes = { title: input.title, reminderTime: input.reminderTime ?? null, ...(input.category && { category: input.category }) };
-  const [row] = await db.update(todos).set(changes).where(eq(todos.id, task.id)).returning();
+  const changes = {
+    ...(input.title !== undefined && { title: input.title }),
+    ...(input.reminderTime !== undefined && { reminderTime: input.reminderTime }),
+    ...(input.category !== undefined && task.isRecurring && { category: input.category }),
+  };
+  const [row] = Object.keys(changes).length > 0 ? await db.update(todos).set(changes).where(eq(todos.id, task.id)).returning() : [task];
+  if (!row) return null; // deleted meanwhile
   const space = row.space as TodoSpace;
-  if (input.category) await ensureCategory(userId, space, input.category);
+  if (changes.category) await ensureCategory(userId, space, changes.category);
   return { ...row, space };
 }
 

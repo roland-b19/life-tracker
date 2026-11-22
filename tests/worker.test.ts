@@ -21,15 +21,15 @@ const query = (text: string, params: unknown[]) => app.query(text, params) as Pr
 
 const subscribe = (userId: string, endpoint = `https://push.example/${randomUUID()}`) =>
   savePushSubscription(userId, { endpoint, p256dhKey: "p256dh", authKey: "auth" });
-const task = (userId: string, title: string, extra: { dueDate?: string; reminderTime?: string; isRecurring?: boolean } = {}) =>
-  addTodo(userId, {
+const task = async (userId: string, title: string, extra: { dueDate?: string; reminderTime?: string; isRecurring?: boolean } = {}) =>
+  (await addTodo(userId, {
     space: "personal",
     title,
     dueDate: extra.dueDate ?? toISODate(),
     isRecurring: extra.isRecurring ?? false,
     recurrencePattern: extra.isRecurring ? "daily" : "none",
     reminderTime: extra.reminderTime ?? "09:00",
-  });
+  })).todo!;
 
 afterAll(async () => {
   await app.end();
@@ -83,6 +83,16 @@ describe("worker: which reminders are due (flag-independent, Azure only)", () =>
     await task(noDevice, "nobody to tell");
 
     expect(await due()).toEqual([open.id]);
+  });
+
+  it("reminds of an undone one-off task from an earlier day before the page carries it over [TASK-02]", async () => {
+    const user = await seedUser();
+    await subscribe(user);
+    const overdue = await task(user, "left yesterday", { dueDate: addDays(toISODate(), -1) });
+    const doneEarlier = await task(user, "done yesterday", { dueDate: addDays(toISODate(), -1) });
+    await admin.query("UPDATE todos SET is_completed = true WHERE id = $1", [doneEarlier.id]);
+
+    expect(await due()).toEqual([overdue.id]);
   });
 
   it("treats a repeating task as open again each day", async () => {

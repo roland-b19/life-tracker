@@ -33,7 +33,7 @@ describe("Task order: only the user's own actions move a task", () => {
     return result;
   };
   const add = (title: string, over: Record<string, unknown> = {}) =>
-    apart(() => addTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over }));
+    apart(async () => (await addTodo(user, { space: "personal", title, dueDate: today, isRecurring: false, recurrencePattern: "none", ...over })).todo!);
   const daily = (title: string, space: "personal" | "business" = "personal", category = "other") =>
     add(title, { space, isRecurring: true, recurrencePattern: "daily", category });
   const titles = async (day = today, space: "personal" | "business" = "personal") =>

@@ -10,8 +10,9 @@ export const localDay = (d) => dayFormat.format(d);
 /** "09:05": the minute of a moment in the app's timezone (the format of `todos.reminder_time`). */
 export const localTime = (d) => timeFormat.format(d);
 
-// $1 = "HH:MM", $2 = "YYYY-MM-DD" (both in the app's timezone). Mirrors src/lib/todos.ts: a one-off task is due on its day,
-// a repeating one every day from its first day; a repeating task counts as done only if it was ticked today.
+// $1 = "HH:MM", $2 = "YYYY-MM-DD" (both in the app's timezone). Mirrors src/lib/todos.ts: a one-off task is due on its day
+// and, left undone, on every day after it (the page carries it over to today only when it is opened, so the reminder must
+// not wait for that); a repeating one every day from its first day; a repeating task counts as done only if it was ticked today.
 // Only users with a push subscription: no one else could be reached.
 export const DUE_REMINDERS_SQL = `
 SELECT t.id AS "todoId", t.user_id AS "userId"
@@ -19,7 +20,7 @@ FROM todos t
 WHERE t.reminder_time = $1
   AND EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.user_id = t.user_id)
   AND (
-    (NOT t.is_recurring AND t.due_date = $2::date AND NOT t.is_completed)
+    (NOT t.is_recurring AND t.due_date <= $2::date AND NOT t.is_completed)
     OR (
       t.is_recurring AND t.due_date <= $2::date
       AND NOT (t.is_completed AND t.completed_at IS NOT NULL AND (t.completed_at AT TIME ZONE '${APP_TZ}')::date = $2::date)
