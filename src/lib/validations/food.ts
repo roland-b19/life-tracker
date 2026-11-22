@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
-import { isoDate, uuid, visible } from "./common";
+import { isoDate, newId, uuid, visible } from "./common";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
 export const MAX_WATER_ML = 20000;
 /** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
 export const MAX_STEPS = 200000;
 
-export const logMealSchema = z.object({
+const mealFields = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required").default("Meal"),
@@ -19,92 +19,166 @@ export const logMealSchema = z.object({
   isEstimated: z.boolean().default(false).optional(),
 });
 
+/**
+ * Whether a meal holds anything once stored: its calories, or a macro that is not 0 at the one decimal the table keeps
+ * (0.04 g is stored as 0.0). The form's Save asks the same, so the page and the server never disagree.
+ */
+export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
+  meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => Math.round(grams * 10) > 0);
+
+export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0.");
+
 /** Undo of a delete: the same meal, under its old id and time. */
-export const restoreMealSchema = logMealSchema.extend({ id: uuid, createdAt: z.string().datetime().optional() });
+export const restoreMealSchema = mealFields.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
 const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
 
-/** One weigh-in a day: saving a day that already has one replaces its kilograms. */
+/** Whether a number has at most two decimals (the tables keep two). 78.4 * 100 is 7840.000000000001, so it compares against the nearest hundredth instead of Number.isInteger. */
+const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
+const TWO_DECIMALS = "Maximum two decimal places.";
+
+const weightKilograms = z.number("Please enter a valid weight.").min(20, WEIGHT_RANGE).max(500, WEIGHT_RANGE).refine(twoDecimals, TWO_DECIMALS);
+
+/**
+ * One weigh-in a day: saving a day that already has one replaces its kilograms. The Undo of an edit also sends `from`,
+ * the value it undoes: it writes only while the day still holds that value (D-040).
+ */
 export const logWeightSchema = z
   .object({
+    id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
     date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
-    kilograms: z
-      .number("Please enter a valid weight.")
-      .min(20, WEIGHT_RANGE)
-      .max(500, WEIGHT_RANGE)
-      // 78.4 * 100 is 7840.000000000001, so compare against the nearest hundredth instead of Number.isInteger.
-      .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "Maximum two decimal places."),
+    kilograms: weightKilograms,
+    from: weightKilograms.optional(),
   })
   .strict();
 
 /** Undo of a delete: the same weigh-in, under its old id. */
-export const restoreWeightSchema = logWeightSchema.extend({ id: uuid });
+export const restoreWeightSchema = logWeightSchema.omit({ from: true }).extend({ id: uuid });
 
-/** Quick taps (negative, for Undo) and exact totals on a day; both stop at the same ceiling. */
-export const addWaterSchema = z.object({ date: isoDate, amountMl: z.number().int().min(-MAX_WATER_ML).max(MAX_WATER_ML) });
-export const setWaterSchema = z.object({ date: isoDate, waterMl: z.number().int().min(0).max(MAX_WATER_ML) });
-export const updateStepsSchema = z.object({ date: isoDate, steps: z.number().int().min(0).max(MAX_STEPS) });
-
-export const updateNutritionTargetsSchema = z.object({
+const targetFields = {
   calories: z.number().int().min(500).max(10000),
   proteinGrams: z.number().int().min(20).max(500),
   carbsGrams: z.number().int().min(0).max(1000),
   fatGrams: z.number().int().min(0).max(400),
   waterMl: z.number().int().min(500).max(15000),
   steps: z.number().int().min(1000).max(MAX_STEPS),
-});
+};
+const NOTHING_TO_SAVE = "Nothing to save.";
+const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
+
+/** The answer when a stored number is no longer the one the screen showed: another device changed it first. */
+export const CHANGED_ELSEWHERE = "This changed on another device. Check the new value and try again.";
+
+/**
+ * One number an edit changes: the value the screen showed (`from`) and the new one (`to`). The server writes `to` only
+ * while the stored value still equals `from`, so a change made on another device in between is never lost (D-040).
+ */
+export type ValueChange = { from: number; to: number };
+const valueChange = (to: z.ZodNumber) => z.object({ from: z.number().int().min(0).max(2 ** 31 - 1), to }).strict();
+
+const goalChanges = Object.fromEntries(
+  Object.entries(targetFields).map(([key, range]) => [key, valueChange(range).optional()]),
+) as { [K in keyof typeof targetFields]: z.ZodOptional<ReturnType<typeof valueChange>> };
+
+/** The daily goals: an edit sends only the ones it changes, each with the value it showed, and only those are written. */
+export const updateNutritionTargetsSchema = z.object(goalChanges).refine((goals) => anySet(Object.values(goals)), NOTHING_TO_SAVE);
+
+/**
+ * The day's water or steps and its goal, from one dialog: each is sent only when it changed, and both are written or
+ * neither. The amount is the day's total (a quick tap sends the total it showed and the new one).
+ */
+export const setWaterSchema = z
+  .object({ date: isoDate, waterMl: valueChange(z.number().int().min(0).max(MAX_WATER_ML)).optional(), goal: valueChange(targetFields.waterMl).optional() })
+  .refine((v) => anySet([v.waterMl, v.goal]), NOTHING_TO_SAVE);
+export const updateStepsSchema = z
+  .object({ date: isoDate, steps: valueChange(z.number().int().min(0).max(MAX_STEPS)).optional(), goal: valueChange(targetFields.steps).optional() })
+  .refine((v) => anySet([v.steps, v.goal]), NOTHING_TO_SAVE);
 
 /** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
 export const shoppingCategorySchema = categorySchema;
 
-export const addShoppingItemSchema = z.object({
+/** The most one shopping item can hold: an add or a merge that would pass it is refused. */
+export const MAX_SHOPPING_AMOUNT = 1000;
+/** How many names each of the two shopping lists (categories, units) holds at most. */
+export const MAX_SHOPPING_NAMES = 200;
+/** The most items one Clear bought takes off the list, and its Undo puts back, at once. */
+export const MAX_CLEARED = 5000;
+/** The answer to an edit of an item that has left the list (deleted on another device): the form closes. */
+export const SHOPPING_ITEM_GONE = "This item is no longer on the list.";
+/**
+ * The answer to a delete of a weigh-in that is no longer there (deleted on another device, or not the user's): the one
+ * refusal the weight card counts as done, like SHOPPING_ITEM_GONE on the shopping list.
+ */
+export const WEIGHT_ENTRY_GONE = "This weigh-in was already deleted.";
+
+const shoppingAmount = z.number().min(0.01).max(MAX_SHOPPING_AMOUNT).refine(twoDecimals, TWO_DECIMALS);
+const shoppingItemFields = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
-  amount: z.number().min(0.01).max(1000).default(1),
+  amount: shoppingAmount.default(1),
   unit: z.string().trim().toLowerCase().min(1).max(30).default("pcs"),
   category: shoppingCategorySchema.default("other"),
 });
 
-export const updateShoppingItemSchema = addShoppingItemSchema.extend({
+export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
+
+export const updateShoppingItemSchema = shoppingItemFields.extend({ itemId: uuid });
+
+/** Undo of an add that merged: the merged row (`itemId`) and the row it replaced, as it was. */
+export const unmergeShoppingItemSchema = z.object({
   itemId: uuid,
-  // Only Undo sends these, to put back the bought state an "add again" reset.
-  isBought: z.boolean().optional(),
-  checkedAt: z.coerce.date().nullable().optional(),
+  before: shoppingItemFields.extend({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable() }),
 });
 
 /** The two lists of names the user manages on the shopping list; "other" and "pcs" are their built-in fallbacks. */
 const shoppingKindSchema = z.enum(["category", "unit"]).default("category");
-const FALLBACK = { category: "other", unit: "pcs" } as const;
+type ShoppingKind = z.infer<typeof shoppingKindSchema>;
 
-/** A name the user manages: not the built-in fallback, and short enough for the column it ends up in (units: 30). */
-const managed = <T extends { kind: "category" | "unit" }>(v: T, names: string[]) =>
-  names.every((n) => n !== FALLBACK[v.kind] && (v.kind === "category" || n.length <= 30));
-const builtIn = "\"other\" and \"pcs\" are built in, and a unit has at most 30 characters.";
+/** Names the user manages: never the list's built-in fallback, and a unit fits its column (30 characters). */
+const managed = <T extends { kind: ShoppingKind }>(schema: z.ZodType<T>, names: (v: T) => string[]) =>
+  schema
+    .refine((v) => v.kind !== "category" || !names(v).includes("other"), '"other" is built in.')
+    .refine((v) => v.kind !== "unit" || !names(v).includes("pcs"), '"pcs" is built in.')
+    .refine((v) => v.kind !== "unit" || names(v).every((n) => n.length <= 30), "Too long (max 30)");
 
-export const shoppingCategoryNameSchema = z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }).refine((v) => managed(v, [v.name]), builtIn);
-export const reorderShoppingCategoriesSchema = z
-  .object({ kind: shoppingKindSchema, names: z.array(shoppingCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique.") })
-  .refine((v) => managed(v, v.names), builtIn);
-export const renameShoppingCategorySchema = z
-  .object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema })
-  .refine((v) => managed(v, [v.from, v.to]), builtIn)
-  .refine((v) => v.from !== v.to, { message: "That is already its name.", path: ["to"] });
+export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }), (v) => [v.name]);
+export const reorderShoppingCategoriesSchema = managed(
+  z.object({
+    kind: shoppingKindSchema,
+    names: z.array(shoppingCategorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique."),
+  }),
+  (v) => v.names,
+);
+export const renameShoppingCategorySchema = managed(
+  z.object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema }),
+  (v) => [v.from, v.to],
+).refine((v) => v.from !== v.to, { message: "That is already its name.", path: ["to"] });
 
-/** Undo of a rename or delete: what the change reported, sent back as it was. */
-export const revertShoppingCategorySchema = z
-  .object({
+/**
+ * Undo of a rename or delete: what the change reported, sent back as it was. A unit change also reports the rows it
+ * merged into another (`merges`: the target's values before) and the amounts it converted (`amounts`: the old ones).
+ */
+export const revertShoppingCategorySchema = managed(
+  z.object({
     kind: shoppingKindSchema,
     name: shoppingCategorySchema,
     current: shoppingCategorySchema,
     sortOrder: z.number().int(),
-    itemIds: z.array(uuid).max(5000),
+    itemIds: z.array(uuid).max(MAX_CLEARED),
     dropCurrent: z.boolean(),
-  })
-  .refine((v) => managed(v, [v.name]), builtIn);
+    merges: z
+      .array(z.object({ id: uuid, into: uuid, amount: shoppingAmount, category: shoppingCategorySchema, isBought: z.boolean() }))
+      .max(MAX_CLEARED)
+      .default([]),
+    amounts: z.array(z.object({ id: uuid, amount: shoppingAmount })).max(MAX_CLEARED).default([]),
+  }),
+  (v) => [v.name],
+);
 
-export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean() });
+/** A tick, or its Undo: Undo sends the time the box had before (`checkedAt`), so the row goes back to its place. */
+export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
 
-export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(500) });
+export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(MAX_CLEARED) });
 
 export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
 export type LogWeightInput = z.infer<typeof logWeightSchema>;
@@ -113,3 +187,5 @@ export type LogMealInput = z.infer<typeof logMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type AddShoppingItemInput = z.infer<typeof addShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;
+export type UnmergeShoppingItemInput = z.infer<typeof unmergeShoppingItemSchema>;
+export type RevertShoppingCategoryInput = Omit<z.infer<typeof revertShoppingCategorySchema>, "kind">;

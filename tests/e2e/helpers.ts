@@ -79,15 +79,23 @@ export function headIsQuiet() {
   });
 }
 
+/**
+ * Resolves once the refresh the last server action left due, and every refresh under way, has finished (the page must
+ * be the `signedInPage` fixture's, which `watchRefreshes` follows). A test that then changes the data elsewhere, or
+ * signs the page out, knows the page's own refresh can no longer show that change.
+ */
+export async function refreshesDone(page: Page) {
+  const state = refreshesDue.get(page);
+  if (!state) throw new Error("refreshesDone needs the signedInPage fixture's page");
+  await expect
+    .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
+    .toBe(false);
+}
+
 // Serious and critical findings fail the spec. The scan waits for the refresh a write left due, then for a quiet <head>
 // and a title; `next dev` also streams the title in after the content on a first load, so a title can be missing then too.
 export async function expectNoSeriousViolations(page: Page) {
-  const state = refreshesDue.get(page);
-  if (state) {
-    await expect
-      .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
-      .toBe(false);
-  }
+  if (refreshesDue.has(page)) await refreshesDone(page);
   await page.evaluate(headIsQuiet);
   await expect(page).toHaveTitle(/.+/);
   const { violations } = await new AxeBuilder({ page }).analyze();

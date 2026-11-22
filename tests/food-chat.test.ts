@@ -13,6 +13,10 @@ import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
 import { succeeded } from "./succeeded";
+import { SIGNED_OUT } from "@/lib/validations/result";
+import { db } from "@/server/db";
+import { recipes } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 /** One successful Claude CLI answer whose structured output is `output`. */
 function mockClaude(output: unknown) {
@@ -20,6 +24,9 @@ function mockClaude(output: unknown) {
 }
 
 const ctx = { date: "2026-11-05", time: "13:10" };
+
+/** How many recipe rows the user has: the assistant no longer seeds any (HTODAY-03). */
+const countRecipes = async (userId: string) => (await db.select().from(recipes).where(eq(recipes.userId, userId))).length;
 
 describe("Food assistant: context prompt and structured answer", () => {
   let userId: string;
@@ -41,7 +48,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("asks the user to connect Claude when there is no token outside dev", async () => {
     delete process.env.AUTH_DEV;
     const result = await sendFoodChatMessage(userId, "Am mancat o banana", [], ctx);
-    expect(result.reply).toContain("Settings");
+    expect(result.reply).toBe("Connect your Claude account in Settings to use the assistant.");
     expect(result.meals).toEqual([]);
     expect(runClaude).not.toHaveBeenCalled();
   });
@@ -62,8 +69,23 @@ describe("Food assistant: context prompt and structured answer", () => {
     process.env.AUTH_DEV = "true";
     runClaude.mockResolvedValueOnce({ ok: false, reason: "auth" });
     const result = await sendFoodChatMessage(userId, "salut", [], ctx);
-    expect(result.reply).toContain("din nou");
+    expect(result.reply).toBe("Claude refused the token. Connect your Claude account again in Settings.");
     expect(result.meals).toEqual([]);
+  });
+
+  it("answers every failure in English", async () => {
+    process.env.AUTH_DEV = "true";
+    const replies: Record<string, string> = {
+      unavailable: "The Claude CLI is not installed on the server.",
+      busy: "Claude is already working on another answer. Try again in a moment.",
+      error: "Claude did not answer. Please try again.",
+    };
+    for (const [reason, reply] of Object.entries(replies)) {
+      runClaude.mockResolvedValueOnce({ ok: false, reason });
+      expect((await sendFoodChatMessage(userId, "salut", [], ctx)).reply).toBe(reply);
+    }
+    mockClaude({ reply: "   ", meals: [] });
+    expect((await sendFoodChatMessage(userId, "salut", [], ctx)).reply).toBe("Done.");
   });
 
   it("logs each valid meal from the JSON answer as an estimate, and drops invalid ones", async () => {
@@ -80,6 +102,7 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     expect(result.reply).toBe("Am adăugat prânzul.");
     expect(result.meals).toHaveLength(1);
+    expect(result.leftOut).toEqual(["Meal 2: name: Required"]);
     const call = runClaude.mock.calls[0][0];
     expect(call.token).toBeNull();
     expect(call.input).toContain("La prânz am mâncat 200 g somon");
@@ -88,6 +111,90 @@ describe("Food assistant: context prompt and structured answer", () => {
     const meal = summary.meals.find((m) => m.name === "200 g somon la grătar");
     expect(meal?.calories).toBe(413);
     expect(meal?.isEstimated).toBe(true);
+  });
+
+  it("leaves out a meal whose every value rounds to 0, and says why", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-zero-${randomUUID()}`);
+    mockClaude({
+      reply: "Ok.",
+      meals: [
+        { name: "Apă", calories: 0.4, protein: 0.04, carbs: 0, fat: 0 },
+        { name: "1 măr", calories: 95, protein: 0.5, carbs: 25, fat: 0.3 },
+      ],
+    });
+
+    const result = await sendFoodChatMessage(owner, "un pahar de apă și un măr", [], ctx);
+
+    expect(result.meals.map((m) => m?.name)).toEqual(["1 măr"]);
+    expect(result.leftOut).toEqual(["Apă: every value rounds to 0"]);
+    expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["1 măr"]);
+  });
+
+  it("leaves out an invalid meal, names it and the field, and logs the rest", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-invalid-${randomUUID()}`);
+    mockClaude({
+      reply: "Ok.",
+      meals: [
+        { name: "Pâine", calories: 250, protein: 8, carbs: 48, fat: -3 },
+        { name: "Supă", calories: "multe", protein: 5, carbs: 10, fat: 2 },
+        "o ciocolată",
+        { name: "Iaurt", calories: 120, protein: 10, carbs: 8, fat: 5 },
+      ],
+    });
+
+    const result = await sendFoodChatMessage(owner, "pâine, supă, ciocolată și iaurt", [], ctx);
+
+    expect(result.meals.map((m) => m?.name)).toEqual(["Iaurt"]);
+    expect(result.leftOut).toEqual([
+      "Pâine: fat: Must be at least 0",
+      expect.stringMatching(/^Supă: calories: /),
+      "Meal 3: not a meal",
+    ]);
+    expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["Iaurt"]);
+  });
+
+  it("saves the first 10 valid meals of a longer answer and says the rest were left out", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-many-${randomUUID()}`);
+    const meals = Array.from({ length: 12 }, (_, i) => ({ name: `Gustare ${i + 1}`, calories: 100 + i, protein: 1, carbs: 10, fat: 1 }));
+    meals.splice(2, 0, { name: "Nimic", calories: 0, protein: 0, carbs: 0, fat: 0 });
+    mockClaude({ reply: "Ok.", meals });
+
+    const result = await sendFoodChatMessage(owner, "toate gustările", [], ctx);
+
+    expect(result.meals.map((m) => m?.name)).toEqual(meals.filter((m) => m.calories).slice(0, 10).map((m) => m.name));
+    expect(result.leftOut).toEqual([
+      "Nimic: every value rounds to 0",
+      "Gustare 11: more than 10 meals in one reply",
+      "Gustare 12: more than 10 meals in one reply",
+    ]);
+    expect((await getDailyFoodSummary(owner, ctx.date)).meals).toHaveLength(10);
+  });
+
+  it("cuts a reply over 2000 characters, logs its meals and says the rest was left out", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-long-${randomUUID()}`);
+    mockClaude({ reply: "a".repeat(2500), meals: [{ name: "1 ou", calories: 78, protein: 6, carbs: 0.6, fat: 5 }] });
+
+    const result = await sendFoodChatMessage(owner, "un ou", [], ctx);
+
+    expect(result.reply).toBe("a".repeat(2000));
+    expect(result.meals.map((m) => m?.name)).toEqual(["1 ou"]);
+    expect(result.leftOut).toEqual(["The rest of the reply: longer than 2000 characters"]);
+  });
+
+  it("sends no recipe to the model and seeds none", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-recipes-${randomUUID()}`);
+    mockClaude({ reply: "Ok.", meals: [] });
+
+    await sendFoodChatMessage(owner, "ce să mănânc?", [], ctx);
+
+    const { system, input } = runClaude.mock.calls[0][0];
+    expect(`${system}\n${input}`).not.toMatch(/recipe|basmati/i);
+    expect(await countRecipes(owner)).toBe(0);
   });
 
   it("sends earlier turns as a labelled transcript", async () => {
@@ -116,6 +223,7 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     const result = await sendFoodChatMessage(userId, "2 felii de pizza", [], ctx);
 
+    expect(result.reply).toBe("The assistant's answer could not be read, so nothing was logged. Please try again.");
     expect(result.meals).toEqual([]);
     expect((await getDailyFoodSummary(userId, ctx.date)).meals).toHaveLength(before);
   });
@@ -147,7 +255,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("puts food context in the prompt, never steps or weight", async () => {
     const other = await seedUser(`chat-prompt-${randomUUID()}`);
     await logMeal(other, { date: ctx.date, name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
-    await updateDailySteps(other, ctx.date, 98765);
+    await updateDailySteps(other, ctx.date, { from: 0, to: 98765 });
 
     const prompt = await buildFoodChatPrompt(other, ctx);
 
@@ -185,7 +293,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     const input = { message: "o banană", history: [], date: today, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
-      await expect(sendFoodChatMessageAction(input)).rejects.toThrow("Authentication required.");
+      expect(await sendFoodChatMessageAction(input)).toEqual({ success: false, error: SIGNED_OUT });
     });
 
     it("logs meals only for the signed-in owner", async () => {
@@ -198,6 +306,7 @@ describe("Food assistant: context prompt and structured answer", () => {
       const res = succeeded(await sendFoodChatMessageAction(input));
 
       expect(res.meals).toHaveLength(1);
+      expect(res.leftOut).toEqual([]);
       expect(res.freshSummary?.meals.map((m) => m.name)).toEqual(["1 banană"]);
       expect((await getDailyFoodSummary(stranger, today)).meals).toHaveLength(0);
     });

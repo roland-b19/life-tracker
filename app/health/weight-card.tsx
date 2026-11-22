@@ -1,145 +1,167 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { BigNumber, Card, Field, FormModal } from "../components/blocks";
 import { EditButton, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
+import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
-import { showDecimal } from "@/lib/decimal-input";
-import { toISODate } from "@/lib/format-date";
-import { weightStats } from "@/lib/weight-stats";
+import { sevenDayAverage } from "@/lib/weight-stats";
+import { formatAmount } from "@/lib/number-format";
+import { WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
 import { TrendChart } from "./trend-chart";
 
 export type WeightEntry = { id: string; date: string; kilograms: string };
 
-const twoDecimals = (n: number) => Math.round(n * 100) / 100;
+const kg = (value: number | string) => formatAmount(value, 2);
+const touches = (entry: WeightEntry) => [`weight_entries:${entry.id}`];
 
-/** Health's weight: today's weigh-in, the 7-day average and the chart in one card. The chart shows up to a year; every weigh-in is kept. */
-export function WeightCard({ today: initialToday, initial }: { today: string; initial: WeightEntry[] }) {
-  // The page may have been open since yesterday: opening the form reads the day again.
-  const [today, setToday] = useState(initialToday);
-  const [entries, setEntries] = useState(initial);
+/**
+ * Health's weight: today's weigh-in, the 7-day average and the chart in one card. The chart shows up to a year; every
+ * weigh-in is kept. Only today's weigh-in is written (D-036); `today` is the server's day, so the card and the chart
+ * move to the new day with the page's refresh at midnight.
+ */
+export function WeightCard({ today, initial }: { today: string; initial: WeightEntry[] }) {
   const [open, setOpen] = useState(false);
+  // The weigh-in the open form edits (null when the form adds one): the form closes when another device deletes it.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [entries, setEntries] = useServerState(initial, { editing: open ? editing : null, onDeleted: () => setOpen(false) });
+  const current = entries.find((e) => e.date === today) ?? null;
   const [kilograms, setKilograms] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+  // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
+  const once = useOnce();
+  const tappedButton = useRef<Element | null>(null);
+  // The id a new day's weigh-in gets (D-040): made when the form opens and kept until the save is answered, so a second
+  // Save after a lost answer sends the same id and the server answers the row the first one made.
+  const addId = useRef("");
+  // The weigh-in the form showed when it opened: an edit's Undo writes it back, even when a Save again after a lost
+  // answer finds the day already at the new value (so the server's `previous` is that value).
+  const opened = useRef<WeightEntry | null>(null);
 
-  const current = entries.find((e) => e.date === today) ?? null;
-  const stats = weightStats(entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })), today);
+  const average = sevenDayAverage(entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })), today);
   // A day has one weigh-in, so a row replaces the one on its day.
   const upsert = (to: WeightEntry) => setEntries((list) => [...list.filter((e) => e.date !== to.date), to]);
 
   function openForm() {
-    const day = toISODate();
-    setToday(day);
     setErrorMsg("");
-    setKilograms(entries.find((e) => e.date === day)?.kilograms ?? "");
+    setKilograms(current?.kilograms ?? "");
+    setEditing(current?.id ?? null);
+    opened.current = current;
+    addId.current = crypto.randomUUID();
     setOpen(true);
   }
 
   /** The weigh-in leaves the screen at once; Undo restores it under its old id, so the same row comes back. */
-  async function handleDelete(entry: WeightEntry) {
+  function handleDelete(entry: WeightEntry) {
     setEntries((list) => list.filter((e) => e.id !== entry.id));
-    const gone = await deleteWeightAction(entry.id).catch(() => null);
-    // `success: false` means another device already deleted it, so the screen is right as it is; only a thrown error needs the rollback.
-    if (!gone) {
-      upsert(entry);
-      showToast({ message: "Failed to remove weight", type: "warning" });
-      return;
-    }
-    const kg = showDecimal(String(twoDecimals(Number(entry.kilograms))));
+    const saved = deleteWeightAction(entry.id).catch(() => null);
+    // A weigh-in another device already deleted stays off the screen; any other refusal, or no answer, puts it back.
+    // Either way the server's reason shows and the toast goes with its Undo.
+    void saved.then((res) => {
+      if (res?.success) return;
+      if (res?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
+      showToast({ message: res?.error ?? "Failed to remove weight", type: "warning" });
+    });
     showToast({
-      message: `Removed ${kg} kg`,
+      message: `Removed ${kg(entry.kilograms)} kg`,
       type: "success",
+      touches: touches(entry),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
-          const back = await restoreWeightAction({ id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) });
-          if (back.success) upsert(entry);
+          if (!(await saved)?.success) return true; // the delete never happened; the failure path above said why
+          const back = await restoreWeightAction({ id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) }).catch(() => null);
+          if (back?.success) upsert(entry);
           return back;
         },
-        "Failed to restore weight",
+        (back) => (back && !back.success ? back.error : "Failed to restore weight"),
       ),
     });
+    return saved;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
     setErrorMsg("");
-    const kg = Number(kilograms);
-    setSaving(true);
-    try {
-      // The screen can be behind the database (another device): the server creates the day or changes the row it already has.
-      const saved = await saveWeightAction({ date: today, kilograms: kg });
-      if (!saved.success) {
-        setErrorMsg(saved.error);
-        return;
-      }
-      const { entry, previous } = saved;
-      setOpen(false);
-      upsert(entry);
-      if (!previous) {
-        showToast({
-          message: `Added ${showDecimal(String(kg))} kg`,
-          type: "success",
-          onUndo: undoWith(showToast, async () => {
-            setEntries((list) => list.filter((e) => e.id !== entry.id));
-            const gone = await deleteWeightAction(entry.id).catch(() => null);
-            if (!gone) upsert(entry); // `success: false` means it is already gone, so the screen is right without it
-            return gone;
-          }),
-        });
-        return;
-      }
+    const value = Number(kilograms);
+    // The screen can be behind the database (another device): the server creates the day or changes the row it already
+    // has. The id comes from the form (addId), so a repeat of the same add after a lost answer adds nothing (D-040) and
+    // says it was already saved, without an Undo.
+    const saved = saveWeightAction({ id: addId.current, date: today, kilograms: value }).catch(() => null);
+    const res = await saved;
+    if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save weight");
+    const { entry, previous, repeated } = res;
+    setOpen(false);
+    upsert(entry);
+    if (repeated) return showToast({ message: "Already saved", type: "success", touches: touches(entry), saved });
+    if (!previous) {
       showToast({
-        message: `Weight set to ${showDecimal(String(kg))} kg`,
+        message: `Added ${kg(value)} kg`,
         type: "success",
-        // Writes the old value back; if that fails the edit stays, so the screen matches the database.
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            upsert(previous);
-            const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
-            // The saved row is the one the database has now: a new id if the day was deleted elsewhere in the meantime.
-            if (back?.success) upsert(back.entry);
-            else upsert(entry);
-            return back;
-          },
-          "Failed to undo the edit",
-        ),
+        touches: touches(entry),
+        saved,
+        onUndo: undoWith(showToast, async () => {
+          setEntries((list) => list.filter((e) => e.id !== entry.id));
+          const gone = await deleteWeightAction(entry.id).catch(() => null);
+          // A weigh-in already deleted on another device stays off the screen; any other refusal puts it back.
+          if (!gone?.success && gone?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
+          return gone;
+        }, (back) => (back && !back.success ? back.error : "Failed to undo")),
       });
-    } catch {
-      setErrorMsg("Failed to save weight");
-    } finally {
-      setSaving(false);
+      return;
     }
+    const before = opened.current?.date === previous.date ? opened.current : previous;
+    showToast({
+      message: `Weight set to ${kg(value)} kg`,
+      type: "success",
+      touches: touches(entry),
+      saved,
+      // Writes the old value back; if that fails the edit stays, so the screen matches the database.
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          upsert(before);
+          // `from` is the value this edit saved: if another device changed or deleted the day since, the server refuses.
+          const back = await saveWeightAction({ date: before.date, kilograms: Number(before.kilograms), from: Number(entry.kilograms) }).catch(() => null);
+          if (back?.success) upsert(back.entry);
+          else upsert(entry);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   return (
     <>
       <Card id="weight-title" title="Weight" end={
           current ? (
-            <RowActions onEdit={openForm} onDelete={() => void handleDelete(current)} editLabel="Edit today's weight" deleteLabel="Delete today's weight" />
+            <span onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
+              <RowActions
+                onEdit={openForm}
+                onDelete={() => once(`weight:${current.id}`, () => handleDelete(current), tappedButton.current)}
+                editLabel="Edit today's weight"
+                deleteLabel="Delete today's weight"
+              />
+            </span>
           ) : (
             <EditButton label="Edit today's weight" onClick={openForm} />
           )
         }>
-        <BigNumber value={current ? showDecimal(String(twoDecimals(Number(current.kilograms)))) : "—"} of="kg today" />
-        <p className="muted metric-avg number-tabular">7-day average · {stats.sevenDayAverage === null ? "—" : `${showDecimal(String(stats.sevenDayAverage))} kg`}</p>
-        <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
+        <BigNumber value={current ? kg(current.kilograms) : "—"} of="kg today" />
+        <p className="muted metric-avg number-tabular">7-day average · {average === null ? "—" : `${kg(average)} kg`}</p>
+        <TrendChart noun="Weight" days={[7, 30, 90, 180, 365]} today={today} entries={entries.map((e) => ({ date: e.date, value: Number(e.kilograms) }))} />
       </Card>
 
-      <FormModal isOpen={open} onClose={() => setOpen(false)} title="Edit weight" onSubmit={handleSubmit} error={errorMsg} busy={saving} canSubmit={!!kilograms}>
+      <FormModal isOpen={open} onClose={() => setOpen(false)} title="Edit weight" onSubmit={handleSubmit} error={errorMsg} canSubmit={!!kilograms}>
         <Field
           label="Weight today (kg)"
           type="number"
           inputMode="decimal"
-          min="20"
-          max="500"
-          step="0.01"
-          disabled={saving}
           value={kilograms}
           onChange={(e) => setKilograms(e.target.value)}
           required
