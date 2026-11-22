@@ -9,11 +9,13 @@ import {
   countWrites,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
   holdWrites,
   isRefresh,
   itemName,
   loseAnswerOnce,
   openWishlist,
+  pauseClock,
   recordStates,
   refreshesDone,
   settled,
@@ -247,9 +249,12 @@ test("a double tap on an item's Delete deletes it once [WISH-01]", async ({ sign
   await expect(page.getByText(/^Failed/)).toHaveCount(0);
 });
 
-// D-040: a newer change to a row takes the Undo off the older toasts about that row, and only those.
+// D-040: a newer change to a row takes the Undo off the older toasts about that row, and only those. The page's clock
+// stands still from the first add on, so no toast runs out.
 test("a newer change takes the Undo off the older toasts about the same item, and only those [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openWishlist(page);
+  await pauseClock(page);
   const [a, b] = [itemName(), itemName()];
   await addItem(page, a, "10");
   await addItem(page, b, "20");
@@ -262,12 +267,14 @@ test("a newer change takes the Undo off the older toasts about the same item, an
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${a}`, exact: true }).click());
   await expect(undoIn(page, `Removed "${a}"`)).toBeVisible();
-  await expect(undoIn(page, `Saved "${a}"`)).toHaveCount(0);
-  await expect(undoIn(page, `Added "${a}"`)).toHaveCount(0);
+  await expectToastWithoutUndo(page, `Saved "${a}"`);
+  await expectToastWithoutUndo(page, `Added "${a}"`);
   await expect(undoIn(page, `Added "${b}"`)).toBeVisible();
 });
 
+// The page's clock stands still from the category delete on, so its toast does not run out.
 test("a category delete's toast loses its Undo once an item it moved is edited [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openWishlist(page);
   const category = `cat${randomUUID().slice(0, 6)}`;
   await page.getByRole("button", { name: "Add category" }).click();
@@ -283,18 +290,21 @@ test("a category delete's toast loses its Undo once an item it moved is edited [
   await form.getByLabel("Category").selectOption(category);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   await andSettle(page, () => page.getByRole("button", { name: `Delete category ${category}`, exact: true }).click());
-  const undoRemove = undoIn(page, `Removed "${category}"`);
-  await expect(undoRemove).toBeVisible();
+  const removed = `Removed "${category}"`;
+  await expect(undoIn(page, removed)).toBeVisible();
   await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit item" });
   await edit.getByLabel("Price (RON)").fill("12");
   await andSettle(page, () => edit.getByRole("button", { name: "Save" }).click());
   await expect(page.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
-  await expect(undoRemove).toHaveCount(0);
+  await expectToastWithoutUndo(page, removed);
 });
 
+// The page's clock stands still from Save again on, so its toast does not run out.
 test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openWishlist(page);
   const name = itemName();
   // The first add reaches the server, but its answer never comes back.
@@ -306,9 +316,10 @@ test("an add whose answer was lost, saved again, adds once and says it was alrea
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form.getByText("Failed to save item. Please try again.")).toBeVisible();
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
-  await expect(toast(page, `Already added "${name}"`)).toBeVisible();
-  await expect(undoIn(page, `Already added "${name}"`)).toHaveCount(0);
+  await expectToastWithoutUndo(page, `Already added "${name}"`);
+  await page.clock.resume();
   await page.reload();
   await expect(page.getByText(name, { exact: true })).toHaveCount(1);
 });

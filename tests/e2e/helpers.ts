@@ -320,6 +320,20 @@ export const toast = (page: Page, text: string | RegExp) => page.locator(".toast
 export const undoIn = (page: Page, text: string | RegExp) => toast(page, text).getByRole("button", { name: "Undo" });
 
 /**
+ * Checks that the toast that shows `text` is on screen without an Undo (a newer change took it away, or it never had
+ * one). A toast runs out after 5 s, and a toast gone has no Undo either, so the page's clock must stand still from
+ * before the toast showed (`page.clock.install()` before the page opens, then `pauseClock`) however slow the run is;
+ * the check fails when the clock moved while it ran.
+ */
+export async function expectToastWithoutUndo(page: Page, text: string | RegExp) {
+  const now = () => page.evaluate(() => Date.now());
+  const held = await now();
+  await expect(toast(page, text)).toBeVisible();
+  await expect(undoIn(page, text)).toHaveCount(0);
+  expect(await now(), "the page's clock stands still (pauseClock)").toBe(held);
+}
+
+/**
  * Closes the one toast on screen with its Dismiss button (one Undo or Dismiss at a time: a second toast fails the click)
  * and waits until it has gone: no Dismiss is left, and `message`, when given, is off the page. A toast among others is
  * closed with `toast(page, text)`'s own Dismiss button.

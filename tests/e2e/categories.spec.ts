@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, signedInUserId, signOutHere, test, toast, undoIn } from "./helpers";
+import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, expectToastWithoutUndo, holdWrites, itemName, openWishlist, pauseClock, signedInUserId, signOutHere, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -468,13 +468,16 @@ test("the categories card takes a quick tap beside the deleted row's Delete butt
 
 // Each Undo toast names the category rows it touches (D-040): a newer toast touching the same category takes the older
 // toast's Undo away, so the older Undo never writes over the newer change; toasts about other categories keep theirs.
+// The page's clock stands still from the rename to the check, so the rename's toast does not run out.
 test("the categories card's older toast loses its Undo to a newer one about the same category", async ({ signedInPage: page }) => {
   const [a, b, c, d, e] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await page.clock.install();
   await wishlist.open(page);
   for (const name of [a, c, d]) {
     await addCategory(page, name);
     await dismissToast(page);
   }
+  await pauseClock(page);
 
   // The same category: rename a to b, then delete b. The closed form's Save lay over a row's Delete, so Shift ends the
   // Save's tap burst (D-043) first; this test is about the toasts, not the guard.
@@ -483,10 +486,8 @@ test("the categories card's older toast loses its Undo to a newer one about the 
   await page.keyboard.press("Shift");
   await deleteCategory(page, b);
   await expect(undoIn(page, `Removed "${b}"`)).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still
-  // there afterwards, so its Undo is gone from a toast on screen.
-  expect(await undoIn(page, `Renamed "${a}" to "${b}"`).count()).toBe(0);
-  await expect(toast(page, `Renamed "${a}" to "${b}"`)).toBeVisible();
+  await expectToastWithoutUndo(page, `Renamed "${a}" to "${b}"`);
+  await page.clock.resume();
   for (const message of [`Renamed "${a}"`, `Removed "${b}"`]) await toast(page, message).getByRole("button", { name: "Dismiss notification" }).click();
   await expect(dismissButton(page)).toHaveCount(0);
 

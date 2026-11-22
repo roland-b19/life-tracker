@@ -6,8 +6,10 @@ import {
   center,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
   holdWrites,
   loseAnswerOnce,
+  pauseClock,
   signInThroughForm,
   test,
   toast,
@@ -213,7 +215,9 @@ test("an Undo of a tick that fails says so and keeps a Retry, which puts the box
   await expect(page.getByRole("button", { name: `Mark ${title} as complete` })).toBeVisible();
 });
 
+// The page's clock stands still from Save again on, so its toast does not run out.
 test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openTasks(page, "Today");
   const title = taskTitle();
   // The first add reaches the server, but its answer never comes back.
@@ -224,15 +228,19 @@ test("an add whose answer was lost, saved again, adds once and says it was alrea
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form.getByText("Failed to save task")).toBeVisible();
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"title":"${title}"`);
-  await expect(toast(page, `Already added "${title}"`)).toBeVisible();
-  await expect(undoIn(page, `Already added "${title}"`)).toHaveCount(0);
+  await expectToastWithoutUndo(page, `Already added "${title}"`);
+  await page.clock.resume();
   await openTasks(page, "Today");
   await expect(page.getByText(title, { exact: true })).toHaveCount(1);
 });
 
+// The page's clock stands still from the first add on, so no toast runs out.
 test("a newer change takes the Undo off the older toasts about the same task, and only those [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openTasks(page, "Today");
+  await pauseClock(page);
   const [a, b] = [taskTitle(), taskTitle()];
   await addTask(page, a, "New task");
   await addTask(page, b, "New task");
@@ -245,8 +253,8 @@ test("a newer change takes the Undo off the older toasts about the same task, an
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${a} v2` }).click());
   await expect(undoIn(page, `Removed "${a} v2"`)).toBeVisible();
-  await expect(undoIn(page, `Saved "${a} v2"`)).toHaveCount(0);
-  await expect(undoIn(page, `Added "${a}"`)).toHaveCount(0);
+  await expectToastWithoutUndo(page, `Saved "${a} v2"`);
+  await expectToastWithoutUndo(page, `Added "${a}"`);
   await expect(undoIn(page, `Added "${b}"`)).toBeVisible();
 });
 

@@ -8,9 +8,11 @@ import {
   countWrites,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
   holdWrites,
   itemName,
   loseAnswerOnce,
+  pauseClock,
   refreshesDone,
   settled,
   signedInUserId,
@@ -455,12 +457,14 @@ test("saving an edit of an item deleted meanwhile closes the form and drops the 
 });
 
 // A category delete's toast touches the items it moved (D-040): editing one of them takes that toast's Undo, which would
-// otherwise move the edited item back.
+// otherwise move the edited item back. The page's clock stands still from the delete on, so its toast does not run out.
 test("editing an item that a category delete moved takes the delete's Undo [TOUCHES]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openHealth(page, "Shopping");
   const name = itemName();
   await addShoppingItem(page, name, 2, "meat");
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   const removed = 'Removed "meat"; its items are in Other';
   await andSettle(page, () => page.getByRole("button", { name: "Delete category meat", exact: true }).click());
   await expect(undoIn(page, removed)).toBeVisible();
@@ -471,14 +475,14 @@ test("editing an item that a category delete moved takes the delete's Undo [TOUC
   await form.getByLabel("Amount").fill("3");
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
   await expect(page.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
-  // Counted at once, while the toast is still on screen (see the meal [TOUCHES] test below).
-  expect(await undoIn(page, removed).count()).toBe(0);
-  await expect(toast(page, removed)).toBeVisible();
+  await expectToastWithoutUndo(page, removed);
 });
 
 // The add form makes its id when it opens and keeps it, so Save again after a lost answer sends the same add, which the
 // server answers with the row the first one made (D-040), also when that add merged into a row already on the list.
+// The page's clock stands still from the second Save on, so its toast does not run out.
 test("Save again after a lost answer adds the item once, also when the add merged [D-040]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openHealth(page, "Shopping");
   const name = itemName();
   await addShoppingItem(page, name, 1);
@@ -495,11 +499,12 @@ test("Save again after a lost answer adds the item once, also when the add merge
 
   // Shift ends the tap burst (D-043): this Save is a second one, on purpose.
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
   await expect(form).toBeHidden();
   // The repeat says so, and has no Undo (whether the first add merged is no longer known).
-  await expect(page.getByText(`Already added "${name}"`, { exact: true })).toBeVisible();
-  expect(await undoIn(page, `Already added "${name}"`).count()).toBe(0);
+  await expectToastWithoutUndo(page, `Already added "${name}"`);
+  await page.clock.resume(); // the refresh that shows the one row
   await expect(shoppingRow(page, name)).toHaveCount(1);
   await expect(shoppingRow(page, name)).toContainText("2 pcs");
   expect((await asOwner((db) => db.query("SELECT amount FROM shopping_items WHERE name = $1 AND cleared_at IS NULL", [name]))).rows).toEqual([{ amount: "2.00" }]);
@@ -534,7 +539,8 @@ test("Save again after a lost answer logs the meal once [D-040]", async ({ signe
 const weightCard = (page: Page) => page.getByRole("region", { name: "Weight", exact: true });
 
 // Opens the weight form and saves `kilograms`; that answer is lost (the page reloads, the form stays), and Save again.
-async function saveWeightTwice(page: Page, kilograms: string) {
+// `hold` stops the page's clock (installed before the page opened) before Save again, so its toast does not run out.
+async function saveWeightTwice(page: Page, kilograms: string, { hold = false } = {}) {
   const form = page.getByRole("dialog", { name: "Edit weight" });
   await loseAnswerOnce(page, `"kilograms":${kilograms}`);
   await weightCard(page).getByRole("button", { name: "Edit today's weight" }).click();
@@ -543,6 +549,7 @@ async function saveWeightTwice(page: Page, kilograms: string) {
   await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
   await expect(form).toBeVisible();
   await page.keyboard.press("Shift");
+  if (hold) await pauseClock(page);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"kilograms":${kilograms}`);
   await expect(form).toBeHidden();
 }
@@ -551,10 +558,10 @@ async function saveWeightTwice(page: Page, kilograms: string) {
 // save made: one row, and a toast that says it was already saved, without an Undo.
 test("Save again after a lost answer adds the weigh-in once [D-040]", async ({ signedInPage: page }) => {
   const user = await signedInUserId(page);
+  await page.clock.install();
   await openHealth(page, "Today");
-  await saveWeightTwice(page, "77");
-  await expect(page.getByText("Already saved", { exact: true })).toBeVisible();
-  expect(await undoIn(page, "Already saved").count()).toBe(0);
+  await saveWeightTwice(page, "77", { hold: true });
+  await expectToastWithoutUndo(page, "Already saved");
   expect((await asOwner((db) => db.query("SELECT kilograms FROM weight_entries WHERE user_id = $1", [user]))).rows).toEqual([{ kilograms: "77.00" }]);
 });
 
@@ -735,13 +742,16 @@ for (const [write, act] of Object.entries(STALE_WRITES)) {
   });
 }
 
-// Clear bought deletes for good what was taken off the list before it, so an older delete's toast loses its Undo.
+// Clear bought deletes for good what was taken off the list before it, so an older delete's toast loses its Undo. The
+// page's clock stands still from the delete on, so its toast does not run out.
 test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openHealth(page, "Shopping");
   const base = itemName();
   const [gone, bought] = [`${base} a`, `${base} b`];
   for (const n of [gone, bought]) await addShoppingItem(page, n, 1);
   await page.keyboard.press("Shift");
+  await pauseClock(page);
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${gone}`, exact: true }).click());
   await expect(undoIn(page, `Removed "${gone}"`)).toBeVisible();
   await page.keyboard.press("Shift");
@@ -749,9 +759,7 @@ test("Clear bought takes the Undo of an older delete's toast [TOUCHES]", async (
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: "Clear bought" }).click());
   await expect(page.getByText("Cleared 1 bought item")).toBeVisible();
-  // Counted at once, while the toast is still on screen (see the meal [TOUCHES] test below).
-  expect(await undoIn(page, `Removed "${gone}"`).count()).toBe(0);
-  await expect(toast(page, `Removed "${gone}"`)).toBeVisible();
+  await expectToastWithoutUndo(page, `Removed "${gone}"`);
 });
 
 // Two clicks in one task reach the handler before the page re-renders, so only the guard (D-043) stops the second clear.
@@ -831,9 +839,12 @@ test("the meal form keeps Save off until a value survives rounding, says calorie
 });
 
 // Each Undo toast names the rows it touches (D-040): a newer toast about the same meal takes the older toast's Undo away,
-// so that Undo never writes over the newer change; a toast about another row keeps its Undo.
+// so that Undo never writes over the newer change; a toast about another row keeps its Undo. The page's clock stands
+// still from the meal on, so no toast runs out.
 test("a newer toast about the same meal takes the older toast's Undo; the water toast keeps its own [TOUCHES]", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openHealth(page, "Today");
+  await pauseClock(page);
   await addMeal(page);
   await expect(undoIn(page, "Added meal (450 kcal)")).toBeVisible();
   // Shift ends the last tap burst (D-043); this test is about the toasts, not the guard.
@@ -843,10 +854,7 @@ test("a newer toast about the same meal takes the older toast's Undo; the water 
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: deleteMeal("450") }).click());
   await expect(undoIn(page, 'Removed "Meal"')).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still
-  // there afterwards, so its Undo is gone from a toast on screen.
-  expect(await undoIn(page, "Added meal (450 kcal)").count()).toBe(0);
-  await expect(toast(page, "Added meal (450 kcal)")).toBeVisible();
+  await expectToastWithoutUndo(page, "Added meal (450 kcal)");
   await expect(undoIn(page, "Added 250 ml")).toBeVisible();
 });
 

@@ -11,6 +11,7 @@ import {
   countWrites,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
   headIsQuiet,
   holdWrites,
   hydrationWarnings,
@@ -304,8 +305,7 @@ test("a newer toast about the same custom exercise takes the older toast's Undo 
   await expect(undoIn(page, `Saved "${a2}"`)).toBeVisible();
   await andSettle(page, () => mine(page).getByRole("button", { name: `Delete ${a2}` }).click());
   await expect(undoIn(page, `Removed "${a2}"`)).toBeVisible();
-  await expect(undoIn(page, `Saved "${a2}"`)).toHaveCount(0);
-  await expect(toast(page, `Saved "${a2}"`)).toBeVisible();
+  await expectToastWithoutUndo(page, `Saved "${a2}"`);
 
   // Another exercise: renaming b leaves the delete of a its Undo.
   await renameExercise(page, b, b2);
@@ -676,17 +676,21 @@ test("a double tap on Start or on Finish writes once", async ({ signedInPage: pa
   await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
 });
 
-// D-040: the day's Save toast names the day's row, so a newer save of the day takes the older Undo away.
+// D-040: the day's Save toast names the day's row, so a newer save of the day takes the older Undo away. The page's
+// clock stands still from the first save on and moves 1 s only, for the refresh, so neither toast runs out.
 test("a second save of a day takes the first save's Undo away", async ({ signedInPage: page }) => {
   const id = randomUUID().slice(0, 8);
   const [first, second] = [`Upper ${id} one`, `Upper ${id} two`];
+  await page.clock.install();
   await openGym(page);
   const editor = await openEditor(page);
   await editor.getByLabel("Name", { exact: true }).fill(first);
+  await pauseClock(page);
   await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${first}"`);
   await expect(editor).toBeHidden();
   await expect(undoIn(page, `Saved "${first}"`)).toBeVisible();
   await page.keyboard.press("Shift"); // ends the Save's tap burst (D-043)
+  await page.clock.runFor(1000); // the refresh that shows the day's new name
 
   await page.getByRole("button", { name: `Edit ${first}` }).click();
   await expect(editor).toBeVisible();
@@ -694,9 +698,7 @@ test("a second save of a day takes the first save's Undo away", async ({ signedI
   await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${second}"`);
   await expect(editor).toBeHidden();
   await expect(undoIn(page, `Saved "${second}"`)).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
-  expect(await undoIn(page, `Saved "${first}"`).count()).toBe(0);
-  await expect(toast(page, `Saved "${first}"`)).toBeVisible();
+  await expectToastWithoutUndo(page, `Saved "${first}"`);
 });
 
 // A save refused because an exercise of the day was deleted elsewhere leaves the editor open; after the page's refresh
@@ -803,39 +805,40 @@ test("Undo of a workout removed on Finish because another device deleted its set
   await expect(banner(page).getByText(`${DAY} · 0 sets logged`)).toBeVisible();
 });
 
-// D-040: a newer change to the workout takes the Undo away from the older toasts that touch it.
+// D-040: a newer change to the workout takes the Undo away from the older toasts that touch it. The page's clock stands
+// still from the start on, so no toast runs out.
 test("Pause takes the Started toast's Undo away, and Resume the Paused toast's", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openGym(page);
+  await pauseClock(page);
   await startWorkout(page, DAY);
   const started = `Started "${DAY}"`;
   await expect(undoIn(page, started)).toBeVisible();
 
   await andSettle(page, () => page.getByRole("button", { name: "Pause", exact: true }).click());
   await expect(undoIn(page, "Paused the timer")).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
-  expect(await undoIn(page, started).count()).toBe(0);
-  await expect(toast(page, started)).toBeVisible();
+  await expectToastWithoutUndo(page, started);
   await page.keyboard.press("Shift"); // ends the Pause's tap burst (D-043): Resume is on the same spot
 
   await andSettle(page, () => page.getByRole("button", { name: "Resume", exact: true }).click());
   await expect(undoIn(page, "Resumed the timer")).toBeVisible();
-  expect(await undoIn(page, "Paused the timer").count()).toBe(0);
-  await expect(toast(page, "Paused the timer")).toBeVisible();
+  await expectToastWithoutUndo(page, "Paused the timer");
 });
 
-// D-039: a finished workout takes no set changes, so Finish takes the Undo away from its sets' toasts.
+// D-039: a finished workout takes no set changes, so Finish takes the Undo away from its sets' toasts. The page's clock
+// stands still from the set on, so its toast does not run out.
 test("Finish takes the Undo away from an Added set toast", async ({ signedInPage: page }) => {
+  await page.clock.install();
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
+  await pauseClock(page);
   await logSet(page);
   await expect(undoIn(page, "Added set 1")).toBeVisible();
 
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(undoIn(page, "Finished the workout")).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
-  expect(await undoIn(page, "Added set 1").count()).toBe(0);
-  await expect(toast(page, "Added set 1")).toBeVisible();
+  await expectToastWithoutUndo(page, "Added set 1");
 });
 
 const notes = (page: Page) => page.getByLabel("Session notes (optional)");
