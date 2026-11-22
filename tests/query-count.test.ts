@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -103,8 +102,8 @@ describe("a page view with two years of data stays cheap", () => {
 
   it("no action re-renders the page: every client keeps its own state", () => {
     // `providers.tsx` refreshes the router cache once the writes stop, so a write never has to revalidate a path.
-    for (const file of readdirSync("src/actions")) {
-      expect(readFileSync(`src/actions/${file}`, "utf8"), file).not.toContain("revalidatePath");
-    }
+    const actions = import.meta.glob("../src/actions/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    expect(Object.keys(actions).length).toBeGreaterThan(0);
+    for (const [file, text] of Object.entries(actions)) expect(text, file).not.toContain("revalidatePath");
   });
 });

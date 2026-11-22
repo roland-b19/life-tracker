@@ -14,17 +14,15 @@ import { listWeightEntries } from "@/lib/food";
 import { addDays, toISODate } from "@/lib/format-date";
 import { addCustomExercise, EXERCISE_GONE, getExercises, getPlateWeights } from "@/lib/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
-import { readdirSync } from "node:fs";
-import path from "node:path";
 import { securityHeaders } from "@/../next.config";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
 describe("weight authorization", () => {
   it("keeps every API route in the authorization test table", () => {
-    const routeFiles = readdirSync(path.resolve("app/api"), { recursive: true })
-      .map(String)
-      .filter((file) => file.endsWith("route.ts"))
+    const routes = import.meta.glob("../app/api/**/route.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    const routeFiles = Object.keys(routes)
+      .map((file) => file.slice("../app/api/".length))
       .sort();
     // `health` is public on purpose: it answers {status:"ok"} and reads no data (tests/health.test.ts).
     expect(routeFiles).toEqual([

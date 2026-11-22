@@ -1303,18 +1303,26 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
      * without it, `second` reads the workout as `first` found it and both succeed (or the late one breaks).
      */
     async function overlap<A, B>(id: string, first: () => Promise<A>, second: () => Promise<B>) {
-      // The backends of this database waiting on a lock (pg_locks is the whole server's; other worktrees use other databases).
+      // The backends waiting, directly or through another waiter, on the lock held here: only this test's own calls, never
+      // another test's or another database's waits (pg_locks and pg_blocking_pids see the whole server).
       const waiting = async (n: number) =>
         vi.waitFor(
           async () => {
             const { rows } = await admin.query(
-              "SELECT count(*) AS n FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE NOT l.granted AND a.datname = current_database()",
+              `WITH RECURSIVE blocked(pid) AS (
+                 SELECT pid FROM pg_stat_activity WHERE $1::int = ANY(pg_blocking_pids(pid))
+                 UNION
+                 SELECT a.pid FROM pg_stat_activity a JOIN blocked b ON b.pid = ANY(pg_blocking_pids(a.pid))
+               )
+               SELECT count(*) AS n FROM blocked`,
+              [holder],
             );
             expect(Number(rows[0].n)).toBe(n);
           },
           { timeout: 5000, interval: 20 },
         );
       const hold = await admin.connect();
+      const holder = (await hold.query("SELECT pg_backend_pid() AS pid")).rows[0].pid as number;
       try {
         await hold.query("BEGIN");
         await hold.query("SELECT 1 FROM workout_sessions WHERE id = $1 FOR UPDATE", [id]);
