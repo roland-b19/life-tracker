@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SIGNED_OUT } from "@/lib/validations/result";
+import { refused } from "./succeeded";
 
 // No session at all: every server action must refuse before it touches input or data.
 vi.mock("@/server/auth", () => {
@@ -40,7 +41,7 @@ describe("server actions reject anonymous callers", () => {
         (answer) => ({ answer }),
         (e: unknown) => ({ thrown: e instanceof Error ? e.message : String(e) }),
       );
-      expect(outcome, `${file}:${name}`).toEqual({ answer: { success: false, error: SIGNED_OUT } });
+      expect(outcome, `${file}:${name}`).toEqual({ answer: refused(SIGNED_OUT) });
     }
   });
 });

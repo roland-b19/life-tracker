@@ -5,9 +5,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 
-import { succeeded } from "./succeeded";
-import { SIGNED_OUT } from "@/lib/validations/result";
-import { NOTHING_TO_SAVE, TWO_DECIMALS } from "@/lib/validations/common";
+import { refused, succeeded } from "./succeeded";
+import { alreadyExists, SIGNED_OUT } from "@/lib/validations/result";
+import { FUTURE_DATE, NOTHING_TO_SAVE, TWO_DECIMALS } from "@/lib/validations/common";
+import { CATEGORY_GONE } from "@/lib/validations/categories";
 import { buildFoodChatPrompt } from "@/lib/food-ai-chat";
 import {
   CHANGED_ELSEWHERE,
@@ -189,24 +190,24 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const undo = { id: meal.id, date: today, name: meal.name, calories: meal.calories, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true, createdAt: meal.createdAt.toISOString() };
     authState.id = userB;
     expect(succeeded(await deleteMealAction(meal.id)).deleted).toBeUndefined(); // another user's delete changes nothing
-    expect((await restoreMealAction(undo)).success).toBe(false); // the id is taken, so B cannot claim or overwrite it
+    expect(await restoreMealAction(undo)).toEqual(refused("This meal could not be restored.")); // the id is taken, so B cannot claim or overwrite it
     expect((await getDailyFoodSummary(userA, today)).meals).toEqual([before]);
     authState.id = userA;
     expect(succeeded(await deleteMealAction(meal.id)).deleted?.id).toBe(meal.id);
     expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(0);
     succeeded(await restoreMealAction(undo));
     expect((await getDailyFoodSummary(userA, today)).meals).toEqual([before]);
-    expect((await restoreMealAction(undo)).success).toBe(false); // a second Undo adds nothing
+    expect(await restoreMealAction(undo)).toEqual(refused("This meal could not be restored.")); // a second Undo adds nothing
     expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
-    await expect(restoreMealAction({ ...undo, date: addDays(today, -2) })).resolves.toEqual({ success: false, error: "Only today and yesterday can be changed." });
+    await expect(restoreMealAction({ ...undo, date: addDays(today, -2) })).resolves.toEqual(refused("Only today and yesterday can be changed."));
     authState.id = "";
-    expect(await restoreMealAction(undo)).toEqual({ success: false, error: SIGNED_OUT });
-    expect(await deleteMealAction(meal.id)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await restoreMealAction(undo)).toEqual(refused(SIGNED_OUT));
+    expect(await deleteMealAction(meal.id)).toEqual(refused(SIGNED_OUT));
   });
 
   it("refuses a rename onto itself, and an Undo never deletes the name it puts back", async () => {
     await addShoppingCategoryAction({ name: "snacks" });
-    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).resolves.toEqual({ success: false, error: "That is already its name" });
+    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).resolves.toEqual(refused("That is already its name"));
     await revertShoppingCategoryAction({ name: "snacks", current: "snacks", sortOrder: 0, itemIds: [], dropCurrent: true });
     expect(await getShoppingCategories(userA)).toContain("snacks"); // an Undo never deletes the name it puts back
   });
@@ -234,7 +235,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     succeeded(await deleteShoppingItemAction(item.id));
     expect(await getShoppingList(userA)).toHaveLength(0);
     authState.id = userB;
-    await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual({ success: false, error: "Item not found." });
+    await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual(refused("Item not found."));
     authState.id = userA;
     await restoreShoppingItemsAction({ itemIds: [item.id] });
     expect((await getShoppingList(userA))[0]).toEqual(before);
@@ -245,18 +246,18 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     succeeded(await unmergeShoppingItemAction({ itemId: again.item.id, before: { ...before, amount: Number(before.amount) } }));
     expect(await getShoppingList(userA)).toEqual([before]);
     authState.id = "";
-    expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
   });
 
   it("ticks and deletes a shopping item for the owner only", async () => {
     const item = await addItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "pantry" });
     const bought = async () => (await getShoppingList(userA)).find((i) => i.id === item.id)?.isBought;
     authState.id = userB;
-    await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
-    await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
+    await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+    await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
     authState.id = "";
-    expect(await toggleShoppingItemAction(item.id, true)).toEqual({ success: false, error: SIGNED_OUT });
-    expect(await deleteShoppingItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await toggleShoppingItemAction(item.id, true)).toEqual(refused(SIGNED_OUT));
+    expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
     expect(await bought()).toBe(false); // still on A's list, untouched
     authState.id = userA;
     await toggleShoppingItemAction(item.id, true);
@@ -330,7 +331,6 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   describe("Shopping list (D-042)", () => {
     const list = async (userId = userA) => (await getShoppingList(userId)).map((i) => `${i.name} ${Number(i.amount)} ${i.unit} ${i.category}${i.isBought ? " bought" : ""}`);
-    const refused = (error: string) => ({ success: false, error });
     const rowCount = async (userId: string) => Number((await admin.query("SELECT count(*) AS n FROM shopping_items WHERE user_id = $1", [userId])).rows[0].n);
     /** Bought rows made straight in the table: hundreds of adds through the action would only slow the test. */
     const boughtRows = async (userId: string, count: number) =>
@@ -455,7 +455,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const before = await list();
 
       authState.id = userB;
-      expect((await renameShoppingCategoryAction({ kind: "unit", from: "g", to: "kg" })).success).toBe(false);
+      expect(await renameShoppingCategoryAction({ kind: "unit", from: "g", to: "kg" })).toEqual(refused(CATEGORY_GONE));
       expect(await list()).toEqual(before);
 
       authState.id = userA;
@@ -466,7 +466,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       const undo = { kind: "unit" as const, name: "g", current: "kg", ...change!, dropCurrent: !change!.merged };
       authState.id = userB;
-      expect((await revertShoppingCategoryAction(undo)).success).toBe(false);
+      expect(await revertShoppingCategoryAction(undo)).toEqual(refused("Can't undo: \"kg\" has changed since."));
       authState.id = "";
       expect(await revertShoppingCategoryAction(undo)).toEqual(refused(SIGNED_OUT));
       expect(await list()).toEqual(["Flour 1.5 kg pantry", "Sugar 0.13 kg pantry"]);
@@ -742,7 +742,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
           amounts: [{ id: itemId, amount: 125 }],
         }),
       ]);
-      for (const answer of answers) expect(answer).toEqual({ success: false, error: SIGNED_OUT });
+      for (const answer of answers) expect(answer).toEqual(refused(SIGNED_OUT));
       const { rows } = await admin.query(
         "SELECT (SELECT count(*) FROM meals) + (SELECT count(*) FROM weight_entries) + (SELECT count(*) FROM daily_metrics) + (SELECT count(*) FROM shopping_items) AS n",
       );
@@ -756,9 +756,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       authState.id = owner;
       succeeded(await addShoppingCategoryAction({ name: " Frozen " }));
-      expect((await addShoppingCategoryAction({ name: "frozen" })).success).toBe(false);
-      await expect(addShoppingCategoryAction({ name: "Other" })).resolves.toMatchObject({ success: false });
-      await expect(renameShoppingCategoryAction({ from: "frozen", to: "other" })).resolves.toMatchObject({ success: false });
+      expect(await addShoppingCategoryAction({ name: "frozen" })).toEqual(refused(alreadyExists("frozen")));
+      expect(await addShoppingCategoryAction({ name: "Other" })).toEqual(refused("\"other\" is built in"));
+      expect(await renameShoppingCategoryAction({ from: "frozen", to: "other" })).toEqual(refused("\"other\" is built in"));
       expect((await getShoppingCategories(owner)).at(-1)).toBe("frozen");
 
       // A category an item brings along (for example from the assistant) joins the list.
@@ -771,8 +771,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await getShoppingCategories(owner)).filter((c) => c.startsWith("fr"))).toEqual(["frozen"]);
 
       authState.id = stranger;
-      expect((await renameShoppingCategoryAction({ from: "frozen", to: "mine" })).success).toBe(false);
-      expect((await deleteShoppingCategoryAction({ name: "frozen" })).success).toBe(false);
+      expect(await renameShoppingCategoryAction({ from: "frozen", to: "mine" })).toEqual(refused(CATEGORY_GONE));
+      expect(await deleteShoppingCategoryAction({ name: "frozen" })).toEqual(refused(CATEGORY_GONE));
       expect((await getShoppingList(owner))[0].category).toBe("frozen");
 
       authState.id = owner;
@@ -790,10 +790,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       authState.id = owner;
       succeeded(await addShoppingCategoryAction({ kind: "unit", name: " TIN " }));
-      expect((await addShoppingCategoryAction({ kind: "unit", name: "tin" })).success).toBe(false);
-      await expect(addShoppingCategoryAction({ kind: "unit", name: "pcs" })).resolves.toMatchObject({ success: false });
-      await expect(addShoppingCategoryAction({ kind: "unit", name: "x".repeat(31) })).resolves.toMatchObject({ success: false });
-      await expect(renameShoppingCategoryAction({ kind: "unit", from: "tin", to: "pcs" })).resolves.toMatchObject({ success: false });
+      expect(await addShoppingCategoryAction({ kind: "unit", name: "tin" })).toEqual(refused(alreadyExists("tin")));
+      expect(await addShoppingCategoryAction({ kind: "unit", name: "pcs" })).toEqual(refused("\"pcs\" is built in"));
+      expect(await addShoppingCategoryAction({ kind: "unit", name: "x".repeat(31) })).toEqual(refused("Too long (max 30)"));
+      expect(await renameShoppingCategoryAction({ kind: "unit", from: "tin", to: "pcs" })).toEqual(refused("\"pcs\" is built in"));
       // "other" is a category fallback only; a unit may use it.
       succeeded(await addShoppingCategoryAction({ kind: "unit", name: "other" }));
       expect(await getShoppingCategories(owner)).not.toContain("tin"); // the lists are apart
@@ -806,8 +806,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await getShoppingList(owner)).find((i) => i.id === item.id)?.unit).toBe("crate");
 
       authState.id = stranger;
-      expect((await renameShoppingCategoryAction({ kind: "unit", from: "crate", to: "mine" })).success).toBe(false);
-      expect((await deleteShoppingCategoryAction({ kind: "unit", name: "crate" })).success).toBe(false);
+      expect(await renameShoppingCategoryAction({ kind: "unit", from: "crate", to: "mine" })).toEqual(refused(CATEGORY_GONE));
+      expect(await deleteShoppingCategoryAction({ kind: "unit", name: "crate" })).toEqual(refused(CATEGORY_GONE));
       expect((await getShoppingList(owner)).find((i) => i.id === item.id)?.unit).toBe("crate");
 
       authState.id = owner;
@@ -878,24 +878,24 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const waterRes = succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } }));
       expect(waterRes.metrics?.waterMl).toBe(500);
       expect(waterRes.targets).toBeNull(); // the goal was not sent, so it was not written
-      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual({ success: false, error: CHANGED_ELSEWHERE });
+      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual(refused(CHANGED_ELSEWHERE));
       expect((await getDailyFoodSummary(userA, today)).metrics.waterMl).toBe(500);
       // A bare total (no value it showed) is not a valid change.
-      await expect(setWaterAction({ date: today, waterMl: 750 })).resolves.toMatchObject({ success: false });
+      expect(await setWaterAction({ date: today, waterMl: 750 })).toEqual(refused("Invalid value"));
 
       // A day never holds more than the limit, nor less than 0.
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 500, to: MAX_WATER_ML } })).metrics?.waterMl).toBe(MAX_WATER_ML);
-      await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: MAX_WATER_ML + 1 } })).resolves.toMatchObject({ success: false });
-      await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: -1 } })).resolves.toMatchObject({ success: false });
-      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: NOTHING_TO_SAVE });
+      expect(await setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: MAX_WATER_ML + 1 } })).toEqual(refused("Must be at most 20000"));
+      expect(await setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: -1 } })).toEqual(refused("Must be at least 0"));
+      await expect(setWaterAction({ date: today })).resolves.toEqual(refused(NOTHING_TO_SAVE));
 
       // The steps log and the steps goal share one limit.
       expect(succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 150000 } })).metrics?.steps).toBe(150000);
-      await expect(updateStepsAction({ date: today, steps: { from: 150000, to: 200001 } })).resolves.toMatchObject({ success: false });
+      expect(await updateStepsAction({ date: today, steps: { from: 150000, to: 200001 } })).toEqual(refused("Must be at most 200000"));
 
       // An impossible day and a malformed id are validation errors, not database errors.
-      await expect(setWaterAction({ date: "2026-13-45", waterMl: { from: 0, to: 250 } })).resolves.toMatchObject({ success: false });
-      await expect(updateStepsAction({ date: "2026-02-30", steps: { from: 0, to: 1000 } })).resolves.toMatchObject({ success: false });
+      expect(await setWaterAction({ date: "2026-13-45", waterMl: { from: 0, to: 250 } })).toEqual(refused("Invalid date format (YYYY-MM-DD)"));
+      expect(await updateStepsAction({ date: "2026-02-30", steps: { from: 0, to: 1000 } })).toEqual(refused("Invalid date format (YYYY-MM-DD)"));
 
       // 3. Update steps
       const stepsRes = succeeded(await updateStepsAction({ date: today, steps: { from: 150000, to: 10500 } }));
@@ -917,12 +917,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const editRes = await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" });
       expect(editRes.success && Number(editRes.item.amount)).toBe(10);
       succeeded(await renameShoppingCategoryAction({ from: "dairy", to: "fridge" }));
-      await expect(updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).resolves.toMatchObject({ success: false });
-      await expect(updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).resolves.toMatchObject({ success: false });
+      expect(await updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
+      expect(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
 
       // Renaming onto another item with the same name and unit is refused as data (any case), not merged.
       const { item: milk } = succeeded(await addShoppingItemAction({ name: "Milk", amount: 1, unit: "l", category: "dairy" }));
-      expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toMatchObject({ success: false });
+      expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toEqual(refused("\"EGGS\" is already on the list with this unit."));
       succeeded(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
 
       // 6. Toggle, clear bought items and undo
@@ -933,14 +933,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       // Another user cannot edit or restore it.
       authState.id = userB;
-      await expect(
-        updateShoppingItemAction({ itemId: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
-      ).resolves.toMatchObject({ success: false });
-      await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual({ success: false, error: "Item not found." });
+      expect(
+        await updateShoppingItemAction({ itemId: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
+      ).toEqual(refused(SHOPPING_ITEM_GONE));
+      await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual(refused("Item not found."));
       expect(succeeded(await clearBoughtItemsAction({ itemIds: [item.id] })).deletedCount).toBe(0);
-      await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
-      await expect(deleteShoppingItemAction(item.id)).resolves.toEqual({ success: false, error: SHOPPING_ITEM_GONE });
-      expect((await renameShoppingCategoryAction({ from: "fridge", to: "x" })).success).toBe(false);
+      await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+      await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await renameShoppingCategoryAction({ from: "fridge", to: "x" })).toEqual(refused(CATEGORY_GONE));
       authState.id = userA;
 
       // 7. Delete meal
@@ -959,11 +959,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         steps: { from: 10000, to: 12000 },
       };
       authState.id = "";
-      expect(await updateTargetsAction(goals)).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await updateTargetsAction(goals)).toEqual(refused(SIGNED_OUT));
 
       authState.id = userA;
       expect(succeeded(await updateTargetsAction(goals)).targets.steps).toBe(12000);
-      await expect(updateTargetsAction({ waterMl: { from: 3500, to: 100 } })).resolves.toMatchObject({ success: false });
+      expect(await updateTargetsAction({ waterMl: { from: 3500, to: 100 } })).toEqual(refused("Must be at least 500"));
 
       // Another user's save writes their own row: the owner's goals stay as they were.
       authState.id = userB;
@@ -978,7 +978,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const locked = "Only today and yesterday can be changed.";
       const meal = { name: "Oats", calories: 100, protein: 1, carbs: 1, fat: 1 };
       for (const date of [addDays(today, -2), addDays(today, 1)]) {
-        await expect(logMealAction({ ...meal, date })).resolves.toEqual({ success: false, error: locked });
+        await expect(logMealAction({ ...meal, date })).resolves.toEqual(refused(locked));
       }
       succeeded(await logMealAction({ ...meal, date: addDays(today, -1) })); // yesterday is the grace day
     });
@@ -989,7 +989,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date(instant));
       };
-      const onlyToday = { success: false, error: "Only today can be changed." };
+      const onlyToday = refused("Only today can be changed.");
       const saves = (date: string) => [
         setWaterAction({ date, waterMl: { from: 0, to: 250 } }),
         updateStepsAction({ date, steps: { from: 0, to: 5000 } }),
@@ -1007,8 +1007,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         authState.id = userA;
         at("2026-11-20T10:00:00Z"); // 12:00 in Bucharest
         for (const answer of await Promise.all(saves("2026-11-19"))) expect(answer).toEqual(onlyToday);
-        // Tomorrow: the weigh-in's own rule (no future day) may answer first; water and steps get the today rule.
-        for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: false });
+        // Tomorrow: the weigh-in's own rule (no future day) answers first; water and steps get the today rule.
+        expect(await Promise.all(saves("2026-11-21"))).toEqual([onlyToday, onlyToday, refused(FUTURE_DATE)]);
         expect(await written()).toBe(0);
         for (const answer of await Promise.all(saves("2026-11-20"))) succeeded(answer);
         expect(await written()).toBe(2); // one metrics row (water and steps) and one weigh-in
@@ -1044,7 +1044,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const today = toISODate();
       // A valid amount with a goal out of range: refused, and neither is written.
       const steps = { from: 0, to: 5000 };
-      expect((await updateStepsAction({ date: today, steps, goal: { from: 10000, to: 10 } })).success).toBe(false);
+      expect(await updateStepsAction({ date: today, steps, goal: { from: 10000, to: 10 } })).toEqual(refused("Must be at least 1000"));
       expect(await getDailyMetricsHistory(userA, today)).toEqual([]);
       expect((await getNutritionTargets(userA)).steps).toBe(10000);
       // A failure of the goal's write in the database takes the amount back with it (one transaction).
@@ -1062,7 +1062,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
       succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190, carbsGrams: 300, waterMl: 3000, steps: 10000 });
-      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: NOTHING_TO_SAVE });
+      await expect(updateTargetsAction({})).resolves.toEqual(refused(NOTHING_TO_SAVE));
 
       // The day's water and its goal, each edited alone, leave the other one as it was.
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 750 } })).targets).toBeNull();
@@ -1078,25 +1078,25 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     it("refuses a water, steps or goal change from a screen that shows an old value, and writes nothing", async () => {
       authState.id = userA;
       const today = toISODate();
-      const refused = { success: false, error: CHANGED_ELSEWHERE };
+      const changedElsewhere = refused(CHANGED_ELSEWHERE);
       const day = async () => (await getDailyFoodSummary(userA, today)).metrics;
 
       // Water: device A adds to an empty day; device B, still showing 0, adds too and is refused. A's total stays.
       succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 250 } }));
-      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual(refused);
+      expect(await setWaterAction({ date: today, waterMl: { from: 0, to: 500 } })).toEqual(changedElsewhere);
       expect((await day()).waterMl).toBe(250);
       // From the value stored, it saves.
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 250, to: 750 } })).metrics?.waterMl).toBe(750);
       // An Undo sends back from the value its change wrote: after another device changed it, the Undo is refused too.
       succeeded(await setWaterAction({ date: today, waterMl: { from: 750, to: 1250 } })); // the other device, after a refresh
-      expect(await setWaterAction({ date: today, waterMl: { from: 750, to: 250 } })).toEqual(refused); // Undo of the add to 750
+      expect(await setWaterAction({ date: today, waterMl: { from: 750, to: 250 } })).toEqual(changedElsewhere); // Undo of the add to 750
       expect((await day()).waterMl).toBe(1250);
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 1250, to: 750 } })).metrics?.waterMl).toBe(750);
 
       // Steps: a stale amount refuses the whole save, its goal too (both or neither), and so does a stale goal.
       succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 4000 } }));
-      expect(await updateStepsAction({ date: today, steps: { from: 0, to: 6000 }, goal: { from: 10000, to: 12000 } })).toEqual(refused);
-      expect(await updateStepsAction({ date: today, steps: { from: 4000, to: 6000 }, goal: { from: 9000, to: 12000 } })).toEqual(refused);
+      expect(await updateStepsAction({ date: today, steps: { from: 0, to: 6000 }, goal: { from: 10000, to: 12000 } })).toEqual(changedElsewhere);
+      expect(await updateStepsAction({ date: today, steps: { from: 4000, to: 6000 }, goal: { from: 9000, to: 12000 } })).toEqual(changedElsewhere);
       expect((await day()).steps).toBe(4000);
       expect((await getNutritionTargets(userA)).steps).toBe(10000);
       const both = succeeded(await updateStepsAction({ date: today, steps: { from: 4000, to: 6000 }, goal: { from: 10000, to: 12000 } }));
@@ -1105,22 +1105,22 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // Goals: device A changes calories; device B, still showing the old calories, changes them too and is refused,
       // with its protein in the same save; B's edit of protein alone still saves (the edits touch different goals).
       succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
-      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 } })).toEqual(refused);
-      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 }, proteinGrams: { from: 170, to: 190 } })).toEqual(refused);
+      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 } })).toEqual(changedElsewhere);
+      expect(await updateTargetsAction({ calories: { from: 3350, to: 3000 }, proteinGrams: { from: 170, to: 190 } })).toEqual(changedElsewhere);
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 170 });
       succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190 });
       // The water goal from the water dialog is checked the same way.
-      expect(await setWaterAction({ date: today, goal: { from: 2500, to: 4000 } })).toEqual(refused);
+      expect(await setWaterAction({ date: today, goal: { from: 2500, to: 4000 } })).toEqual(changedElsewhere);
       expect((await getNutritionTargets(userA)).waterMl).toBe(3000);
     });
 
     it("rejects a name that is only spaces instead of storing an empty one", async () => {
       authState.id = userA;
       const today = toISODate();
-      await expect(
-        logMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
-      ).resolves.toMatchObject({ success: false });
+      expect(
+        await logMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
+      ).toEqual(refused("Required"));
       expect(succeeded(await logMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal?.name).toBe("Rice");
     });
 
@@ -1190,7 +1190,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     it("undoes a weight edit only while the day still holds the value the edit saved, for its owner only [D-040]", async () => {
       const today = toISODate();
-      const changed = { success: false, error: CHANGED_ELSEWHERE };
+      const changed = refused(CHANGED_ELSEWHERE);
       authState.id = userA;
       succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 80 }));
       succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 81 })); // the edit the Undo takes back
@@ -1217,7 +1217,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     it("answers WEIGHT_ENTRY_GONE to a delete of a weigh-in no longer there, and to another user's [D-040]", async () => {
       const today = toISODate();
-      const gone = { success: false, error: WEIGHT_ENTRY_GONE };
+      const gone = refused(WEIGHT_ENTRY_GONE);
       authState.id = userA;
       const { entry } = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 80 }));
       // Another user's delete finds nothing of theirs: the same answer, and the owner's weigh-in stays.
@@ -1239,14 +1239,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       authState.id = userA;
       // Refused with a reason that names nothing of theirs.
-      expect(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 })).toEqual({
-        success: false,
-        error: "This meal could not be saved.",
-      });
-      expect(await saveWeightAction({ id: theirWeight.entry.id, date: today, kilograms: 90 })).toEqual({
-        success: false,
-        error: "This weight could not be saved.",
-      });
+      expect(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 })).toEqual(refused("This meal could not be saved."));
+      expect(await saveWeightAction({ id: theirWeight.entry.id, date: today, kilograms: 90 })).toEqual(refused("This weight could not be saved."));
 
       expect((await getDailyFoodSummary(userA, today)).meals).toEqual([]);
       expect(await listWeightEntries(userA)).toEqual([]);
@@ -1260,15 +1254,15 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(mealHasValue({ calories: 1, protein: 0, carbs: 0, fat: 0 })).toBe(true);
       authState.id = userA;
       const empty = { date: toISODate(), name: "Meal", calories: 0, protein: 0.04, carbs: 0.04, fat: 0 };
-      expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0" });
+      expect(await logMealAction(empty)).toEqual(refused("Enter calories or a macro above 0"));
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
 
     it("refuses a meal over a limit in one sentence that names the field once [U5]", async () => {
       authState.id = userA;
       const meal = { date: toISODate(), name: "Meal", calories: 100, protein: 0, carbs: 0, fat: 0 };
-      expect(await logMealAction({ ...meal, calories: 10001 })).toEqual({ success: false, error: "Calories must be 10.000 or less" });
-      expect(await logMealAction({ ...meal, fat: 1000.5 })).toEqual({ success: false, error: "Protein, carbs and fat must each be 1.000 g or less" });
+      expect(await logMealAction({ ...meal, calories: 10001 })).toEqual(refused("Calories must be 10.000 or less"));
+      expect(await logMealAction({ ...meal, fat: 1000.5 })).toEqual(refused("Protein, carbs and fat must each be 1.000 g or less"));
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
   });

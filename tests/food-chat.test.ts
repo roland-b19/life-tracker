@@ -13,7 +13,7 @@ import { logMealSchema } from "@/lib/validations/food";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
-import { succeeded } from "./succeeded";
+import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { db } from "@/server/db";
 import { recipes } from "@/db/schema";
@@ -345,7 +345,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     const input = { message: "o banană", history: [], date: today, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
-      expect(await sendFoodChatMessageAction(input)).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await sendFoodChatMessageAction(input)).toEqual(refused(SIGNED_OUT));
     });
 
     it("logs meals only for the signed-in owner", async () => {
@@ -367,7 +367,7 @@ describe("Food assistant: context prompt and structured answer", () => {
       authState.id = userId;
       process.env.AUTH_DEV = "true";
       for (const date of ["2026-11-05", "2999-01-01"]) {
-        expect(await sendFoodChatMessageAction({ ...input, date })).toEqual({ success: false, error: "Only today and yesterday can be changed." });
+        expect(await sendFoodChatMessageAction({ ...input, date })).toEqual(refused("Only today and yesterday can be changed."));
       }
       expect(runClaude).not.toHaveBeenCalled();
     });
@@ -383,17 +383,18 @@ describe("Food assistant: context prompt and structured answer", () => {
 
       succeeded(await sendFoodChatMessageAction({ ...input, history: [...turns] }));
 
-      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toMatchObject({
-        success: false,
-        error: expect.any(String),
-      });
+      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toEqual(refused("Pick one of the options"));
       expect(runClaude).toHaveBeenCalledTimes(1);
     });
 
     it("rejects invalid input before calling the model", async () => {
       authState.id = userId;
-      for (const bad of [{ message: "   " }, { time: "25:00" }, { message: "x".repeat(1001) }]) {
-        expect(await sendFoodChatMessageAction({ ...input, ...bad })).toMatchObject({ success: false, error: expect.any(String) });
+      for (const [bad, error] of [
+        [{ message: "   " }, "Required"],
+        [{ time: "25:00" }, "Invalid format"],
+        [{ message: "x".repeat(1001) }, "Too long (max 1000)"],
+      ] as const) {
+        expect(await sendFoodChatMessageAction({ ...input, ...bad })).toEqual(refused(error));
       }
       expect(runClaude).not.toHaveBeenCalled();
     });

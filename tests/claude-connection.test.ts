@@ -9,7 +9,7 @@ import { db } from "@/server/db";
 import { claudeConnections } from "@/db/schema";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
-import { succeeded } from "./succeeded";
+import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
 
 const TOKEN = "sk-ant-oat01-test-token-abcdefghijklmnopqrstuvwxyz";
@@ -101,10 +101,10 @@ describe("Claude connection", () => {
   });
 
   it("refuses signed-out callers in people's words, before anything is read or written", async () => {
-    const refused = { success: false, error: SIGNED_OUT };
-    expect(await restoreClaudeConnectionAction({ tokenEncrypted: "x", connectedAt: new Date().toISOString() })).toEqual(refused);
-    expect(await connectClaudeAction({ token: TOKEN })).toEqual(refused);
-    expect(await disconnectClaudeAction()).toEqual(refused);
+    const signedOut = refused(SIGNED_OUT);
+    expect(await restoreClaudeConnectionAction({ tokenEncrypted: "x", connectedAt: new Date().toISOString() })).toEqual(signedOut);
+    expect(await connectClaudeAction({ token: TOKEN })).toEqual(signedOut);
+    expect(await disconnectClaudeAction()).toEqual(signedOut);
   });
 
   it("stores a restored date from the future as now [MORE-13]", async () => {
