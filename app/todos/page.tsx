@@ -5,7 +5,7 @@ import { toISODate } from "@/lib/format-date";
 import { TodosClient } from "./todos-client";
 
 export default async function TodosPage() {
-  const user = await requirePageUser();
+  const user = await requirePageUser("/todos");
 
   const today = toISODate();
 

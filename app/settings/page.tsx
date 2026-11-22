@@ -4,7 +4,7 @@ import { isClaudeEnabled } from "@/lib/features";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
-  const user = await requirePageUser();
+  const user = await requirePageUser("/settings");
 
   // Settings is always shown (Appearance); only the Claude card and its data sit behind the flag.
   const connection = isClaudeEnabled() ? await getClaudeConnection(user.id) : null;
