@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Browser, type Locator, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, isRefresh, refreshesDone, settled, test } from "./helpers";
 
@@ -933,6 +933,45 @@ test("notes of only an invisible character do not stop Exit, Finish or Cancel", 
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText("No sets logged: the workout was removed")).toBeVisible();
   await expect(page.getByText("Nothing to save.")).toBeHidden();
+});
+
+// D-034: Next sends a write without waiting for a refresh on its way, and applies that refresh once the write's own change
+// is on screen. A refresh the server rendered before Start (no workout open) must not end the workout Start put on screen.
+// The refresh after Cancel is rendered at once and its answer held until Start has answered.
+test("a refresh rendered before Start and answered after it leaves the started workout on screen", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  // The page holds the open workout as the server sent it, so the held page (none open) is a change to it.
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await page.getByRole("button", { name: "Cancel workout" }).click();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let rendered = () => {};
+  const renderedBeforeStart = new Promise<void>((resolve) => (rendered = resolve));
+  let stale: Request | undefined;
+  await page.route(
+    (url) => url.pathname === "/gym",
+    async (route) => {
+      if (stale || !isRefresh(page, route.request())) return route.fallback();
+      stale = route.request();
+      const answer = await route.fetch();
+      rendered();
+      await held;
+      await route.fulfill({ response: answer });
+    },
+  );
+  await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+  await expect(page.getByText("Cancelled the workout")).toBeVisible();
+  await renderedBeforeStart;
+  await startWorkout(page, DAY);
+  release();
+  await stale!.response();
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+  await notes(page).fill("Still in hand");
 });
 
 // D-040: notes changed on another page refuse this page's save; the next save changes the server's notes and keeps the typed text.
