@@ -2,7 +2,7 @@ import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
 import { FUTURE_DATE, isoDate, newId, NOTHING_TO_SAVE, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
-import { formatNumber } from "@/lib/number-format";
+import { formatNumber, roundTo } from "@/lib/number-format";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
 export const MAX_WATER_ML = 20000;
@@ -32,7 +32,7 @@ const mealFields = z.object({
  * (0.04 g is stored as 0.0). The form's Save asks the same, so the page and the server never disagree.
  */
 export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
-  meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => Math.round(grams * 10) > 0);
+  meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => roundTo(grams, 1) > 0);
 
 export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
 
