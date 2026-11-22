@@ -32,7 +32,7 @@ last_verified: 2026-11-22
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A and C merged (#169, #170, #171), M run on live; part B (steps 9–13) built, verified and reviewed (2 rounds), in its PR; part D (steps 18–20) building, then part E; accepted edges in D-045 and D-046; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B and C merged (#169, #170, #172, #171), M run on live; part D (steps 18–20) built, verified and reviewed (2 rounds), in its PR; then part E (step 21); accepted edges in D-045 and D-046; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
