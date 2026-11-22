@@ -102,6 +102,7 @@ describe("a refusal or check several actions give is written once [U6]", () => {
     ["Only today and yesterday can be changed.", "../src/lib/validations/food.ts"],
     ["Date cannot be in the future", "../src/lib/validations/common.ts"],
     ["Maximum two decimal places", "../src/lib/validations/common.ts"],
+    ["Nothing to save", "../src/lib/validations/common.ts"],
     ["< 1e-6", "../src/lib/validations/common.ts"],
   ])("%s", (words, home) => {
     expect(writtenIn(words)).toEqual([home]);
