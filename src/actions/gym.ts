@@ -7,6 +7,7 @@ import {
   addCustomExerciseSchema,
   customExerciseWithIdSchema,
   addSessionSchema,
+  cancelSessionSchema,
   finishSessionSchema,
   logSetSchema,
   restoreDeloadWeeksSchema,
@@ -102,12 +103,15 @@ export async function saveSessionNotesAction(rawInput: unknown) {
   });
 }
 
-/** Cancel: an open workout and its sets go (a finished one is refused); answers its timer, which Undo puts back. */
+/**
+ * Cancel: an open workout and its sets go (a finished one is refused; with `onlyEmpty`, one with a set too); answers its
+ * timer, which Undo puts back.
+ */
 export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId } = sessionIdSchema.parse(rawInput);
-    const deleted = await cancelWorkoutSession(userId, sessionId);
+    const { sessionId, onlyEmpty } = cancelSessionSchema.parse(rawInput);
+    const deleted = await cancelWorkoutSession(userId, sessionId, onlyEmpty);
     if (!deleted) throw new Refusal(WORKOUT_GONE);
     return { timer: deleted.timer };
   });

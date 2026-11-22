@@ -1,7 +1,7 @@
 "use client";
 
 import { toISODate } from "@/lib/format-date";
-import { NOTES_CHANGED, SET_GONE, sessionNote, type RestoreSessionInput } from "@/lib/validations/gym";
+import { NOTES_CHANGED, SET_GONE, SETS_LOGGED, sessionNote, type RestoreSessionInput } from "@/lib/validations/gym";
 import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
@@ -95,6 +95,10 @@ export function useWorkout({
   // next save changes from, so the device is not refused again; the field keeps what was typed.
   const [serverOpen] = useServerState(openSession);
   const notesStale = useRef(false);
+  /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
+  const notesAnswered = (res: Answer | null) => {
+    if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
+  };
   useEffect(() => {
     if (!notesStale.current || !serverOpen || serverOpen.id !== live.current?.id) return;
     notesStale.current = false;
@@ -193,22 +197,27 @@ export function useWorkout({
         message: `Started "${name}"`,
         type: "success",
         touches,
-        // Only while nothing is logged: Undo must not delete sets.
-        onUndo: undoWith(showToast, async () => {
-          const now = live.current;
-          if (now?.id !== session.id || now.sets.length > 0) {
-            warn("Sets are logged; use Cancel workout instead");
-            return true;
-          }
-          const gone = await cancelSessionAction({ sessionId: session.id }).catch(() => null);
-          if (gone?.success) {
-            setConfirmCancel(false);
-            setActiveSession(null);
-            setPaused((p) => (p?.id === session.id ? null : p));
-            setSessionNotes("");
-          }
-          return gone;
-        }),
+        // Only while nothing is logged: Undo must not delete sets. The server checks too (`onlyEmpty`), so a set logged
+        // on another device is never deleted; its refusal shows in the toast (D-040).
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            const now = live.current;
+            if (now?.id !== session.id || now.sets.length > 0) {
+              warn(SETS_LOGGED);
+              return true;
+            }
+            const gone = await cancelSessionAction({ sessionId: session.id, onlyEmpty: true }).catch(() => null);
+            if (gone?.success) {
+              setConfirmCancel(false);
+              setActiveSession(null);
+              setPaused((p) => (p?.id === session.id ? null : p));
+              setSessionNotes("");
+            }
+            return gone;
+          },
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
+        ),
       });
     }, "Failed to start workout", spot);
   }
@@ -366,8 +375,8 @@ export function useWorkout({
       const to = sessionNote.safeParse(text);
       if (to.success && (to.data ?? "") === from) return true;
       const res = await saveSessionNotesAction({ sessionId: session.id, notes: { from: from || null, to: text } }).catch(() => null);
+      notesAnswered(res);
       if (!res?.success) {
-        if (res?.error === NOTES_CHANGED) notesStale.current = true;
         warn(res ? res.error : "Failed to save the notes");
         return false;
       }
@@ -380,6 +389,7 @@ export function useWorkout({
           showToast,
           async () => {
             const back = await saveSessionNotesAction({ sessionId: session.id, notes: { from: res.notes, to: from || null } });
+            notesAnswered(back);
             if (back.success && live.current?.id === session.id) showNotes(back.notes);
             return back;
           },
