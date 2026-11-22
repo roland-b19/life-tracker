@@ -144,6 +144,14 @@ export function FoodClient({
   // The button last tapped, set before its own handler runs.
   const tappedButton = useRef<Element | null>(null);
   const noteTap = (e: React.MouseEvent) => (tappedButton.current = (e.target as Element).closest("button"));
+  // The id the open meal form's meal gets (D-040): made when the form opens and kept until the add is answered, so a
+  // second Save after a lost answer sends the same id and adds nothing.
+  const mealId = useRef("");
+  const openMealForm = () => {
+    setErrorMsg("");
+    mealId.current = crypto.randomUUID();
+    setIsMealModalOpen(true);
+  };
 
   // In-app Food AI Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -151,6 +159,7 @@ export function FoodClient({
       role: "user" | "assistant";
       text: string;
       meals?: MealData[];
+      leftOut?: string[];
     }>
   >([]);
   const [chatInput, setChatInput] = useState("");
@@ -192,15 +201,24 @@ export function FoodClient({
     });
   }
 
-  /** Undo of a log: the meals leave the day at once; one the server refuses to delete comes back. `removed` gets the ids that went. */
+  /**
+   * Undo of a log: the meals leave the day at once; one the server refuses to delete comes back, and the toast says the
+   * first refusal's reason. `removed` gets the ids that went.
+   */
   const undoLogged = (logged: MealData[], removed?: (ids: Set<string>) => void) =>
-    undoWith(showToast, async () => {
-      logged.forEach((m) => applyMeal(m, -1));
-      const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).then((r) => r.success, () => false)));
-      logged.filter((_, i) => !results[i]).forEach((m) => applyMeal(m, 1));
-      removed?.(new Set(logged.filter((_, i) => results[i]).map((m) => m.id)));
-      return results.every(Boolean);
-    });
+    undoWith(
+      showToast,
+      async () => {
+        logged.forEach((m) => applyMeal(m, -1));
+        const results = await Promise.all(logged.map((m) => deleteMealAction(m.id).catch(() => null)));
+        const gone = results.map((r) => r?.success === true);
+        logged.filter((_, i) => !gone[i]).forEach((m) => applyMeal(m, 1));
+        removed?.(new Set(logged.filter((_, i) => gone[i]).map((m) => m.id)));
+        const first = gone.indexOf(false);
+        return first === -1 ? true : results[first];
+      },
+      (back) => (back && !back.success ? back.error : "Failed to undo"),
+    );
 
   /** Delete from the list: the meal leaves the day at once; Undo puts the same meal back under its old id and time. */
   function handleDeleteMeal(meal: MealData) {
@@ -234,7 +252,7 @@ export function FoodClient({
           if (back?.success) applyMeal(meal, 1);
           return back;
         },
-        "Failed to restore meal",
+        (back) => (back && !back.success ? back.error : "Failed to restore meal"),
       ),
     });
     return saved;
@@ -248,8 +266,8 @@ export function FoodClient({
     if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setErrorMsg("Protein, carbs and fat must each be 1.000 g or less.");
 
     setErrorMsg("");
-    // The id is made here, so a repeat of the same save after a lost answer adds nothing (D-040).
-    const saved = logMealAction({ id: crypto.randomUUID(), date: todayDate, ...entered }).catch(() => null);
+    // The id comes from the form (mealId), so a repeat of the same save after a lost answer adds nothing (D-040).
+    const saved = logMealAction({ id: mealId.current, date: todayDate, ...entered }).catch(() => null);
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to add meal");
     const meal = res.meal as MealData;
@@ -259,6 +277,8 @@ export function FoodClient({
     setMealCarbs("");
     setMealFat("");
     setIsMealModalOpen(false);
+    // A Save again after a lost answer finds the meal the first one logged (D-040): it says so, without an Undo.
+    if (res.repeated) return showToast({ message: "Already saved", type: "success", touches: mealKeys([meal]), saved });
     showToast({
       message: `Added meal (${formatNumber(meal.calories)} kcal)`,
       type: "success",
@@ -470,7 +490,7 @@ export function FoodClient({
       });
       if (!res.success) return takeBack(res.error);
       const meals = res.meals.filter((m) => m !== null) as MealData[];
-      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
       if (res.freshSummary) setSummary(res.freshSummary);
       if (meals.length) {
         showToast({
@@ -552,7 +572,7 @@ export function FoodClient({
               actions={
                 <>
                   <SmallButton onClick={openGoals}>Edit goals</SmallButton>
-                  <AddButton onClick={() => (setErrorMsg(""), setIsMealModalOpen(true))}>Add meal</AddButton>
+                  <AddButton onClick={openMealForm}>Add meal</AddButton>
                 </>
               }
             >
@@ -629,6 +649,12 @@ export function FoodClient({
                   <div key={m.id} className="chat-tool number-tabular">
                     <strong>Added:</strong> {m.name} · {formatNumber(m.calories)} kcal · {formatAmount(m.protein, 1)}g P ·{" "}
                     {formatAmount(m.carbs, 1)}g C · {formatAmount(m.fat, 1)}g F
+                  </div>
+                ))}
+                {msg.leftOut?.map((line, i) => (
+                  // The same line can be left out twice, so the place is the key.
+                  <div key={i} className="chat-tool">
+                    <strong>Left out:</strong> {line}
                   </div>
                 ))}
               </div>

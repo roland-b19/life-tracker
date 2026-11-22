@@ -9,6 +9,7 @@ import { useServerState } from "../components/server-state";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { sevenDayAverage } from "@/lib/weight-stats";
 import { formatAmount } from "@/lib/number-format";
+import { WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
 import { TrendChart } from "./trend-chart";
 
 export type WeightEntry = { id: string; date: string; kilograms: string };
@@ -33,6 +34,12 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
+  // The id a new day's weigh-in gets (D-040): made when the form opens and kept until the save is answered, so a second
+  // Save after a lost answer sends the same id and the server answers the row the first one made.
+  const addId = useRef("");
+  // The weigh-in the form showed when it opened: an edit's Undo writes it back, even when a Save again after a lost
+  // answer finds the day already at the new value (so the server's `previous` is that value).
+  const opened = useRef<WeightEntry | null>(null);
 
   const average = sevenDayAverage(entries.map((e) => ({ date: e.date, kilograms: Number(e.kilograms) })), today);
   // A day has one weigh-in, so a row replaces the one on its day.
@@ -42,6 +49,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     setErrorMsg("");
     setKilograms(current?.kilograms ?? "");
     setEditing(current?.id ?? null);
+    opened.current = current;
+    addId.current = crypto.randomUUID();
     setOpen(true);
   }
 
@@ -49,26 +58,27 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   function handleDelete(entry: WeightEntry) {
     setEntries((list) => list.filter((e) => e.id !== entry.id));
     const saved = deleteWeightAction(entry.id).catch(() => null);
-    void saved.then((gone) => {
-      // `success: false` means another device already deleted it, so the screen is right as it is; only a thrown error needs the rollback.
-      if (gone) return;
-      upsert(entry);
-      showToast({ message: "Failed to remove weight", type: "warning" });
+    // A weigh-in another device already deleted stays off the screen; any other refusal, or no answer, puts it back.
+    // Either way the server's reason shows and the toast goes with its Undo.
+    void saved.then((res) => {
+      if (res?.success) return;
+      if (res?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
+      showToast({ message: res?.error ?? "Failed to remove weight", type: "warning" });
     });
     showToast({
       message: `Removed ${kg(entry.kilograms)} kg`,
       type: "success",
       touches: touches(entry),
-      saved: saved.then((gone) => gone !== null),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)) return true; // the delete never happened
+          if (!(await saved)?.success) return true; // the delete never happened; the failure path above said why
           const back = await restoreWeightAction({ id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) }).catch(() => null);
           if (back?.success) upsert(entry);
           return back;
         },
-        "Failed to restore weight",
+        (back) => (back && !back.success ? back.error : "Failed to restore weight"),
       ),
     });
     return saved;
@@ -79,13 +89,15 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     setErrorMsg("");
     const value = Number(kilograms);
     // The screen can be behind the database (another device): the server creates the day or changes the row it already
-    // has. The id is made here, so a repeat of the same add after a lost answer adds nothing (D-040).
-    const saved = saveWeightAction({ id: crypto.randomUUID(), date: today, kilograms: value }).catch(() => null);
+    // has. The id comes from the form (addId), so a repeat of the same add after a lost answer adds nothing (D-040) and
+    // says it was already saved, without an Undo.
+    const saved = saveWeightAction({ id: addId.current, date: today, kilograms: value }).catch(() => null);
     const res = await saved;
     if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save weight");
-    const { entry, previous } = res;
+    const { entry, previous, repeated } = res;
     setOpen(false);
     upsert(entry);
+    if (repeated) return showToast({ message: "Already saved", type: "success", touches: touches(entry), saved });
     if (!previous) {
       showToast({
         message: `Added ${kg(value)} kg`,
@@ -95,12 +107,14 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
         onUndo: undoWith(showToast, async () => {
           setEntries((list) => list.filter((e) => e.id !== entry.id));
           const gone = await deleteWeightAction(entry.id).catch(() => null);
-          if (!gone) upsert(entry); // `success: false` means it is already gone, so the screen is right without it
+          // A weigh-in already deleted on another device stays off the screen; any other refusal puts it back.
+          if (!gone?.success && gone?.error !== WEIGHT_ENTRY_GONE) upsert(entry);
           return gone;
-        }),
+        }, (back) => (back && !back.success ? back.error : "Failed to undo")),
       });
       return;
     }
+    const before = opened.current?.date === previous.date ? opened.current : previous;
     showToast({
       message: `Weight set to ${kg(value)} kg`,
       type: "success",
@@ -110,9 +124,9 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
       onUndo: undoWith(
         showToast,
         async () => {
-          upsert(previous);
-          const back = await saveWeightAction({ date: previous.date, kilograms: Number(previous.kilograms) }).catch(() => null);
-          // The saved row is the one the database has now: a new id if the day was deleted elsewhere in the meantime.
+          upsert(before);
+          // `from` is the value this edit saved: if another device changed or deleted the day since, the server refuses.
+          const back = await saveWeightAction({ date: before.date, kilograms: Number(before.kilograms), from: Number(entry.kilograms) }).catch(() => null);
           if (back?.success) upsert(back.entry);
           else upsert(entry);
           return back;

@@ -18,6 +18,7 @@ import {
   revertShoppingCategorySchema,
   setWaterSchema,
   toggleShoppingItemSchema,
+  unmergeShoppingItemSchema,
   updateNutritionTargetsSchema,
   updateShoppingItemSchema,
   updateStepsSchema,
@@ -30,7 +31,6 @@ import {
   deleteShoppingCategory,
   deleteShoppingItem,
   deleteWeightEntry,
-  hasDuplicateShoppingItem,
   logMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
@@ -40,6 +40,7 @@ import {
   revertShoppingCategory,
   saveWeightEntry,
   toggleShoppingItem,
+  unmergeShoppingItem,
   updateDailySteps,
   updateDailyWater,
   updateNutritionTargets,
@@ -56,15 +57,18 @@ function assertToday(date: string) {
   if (date !== toISODate()) throw new Refusal("Only today can be changed.");
 }
 
-/** Adds a meal; a repeat of the same add (same id) answers the meal already there, an id another user holds is refused. */
+/**
+ * Adds a meal; a repeat of the same add (same id) answers the meal already there with `repeated`, an id another user
+ * holds is refused.
+ */
 export async function logMealAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = logMealSchema.parse(rawInput);
     assertWritableDay(parsed.date);
-    const meal = await logMeal(userId, parsed);
+    const { meal, repeated } = await logMeal(userId, parsed);
     if (!meal) throw new Refusal("This meal could not be saved.");
-    return { meal };
+    return { meal, repeated };
   });
 }
 
@@ -89,16 +93,17 @@ export async function restoreMealAction(rawInput: unknown) {
 
 /**
  * Sets today's weight (creates or changes it). An id another weigh-in already holds (another user's, or one of the
- * caller's other days) is refused like a meal's, whether or not today has a weigh-in yet; a replay of the same save is not.
+ * caller's other days) is refused like a meal's, whether or not today has a weigh-in yet; a replay of the same save is not,
+ * and answers `repeated`.
  */
 export async function saveWeightAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const input = logWeightSchema.parse(rawInput);
     assertToday(input.date);
-    const { entry, previous } = await saveWeightEntry(userId, input);
+    const { entry, previous, repeated } = await saveWeightEntry(userId, input);
     if (!entry) throw new Refusal("This weight could not be saved.");
-    return { entry, previous };
+    return { entry, previous, repeated };
   });
 }
 
@@ -106,7 +111,7 @@ export async function saveWeightAction(rawInput: unknown) {
 export async function deleteWeightAction(entryId: string) {
   return respond(async () => {
     const userId = await requireUser();
-    if ((await deleteWeightEntry(userId, uuid.parse(entryId))) === undefined) throw new Refusal("Weight entry not found.");
+    await deleteWeightEntry(userId, uuid.parse(entryId));
     return {};
   });
 }
@@ -155,16 +160,24 @@ export async function updateTargetsAction(rawInput: unknown) {
 export async function addShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    return { item: await addShoppingItem(userId, addShoppingItemSchema.parse(rawInput)) };
+    return addShoppingItem(userId, addShoppingItemSchema.parse(rawInput));
   });
 }
 
-export async function toggleShoppingItemAction(itemId: string, isBought: boolean) {
+/** Undo of an add that merged into an item on the list: that item comes back as it was, under its own id. */
+export async function unmergeShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const input = toggleShoppingItemSchema.parse({ itemId, isBought });
-    const item = await toggleShoppingItem(userId, input.itemId, input.isBought);
-    if (!item) throw new Refusal("Item not found.");
+    return unmergeShoppingItem(userId, unmergeShoppingItemSchema.parse(rawInput));
+  });
+}
+
+/** A tick; its Undo also sends the time the box had before (`checkedAt`), so the row goes back to its place. */
+export async function toggleShoppingItemAction(itemId: string, isBought: boolean, checkedAt?: Date | string | null) {
+  return respond(async () => {
+    const userId = await requireUser();
+    const input = toggleShoppingItemSchema.parse({ itemId, isBought, checkedAt });
+    const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
     return { item };
   });
 }
@@ -173,7 +186,6 @@ export async function deleteShoppingItemAction(itemId: string) {
   return respond(async () => {
     const userId = await requireUser();
     const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
-    if (!deleted) throw new Refusal("Item not found.");
     return { deleted };
   });
 }
@@ -191,20 +203,16 @@ export async function restoreShoppingItemsAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { itemIds } = restoreShoppingItemsSchema.parse(rawInput);
-    const items = await restoreShoppingItems(userId, itemIds);
-    if (items.length === 0) throw new Refusal("Item not found.");
-    return { items };
+    const restored = await restoreShoppingItems(userId, itemIds);
+    if (restored.items.length === 0) throw new Refusal("Item not found.");
+    return restored;
   });
 }
 
 export async function updateShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const parsed = updateShoppingItemSchema.parse(rawInput);
-    if (await hasDuplicateShoppingItem(userId, parsed)) throw new Refusal(`"${parsed.name}" is already on the list with this unit.`);
-    const item = await updateShoppingItem(userId, parsed);
-    if (!item) throw new Refusal("This item is no longer on the list.");
-    return { item };
+    return { item: await updateShoppingItem(userId, updateShoppingItemSchema.parse(rawInput)) };
   });
 }
 
@@ -250,7 +258,8 @@ export async function revertShoppingCategoryAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { kind, ...input } = revertShoppingCategorySchema.parse(rawInput);
-    await revertShoppingCategory(userId, input, kind);
-    return {};
+    const done = await revertShoppingCategory(userId, input, kind);
+    if (!done) throw new Refusal(`Can't undo: "${input.current}" has changed since.`);
+    return done;
   });
 }
