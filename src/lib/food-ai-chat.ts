@@ -49,10 +49,24 @@ const modelAnswerSchema = z.object({ reply: z.string(), meals: z.array(z.unknown
 const MAX_MEALS = 10;
 const MAX_REPLY = 2000;
 
-/** Why a meal was left out, from its first validation issue; the only issue with no field is "all zero". */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/**
+ * Why a meal was left out, from its first validation issue, as one phrase that names the field once: the schema's own
+ * words when they name it ("calories must be 10.000 or less"), else the field and zod's words ("fat must be at least 0",
+ * "name is required"). The only issue with no field is "all zero".
+ */
 function whyLeftOut(error: z.ZodError): string {
   const issue = error.issues[0];
-  return issue.path.length ? `${issue.path.join(".")}: ${issue.message}` : "every value rounds to 0";
+  if (!issue.path.length) return "every value rounds to 0";
+  const field = issue.path.join(".");
+  const message = issue.message;
+  if (new RegExp(`\\b${field}\\b`, "i").test(message)) return lowerFirst(message);
+  if (message === "Required") return `${field} is required`;
+  if (/^Must\b/.test(message)) return `${field} ${lowerFirst(message)}`;
+  if (/^Too\b/.test(message)) return `${field} is ${lowerFirst(message)}`;
+  if (/^Invalid\b/.test(message)) return `${field} is not valid`;
+  return `${field}: ${lowerFirst(message)}`;
 }
 
 /** The name a left-out line uses: the meal's own, or its place in the answer. */
