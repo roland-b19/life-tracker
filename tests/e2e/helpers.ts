@@ -225,13 +225,13 @@ export async function pauseClock(page: Page) {
 }
 
 /**
- * Installs the page's clock standing still at `time` (now by default), before the page loads: only `runFor`,
- * `fastForward` and `resume` move it, however long the page takes to load. It is paused a second after `time`, which
- * the clock, started a moment before, has not reached yet.
+ * Installs the page's clock standing still at `time` (now by default; a few milliseconds later, where `pauseClock`
+ * stops it), before the page loads: only `runFor`, `fastForward` and `resume` move it, however long the page takes to
+ * load.
  */
 export async function installStoppedClock(page: Page, time = Date.now()) {
   await page.clock.install({ time });
-  await page.clock.pauseAt(time + 1_000);
+  await pauseClock(page);
 }
 
 /**

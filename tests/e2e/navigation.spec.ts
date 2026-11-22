@@ -308,6 +308,35 @@ test("a session check that never answers stops holding the sign-in form after 5 
   }
 });
 
+// installStoppedClock stops the clock where it stands, as pauseClock does, not at a fixed second after `time`: a page
+// whose main thread is busy for 2 s right after the install (install wrapped here to make it so) answers the pause late,
+// past that second.
+test("a stopped clock installed while the page is busy stands still, however late the page answers", async ({ page }) => {
+  // The page's own clock, kept from before the install, times the busy spell
+  await page.evaluate(() => Object.assign(window, { realNow: performance.now.bind(performance) }));
+  const install = page.clock.install.bind(page.clock);
+  page.clock.install = async (options) => {
+    await install(options);
+    await page.evaluate(() => {
+      const realNow = (window as unknown as { realNow: () => number }).realNow;
+      const end = realNow() + 2_000;
+      while (realNow() < end);
+    });
+  };
+  const time = Date.parse("2026-11-20T12:00:00Z");
+  await installStoppedClock(page, time);
+  // Read twice, 100 ms apart by the page's own clock: the same time
+  const twice = await page.evaluate(() => {
+    const realNow = (window as unknown as { realNow: () => number }).realNow;
+    const first = Date.now();
+    const end = realNow() + 100;
+    while (realNow() < end);
+    return [first, Date.now()];
+  });
+  expect(twice[0]).toBeGreaterThan(time + 1_000);
+  expect(twice[1]).toBe(twice[0]);
+});
+
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {
   await page.setViewportSize(PHONE);
   await page.goto("/todos");
