@@ -25,8 +25,8 @@ const AFTER_WRITES = 600;
 const FRESH = 2000;
 // An open page on screen refreshes this often.
 const EVERY = 60_000;
-// A tap on a link waits at most this long for a write's answer, so a write that never gets one cannot keep the app on
-// one page.
+// A tap on a link waits at most this long for the unanswered writes, the refresh they left due, or the server check of
+// a refresh missed offline, so nothing that never answers can keep the app on one page.
 const HOLD = 10_000;
 
 // A page payload (React Server Components) is rows like `0:...`, each ending in a newline, after an optional marker
