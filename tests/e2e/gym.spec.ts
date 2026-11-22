@@ -553,6 +553,28 @@ test("Cancel in one page of a workout another page finished is refused, and Hist
   await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
 });
 
+// D-046: the Undo of "Started" deletes the workout only while the server finds no set, so a set another page logged stays.
+test("Undo of Started after another page logged a set is refused with the server's reason, and the set stays", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  // Held under the mouse, the toast keeps its Undo while the other page works.
+  await toast(page, `Started "${DAY}"`).hover();
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await logSet(other);
+  await expect(other.getByText(SET_LINE)).toBeVisible();
+  await other.close();
+
+  await andSettle(page, () => undoIn(page, `Started "${DAY}"`).click());
+  await expect(toast(page, "Sets are logged; use Cancel workout instead.")).toBeVisible();
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  const userId = await userIdOf(page);
+  expect(await setCount(userId)).toBe(1);
+  const { rows } = await asAdmin((admin) => admin.query("SELECT duration_minutes FROM workout_sessions WHERE user_id = $1", [userId]));
+  expect(rows).toEqual([{ duration_minutes: null }]);
+});
+
 // D-039: the timer lives on the workout row, so every page shows the same time.
 test("a workout paused in one page shows the same paused time in another after its refresh", async ({ signedInPage: page }) => {
   await openGym(page);
@@ -874,6 +896,38 @@ test("notes refused because another page changed them are saved on the next try,
   const userId = await userIdOf(page);
   const { rows } = await asAdmin((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
   expect(rows).toEqual([{ notes: "From this page" }]);
+});
+
+// D-046: a refused Undo of "Saved the notes" takes the server's notes as the next save's start, as a refused save does.
+test("Undo of saved notes refused because another page changed them leaves the next save free to go", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await notes(page).fill("From this page");
+  await andSettle(page, () => notes(page).blur(), "From this page");
+  // Held under the mouse, the toast keeps its Undo while the other page works.
+  await toast(page, "Saved the notes").hover();
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await expect(notes(other)).toHaveValue("From this page");
+  await notes(other).fill("From the other page");
+  await andSettle(other, () => notes(other).blur(), "From the other page");
+  await expect(other.getByText("Saved the notes")).toBeVisible();
+  await other.close();
+
+  await andSettle(page, () => undoIn(page, "Saved the notes").click());
+  await expect(toast(page, "These notes changed on another device. Check them and try again.")).toBeVisible();
+  await expect(notes(page)).toHaveValue("From this page");
+  // The refresh after the refusal brings the server's notes; React commits it a few tasks after its response.
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await notes(page).fill("Second try");
+  await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click(), "Second try");
+  await expect(banner(page)).toBeVisible();
+  const userId = await userIdOf(page);
+  const { rows } = await asAdmin((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
+  expect(rows).toEqual([{ notes: "Second try" }]);
 });
 
 // GYMB-05: Undo of "Added set" after another page deleted that set leaves nothing behind, not a row that is not saved.

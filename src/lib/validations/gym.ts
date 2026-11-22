@@ -26,6 +26,8 @@ export const ZERO_LOAD = "Enter a value above 0, or pick BW.";
 export const NOTES_CHANGED = "These notes changed on another device. Check them and try again.";
 /** What deleting a set that is no longer there answers: the client then has nothing to put back. */
 export const SET_GONE = "Set not found.";
+/** What the Undo of "Started" answers when the workout has a set, logged here or on another device: it deletes nothing. */
+export const SETS_LOGGED = "Sets are logged; use Cancel workout instead.";
 /** Whether a number has at most two decimals. */
 export const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
 /** A set's weight: at least 0, at most `max`, with at most two decimals. */
@@ -127,8 +129,14 @@ export const saveDeloadWeeksSchema = z
 /** Undo of saving the deload weeks: the weeks that save removed come back and the weeks it added go. */
 export const restoreDeloadWeeksSchema = z.object({ add: z.array(weekSunday).max(60), remove: z.array(weekSunday).max(60) });
 
-/** One workout by id: Cancel, Pause, Resume and the Undo of Finish. */
+/** One workout by id: Pause, Resume and the Undo of Finish. */
 export const sessionIdSchema = z.object({ sessionId: uuid });
+
+/**
+ * Cancel a workout. `onlyEmpty` (the Undo of "Started") cancels it only while it has no set, so that Undo never deletes a
+ * set logged on another device; the Cancel workout button sends none.
+ */
+export const cancelSessionSchema = z.object({ sessionId: uuid, onlyEmpty: z.boolean().optional() });
 
 /**
  * Undo of cancelling a workout, or of a Finish that deleted an empty one: the session as it was, with all its sets (same

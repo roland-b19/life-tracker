@@ -46,7 +46,7 @@ import {
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, NOTES_CHANGED, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
+import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, NOTES_CHANGED, SETS_LOGGED, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
@@ -1197,6 +1197,28 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(await cancelSessionAction({ sessionId: id })).toEqual({ success: false, error: SIGNED_OUT });
       expect(await sessionsOf(userA)).toEqual(before);
       expect(await setCount(id)).toBe(1);
+    });
+
+    // The Undo of "Started" sends onlyEmpty (D-046): a set logged meanwhile, on any device, keeps the workout.
+    it("with onlyEmpty, refuses a workout that has a set and deletes nothing; another user and signed out learn nothing", async () => {
+      const id = await startWithSet(userA);
+      const before = await sessionsOf(userA);
+      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual({ success: false, error: SETS_LOGGED });
+      expect(await sessionsOf(userA)).toEqual(before);
+      expect(await setCount(id)).toBe(1);
+      authState.id = userB;
+      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual({ success: false, error: WORKOUT_GONE });
+      authState.id = "";
+      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await sessionsOf(userA)).toEqual(before);
+      expect(await setCount(id)).toBe(1);
+    });
+
+    it("with onlyEmpty, lets the owner cancel a workout with no set", async () => {
+      authState.id = userA;
+      const { session } = succeeded(await startSessionAction(await startInput(userA)));
+      expect(succeeded(await cancelSessionAction({ sessionId: session.id, onlyEmpty: true })).timer.running).toBe(true);
+      expect(await sessionsOf(userA)).toEqual([]);
     });
 
     it("a Cancel and a Finish at once: one of them wins, never both", async () => {

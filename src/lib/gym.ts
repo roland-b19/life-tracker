@@ -25,6 +25,7 @@ import {
   SavePlateWeightInput,
   SaveSplitDayInput,
   SET_TIME_SKEW_MS,
+  SETS_LOGGED,
 } from "./validations/gym";
 import { Refusal } from "./validations/result";
 import { setLoad } from "./gym-progress";
@@ -510,16 +511,22 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
 
 /**
  * Delete an open workout the user started but does not want (its sets go with it). Owner only (undefined otherwise); a
- * finished workout is history (D-039) and is refused, also from a page that still shows it open. Answers its timer at
- * that moment, which Undo puts back.
+ * finished workout is history (D-039) and is refused, also from a page that still shows it open. With `onlyEmpty` (the
+ * Undo of "Started") a workout with a set is refused too, whichever device logged it. Answers its timer at that moment,
+ * which Undo puts back.
  */
-export async function cancelWorkoutSession(userId: string, sessionId: string) {
+export async function cancelWorkoutSession(userId: string, sessionId: string, onlyEmpty = false) {
   return db.transaction(async (tx) => {
-    await lockUser(tx, "session", userId); // a Finish at the same moment lands before the Cancel (refused) or after it
+    // A Finish or a set at the same moment lands before the Cancel (and is seen here) or after it (and is refused).
+    await lockUser(tx, "session", userId);
     const mine = and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId));
     const [row] = await tx.select({ durationMinutes: workoutSessions.durationMinutes }).from(workoutSessions).where(mine);
     if (!row) return undefined;
     if (row.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    if (onlyEmpty) {
+      const [set] = await tx.select({ id: workoutSets.id }).from(workoutSets).where(eq(workoutSets.sessionId, sessionId)).limit(1);
+      if (set) throw new Refusal(SETS_LOGGED);
+    }
     const [deleted] = await tx.delete(workoutSessions).where(mine).returning();
     return { id: deleted.id, timer: workoutTimer(deleted) };
   });
