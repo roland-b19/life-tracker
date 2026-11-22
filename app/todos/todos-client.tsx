@@ -50,7 +50,13 @@ export function TodosClient({
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   // The task the form opened on (its values then), null for a new task.
   const [editing, setEditing] = useState<TodoItem | null>(null);
-  const closeForm = () => setIsTaskModalOpen(false);
+  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
+  // opened after it, and a form closed since (Cancel) counts as gone.
+  const formOpening = useRef(0);
+  const closeForm = () => {
+    formOpening.current += 1;
+    setIsTaskModalOpen(false);
+  };
   // Each space's list as the server sent it; the edit form closes when another device deletes its task.
   const editingIn = (s: TodoSpace) => (isTaskModalOpen && editing?.space === s ? editing.id : null);
   const [personalTodos, setPersonalTodos] = useServerState(initialPersonalTodos, { editing: editingIn("personal"), onDeleted: closeForm });
@@ -84,9 +90,6 @@ export function TodosClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // The id the open add form's task gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
   const addId = useRef("");
-  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
-  // opened after it.
-  const formOpening = useRef(0);
   const [savingIn, setSavingIn] = useState<number | null>(null);
   const [opening, setOpening] = useState(0);
   const saving = savingIn === opening;
@@ -189,7 +192,8 @@ export function TodosClient({
     const reminderTime = reminderTimeInput.trim() || null;
     const before = editing;
     const from = formOpening.current;
-    // The answer belongs to the opening it came from: a form opened since stays as it is, and a refusal is told in a toast.
+    // The answer belongs to the opening it came from: a form closed or opened since stays as it is, and a refusal is told
+    // in a toast.
     const stillOpen = () => from === formOpening.current;
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));

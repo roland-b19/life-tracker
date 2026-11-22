@@ -264,3 +264,33 @@ test("a task deleted in one tab leaves another tab after its refresh, and closes
     await other.close();
   }
 });
+
+test("a refusal that answers after the form was closed with Cancel shows the server's words in a toast, and nothing is saved [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openTasks(page, "Today");
+  const title = `${taskTitle()} ${"x".repeat(150)}`;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/todos", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"title":"${title}"`)) await held;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add task" }).click();
+  const form = page.getByRole("dialog", { name: "New task" });
+  await form.getByLabel("Title").fill(title);
+  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"title":"${title}"`));
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  release();
+  await answered;
+  await expect(page.locator(".toast-item").filter({ hasText: "Too long (max 150)" })).toBeVisible();
+  await expect(form).toBeHidden();
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    expect((await admin.query("SELECT 1 FROM todos WHERE title = $1", [title])).rowCount).toBe(0);
+  } finally {
+    await admin.end();
+  }
+});

@@ -402,6 +402,37 @@ test("a New item form opened while an earlier save is unanswered stays open when
   await expect(form).toBeHidden();
 });
 
+test("a refusal that answers after the form was closed with Cancel shows the server's words in a toast, and nothing is saved [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)} ${"x".repeat(120)}`;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${name}"`)) await held;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill("10");
+  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"name":"${name}"`));
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  release();
+  await answered;
+  await expect(page.locator(".toast-item").filter({ hasText: "Too long (max 120)" })).toBeVisible();
+  await expect(form).toBeHidden();
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    expect((await admin.query("SELECT 1 FROM wishlist_items WHERE name = $1", [name])).rowCount).toBe(0);
+  } finally {
+    await admin.end();
+  }
+});
+
 // The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a
 // link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
 // (app/providers.tsx), so the page it opens is never older than the last write. Each test records every state the page

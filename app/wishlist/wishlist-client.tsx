@@ -86,7 +86,13 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [isModalOpen, setIsModalOpen] = useState(false);
   // The item the form opened on (its values then), null for a new item.
   const [editing, setEditing] = useState<WishlistItemData | null>(null);
-  const closeForm = () => setIsModalOpen(false);
+  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
+  // opened after it, and a form closed since (Cancel) counts as gone.
+  const formOpening = useRef(0);
+  const closeForm = () => {
+    formOpening.current += 1;
+    setIsModalOpen(false);
+  };
   // The edit form closes when another device deletes its item.
   const [items, setItems] = useServerState(initialItems, { editing: isModalOpen ? (editing?.id ?? null) : null, onDeleted: closeForm });
   const [categories, setCategories] = useServerState(initialCategories);
@@ -103,9 +109,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const tappedButton = useRef<Element | null>(null);
   // The id the open add form's item gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
   const addId = useRef("");
-  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
-  // opened after it.
-  const formOpening = useRef(0);
   const [savingIn, setSavingIn] = useState<number | null>(null);
   const [opening, setOpening] = useState(0);
 
@@ -172,7 +175,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     };
     const before = editing;
     const from = formOpening.current;
-    // The answer belongs to the opening it came from: a form opened since stays as it is, and a refusal is told in a toast.
+    // The answer belongs to the opening it came from: a form closed or opened since stays as it is, and a refusal is told
+    // in a toast.
     const stillOpen = () => from === formOpening.current;
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
 
