@@ -402,6 +402,7 @@ export function TodosClient({
       showToast({
         message: "Reminders enabled",
         type: "success",
+        touches: [`push_subscriptions:${res.subscription.id}`],
         // Forgets the subscription here and on the server, so no reminder arrives.
         onUndo: undoWith(
           showToast,
