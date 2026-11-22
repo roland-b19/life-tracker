@@ -677,7 +677,9 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       // Another device ticks one task and carries the other over, and commits only once this page load's carry-over,
       // which picked both as overdue, waits on their row locks.
       const other = await admin.connect();
-      let load: Promise<unknown> = Promise.resolve();
+      // The page load ended, either way; it is caught when it starts, so a load that fails while the poll still runs is
+      // never an unhandled rejection.
+      let loaded: Promise<unknown> = Promise.resolve();
       try {
         await other.query("BEGIN");
         await other.query("UPDATE todos SET is_completed = true, completed_at = now() WHERE id = $1", [ticked.id]);
@@ -686,7 +688,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
           today,
           placedThere,
         ]);
-        load = getDailyTodos(userA, "personal", today, today);
+        const load = getDailyTodos(userA, "personal", today, today);
+        loaded = load.catch(() => {});
         await expect
           .poll(
             async () => {
@@ -702,10 +705,14 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         await load;
       } finally {
         // A poll that timed out leaves the transaction open with both rows locked: it is rolled back (nothing after a
-        // COMMIT), so the connection goes back to the pool clean and the waiting page load ends before the next test.
-        await other.query("ROLLBACK").catch(() => {});
-        other.release();
-        await load.catch(() => {});
+        // COMMIT), so the connection goes back to the pool clean and the waiting page load ends before the next test. A
+        // connection that cannot roll back is closed instead (`release(err)`), which ends its transaction too.
+        const failed = await other.query("ROLLBACK").then(
+          () => undefined,
+          (err: Error) => err,
+        );
+        other.release(failed);
+        await loaded;
       }
       const row = async (id: string) =>
         (
