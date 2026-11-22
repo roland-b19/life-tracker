@@ -36,7 +36,7 @@ A clickable prototype of the result (one basic view of each page, dark and light
 
 Choices 9–11 (asked in the design artifact; the owner picked A for all three):
 - 9, where the switch lives. A (chosen): Settings is always shown, and only its Claude card stays behind the Claude flag (today the whole page is hidden on live, `app/settings/page.tsx` and `app/components/navigation.tsx` line 101). B: a row in the More menu.
-- 10, per device or per account. A (chosen): per device in `localStorage`, the pattern of `app/gym/workout-timer.ts` and `app/components/categories-card.tsx`. B: synced to the account (a column, an additive migration run by the owner, a server action with its authorization test).
+- 10, per device or per account. A (chosen): per device in `localStorage`, the pattern of `useDeviceState` in `app/components/device-state.ts` (D-041), which `app/components/categories-card.tsx` uses too. B: synced to the account (a column, an additive migration run by the owner, a server action with its authorization test).
 - 11, light amber. A (chosen): golden `#cc8c0a`, 2.9:1 on the card, the one fill under 3:1 (the status word carries the meaning). B: deeper `#b87d08`, 3.5:1, more ochre.
 
 Defaults for the build:
