@@ -5,6 +5,7 @@ import {
   andSettle,
   asOwner,
   countRefreshes,
+  countWrites,
   dismissToast,
   headIsQuiet,
   holdWrites,
@@ -536,8 +537,7 @@ test("a number field puts the thousand dots in, takes a dot as the decimal and s
   await expect(form.getByRole("alert")).toHaveCSS("font-weight", "400");
   await expect(form.getByRole("alert")).toHaveCSS("font-size", "14px");
   await expect(field).toHaveAccessibleName("Weight today (kg)");
-  const writes: Request[] = [];
-  page.on("request", (r) => r.method() === "POST" && "next-action" in r.headers() && writes.push(r));
+  const writes = countWrites(page);
   await form.getByRole("button", { name: "Save" }).click();
   await settled(page);
   expect(writes).toHaveLength(0);

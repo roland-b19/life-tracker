@@ -7,6 +7,7 @@ import {
   center,
   dismissToast,
   expectNoSeriousViolations,
+  hydrationWarnings,
   signInThroughForm,
   test,
   theme,
@@ -138,10 +139,7 @@ async function pick(page: Page, choice: "Auto" | "Light" | "Dark") {
 
 test("a signed-in user picks Light or Dark for this device, with Undo, also after a reload", async ({ signedInPage: page }) => {
   // The script in <head> changes <html> before React hydrates; React must not warn about either (InlineScript).
-  const reactWarnings: string[] = [];
-  page.on("console", (m) => {
-    if (/hydrat|script tag/i.test(m.text())) reactWarnings.push(m.text());
-  });
+  const reactWarnings = hydrationWarnings(page);
 
   await openSettings(page);
   await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");

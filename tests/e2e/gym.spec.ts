@@ -8,9 +8,11 @@ import {
   asOwner,
   burst,
   center,
+  countWrites,
   dismissToast,
   expectNoSeriousViolations,
   headIsQuiet,
+  hydrationWarnings,
   installStoppedClock,
   isRefresh,
   pauseClock,
@@ -1404,10 +1406,7 @@ const PULL_UPS = "Weighted pull-ups"; // a bodyweight exercise: its load is the 
 // GYMC-04: with nothing logged the card keeps its title and its fold. GYMC-03: an exercise on two days with different
 // targets shows each day's own. GYMC-01: a browser whose clock is a day ahead of the server renders the same page.
 test("the progress card, the muscle map and History render the server's day, with no hydration warning", async ({ signedInPage: page }) => {
-  const warnings: string[] = [];
-  page.on("console", (m) => {
-    if (/hydrat|script tag/i.test(m.text())) warnings.push(m.text());
-  });
+  const warnings = hydrationWarnings(page);
   await openGym(page);
   await expect(progress(page).getByRole("button", { name: "Show exercise progress" })).toBeVisible();
   await expect(progress(page).getByText("Log a workout to see your progress.")).toBeVisible();
@@ -1693,10 +1692,7 @@ for (const { write, act, onRefresh } of STALE_WRITES) {
       }
       const userId = await signedInUserId(page);
       const sets = await setCount(userId);
-      let writes = 0;
-      other.on("request", (r) => {
-        if (r.method() === "POST" && "next-action" in r.headers()) writes++;
-      });
+      const writes = countWrites(other);
 
       await act(other);
       if (onRefresh === ended) {
@@ -1711,7 +1707,7 @@ for (const { write, act, onRefresh } of STALE_WRITES) {
       await other.clock.resume();
       await refreshed;
       await other.evaluate(headIsQuiet);
-      expect(writes).toBe(1);
+      expect(writes).toHaveLength(1);
       await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
       await expect(toast(other, WORKOUT_FINISHED)).toHaveCount(0);
       await expect(toast(other, WORKOUT_GONE)).toHaveCount(0);

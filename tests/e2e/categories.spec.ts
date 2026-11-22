@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, signOutHere, test, toast, undoIn } from "./helpers";
+import { andSettle, burst, center, countWrites, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, signOutHere, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -345,15 +345,12 @@ test("the categories card deletes another row while a delete is unanswered", asy
     await addCategory(page, name);
     await dismissToast(page);
   }
-  const deleted: string[] = [];
-  page.on("request", (r) => {
-    if (r.method() !== "POST" || !("next-action" in r.headers())) return;
-    for (const name of [a, b]) if ((r.postData() ?? "").includes(`"name":"${name}"`)) deleted.push(name);
-  });
+  const writes = countWrites(page);
+  const deleted = () => writes.flatMap((r) => [a, b].filter((name) => (r.postData() ?? "").includes(`"name":"${name}"`)));
   const release = await holdWrites(page, `"name":"${a}"`);
 
   await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
-  await expect.poll(() => deleted).toEqual([a]);
+  await expect.poll(deleted).toEqual([a]);
   // A keydown ends the tap burst, so only the lock could stand in the way of the next tap.
   await page.keyboard.press("Shift");
   await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
@@ -361,7 +358,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await andSettle(page, async () => release(), `"name":"${a}"`);
   await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
-  expect(deleted).toEqual([a, b]);
+  expect(deleted()).toEqual([a, b]);
 
   await wishlist.open(page);
   await expect(card(page).locator(".entry-row")).toHaveCount(0);

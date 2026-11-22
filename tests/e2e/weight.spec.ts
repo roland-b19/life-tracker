@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { addDays, appDay, formatDM, toISODate } from "../../src/lib/format-date";
-import { andSettle, countRefreshes, dismissToast, expectNoSeriousViolations, settled, test } from "./helpers";
+import { andSettle, countRefreshes, dismissToast, expectNoSeriousViolations, hydrationWarnings, settled, test } from "./helpers";
 
 async function openFood(page: Page) {
   await page.goto("/health");
@@ -25,14 +25,6 @@ function midnightAfter(day: string) {
   return t;
 }
 const lastAxisLabel = (page: Page) => page.getByRole("region", { name: "Weight", exact: true }).locator(".line-axis span").last();
-
-function watchHydration(page: Page) {
-  const warnings: string[] = [];
-  page.on("console", (m) => {
-    if (/hydrat/i.test(m.text())) warnings.push(m.text());
-  });
-  return warnings;
-}
 
 // Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
 // axe scan depends on the width and the color scheme (see playwright.config.ts).
@@ -95,7 +87,7 @@ test("a signed-in user adds, edits and deletes today's weight, with Undo for the
 // The page's clock is half an hour into the next Bucharest day while the server is still on today: the card and the chart
 // show the server's day, and the browser's render matches the server's, so React warns of nothing.
 test("the weight card and chart show the server's day, whatever the device's clock says [HTODAY-01]", async ({ signedInPage: page }) => {
-  const warnings = watchHydration(page);
+  const warnings = hydrationWarnings(page);
   await openFood(page);
   await addWeight(page, "72,4");
   // The server's day: the tests run on the machine that serves the app. The page's own clock is moved with `page.clock`.
@@ -111,7 +103,7 @@ test("the weight card and chart show the server's day, whatever the device's clo
 // At the device's midnight the page refreshes once, through the app's day watch, and the chart takes its day from that
 // refresh, not from the device: here the server is still on today, so the chart still ends on it. No reload either.
 test("at midnight the page refreshes once and the chart keeps the server's day, without a reload [HTODAY-11]", async ({ signedInPage: page }) => {
-  const warnings = watchHydration(page);
+  const warnings = hydrationWarnings(page);
   const day = toISODate();
   await page.clock.install({ time: new Date(midnightAfter(day) - 30_000) });
   await openFood(page);

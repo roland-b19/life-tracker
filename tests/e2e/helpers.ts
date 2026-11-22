@@ -23,10 +23,32 @@ export function isRefresh(page: Page, request: Request) {
   );
 }
 
+/**
+ * The warnings React logs from now on about a page that hydrated with other markup than the server sent, or about the
+ * script tag the theme runs in <head> (InlineScript); the list grows as they come.
+ */
+export function hydrationWarnings(page: Page) {
+  const seen: string[] = [];
+  page.on("console", (m) => /hydrat|script tag/i.test(m.text()) && seen.push(m.text()));
+  return seen;
+}
+
 /** The router refreshes of a page from now on (the list grows as they start). */
 export function countRefreshes(page: Page) {
   const seen: Request[] = [];
   page.on("request", (r) => isRefresh(page, r) && seen.push(r));
+  return seen;
+}
+
+/** A server action of the page: Next sends them as POSTs with this header. With `body`, only one whose body holds it. */
+export function isWrite(request: Request, body?: string) {
+  return request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body));
+}
+
+/** The server actions the page sends from now on (those whose body holds `body`, when given); the list grows as they start. */
+export function countWrites(page: Page, body?: string) {
+  const seen: Request[] = [];
+  page.on("request", (r) => isWrite(r, body) && seen.push(r));
   return seen;
 }
 
@@ -37,7 +59,7 @@ function watchRefreshes(page: Page) {
   const covering = new Map<Request, number>();
   page.on("response", (response) => {
     const request = response.request();
-    if (request.method() === "POST" && "next-action" in request.headers() && response.ok()) {
+    if (isWrite(request) && response.ok()) {
       writes++;
       state.due = true;
     }
@@ -123,14 +145,11 @@ export async function expectNoSeriousViolations(page: Page) {
 }
 
 // A click that starts a server action returns once the action has answered, so the next step never races the database
-// (a reload would otherwise abort an action still in flight). Next sends server actions as POSTs with this header.
+// (a reload would otherwise abort an action still in flight).
 // A page that refreshes its list after a write sends a second action, so `body` (a piece of the request body, such as
 // a title) names the action to wait for when an earlier refresh may still be in flight and would be taken for it.
 export async function andSettle(page: Page, act: () => Promise<void>, body?: string) {
-  const answered = page.waitForResponse((r) => {
-    const request = r.request();
-    return request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body));
-  });
+  const answered = page.waitForResponse((r) => isWrite(r.request(), body));
   await act();
   await answered;
 }
@@ -161,7 +180,7 @@ export const center = (box: { x: number; y: number; width: number; height: numbe
 export async function burst(page: Page, { x, y }: { x: number; y: number }) {
   let acts = 0;
   const count = (r: Request) => {
-    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
+    if (isWrite(r)) acts++;
   };
   page.on("request", count);
   const started = Date.now();
@@ -178,7 +197,7 @@ export async function burst(page: Page, { x, y }: { x: number; y: number }) {
 export async function writesIn(page: Page, spot: { x: number; y: number }, body: string) {
   let writes = 0;
   const count = (r: Request) => {
-    if (r.method() === "POST" && (r.postData() ?? "").includes(body)) writes++;
+    if (isWrite(r, body)) writes++;
   };
   page.on("request", count);
   await burst(page, spot);
@@ -209,23 +228,32 @@ export async function installStoppedClock(page: Page, time = Date.now()) {
 }
 
 /**
- * Holds the answers of the page's server actions from now on (those whose body holds `body`, when given) until the
- * returned `release`; after it, they go through. A held write has reached the server only once released. The route is
- * the path of the page on screen, where Next sends them.
+ * Holds the page's server actions from now on (those whose body holds `body`, when given) until the returned
+ * `release(lose)`; a held write has reached the server only once released. After it they go through, or, with
+ * `lose`, they and the later ones are lost on the way (the page sees a network error and the server writes nothing).
+ * `release` resolves once the writes held so far have gone on. The route is the path of the page on screen, where
+ * Next sends them.
  */
 export async function holdWrites(page: Page, body?: string) {
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
+  let open: (lose: boolean) => void = () => {};
+  const held = new Promise<boolean>((resolve) => (open = resolve));
+  const gone: Promise<void>[] = [];
   const path = new URL(page.url()).pathname;
   await page.route(
     (url) => url.pathname === path,
     async (route) => {
-      const request = route.request();
-      if (request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body))) await held;
-      await route.fallback();
+      if (!isWrite(route.request(), body)) return route.fallback();
+      let wentOn = () => {};
+      gone.push(new Promise<void>((resolve) => (wentOn = resolve)));
+      if (await held) await route.abort();
+      else await route.fallback();
+      wentOn();
     },
   );
-  return release;
+  return async (lose = false) => {
+    open(lose);
+    await Promise.all(gone);
+  };
 }
 
 /**
@@ -240,7 +268,7 @@ export async function loseAnswerOnce(page: Page, marker: string) {
     async (route) => {
       const request = route.request();
       const body = request.postData() ?? "";
-      if (sent || request.method() !== "POST" || !("next-action" in request.headers()) || !body.includes(marker)) return route.fallback();
+      if (sent || !isWrite(request, marker)) return route.fallback();
       sent = body;
       await route.fetch();
       await route.abort();

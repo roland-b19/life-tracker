@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Locator, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import {
   addItem,
   andSettle,
   asOwner,
   burst,
   center,
+  countWrites,
   dismissToast,
   expectNoSeriousViolations,
   holdWrites,
@@ -135,10 +136,7 @@ for (const size of [
 test("a form submitted again while its save is unanswered saves once", async ({ signedInPage: page }) => {
   await openWishlist(page);
   const name = itemName();
-  const writes: Request[] = [];
-  page.on("request", (r) => {
-    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${name}"`)) writes.push(r);
-  });
+  const writes = countWrites(page, `"name":"${name}"`);
   const release = await holdWrites(page);
 
   await page.getByRole("button", { name: "Add item" }).click();
