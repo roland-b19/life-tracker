@@ -286,20 +286,24 @@ async function renameExercise(page: Page, from: string, to: string) {
 }
 
 // Each Undo toast names the exercise it touches (D-040): a newer toast about the same exercise takes the older toast's
-// Undo away, so the older Undo never writes over the newer change; a toast about another exercise keeps its own.
+// Undo away, so the older Undo never writes over the newer change; a toast about another exercise keeps its own. The
+// page's clock stands still from the first toast on and moves 1 s only, for the refresh that shows a's new name, so no
+// toast runs out (it stays 5 s) however slow the machine is.
 test("a newer toast about the same custom exercise takes the older toast's Undo away", async ({ signedInPage: page }) => {
   const [a, b] = [exerciseName(), exerciseName()];
   const [a2, b2] = [`${a} renamed`, `${b} renamed`];
+  await page.clock.install();
   await openGym(page);
   await customExercises(page, [a, b]);
+  await pauseClock(page);
 
   // The same exercise: rename a, then delete it.
   await renameExercise(page, a, a2);
+  await page.clock.runFor(1000);
   await expect(undoIn(page, `Saved "${a2}"`)).toBeVisible();
   await andSettle(page, () => mine(page).getByRole("button", { name: `Delete ${a2}` }).click());
   await expect(undoIn(page, `Removed "${a2}"`)).toBeVisible();
-  // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still there.
-  expect(await undoIn(page, `Saved "${a2}"`).count()).toBe(0);
+  await expect(undoIn(page, `Saved "${a2}"`)).toHaveCount(0);
   await expect(toast(page, `Saved "${a2}"`)).toBeVisible();
 
   // Another exercise: renaming b leaves the delete of a its Undo.
