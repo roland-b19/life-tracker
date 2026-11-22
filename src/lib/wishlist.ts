@@ -7,6 +7,8 @@ import {
   addWishlistItemSchema,
   RestoreWishlistItemInput,
   restoreWishlistItemSchema,
+  UpdateWishlistItemInput,
+  updateWishlistItemSchema,
 } from "./validations/wishlist";
 import { priorityForPrice } from "./rules";
 
@@ -40,15 +42,21 @@ export async function getWishlist(userId: string): Promise<WishlistItemData[]> {
   return items as WishlistItemData[];
 }
 
+/**
+ * Adds an item under the id the device made, when it sent one: a repeat of the same add finds the row already there and
+ * answers it, with `repeated`. An id another user's item holds writes nothing and answers a null item, so it neither
+ * changes nor shows that row.
+ */
 export async function addWishlistItem(
   userId: string,
   rawInput: AddWishlistItemInput,
-): Promise<WishlistItemData> {
+): Promise<{ item: WishlistItemData | null; repeated: boolean }> {
   const validated = addWishlistItemSchema.parse(rawInput);
 
   const [item] = await db
     .insert(wishlistItems)
     .values({
+      id: validated.id,
       userId,
       name: validated.name,
       url: validated.url || null,
@@ -56,10 +64,25 @@ export async function addWishlistItem(
       priority: priorityForPrice(validated.estimatedPrice),
       category: validated.category,
     })
+    .onConflictDoNothing()
     .returning(wishlistColumns);
 
-  await ensureCategory(userId, "wishlist", validated.category);
-  return item as WishlistItemData;
+  if (item) {
+    await ensureCategory(userId, "wishlist", validated.category);
+    return { item: item as WishlistItemData, repeated: false };
+  }
+  if (!validated.id) return { item: null, repeated: false };
+  const own = await findWishlistItem(userId, validated.id);
+  return { item: own, repeated: own !== null };
+}
+
+/** The user's item, or null. */
+async function findWishlistItem(userId: string, itemId: string): Promise<WishlistItemData | null> {
+  const [own] = await db
+    .select(wishlistColumns)
+    .from(wishlistItems)
+    .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)));
+  return (own as WishlistItemData | undefined) ?? null;
 }
 
 /**
@@ -91,26 +114,34 @@ export async function restoreWishlistItem(
   return (item as WishlistItemData | undefined) ?? null;
 }
 
+/**
+ * Edits an item in place: only the fields the edit sent (the ones it changed, D-040), so another tab's change to another
+ * field stays. A new price brings its priority. Null when the item is not the user's.
+ */
 export async function updateWishlistItem(
   userId: string,
   itemId: string,
-  rawInput: AddWishlistItemInput,
+  rawInput: UpdateWishlistItemInput,
 ): Promise<WishlistItemData | null> {
-  const validated = addWishlistItemSchema.parse(rawInput);
+  const validated = updateWishlistItemSchema.parse(rawInput);
+  const changes = {
+    ...(validated.name !== undefined && { name: validated.name }),
+    ...(validated.url !== undefined && { url: validated.url || null }),
+    ...(validated.estimatedPrice !== undefined && {
+      estimatedPrice: String(validated.estimatedPrice),
+      priority: priorityForPrice(validated.estimatedPrice),
+    }),
+    ...(validated.category !== undefined && { category: validated.category }),
+  };
+  if (Object.keys(changes).length === 0) return findWishlistItem(userId, itemId);
 
   const [item] = await db
     .update(wishlistItems)
-    .set({
-      name: validated.name,
-      url: validated.url || null,
-      estimatedPrice: String(validated.estimatedPrice),
-      priority: priorityForPrice(validated.estimatedPrice),
-      category: validated.category,
-    })
+    .set(changes)
     .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)))
     .returning(wishlistColumns);
 
-  if (item) await ensureCategory(userId, "wishlist", validated.category);
+  if (item && validated.category) await ensureCategory(userId, "wishlist", validated.category);
   return (item as WishlistItemData | undefined) ?? null;
 }
 

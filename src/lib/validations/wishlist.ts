@@ -1,12 +1,16 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { uuid, visible } from "./common";
+import { newId, uuid, visible } from "./common";
 
-export const addWishlistItemSchema = z.object({
+/** The refusal for an item that is not there (deleted on another device, or another user's): the client drops its row. */
+export const WISHLIST_ITEM_GONE = "This item no longer exists.";
+
+const wishlistFields = z.object({
   // trim() leaves zero-width characters, so a name of only those would look empty on screen.
-  name: z.string().trim().min(1, "Name is required").max(120, "Name cannot exceed 120 chars").refine(visible, "Name is required"),
+  // Too long is told with the shared "Too long (max N)" (validations/result.ts), here and for the link.
+  name: z.string().trim().min(1, "Name is required").max(120).refine(visible, "Name is required"),
   // Free text on purpose: a store name is as valid as a URL.
-  url: z.string().trim().max(500, "Link cannot exceed 500 chars").optional().nullable(),
+  url: z.string().trim().max(500).optional().nullable(),
   estimatedPrice: z
     .coerce
     .number()
@@ -17,11 +21,23 @@ export const addWishlistItemSchema = z.object({
   category: categorySchema.default("other"),
 });
 
+/** A new item, with the id the add form made when it opened (D-040). */
+export const addWishlistItemSchema = wishlistFields.extend({ id: newId });
+
+/** An edit sends only the fields it changed (D-040); the others keep what is stored. A null or empty link clears it. */
+export const updateWishlistItemSchema = z.object({
+  name: wishlistFields.shape.name.optional(),
+  url: wishlistFields.shape.url,
+  estimatedPrice: wishlistFields.shape.estimatedPrice.optional(),
+  category: categorySchema.optional(),
+});
+
 /** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
-export const restoreWishlistItemSchema = addWishlistItemSchema.extend({
+export const restoreWishlistItemSchema = wishlistFields.extend({
   id: uuid,
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
 });
 
 export type AddWishlistItemInput = z.input<typeof addWishlistItemSchema>;
+export type UpdateWishlistItemInput = z.input<typeof updateWishlistItemSchema>;
 export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;

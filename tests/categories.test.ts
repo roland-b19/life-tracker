@@ -28,7 +28,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     authState.id = userA;
     expect((await addCategoryAction({ scope: "wishlist", name: "  Gifts " })).success).toBe(true);
     expect(await addCategoryAction({ scope: "wishlist", name: "gifts" })).toEqual({ success: false, error: '"gifts" already exists.' });
-    const item = await addWishlistItem(userA, { name: "Scarf", estimatedPrice: 20, category: "gifts" });
+    const item = (await addWishlistItem(userA, { name: "Scarf", estimatedPrice: 20, category: "gifts" })).item!;
     expect(item.category).toBe("gifts");
 
     await renameCategoryAction({ scope: "wishlist", from: "gifts", to: "presents" });
@@ -67,13 +67,14 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const day = (n: number) => addDays(today, n);
     await addCategoryAction({ scope: "personal", name: "gym" });
     await addTodo(userA, { space: "personal", title: "Lift", isRecurring: true, recurrencePattern: "daily", dueDate: day(-3), category: "gym" });
-    const old = await addTodo(userA, { space: "personal", title: "Old one", isRecurring: false, recurrencePattern: "none", dueDate: day(-1), category: "gym" });
+    // A one-off task is never filed (D-036), so the second row is a daily task begun yesterday.
+    const { todo: old } = await addTodo(userA, { space: "personal", title: "Old one", isRecurring: true, recurrencePattern: "daily", dueDate: day(-1), category: "gym" });
     const catOn = async (d: string, title: string) => (await getDailyTodos(userA, "personal", d, today)).todos.find((t) => t.title === title)?.category;
 
     await deleteCategoryAction({ scope: "personal", name: "gym" });
     expect(await catOn(today, "Lift")).toBe("other");
     expect(await catOn(day(-1), "Old one")).toBe("other");
-    expect(old.category).toBe("gym"); // the row returned at creation, before the delete
+    expect(old!.category).toBe("gym"); // the row returned at creation, before the delete
     expect((await getCategories(userA, ["personal"])).personal).not.toContain("gym");
   });
 
@@ -82,10 +83,10 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const today = toISODate();
     const day = (n: number) => addDays(today, n);
     await addCategoryAction({ scope: "personal", name: "undo-cat" });
-    const run = await addTodo(userA, { space: "personal", title: "Undo run", isRecurring: true, recurrencePattern: "daily", dueDate: day(-5), category: "undo-cat" });
-    const fresh = await addTodo(userA, { space: "personal", title: "Undo fresh", isRecurring: true, recurrencePattern: "daily", dueDate: today, category: "undo-cat" });
-    await toggleTodo(userA, { id: run.id, isCompleted: true });
-    await toggleTodo(userA, { id: fresh.id, isCompleted: true });
+    const { todo: run } = await addTodo(userA, { space: "personal", title: "Undo run", isRecurring: true, recurrencePattern: "daily", dueDate: day(-5), category: "undo-cat" });
+    const { todo: fresh } = await addTodo(userA, { space: "personal", title: "Undo fresh", isRecurring: true, recurrencePattern: "daily", dueDate: today, category: "undo-cat" });
+    await toggleTodo(userA, { id: run!.id, isCompleted: true });
+    await toggleTodo(userA, { id: fresh!.id, isCompleted: true });
     const state = async () => ({
       rows: (await db.select().from(todos).where(eq(todos.userId, userA))).sort((a, b) => a.id.localeCompare(b.id)),
     });
@@ -120,8 +121,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
     authState.id = userA;
     await addCategoryAction({ scope: "wishlist", name: "books" });
     await addCategoryAction({ scope: "wishlist", name: "games" });
-    const inBooks = await addWishlistItem(userA, { name: "Novel", estimatedPrice: 20, category: "books" });
-    const alreadyOther = await addWishlistItem(userA, { name: "Misc", estimatedPrice: 5, category: "other" });
+    const inBooks = (await addWishlistItem(userA, { name: "Novel", estimatedPrice: 20, category: "books" })).item!;
+    const alreadyOther = (await addWishlistItem(userA, { name: "Misc", estimatedPrice: 5, category: "other" })).item!;
     const catOf = async (id: string) => (await getWishlist(userA)).find((i) => i.id === id)?.category;
 
     const del = succeeded(await deleteCategoryAction({ scope: "wishlist", name: "books" }));
@@ -246,7 +247,7 @@ describe("Categories: signed-out callers, repeated adds and Undo", () => {
   it("revert: another user cannot undo the owner's rename; the owner can", async () => {
     const userA = await owner();
     await addCategoryAction({ scope: "wishlist", name: "old" });
-    const item = await addWishlistItem(userA, { name: "Pen", estimatedPrice: 2, category: "old" });
+    const item = (await addWishlistItem(userA, { name: "Pen", estimatedPrice: 2, category: "old" })).item!;
     const ren = succeeded(await renameCategoryAction({ scope: "wishlist", from: "old", to: "new" }));
     const undo = { scope: "wishlist", name: "old", current: "new", dropCurrent: !ren.change.merged, ...ren.change };
 
@@ -283,7 +284,7 @@ describe("Categories: signed-out callers, repeated adds and Undo", () => {
   it("a stale Undo of a rename, after the new name was renamed or deleted again, changes nothing and leaves no orphan", async () => {
     const userA = await owner();
     await addCategoryAction({ scope: "wishlist", name: "books" });
-    const item = await addWishlistItem(userA, { name: "Novel", estimatedPrice: 10, category: "books" });
+    const item = (await addWishlistItem(userA, { name: "Novel", estimatedPrice: 10, category: "books" })).item!;
     const catOf = async () => (await getWishlist(userA)).find((i) => i.id === item.id)?.category;
 
     const first = succeeded(await renameCategoryAction({ scope: "wishlist", from: "books", to: "reading" }));
@@ -305,9 +306,9 @@ describe("Categories: signed-out callers, repeated adds and Undo", () => {
   it("Undo of a rename keeps the new name when an item was filed under it since, so no item loses its category", async () => {
     const userA = await owner();
     await addCategoryAction({ scope: "wishlist", name: "tools" });
-    const moved = await addWishlistItem(userA, { name: "Saw", estimatedPrice: 15, category: "tools" });
+    const moved = (await addWishlistItem(userA, { name: "Saw", estimatedPrice: 15, category: "tools" })).item!;
     const ren = succeeded(await renameCategoryAction({ scope: "wishlist", from: "tools", to: "gear" }));
-    const added = await addWishlistItem(userA, { name: "Rope", estimatedPrice: 8, category: "gear" });
+    const added = (await addWishlistItem(userA, { name: "Rope", estimatedPrice: 8, category: "gear" })).item!;
 
     expect(await revertCategoryAction({ scope: "wishlist", name: "tools", current: "gear", dropCurrent: !ren.change.merged, ...ren.change })).toEqual({
       success: true,
