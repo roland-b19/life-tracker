@@ -2,9 +2,19 @@
 
 import { useRef, useState } from "react";
 import { appTime } from "@/lib/format-date";
-import { formatAmount, formatNumber } from "@/lib/number-format";
+import { formatAmount, formatNumber, NOT_WHOLE } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
-import { CHANGED_ELSEWHERE, MAX_STEPS, MAX_WATER_ML, mealHasValue, type ValueChange } from "@/lib/validations/food";
+import {
+  CHANGED_ELSEWHERE,
+  GOAL_RANGES,
+  MAX_STEPS,
+  MAX_WATER_ML,
+  MEAL_CALORIES_TOO_HIGH,
+  MEAL_LIMITS,
+  MEAL_MACROS_TOO_HIGH,
+  mealHasValue,
+  type ValueChange,
+} from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
@@ -77,17 +87,16 @@ interface FoodClientProps {
 }
 
 type Goals = FoodClientProps["targets"];
-// Same ranges as updateNutritionTargetsSchema.
 const NUTRITION_GOALS = [
-  { key: "calories", label: "Calories (kcal)", min: 500, max: 10000 },
-  { key: "proteinGrams", label: "Protein (g)", min: 20, max: 500 },
-  { key: "carbsGrams", label: "Carbs (g)", min: 0, max: 1000 },
-  { key: "fatGrams", label: "Fat (g)", min: 0, max: 400 },
+  { key: "calories", label: "Calories (kcal)", ...GOAL_RANGES.calories },
+  { key: "proteinGrams", label: "Protein (g)", ...GOAL_RANGES.proteinGrams },
+  { key: "carbsGrams", label: "Carbs (g)", ...GOAL_RANGES.carbsGrams },
+  { key: "fatGrams", label: "Fat (g)", ...GOAL_RANGES.fatGrams },
 ] as const;
 type NutritionGoal = (typeof NUTRITION_GOALS)[number]["key"];
 // The most one day's total can hold: the same limits as setWaterAction and updateStepsAction.
 const METRIC_MAX = { water: MAX_WATER_ML, steps: MAX_STEPS };
-const METRIC_GOAL = { water: { min: 500, max: 15000 }, steps: { min: 1000, max: MAX_STEPS } };
+const METRIC_GOAL = { water: GOAL_RANGES.waterMl, steps: GOAL_RANGES.steps };
 const METRIC_KEY = { water: "waterMl", steps: "steps" } as const;
 type Metric = keyof typeof METRIC_KEY;
 /**
@@ -261,9 +270,9 @@ export function FoodClient({
   async function handleLogMeal(e: React.FormEvent) {
     e.preventDefault();
     if (!mealHasValue(entered)) return;
-    // Same limits as logMealSchema, said with the field's name.
-    if (entered.calories > 10000) return setErrorMsg("Calories must be 10.000 or less.");
-    if (Math.max(entered.protein, entered.carbs, entered.fat) > 1000) return setErrorMsg("Protein, carbs and fat must each be 1.000 g or less.");
+    // Same limits and words as logMealSchema.
+    if (entered.calories > MEAL_LIMITS.calories) return setErrorMsg(MEAL_CALORIES_TOO_HIGH);
+    if (Math.max(entered.protein, entered.carbs, entered.fat) > MEAL_LIMITS.macroGrams) return setErrorMsg(MEAL_MACROS_TOO_HIGH);
 
     setErrorMsg("");
     // The id comes from the form (mealId), so a repeat of the same save after a lost answer adds nothing (D-040).
@@ -379,8 +388,8 @@ export function FoodClient({
     const value = Number(metricInput);
     const goal = Number(metricGoalInput);
     const range = METRIC_GOAL[metric];
-    if (!Number.isInteger(value) || value < 0) return setErrorMsg("Please enter a whole number.");
-    if (value > METRIC_MAX[metric]) return setErrorMsg(`The total must be ${formatNumber(METRIC_MAX[metric])} or less.`);
+    if (!Number.isInteger(value)) return setErrorMsg(NOT_WHOLE);
+    if (value < 0 || value > METRIC_MAX[metric]) return setErrorMsg(`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}.`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}.`);
     const before = metricBase;
