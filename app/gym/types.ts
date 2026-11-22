@@ -53,6 +53,7 @@ export interface DeloadInfo {
   inDeloadWeek: boolean;
   lastDeloadWeek: string | null;
   nextDeloadWeek: string | null;
+  weeks: string[];
 }
 
 export interface WorkoutSetData {

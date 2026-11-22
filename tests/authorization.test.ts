@@ -7,9 +7,12 @@ import { authState, seedUser } from "./auth";
 
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
-import { weightEntries } from "@/db/schema";
+import { exercisePlateWeights, weightEntries } from "@/db/schema";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
+import { savePlateWeightAction } from "@/actions/gym";
 import { listWeightEntries } from "@/lib/food";
+import { addCustomExercise, EXERCISE_GONE, getExercises, getPlateWeights } from "@/lib/gym";
+import { SIGNED_OUT } from "@/lib/validations/result";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { securityHeaders } from "@/../next.config";
@@ -134,5 +137,43 @@ describe("weight authorization", () => {
     expect(await deleteWeightAction("abc")).toEqual({ success: false, error: "Invalid id" });
     expect(await restoreWeightAction({ id: "abc", date: "2026-01-03", kilograms: 82 })).toEqual({ success: false, error: "Invalid id" });
     expect(await listWeightEntries(authState.id)).toEqual([]);
+  });
+});
+
+describe("plate weight authorization (GYMC-05)", () => {
+  const custom = async (userId: string) =>
+    (await addCustomExercise(userId, { name: `Plate lift ${randomUUID()}`, muscleGroup: "chest", equipmentType: "machine" }))!.id;
+  const rowsOf = (exerciseId: string) =>
+    db.select({ userId: exercisePlateWeights.userId, kg: exercisePlateWeights.kg }).from(exercisePlateWeights).where(eq(exercisePlateWeights.exerciseId, exerciseId));
+
+  it("lets the owner set a shared or own exercise's plate weight, and undo it", async () => {
+    const owner = (authState.id = await seedUser(`p-${randomUUID()}`));
+    const shared = (await getExercises(owner)).find((e) => e.userId === null)!.id;
+    const own = await custom(owner);
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 10 })).toEqual({ success: true, previous: null });
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 12.5 })).toEqual({ success: true, previous: 10 });
+    expect(await savePlateWeightAction({ exerciseId: own, kg: 5 })).toEqual({ success: true, previous: null });
+    expect(await getPlateWeights(owner)).toEqual({ [shared]: 12.5, [own]: 5 });
+    // Undo of a first save: none before, so the row goes.
+    expect(await savePlateWeightAction({ exerciseId: own, kg: null })).toEqual({ success: true, previous: 5 });
+    expect(await getPlateWeights(owner)).toEqual({ [shared]: 12.5 });
+  });
+
+  it("refuses another user's custom exercise and leaves its plate weight unchanged", async () => {
+    const other = (authState.id = await seedUser(`q-${randomUUID()}`));
+    const theirs = await custom(other);
+    expect((await savePlateWeightAction({ exerciseId: theirs, kg: 20 })).success).toBe(true);
+    authState.id = await seedUser(`r-${randomUUID()}`);
+    expect(await savePlateWeightAction({ exerciseId: theirs, kg: 99 })).toEqual({ success: false, error: EXERCISE_GONE });
+    expect(await savePlateWeightAction({ exerciseId: theirs, kg: null })).toEqual({ success: false, error: EXERCISE_GONE });
+    expect(await rowsOf(theirs)).toEqual([{ userId: other, kg: "20.00" }]);
+  });
+
+  it("refuses a signed-out caller and writes nothing", async () => {
+    const owner = await seedUser(`s-${randomUUID()}`);
+    const shared = (await getExercises(owner)).find((e) => e.userId === null)!.id;
+    authState.id = "";
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 10 })).toEqual({ success: false, error: SIGNED_OUT });
+    expect(await getPlateWeights(owner)).toEqual({});
   });
 });

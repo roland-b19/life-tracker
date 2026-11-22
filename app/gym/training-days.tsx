@@ -1,6 +1,6 @@
 "use client";
 
-import { toISODate, weekday } from "@/lib/format-date";
+import { weekday } from "@/lib/format-date";
 import { Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { PencilIcon } from "../components/icons";
@@ -10,6 +10,7 @@ import { MuscleTag } from "./muscle-tag";
 
 /** The week's training days (pick one, or Start it) and, beside them, the picked day's routine with Edit and Start. */
 export function TrainingDays({
+  today,
   days,
   selectedId,
   onSelect,
@@ -18,6 +19,7 @@ export function TrainingDays({
   onStart,
   onEdit,
 }: {
+  today: string; // the server's day, so the server and the browser mark the same day
   days: SplitDay[];
   selectedId: string;
   onSelect: (id: string) => void;
@@ -27,7 +29,7 @@ export function TrainingDays({
   onEdit: (day: SplitDay) => void;
 }) {
   const [isFolded, toggleFolded] = useFolded("gym");
-  const todayDayOfWeek = weekday(toISODate()); // 0 = Sun, 1 = Mon, ..., in the app timezone
+  const todayDayOfWeek = weekday(today); // 0 = Sun, 1 = Mon, ...
   return (
     <Dashboard>
       <DashboardMain>

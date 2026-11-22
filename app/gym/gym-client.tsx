@@ -1,8 +1,8 @@
 "use client";
 
-import { toISODate, weekday } from "@/lib/format-date";
+import { weekday } from "@/lib/format-date";
 import type { MuscleGroupKey } from "@/lib/gym-muscles";
-import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
+import { progressSets, type HistoryEntry, type PlateWeights } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
 import { Banner, Page, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
@@ -20,6 +20,9 @@ import { formatClock, useWorkout } from "./use-workout";
 
 interface GymClientProps {
   userName: string;
+  /** The server's day, so the server and the browser render the same page (the browser's clock may differ). */
+  today: string;
+  plateWeights: PlateWeights;
   split: {
     id: string;
     name: string;
@@ -32,11 +35,10 @@ interface GymClientProps {
   openSession: ActiveSessionData | null;
 }
 
-export function GymClient({ userName, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
+export function GymClient({ userName, today, plateWeights, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
   const days = split?.days ?? [];
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
-    const today = weekday(toISODate());
-    const todayMatch = days.find((d) => d.dayOfWeek === today);
+    const todayMatch = days.find((d) => d.dayOfWeek === weekday(today));
     return todayMatch ? todayMatch.id : days[0]?.id ?? "";
   });
   // Follows the server: a deload week saved for this week turns it on without a reload; a tap still sets it by hand.
@@ -73,10 +75,11 @@ export function GymClient({ userName, split, deload, history, exercises, customE
               title="Workout in progress"
               sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged · ${formatClock(w.clock)}`}
             >
-              <SmallButton disabled={busy} onClick={w.resume}>Resume</SmallButton>
+              <SmallButton disabled={busy} onClick={(e) => w.resume(e.currentTarget)}>Resume</SmallButton>
             </Banner>
           )}
           <TrainingDays
+            today={today}
             days={days}
             selectedId={selectedDayId}
             onSelect={setSelectedDayId}
@@ -85,7 +88,7 @@ export function GymClient({ userName, split, deload, history, exercises, customE
             onStart={w.start}
             onEdit={(day) => setEditing({ day })}
           />
-          <ProgressPanel sets={progress} />
+          <ProgressPanel today={today} sets={progress} deloadWeeks={deload.weeks} plateWeights={plateWeights} />
           <MuscleExplorer dayGroups={dayGroups} planned={days.flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))} />
           <CustomExercises exercises={customExercises} fold={{ folded: isFolded("custom"), onToggle: () => toggleFolded("custom") }} />
           <HistoryCard history={history} />

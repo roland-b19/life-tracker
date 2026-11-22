@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 
-import { dayProgress, exerciseSeries, exerciseUnit, kgDelta, progressSets, setLoad, weekStart, weeksBetween, withProgress } from "@/lib/gym-progress";
+import { dayProgress, deloadWeeksIn, exerciseMeasure, exerciseSeries, exerciseUnit, kgDelta, progressSets, setKg, setLoad, weekStart, weeksBetween, withProgress, type PlateWeights } from "@/lib/gym-progress";
 import { addDays, toISODate } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import {
@@ -19,6 +19,7 @@ import {
   getOpenWorkoutSession,
   getUserSplitWithDays,
   getWorkoutHistory,
+  getPlateWeights,
   getWorkoutSessionDetails,
   logWorkoutSet,
   EXERCISE_GONE,
@@ -41,15 +42,16 @@ import {
   restoreDeloadWeeksAction,
   restoreSessionAction,
   saveDeloadWeeksAction,
+  savePlateWeightAction,
   saveSessionNotesAction,
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { exerciseNameKey, NOT_NEGATIVE, TWO_DECIMALS, type LogSetInput } from "@/lib/validations/gym";
+import { exerciseNameKey, NOT_NEGATIVE, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
-import { canLog, emptyInput, inputProblem, outlierBest, ZERO_LOAD, type SetInput } from "@/../app/gym/exercise-logger";
+import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
 import { setText } from "@/../app/gym/types";
 
 const TODAY = toISODate();
@@ -510,6 +512,27 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await logSetAction(setOf(session.id, ex, { extraKg: -1 }))).toEqual({ success: false, error: NOT_NEGATIVE });
     expect(await setCount(session.id)).toBe(0);
     expect(succeeded(await logSetAction(setOf(session.id, ex, { loadValue: 42.25 }))).set.loadValue).toBe("42.25");
+  });
+
+  it("refuses a weighted set of 0 kg or 0 plates with the set form's words, and logs a bodyweight set with 0 extra (Q5)", async () => {
+    const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+    const session = await begin(userA);
+    expect(await logSetAction(setOf(session.id, ex, { loadValue: 0 }))).toEqual({ success: false, error: ZERO_LOAD });
+    expect(await logSetAction(setOf(session.id, ex, { loadType: "plates", loadValue: 0 }))).toEqual({ success: false, error: ZERO_LOAD });
+    expect(await setCount(session.id)).toBe(0);
+    expect(succeeded(await logSetAction(setOf(session.id, ex, { loadType: "bodyweight", loadValue: 0, extraKg: 0 }))).set.loadValue).toBe("0.00");
+    expect(await setCount(session.id)).toBe(1);
+  });
+
+  it("checks a plate weight like the form: above 0, at most 100 kg, two decimals (GYMC-05)", async () => {
+    const shared = (await getExercises(userA)).find((e) => e.userId === null)!.id;
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 0 })).toEqual({ success: false, error: "Must be more than 0" });
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.555 })).toEqual({ success: false, error: TWO_DECIMALS });
+    expect((await savePlateWeightAction({ exerciseId: shared, kg: 100.5 })).success).toBe(false);
+    expect(await getPlateWeights(userA)).toEqual({});
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.25 })).toEqual({ success: true, previous: null });
+    expect(await getPlateWeights(userA)).toEqual({ [shared]: 2.25 });
+    expect(await getPlateWeights(userB)).toEqual({}); // per user
   });
 
   it("takes a set's time only within its workout, and saves a bodyweight set with no extra kg", async () => {
@@ -1314,44 +1337,57 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(weekStart("2026-11-07")).toBe("2026-11-01");
     });
 
-    it("keeps the best of each day and skips deload", () => {
-      const sets = [set("2026-11-02", 40, 8), set("2026-11-02", 50, 5), set("2026-11-09", 100, 1, { isDeload: true })];
-      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-02", weight: 50 }]);
+    const none = { plates: {}, deload: new Set<string>() };
+    /** The rules with the deload weeks the sets and `chosen` give (`deloadWeeksIn`), and `plates`. */
+    const rulesOf = (sets: HistorySet[], chosen: string[] = [], plates: PlateWeights = {}) => ({ plates, deload: deloadWeeksIn(chosen, sets) });
+
+    it("keeps the best of each day", () => {
+      const sets = [set("2026-11-02", 40, 8), set("2026-11-02", 50, 5), set("2026-11-04", 45, 5)];
+      expect(exerciseSeries(sets, "e1", "kg", none)).toEqual([{ date: "2026-11-02", value: 50 }, { date: "2026-11-04", value: 45 }]);
     });
 
-    it("skips only the deload session's sets, not the rest of its week", () => {
+    it("leaves a deload week out of the chart whole: the deload workout and every other workout that week (GYMC-07, GYMA-18)", () => {
       const sets = [
         set("2026-11-02", 50, 8),
-        set("2026-11-09", 30, 8, { isDeload: true }), // the deload session
-        set("2026-11-12", 45, 8), // a normal session in the same week still counts
+        set("2026-11-09", 30, 8, { isDeload: true }), // the deload workout
+        set("2026-11-12", 45, 8), // another workout in the same week
         set("2026-11-16", 55, 8),
+        set("2026-11-24", 20, 8), // a week the user chose as deload, with no workout started as one
       ];
-      expect(exerciseSeries(sets, "e1").map((p) => p.date)).toEqual(["2026-11-02", "2026-11-12", "2026-11-16"]);
+      const rules = rulesOf(sets, ["2026-11-22"]);
+      expect([...rules.deload].sort()).toEqual(["2026-11-08", "2026-11-22"]);
+      expect(exerciseSeries(sets, "e1", "kg", rules).map((p) => p.date)).toEqual(["2026-11-02", "2026-11-16"]);
+      // Done only in deload weeks: nothing to chart.
+      expect(exerciseMeasure([set("2026-11-09", 30, 8, { isDeload: true })], "e1", rulesOf([set("2026-11-09", 30, 8, { isDeload: true })]), "reps")).toBeNull();
     });
 
-    it("counts a deload week in the day figures like any other week", () => {
-      const sets = [set("2026-11-02", 100, 10), set("2026-11-09", 60, 10, { isDeload: true }), set("2026-11-16", 110, 10)];
-      const weeks = dayProgress(sets, "d");
-      expect(weeks.map((w) => w.week)).toEqual(["2026-11-01", "2026-11-08", "2026-11-15"]);
-      expect(weeks.map((w) => w.change)).toEqual([null, -40, 50]);
+    it("compares the week after a deload week with the week before it, and never compares the deload week (GYMC-07, GYMA-18)", () => {
+      const sets = [set("2026-11-02", 100, 10), set("2026-11-09", 60, 10, { isDeload: true }), set("2026-11-12", 70, 10), set("2026-11-16", 110, 10)];
+      const weeks = dayProgress(sets, "d", rulesOf(sets));
+      expect(weeks.map((w) => w.week)).toEqual(["2026-11-01", "2026-11-15"]);
+      expect(weeks.map((w) => w.change)).toEqual([null, 10]); // 110 against 100, not against the deload week's 70
     });
 
-    it("gives each past workout its week's kg change against the week before, none for a first week or a session with no day", () => {
+    it("gives each past workout its week's kg change against the week before; none for a first week, a deload week or a session with no day", () => {
       const sets = [
         set("2026-11-02", 100, 10),
         set("2026-11-09", 60, 10, { isDeload: true }),
+        set("2026-11-11", 65, 10),
         set("2026-11-16", 110, 10),
       ];
       const session = (date: string, over: Partial<HistorySession> = {}): HistorySession => ({
         id: date, date, dayId: "d", dayName: "Push", durationMinutes: 50, isDeload: false, exercises: [], ...over,
       });
-      const [first, deload, third, noDay] = withProgress(
-        [session("2026-11-02"), session("2026-11-09", { isDeload: true }), session("2026-11-16"), session("2026-11-17", { dayId: null })],
+      const [first, deload, sameWeek, after, noDay] = withProgress(
+        [session("2026-11-02"), session("2026-11-09", { isDeload: true }), session("2026-11-11"), session("2026-11-16"), session("2026-11-17", { dayId: null })],
         sets,
+        rulesOf(sets),
       );
-      expect(first.progress).toBeNull(); // nothing before it
-      expect(deload.progress).toBeCloseTo(-40); // a deload session is compared like any other
-      expect(third.progress).toBeCloseTo(50);
+      expect(first).toMatchObject({ progress: null, deloadWeek: false }); // nothing before it
+      expect(deload).toMatchObject({ progress: null, deloadWeek: true });
+      expect(sameWeek).toMatchObject({ progress: null, deloadWeek: true }); // the whole week is a deload week
+      expect(after.progress).toBeCloseTo(10); // against the week before the deload
+      expect(after.deloadWeek).toBe(false);
       expect(noDay.progress).toBeNull();
       expect(kgDelta(2.5)).toBe("+2.5 kg");
       expect(kgDelta(-1)).toBe("−1 kg");
@@ -1359,7 +1395,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(kgDelta(null)).toBe("—");
     });
 
-    it("never mixes plates and kg: extra kg is not added to plates, the chart follows the latest unit, day progress skips plates", () => {
+    it("never mixes plates and kg: extra kg is not added to plates, the chart follows the latest unit, a plate set counts in kg only with a plate weight", () => {
       expect(setLoad("kg", "40", "2.5")).toBe(42.5);
       expect(setLoad("bodyweight", "0", "10")).toBe(10);
       expect(setLoad("plates", "6", "2.5")).toBe(6);
@@ -1368,11 +1404,52 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         set("2026-11-09", 6, 8, { loadType: "plates" }),
         set("2026-11-16", 7, 8, { loadType: "plates" }),
       ];
-      expect(exerciseUnit(sets, "e1")).toBe("plates");
-      expect(exerciseSeries(sets, "e1")).toEqual([{ date: "2026-11-09", weight: 6 }, { date: "2026-11-16", weight: 7 }]);
-      expect(exerciseUnit([], "e1")).toBe("kg");
+      expect(exerciseUnit(sets, "e1", none.deload)).toBe("plates");
+      expect(exerciseUnit([], "e1", none.deload)).toBeNull();
+      expect(exerciseMeasure(sets, "e1", none, "reps")).toBe("plates");
+      expect(exerciseSeries(sets, "e1", "plates", none)).toEqual([{ date: "2026-11-09", value: 6 }, { date: "2026-11-16", value: 7 }]);
       // The week-over-week change reads kg only, so 60 kg to 6 plates is no "−54 kg".
-      expect(dayProgress(sets, "d").map((w) => w.change)).toEqual([null]);
+      expect(dayProgress(sets, "d", none).map((w) => w.change)).toEqual([null]);
+    });
+
+    it("charts and compares a plate exercise in kg once 1 plate has a weight (GYMC-05)", () => {
+      const plates = { e1: 10 };
+      const sets = [
+        set("2026-11-02", 60, 8), // kg
+        set("2026-11-09", 6, 8, { loadType: "plates" }),
+        set("2026-11-16", 6.5, 8, { loadType: "plates" }),
+      ];
+      expect(setKg(sets[1], plates)).toBe(60);
+      expect(setKg(set("2026-11-09", 3, 8, { loadType: "plates" }), { e1: 2.27 })).toBe(6.81); // rounded to 2 decimals
+      expect(setKg(sets[1], {})).toBeNull();
+      expect(exerciseMeasure(sets, "e1", { plates, deload: new Set() }, "reps")).toBe("kg");
+      expect(exerciseSeries(sets, "e1", "kg", { plates, deload: new Set() })).toEqual([
+        { date: "2026-11-02", value: 60 },
+        { date: "2026-11-09", value: 60 },
+        { date: "2026-11-16", value: 65 },
+      ]);
+      expect(dayProgress(sets, "d", { plates, deload: new Set() }).map((w) => w.change)).toEqual([null, 0, 5]);
+      // Another exercise's plate weight is not this one's.
+      expect(exerciseSeries(sets, "e1", "kg", { plates: { e2: 10 }, deload: new Set() })).toEqual([{ date: "2026-11-02", value: 60 }]);
+    });
+
+    it("charts a bodyweight exercise by its reps or its added kg, and compares it by the added kg only (GYMC-06)", () => {
+      const bw = (date: string, added: number, reps: number) => set(date, added, reps, { loadType: "bodyweight" });
+      const sets = [bw("2026-11-02", 0, 12), bw("2026-11-02", 0, 10), bw("2026-11-09", 0, 14), bw("2026-11-16", 5, 8)];
+      expect(exerciseMeasure(sets, "e1", none, "reps")).toBe("reps");
+      expect(exerciseMeasure(sets, "e1", none, "added")).toBe("added");
+      expect(exerciseSeries(sets, "e1", "reps", none)).toEqual([
+        { date: "2026-11-02", value: 12 },
+        { date: "2026-11-09", value: 14 },
+        { date: "2026-11-16", value: 8 },
+      ]);
+      expect(exerciseSeries(sets, "e1", "added", none)).toEqual([{ date: "2026-11-16", value: 5 }]); // a set with none adds no point
+      expect(exerciseSeries(sets.slice(0, 3), "e1", "added", none)).toEqual([]); // "No added weight yet"
+      // Never on the kg chart, and in History only by the kg it adds: 0 kg weeks have nothing to compare.
+      expect(exerciseSeries(sets, "e1", "kg", none)).toEqual([]);
+      expect(setKg(bw("2026-11-02", 0, 12), {})).toBeNull();
+      const added = [bw("2026-11-02", 0, 12), bw("2026-11-09", 5, 8), bw("2026-11-16", 7.5, 8)];
+      expect(dayProgress(added, "d", none).map((w) => w.change)).toEqual([null, 2.5]);
     });
 
     it("counts whole calendar weeks between dates, Sunday to Saturday", () => {
@@ -1390,10 +1467,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         set("2026-11-09", 50, 12, { exerciseId: "e2" }), // no change
         set("2026-11-09", 30, 8, { exerciseId: "e3" }), // no previous week: not counted
       ];
-      const [first, second] = dayProgress(sets, "d");
+      const [first, second] = dayProgress(sets, "d", none);
       expect(first).toEqual({ week: "2026-11-01", change: null });
       expect(second.change).toBeCloseTo(5);
-      expect(dayProgress(sets, "other")).toEqual([]);
+      expect(dayProgress(sets, "other", none)).toEqual([]);
     });
   });
 

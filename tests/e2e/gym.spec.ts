@@ -967,3 +967,184 @@ test("Start shows the day of the server's answer, not the day that was tapped", 
   await expect(page.getByRole("button", { name: "Show Seated/lying hamstring curl", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true })).toBeHidden();
 });
+
+// Step 13 (D-038): past workouts are written straight to the database, on dates counted from the app's day (the app's
+// time zone, like the server), so the progress figures have weeks to compare.
+const appToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest" }).format(new Date());
+const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const sundayOf = (iso: string) => plusDays(iso, -new Date(`${iso}T00:00:00Z`).getUTCDay());
+
+type PastSet = { date: string; exercise: string; loadType?: "kg" | "plates" | "bodyweight"; load: number; reps?: number; deload?: boolean };
+
+// One finished workout of DAY per entry, with one set of a shared exercise; the page is opened first (it makes the split)
+// and opened again after.
+async function pastWorkouts(page: Page, workouts: PastSet[]) {
+  await openGym(page);
+  const userId = await userIdOf(page);
+  await asAdmin(async (admin) => {
+    const day = (await admin.query("SELECT id FROM workout_split_days WHERE user_id = $1 AND name = $2", [userId, DAY])).rows[0].id;
+    for (const w of workouts) {
+      const exercise = (await admin.query("SELECT id FROM exercises WHERE user_id IS NULL AND name = $1", [w.exercise])).rows[0].id;
+      const session = (
+        await admin.query("INSERT INTO workout_sessions (user_id, split_day_id, date, duration_minutes, is_deload) VALUES ($1, $2, $3, 50, $4) RETURNING id", [
+          userId,
+          day,
+          w.date,
+          w.deload ?? false,
+        ])
+      ).rows[0].id;
+      await admin.query(
+        "INSERT INTO workout_sets (session_id, user_id, exercise_id, set_order, reps, load_type, load_value) VALUES ($1, $2, $3, 1, $4, $5, $6)",
+        [session, userId, exercise, w.reps ?? 8, w.loadType ?? "kg", w.load],
+      );
+    }
+  });
+  await openGym(page);
+  return userId;
+}
+
+const progress = (page: Page) => page.getByRole("region", { name: /^Exercise progress/ });
+const ROW = "Chest-supported row"; // a machine exercise, logged here in plates
+const PULL_UPS = "Weighted pull-ups"; // a bodyweight exercise: its load is the kg it adds
+
+// GYMC-04: with nothing logged the card keeps its title and its fold. GYMC-03: an exercise on two days with different
+// targets shows each day's own. GYMC-01: a browser whose clock is a day ahead of the server renders the same page.
+test("the progress card, the muscle map and History render the server's day, with no hydration warning", async ({ signedInPage: page }) => {
+  const warnings: string[] = [];
+  page.on("console", (m) => {
+    if (/hydrat|script tag/i.test(m.text())) warnings.push(m.text());
+  });
+  await openGym(page);
+  await expect(progress(page).getByRole("button", { name: "Show exercise progress" })).toBeVisible();
+  await expect(progress(page).getByText("Log a workout to see your progress.")).toBeVisible();
+
+  await pickDay(page, DAY);
+  const map = page.getByRole("region", { name: /^Muscle map/ });
+  await expect(map.getByRole("button", { name: "Biceps", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(map.getByText("Bayesian curl (high)", { exact: true })).toBeVisible();
+  await expect(map.getByText(`${DAY} · 2 × 5 – 8`, { exact: true })).toBeVisible();
+  await expect(map.getByText("Upper (back) · 2 × 8 – 10", { exact: true })).toBeVisible();
+
+  // 89 days ago is still in the 90-day chart for the server; for a browser a day ahead it would not be.
+  const today = appToday();
+  await pastWorkouts(page, [
+    { date: plusDays(today, -89), exercise: EXERCISE, load: 50 },
+    { date: plusDays(today, -10), exercise: EXERCISE, load: 60 },
+  ]);
+  await page.clock.install({ time: new Date(Date.now() + 86_400_000) });
+  await openGym(page);
+  await expect(progress(page).getByRole("img", { name: "Heaviest load (kg) of each workout over the last 90 days" })).toBeVisible();
+  await expect(progress(page).getByText("50", { exact: true })).toBeVisible();
+  await expect(history(page).getByText("2 workouts", { exact: true })).toBeVisible();
+  await settled(page);
+  expect(warnings).toEqual([]);
+});
+
+// GYMC-05: plate sets chart in plates until 1 plate has a weight, then in kg; the weight is saved per exercise, with Undo.
+test("a signed-in user sets the weight of 1 plate, and the chart turns to kg, with Undo, also after a reload", async ({ signedInPage: page }) => {
+  const today = appToday();
+  const userId = await pastWorkouts(page, [
+    { date: plusDays(today, -14), exercise: ROW, loadType: "plates", load: 6 },
+    { date: plusDays(today, -7), exercise: ROW, loadType: "plates", load: 7 },
+  ]);
+  const card = progress(page);
+  await expect(card.getByText("1 plate: no weight yet")).toBeVisible();
+  await expect(card.getByRole("img", { name: /^Heaviest load \(plates\)/ })).toBeVisible();
+  await expect(card.getByText("7", { exact: true })).toBeVisible();
+
+  const saved = `1 plate of ${ROW} = 10 kg`;
+  const save = async () => {
+    await card.getByRole("button", { name: `Edit 1 plate of ${ROW} in kg` }).click();
+    const dialog = page.getByRole("dialog", { name: "Plate weight" });
+    await dialog.getByLabel(`1 plate of ${ROW} (kg)`).fill("10");
+    await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click());
+    await expect(dialog).toBeHidden();
+    await expect(toast(page, saved)).toBeVisible();
+  };
+  const weights = async () =>
+    (await asAdmin((admin) => admin.query("SELECT kg FROM exercise_plate_weights WHERE user_id = $1", [userId]))).rows.map((r) => r.kg);
+
+  await save();
+  await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
+  await expect(card.getByRole("img", { name: /^Heaviest load \(kg\)/ })).toBeVisible();
+  await expect(card.getByText("70", { exact: true })).toBeVisible();
+  expect(await weights()).toEqual(["10.00"]);
+
+  // Undo takes the weight away again (there was none before).
+  await andSettle(page, () => undoIn(page, saved).click());
+  await expect(card.getByText("1 plate: no weight yet")).toBeVisible();
+  await expect(card.getByText("7", { exact: true })).toBeVisible();
+  expect(await weights()).toEqual([]);
+
+  await save();
+  await openGym(page);
+  await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
+  await expect(card.getByText("70", { exact: true })).toBeVisible();
+});
+
+// GYMC-06: a bodyweight exercise charts its reps or the kg it adds. GYMC-11: the exercise, the period and that choice
+// are kept on the device.
+test("a bodyweight exercise charts reps or added weight, and the progress controls are kept after a reload", async ({ signedInPage: page }) => {
+  const today = appToday();
+  await pastWorkouts(page, [
+    { date: plusDays(today, -21), exercise: PULL_UPS, loadType: "bodyweight", load: 0, reps: 12 },
+    { date: plusDays(today, -14), exercise: PULL_UPS, loadType: "bodyweight", load: 5, reps: 8 },
+    { date: plusDays(today, -7), exercise: PULL_UPS, loadType: "bodyweight", load: 7.5, reps: 6 },
+    { date: plusDays(today, -7), exercise: ROW, load: 40 },
+  ]);
+  const card = progress(page);
+  await expect(card.getByRole("tablist", { name: "Bodyweight chart" })).toBeHidden();
+  await card.getByRole("combobox", { name: "Exercise" }).selectOption({ label: PULL_UPS });
+  const charts = card.getByRole("tablist", { name: "Bodyweight chart" });
+  await expect(charts.getByRole("tab", { name: "Reps" })).toHaveAttribute("aria-selected", "true");
+  await expect(card.getByRole("img", { name: "Most reps of each workout over the last 90 days" })).toBeVisible();
+  await expect(card.getByText("12", { exact: true })).toBeVisible();
+
+  await charts.getByRole("tab", { name: "Added weight" }).click();
+  await card.getByRole("tablist", { name: "Chart period" }).getByRole("tab", { name: "30D" }).click();
+  const added = card.getByRole("img", { name: "Most added weight (kg) of each workout over the last 30 days" });
+  await expect(added).toBeVisible();
+  await expect(card.getByText("7.5", { exact: true })).toBeVisible();
+  await expect(card.getByText("12", { exact: true })).toBeHidden();
+
+  await openGym(page);
+  await expect(card.getByRole("combobox", { name: "Exercise" }).locator("option:checked")).toHaveText(PULL_UPS);
+  await expect(charts.getByRole("tab", { name: "Added weight" })).toHaveAttribute("aria-selected", "true");
+  await expect(card.getByRole("tablist", { name: "Chart period" }).getByRole("tab", { name: "30D" })).toHaveAttribute("aria-selected", "true");
+  await expect(added).toBeVisible();
+});
+
+// GYMA-18, GYMC-07: a deload week is left out whole, also a workout in it not started as a deload; the week after
+// compares with the week before the deload.
+test("History leaves deload weeks out of the comparison and compares past them", async ({ signedInPage: page }) => {
+  const sunday = sundayOf(appToday());
+  await pastWorkouts(page, [
+    { date: plusDays(sunday, -21), exercise: EXERCISE, load: 100 },
+    { date: plusDays(sunday, -14), exercise: EXERCISE, load: 60, deload: true },
+    { date: plusDays(sunday, -12), exercise: EXERCISE, load: 70 },
+    { date: plusDays(sunday, -7), exercise: EXERCISE, load: 110 },
+  ]);
+  await expect(history(page).getByText("4 workouts", { exact: true })).toBeVisible();
+  await expect(history(page).getByText("Weight +10 kg vs the week before")).toHaveCount(1);
+  await expect(history(page).getByText("Deload week, left out of progress")).toHaveCount(2);
+  await expect(history(page).getByText("Nothing to compare with yet")).toHaveCount(1);
+  await expect(progress(page).getByRole("img", { name: /^Heaviest load \(kg\)/ })).toBeVisible();
+  await expect(progress(page).getByText("110", { exact: true })).toBeVisible();
+  await expect(progress(page).getByText("100", { exact: true })).toBeVisible();
+  await expect(progress(page).getByText("60", { exact: true })).toBeHidden();
+});
+
+// Item 2 (D-043): the banner's Resume locks its own spot, so a double tap resumes once and the second tap lands nowhere.
+test("a double tap on the banner's Resume resumes once", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click());
+  // A new page, so Exit's own tap burst (its spot may hold the banner's Resume now) is over.
+  await openGym(page);
+  const resume = banner(page).getByRole("button", { name: "Resume" });
+  await expect(resume).toBeVisible();
+  expect(await guardedBurst(page, resume)).toEqual({ writes: 1, clicks: 1 });
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+});

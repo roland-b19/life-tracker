@@ -13,43 +13,100 @@ export function weeksBetween(from: string, to: string): number {
 export const setLoad = (loadType: string, value: number | string, extra: number | string) =>
   loadType === "plates" ? Number(value) : Number(value) + Number(extra);
 
-/** The unit an exercise is shown in: the one of its latest set, so a change of unit never plots plates against kg. */
-export function exerciseUnit(sets: HistorySet[], exerciseId: string) {
-  return [...sets].reverse().find((s) => s.exerciseId === exerciseId && !s.isDeload)?.loadType ?? "kg"; // sets arrive oldest first
+/** "1 plate = X kg" of each exercise that has one (D-038): exercise id → kg. */
+export type PlateWeights = Record<string, number>;
+
+/** What the progress figures need besides the sets (D-038): the plate weights, and the deload weeks they leave out. */
+export interface ProgressRules {
+  plates: PlateWeights;
+  /** Deload weeks, as the Sunday that starts each (`deloadWeeksIn`). */
+  deload: Set<string>;
 }
 
-/** An exercise's heaviest load of each training day, in its current unit. Sets of deload sessions are left out (only that session, not its week): only this chart ignores them. */
-export function exerciseSeries(sets: HistorySet[], exerciseId: string) {
-  const unit = exerciseUnit(sets, exerciseId);
-  const byDate = new Map<string, { date: string; weight: number }>();
+/**
+ * The deload weeks the progress figures leave out whole (D-038), as the Sunday that starts each: the weeks the user
+ * chose, and the week of any workout started as a deload.
+ */
+export function deloadWeeksIn(chosen: string[], sets: HistorySet[]): Set<string> {
+  return new Set([...chosen, ...sets.filter((s) => s.isDeload).map((s) => weekStart(s.date))]);
+}
+
+const inDeloadWeek = (date: string, deload: Set<string>) => deload.has(weekStart(date));
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * A set's kg for the progress figures, or null when it has none (D-038): a plate set counts once its exercise has a
+ * plate weight, a bodyweight set by the kg it adds, and only when it adds some.
+ */
+export function setKg(s: Pick<HistorySet, "exerciseId" | "loadType" | "load">, plates: PlateWeights): number | null {
+  if (s.loadType === "plates") return plates[s.exerciseId] ? round2(s.load * plates[s.exerciseId]) : null;
+  if (s.loadType === "bodyweight") return s.load > 0 ? s.load : null;
+  return s.load;
+}
+
+/**
+ * The unit an exercise is charted in: the one of its latest set outside deload weeks, so a change of unit never plots
+ * plates against kg; null when it was only done in deload weeks.
+ */
+export function exerciseUnit(sets: HistorySet[], exerciseId: string, deload: Set<string>) {
+  // sets arrive oldest first
+  return [...sets].reverse().find((s) => s.exerciseId === exerciseId && !inDeloadWeek(s.date, deload))?.loadType ?? null;
+}
+
+/** What an exercise's chart shows: kg, plates (no plate weight yet), or a bodyweight exercise's reps or added kg. */
+export type Measure = "kg" | "plates" | "reps" | "added";
+
+/**
+ * What an exercise's chart measures (D-038): a bodyweight exercise its reps or its added kg (`bodyweight`, the
+ * chart's switch), a plate exercise with no plate weight its plates, any other its kg (plate sets in kg). Null when it
+ * was only done in deload weeks.
+ */
+export function exerciseMeasure(sets: HistorySet[], exerciseId: string, { plates, deload }: ProgressRules, bodyweight: "reps" | "added"): Measure | null {
+  const unit = exerciseUnit(sets, exerciseId, deload);
+  if (unit === null) return null;
+  if (unit === "bodyweight") return bodyweight;
+  return unit === "plates" && !plates[exerciseId] ? "plates" : "kg";
+}
+
+function measured(s: HistorySet, measure: Measure, plates: PlateWeights): number | null {
+  if (measure === "reps") return s.loadType === "bodyweight" ? s.reps : null;
+  if (measure === "added") return s.loadType === "bodyweight" && s.load > 0 ? s.load : null;
+  if (measure === "plates") return s.loadType === "plates" ? s.load : null;
+  return s.loadType === "bodyweight" ? null : setKg(s, plates);
+}
+
+/** An exercise's best of each training day in `measure` (`exerciseMeasure`), oldest first. Deload weeks are left out whole. */
+export function exerciseSeries(sets: HistorySet[], exerciseId: string, measure: Measure, { plates, deload }: ProgressRules) {
+  const byDate = new Map<string, number>();
   for (const s of sets) {
-    if (s.exerciseId !== exerciseId || s.isDeload || s.loadType !== unit) continue;
-    const best = byDate.get(s.date) ?? { date: s.date, weight: 0 };
-    best.weight = Math.max(best.weight, s.load);
-    byDate.set(s.date, best);
+    if (s.exerciseId !== exerciseId || inDeloadWeek(s.date, deload)) continue;
+    const value = measured(s, measure, plates);
+    if (value !== null) byDate.set(s.date, Math.max(byDate.get(s.date) ?? 0, value));
   }
-  return [...byDate.values()]; // sets arrive oldest first
+  return [...byDate].map(([date, value]) => ({ date, value })); // sets arrive oldest first
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 /**
- * How a workout day progressed week over week: for each week, the average over the day's exercises of the change in
- * their best weight (kg) from the week before. An exercise only counts in a week when it was also done the week
- * before. Deload weeks count like any other week. Plates are not kg, so plate sets are left out.
+ * How a workout day progressed week over week (D-038): for each week, the average over the day's exercises of the
+ * change in their best kg (`setKg`) from the week before. An exercise only counts in a week when it was also done the
+ * week before. Deload weeks are left out whole: the week after one compares with the week before it.
  */
-export function dayProgress(sets: HistorySet[], dayId: string) {
+export function dayProgress(sets: HistorySet[], dayId: string, { plates, deload }: ProgressRules) {
   const perExercise = new Map<string, Map<string, number>>();
   for (const s of sets) {
-    if (s.dayId !== dayId || s.loadType === "plates") continue;
+    const kg = setKg(s, plates);
+    if (s.dayId !== dayId || kg === null || inDeloadWeek(s.date, deload)) continue;
     const weeks = perExercise.get(s.exerciseId) ?? new Map();
     const w = weekStart(s.date);
-    weeks.set(w, Math.max(weeks.get(w) ?? 0, s.load));
+    weeks.set(w, Math.max(weeks.get(w) ?? 0, kg));
     perExercise.set(s.exerciseId, weeks);
   }
   const allWeeks = [...new Set([...perExercise.values()].flatMap((m) => [...m.keys()]))].sort();
   return allWeeks.map((week) => {
-    const before = addDays(week, -7);
+    let before = addDays(week, -7);
+    while (deload.has(before)) before = addDays(before, -7);
     const changes: number[] = [];
     for (const weeks of perExercise.values()) {
       const now = weeks.get(week);
@@ -100,16 +157,18 @@ export const kgDelta = (n: number | null) => {
 
 /**
  * Each past workout with how its day did that week against the week before (the average kg change of its
- * exercises), or null when there is nothing to compare: no day, or no earlier week. Deload weeks count like any other.
+ * exercises, `dayProgress`), or null when there is nothing to compare: no day, or no earlier week. A workout in a
+ * deload week is never compared (`deloadWeek`).
  */
-export type HistoryEntry = HistorySession & { progress: number | null };
+export type HistoryEntry = HistorySession & { progress: number | null; deloadWeek: boolean };
 
-export function withProgress(sessions: HistorySession[], sets: HistorySet[]): HistoryEntry[] {
+export function withProgress(sessions: HistorySession[], sets: HistorySet[], rules: ProgressRules): HistoryEntry[] {
   const byDay = new Map<string, ReturnType<typeof dayProgress>>();
   return sessions.map((s) => {
-    if (!s.dayId) return { ...s, progress: null };
+    const deloadWeek = inDeloadWeek(s.date, rules.deload);
+    if (!s.dayId || deloadWeek) return { ...s, progress: null, deloadWeek };
     let weeks = byDay.get(s.dayId);
-    if (!weeks) byDay.set(s.dayId, (weeks = dayProgress(sets, s.dayId)));
-    return { ...s, progress: weeks.find((x) => x.week === weekStart(s.date))?.change ?? null };
+    if (!weeks) byDay.set(s.dayId, (weeks = dayProgress(sets, s.dayId, rules)));
+    return { ...s, progress: weeks.find((x) => x.week === weekStart(s.date))?.change ?? null, deloadWeek };
   });
 }

@@ -3,7 +3,7 @@
 import { formatDMY } from "@/lib/format-date";
 import { setLoad, type HistoryEntry } from "@/lib/gym-progress";
 import { formatAmount, formatNumber } from "@/lib/number-format";
-import { GYM_LIMITS, NOT_NEGATIVE, TWO_DECIMALS, twoDecimals } from "@/lib/validations/gym";
+import { GYM_LIMITS, NOT_NEGATIVE, TWO_DECIMALS, twoDecimals, ZERO_LOAD } from "@/lib/validations/gym";
 import { useRef, useState } from "react";
 import { Badge, ErrorText, Field, FoldButton, SelectField, Toggle } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
@@ -37,9 +37,6 @@ export function emptyInput(e: ExerciseItem): SetInput {
     notes: "",
   };
 }
-
-/** Why a kg or plates set with a value of 0 cannot be logged (a bodyweight set can). */
-export const ZERO_LOAD = "Enter a value above 0, or pick BW.";
 
 /**
  * What stops a set from being logged, in the form's words ("" when nothing does); the limits are the server's. Text

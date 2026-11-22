@@ -284,7 +284,7 @@ export function useWorkout({
             putBackSet(logged);
             return gone;
           },
-          (gone) => (gone ? gone.error : "Failed to undo"),
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
         ),
       });
     }, "Failed to add set", spot);
@@ -393,7 +393,7 @@ export function useWorkout({
     }, "Failed to leave the workout", spot);
   }
 
-  function resume() {
+  function resume(spot?: Element | null) {
     const session = paused;
     if (!session) return;
     write(async () => {
@@ -403,7 +403,7 @@ export function useWorkout({
       setActiveSession({ ...session, timer: res.timer });
       setPaused(null);
       showNotes(session.notes);
-    }, "Failed to resume the workout");
+    }, "Failed to resume the workout", spot);
   }
 
   // Undo hands a workout back as it was, unless another one was started in the meantime. A refusal shows the server's

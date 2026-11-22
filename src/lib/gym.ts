@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql, type SQLWr
 import { db } from "@/server/db";
 import {
   exercises,
+  exercisePlateWeights,
   deloadWeeks,
   workoutSplits,
   workoutSplitDays,
@@ -20,6 +21,7 @@ import {
   RestoreDeloadWeeksInput,
   RestoreSessionInput,
   SaveSessionNotesInput,
+  SavePlateWeightInput,
   SaveSplitDayInput,
   SET_TIME_SKEW_MS,
 } from "./validations/gym";
@@ -42,6 +44,8 @@ interface DeloadStatus {
   lastDeloadWeek: string | null;
   /** The first deload week after this one, if the user chose one. */
   nextDeloadWeek: string | null;
+  /** Every deload week the user chose, oldest first: the progress figures leave them out (D-038). */
+  weeks: string[];
 }
 
 /**
@@ -714,6 +718,7 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
     inDeloadWeek,
     lastDeloadWeek: last,
     nextDeloadWeek: next,
+    weeks: all,
   };
 }
 
@@ -749,6 +754,41 @@ export async function restoreDeloadWeeks(userId: string, { add, remove }: Restor
 async function swapDeloadWeeks(tx: Pick<typeof db, "delete" | "insert">, userId: string, add: string[], remove: string[]) {
   if (remove.length) await tx.delete(deloadWeeks).where(and(eq(deloadWeeks.userId, userId), inArray(deloadWeeks.weekStart, remove)));
   if (add.length) await tx.insert(deloadWeeks).values(add.map((weekStart) => ({ userId, weekStart }))).onConflictDoNothing();
+}
+
+/** "1 plate = X kg" of each exercise the user set one for (D-038), as exercise id → kg: one query for the whole page. */
+export async function getPlateWeights(userId: string): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ exerciseId: exercisePlateWeights.exerciseId, kg: exercisePlateWeights.kg })
+    .from(exercisePlateWeights)
+    .where(eq(exercisePlateWeights.userId, userId));
+  return Object.fromEntries(rows.map((r) => [r.exerciseId, Number(r.kg)]));
+}
+
+/**
+ * Sets "1 plate = X kg" for one exercise (null clears it, the Undo of a first save). Only an exercise the user can see
+ * (a shared one or their own) takes one: anything else answers null and nothing changes. Answers the kg it had before,
+ * which Undo writes back.
+ */
+export async function savePlateWeight(userId: string, { exerciseId, kg }: SavePlateWeightInput) {
+  return db.transaction(async (tx) => {
+    // The lock a custom exercise's delete takes, so the exercise cannot go between the check and the write.
+    await lockUser(tx, "exercise", userId);
+    const [exercise] = await tx
+      .select({ id: exercises.id })
+      .from(exercises)
+      .where(and(eq(exercises.id, exerciseId), or(isNull(exercises.userId), eq(exercises.userId, userId))));
+    if (!exercise) return null;
+    const mine = and(eq(exercisePlateWeights.userId, userId), eq(exercisePlateWeights.exerciseId, exerciseId));
+    const [had] = await tx.select({ kg: exercisePlateWeights.kg }).from(exercisePlateWeights).where(mine);
+    if (kg === null) await tx.delete(exercisePlateWeights).where(mine);
+    else
+      await tx
+        .insert(exercisePlateWeights)
+        .values({ userId, exerciseId, kg: String(kg) })
+        .onConflictDoUpdate({ target: [exercisePlateWeights.userId, exercisePlateWeights.exerciseId], set: { kg: String(kg) } });
+    return { previous: had ? Number(had.kg) : null };
+  });
 }
 
 export interface HistorySession {

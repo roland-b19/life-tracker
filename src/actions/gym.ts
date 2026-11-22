@@ -12,6 +12,7 @@ import {
   restoreDeloadWeeksSchema,
   restoreSessionSchema,
   saveDeloadWeeksSchema,
+  savePlateWeightSchema,
   saveSessionNotesSchema,
   saveSplitDaySchema,
   sessionIdSchema,
@@ -32,6 +33,7 @@ import {
   restoreDeloadWeeks,
   restoreWorkoutSession,
   saveDeloadWeeks,
+  savePlateWeight,
   saveSplitDay,
   saveWorkoutNotes,
   setWorkoutTimer,
@@ -214,5 +216,15 @@ export async function restoreDeloadWeeksAction(rawInput: unknown) {
     const userId = await requireUser();
     await restoreDeloadWeeks(userId, restoreDeloadWeeksSchema.parse(rawInput));
     return {};
+  });
+}
+
+/** "1 plate = X kg" for one exercise (D-038), and the Undo of that save (it sends the old kg, null for none); answers the kg it had before. */
+export async function savePlateWeightAction(rawInput: unknown) {
+  return respond(async () => {
+    const userId = await requireUser();
+    const saved = await savePlateWeight(userId, savePlateWeightSchema.parse(rawInput));
+    if (!saved) throw new Refusal(EXERCISE_GONE);
+    return saved;
   });
 }
