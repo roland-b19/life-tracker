@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, test, toast, undoIn } from "./helpers";
+import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, signOutHere, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -520,9 +520,10 @@ test("the categories card shows why the server refused a delete or an Undo", asy
   await expect(page.getByText(`Can't undo: "${b}" has changed since.`, { exact: true })).toBeVisible();
   await dismissToast(page);
 
-  // Signed out: the delete is refused with the sign-in message.
-  await page.context().clearCookies();
-  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click(), `"name":"${b}"`);
+  // Signed out: the delete is refused with the sign-in message. The page's refresh, done before the sign-out, shows the
+  // other tab's name.
+  await signOutHere(page);
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${c}`, exact: true }).click(), `"name":"${c}"`);
   await expect(page.getByText("You're signed out. Sign in again.", { exact: true })).toBeVisible();
 });
 

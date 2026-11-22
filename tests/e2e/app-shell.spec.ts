@@ -4,6 +4,7 @@ import {
   addItem,
   andSettle,
   asOwner,
+  countRefreshes,
   dismissToast,
   headIsQuiet,
   holdWrites,
@@ -24,13 +25,6 @@ import {
 // Nothing waits by time: a check that something did not happen runs the page's clock past the moment it would have
 // happened (`page.clock.runFor`, which also fires the timers set on the way, unlike `fastForward`), then waits until the
 // page has sent a request of its own (`settled`).
-
-/** The router refreshes of a page from now on. */
-function countRefreshes(page: Page) {
-  const seen: Request[] = [];
-  page.on("request", (r) => isRefresh(page, r) && seen.push(r));
-  return seen;
-}
 
 /**
  * Takes this one page offline and back through Chromium's network emulation (what DevTools' Offline does): the page's

@@ -7,13 +7,13 @@ import {
   dismissToast,
   expectNoSeriousViolations,
   holdWrites,
-  isRefresh,
   itemName,
   loseAnswerOnce,
   refreshesDone,
   settled,
   signedInUserId,
   signInThroughForm,
+  signOutHere,
   test,
   toast,
   undoIn,
@@ -636,14 +636,6 @@ test("Undo of a shopping edit on an item deleted meanwhile says the item is gone
 });
 
 const SIGNED_OUT = "You're signed out. Sign in again.";
-
-// Signs the page out once its own refreshes are done, and holds every refresh after that: the app refreshes 600 ms after
-// any answer, and a signed-out refresh goes to the sign-in form, so holding it keeps on screen what the refusal left.
-async function signOutHere(page: Page) {
-  await refreshesDone(page);
-  await page.route((url) => url.pathname === "/health", (route) => (isRefresh(page, route.request()) ? undefined : route.fallback()));
-  await page.context().clearCookies();
-}
 
 // A refused write shows the server's reason (D-040), not a fixed failure text, and changes nothing.
 test("Clear bought when signed out says so and clears nothing [D-040]", async ({ signedInPage: page }) => {

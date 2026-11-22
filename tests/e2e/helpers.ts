@@ -23,6 +23,13 @@ export function isRefresh(page: Page, request: Request) {
   );
 }
 
+/** The router refreshes of a page from now on (the list grows as they start). */
+export function countRefreshes(page: Page) {
+  const seen: Request[] = [];
+  page.on("request", (r) => isRefresh(page, r) && seen.push(r));
+  return seen;
+}
+
 function watchRefreshes(page: Page) {
   const state = { due: false, running: new Set<Request>() };
   let writes = 0;
@@ -90,6 +97,18 @@ export async function refreshesDone(page: Page) {
   await expect
     .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
     .toBe(false);
+}
+
+/**
+ * Signs the page out once its own refreshes are done (`refreshesDone`), and holds every refresh of the page on screen
+ * after that: the app refreshes 600 ms after any answer, and a signed-out refresh goes to the sign-in form, so holding
+ * it keeps on screen what a refused write left there.
+ */
+export async function signOutHere(page: Page) {
+  await refreshesDone(page);
+  const path = new URL(page.url()).pathname;
+  await page.route((url) => url.pathname === path, (route) => (isRefresh(page, route.request()) ? undefined : route.fallback()));
+  await page.context().clearCookies();
 }
 
 // Serious and critical findings fail the spec. The scan waits for the refresh a write left due, then for a quiet <head>

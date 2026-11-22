@@ -1,6 +1,6 @@
-import { expect, type Page, type Request } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { addDays, appDay, formatDMY, toISODate } from "../../src/lib/format-date";
-import { andSettle, dismissToast, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
+import { andSettle, countRefreshes, dismissToast, expectNoSeriousViolations, settled, test } from "./helpers";
 
 async function openFood(page: Page) {
   await page.goto("/health");
@@ -119,8 +119,7 @@ test("at midnight the page refreshes once and the chart keeps the server's day, 
   await openFood(page);
   await expect(lastAxisLabel(page)).toHaveText(axisLabel(day));
   await page.evaluate(() => Object.assign(window, { kept: true }));
-  const refreshes: Request[] = [];
-  page.on("request", (r) => isRefresh(page, r) && refreshes.push(r));
+  const refreshes = countRefreshes(page);
   await page.clock.runFor(20_000);
   await settled(page);
   expect(refreshes).toHaveLength(0);
