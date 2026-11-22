@@ -7,6 +7,9 @@ export type CategoryScope = z.infer<typeof categoryScopeSchema>;
 /** Free text, so the user can add and rename categories; lower case so "Gifts" and "gifts" are one group. */
 export const categorySchema = z.string().trim().toLowerCase().min(1, "Name is required").max(50).refine(visible, "Name is required");
 
+/** The answer when a category the page showed is gone (deleted or renamed elsewhere). */
+export const CATEGORY_GONE = "Category not found.";
+
 /** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
 const managedCategorySchema = categorySchema.refine((c) => c !== "other", '"other" is built in.');
 

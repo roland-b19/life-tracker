@@ -4,6 +4,7 @@ import { z } from "zod";
 import { toISODate } from "@/lib/format-date";
 import { isoDate } from "@/lib/validations/common";
 import { Refusal, respond } from "@/lib/validations/result";
+import { ONLY_TODAY_AND_YESTERDAY } from "@/lib/validations/food";
 import { metricDayEditable } from "@/lib/rules";
 import { requireUser } from "@/server/auth";
 import { assertClaudeEnabled } from "@/lib/features";
@@ -23,7 +24,7 @@ export async function sendFoodChatMessageAction(input: z.input<typeof chatInputS
     const userId = await requireUser();
     const { message, history, date, time } = chatInputSchema.parse(input);
     // Same rule as logging a meal by hand: the Assistant may not write into older days.
-    if (!metricDayEditable(date, toISODate())) throw new Refusal("Only today and yesterday can be changed.");
+    if (!metricDayEditable(date, toISODate())) throw new Refusal(ONLY_TODAY_AND_YESTERDAY);
 
     // Only the last 10 turns go to the model: enough for follow-ups, bounded in size.
     const result = await sendFoodChatMessage(userId, message, history.slice(-10), { date, time });

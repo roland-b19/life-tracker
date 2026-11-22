@@ -83,6 +83,9 @@ const targetFields = {
 const NOTHING_TO_SAVE = "Nothing to save.";
 const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
 
+/** The answer for a meal written into a day older than yesterday: older days are history. */
+export const ONLY_TODAY_AND_YESTERDAY = "Only today and yesterday can be changed.";
+
 /** The answer when a stored number is no longer the one the screen showed: another device changed it first. */
 export const CHANGED_ELSEWHERE = "This changed on another device. Check the new value and try again.";
 

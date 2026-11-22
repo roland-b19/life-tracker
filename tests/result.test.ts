@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { Refusal, respond, SIGNED_OUT } from "@/lib/validations/result";
@@ -82,5 +84,24 @@ describe("newId: an add's id made on the device", () => {
 
   it("refuses a malformed id", async () => {
     expect(await messageFor(z.object({ id: newId }), { id: "not-an-id" })).toBe("Invalid id");
+  });
+});
+
+describe("a refusal several actions give is written once [U6]", () => {
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? sources(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
+    );
+  // Gym still words its own duplicate name; it moves to alreadyExists with the gym pages.
+  const files = [...sources("src"), ...sources("app")].filter((f) => !/gym/.test(f));
+  const writtenIn = (words: string) => files.filter((f) => readFileSync(f, "utf8").includes(words));
+
+  it.each([
+    ["Category not found.", "src/lib/validations/categories.ts"],
+    ["has changed since.", "src/lib/validations/result.ts"],
+    ["already exists.", "src/lib/validations/result.ts"],
+    ["Only today and yesterday can be changed.", "src/lib/validations/food.ts"],
+  ])("%s", (words, home) => {
+    expect(writtenIn(words)).toEqual([home]);
   });
 });
