@@ -292,7 +292,13 @@ export function TodosClient({
   const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
     updateList(task.space, (list) => list.map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos));
 
-  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean, completedAt?: Date | null) => {
+  // A tick, or (withUndo false) its Undo, whose failure undoWith tells. Answers the server's answer.
+  const toggle = async (
+    todo: TodoItem,
+    next: boolean,
+    withUndo: boolean,
+    completedAt?: Date | null,
+  ): Promise<Awaited<ReturnType<typeof toggleTodoAction>> | null> => {
     ++requestId.current;
     setCompleted(todo, next, completedAt);
     const saved = toggleTodoAction({ id: todo.id, isCompleted: next, completedAt }).catch(() => null);
@@ -301,13 +307,18 @@ export function TodosClient({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
         touches: touches(todo.id),
         saved,
-        onUndo: () => void toggle(todo, !next, false, todo.completedAt),
+        onUndo: undoWith(
+          showToast,
+          () => toggle(todo, !next, false, todo.completedAt),
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
+        ),
       });
     }
     const res = await saved;
-    if (!res?.success) warn(res?.error ?? "Failed to update task");
+    if (withUndo && !res?.success) warn(res?.error ?? "Failed to update task");
     // Refresh so the screen matches the database, whatever the server answered.
     await loadDay();
+    return res;
   };
 
   const handleToggleTodo = (todo: TodoItem) => once(`todos:${todo.id}`, () => toggle(todo, !todo.isCompleted, true), tappedButton.current);

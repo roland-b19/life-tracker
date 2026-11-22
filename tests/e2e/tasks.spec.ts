@@ -219,6 +219,27 @@ test("a Save in a form opened again while the last opening's save is unanswered 
   await expect(page.getByText(second, { exact: true })).toBeVisible();
 });
 
+test("an Undo of a tick that fails says so and keeps a Retry, which puts the box back [D-040]", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  const title = taskTitle();
+  await addTask(page, title, "New task");
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${title} as complete` }).click(), `"isCompleted":true`);
+  // The Undo's write gets a server error; the list's reload still goes through.
+  await page.route("**/todos", (route) =>
+    route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"isCompleted":false`)
+      ? route.fulfill({ status: 500, contentType: "text/plain", body: "boom" })
+      : route.fallback(),
+  );
+  await page.getByRole("button", { name: "Undo" }).click();
+  const warning = page.locator(".toast-item").filter({ hasText: "Failed to undo" });
+  await expect(warning.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Mark ${title} as incomplete` })).toBeVisible();
+  await page.unroute("**/todos");
+  await andSettle(page, () => warning.getByRole("button", { name: "Retry" }).click(), `"isCompleted":false`);
+  await expect(page.getByRole("button", { name: `Mark ${title} as complete` })).toBeVisible();
+});
+
 test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   const title = taskTitle();
