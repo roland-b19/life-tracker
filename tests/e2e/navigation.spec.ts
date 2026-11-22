@@ -217,7 +217,7 @@ test("a dev user name longer than 64 characters is refused with the message, not
     await field.fill(name);
     await expect(field).toHaveValue(name);
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
+    await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes")).toBeVisible();
     await expect(page).toHaveURL(/\/signin$/);
     const rows = await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
     expect(rows.rowCount).toBe(0);

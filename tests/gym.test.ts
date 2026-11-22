@@ -23,8 +23,6 @@ import {
   getWorkoutSessionDetails,
   logWorkoutSet,
   EXERCISE_GONE,
-  WORKOUT_FINISHED,
-  WORKOUT_GONE,
 } from "@/lib/gym";
 import {
   cancelSessionAction,
@@ -60,16 +58,18 @@ import {
   REPS_RANGE,
   ROUTINE_RANGE,
   SETS_LOGGED,
-  TWO_DECIMALS,
+  WORKOUT_FINISHED,
+  WORKOUT_GONE,
   ZERO_LOAD,
   type LogSetInput,
 } from "@/lib/validations/gym";
-import { SIGNED_OUT } from "@/lib/validations/result";
+import { alreadyExists, SIGNED_OUT } from "@/lib/validations/result";
+import { FUTURE_DATE, TWO_DECIMALS } from "@/lib/validations/common";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
 import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
 import { plateKgProblem } from "@/../app/gym/progress-panel";
-import { dayProblem } from "@/../app/gym/day-editor";
+import { dayProblem, exerciseNameProblem } from "@/../app/gym/day-editor";
 import { deloadProblem } from "@/../app/gym/deload-card";
 import { setText } from "@/../app/gym/types";
 
@@ -455,7 +455,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await save(null, "b".repeat(501))).toEqual({ success: false, error: "Too long (max 500)" });
     expect(succeeded(await save(null, ` ${"b".repeat(500)}\n`)).notes).toBe("b".repeat(500));
     expect(succeeded(await save("b".repeat(500), "   ")).notes).toBeNull();
-    expect(await save(null, "  ")).toEqual({ success: false, error: "Nothing to save." });
+    expect(await save(null, "  ")).toEqual({ success: false, error: "Nothing to save" });
   });
 
   describe("workout notes are saved with the open workout, sending the notes shown and the new ones (GYMB-03, GYMB-14, D-040)", () => {
@@ -626,8 +626,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     }
     expect(check([{ targetSets: 10, minReps: 1, maxReps: 100 }])).toBe("");
 
-    // The new exercise form refuses a one-character name before sending (`NAME_TOO_SHORT`), as the server does.
-    expect(await addCustomExerciseAction({ id: randomUUID(), name: " B ", muscleGroup: "chest", equipmentType: "barbell" })).toEqual(refusal(NAME_TOO_SHORT));
+    // The new exercise form refuses a one-character name and a taken one before sending, as the server does.
+    const custom = (name: string) => addCustomExerciseAction({ id: randomUUID(), name, muscleGroup: "chest", equipmentType: "barbell" });
+    expect(await custom("B")).toEqual(refusal(NAME_TOO_SHORT));
+    expect(exerciseNameProblem("B", [])).toBe(NAME_TOO_SHORT);
+    expect(await custom("incline  BARBELL press")).toEqual(refusal(alreadyExists("Incline barbell press")));
+    expect(exerciseNameProblem("incline  BARBELL press", [{ name: "Incline barbell press" }])).toBe(alreadyExists("Incline barbell press"));
+    expect(exerciseNameProblem("Cable fly", [{ name: "Incline barbell press" }])).toBe("");
 
     const sunday = weekStart(TODAY);
     expect(await saveDeloadWeeksAction({ last: sunday, next: sunday })).toEqual(refusal(DELOAD_ORDER));
@@ -658,7 +663,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect((await log(1, start - 60_000)).success).toBe(true); // the device's clock may run a minute behind
     expect(await log(2, start - 60_001)).toEqual(outside);
     expect((await log(2, Date.now() + 50_000)).success).toBe(true); // ...or ahead
-    expect(await log(3, Date.now() + 70_000)).toEqual({ success: false, error: "Date cannot be in the future" });
+    expect(await log(3, Date.now() + 70_000)).toEqual({ success: false, error: FUTURE_DATE });
     expect(await setCount(session.id)).toBe(2);
     const bodyweight = succeeded(await logSetAction(setOf(session.id, ex, { setOrder: 3, loadType: "bodyweight", loadValue: 0, extraKg: 10 })));
     expect(bodyweight.set.extraKg).toBe("0.00");
@@ -1691,7 +1696,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("says why a value cannot be logged, in the server's words (GYMB-07, GYMB-08)", () => {
       expect(inputProblem(form({ loadValue: "-5" }))).toBe(NOT_NEGATIVE);
       expect(inputProblem(form({ loadValue: "2.555" }))).toBe(TWO_DECIMALS);
-      expect(inputProblem(form({ loadValue: "100000" }))).toBe("Value can be at most 1.000.");
+      expect(inputProblem(form({ loadValue: "100000" }))).toBe(AT_MOST_LOAD);
       expect(inputProblem(form({ loadValue: "0" }))).toBe(ZERO_LOAD);
       expect(inputProblem(form({ loadValue: "0", loadType: "plates" }))).toBe(ZERO_LOAD);
       expect(canLog(form({ loadValue: "0" }))).toBe(false);

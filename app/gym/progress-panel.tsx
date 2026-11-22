@@ -14,7 +14,8 @@ import { addDays, weekStart } from "@/lib/format-date";
 import { deloadWeeksIn, exerciseMeasure, exerciseSeries, type Measure, type PlateWeights } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 import { formatAmount } from "@/lib/number-format";
-import { AT_MOST_PLATE_KG, GYM_LIMITS, MORE_THAN_ZERO, TWO_DECIMALS, twoDecimals } from "@/lib/validations/gym";
+import { TWO_DECIMALS, twoDecimals } from "@/lib/validations/common";
+import { AT_MOST_PLATE_KG, GYM_LIMITS, MORE_THAN_ZERO } from "@/lib/validations/gym";
 
 type Range = "30" | "90" | "180" | "360";
 const RANGES: { value: Range; label: string }[] = (["30", "90", "180", "360"] as const).map((d) => ({ value: d, label: `${d}D` }));

@@ -1,7 +1,16 @@
 "use client";
 
 import { toISODate } from "@/lib/format-date";
-import { NOTES_CHANGED, SET_GONE, SETS_LOGGED, sessionNote, type RestoreSessionInput } from "@/lib/validations/gym";
+import {
+  NOTES_CHANGED,
+  SET_GONE,
+  SETS_LOGGED,
+  sessionNote,
+  WORKOUT_ENDED_ELSEWHERE,
+  WORKOUT_FINISHED,
+  WORKOUT_GONE,
+  type RestoreSessionInput,
+} from "@/lib/validations/gym";
 import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
@@ -35,9 +44,6 @@ export function formatClock(total: number) {
   const s = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
-
-/** What the page says when the workout in hand was finished or cancelled on another device (D-034). */
-export const WORKOUT_ENDED_ELSEWHERE = "This workout was finished or cancelled on another device.";
 
 /**
  * The seconds a workout's clock shows: the server's count (D-039) plus the time since it answered, ticking while the
@@ -101,7 +107,7 @@ export function useWorkout({
     setHandId(id);
     setFloor(refreshesSent());
   };
-  // A workout in hand that the server no longer has open (finished or cancelled on another device) leaves the screen,
+  // A workout in hand that the server no longer has open (finished or cancelled elsewhere) leaves the screen,
   // and a toast says so; as in `useServerState`, the state changes while rendering and the toast follows. A later server
   // value without it ends it too when the one before had none either (no change for `useServerState`).
   const [ended, setEnded] = useState<{ id: string } | null>(null);
@@ -118,6 +124,19 @@ export function useWorkout({
     toldEnded.current = ended;
     showToast({ message: WORKOUT_ENDED_ELSEWHERE, type: "warning" });
   }, [ended, showToast]);
+  /**
+   * Says why a write of the workout `id` was refused. A workout that ended elsewhere (`WORKOUT_FINISHED`,
+   * `WORKOUT_GONE`) leaves the screen at once, with the one toast a refresh would show; it is no longer in hand then, so
+   * that refresh shows none.
+   */
+  const refused = (id: string, error: string) => {
+    if (error !== WORKOUT_FINISHED && error !== WORKOUT_GONE) return warn(error);
+    setOpen((o) => (o?.id === id ? null : o));
+    setHandId((hand) => (hand === id ? null : hand));
+    setConfirmCancel(false);
+    setSessionNotes("");
+    warn(WORKOUT_ENDED_ELSEWHERE);
+  };
   // The notes as the server holds them, and the save in flight: a save sends only the change from them (D-040).
   const savedNotes = useRef("");
   const notesSave = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -271,7 +290,7 @@ export function useWorkout({
     };
     write(async () => {
       const res = await turn(run);
-      if (!res.success) return warn(res.error);
+      if (!res.success) return refused(session.id, res.error);
       showToast({
         message: run ? "Resumed the timer" : "Paused the timer",
         type: "success",
@@ -302,7 +321,7 @@ export function useWorkout({
         isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
       });
-      if (!res.success) return warn(res.error);
+      if (!res.success) return refused(session.id, res.error);
       const logged: WorkoutSetData = {
         id: res.set.id,
         exerciseId: exercise.exerciseId,
@@ -386,7 +405,8 @@ export function useWorkout({
         return deleted.then((res) => {
           if (res?.success || res?.error === SET_GONE) return;
           putBackSet(set);
-          warn(res ? res.error : "Failed to remove set");
+          if (res) refused(sessionId, res.error);
+          else warn("Failed to remove set");
         });
       },
       spot,
@@ -414,7 +434,8 @@ export function useWorkout({
       const res = await saveSessionNotesAction({ sessionId: session.id, notes: { from: from || null, to: text } }).catch(() => null);
       notesAnswered(res);
       if (!res?.success) {
-        warn(res ? res.error : "Failed to save the notes");
+        if (res) refused(session.id, res.error);
+        else warn("Failed to save the notes");
         return false;
       }
       savedNotes.current = res.notes ?? "";
@@ -447,7 +468,7 @@ export function useWorkout({
     write(async () => {
       if (!(await saveNotes())) return;
       const res = await pauseSessionAction({ sessionId: session.id });
-      if (!res.success) return warn(res.error);
+      if (!res.success) return refused(session.id, res.error);
       setOpen({ ...session, timer: res.timer, notes: savedNotes.current || null });
       setConfirmCancel(false);
       setHandId(null);
@@ -547,7 +568,7 @@ export function useWorkout({
       const snap = { ...session, notes: savedNotes.current || null };
       const res = await cancelSessionAction({ sessionId: session.id });
       setConfirmCancel(false);
-      if (!res.success) return warn(res.error);
+      if (!res.success) return refused(session.id, res.error);
       setOpen(null);
       setHandId(null);
       setSessionNotes("");
@@ -569,7 +590,7 @@ export function useWorkout({
       if (!(await saveNotes())) return;
       const snap = { ...session, notes: savedNotes.current || null };
       const done = await finishSessionAction({ sessionId: session.id });
-      if (!done.success) return warn(done.error);
+      if (!done.success) return refused(session.id, done.error);
       setOpen(null);
       setHandId(null);
       setSessionNotes("");

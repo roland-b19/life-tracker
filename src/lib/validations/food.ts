@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
-import { isoDate, newId, uuid, visible } from "./common";
+import { FUTURE_DATE, isoDate, newId, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
 import { formatNumber } from "@/lib/number-format";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
@@ -32,18 +32,14 @@ const mealFields = z.object({
 export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
   meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => Math.round(grams * 10) > 0);
 
-export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0.");
+export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
 
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = mealFields.extend({ id: uuid, createdAt: z.string().datetime().optional() });
 
-const WEIGHT_RANGE = "The weight must be between 20 and 500 kg.";
+const WEIGHT_RANGE = "The weight must be between 20 and 500 kg";
 
-/** Whether a number has at most two decimals (the tables keep two). 78.4 * 100 is 7840.000000000001, so it compares against the nearest hundredth instead of Number.isInteger. */
-const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
-const TWO_DECIMALS = "Maximum two decimal places.";
-
-const weightKilograms = z.number("Please enter a valid weight.").min(20, WEIGHT_RANGE).max(500, WEIGHT_RANGE).refine(twoDecimals, TWO_DECIMALS);
+const weightKilograms = z.number("Please enter a valid weight").min(20, WEIGHT_RANGE).max(500, WEIGHT_RANGE).refine(twoDecimals, TWO_DECIMALS);
 
 /**
  * One weigh-in a day: saving a day that already has one replaces its kilograms. The Undo of an edit also sends `from`,
@@ -53,7 +49,7 @@ export const logWeightSchema = z
   .object({
     id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
-    date: isoDate.refine((date) => date <= toISODate(), "The date cannot be in the future."),
+    date: isoDate.refine((date) => date <= toISODate(), FUTURE_DATE),
     kilograms: weightKilograms,
     from: weightKilograms.optional(),
   })
@@ -80,7 +76,7 @@ const targetFields = {
   waterMl: goal(GOAL_RANGES.waterMl),
   steps: goal(GOAL_RANGES.steps),
 };
-const NOTHING_TO_SAVE = "Nothing to save.";
+const NOTHING_TO_SAVE = "Nothing to save";
 const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
 
 /** The answer for a meal written into a day older than yesterday: older days are history. */
@@ -156,22 +152,22 @@ type ShoppingKind = z.infer<typeof shoppingKindSchema>;
 /** Names the user manages: never the list's built-in fallback, and a unit fits its column (30 characters). */
 const managed = <T extends { kind: ShoppingKind }>(schema: z.ZodType<T>, names: (v: T) => string[]) =>
   schema
-    .refine((v) => v.kind !== "category" || !names(v).includes("other"), '"other" is built in.')
-    .refine((v) => v.kind !== "unit" || !names(v).includes("pcs"), '"pcs" is built in.')
+    .refine((v) => v.kind !== "category" || !names(v).includes("other"), '"other" is built in')
+    .refine((v) => v.kind !== "unit" || !names(v).includes("pcs"), '"pcs" is built in')
     .refine((v) => v.kind !== "unit" || names(v).every((n) => n.length <= 30), "Too long (max 30)");
 
 export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }), (v) => [v.name]);
 export const reorderShoppingCategoriesSchema = managed(
   z.object({
     kind: shoppingKindSchema,
-    names: z.array(shoppingCategorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique."),
+    names: z.array(shoppingCategorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique"),
   }),
   (v) => v.names,
 );
 export const renameShoppingCategorySchema = managed(
   z.object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema }),
   (v) => [v.from, v.to],
-).refine((v) => v.from !== v.to, { message: "That is already its name.", path: ["to"] });
+).refine((v) => v.from !== v.to, { message: "That is already its name", path: ["to"] });
 
 /**
  * Undo of a rename or delete: what the change reported, sent back as it was. A unit change also reports the rows it

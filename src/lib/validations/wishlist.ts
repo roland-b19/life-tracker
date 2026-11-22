@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { newId, uuid, visible } from "./common";
+import { FUTURE_DATE, newId, uuid, visible } from "./common";
 
 /** The refusal for an item that is not there (deleted on another device, or another user's): the client drops its row. */
 export const WISHLIST_ITEM_GONE = "This item no longer exists.";
@@ -35,7 +35,7 @@ export const updateWishlistItemSchema = z.object({
 /** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
 export const restoreWishlistItemSchema = wishlistFields.extend({
   id: uuid,
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, FUTURE_DATE),
 });
 
 export type AddWishlistItemInput = z.input<typeof addWishlistItemSchema>;

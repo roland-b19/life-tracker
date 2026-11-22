@@ -172,7 +172,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
-    if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}".`);
+    if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}"`);
     setErrorMsg("");
     setBusy(true);
     try {

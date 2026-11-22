@@ -3,7 +3,8 @@
 import { formatDMY } from "@/lib/format-date";
 import { setLoad, type HistoryEntry } from "@/lib/gym-progress";
 import { formatAmount } from "@/lib/number-format";
-import { AT_MOST_LOAD, GYM_LIMITS, NOT_NEGATIVE, REPS_RANGE, TWO_DECIMALS, twoDecimals, ZERO_LOAD } from "@/lib/validations/gym";
+import { TWO_DECIMALS, twoDecimals } from "@/lib/validations/common";
+import { AT_MOST_LOAD, GYM_LIMITS, NOT_NEGATIVE, REPS_RANGE, ZERO_LOAD } from "@/lib/validations/gym";
 import { useRef, useState } from "react";
 import { Badge, ErrorText, Field, FoldButton, SelectField, Toggle } from "../components/blocks";
 import { PlusIcon } from "../components/icons";

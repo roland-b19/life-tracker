@@ -11,6 +11,7 @@ import { exercisePlateWeights, weightEntries } from "@/db/schema";
 import { deleteWeightAction, restoreWeightAction, saveWeightAction } from "@/actions/food";
 import { savePlateWeightAction } from "@/actions/gym";
 import { listWeightEntries } from "@/lib/food";
+import { FUTURE_DATE, TWO_DECIMALS } from "@/lib/validations/common";
 import { addDays, toISODate } from "@/lib/format-date";
 import { addCustomExercise, EXERCISE_GONE, getExercises, getPlateWeights } from "@/lib/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
@@ -197,12 +198,12 @@ describe("weight authorization", () => {
     for (const date of ["2026-13-45", "2026-02-30"]) {
       expect(await saveWeightAction({ date, kilograms: 82 })).toEqual(refused("Invalid date format (YYYY-MM-DD)"));
     }
-    expect(await saveWeightAction({ date: "2999-01-01", kilograms: 82 })).toEqual(refused("The date cannot be in the future."));
+    expect(await saveWeightAction({ date: "2999-01-01", kilograms: 82 })).toEqual(refused(FUTURE_DATE));
     for (const kilograms of [19.9, 500.5]) {
-      expect(await saveWeightAction({ date: today, kilograms })).toEqual(refused("The weight must be between 20 and 500 kg."));
+      expect(await saveWeightAction({ date: today, kilograms })).toEqual(refused("The weight must be between 20 and 500 kg"));
     }
-    expect(await saveWeightAction({ date: today, kilograms: 80.123 })).toEqual(refused("Maximum two decimal places."));
-    expect(await saveWeightAction({ date: today, kilograms: Number.NaN })).toEqual(refused("Please enter a valid weight."));
+    expect(await saveWeightAction({ date: today, kilograms: 80.123 })).toEqual(refused(TWO_DECIMALS));
+    expect(await saveWeightAction({ date: today, kilograms: Number.NaN })).toEqual(refused("Please enter a valid weight"));
     expect(await deleteWeightAction("abc")).toEqual({ success: false, error: "Invalid id" });
     expect(await restoreWeightAction({ id: "abc", date: "2026-01-03", kilograms: 82 })).toEqual({ success: false, error: "Invalid id" });
     expect(await listWeightEntries(authState.id)).toEqual([]);

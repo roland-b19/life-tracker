@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate, newId, uuid, visible } from "./common";
+import { FUTURE_DATE, isoDate, newId, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
 import { weekday } from "@/lib/format-date";
 import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
 import { formatNumber } from "@/lib/number-format";
@@ -27,20 +27,18 @@ export const EXERCISE_NAME_MIN = 2;
 
 /** What a weight below zero answers, in the set form and on the server. */
 export const NOT_NEGATIVE = "Can't be negative";
-/** What a weight with more than two decimals answers (the columns keep two), in the set form and on the server. */
-export const TWO_DECIMALS = "Maximum two decimal places.";
 /** What a set's reps outside 1 to the limit, or not whole, answer, in the set form and on the server. */
-export const REPS_RANGE = `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}.`;
+export const REPS_RANGE = `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}`;
 /** What a set's weight above the limit answers, in the set form and on the server. */
-export const AT_MOST_LOAD = `Value can be at most ${formatNumber(GYM_LIMITS.load)}.`;
+export const AT_MOST_LOAD = `Value can be at most ${formatNumber(GYM_LIMITS.load)}`;
 /** What a routine's target sets or reps outside their limits, or not whole, answer, in the day editor and on the server. */
-export const ROUTINE_RANGE = `Sets must be whole numbers from 1 to ${GYM_LIMITS.targetSets} and reps from 1 to ${GYM_LIMITS.targetReps}.`;
+export const ROUTINE_RANGE = `Sets must be whole numbers from 1 to ${GYM_LIMITS.targetSets} and reps from 1 to ${GYM_LIMITS.targetReps}`;
 /** What a routine row whose min reps are above its max reps answers, in the day editor and on the server. */
 export const MIN_OVER_MAX = "Min reps must not exceed max reps";
 /** What a day's or an exercise's name with nothing visible answers, in the gym forms and on the server. */
 export const NAME_REQUIRED = "Name is required";
 /** What an exercise name shorter than the minimum answers, in the new exercise form and on the server. */
-export const NAME_TOO_SHORT = `The name must have at least ${EXERCISE_NAME_MIN} characters.`;
+export const NAME_TOO_SHORT = `The name must have at least ${EXERCISE_NAME_MIN} characters`;
 /** What a next deload week not after the last one answers, in the deload dialog and on the server. */
 export const DELOAD_ORDER = "The next deload must come after the last one";
 /** What a plate weight of 0 or less answers, in the plate weight form and on the server. */
@@ -48,18 +46,25 @@ export const MORE_THAN_ZERO = "Must be more than 0";
 /** What a plate weight above the limit answers, in the plate weight form and on the server. */
 export const AT_MOST_PLATE_KG = `Must be at most ${GYM_LIMITS.plateKg}`;
 /** Why a kg or plates set with a value of 0 cannot be logged (a bodyweight set can), in the set form and on the server. */
-export const ZERO_LOAD = "Enter a value above 0, or pick BW.";
+export const ZERO_LOAD = "Enter a value above 0, or pick BW";
 /**
  * What a change of a workout's notes answers when the stored notes are no longer the ones the screen showed (D-040): the
  * client then takes the server's notes as the ones its next save changes from.
  */
 export const NOTES_CHANGED = "These notes changed on another device. Check them and try again.";
+/** What a set, a Finish, a Pause or a Resume on a finished workout answers (D-039): it is history now. */
+export const WORKOUT_FINISHED = "This workout is already finished.";
+/** What a workout that is not the user's (or no longer there) answers: the same words whoever owns it. */
+export const WORKOUT_GONE = "Workout not found.";
+/**
+ * What the page says when the workout in hand ended elsewhere (finished or cancelled on another device or in another
+ * tab): seen on a refresh (D-034), or as the reason a write of it was refused (`WORKOUT_FINISHED`, `WORKOUT_GONE`).
+ */
+export const WORKOUT_ENDED_ELSEWHERE = "This workout was finished or cancelled elsewhere.";
 /** What deleting a set that is no longer there answers: the client then has nothing to put back. */
 export const SET_GONE = "Set not found.";
 /** What the Undo of "Started" answers when the workout has a set, logged here or on another device: it deletes nothing. */
 export const SETS_LOGGED = "Sets are logged; use Cancel workout instead.";
-/** Whether a number has at most two decimals. */
-export const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
 /** A set's weight: at least 0, at most `max` (answering `tooBig` above it), with at most two decimals. */
 const weight = (max: number, tooBig?: string) => z.number().min(0, NOT_NEGATIVE).max(max, tooBig).refine(twoDecimals, TWO_DECIMALS);
 
@@ -77,7 +82,7 @@ const note = (max: number) =>
 
 /**
  * A workout's notes as the server saves them (trimmed; null when nothing visible is left). The notes field compares its
- * text with this too, so it sends nothing the server would answer with "Nothing to save.".
+ * text with this too, so it sends nothing the server would answer with "Nothing to save".
  */
 export const sessionNote = note(GYM_LIMITS.sessionNotes);
 
@@ -104,7 +109,7 @@ const setFields = z.object({
   // was (the number after the highest when a set logged meanwhile took its own). The server checks the time falls within the
   // workout, and numbers a new set itself (D-040: a log sends only what the device knows, so two devices never pick one number).
   id: newId,
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + SET_TIME_SKEW_MS, "Date cannot be in the future").optional(),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + SET_TIME_SKEW_MS, FUTURE_DATE).optional(),
   sessionId: uuid,
   exerciseId: uuid,
   setOrder: z.number().int().min(1).max(GYM_LIMITS.sets).optional(),
@@ -147,7 +152,7 @@ export const finishSessionSchema = z.object({ sessionId: uuid });
  */
 export const saveSessionNotesSchema = z
   .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
-  .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), "Nothing to save.");
+  .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), "Nothing to save");
 
 const weekSunday = isoDate.refine((d) => weekday(d) === 0, "A deload week starts on a Sunday");
 

@@ -57,8 +57,8 @@ describe("Categories: lists, items and multi-user isolation", () => {
     const { todos } = await getDailyTodos(userA, "personal", toISODate());
     expect(todos.find((t) => t.title === "Fix tap")?.category).toBe("house");
 
-    expect(await renameCategoryAction({ scope: "personal", from: "house", to: "other" })).toEqual({ success: false, error: '"other" is built in.' });
-    expect(await addCategoryAction({ scope: "personal", name: "other" })).toEqual({ success: false, error: '"other" is built in.' });
+    expect(await renameCategoryAction({ scope: "personal", from: "house", to: "other" })).toEqual({ success: false, error: '"other" is built in' });
+    expect(await addCategoryAction({ scope: "personal", name: "other" })).toEqual({ success: false, error: '"other" is built in' });
   });
 
   it("deleting a task category refiles all its tasks to other", async () => {
@@ -159,7 +159,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
   it("refuses a rename to the same name, and a revert never deletes the category it puts back", async () => {
     authState.id = userA;
     await addCategoryAction({ scope: "wishlist", name: "keepme" });
-    expect(await renameCategoryAction({ scope: "wishlist", from: "keepme", to: "keepme" })).toEqual({ success: false, error: "That is already its name." });
+    expect(await renameCategoryAction({ scope: "wishlist", from: "keepme", to: "keepme" })).toEqual({ success: false, error: "That is already its name" });
     await revertCategoryAction({ scope: "wishlist", name: "keepme", current: "keepme", sortOrder: 1, itemIds: [], dropCurrent: true });
     expect((await getCategories(userA, ["wishlist"])).wishlist).toContain("keepme");
   });
@@ -179,7 +179,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
     expect(await list()).toEqual(["third", "first", "second"]);
 
     authState.id = userA;
-    expect(await reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).toEqual({ success: false, error: "Names must be unique." });
+    expect(await reorderCategoriesAction({ scope: "personal", names: ["first", "first"] })).toEqual({ success: false, error: "Names must be unique" });
     authState.id = "";
     expect(await reorderCategoriesAction({ scope: "personal", names: ["first"] })).toEqual({ success: false, error: SIGNED_OUT });
     authState.id = userA;

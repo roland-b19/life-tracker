@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
+import { TWO_DECIMALS } from "../../src/lib/validations/common";
+import { WORKOUT_ENDED_ELSEWHERE, ZERO_LOAD } from "../../src/lib/validations/gym";
 import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, isRefresh, refreshesDone, settled, test } from "./helpers";
 
 // A new user gets the default split (Upper / Lower 5-Day) when the page first loads. The day the page selects at load
@@ -628,7 +630,7 @@ test("a workout paused, logged into and finished on another device shows so here
     await andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click());
     await expect(other.getByText(/^Finished the workout/)).toBeVisible();
     await refresh();
-    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeVisible();
+    await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
     await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
     await expect(banner(page)).toBeHidden();
     await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
@@ -932,7 +934,7 @@ test("notes of only an invisible character do not stop Exit, Finish or Cancel", 
   await notes(page).fill("\u200B");
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText("No sets logged: the workout was removed")).toBeVisible();
-  await expect(page.getByText("Nothing to save.")).toBeHidden();
+  await expect(page.getByText("Nothing to save", { exact: true })).toBeHidden();
 });
 
 // D-034: Next sends a write without waiting for a refresh on its way, and applies that refresh once the write's own change
@@ -970,7 +972,7 @@ test("a refresh rendered before Start and answered after it leaves the started w
   await refreshesDone(page);
   await page.evaluate(headIsQuiet);
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
-  await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+  await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeHidden();
   await notes(page).fill("Still in hand");
 });
 
@@ -1017,7 +1019,7 @@ for (const ms of [1, 2, 4]) {
     await refreshesDone(page);
     await page.evaluate(headIsQuiet);
     await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
-    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+    await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeHidden();
   });
 }
 
@@ -1070,7 +1072,7 @@ test("a refresh rendered before Start and answered after it, offline since, leav
   await shown;
   await page.evaluate(headIsQuiet);
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
-  await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+  await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeHidden();
 
   const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
   await page.context().setOffline(false);
@@ -1105,7 +1107,7 @@ test("a workout finished on another device before the first refresh after Start 
     await expect(other.getByText("No sets logged: the workout was removed")).toBeVisible();
     release();
     await refreshesDone(page);
-    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeVisible();
+    await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
     await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
     await expect(banner(page)).toBeHidden();
   } finally {
@@ -1247,14 +1249,14 @@ test("the set form explains a value it refuses, and each new set starts with its
   await expect(page.getByText("Can't be negative")).toBeVisible();
   await expect(log).toBeDisabled();
   await value.fill("0");
-  await expect(page.getByText("Enter a value above 0, or pick BW.")).toBeVisible();
+  await expect(page.getByText(ZERO_LOAD, { exact: true })).toBeVisible();
   await expect(log).toBeDisabled();
   await value.fill("2,555");
-  await expect(page.getByText("Maximum two decimal places.")).toBeVisible();
+  await expect(page.getByText(TWO_DECIMALS, { exact: true })).toBeVisible();
   await expect(log).toBeDisabled();
   await page.getByLabel("Unit").selectOption("bodyweight");
   await value.fill("0");
-  await expect(page.getByText("Enter a value above 0, or pick BW.")).toBeHidden();
+  await expect(page.getByText(ZERO_LOAD, { exact: true })).toBeHidden();
   await expect(log).toBeEnabled();
   await page.getByLabel("Unit").selectOption("kg");
 
@@ -1540,7 +1542,7 @@ test("the plate weight form says why a value is refused, drops a stale refusal, 
     const field = dialog.getByLabel(`1 plate of ${ROW} (kg)`);
     const save = dialog.getByRole("button", { name: "Save" });
     const moreThanZero = "Must be more than 0", atMost100 = "Must be at most 100";
-    const refused = [["0", moreThanZero], ["-1", moreThanZero], ["100.5", atMost100], ["101", atMost100], ["2,555", "Maximum two decimal places."], ["abc", "Must be a number"]];
+    const refused = [["0", moreThanZero], ["-1", moreThanZero], ["100.5", atMost100], ["101", atMost100], ["2,555", TWO_DECIMALS], ["abc", "Must be a number"]];
     for (const [value, reason] of refused) {
       await field.fill(value);
       await expect(dialog.getByRole("alert")).toHaveText(reason);

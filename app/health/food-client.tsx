@@ -395,7 +395,7 @@ export function FoodClient({
     if (!Number.isInteger(value)) return setErrorMsg(NOT_WHOLE);
     if (value < 0 || value > METRIC_MAX[metric]) return setErrorMsg(`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
-      return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}.`);
+      return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}`);
     const before = metricBase;
     const change: MetricChange = {
       ...(value === before.amount ? {} : { amount: { from: before.amount, to: value } }),
@@ -449,7 +449,7 @@ export function FoodClient({
     e.preventDefault();
     const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
-    if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${formatNumber(bad.min)} and ${formatNumber(bad.max)}.`);
+    if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${formatNumber(bad.min)} and ${formatNumber(bad.max)}`);
     // Only the goals this edit changed are sent, each with the value the form showed, so an older tab never writes back
     // goals it did not touch nor overwrites one another device changed (D-040).
     const changed = NUTRITION_GOALS.filter((g) => next[g.key] !== goalsBase[g.key]).map((g) => g.key);

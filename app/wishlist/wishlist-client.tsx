@@ -166,7 +166,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!visible(name)) return setErrorMsg("Please enter an item name.");
+    if (!visible(name)) return setErrorMsg("Please enter an item name");
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     setErrorMsg("");
     const input = {

@@ -15,3 +15,14 @@ export const uuid = z.guid("Invalid id");
  * reply) is one row. Without it the database makes the id.
  */
 export const newId = uuid.optional();
+
+/**
+ * Whether a number has at most two decimals (the tables keep two). 78.4 * 100 is 7840.000000000001, so it compares
+ * against the nearest hundredth instead of Number.isInteger.
+ */
+export const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
+/** What a number with more than two decimals answers, in the forms and on the server. */
+export const TWO_DECIMALS = "Maximum two decimal places";
+
+/** What a date or time after now answers (a weigh-in, a logged set, a task's or wish's time). */
+export const FUTURE_DATE = "Date cannot be in the future";

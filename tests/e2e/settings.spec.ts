@@ -66,7 +66,7 @@ test("a signed-in user connects Claude, with a refusal for a bad token and Undo,
   const form = page.getByRole("dialog", { name: "Connect Claude" });
   await form.getByLabel("Token").fill("not-a-token");
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
-  await expect(form.getByRole("alert")).toHaveText("Please paste the token that claude setup-token prints.");
+  await expect(form.getByRole("alert")).toHaveText("Please paste the token that claude setup-token prints");
   await expect(notConnected(page)).toBeVisible();
 
   // The same form takes a valid one.

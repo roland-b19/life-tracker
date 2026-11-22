@@ -7,6 +7,7 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
+import { TWO_DECIMALS } from "@/lib/validations/common";
 import {
   CHANGED_ELSEWHERE,
   MAX_WATER_ML,
@@ -193,7 +194,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   it("refuses a rename onto itself, and an Undo never deletes the name it puts back", async () => {
     await addShoppingCategoryAction({ name: "snacks" });
-    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).resolves.toEqual({ success: false, error: "That is already its name." });
+    await expect(renameShoppingCategoryAction({ from: "snacks", to: " Snacks " })).resolves.toEqual({ success: false, error: "That is already its name" });
     await revertShoppingCategoryAction({ name: "snacks", current: "snacks", sortOrder: 0, itemIds: [], dropCurrent: true });
     expect(await getShoppingCategories(userA)).toContain("snacks"); // an Undo never deletes the name it puts back
   });
@@ -404,12 +405,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     it("answers a bad item or name in words, the text sent kept as data [HSHOP-13]", async () => {
       expect(await addShoppingItemAction({ name: "x".repeat(121) })).toEqual(refused("Too long (max 120)"));
       expect(await addShoppingItemAction({ name: "Tea", unit: "u".repeat(31) })).toEqual(refused("Too long (max 30)"));
-      expect(await addShoppingItemAction({ name: "Tea", amount: 1.005 })).toEqual(refused("Maximum two decimal places."));
+      expect(await addShoppingItemAction({ name: "Tea", amount: 1.005 })).toEqual(refused(TWO_DECIMALS));
       expect(await addShoppingItemAction({ name: "Tea", amount: 1001 })).toEqual(refused("Must be at most 1000"));
       expect(await addShoppingCategoryAction({ kind: "unit", name: "u".repeat(31) })).toEqual(refused("Too long (max 30)"));
       expect(await addShoppingCategoryAction({ name: "c".repeat(51) })).toEqual(refused("Too long (max 50)"));
-      expect(await addShoppingCategoryAction({ name: "Other" })).toEqual(refused('"other" is built in.'));
-      expect(await addShoppingCategoryAction({ kind: "unit", name: "PCS" })).toEqual(refused('"pcs" is built in.'));
+      expect(await addShoppingCategoryAction({ name: "Other" })).toEqual(refused('"other" is built in'));
+      expect(await addShoppingCategoryAction({ kind: "unit", name: "PCS" })).toEqual(refused('"pcs" is built in'));
       expect(await rowCount(userA)).toBe(0);
     });
 
@@ -874,7 +875,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 500, to: MAX_WATER_ML } })).metrics?.waterMl).toBe(MAX_WATER_ML);
       await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: MAX_WATER_ML + 1 } })).resolves.toMatchObject({ success: false });
       await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: -1 } })).resolves.toMatchObject({ success: false });
-      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: "Nothing to save." });
+      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: "Nothing to save" });
 
       // The steps log and the steps goal share one limit.
       expect(succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 150000 } })).metrics?.steps).toBe(150000);
@@ -1049,7 +1050,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
       succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190, carbsGrams: 300, waterMl: 3000, steps: 10000 });
-      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: "Nothing to save." });
+      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: "Nothing to save" });
 
       // The day's water and its goal, each edited alone, leave the other one as it was.
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 750 } })).targets).toBeNull();
@@ -1247,7 +1248,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(mealHasValue({ calories: 1, protein: 0, carbs: 0, fat: 0 })).toBe(true);
       authState.id = userA;
       const empty = { date: toISODate(), name: "Meal", calories: 0, protein: 0.04, carbs: 0.04, fat: 0 };
-      expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0." });
+      expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0" });
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
 

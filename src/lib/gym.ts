@@ -26,8 +26,10 @@ import {
   SaveSplitDayInput,
   SET_TIME_SKEW_MS,
   SETS_LOGGED,
+  WORKOUT_FINISHED,
+  WORKOUT_GONE,
 } from "./validations/gym";
-import { Refusal } from "./validations/result";
+import { alreadyExists, Refusal } from "./validations/result";
 import { setLoad } from "./gym-progress";
 import { DEFAULT_EXERCISES, ensureDefaultExercises, ensureUserDefaultSplit, lockUser } from "./gym-seed";
 import { addDays, toISODate, weekStart } from "./format-date";
@@ -107,7 +109,7 @@ async function refuseTakenName(tx: Pick<typeof db, "select">, userId: string, na
     .from(exercises)
     .where(and(sql`${nameKey(exercises.name)} = ${nameKey(sql`${name}::text`)}`, or(isNull(exercises.userId), eq(exercises.userId, userId)), except ? ne(exercises.id, except) : undefined))
     .limit(1);
-  if (same) throw new Refusal(`"${same.name}" already exists.`);
+  if (same) throw new Refusal(alreadyExists(same.name));
 }
 
 /** Edit of the user's own custom exercise (also the Undo of an edit); null when it is not (or no longer) theirs. */
@@ -261,10 +263,6 @@ export async function saveSplitDay(userId: string, input: SaveSplitDayInput): Pr
   });
 }
 
-/** What a set, a Finish, a Pause or a Resume on a finished workout answers (D-039): it is history now. */
-export const WORKOUT_FINISHED = "This workout is already finished.";
-/** What a workout that is not the user's (or no longer there) answers: the same words whoever owns it. */
-export const WORKOUT_GONE = "Workout not found.";
 /** What a custom exercise that is gone (deleted in another tab, say) answers. */
 export const EXERCISE_GONE = "This exercise no longer exists.";
 
