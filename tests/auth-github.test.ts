@@ -28,8 +28,12 @@ describe("GitHub sign-in with an owner allowlist", () => {
     env.OWNER_ALLOWLIST = ownerId;
   });
 
-  afterEach(() => {
+  // The owner a test signs in, removed after it so no GitHub user stays behind in the test database.
+  afterEach(async () => {
     for (const key of KEYS) delete env[key];
+    const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+    await admin.query("DELETE FROM users WHERE issuer = 'https://github.com' AND subject = $1", [ownerId]);
+    await admin.end();
   });
 
   it("lets the owner in and creates the user under the GitHub issuer", async () => {
