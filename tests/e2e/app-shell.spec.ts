@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 import { andSettle, headIsQuiet, isRefresh, settled, test } from "./helpers";
 
@@ -245,37 +245,269 @@ test("a write whose answer is lost while online says so and refreshes [XR-04]", 
   await page.unroute("**/wishlist");
 });
 
-// A tap on a link while a write is unanswered waits for the answer (the page it opens would be the copy from before the
-// write), but a write that never answers lets it through after 10 s, so the app is never stuck on one page.
-test("a tap on a link while a write is unanswered waits for the answer, at most 10 s [WISH-13]", async ({ signedInPage: page }) => {
-  await page.clock.install();
-  await openWishlist(page);
-  const name = itemName();
-  await addItem(page, name);
+// A tap on a link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
+// (the page it would open is the copy from before the write). The tests below hold the answer of a Wishlist write.
+
+/** Holds the answers of the Wishlist's writes from now on until `release`; `answered` resolves on the first answer. */
+async function holdWrites(page: Page) {
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route("**/wishlist", async (route) => {
     if (route.request().method() === "POST") await held;
     await route.fallback();
   });
-  const opened: Request[] = [];
-  page.on("request", (r) => {
-    const headers = r.headers();
-    if (new URL(r.url()).pathname === "/todos" && "rsc" in headers && !("next-router-prefetch" in headers)) opened.push(r);
-  });
   const answered = page.waitForResponse((r) => r.request().method() === "POST");
+  return { release, answered };
+}
+
+/** A page request of a navigation to another page: not a prefetch, not a refresh of the page on screen. */
+function isOpen(page: Page, request: Request) {
+  const headers = request.headers();
+  const path = new URL(request.url()).pathname;
+  return (
+    request.method() === "GET" &&
+    "rsc" in headers &&
+    !("next-router-prefetch" in headers) &&
+    !("next-router-segment-prefetch" in headers) &&
+    path !== new URL(page.url()).pathname
+  );
+}
+
+/** The paths of the pages a navigation asked for from now on. */
+function countOpens(page: Page) {
+  const seen: string[] = [];
+  page.on("request", (r) => isOpen(page, r) && seen.push(new URL(r.url()).pathname));
+  return seen;
+}
+
+/** Waits until a refresh has answered and the page has shown it, so it cannot land after a later write. */
+async function waitForRefresh(refresh: Promise<Request>) {
+  const request = await refresh;
+  await request.response();
+  await request.frame().page().evaluate(headIsQuiet);
+}
+
+/** Stops the page's clock (installed before the page loaded) a moment from now: from here on no timer fires. */
+async function stopClock(page: Page) {
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+}
+
+// A write that never answers lets the tap through after 10 s, so the app is never stuck on one page.
+test("a tap on a link while a write is unanswered waits for the answer, at most 10 s [WISH-13]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const name = itemName();
+  await addItem(page, name);
+  const { release, answered } = await holdWrites(page);
+  const opens = countOpens(page);
   await page.getByRole("button", { name: `Delete ${name}` }).click();
   await expect(page.getByText(name, { exact: true })).toBeHidden();
   await page.getByRole("link", { name: "Tasks" }).first().click();
   // Just short of 10 s the tap still waits: Tasks was not even asked for
   await page.clock.runFor(9_000);
   await settled(page);
-  expect(opened).toHaveLength(0);
+  expect(opens).toHaveLength(0);
   await expect(page).toHaveURL(/\/wishlist$/);
   await page.clock.runFor(1_000);
   await expect(page).toHaveURL(/\/todos$/);
   release();
   await answered;
+});
+
+test("a tap that waits goes through as soon as the refresh after the answer starts, with no timer [WISH-13]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const name = itemName();
+  const addRefresh = page.waitForRequest((r) => isRefresh(page, r));
+  await addItem(page, name);
+  await waitForRefresh(addRefresh);
+  // Neither the 600 ms after an answer nor the 10 s cap can fire now: only the answer can start the refresh, and only
+  // the refresh can let the tap through
+  await stopClock(page);
+  const { release, answered } = await holdWrites(page);
+  const events: string[] = [];
+  page.on("response", (r) => r.request().method() === "POST" && events.push("answer"));
+  page.on("request", (r) => {
+    if (isRefresh(page, r)) events.push("refresh");
+    else if (isOpen(page, r)) events.push(new URL(r.url()).pathname);
+  });
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(page.getByText(name, { exact: true })).toBeHidden();
+  await page.getByRole("navigation", { name: "Main Navigation" }).getByRole("link", { name: "Tasks" }).click();
+  await settled(page);
+  expect(events).toEqual([]);
+  release();
+  await answered;
+  // The refresh starts on the answer itself
+  await expect.poll(() => events.slice(0, 2)).toEqual(["answer", "refresh"]);
+  // And the tap goes through once that refresh has started
+  await expect.poll(() => events).toEqual(["answer", "refresh", "/todos"]);
+  await expect(page).toHaveURL(/\/todos$/);
+});
+
+test("of several taps on links while a write is unanswered, only the latest goes through, once [WISH-13]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = itemName();
+  await addItem(page, name);
+  const { release, answered } = await holdWrites(page);
+  const opens = countOpens(page);
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(page.getByText(name, { exact: true })).toBeHidden();
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Tasks" }).click();
+  await nav.getByRole("link", { name: "Health" }).click();
+  // A screen reader activates a link with a click alone, with no pointer or key before it
+  await nav.getByRole("link", { name: "Gym" }).dispatchEvent("click");
+  await settled(page);
+  expect(opens).toEqual([]);
+  release();
+  await answered;
+  await expect(page).toHaveURL(/\/(todos|health|gym)$/);
+  expect(new URL(page.url()).pathname).toBe("/gym");
+  await settled(page);
+  expect(opens).toEqual(["/gym"]);
+});
+
+/**
+ * Taps Tasks while a delete is unanswered, then opens the New item form and types a name: doing something else forgets
+ * the tap. When the delete answers, the page stays on the Wishlist with the form and its text, and the bar shows the
+ * Wishlist again.
+ */
+async function tapThenType(
+  page: Page,
+  navigation: string,
+  press: (target: Locator) => Promise<void>,
+  open: (button: Locator) => Promise<void>,
+  type: (field: Locator, text: string) => Promise<void>,
+) {
+  await openWishlist(page);
+  const name = itemName();
+  await addItem(page, name);
+  const { release, answered } = await holdWrites(page);
+  const opens = countOpens(page);
+  await press(page.getByRole("button", { name: `Delete ${name}` }));
+  await expect(page.getByText(name, { exact: true })).toBeHidden();
+  const nav = page.getByRole("navigation", { name: navigation });
+  await press(nav.getByRole("link", { name: "Tasks" }));
+  await open(page.getByRole("button", { name: "Add item" }));
+  const form = page.getByRole("dialog", { name: "New item" });
+  const typed = itemName();
+  await type(form.getByLabel("Name", { exact: true }), typed);
+  const refreshed = page.waitForRequest((r) => isRefresh(page, r));
+  release();
+  await answered;
+  // The refresh after the answer still comes; once it has, a replayed tap would have gone out
+  await (await refreshed).response();
+  await settled(page);
+  expect(opens).toEqual([]);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(typed);
+  await expect(nav.getByRole("link", { name: "Wishlist" })).toHaveAttribute("aria-current", "page");
+}
+
+test("a tap that waits is forgotten once the person taps something else and types [WISH-13]", async ({ signedInPage: page }) => {
+  await tapThenType(
+    page,
+    "Main Navigation",
+    (target) => target.click(),
+    (button) => button.click(),
+    (field, text) => field.fill(text),
+  );
+});
+
+test("a tap that waits is forgotten once the person presses a key [WISH-13]", async ({ signedInPage: page }) => {
+  await tapThenType(
+    page,
+    "Main Navigation",
+    (target) => target.click(),
+    async (button) => {
+      await button.focus();
+      await page.keyboard.press("Enter");
+    },
+    (field, text) => field.pressSequentially(text),
+  );
+});
+
+test.describe("at phone width with touch", () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
+
+  test("a tap that waits is forgotten once the person taps something else and types [WISH-13]", async ({ signedInPage: page }) => {
+    await tapThenType(
+      page,
+      "Mobile Navigation",
+      (target) => target.tap(),
+      (button) => button.tap(),
+      (field, text) => field.fill(text),
+    );
+  });
+});
+
+// A refresh missed offline drops no copy either: back online, a tap waits for the refresh the server check starts.
+test("after a refresh missed offline, a tap waits for the refresh once the server answers [WISH-13]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const name = itemName();
+  const addRefresh = page.waitForRequest((r) => isRefresh(page, r));
+  await addItem(page, name);
+  await waitForRefresh(addRefresh);
+  await stopClock(page);
+  await markPage(page);
+  // Each state from now on: the item list with the item or without it while the Wishlist is on screen, else the page
+  await page.evaluate((item) => {
+    const seen: string[] = [];
+    const sample = () => {
+      const list = [...document.querySelectorAll("section")].find((s) => /^Items\b/.test(s.querySelector("h2")?.textContent ?? ""));
+      if (location.pathname === "/wishlist" && !list) return;
+      const state = location.pathname !== "/wishlist" ? location.pathname : list?.textContent?.includes(item) ? "item" : "none";
+      if (seen.at(-1) !== state) seen.push(state);
+    };
+    sample();
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
+    Object.assign(window, { seenItems: seen });
+  }, name);
+  const seen = () => page.evaluate(() => (window as unknown as { seenItems: string[] }).seenItems);
+  await andSettle(page, () => page.getByRole("button", { name: `Delete ${name}` }).click());
+  await expect(page.getByText(name, { exact: true })).toBeHidden();
+  // The device goes offline before the refresh after the answer, which is missed
+  const refreshes = countRefreshes(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await page.clock.runFor(1000);
+  await settled(page);
+  expect(refreshes).toHaveLength(0);
+  // Back online, the server does not answer the check yet
+  let answer = () => {};
+  const checked = new Promise<void>((resolve) => (answer = resolve));
+  await page.route("**/api/health", async (route) => {
+    await checked;
+    await route.fallback();
+  });
+  await setOnline(true);
+  await page.clock.runFor(1000);
+  // Tasks and back while the check is unanswered: each tap waits, the later one in place of the earlier. Opened now,
+  // Tasks and then the Wishlist would come from the copies kept from before the delete, with the item back.
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  const opens = countOpens(page);
+  const refreshed = page.waitForRequest((r) => isRefresh(page, r));
+  await nav.getByRole("link", { name: "Tasks" }).click();
+  await settled(page);
+  expect(opens).toEqual([]);
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await settled(page);
+  expect(await seen()).toEqual(["item", "none"]);
+  // The server answers: the refresh starts, and the tap goes through (to the page on screen)
+  answer();
+  await page.clock.resume();
+  await refreshed;
+  // Tasks and back again, now fetched afresh
+  await nav.getByRole("link", { name: "Tasks" }).click();
+  await expect(page).toHaveURL(/\/todos$/);
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  await settled(page);
+  // The item until the delete, then never again
+  expect(await seen()).toEqual(["item", "none", "/todos", "none"]);
+  expect(await isKept(page)).toBe(true);
 });
 
 test("a tab whose page answer is broken says so [XR-11]", async ({ signedInPage: page }) => {
