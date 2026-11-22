@@ -139,6 +139,9 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   });
 
   const replace = (to: WishlistItemData) => setItems((prev) => prev.map((i) => (i.id === to.id ? to : i)));
+  // Puts these fields onto the row as the screen holds it now, so a change another tab made since stays on screen.
+  const putFields = (id: string, fields: Partial<WishlistItemData>) =>
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...fields } : i)));
 
   function openForm(item?: WishlistItemData) {
     setErrorMsg("");
@@ -196,8 +199,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         const updated = res.item as WishlistItemData;
         // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
         const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, toInput(before)[k as keyof typeof changed] ?? null]));
-        // The same fields as the screen holds them, so the Undo puts back on screen only what it writes back.
-        const undoneOnScreen = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof typeof changed]]));
+        // Those fields of a row as the screen holds them: the Undo puts back on screen only what it writes back.
+        const fieldsOf = (item: WishlistItemData) => Object.fromEntries(Object.keys(changed).map((k) => [k, item[k as keyof typeof changed]]));
         replace(updated);
         keepCategory(updated.category);
         if (stillOpen()) closeForm();
@@ -210,12 +213,12 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           onUndo: undoWith(
             showToast,
             async () => {
-              replace({ ...updated, ...undoneOnScreen });
+              putFields(before.id, fieldsOf(before));
               const back = await updateWishlistItemAction(before.id, undo).catch(() => null);
               if (back?.success) {
-                replace(back.item as WishlistItemData);
+                putFields(before.id, fieldsOf(back.item as WishlistItemData));
                 keepCategory(before.category);
-              } else replace(updated);
+              } else putFields(before.id, fieldsOf(updated));
               return back;
             },
             (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
