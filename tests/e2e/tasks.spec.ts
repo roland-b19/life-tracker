@@ -192,6 +192,33 @@ test("a double tap on Save or on a task's box writes once [D-043]", async ({ sig
   await expect(page.getByRole("region", { name: "Progress" }).getByText("1 of 1 done")).toBeVisible();
 });
 
+test("a Save in a form opened again while the last opening's save is unanswered still saves [D-043]", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  const [first, second] = [taskTitle(), taskTitle()];
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/todos", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"title":"${first}"`)) await held;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add task" }).click();
+  const form = page.getByRole("dialog", { name: "New task" });
+  await form.getByLabel("Title").fill(first);
+  const firstAnswered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"title":"${first}"`));
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  // The first opening's Save must not lock this opening's Save (Next sends it once the first one has answered).
+  await page.getByRole("button", { name: "Add task" }).click();
+  await form.getByLabel("Title").fill(second);
+  await form.getByRole("button", { name: "Save" }).click();
+  release();
+  await firstAnswered;
+  await expect(form).toBeHidden();
+  await expect(page.getByText(first, { exact: true })).toBeVisible();
+  await expect(page.getByText(second, { exact: true })).toBeVisible();
+});
+
 test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   const title = taskTitle();

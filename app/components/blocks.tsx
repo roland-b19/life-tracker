@@ -496,10 +496,17 @@ export function FormModal({
   children: ReactNode;
 }) {
   // One submit until the handler settles, and the rest of a double tap on Save is swallowed, so it neither submits
-  // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too.
+  // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too. The lock
+  // belongs to one opening of the form: a save still unanswered after Cancel never holds the Save of the next opening.
   const once = useOnce();
+  const [opening, setOpening] = useState(0);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setOpening(opening + 1);
+  }
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!once("form", () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
+    if (!once(`form:${opening}`, () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
