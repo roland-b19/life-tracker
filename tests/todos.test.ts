@@ -313,14 +313,14 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         id: addRes.todo.id,
         isCompleted: true,
       });
-      expect(toggleRes.success).toBe(true);
+      succeeded(toggleRes);
 
       const listRes = await getDailyTodos(userA, "personal", today);
       expect(listRes.todos).toHaveLength(1);
       expect(listRes.todos[0].isCompleted).toBe(true);
 
       const deleteRes = succeeded(await deleteTodoAction(addRes.todo.id));
-      expect(deleteRes.success).toBe(true);
+      succeeded(deleteRes);
       expect(deleteRes.deleted).toBe(true);
 
       vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
@@ -329,7 +329,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         p256dhKey: "sample-p256dh-val",
         authKey: "sample-auth-val",
       }));
-      expect(subRes.success).toBe(true);
+      succeeded(subRes);
       expect(subRes.subscription.endpoint).toContain("googleapis.com");
     });
 
@@ -366,7 +366,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("adds one-off tasks for today only, with a day of slack backwards and none forwards [TASK-04]", async () => {
       const today = toISODate();
       const task = (dueDate: string) => ({ space: "personal", title: "Plan", dueDate, isRecurring: false });
-      expect((await addTodoAction(task(today))).success).toBe(true);
+      succeeded(await addTodoAction(task(today)));
       await expect(addTodoAction(task(addDays(today, 1)))).resolves.toEqual({ success: false, error: "Tasks can only be added or changed for today." });
       await expect(addTodoAction(task(addDays(today, 2)))).resolves.toEqual({ success: false, error: "Tasks can only be added or changed for today." });
       await expect(addTodoAction(task(addDays(today, -5)))).resolves.toEqual({ success: false, error: "Tasks can only be added or changed for today." });
@@ -379,11 +379,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       await expect(addTodoAction(habit(addDays(today, -400)))).resolves.toEqual({ success: false, error: "Tasks can only be added or changed for today." });
       await expect(addTodoAction(habit(addDays(today, 400)))).resolves.toEqual({ success: false, error: "Tasks can only be added or changed for today." });
       const made = await addTodoAction(habit(addDays(today, -1)));
-      expect(made.success).toBe(true);
+      succeeded(made);
       // Undo of deleting a long-running habit keeps its real first day.
       if (!made.success) throw new Error(made.error);
       const old = { ...made.todo, dueDate: addDays(today, -400), id: randomUUID(), title: "Old habit", createdAt: new Date() };
-      expect((await restoreTodoAction(old)).success).toBe(true);
+      succeeded(await restoreTodoAction(old));
     });
 
     it("puts a one-off task added for a day already over on today, so it shows and carries over", async () => {
@@ -448,7 +448,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
         space: "personal", title: "Walk", dueDate: today, isRecurring: true, recurrencePattern: "daily",
       });
       if (!habit.success) throw new Error(habit.error);
-      expect((await toggleTodoAction({ id: habit.todo.id, isCompleted: true })).success).toBe(true);
+      succeeded(await toggleTodoAction({ id: habit.todo.id, isCompleted: true }));
       expect((await getDailyTodos(userA, "personal", today)).todos.find((t) => t.id === habit.todo.id)?.isCompleted).toBe(true);
       const later = await add(userA, { space: "personal", title: "Later", dueDate: addDays(today, 3), isRecurring: true, recurrencePattern: "daily" });
       await expect(toggleTodoAction({ id: later.id, isCompleted: true})).resolves.toEqual({ success: false, error: "This task is not due today." }); // before it starts
@@ -465,11 +465,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("keeps two tasks with one title, on any list [TASK-11]", async () => {
       const today = toISODate();
       const task = { space: "personal", title: "Buy milk", dueDate: today, isRecurring: false };
-      expect((await addTodoAction(task)).success).toBe(true);
-      expect((await addTodoAction({ ...task, title: "  buy MILK " })).success).toBe(true);
+      succeeded(await addTodoAction(task));
+      succeeded(await addTodoAction({ ...task, title: "  buy MILK " }));
       const habit = { ...task, title: "Stretch", isRecurring: true, recurrencePattern: "daily" };
-      expect((await addTodoAction(habit)).success).toBe(true);
-      expect((await addTodoAction(habit)).success).toBe(true);
+      succeeded(await addTodoAction(habit));
+      succeeded(await addTodoAction(habit));
       const titles = (await getDailyTodos(userA, "personal", today, today)).todos.map((t) => t.title).sort();
       expect(titles).toEqual(["Buy milk", "Stretch", "Stretch", "buy MILK"]);
     });
@@ -518,7 +518,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const today = toISODate();
       expect(await addTodoAction({ space: "personal", title: "x".repeat(151), dueDate: today, isRecurring: false })).toEqual({ success: false, error: "Too long (max 150)" });
       expect(await addTodoAction({ space: "personal", title: "  ", dueDate: today, isRecurring: false })).toEqual({ success: false, error: "Title is required" });
-      expect((await addTodoAction({ space: "personal", title: "x".repeat(150), dueDate: today, isRecurring: false })).success).toBe(true);
+      succeeded(await addTodoAction({ space: "personal", title: "x".repeat(150), dueDate: today, isRecurring: false }));
     });
 
     it("restores a deleted task as it was, owner only", async () => {
@@ -545,7 +545,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
 
       authState.id = userA;
       await deleteTodoAction(habit.id);
-      expect((await restoreTodoAction(input)).success).toBe(true);
+      succeeded(await restoreTodoAction(input));
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true });
       expect((await admin.query("SELECT * FROM todos WHERE id = $1", [habit.id])).rows[0]).toEqual(rowBefore);
@@ -559,7 +559,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(before.completedAt).toBeTruthy();
       await new Promise((r) => setTimeout(r, 10));
       await deleteTodoAction(task.id);
-      expect((await restoreTodoAction({ ...before, reminderTime: null })).success).toBe(true);
+      succeeded(await restoreTodoAction({ ...before, reminderTime: null }));
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(new Date(back.completedAt as unknown as string).getTime()).toBe(new Date(before.completedAt as unknown as string).getTime());
     });
@@ -585,8 +585,8 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1", [userA])).rows[0].n).toBe(1);
 
       // Undo gives the row back, even while another task has its title (D-036).
-      expect((await addTodoAction({ space: "personal", title: "stretch", dueDate: today, isRecurring: true, recurrencePattern: "daily" })).success).toBe(true);
-      expect((await restoreTodoAction(input)).success).toBe(true);
+      succeeded(await addTodoAction({ space: "personal", title: "stretch", dueDate: today, isRecurring: true, recurrencePattern: "daily" }));
+      succeeded(await restoreTodoAction(input));
       expect(await rows(habit.id)).toBe(1);
       authState.id = userB; // the id is taken now: another user cannot overwrite or take the row
       expect((await restoreTodoAction(input)).success).toBe(false);
@@ -606,7 +606,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userB;
       expect(await updateTodoAction({ id: b.id, title: "Hijacked" })).toEqual({ success: false, error: "This task no longer exists." });
       authState.id = userA;
-      expect((await updateTodoAction({ id: b.id, title: "call MOM" })).success).toBe(true);
+      succeeded(await updateTodoAction({ id: b.id, title: "call MOM" }));
       expect((await getDailyTodos(userA, "personal", today, today)).todos.map((t) => t.title).sort()).toEqual(["Call mom", "call MOM"]);
     });
   });
@@ -743,7 +743,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       for (const space of spaces) {
         for (const isRecurring of [false, true]) {
           const res = await addTodoAction({ space, title: "Plan", dueDate: today, isRecurring, recurrencePattern: isRecurring ? "daily" : "none" });
-          expect(res.success).toBe(true);
+          succeeded(res);
         }
       }
       for (const space of spaces) {
@@ -790,7 +790,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
     it("ticks today whatever day the screen sent, and the tick orders today's list only", async () => {
       const a = await daily("A");
       await daily("B");
-      expect((await toggleTodoAction({ id: a.id, isCompleted: true})).success).toBe(true);
+      succeeded(await toggleTodoAction({ id: a.id, isCompleted: true}));
       expect((await getDailyTodos(userA, "personal", today, today)).todos.find((t) => t.id === a.id)?.isCompleted).toBe(true);
       expect(await titlesOn(today)).toEqual(["B", "A"]);
       await expect(toggleTodoAction({ id: (await daily("C", addDays(today, 3))).id, isCompleted: true})).resolves.toEqual({ success: false, error: "This task is not due today." });
@@ -821,7 +821,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await titlesOn(yesterday)).toEqual([]); // nothing of it is left on any day
       expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE id = $1", [task.id])).rows[0].n).toBe(0);
 
-      expect((await restoreTodoAction(before)).success).toBe(true);
+      succeeded(await restoreTodoAction(before));
       expect(await titlesOn(today)).toEqual(["Stretch"]);
       expect((await admin.query("SELECT * FROM todos WHERE id = $1", [task.id])).rows[0]).toEqual(rowBefore);
       expect((await admin.query("SELECT count(*)::int AS n FROM todos WHERE user_id = $1 AND title = 'Stretch'", [userA])).rows[0].n).toBe(1);
@@ -834,7 +834,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await deleteTodo(userA, task.id)).toBe(true);
       expect(await deleteTodo(userB, task.id)).toBeNull();
       expect(await titlesOn(today)).toEqual([]);
-      expect((await restoreTodoAction(before)).success).toBe(true);
+      succeeded(await restoreTodoAction(before));
       expect(await snapOf(task.id)).toMatchObject({ isCompleted: true, completedAt: before.completedAt });
     });
 

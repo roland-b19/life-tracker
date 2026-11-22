@@ -194,7 +194,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     authState.id = userA;
     expect(succeeded(await deleteMealAction(meal.id)).deleted?.id).toBe(meal.id);
     expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(0);
-    expect((await restoreMealAction(undo)).success).toBe(true);
+    succeeded(await restoreMealAction(undo));
     expect((await getDailyFoodSummary(userA, today)).meals).toEqual([before]);
     expect((await restoreMealAction(undo)).success).toBe(false); // a second Undo adds nothing
     expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
@@ -231,7 +231,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const item = await addItem(userA, { name: "Milk", amount: 2, unit: "l", category: "dairy" });
     await toggleShoppingItem(userA, item.id, true);
     const [before] = (await getShoppingList(userA)).filter((i) => i.id === item.id);
-    expect((await deleteShoppingItemAction(item.id)).success).toBe(true);
+    succeeded(await deleteShoppingItemAction(item.id));
     expect(await getShoppingList(userA)).toHaveLength(0);
     authState.id = userB;
     await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual({ success: false, error: "Item not found." });
@@ -755,7 +755,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await getShoppingCategories(owner)).toEqual(["meat", "produce", "dairy", "bakery", "pantry"]);
 
       authState.id = owner;
-      expect((await addShoppingCategoryAction({ name: " Frozen " })).success).toBe(true);
+      succeeded(await addShoppingCategoryAction({ name: " Frozen " }));
       expect((await addShoppingCategoryAction({ name: "frozen" })).success).toBe(false);
       await expect(addShoppingCategoryAction({ name: "Other" })).resolves.toMatchObject({ success: false });
       await expect(renameShoppingCategoryAction({ from: "frozen", to: "other" })).resolves.toMatchObject({ success: false });
@@ -766,7 +766,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await getShoppingCategories(owner)).toContain("freezer");
 
       // Renaming onto an existing name merges; deleting moves the items to "other".
-      expect((await renameShoppingCategoryAction({ from: "freezer", to: "frozen" })).success).toBe(true);
+      succeeded(await renameShoppingCategoryAction({ from: "freezer", to: "frozen" }));
       expect((await getShoppingList(owner))[0].category).toBe("frozen");
       expect((await getShoppingCategories(owner)).filter((c) => c.startsWith("fr"))).toEqual(["frozen"]);
 
@@ -776,7 +776,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect((await getShoppingList(owner))[0].category).toBe("frozen");
 
       authState.id = owner;
-      expect((await deleteShoppingCategoryAction({ name: "frozen" })).success).toBe(true);
+      succeeded(await deleteShoppingCategoryAction({ name: "frozen" }));
       expect((await getShoppingList(owner)).find((i) => i.id === item.id)?.category).toBe("other");
       expect(await getShoppingCategories(owner)).not.toContain("frozen");
       authState.id = "";
@@ -789,13 +789,13 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await getShoppingCategories(owner, "unit")).not.toContain("pcs");
 
       authState.id = owner;
-      expect((await addShoppingCategoryAction({ kind: "unit", name: " TIN " })).success).toBe(true);
+      succeeded(await addShoppingCategoryAction({ kind: "unit", name: " TIN " }));
       expect((await addShoppingCategoryAction({ kind: "unit", name: "tin" })).success).toBe(false);
       await expect(addShoppingCategoryAction({ kind: "unit", name: "pcs" })).resolves.toMatchObject({ success: false });
       await expect(addShoppingCategoryAction({ kind: "unit", name: "x".repeat(31) })).resolves.toMatchObject({ success: false });
       await expect(renameShoppingCategoryAction({ kind: "unit", from: "tin", to: "pcs" })).resolves.toMatchObject({ success: false });
       // "other" is a category fallback only; a unit may use it.
-      expect((await addShoppingCategoryAction({ kind: "unit", name: "other" })).success).toBe(true);
+      succeeded(await addShoppingCategoryAction({ kind: "unit", name: "other" }));
       expect(await getShoppingCategories(owner)).not.toContain("tin"); // the lists are apart
 
       // A unit an item brings along joins the list; renaming moves the items; deleting files them under "pcs".
@@ -870,7 +870,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         carbs: 5,
         fat: 3,
       }));
-      expect(mealRes.success).toBe(true);
+      succeeded(mealRes);
       expect(mealRes.meal?.name).toBe("Whey Shake");
 
       // 2. Water: a tap sends the total it showed and the new one, so a repeat of the same tap no longer matches and
@@ -899,7 +899,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       // 3. Update steps
       const stepsRes = succeeded(await updateStepsAction({ date: today, steps: { from: 150000, to: 10500 } }));
-      expect(stepsRes.success).toBe(true);
+      succeeded(stepsRes);
       expect(stepsRes.metrics?.steps).toBe(10500);
 
       // 4. Update targets
@@ -908,7 +908,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         proteinGrams: { from: 170, to: 175 },
         carbsGrams: { from: 300, to: 310 },
       }));
-      expect(targetRes.success).toBe(true);
+      succeeded(targetRes);
       expect(targetRes.targets.calories).toBe(3400);
 
       // 5. Shopping: add, edit, rename, clear and undo
@@ -916,7 +916,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(item.category).toBe("dairy");
       const editRes = await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" });
       expect(editRes.success && Number(editRes.item.amount)).toBe(10);
-      expect((await renameShoppingCategoryAction({ from: "dairy", to: "fridge" })).success).toBe(true);
+      succeeded(await renameShoppingCategoryAction({ from: "dairy", to: "fridge" }));
       await expect(updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).resolves.toMatchObject({ success: false });
       await expect(updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).resolves.toMatchObject({ success: false });
 
@@ -945,7 +945,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
       // 7. Delete meal
       const delMealRes = await deleteMealAction(mealRes.meal!.id);
-      expect(delMealRes.success).toBe(true);
+      succeeded(delMealRes);
     });
 
     it("saves goals for the signed-in owner only and validates their ranges", async () => {
@@ -980,7 +980,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       for (const date of [addDays(today, -2), addDays(today, 1)]) {
         await expect(logMealAction({ ...meal, date })).resolves.toEqual({ success: false, error: locked });
       }
-      expect((await logMealAction({ ...meal, date: addDays(today, -1) })).success).toBe(true); // yesterday is the grace day
+      succeeded(await logMealAction({ ...meal, date: addDays(today, -1) })); // yesterday is the grace day
     });
 
     describe("water, steps and weight are saved for today only (Bucharest), with a fixed clock", () => {
@@ -1018,7 +1018,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         authState.id = userA;
         at("2026-11-20T21:59:59Z"); // 23:59:59 in Bucharest, still the 20th
         expect(await setWaterAction({ date: "2026-11-21", waterMl: { from: 0, to: 250 } })).toEqual(onlyToday);
-        expect((await setWaterAction({ date: "2026-11-20", waterMl: { from: 0, to: 250 } })).success).toBe(true);
+        succeeded(await setWaterAction({ date: "2026-11-20", waterMl: { from: 0, to: 250 } }));
         at("2026-11-20T22:00:00Z"); // 00:00 in Bucharest: the 21st, though UTC still says the 20th
         for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toEqual(onlyToday);
         for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: true });
@@ -1031,7 +1031,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
           .insert(weightEntries)
           .values({ userId: userA, date: addDays(today, -3), kilograms: "81.20" })
           .returning();
-        expect((await deleteWeightAction(past.id)).success).toBe(true);
+        succeeded(await deleteWeightAction(past.id));
         expect(await listWeightEntries(userA)).toEqual([]);
         const back = succeeded(await restoreWeightAction({ id: past.id, date: past.date, kilograms: 81.2 }));
         expect(back.entry?.id).toBe(past.id);

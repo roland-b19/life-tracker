@@ -26,7 +26,7 @@ describe("Categories: lists, items and multi-user isolation", () => {
 
   it("adds, renames and deletes a category, moving the items with it", async () => {
     authState.id = userA;
-    expect((await addCategoryAction({ scope: "wishlist", name: "  Gifts " })).success).toBe(true);
+    succeeded(await addCategoryAction({ scope: "wishlist", name: "  Gifts " }));
     expect(await addCategoryAction({ scope: "wishlist", name: "gifts" })).toEqual({ success: false, error: '"gifts" already exists.' });
     const item = (await addWishlistItem(userA, { name: "Scarf", estimatedPrice: 20, category: "gifts" })).item!;
     expect(item.category).toBe("gifts");

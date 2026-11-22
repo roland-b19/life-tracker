@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
+import { succeeded } from "./succeeded";
 
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
@@ -88,7 +89,7 @@ describe("weight authorization", () => {
     authState.id = await seedUser(`d-${randomUUID()}`);
     expect((await deleteWeightAction(past.id)).success).toBe(false);
     authState.id = ownerId;
-    expect((await deleteWeightAction(past.id)).success).toBe(true);
+    succeeded(await deleteWeightAction(past.id));
     expect(await listWeightEntries(ownerId)).toEqual([]);
   });
 
@@ -98,11 +99,11 @@ describe("weight authorization", () => {
     const created = await saveWeightAction({ date: today, kilograms: 82.4 });
     if (!created.success) throw new Error("save failed");
     const original = await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id));
-    expect((await deleteWeightAction(created.entry.id)).success).toBe(true);
+    succeeded(await deleteWeightAction(created.entry.id));
     expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([]);
 
     const restored = await restoreWeightAction({ ...created.entry, kilograms: Number(created.entry.kilograms) });
-    expect(restored.success).toBe(true);
+    succeeded(restored);
     expect(await db.select().from(weightEntries).where(eq(weightEntries.id, created.entry.id))).toEqual([
       { ...original[0], createdAt: expect.any(Date) },
     ]);
@@ -178,7 +179,7 @@ describe("weight authorization", () => {
 
     authState.id = ownerId;
     expect(await listWeightEntries(ownerId)).toEqual([created.entry]);
-    expect((await deleteWeightAction(created.entry.id)).success).toBe(true);
+    succeeded(await deleteWeightAction(created.entry.id));
   });
 
   it("sets the day's weight instead of adding a second row, and reports what it replaced", async () => {
@@ -232,7 +233,7 @@ describe("plate weight authorization (GYMC-05)", () => {
   it("refuses another user's custom exercise and leaves its plate weight unchanged", async () => {
     const other = (authState.id = await seedUser(`q-${randomUUID()}`));
     const theirs = await custom(other);
-    expect((await savePlateWeightAction({ exerciseId: theirs, kg: 20 })).success).toBe(true);
+    succeeded(await savePlateWeightAction({ exerciseId: theirs, kg: 20 }));
     authState.id = await seedUser(`r-${randomUUID()}`);
     expect(await savePlateWeightAction({ exerciseId: theirs, kg: 99 })).toEqual({ success: false, error: EXERCISE_GONE });
     expect(await savePlateWeightAction({ exerciseId: theirs, kg: null })).toEqual({ success: false, error: EXERCISE_GONE });

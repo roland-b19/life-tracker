@@ -141,7 +141,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     expect(await updateWishlistItemAction(item.id, edit)).toEqual({ success: false, error: SIGNED_OUT });
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor");
     authState.id = userA;
-    expect((await updateWishlistItemAction(item.id, edit)).success).toBe(true);
+    succeeded(await updateWishlistItemAction(item.id, edit));
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor 4K");
     authState.id = "";
   });

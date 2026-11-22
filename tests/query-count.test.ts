@@ -14,6 +14,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { seedUser } from "./auth";
+import { succeeded } from "./succeeded";
 import { startSession } from "@/server/sessions";
 import { getExercises, getUserSplitWithDays } from "@/lib/gym";
 import { getShoppingCategories } from "@/lib/food";
@@ -95,7 +96,7 @@ describe("a page view with two years of data stays cheap", () => {
   it("the todos page loads everything in one action, with few queries", async () => {
     const { loadTodosViewAction } = await import("@/actions/todos");
     const { result, queries, bytes } = await measure(() => loadTodosViewAction());
-    expect(result.success).toBe(true);
+    succeeded(result);
     // 13 = the session check, the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history.
     expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(13);
     expect(bytes).toBeLessThanOrEqual(20_000);

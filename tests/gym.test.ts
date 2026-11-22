@@ -179,7 +179,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await deleteCustomExerciseAction(fresh.id)).toEqual({ success: false, error: SIGNED_OUT });
 
     authState.id = userA;
-    expect((await deleteCustomExerciseAction(fresh.id)).success).toBe(true);
+    succeeded(await deleteCustomExerciseAction(fresh.id));
     expect((await getExercises(userA)).some((e) => e.id === fresh.id)).toBe(false);
 
     const used = await make("Used Squat");
@@ -207,7 +207,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
           { exerciseId: first.exerciseId, targetSets: 2, minReps: 5, maxReps: 8 },
         ],
       });
-      expect(res.success).toBe(true);
+      succeeded(res);
 
       const after = (await getUserSplitWithDays(userA))!.days.find((d) => d.id === day.id)!;
       expect(after.name).toBe("Push");
@@ -660,9 +660,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const start = session.createdAt.getTime();
     const outside = { success: false, error: "A set's time must fall within its workout." };
     const log = (setOrder: number, createdAt: number) => logSetAction(setOf(session.id, ex, { setOrder, id: randomUUID(), createdAt: new Date(createdAt) }));
-    expect((await log(1, start - 60_000)).success).toBe(true); // the device's clock may run a minute behind
+    succeeded(await log(1, start - 60_000)); // the device's clock may run a minute behind
     expect(await log(2, start - 60_001)).toEqual(outside);
-    expect((await log(2, Date.now() + 50_000)).success).toBe(true); // ...or ahead
+    succeeded(await log(2, Date.now() + 50_000)); // ...or ahead
     expect(await log(3, Date.now() + 70_000)).toEqual({ success: false, error: FUTURE_DATE });
     expect(await setCount(session.id)).toBe(2);
     const bodyweight = succeeded(await logSetAction(setOf(session.id, ex, { setOrder: 3, loadType: "bodyweight", loadValue: 0, extraKg: 10 })));
@@ -791,16 +791,16 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     authState.id = userA;
     expect(await updateCustomExerciseAction({ ...edit, name: "taken" })).toEqual({ success: false, error: '"Taken" already exists.' }); // names the other one
-    expect((await updateCustomExerciseAction({ ...edit, name: "edit ME" })).success).toBe(true); // its own name, other case
-    expect((await updateCustomExerciseAction(edit)).success).toBe(true);
+    succeeded(await updateCustomExerciseAction({ ...edit, name: "edit ME" })); // its own name, other case
+    succeeded(await updateCustomExerciseAction(edit));
     expect((await getExercises(userA)).find((e) => e.id === made.id)).toMatchObject({ name: "Edited", muscleGroup: "back", equipmentType: "cable", isCustom: true });
     expect(await updateCustomExerciseAction({ ...edit, id: randomUUID() })).toEqual({ success: false, error: "This exercise no longer exists." });
 
     const [before] = (await getExercises(userA)).filter((e) => e.id === made.id);
-    expect((await deleteCustomExerciseAction(made.id)).success).toBe(true);
+    succeeded(await deleteCustomExerciseAction(made.id));
     const back = { id: made.id, name: before.name, muscleGroup: before.muscleGroup, equipmentType: before.equipmentType } as const;
-    expect((await restoreCustomExerciseAction(back)).success).toBe(true);
-    expect((await restoreCustomExerciseAction(back)).success).toBe(true); // a repeated Undo changes nothing
+    succeeded(await restoreCustomExerciseAction(back));
+    succeeded(await restoreCustomExerciseAction(back)); // a repeated Undo changes nothing
     const [after] = (await getExercises(userA)).filter((e) => e.id === made.id);
     expect({ ...after, createdAt: 0 }).toEqual({ ...before, createdAt: 0 });
   });
@@ -853,7 +853,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(exerciseNameKey("Cable  fly.")).toBe(exerciseNameKey("cable fly"));
     expect(await addCustomExerciseAction({ ...input, name: "Cable  fly." })).toEqual({ success: false, error: '"Cable fly" already exists.' });
     expect(exerciseNameKey("Cable fly")).not.toBe(exerciseNameKey("cable fly"));
-    expect((await addCustomExerciseAction({ ...input, name: "Cable fly" })).success).toBe(true);
+    succeeded(await addCustomExerciseAction({ ...input, name: "Cable fly" }));
   });
 
   it("takes an exercise name of up to 120 characters and a day name of up to 100", async () => {
@@ -863,7 +863,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await addCustomExerciseAction({ ...input, name: "b".repeat(121) })).toEqual({ success: false, error: "Too long (max 120)" });
     expect(await updateCustomExerciseAction({ ...input, id: made.id, name: "c".repeat(121) })).toEqual({ success: false, error: "Too long (max 120)" });
     const day = (await getUserSplitWithDays(userA))!.days[0];
-    expect((await saveSplitDayAction({ id: day.id, name: "d".repeat(100), isRest: true, exercises: [] })).success).toBe(true);
+    succeeded(await saveSplitDayAction({ id: day.id, name: "d".repeat(100), isRest: true, exercises: [] }));
     expect(await saveSplitDayAction({ id: day.id, name: "d".repeat(101), isRest: true, exercises: [] })).toEqual({ success: false, error: "Too long (max 100)" });
   });
 
@@ -933,12 +933,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     await getExercises(userA); // seeds the defaults
     const input = { muscleGroup: "chest", equipmentType: "barbell" } as const;
     expect((await addCustomExerciseAction({ ...input, name: "incline BARBELL press" })).success).toBe(false);
-    expect((await addCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+    succeeded(await addCustomExerciseAction({ ...input, name: "My Press" }));
     const again = await addCustomExerciseAction({ ...input, name: "my press" });
     expect(again).toMatchObject({ success: false, error: expect.stringContaining("already exists") });
     // Another user may use the same name
     authState.id = userB;
-    expect((await addCustomExerciseAction({ ...input, name: "My Press" })).success).toBe(true);
+    succeeded(await addCustomExerciseAction({ ...input, name: "My Press" }));
   });
 
   it("two custom exercises with one name made at once: exactly one is created", async () => {
@@ -1064,9 +1064,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     // Undo swaps back exactly what the save changed; a repeated Undo changes nothing
     const undo = { add: saved.removed, remove: saved.added };
-    expect((await restoreDeloadWeeksAction(undo)).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction(undo));
     expect(await weeksOf(userA)).toEqual(before);
-    expect((await restoreDeloadWeeksAction(undo)).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction(undo));
     expect(await weeksOf(userA)).toEqual(before);
     expect([await flag(0), await flag(1)]).toEqual([false, true]);
   });
@@ -1082,14 +1082,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const cleared = succeeded(await saveDeloadWeeksAction({ last: null, next: null }));
     expect(cleared).toEqual({ success: true, last: at(-3), added: [], removed: [at(0), at(2)] });
     expect(await weeksOf(userA)).toEqual([at(-8), at(-3)]);
-    expect((await restoreDeloadWeeksAction({ add: cleared.removed, remove: cleared.added })).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction({ add: cleared.removed, remove: cleared.added }));
     expect(await weeksOf(userA)).toEqual(before);
 
     // An earlier week as Last: added, and the later past week still stands as the last one
     const earlier = succeeded(await saveDeloadWeeksAction({ last: at(-5), next: at(2) }));
     expect(earlier).toEqual({ success: true, last: at(-3), added: [at(-5)], removed: [at(0)] });
     expect(await weeksOf(userA)).toEqual([at(-8), at(-5), at(-3), at(2)]);
-    expect((await restoreDeloadWeeksAction({ add: earlier.removed, remove: earlier.added })).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction({ add: earlier.removed, remove: earlier.added }));
     expect(await weeksOf(userA)).toEqual(before);
   });
 
@@ -1099,7 +1099,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const before = await weeksOf(userA);
 
     authState.id = userB;
-    expect((await restoreDeloadWeeksAction({ add: [addDays(thisWeek, 7)], remove: [thisWeek] })).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction({ add: [addDays(thisWeek, 7)], remove: [thisWeek] }));
     expect(await weeksOf(userA)).toEqual(before);
     expect(await weeksOf(userB)).toEqual([addDays(thisWeek, 7)]);
 
@@ -1108,7 +1108,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await weeksOf(userA)).toEqual(before);
 
     authState.id = userA;
-    expect((await restoreDeloadWeeksAction({ add: [], remove: [thisWeek] })).success).toBe(true);
+    succeeded(await restoreDeloadWeeksAction({ add: [], remove: [thisWeek] }));
     expect(await weeksOf(userA)).toEqual([]);
   });
 
@@ -1220,7 +1220,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
       // 3. Delete set (only while the workout is open), and log another
       const deleteRes = await deleteSetAction(logRes.set.id);
-      expect(deleteRes.success).toBe(true);
+      succeeded(deleteRes);
       succeeded(await logSetAction({ sessionId: startRes.session.id, exerciseId: exercise.id, reps: 8, loadType: "kg", loadValue: 42.5 }));
 
       // 4. Finish session
@@ -1243,7 +1243,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("lets the owner cancel a workout, sets included", async () => {
       const id = await startWithSet(userA);
-      expect((await cancelSessionAction({ sessionId: id })).success).toBe(true);
+      succeeded(await cancelSessionAction({ sessionId: id }));
       expect(await getWorkoutSessionDetails(userA, id)).toBeNull();
       const left = await admin.query("SELECT 1 FROM workout_sets WHERE session_id = $1", [id]);
       expect(left.rowCount).toBe(0);
@@ -1396,7 +1396,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(await reopenSessionAction({ sessionId: id })).toEqual({ success: false, error: SIGNED_OUT });
       expect(await getOpenWorkoutSession(userA)).toBeNull(); // still finished
       authState.id = userA;
-      expect((await reopenSessionAction({ sessionId: id })).success).toBe(true);
+      succeeded(await reopenSessionAction({ sessionId: id }));
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(id);
     });
 
@@ -1406,7 +1406,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(await startSessionAction(await startInput(userA))).toEqual({ success: false, error: "A workout is already open. Resume or finish it first." });
       succeeded(await finishSessionAction({ sessionId: old.id }));
       const started = await startSessionAction(await startInput(userA));
-      expect(started.success).toBe(true);
+      succeeded(started);
       expect(await reopenSessionAction({ sessionId: old.id })).toMatchObject({ success: false, error: "A workout is already open. Resume or finish it first." });
       expect(await getOpenWorkoutSession(userA)).toMatchObject({ session: { id: started.success ? started.session.id : "" } });
       expect(await restoreSessionAction({ date: TODAY, isDeload: false, sets: [] })).toMatchObject({ success: false });
