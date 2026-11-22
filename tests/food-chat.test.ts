@@ -260,6 +260,26 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect((await getDailyFoodSummary(userId, ctx.date)).meals).toHaveLength(before);
   });
 
+  it("lists a meal id the answer sends twice once, as one meal, and never an older meal sent again", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-repeat-${randomUUID()}`);
+    const older = (await logMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 })).meal!;
+    const id = randomUUID();
+    mockClaude({
+      reply: "Gata.",
+      meals: [
+        { id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 },
+        { id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 },
+        { id: older.id, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 },
+      ],
+    });
+
+    const result = await sendFoodChatMessage(owner, "Am mâncat o supă", [], ctx);
+
+    expect(result.meals.map((m) => m?.id)).toEqual([id]);
+    expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.id).sort()).toEqual([id, older.id].sort());
+  });
+
   it("only ever adds meals: anything else in the answer changes nothing", async () => {
     process.env.AUTH_DEV = "true";
     const owner = await seedUser(`chat-scope-${randomUUID()}`);

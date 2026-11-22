@@ -850,7 +850,7 @@ test("a signed-out visit to /health goes to the sign-in form, which comes back t
   }
 });
 
-test("the meal form keeps Save off until a value survives rounding, shows the server's refusal and reads the app's number format [HTODAY-06, HTODAY-04, HTODAY-05, HTODAY-13]", async ({
+test("the meal form keeps Save off until a value survives rounding, says calories can't be negative when a macro is beside them, and reads the app's number format [HTODAY-06, HTODAY-04, HTODAY-05, HTODAY-13]", async ({
   signedInPage: page,
 }) => {
   await openHealth(page, "Today");

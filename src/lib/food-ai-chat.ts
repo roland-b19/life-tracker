@@ -176,8 +176,14 @@ export async function sendFoodChatMessage(
     const sent = "calories" in meal ? meal.calories : undefined;
     const calories = typeof sent === "number" ? Math.round(sent) : sent;
     const parsed = logMealSchema.safeParse({ ...meal, calories, date: ctx.date });
-    if (parsed.success) logged.push((await logMeal(userId, { ...parsed.data, isEstimated: true })).meal);
-    else leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
+    if (!parsed.success) {
+      leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
+      continue;
+    }
+    // A meal id already saved (sent twice in this answer, or an older meal's) adds nothing (D-040), so it is not listed
+    // again: the answer's list, and its Undo, hold only the meals this answer added.
+    const { meal: saved, repeated } = await logMeal(userId, { ...parsed.data, isEstimated: true });
+    if (!repeated) logged.push(saved);
   }
   let reply = answer.reply.trim() || "Done.";
   if (reply.length > MAX_REPLY) {
