@@ -7,6 +7,7 @@ import {
   deleteTodoSchema,
   restoreTodoSchema,
   pushSubscriptionSchema,
+  TODO_GONE,
   TodoSpace,
   toggleTodoSchema,
   updateTodoSchema,
@@ -41,7 +42,7 @@ function assertPlannable(task: { isRecurring?: boolean; dueDate: string }, start
 /** A change to a one-off task is made on its own day, to a daily one on today. */
 const assertChangeable = (task: { isRecurring: boolean; dueDate: string }) => assertToday(task.isRecurring ? toISODate() : task.dueDate);
 
-const gone = () => new Refusal("This task no longer exists.");
+const gone = () => new Refusal(TODO_GONE);
 
 /**
  * Adds a task; a repeat of the same add (same id) answers the task already there with `repeated`, an id another user

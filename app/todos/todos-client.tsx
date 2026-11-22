@@ -8,6 +8,9 @@ import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { ProgressRing } from "../components/charts";
 import { undoWith, useToast } from "../components/toast";
+import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
+import { remindersState } from "./reminders";
 import { isPushEnabled } from "@/lib/features";
 import {
   addTodoAction,
@@ -20,10 +23,13 @@ import {
   updateTodoAction,
 } from "@/actions/todos";
 import type { TodoItem } from "@/lib/todos";
-import type { TodoSpace } from "@/lib/validations/todos";
+import { TODO_GONE, type TodoSpace } from "@/lib/validations/todos";
 import { blockPlacements, compareTodos } from "@/lib/todo-order";
 
 type TaskTab = "daily" | "one-day";
+
+/** What a task toast touches (D-040): the task's row. */
+const touches = (id: string) => [`todos:${id}`];
 interface TodosClientProps {
   userName: string;
   todayDate: string;
@@ -42,9 +48,22 @@ export function TodosClient({
   const [space, setSpace] = useState<TodoSpace>("personal");
   const [tab, setTab] = useState<TaskTab>("daily");
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [categories, setCategories] = useState(initialCategories);
+  // The task the form opened on (its values then), null for a new task.
+  const [editing, setEditing] = useState<TodoItem | null>(null);
+  const closeForm = () => setIsTaskModalOpen(false);
+  // Each space's list as the server sent it; the edit form closes when another device deletes its task.
+  const editingIn = (s: TodoSpace) => (isTaskModalOpen && editing?.space === s ? editing.id : null);
+  const [personalTodos, setPersonalTodos] = useServerState(initialPersonalTodos, { editing: editingIn("personal"), onDeleted: closeForm });
+  const [businessTodos, setBusinessTodos] = useServerState(initialBusinessTodos, { editing: editingIn("business"), onDeleted: closeForm });
+  const todosMap: Record<TodoSpace, TodoItem[]> = { personal: personalTodos, business: businessTodos };
+  const updateList = (s: TodoSpace, change: (list: TodoItem[]) => TodoItem[]) => (s === "personal" ? setPersonalTodos : setBusinessTodos)(change);
+  const [categories, setCategories] = useServerState(initialCategories);
 
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
+  // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
+  const once = useOnce();
+  const tappedButton = useRef<Element | null>(null);
   // The list shows this view, which follows the controls once the tasks have loaded.
   const [view, setView] = useState({
     space: "personal" as TodoSpace,
@@ -58,18 +77,19 @@ export function TodosClient({
     scrolled.current = null;
   }, [view]);
 
-  const [todosMap, setTodosMap] = useState<Record<TodoSpace, TodoItem[]>>({
-    personal: initialPersonalTodos,
-    business: initialBusinessTodos,
-  });
-
   // Form state
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [editing, setEditing] = useState<TodoItem | null>(null);
-  const [saving, setSaving] = useState(false);
+  // The id the open add form's task gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
+  const addId = useRef("");
+  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
+  // opened after it.
+  const formOpening = useRef(0);
+  const [savingIn, setSavingIn] = useState<number | null>(null);
+  const [opening, setOpening] = useState(0);
+  const saving = savingIn === opening;
   // Flows that finish seconds later (Undo, a refresh) read the controls as they are then.
   const latest = useRef({ tab });
   useEffect(() => {
@@ -86,12 +106,11 @@ export function TodosClient({
   const loading = useRef<Promise<void>>(Promise.resolve());
 
   const isDaily = tab === "daily";
-  // Every list is today's: tasks are added for today only, and unfinished ones carry over.
-  const visibleFor = (s: TodoSpace, daily: boolean) => todosMap[s].filter((t) => t.isRecurring === daily);
   const listDaily = view.tab === "daily";
   // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
+  // Every list is today's: tasks are added for today only, and unfinished ones carry over.
   const listTodos = (() => {
-    const list = visibleFor(view.space, listDaily);
+    const list = todosMap[view.space].filter((t) => t.isRecurring === listDaily);
     return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
   const [isFolded, toggleFolded] = useFolded("todos");
@@ -101,25 +120,21 @@ export function TodosClient({
     return t.isRecurring === (latest.current.tab === "daily");
   };
 
-  // Progress counts the list on screen (`view`), so it never shows the last day's numbers while the next one loads.
-  // A day with no tasks shows only a note, no ring.
-  const progressTodos = visibleFor(view.space, listDaily);
-  const doneCount = progressTodos.filter((t) => t.isCompleted).length;
-  const totalCount = progressTodos.length;
+  // Progress counts the list on screen (`view`: its space and tab), so it never shows the last day's numbers while the
+  // next one loads, and is labelled with that tab. A list with no tasks shows only a note, no ring.
+  const doneCount = listTodos.filter((t) => t.isCompleted).length;
+  const totalCount = listTodos.length;
   const percentage = Math.round((doneCount / (totalCount || 1)) * 100);
 
-  // Check push notification availability on mount
+  // Whether reminders can be turned on here, and are: the browser's push subscription says so.
   useEffect(() => {
-    if (isPushEnabled() && typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker.ready
-        .then(() => {
-          setPushSupported(true);
-          if (Notification.permission === "granted") {
-            setPushSubscribed(true);
-          }
-        })
-        .catch(() => {});
-    }
+    if (!isPushEnabled()) return;
+    remindersState()
+      .then(({ supported, subscribed }) => {
+        setPushSupported(supported);
+        setPushSubscribed(subscribed);
+      })
+      .catch(() => {});
   }, []);
 
   // Loads both spaces and swaps them in with one state update, so the list never flashes empty.
@@ -129,7 +144,8 @@ export function TodosClient({
       const view = await loadTodosViewAction();
       if (!view.success) throw new Error(view.error);
       if (id === requestId.current) {
-        setTodosMap({ personal: view.daily[0].todos, business: view.daily[1].todos });
+        setPersonalTodos(view.daily[0].todos);
+        setBusinessTodos(view.daily[1].todos);
       }
     } catch {
       showToast({ message: "Failed to load tasks", type: "warning" });
@@ -155,146 +171,156 @@ export function TodosClient({
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
     setCategoryInput(todo?.category ?? "other");
+    if (!todo) addId.current = crypto.randomUUID();
+    formOpening.current += 1;
+    setOpening(formOpening.current);
     setIsTaskModalOpen(true);
   };
 
-  const closeForm = () => {
-    setIsTaskModalOpen(false);
-    setTitleInput("");
-    setReminderTimeInput("");
-  };
+  // The fields an edit changes: only those are sent, so another tab's change to the rest stays (D-040).
+  type Editable = Pick<TodoItem, "title" | "reminderTime" | "category">;
+  const changedFields = (from: TodoItem, to: Editable): Partial<Editable> =>
+    Object.fromEntries((Object.keys(to) as (keyof Editable)[]).filter((k) => to[k] !== from[k]).map((k) => [k, to[k]]));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = titleInput.trim();
-    if (!title || saving) return;
+    if (!title) return;
     const reminderTime = reminderTimeInput.trim() || null;
-    const recurrencePattern = (editing ? editing.isRecurring : isDaily) ? "daily" : "none";
+    const before = editing;
+    const from = formOpening.current;
+    // The answer belongs to the opening it came from: a form opened since stays as it is, and a refusal is told in a toast.
+    const stillOpen = () => from === formOpening.current;
+    // The server checks the limits; its message shows in the form, which keeps what was typed.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
     setErrorMsg(null);
-    setSaving(true);
+    setSavingIn(from);
     try {
-      if (editing) {
-        const before = editing;
+      if (before) {
         // Only a daily task has a category to pick; a one-off keeps the one it has.
-        const category = before.isRecurring ? categoryInput : before.category;
-        const after = { ...before, title, reminderTime, category };
-        const res = await updateTodoAction({ id: before.id, title, reminderTime, category });
-        if (!res.success) return setErrorMsg(res.error); // the form stays open, also when the task was removed elsewhere
+        const changed = changedFields(before, { title, reminderTime, category: before.isRecurring ? categoryInput : before.category });
+        const saved = updateTodoAction({ id: before.id, ...changed }).catch(() => null);
+        const res = await saved;
+        if (!res?.success) {
+          if (res?.error !== TODO_GONE) return refused(res?.error ?? "Failed to save task");
+          // Deleted on another device: the form closes and the row leaves.
+          if (stillOpen()) closeForm();
+          drop(before);
+          return warn(res.error);
+        }
+        // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
+        const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof Editable]])) as Partial<Editable>;
+        const after = { ...before, ...changed };
         ++requestId.current;
-        drop(before);
-        putBack(after);
+        replace(after);
         keepCategory(after);
+        if (stillOpen()) closeForm();
         showToast({
           message: `Saved "${title}"`,
           type: "success",
+          touches: touches(before.id),
+          saved,
+          // Writes the old values back; if that fails the edit stays, so the screen matches the database.
           onUndo: undoWith(
             showToast,
             async () => {
               ++requestId.current;
-              drop(after);
-              putBack(before);
-              const undone = await updateTodoAction({
-                id: before.id,
-                title: before.title,
-                reminderTime: before.reminderTime,
-                category: before.category,
-              }).catch(() => null);
-              if (undone?.success) keepCategory(before);
-              else {
-                drop(before);
-                putBack(after);
-              }
+              replace({ ...after, ...undo });
+              const back = await updateTodoAction({ id: before.id, ...undo }).catch(() => null);
+              if (back?.success) keepCategory({ ...after, ...undo });
+              else replace(after);
               void loadDay();
-              return undone;
+              return back;
             },
-            "Failed to undo the edit",
+            (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
           ),
         });
       } else {
-        const res = await addTodoAction({
+        const saved = addTodoAction({
+          id: addId.current,
           space,
           title,
           isRecurring: isDaily,
-          recurrencePattern,
+          recurrencePattern: isDaily ? "daily" : "none",
           dueDate: todayDate,
           reminderTime,
           category: isDaily ? categoryInput : "other",
-        });
-        if (!res.success) return setErrorMsg(res.error); // the form stays open to fix the title
-        if (res.todo) {
-          const created = res.todo;
-          ++requestId.current;
-          if (shows(created)) putBack(created);
-          keepCategory(created);
-          showToast({
-            message: `Added "${title}"`,
-            type: "success",
-            onUndo: undoWith(showToast, async () => {
-              ++requestId.current;
-              drop(created);
-              const gone = await deleteTodoAction(created.id).then(
-                (r) => r.success,
-                () => false,
-              );
-              if (!gone && shows(created)) putBack(created);
-              void loadDay();
-              return gone;
-            }),
-          });
-        }
+        }).catch(() => null);
+        const res = await saved;
+        if (!res?.success) return refused(res?.error ?? "Failed to save task");
+        const created = res.todo;
+        ++requestId.current;
+        if (shows(created)) putBack(created);
+        keepCategory(created);
+        if (stillOpen()) closeForm();
+        // A repeat of an add whose answer was lost adds nothing (D-040): the toast says so, without an Undo.
+        showToast(
+          res.repeated
+            ? { message: `Already added "${created.title}"`, type: "success", touches: touches(created.id), saved }
+            : {
+                message: `Added "${created.title}"`,
+                type: "success",
+                touches: touches(created.id),
+                saved,
+                onUndo: undoWith(
+                  showToast,
+                  async () => {
+                    ++requestId.current;
+                    drop(created);
+                    const back = await deleteTodoAction(created.id).catch(() => null);
+                    if (!back?.success && shows(created)) putBack(created);
+                    void loadDay();
+                    return back;
+                  },
+                  (back) => (back && !back.success ? back.error : "Failed to undo"),
+                ),
+              },
+        );
       }
-      closeForm();
       await loadDay();
-    } catch {
-      setErrorMsg("Failed to save task"); // the form stays open
     } finally {
-      setSaving(false);
+      setSavingIn((now) => (now === from ? null : now));
     }
   };
 
   // `completedAt` is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
   // Undo passes the time from before the change, so the task goes back to where it was; left out, it is now.
   const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
-    setTodosMap((prev) => ({
-      ...prev,
-      [task.space]: prev[task.space].map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos),
-    }));
+    updateList(task.space, (list) => list.map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos));
 
   const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean, completedAt?: Date | null) => {
     ++requestId.current;
     setCompleted(todo, next, completedAt);
+    const saved = toggleTodoAction({ id: todo.id, isCompleted: next, completedAt }).catch(() => null);
     if (withUndo) {
       showToast({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
-        onUndo: () => toggle(todo, !next, false, todo.completedAt),
+        touches: touches(todo.id),
+        saved,
+        onUndo: () => void toggle(todo, !next, false, todo.completedAt),
       });
     }
-    try {
-      const res = await toggleTodoAction({ id: todo.id, isCompleted: next, completedAt });
-      if (!res.success) showToast({ message: res.error, type: "warning" });
-    } catch {
-      showToast({ message: "Failed to update task", type: "warning" });
-    }
+    const res = await saved;
+    if (!res?.success) warn(res?.error ?? "Failed to update task");
     // Refresh so the screen matches the database, whatever the server answered.
     await loadDay();
   };
 
-  const handleToggleTodo = (todo: TodoItem) => toggle(todo, !todo.isCompleted, true);
+  const handleToggleTodo = (todo: TodoItem) => once(`todos:${todo.id}`, () => toggle(todo, !todo.isCompleted, true), tappedButton.current);
 
   // Back in the list where the server would sort it.
   const putBack = (task: TodoItem) =>
-    setTodosMap((prev) => ({
-      ...prev,
-      [task.space]: prev[task.space].some((t) => t.id === task.id) ? prev[task.space] : [...prev[task.space], task].sort(compareTodos),
-    }));
+    updateList(task.space, (list) => (list.some((t) => t.id === task.id) ? list : [...list, task].sort(compareTodos)));
+
+  // The task as edited, where the server would sort it (a task deleted meanwhile stays off).
+  const replace = (task: TodoItem) =>
+    updateList(task.space, (list) => (list.some((t) => t.id === task.id) ? [...list.filter((t) => t.id !== task.id), task].sort(compareTodos) : list));
 
   // The server files a saved task under its category and creates the category if it is gone (an Undo after the category was deleted): the card shows it too.
   const keepCategory = ({ space, category }: TodoItem) =>
     setCategories((prev) => (category === "other" || prev[space].includes(category) ? prev : { ...prev, [space]: [...prev[space], category] }));
 
-  const drop = (task: TodoItem) => {
-    setTodosMap((prev) => ({ ...prev, [task.space]: prev[task.space].filter((t) => t.id !== task.id) }));
-  };
+  const drop = (task: TodoItem) => updateList(task.space, (list) => list.filter((t) => t.id !== task.id));
 
   // What the server needs to put a task back as it was.
   const snapshot = ({ id, space, title, isRecurring, recurrencePattern, dueDate, reminderTime, isCompleted, isCarriedOver, category, createdAt, placedAt, completedAt }: TodoItem) => ({
@@ -306,13 +332,13 @@ export function TodosClient({
   const handleDeleteTodo = (target: TodoItem) => {
     ++requestId.current;
     drop(target);
+    const saved = deleteTodoAction(target.id).catch(() => null);
     // true: removed now; false: the call failed; "gone": it was already deleted elsewhere, so there is nothing to undo.
-    const deleted = deleteTodoAction(target.id).then(
-      (res) => (res.success ? (res.deleted ? true : ("gone" as const)) : false),
-      () => false,
-    );
+    const deleted = saved.then((res) => (res?.success ? (res.deleted ? true : ("gone" as const)) : false));
     showToast({
       message: `Removed "${target.title}"`,
+      touches: touches(target.id),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
@@ -330,12 +356,15 @@ export function TodosClient({
         (back) => (back && !back.success ? back.error : "Failed to restore task"),
       ),
     });
-    void deleted.then((ok) => {
-      if (ok === "gone") showToast({ message: `"${target.title}" was already removed`, type: "warning" });
-      if (ok) return void loadDay();
+    void saved.then((res) => {
+      if (res?.success) {
+        if (!res.deleted) warn(`"${target.title}" was already removed`);
+        return void loadDay();
+      }
       if (shows(target)) putBack(target);
-      showToast({ message: "Failed to remove task", type: "warning" });
+      warn(res?.error ?? "Failed to remove task");
     });
+    return saved;
   };
 
   const handleEnablePush = async () => {
@@ -421,7 +450,7 @@ export function TodosClient({
                   isFolded={(c) => isFolded(foldKey(c))}
                   onToggle={(c) => toggleFolded(foldKey(c))}
                   row={(task) => (
-                    <div className="todo-row">
+                    <div className="todo-row" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
                       <Checkbox
                         checked={task.isCompleted}
                         onChange={() => handleToggleTodo(task)}
@@ -438,7 +467,7 @@ export function TodosClient({
                         )}
                       </div>
 
-                      <RowActions bare onEdit={() => openForm(task)} onDelete={() => handleDeleteTodo(task)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
+                      <RowActions bare onEdit={() => openForm(task)} onDelete={() => once(`todos:${task.id}`, () => handleDeleteTodo(task), tappedButton.current)} editLabel={`Edit ${task.title}`} deleteLabel={`Delete ${task.title}`} />
                     </div>
                   )}
                 />
@@ -457,14 +486,11 @@ export function TodosClient({
               categories={categories[view.space]}
               onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
               onRefile={(from, to, only) => {
-                setTodosMap((prev) => {
+                updateList(view.space, (list) => {
                   // As the server files them: repeating tasks land on top of the new category as one block, in the order they had.
                   const moving = (t: TodoItem) => t.category === from && (!only || only.includes(t.id));
-                  const placed = blockPlacements(prev[view.space].filter((t) => moving(t) && t.isRecurring));
-                  const refiled = prev[view.space]
-                    .map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt }))
-                    .sort(compareTodos);
-                  return { ...prev, [view.space]: refiled };
+                  const placed = blockPlacements(list.filter((t) => moving(t) && t.isRecurring));
+                  return list.map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt })).sort(compareTodos);
                 });
               }}
               idsIn={(c) => todosMap[view.space].filter((t) => t.category === c).map((t) => t.id)}
@@ -477,15 +503,13 @@ export function TodosClient({
         <DashboardAside>
           <Card id="progress-title" title="Progress">
             {!totalCount ? (
-              <EmptyNote>
-                No tasks for today.
-              </EmptyNote>
+              <EmptyNote>{listDaily ? "No daily tasks yet." : "No tasks for today."}</EmptyNote>
             ) : (
               <div className="dash-hero">
                 <div className="dash-hero-text">
                   {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
                   <BigNumber value={doneCount} of={`of ${totalCount} done`} />
-                  <span className="muted">Today</span>
+                  <span className="muted">{listDaily ? "Daily" : "Today"}</span>
                 </div>
                 <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
               </div>
@@ -518,7 +542,6 @@ export function TodosClient({
           label="Title"
           type="text"
           required
-          maxLength={150}
           disabled={saving}
           value={titleInput}
           onChange={(e) => {

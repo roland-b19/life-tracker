@@ -56,6 +56,9 @@ export const updateTodoSchema = z.object({
 
 export const deleteTodoSchema = z.object({ id: uuid });
 
+/** The refusal of a change to a task that is gone (deleted on another device); the page closes its edit form on it. */
+export const TODO_GONE = "This task no longer exists.";
+
 export const pushSubscriptionSchema = z.object({
   // https only: the push sender (Azure) will call this address, so it must not be http or any other scheme.
   endpoint: z.url({ protocol: /^https$/ }).max(500),

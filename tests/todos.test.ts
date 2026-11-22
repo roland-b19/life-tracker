@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
+import { remindersState } from "../app/todos/reminders";
 
 import { eq } from "drizzle-orm";
 import { succeeded } from "./succeeded";
@@ -814,5 +815,28 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = "";
       expect(await loadTodosViewAction()).toEqual({ success: false, error: SIGNED_OUT });
     });
+  });
+});
+
+describe("Tasks: the reminders card's state [TASK-01]", () => {
+  // A browser with push, notifications allowed, and a subscription or none.
+  const browser = (subscription: object | null) => {
+    vi.stubGlobal("window", { PushManager: class {} });
+    vi.stubGlobal("Notification", { permission: "granted" });
+    vi.stubGlobal("navigator", { serviceWorker: { ready: Promise.resolve({ pushManager: { getSubscription: async () => subscription } }) } });
+  };
+  afterAll(() => vi.unstubAllGlobals());
+
+  it("is on only while this browser holds a push subscription, whatever the permission says", async () => {
+    browser(null);
+    expect(await remindersState()).toEqual({ supported: true, subscribed: false });
+    browser({ endpoint: "https://push.example/1" });
+    expect(await remindersState()).toEqual({ supported: true, subscribed: true });
+  });
+
+  it("is not offered in a browser without push", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {});
+    expect(await remindersState()).toEqual({ supported: false, subscribed: false });
   });
 });
