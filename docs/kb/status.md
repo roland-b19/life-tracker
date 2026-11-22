@@ -32,7 +32,7 @@ last_verified: 2026-11-22
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B and C merged (#169, #170, #172, #171), M run on live; part D (steps 18–20) built, verified and reviewed (2 rounds), in its PR; then part E (step 21); accepted edges in D-045 and D-046; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B, C and D merged (#169, #170, #172, #171, #173), M run on live; part E (step 21: `src/lib/decimal-input.ts` deleted, the action and page guard greps clean, the anonymous-action test takes only the signed-out answer) verified, in its PR; open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -47,5 +47,4 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
-- `requireUser()` before `respond` and a page or layout without its path: no usage left (parts B, C and D moved theirs); step 21 greps again and ends both deprecated marks in the conventions.
-- `src/lib/decimal-input.ts` (D-037): `tests/format-date.test.ts` (the Gym files moved in part B, the weight card in part C). Step 21 deletes it.
+None: no deprecated pattern is in use (step 21 of the audit fixes ended the last three: `requireUser()` before `respond`, a page or layout without its path, and `src/lib/decimal-input.ts`).

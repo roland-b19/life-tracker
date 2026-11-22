@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { appTime, toISODate, weekday, weekStart } from "@/lib/format-date";
-import { cleanNumberInput, showDecimal } from "@/lib/decimal-input";
 
 afterEach(() => vi.useRealTimers());
 
@@ -80,20 +79,5 @@ describe("no code reads the device's time zone", () => {
       text.split("\n").flatMap((line, i) => (DEVICE_LOCAL.test(line) ? [`${file}:${i + 1}: ${line.trim()}`] : [])),
     );
     expect(hits).toEqual([]);
-  });
-});
-
-describe("cleanNumberInput", () => {
-  it("takes a comma or a dot as the decimal separator and keeps only one", () => {
-    expect(cleanNumberInput("72,5", false)).toBe("72.5");
-    expect(cleanNumberInput("72.5.1", false)).toBe("72.51");
-    expect(cleanNumberInput("7a2,,5", false)).toBe("72.5");
-    expect(cleanNumberInput("-3-4", false)).toBe("-34");
-    expect(showDecimal("72.5")).toBe("72,5");
-  });
-  it("keeps only digits in a whole-number field", () => {
-    expect(cleanNumberInput("1,5", true)).toBe("1");
-    expect(cleanNumberInput("250.5", true)).toBe("250");
-    expect(cleanNumberInput("-2", true)).toBe("2");
   });
 });
