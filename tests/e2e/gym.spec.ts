@@ -1,5 +1,5 @@
 import { NOTHING_TO_SAVE, TWO_DECIMALS } from "../../src/lib/validations/common";
-import { WORKOUT_ENDED_ELSEWHERE, WORKOUT_FINISHED, WORKOUT_GONE, ZERO_LOAD } from "../../src/lib/validations/gym";
+import { GYM_LIMITS, NOTES_CHANGED, WORKOUT_ENDED_ELSEWHERE, WORKOUT_FINISHED, WORKOUT_GONE, ZERO_LOAD } from "../../src/lib/validations/gym";
 import { randomUUID } from "node:crypto";
 import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { addDays, formatDMY, toISODate, weekStart } from "../../src/lib/format-date";
@@ -1123,6 +1123,56 @@ test("Undo of saved notes refused because another page changed them leaves the n
   const { rows } = await asOwner((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
   expect(rows).toEqual([{ notes: "Second try" }]);
 });
+
+// Notes the server takes as over its limit, typed past the field's own limit (an older page, a paste the field let by).
+async function typeTooLong(page: Page, start = "") {
+  await notes(page).evaluate((field) => field.removeAttribute("maxlength"));
+  await notes(page).fill(start + "x".repeat(GYM_LIMITS.sessionNotes + 1));
+}
+
+// Notes another page saved meanwhile, so this page's next notes save is refused with NOTES_CHANGED.
+async function notesChangedElsewhere(page: Page) {
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await notes(other).fill("From the other page");
+  await andSettle(other, () => notes(other).blur(), "From the other page");
+  await other.close();
+}
+
+// A notes refusal that does not end the workout is told once when Exit follows the tap's blur: Exit's own notes save is
+// the same text, so it sends nothing again, and the workout stays in hand. The page's clock stands still from Exit on and
+// moves 200 ms at a time only while the refreshes after the writes are due, so the toasts (5 s) are still there to count
+// however slow the machine is.
+const NOT_ENDING: { refusal: string; error: string; type: (page: Page) => Promise<void> }[] = [
+  { refusal: "over the limit", error: `Too long (max ${GYM_LIMITS.sessionNotes})`, type: (page) => typeTooLong(page) },
+  {
+    refusal: "changed on another page",
+    error: NOTES_CHANGED,
+    type: async (page) => {
+      await notesChangedElsewhere(page);
+      await notes(page).fill("From this page");
+    },
+  },
+];
+for (const { refusal, error, type } of NOT_ENDING) {
+  test(`notes refused as ${refusal} on Exit are told once, and the workout stays`, async ({ signedInPage: page }) => {
+    await page.clock.install();
+    await openGym(page);
+    await startWorkout(page, DAY);
+    await dismissToast(page, `Started "${DAY}"`);
+    await type(page);
+    await pauseClock(page);
+    const writes = countWrites(page);
+
+    await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click());
+    await refreshesDone(page, { tick: 200 });
+    await expect(toast(page, error)).toHaveCount(1);
+    expect(writes).toHaveLength(1);
+    await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+    await expect(banner(page)).toBeHidden();
+  });
+}
 
 // GYMB-05: Undo of "Added set" after another device deleted that set leaves nothing behind, not a row that is not saved.
 test("Undo of an added set another device already deleted adds no row back", async ({ signedInPage: page, browser }) => {

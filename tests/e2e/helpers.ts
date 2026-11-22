@@ -111,13 +111,20 @@ export function headIsQuiet() {
 /**
  * Resolves once the refresh the last server action left due, and every refresh under way, has finished (the page must
  * be the `signedInPage` fixture's, which `watchRefreshes` follows). A test that then changes the data elsewhere, or
- * signs the page out, knows the page's own refresh can no longer show that change.
+ * signs the page out, knows the page's own refresh can no longer show that change. On a paused clock, `tick` moves it
+ * that many ms before each look, so the refresh timer fires, and so does one a later write sets.
  */
-export async function refreshesDone(page: Page) {
+export async function refreshesDone(page: Page, { tick = 0 } = {}) {
   const state = refreshesDue.get(page);
   if (!state) throw new Error("refreshesDone needs the signedInPage fixture's page");
   await expect
-    .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
+    .poll(
+      async () => {
+        if (tick) await page.clock.runFor(tick);
+        return state.due || state.running.size > 0;
+      },
+      { message: "the refresh after the last server action, and those under way" },
+    )
     .toBe(false);
 }
 

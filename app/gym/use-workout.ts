@@ -135,8 +135,8 @@ export function useWorkout({
    */
   const refused = (id: string, error: string) => {
     if (error !== WORKOUT_FINISHED && error !== WORKOUT_GONE) return warn(error);
-    // At once, not at the next render: a write already waiting on this one (Exit's or Finish's notes save, after the
-    // save the tap's blur sent) then sends nothing, so it is not refused and told a second time.
+    // At once, not at the next render: a write already waiting on this one (a notes save of newer text, behind the save
+    // the tap's blur sent) then sends nothing, so it is not refused and told a second time.
     if (live.current?.id === id) live.current = null;
     setOpen((o) => (o?.id === id ? null : o));
     setHandId((hand) => (hand === id ? null : hand));
@@ -144,9 +144,10 @@ export function useWorkout({
     setSessionNotes("");
     warn(WORKOUT_ENDED_ELSEWHERE);
   };
-  // The notes as the server holds them, and the save in flight: a save sends only the change from them (D-040).
+  // The notes as the server holds them, and the last save (with the workout and text it sends while it is in flight): a
+  // save sends only the change from them (D-040).
   const savedNotes = useRef("");
-  const notesSave = useRef<Promise<boolean>>(Promise.resolve(true));
+  const notesSave = useRef<{ run: Promise<boolean>; id?: string; text?: string }>({ run: Promise.resolve(true) });
   // Exercises opened in the workout; they start collapsed and are not kept between workouts.
   const [openEx, setOpenEx] = useState<string[]>([]);
   // Per-exercise quick log input state
@@ -426,11 +427,14 @@ export function useWorkout({
    * Saves the notes field when the server would save it as other notes than it holds (D-040: the change only, refused
    * when they changed elsewhere), after any save in flight. Answers false when the save was refused or failed; it says why.
    * A workout no longer in hand once that save has answered (it ended elsewhere, and that refusal said so) sends nothing.
+   * The same text for the same workout as the save in flight (Exit's or Finish's save after the tap's blur sent one)
+   * answers with that save, so a refusal is not sent and told twice.
    */
   function saveNotes(text = sessionNotes): Promise<boolean> {
     const session = activeSession;
-    if (!session) return notesSave.current;
-    const run = notesSave.current.then(async () => {
+    const last = notesSave.current;
+    if (!session || (last.id === session.id && last.text === text)) return last.run;
+    const run = last.run.then(async () => {
       if (live.current?.id !== session.id) return false;
       const from = savedNotes.current;
       // Compared as the server saves it (trimmed, invisible-only is none); too long text goes, for the server's reason.
@@ -461,7 +465,12 @@ export function useWorkout({
       });
       return true;
     });
-    notesSave.current = run;
+    const save = { run, id: session.id, text };
+    notesSave.current = save;
+    const settled = () => {
+      if (notesSave.current === save) notesSave.current = { run };
+    };
+    run.then(settled, settled);
     return run;
   }
 
