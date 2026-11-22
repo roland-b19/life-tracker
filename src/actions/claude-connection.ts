@@ -14,8 +14,8 @@ const tokenSchema = z.object({
 
 export async function connectClaudeAction(input: z.input<typeof tokenSchema>) {
   assertClaudeEnabled();
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { token } = tokenSchema.parse(input);
     const previous = await getStoredConnection(userId);
     const { connectedAt } = await saveClaudeToken(userId, token);
@@ -25,8 +25,8 @@ export async function connectClaudeAction(input: z.input<typeof tokenSchema>) {
 
 export async function disconnectClaudeAction() {
   assertClaudeEnabled();
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const previous = await getStoredConnection(userId);
     await deleteClaudeToken(userId);
     return { previous: sealed(previous) };
@@ -41,10 +41,10 @@ const restoreSchema = z.object({ tokenEncrypted: z.string().max(2000), connected
 
 export async function restoreClaudeConnectionAction(input: z.input<typeof restoreSchema>) {
   assertClaudeEnabled();
-  const userId = await requireUser();
   return respond(async () => {
+    const userId = await requireUser();
     const { tokenEncrypted, connectedAt } = restoreSchema.parse(input);
-    await restoreClaudeConnection(userId, tokenEncrypted, new Date(connectedAt));
-    return { connectedAt };
+    const restoredAt = await restoreClaudeConnection(userId, tokenEncrypted, new Date(connectedAt));
+    return { connectedAt: restoredAt.toISOString() };
   });
 }
