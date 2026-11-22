@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { Pool } from "pg";
 import type { Account, User } from "next-auth";
 
 const env = process.env as Record<string, string | undefined>;
@@ -120,8 +121,15 @@ describe("GitHub sign-in with an owner allowlist", () => {
 });
 
 describe("dev sign-in (MORE-12)", () => {
-  afterEach(() => {
+  // The dev user a test signs in, removed after it so no `e2e-` user stays behind in the test database.
+  let devName = "";
+  afterEach(async () => {
     for (const key of KEYS) delete env[key];
+    if (!devName) return;
+    const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+    await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [devName]);
+    await admin.end();
+    devName = "";
   });
 
   it("accepts only lower-case letters, digits and dashes, and the e2e fixture's names still pass", async () => {
@@ -139,7 +147,7 @@ describe("dev sign-in (MORE-12)", () => {
     for (const bad of ["Roland", "a b", "<b>x</b>", "x_y", "ă", "", "a".repeat(65), 42]) {
       expect(await authorize(bad)).toBeNull();
     }
-    const name = `e2e-${randomUUID().slice(0, 8)}`;
+    const name = (devName = `e2e-${randomUUID().slice(0, 8)}`);
     const user = await authorize(name);
     expect(user?.name).toBe(name);
     const rows = await db.select().from(users).where(eq(users.subject, name));
