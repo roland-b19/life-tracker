@@ -44,9 +44,9 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
  * answer says why: offline nothing was saved (open forms stay as they are); online the answer was lost and the write
  * may have happened, so the page refreshes. A failed answer (non-2xx) changes nothing here.
  * The browser keeps a copy of the pages already seen (`staleTimes` in next.config.ts), and only a refresh drops it. So a
- * tap on a link while a write is unanswered, or before the refresh it (or another copy's write) left due, waits: the
- * refresh runs at once after the answer, and the tap goes through as soon as the refresh has started, so the page it opens
- * is fetched again and shows the write.
+ * tap on a link while a write is unanswered, or before the refresh it (or another copy's write, or a refresh missed
+ * offline) left due, waits: the refresh runs at once after the answer, and the tap goes through as soon as the refresh
+ * has started, so the page it opens is fetched again and shows the write. Any other tap or key meanwhile forgets it.
  */
 function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) => void }) {
   const router = useRouter();
@@ -66,12 +66,20 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     let passing = false;
     const realFetch = window.fetch;
 
-    // Taps the link that waited again, now that nothing it could open is older than the last write.
-    const release = () => {
+    // Forgets the tap that waited: its page was not opened, so the tab bar shows the page on screen again.
+    const forget = () => {
       const link = held;
       held = null;
       clearTimeout(holdTimer);
-      if (!link?.isConnected) return;
+      if (link) onPageNotOpened({ path: link.pathname });
+    };
+    // Taps the link that waited again, now that nothing it could open is older than the last write. A link no longer on
+    // the page (the More menu was closed) is forgotten: closing the menu was doing something else.
+    const release = () => {
+      const link = held;
+      if (!link?.isConnected) return forget();
+      held = null;
+      clearTimeout(holdTimer);
       passing = true;
       try {
         link.click();
@@ -89,10 +97,8 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
         missed = true;
         return release();
       }
-      if (missed) {
-        check();
-        return release();
-      }
+      // A tap waits for the refresh the check starts, as after a write's answer
+      if (missed) return check();
       last = Date.now();
       day.seen();
       router.refresh();
@@ -100,15 +106,16 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     // "Online" can come before the server is reachable (a network still settling, a captive portal), and a refresh that
     // fails becomes a full page load that drops an open form: after a missed refresh the server must answer a small
     // request first (`/api/health`, which the service worker never answers). Until it does, the next focus, minute or
-    // "online" tries again.
+    // "online" tries again, and a tap that waits goes through: the copy is all there is.
     const check = () => {
       realFetch("/api/health", { cache: "no-store" }).then(
         (res) => {
-          if (!res.ok || !missed) return;
+          if (!res.ok) return release();
+          if (!missed) return;
           missed = false;
           refresh();
         },
-        () => {},
+        () => release(),
       );
     };
     // A refresh while a write is on its way could show the screen from before it: it waits for the answer.
@@ -186,9 +193,10 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     };
 
     // A tap on a link of this app while the copies may be older than the last write (see above). A tap with a modifier
-    // (new tab or window) or on a link that leaves the app goes through.
+    // (new tab or window), on a download or on a link that leaves the app or opens elsewhere goes through. A tap on
+    // another link of the app waits in its place.
     const onClick = (e: MouseEvent) => {
-      if (passing || !(writing > 0 || due) || e.defaultPrevented || e.button !== 0) return;
+      if (passing || !(writing > 0 || due || missed) || e.defaultPrevented || e.button !== 0) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const link = e.target instanceof Element ? e.target.closest("a[href]") : null;
       if (!(link instanceof HTMLAnchorElement) || link.origin !== location.origin || link.hasAttribute("download")) return;
@@ -200,6 +208,11 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       if (writing === 0) refreshNow();
     };
     window.addEventListener("click", onClick, true);
+    // Any other tap or key while a tap waits forgets it: replayed later, it would take the person off what they did since.
+    const onInput = (e: Event) => {
+      if (held && !(e.target instanceof Node && held.contains(e.target))) forget();
+    };
+    for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, onInput, true);
 
     const onFocus = () => {
       if (Date.now() - last >= FRESH) refresh();
@@ -224,6 +237,7 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       channel?.close();
       window.fetch = realFetch;
       window.removeEventListener("click", onClick, true);
+      for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, onInput, true);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
