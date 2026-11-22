@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChartControls } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { Segmented } from "../components/segmented";
-import { addDays } from "@/lib/format-date";
+import { addDays, formatDM } from "@/lib/format-date";
 
 /**
  * The simple line chart of a card (Weight): `days` are the periods offered, the window ends `today`, the server's day,
@@ -26,7 +26,7 @@ export function TrendChart({
   // Every day of the window is on the axis, so a few entries still make a chart.
   const points = Array.from({ length: Number(range) }, (_, i) => {
     const date = addDays(today, i + 1 - Number(range));
-    return { label: date.slice(5).split("-").reverse().join("."), value: byDate.get(date) ?? null };
+    return { label: formatDM(date), value: byDate.get(date) ?? null };
   });
   return (
     <>

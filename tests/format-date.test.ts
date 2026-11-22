@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appTime, toISODate, weekday, weekStart } from "@/lib/format-date";
+import { appTime, formatDM, toISODate, weekday, weekStart } from "@/lib/format-date";
 
 afterEach(() => vi.useRealTimers());
 
@@ -59,6 +59,15 @@ describe("the app's clock never follows the device's zone", () => {
     expect(weekday("2026-11-14")).toBe(6);
     expect(weekStart("2026-11-14")).toBe("2026-11-08");
     expect(weekStart("2026-11-15")).toBe("2026-11-15");
+  });
+});
+
+describe("formatDM() gives a chart's day label", () => {
+  // The text the Health trend chart and the Gym progress chart showed before they shared it.
+  it("is the day and the month, two digits each, joined by a dot", () => {
+    expect(formatDM("2026-11-04")).toBe("04.11");
+    expect(formatDM("2026-01-31")).toBe("31.01");
+    expect(formatDM("2025-12-09")).toBe("09.12");
   });
 });
 
