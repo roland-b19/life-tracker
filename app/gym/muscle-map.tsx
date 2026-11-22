@@ -325,7 +325,6 @@ interface PlannedExercise {
   exerciseId: string;
   exerciseName: string;
   muscleGroup: string;
-  equipmentType: string;
   targetSets: number;
   minReps: number;
   maxReps: number;
