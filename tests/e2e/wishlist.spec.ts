@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
 
@@ -402,46 +402,128 @@ test("a New item form opened while an earlier save is unanswered stays open when
   await expect(form).toBeHidden();
 });
 
-// A page reached by a client navigation shows the copy the browser keeps (staleTimes in next.config.ts) until the
-// refresh after the unanswered write; the page then takes the refreshed categories in, without a reload. The copy is
-// fresh once the refresh after the earlier writes ran, so the test waits for it (see the report on WISH-13).
-test("after a client navigation while a write is unanswered, the categories card shows its categories, then the write's result [WISH-13]", async ({
-  signedInPage: page,
-}) => {
+// The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a
+// link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
+// (app/providers.tsx), so the page it opens is never older than the last write. Each test records every state the page
+// goes through (a MutationObserver, which sees each DOM change; the document stays across client navigations), so no
+// state slips between two checks and nothing waits by time.
+
+/**
+ * Records each state the Wishlist's categories card shows from now on: its names, or "empty". Answers the states seen so
+ * far. Tasks has a categories card of its own, so only the Wishlist counts.
+ */
+async function recordCategories(page: Page) {
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    const sample = () => {
+      if (location.pathname !== "/wishlist") return;
+      const card = [...document.querySelectorAll("section")].find((s) => /^Categories\b/.test(s.querySelector("h2")?.textContent ?? ""));
+      if (!card) return;
+      const names = [...card.querySelectorAll(".category-name")].map((n) => n.textContent);
+      const state = card.textContent?.includes("No categories yet.") ? "empty" : names.join(",");
+      if (seen.at(-1) !== state) seen.push(state);
+    };
+    sample();
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
+    Object.assign(window, { seenCategories: seen });
+  });
+  return () => page.evaluate(() => (window as unknown as { seenCategories: string[] }).seenCategories);
+}
+
+/**
+ * Adds two categories, deletes the second while its answer is held, goes to Tasks and back on the given navigation
+ * while it is held, then again after the answer. The card never shows the deleted category again, nor no categories.
+ */
+async function deleteThenNavigate(page: Page, navigation: string, press: (target: Locator) => Promise<void>) {
   await openWishlist(page);
   const [kept, deleted] = [`cat${randomUUID().slice(0, 6)}`, `cat${randomUUID().slice(0, 6)}`];
-  let refreshed: Promise<Request> | undefined;
+  const card = page.getByRole("region", { name: /^Categories/ });
   for (const category of [kept, deleted]) {
-    await page.getByRole("button", { name: "Add category" }).click();
+    await press(page.getByRole("button", { name: "Add category" }));
     const form = page.getByRole("dialog", { name: "New category" });
     await form.getByLabel("Name", { exact: true }).fill(category);
-    refreshed = page.waitForRequest((r) => isRefresh(page, r));
-    await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${category}"`);
+    await andSettle(page, () => press(form.getByRole("button", { name: "Save" })), `"name":"${category}"`);
     await expect(form).toBeHidden();
   }
-  await (await refreshed!).response();
-  const card = page.getByRole("region", { name: /^Categories/ });
+  // No wait for the refresh after these adds: a tap right after them is the case to cover.
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route("**/wishlist", async (route) => {
     if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${deleted}"`)) await held;
     await route.fallback();
   });
-  await page.keyboard.press("Shift");
   const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"name":"${deleted}"`));
-  await page.getByRole("button", { name: `Delete category ${deleted}`, exact: true }).click();
+  await press(page.getByRole("button", { name: `Delete category ${deleted}`, exact: true }));
+  await expect(card.getByText(deleted, { exact: true })).toBeHidden();
+  const seen = await recordCategories(page);
   // Marks the document: a full reload would drop it.
   await page.evaluate(() => Object.assign(window, { kept: true }));
+  const nav = page.getByRole("navigation", { name: navigation });
+  await press(nav.getByRole("link", { name: "Tasks" }));
+  await settled(page);
+  await press(nav.getByRole("link", { name: "Wishlist" }));
+  await settled(page);
+  release();
+  await answered;
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(card.getByText(kept, { exact: true })).toBeVisible();
+  // Tasks and back again, now that the delete has answered
+  await press(nav.getByRole("link", { name: "Tasks" }));
+  await expect(page).toHaveURL(/\/todos$/);
+  await press(nav.getByRole("link", { name: "Wishlist" }));
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(card.getByText(kept, { exact: true })).toBeVisible();
+  await settled(page);
+  expect(await seen()).toEqual([kept]);
+  expect(await page.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
+}
+
+test("Tasks and back while a category delete is unanswered never shows the deleted category or no categories [WISH-13]", async ({
+  signedInPage: page,
+}) => {
+  await deleteThenNavigate(page, "Main Navigation", (target) => target.click());
+});
+
+test.describe("at phone width with touch", () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
+
+  test("Tasks and back while a category delete is unanswered never shows the deleted category or no categories [WISH-13]", async ({
+    signedInPage: page,
+  }) => {
+    await deleteThenNavigate(page, "Mobile Navigation", (target) => target.tap());
+  });
+});
+
+test("Tasks and back right after an add never shows the list without the new item [WISH-13]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Price (RON)").fill("7");
+  await andSettle(page, () => page.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  // Each state of the item list from now on, while the Wishlist is on screen: with the item, or without it
+  await page.evaluate((item) => {
+    const seen: string[] = [];
+    const sample = () => {
+      if (location.pathname !== "/wishlist") return;
+      const list = [...document.querySelectorAll("section")].find((s) => /^Items\b/.test(s.querySelector("h2")?.textContent ?? ""));
+      if (!list) return;
+      const state = list.textContent?.includes(item) ? "item" : "none";
+      if (seen.at(-1) !== state) seen.push(state);
+    };
+    sample();
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
+    Object.assign(window, { seenItems: seen });
+  }, name);
+  // Tasks and back at once, well within the 600 ms after which the refresh would come on its own
   const nav = page.getByRole("navigation", { name: "Main Navigation" });
   await nav.getByRole("link", { name: "Tasks" }).click();
   await expect(page).toHaveURL(/\/todos$/);
   await nav.getByRole("link", { name: "Wishlist" }).click();
   await expect(page).toHaveURL(/\/wishlist$/);
-  await expect(card.getByText(kept, { exact: true })).toBeVisible();
-  release();
-  await answered;
-  // The refresh after the answer brings the delete in, without a reload.
-  await expect(card.getByText(deleted, { exact: true })).toBeHidden();
-  await expect(card.getByText(kept, { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Estimated investment · All" })).toHaveText(/^Estimated investment · All\s*7 RON$/);
+  await settled(page);
+  expect(await page.evaluate(() => (window as unknown as { seenItems: string[] }).seenItems)).toEqual(["item"]);
 });

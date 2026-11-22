@@ -245,6 +245,39 @@ test("a write whose answer is lost while online says so and refreshes [XR-04]", 
   await page.unroute("**/wishlist");
 });
 
+// A tap on a link while a write is unanswered waits for the answer (the page it opens would be the copy from before the
+// write), but a write that never answers lets it through after 10 s, so the app is never stuck on one page.
+test("a tap on a link while a write is unanswered waits for the answer, at most 10 s [WISH-13]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const name = itemName();
+  await addItem(page, name);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST") await held;
+    await route.fallback();
+  });
+  const opened: Request[] = [];
+  page.on("request", (r) => {
+    const headers = r.headers();
+    if (new URL(r.url()).pathname === "/todos" && "rsc" in headers && !("next-router-prefetch" in headers)) opened.push(r);
+  });
+  const answered = page.waitForResponse((r) => r.request().method() === "POST");
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(page.getByText(name, { exact: true })).toBeHidden();
+  await page.getByRole("link", { name: "Tasks" }).first().click();
+  // Just short of 10 s the tap still waits: Tasks was not even asked for
+  await page.clock.runFor(9_000);
+  await settled(page);
+  expect(opened).toHaveLength(0);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await page.clock.runFor(1_000);
+  await expect(page).toHaveURL(/\/todos$/);
+  release();
+  await answered;
+});
+
 test("a tab whose page answer is broken says so [XR-11]", async ({ signedInPage: page }) => {
   await openWishlist(page);
   // The page request of a navigation (not a prefetch) answers HTTP 200 with a body that is no page
