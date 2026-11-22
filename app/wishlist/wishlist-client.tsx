@@ -196,6 +196,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         const updated = res.item as WishlistItemData;
         // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
         const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, toInput(before)[k as keyof typeof changed] ?? null]));
+        // The same fields as the screen holds them, so the Undo puts back on screen only what it writes back.
+        const undoneOnScreen = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof typeof changed]]));
         replace(updated);
         keepCategory(updated.category);
         if (stillOpen()) closeForm();
@@ -208,7 +210,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           onUndo: undoWith(
             showToast,
             async () => {
-              replace({ ...updated, ...before, id: updated.id });
+              replace({ ...updated, ...undoneOnScreen });
               const back = await updateWishlistItemAction(before.id, undo).catch(() => null);
               if (back?.success) {
                 replace(back.item as WishlistItemData);

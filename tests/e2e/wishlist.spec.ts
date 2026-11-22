@@ -433,6 +433,48 @@ test("a refusal that answers after the form was closed with Cancel shows the ser
   }
 });
 
+test("an edit's Undo puts back on screen only the fields it undoes, so another tab's change to the item stays [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "100");
+  // This tab opens the edit form; another tab then changes the price; this form renames only.
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Edit item" });
+  const other = await page.context().newPage();
+  try {
+    await openWishlist(other);
+    await other.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const otherForm = other.getByRole("dialog", { name: "Edit item" });
+    await otherForm.getByLabel("Price (RON)").fill("300");
+    await andSettle(other, () => otherForm.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
+  await form.getByLabel("Name", { exact: true }).fill(`${name} v2`);
+  // The refresh the rename leaves due has landed before the Undo, so nothing but the Undo changes the row meanwhile.
+  const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name} v2"`);
+  await refreshed;
+  await settled(page);
+  await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
+  // The Undo's answer is held: the screen shows the old name and keeps the other tab's price.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${name}"`)) await held;
+    await route.fallback();
+  });
+  await page.keyboard.press("Shift");
+  const toast = page.locator(".toast-item").filter({ hasText: `Saved "${name} v2"` });
+  await toast.getByRole("button", { name: "Undo" }).click();
+  await expect(itemRow(page, name)).toContainText("300 RON");
+  await andSettle(page, async () => release(), `"name":"${name}"`);
+  await expect(itemRow(page, name)).toContainText("300 RON");
+});
+
 // The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a
 // link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
 // (app/providers.tsx), so the page it opens is never older than the last write. Each test records every state the page
