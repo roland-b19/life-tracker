@@ -515,10 +515,24 @@ test("an edit's Undo keeps on screen another tab's change made after the save, a
   release();
   await expect(page.getByText("Failed to undo the edit")).toBeVisible();
   await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
-  // The Retry writes the old name back and keeps the price.
+  // The Retry writes the old name back and keeps the price. The refresh its answer leaves due is held, so the row checked
+  // is the one the answer put on screen, not one the refresh corrected: the page asks for that refresh 600 ms after the
+  // answer, by when the answer is on screen.
   await page.unroute("**/wishlist");
+  let releaseRefresh = () => {};
+  const refreshHeld = new Promise<void>((resolve) => (releaseRefresh = resolve));
+  await page.route(
+    (url) => url.pathname === "/wishlist",
+    async (route) => {
+      if (isRefresh(page, route.request())) await refreshHeld;
+      await route.fallback();
+    },
+  );
+  const refreshAsked = page.waitForRequest((r) => isRefresh(page, r));
   await andSettle(page, () => page.getByRole("button", { name: "Retry" }).click(), `"name":"${name}"`);
+  await refreshAsked;
   await expect(itemRow(page, name)).toContainText("300 RON");
+  releaseRefresh();
 });
 
 // The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a
