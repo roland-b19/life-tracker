@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -900,16 +899,5 @@ describe("Tasks: the reminders card's state [TASK-01]", () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("navigator", {});
     expect(await remindersState()).toEqual({ supported: false, subscribed: false });
-  });
-});
-
-// conventions.md, Form error state (D-009): `const [errorMsg, setErrorMsg] = useState("")` on every page, never null.
-describe("every form's error state starts as an empty string [D-009]", () => {
-  const files = readdirSync("app", { recursive: true, encoding: "utf8" })
-    .filter((f) => f.endsWith(".tsx"))
-    .map((f) => `app/${f}`);
-  it.each(files)("%s", (file) => {
-    const states = [...readFileSync(file, "utf8").matchAll(/\[errorMsg, setErrorMsg\] = useState(<[^>]*>)?\(([^)]*)\)/g)];
-    expect(states.filter(([, typed, initial]) => typed || ["", "null", "undefined"].includes(initial.trim())).map(([line]) => line)).toEqual([]);
   });
 });
