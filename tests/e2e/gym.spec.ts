@@ -1,5 +1,6 @@
-import { TWO_DECIMALS } from "../../src/lib/validations/common";
+import { NOTHING_TO_SAVE, TWO_DECIMALS } from "../../src/lib/validations/common";
 import { WORKOUT_ENDED_ELSEWHERE, WORKOUT_FINISHED, WORKOUT_GONE, ZERO_LOAD } from "../../src/lib/validations/gym";
+import { formatDMY } from "../../src/lib/format-date";
 import { randomUUID } from "node:crypto";
 import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
@@ -925,7 +926,7 @@ test("notes of only an invisible character do not stop Exit, Finish or Cancel", 
   await notes(page).fill("\u200B");
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText("No sets logged: the workout was removed")).toBeVisible();
-  await expect(page.getByText("Nothing to save", { exact: true })).toBeHidden();
+  await expect(page.getByText(NOTHING_TO_SAVE, { exact: true })).toBeHidden();
 });
 
 // D-034: Next sends a write without waiting for a refresh on its way, and applies that refresh once the write's own change
@@ -1639,8 +1640,7 @@ for (const days of [7, -7]) {
     await page.getByRole("button", { name: "Edit deload weeks" }).click();
     const last = page.getByRole("dialog", { name: "Deload weeks" }).getByLabel("Last deload");
     const sunday = sundayOf(appToday());
-    const dmy = (iso: string) => iso.split("-").reverse().join(".");
-    await expect(last.getByRole("option", { name: /\(this week\)$/ })).toHaveText(`${dmy(sunday)} - ${dmy(plusDays(sunday, 6))} (this week)`);
+    await expect(last.getByRole("option", { name: /\(this week\)$/ })).toHaveText(`${formatDMY(sunday)} - ${formatDMY(plusDays(sunday, 6))} (this week)`);
   });
 }
 

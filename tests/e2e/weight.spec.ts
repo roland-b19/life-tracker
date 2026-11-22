@@ -1,5 +1,5 @@
 import { expect, type Page, type Request } from "@playwright/test";
-import { addDays, appDay } from "../../src/lib/format-date";
+import { addDays, appDay, formatDM } from "../../src/lib/format-date";
 import { andSettle, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
 
 async function openFood(page: Page) {
@@ -26,8 +26,6 @@ function midnightAfter(day: string) {
   while (appDay(new Date(t)) === day) t += 60_000;
   return t;
 }
-// The chart's axis names its first and last day as DD.MM.
-const axisLabel = (day: string) => day.slice(5).split("-").reverse().join(".");
 const lastAxisLabel = (page: Page) => page.getByRole("region", { name: "Weight", exact: true }).locator(".line-axis span").last();
 
 function watchHydration(page: Page) {
@@ -107,7 +105,7 @@ test("the weight card and chart show the server's day, whatever the device's clo
   await page.clock.install({ time: new Date(midnightAfter(day) + 30 * 60_000) });
   await openFood(page);
   await expect(page.getByRole("region", { name: "Weight", exact: true }).getByText("72,4 kg today", { exact: true })).toBeVisible();
-  await expect(lastAxisLabel(page)).toHaveText(axisLabel(day));
+  await expect(lastAxisLabel(page)).toHaveText(formatDM(day));
   await settled(page);
   expect(warnings).toEqual([]);
 });
@@ -119,7 +117,7 @@ test("at midnight the page refreshes once and the chart keeps the server's day, 
   const day = serverDay();
   await page.clock.install({ time: new Date(midnightAfter(day) - 30_000) });
   await openFood(page);
-  await expect(lastAxisLabel(page)).toHaveText(axisLabel(day));
+  await expect(lastAxisLabel(page)).toHaveText(formatDM(day));
   await page.evaluate(() => Object.assign(window, { kept: true }));
   const refreshes: Request[] = [];
   page.on("request", (r) => isRefresh(page, r) && refreshes.push(r));
@@ -130,7 +128,7 @@ test("at midnight the page refreshes once and the chart keeps the server's day, 
   await expect.poll(() => refreshes.length).toBe(1);
   await refreshes[0].response();
   await settled(page);
-  await expect(lastAxisLabel(page)).toHaveText(axisLabel(day));
+  await expect(lastAxisLabel(page)).toHaveText(formatDM(day));
   expect(await page.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
   expect(warnings).toEqual([]);
 });

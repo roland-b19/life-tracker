@@ -64,7 +64,7 @@ import {
   type LogSetInput,
 } from "@/lib/validations/gym";
 import { alreadyExists, SIGNED_OUT } from "@/lib/validations/result";
-import { FUTURE_DATE, TWO_DECIMALS } from "@/lib/validations/common";
+import { FUTURE_DATE, NOTHING_TO_SAVE, TWO_DECIMALS } from "@/lib/validations/common";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
 import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
@@ -455,7 +455,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await save(null, "b".repeat(501))).toEqual({ success: false, error: "Too long (max 500)" });
     expect(succeeded(await save(null, ` ${"b".repeat(500)}\n`)).notes).toBe("b".repeat(500));
     expect(succeeded(await save("b".repeat(500), "   ")).notes).toBeNull();
-    expect(await save(null, "  ")).toEqual({ success: false, error: "Nothing to save" });
+    expect(await save(null, "  ")).toEqual({ success: false, error: NOTHING_TO_SAVE });
   });
 
   describe("workout notes are saved with the open workout, sending the notes shown and the new ones (GYMB-03, GYMB-14, D-040)", () => {
@@ -1323,9 +1323,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       try {
         await hold.query("BEGIN");
         await hold.query("SELECT 1 FROM workout_sessions WHERE id = $1 FOR UPDATE", [id]);
-        const a = first().catch((e: unknown) => e);
+        // Each is awaited below; the empty catch only keeps a rejection meanwhile from going unhandled.
+        const a = first();
+        a.catch(() => undefined);
         await waiting(1);
-        const b = second().catch((e: unknown) => e);
+        const b = second();
+        b.catch(() => undefined);
         await waiting(2);
         await hold.query("COMMIT");
         return [await a, await b] as const;
@@ -1348,7 +1351,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("a Cancel and then a Finish at the same moment: the Cancel wins and the Finish finds no workout", async () => {
       const id = await startWithSet(userA);
       const [cancelled, finished] = await overlap(id, () => cancelSessionAction({ sessionId: id }), () => finishSessionAction({ sessionId: id }));
-      expect(cancelled).toMatchObject({ success: true });
+      succeeded(cancelled);
       expect(finished).toEqual({ success: false, error: WORKOUT_GONE });
       expect(await sessionsOf(userA)).toEqual([]);
     });

@@ -26,3 +26,6 @@ export const TWO_DECIMALS = "Maximum two decimal places";
 
 /** What a date or time after now answers (a weigh-in, a logged set, a task's or wish's time). */
 export const FUTURE_DATE = "Date cannot be in the future";
+
+/** What an edit that changes nothing answers (it sends only what changed, D-040). */
+export const NOTHING_TO_SAVE = "Nothing to save";

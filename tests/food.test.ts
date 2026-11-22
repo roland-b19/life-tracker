@@ -7,7 +7,7 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
-import { TWO_DECIMALS } from "@/lib/validations/common";
+import { NOTHING_TO_SAVE, TWO_DECIMALS } from "@/lib/validations/common";
 import { buildFoodChatPrompt } from "@/lib/food-ai-chat";
 import {
   CHANGED_ELSEWHERE,
@@ -693,7 +693,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         refused(SHOPPING_ITEM_GONE),
       );
       expect(await list()).toEqual(["Tea 1 pcs other"]);
-      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" })).toMatchObject({ success: true });
+      succeeded(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" }));
     });
   });
 
@@ -887,7 +887,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 500, to: MAX_WATER_ML } })).metrics?.waterMl).toBe(MAX_WATER_ML);
       await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: MAX_WATER_ML + 1 } })).resolves.toMatchObject({ success: false });
       await expect(setWaterAction({ date: today, waterMl: { from: MAX_WATER_ML, to: -1 } })).resolves.toMatchObject({ success: false });
-      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: "Nothing to save" });
+      await expect(setWaterAction({ date: today })).resolves.toEqual({ success: false, error: NOTHING_TO_SAVE });
 
       // The steps log and the steps goal share one limit.
       expect(succeeded(await updateStepsAction({ date: today, steps: { from: 0, to: 150000 } })).metrics?.steps).toBe(150000);
@@ -923,7 +923,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // Renaming onto another item with the same name and unit is refused as data (any case), not merged.
       const { item: milk } = succeeded(await addShoppingItemAction({ name: "Milk", amount: 1, unit: "l", category: "dairy" }));
       expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toMatchObject({ success: false });
-      expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" })).toMatchObject({ success: true });
+      succeeded(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
 
       // 6. Toggle, clear bought items and undo
       await toggleShoppingItemAction(item.id, true);
@@ -1010,7 +1010,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         // Tomorrow: the weigh-in's own rule (no future day) may answer first; water and steps get the today rule.
         for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: false });
         expect(await written()).toBe(0);
-        for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toMatchObject({ success: true });
+        for (const answer of await Promise.all(saves("2026-11-20"))) succeeded(answer);
         expect(await written()).toBe(2); // one metrics row (water and steps) and one weigh-in
       });
 
@@ -1021,7 +1021,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         succeeded(await setWaterAction({ date: "2026-11-20", waterMl: { from: 0, to: 250 } }));
         at("2026-11-20T22:00:00Z"); // 00:00 in Bucharest: the 21st, though UTC still says the 20th
         for (const answer of await Promise.all(saves("2026-11-20"))) expect(answer).toEqual(onlyToday);
-        for (const answer of await Promise.all(saves("2026-11-21"))) expect(answer).toMatchObject({ success: true });
+        for (const answer of await Promise.all(saves("2026-11-21"))) succeeded(answer);
       });
 
       it("still deletes a past weigh-in, and its Undo puts it back", async () => {
@@ -1062,7 +1062,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       succeeded(await updateTargetsAction({ calories: { from: 3350, to: 2800 } }));
       succeeded(await updateTargetsAction({ proteinGrams: { from: 170, to: 190 } }));
       expect(await getNutritionTargets(userA)).toMatchObject({ calories: 2800, proteinGrams: 190, carbsGrams: 300, waterMl: 3000, steps: 10000 });
-      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: "Nothing to save" });
+      await expect(updateTargetsAction({})).resolves.toEqual({ success: false, error: NOTHING_TO_SAVE });
 
       // The day's water and its goal, each edited alone, leave the other one as it was.
       expect(succeeded(await setWaterAction({ date: today, waterMl: { from: 0, to: 750 } })).targets).toBeNull();

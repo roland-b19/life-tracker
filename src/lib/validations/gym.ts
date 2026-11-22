@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FUTURE_DATE, isoDate, newId, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
+import { FUTURE_DATE, isoDate, newId, NOTHING_TO_SAVE, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
 import { weekday } from "@/lib/format-date";
 import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
 import { formatNumber } from "@/lib/number-format";
@@ -82,7 +82,7 @@ const note = (max: number) =>
 
 /**
  * A workout's notes as the server saves them (trimmed; null when nothing visible is left). The notes field compares its
- * text with this too, so it sends nothing the server would answer with "Nothing to save".
+ * text with this too, so it sends nothing the server would answer with NOTHING_TO_SAVE.
  */
 export const sessionNote = note(GYM_LIMITS.sessionNotes);
 
@@ -152,7 +152,7 @@ export const finishSessionSchema = z.object({ sessionId: uuid });
  */
 export const saveSessionNotesSchema = z
   .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
-  .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), "Nothing to save");
+  .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), NOTHING_TO_SAVE);
 
 const weekSunday = isoDate.refine((d) => weekday(d) === 0, "A deload week starts on a Sunday");
 

@@ -99,7 +99,7 @@ describe("editedNumberText", () => {
 });
 
 describe("roundTo", () => {
-  it("rounds half away from zero on the decimal it keeps, as Math.round does", () => {
+  it("rounds to the nearest value with that many decimals, a half going up toward +infinity as Math.round does (-2.5 to -2)", () => {
     expect([roundTo(0.1 + 0.2, 1), roundTo(1234.565, 2), roundTo(4.45, 1), roundTo(-2.5, 0), roundTo(-1.25, 1), roundTo(7, 2)]).toEqual([0.3, 1234.57, 4.5, -2, -1.2, 7]);
   });
 });

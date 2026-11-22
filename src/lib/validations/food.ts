@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
-import { FUTURE_DATE, isoDate, newId, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
+import { FUTURE_DATE, isoDate, newId, NOTHING_TO_SAVE, TWO_DECIMALS, twoDecimals, uuid, visible } from "./common";
 import { formatNumber } from "@/lib/number-format";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
@@ -78,7 +78,6 @@ const targetFields = {
   waterMl: goal(GOAL_RANGES.waterMl),
   steps: goal(GOAL_RANGES.steps),
 };
-const NOTHING_TO_SAVE = "Nothing to save";
 const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
 
 /** The answer for a meal written into a day older than yesterday: older days are history. */

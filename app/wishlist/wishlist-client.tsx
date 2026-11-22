@@ -126,7 +126,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
   const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
-  // Summed in cents, so the total holds exactly the cents of its items.
+  // Prices have two decimals; the sum is rounded back to two, so float error does not show in the total.
   const totalCost = roundTo(filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0), 2);
   const tabLabel = FILTERS.find((f) => f.value === filterRange)!.label;
 

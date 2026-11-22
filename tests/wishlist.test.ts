@@ -208,7 +208,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     authState.id = "";
     expect(await deleteWishlistItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
     authState.id = userA;
-    expect(await deleteWishlistItemAction(item.id)).toEqual({ success: true });
+    succeeded(await deleteWishlistItemAction(item.id));
     expect(await deleteWishlistItemAction(item.id)).toEqual({ success: false, error: "This item no longer exists." });
     expect(await deleteWishlistItemAction(randomUUID())).toEqual({ success: false, error: "This item no longer exists." });
     authState.id = "";

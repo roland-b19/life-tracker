@@ -807,7 +807,7 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(await deleteTodoAction(task.id)).toEqual({ success: false, error: SIGNED_OUT });
       authState.id = userA;
       expect(await titlesOn(today)).toEqual(["Floss"]); // nothing of A's changed
-      expect(await updateTodoAction({ id: task.id, title: "Floss well" })).toMatchObject({ success: true });
+      succeeded(await updateTodoAction({ id: task.id, title: "Floss well" }));
       expect(await titlesOn(today)).toEqual(["Floss well"]);
     });
 
