@@ -1,27 +1,62 @@
 "use client";
 
 import { toISODate } from "@/lib/format-date";
-import type { RestoreSessionInput } from "@/lib/validations/gym";
+import { NOTES_CHANGED, SET_GONE, SETS_LOGGED, sessionNote, type RestoreSessionInput } from "@/lib/validations/gym";
+import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
+import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
 import { undoWith, useToast } from "../components/toast";
-import { emptyInput, canLog, type SetInput } from "./exercise-logger";
-import type { ActiveSessionData, ExerciseItem, SplitDay, WorkoutSetData } from "./types";
-import { clearWorkoutTime, saveWorkoutTime, useWorkoutTimer, workoutMinutes } from "./workout-timer";
+import { emptyInput, canLog, UNCHECKED, type SetInput } from "./exercise-logger";
+import type { ActiveSessionData, ExerciseItem, SplitDay, WorkoutSetData, WorkoutTimer } from "./types";
 import {
   cancelSessionAction,
   deleteSetAction,
   finishSessionAction,
   logSetAction,
+  pauseSessionAction,
   reopenSessionAction,
   restoreSessionAction,
+  resumeSessionAction,
+  saveSessionNotesAction,
   startSessionAction,
 } from "@/actions/gym";
 
-type SessionSnapshot = { session: ActiveSessionData; seconds: number; notes: string };
+type AnomalyReason = RestoreSessionInput["sets"][number]["anomalyReason"];
+
+/** What an Undo toast of the workout touches (D-040): the workout's row, and the rows of the sets it names. */
+const touchesOf = (sessionId: string, sets: { id: string }[] = []) => [`workout_sessions:${sessionId}`, ...sets.map((s) => `workout_sets:${s.id}`)];
+
+/** 7:05 or 1:02:09. */
+export function formatClock(total: number) {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
 
 /**
- * The workout in hand: starting, logging, leaving, resuming, finishing and cancelling it, each with its Undo.
- * `busy` is the page's one saving flag, so every control on the page waits for the same write.
+ * The seconds a workout's clock shows: the server's count (D-039) plus the time since it answered, ticking while the
+ * timer runs. Every device asks the same row, so they show the same time.
+ */
+function useClock(timer: WorkoutTimer | undefined) {
+  const [shown, setShown] = useState(timer?.seconds ?? 0);
+  useEffect(() => {
+    if (!timer) return;
+    const from = Date.now();
+    const show = () => setShown(timer.seconds + (timer.running ? Math.floor((Date.now() - from) / 1000) : 0));
+    show();
+    if (!timer.running) return;
+    const tick = setInterval(show, 1000);
+    return () => clearInterval(tick);
+  }, [timer]);
+  return shown;
+}
+
+/**
+ * The workout in hand: starting, logging, pausing, leaving, resuming, finishing and cancelling it, each with its Undo.
+ * The timer is the server's (D-039). `busy` is the page's one saving flag, so every control on the page waits for the
+ * same write; every write button also acts once per tap burst (D-043).
  */
 export function useWorkout({
   openSession,
@@ -37,23 +72,38 @@ export function useWorkout({
   selectDay: (id: string) => void;
 }) {
   const { showToast } = useToast();
+  const once = useOnce();
   const warn = (message: string) => showToast({ message, type: "warning" });
   const [activeSession, setActiveSession] = useState<ActiveSessionData | null>(null);
   // A workout left without finishing (Exit, or a reload): its sets stay saved and Resume brings it back.
   const [paused, setPaused] = useState<ActiveSessionData | null>(openSession);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionNotes, setSessionNotes] = useState("");
-  const [timerPaused, setTimerPaused] = useState(false); // the Pause button
-  const [left, setLeft] = useState(false); // Exit stops the timer; a workout found open after a reload keeps its clock
+  // The notes as the server holds them, and the save in flight: a save sends only the change from them (D-040).
+  const savedNotes = useRef("");
+  const notesSave = useRef<Promise<boolean>>(Promise.resolve(true));
   // Exercises opened in the workout; they start collapsed and are not kept between workouts.
   const [openEx, setOpenEx] = useState<string[]>([]);
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
-  const timer = useWorkoutTimer((activeSession ?? paused)?.id ?? null, activeSession ? !timerPaused : left ? false : null);
+  const clock = useClock((activeSession ?? paused)?.timer);
   const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
   useEffect(() => {
     live.current = activeSession ?? paused;
   });
+  // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
+  // next save changes from, so the device is not refused again; the field keeps what was typed.
+  const [serverOpen] = useServerState(openSession);
+  const notesStale = useRef(false);
+  /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
+  const notesAnswered = (res: Answer | null) => {
+    if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
+  };
+  useEffect(() => {
+    if (!notesStale.current || !serverOpen || serverOpen.id !== live.current?.id) return;
+    notesStale.current = false;
+    savedNotes.current = serverOpen.notes ?? "";
+  }, [serverOpen]);
 
   const dropSet = (id: string) => setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {
@@ -61,187 +111,328 @@ export function useWorkout({
       prev && { ...prev, sets: [...prev.sets.filter((s) => s.id !== set.id), set].sort((a, b) => a.setOrder - b.setOrder) },
     );
   };
+  const setTimer = (id: string, timer: WorkoutTimer) => {
+    setActiveSession((prev) => (prev?.id === id ? { ...prev, timer } : prev));
+    setPaused((prev) => (prev?.id === id ? { ...prev, timer } : prev));
+  };
+  // Selects the workout's own day on the page, when the routine still has it.
+  const showDay = (dayId: string | null | undefined) => {
+    if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
+  };
+  // A write of the workout's own (Start, Pause or Resume, Finish, Exit): one at a time, with the page's saving flag.
+  const write = (run: () => Promise<void>, failed: string, spot?: Element | null) =>
+    once(
+      "workout",
+      async () => {
+        setBusy(true);
+        try {
+          await run();
+        } catch {
+          warn(failed);
+        } finally {
+          setBusy(false);
+        }
+      },
+      spot,
+    );
 
-  async function start(day: SplitDay) {
+  // Start on a day that already has a workout gets that one back (D-039); `from` says how, and Undo reverses just that.
+  // The screen shows the workout the server answered (its day and sets), never just the day that was tapped.
+  function start(day: SplitDay, spot?: Element | null) {
     if (day.isRest) return;
-    setBusy(true);
-    try {
-      const res = await startSessionAction({
-        date: toISODate(),
-        splitDayId: day.id,
-        isDeload: isDeloadMode,
-      });
-      if (res.success) {
-        setTimerPaused(false);
-        setActiveSession({
-          id: res.session.id,
-          createdAt: res.session.createdAt,
-          date: res.session.date,
-          isDeload: res.session.isDeload,
-          splitDayId: day.id,
-          splitDayName: day.name,
-          sets: [],
-        });
-        const started = res.session.id;
-        showToast({
-          message: `Started "${day.name}"`,
+    write(async () => {
+      const res = await startSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode });
+      if (!res.success) return warn(res.error);
+      const { session, sets, timer, from, splitDayName: name } = res;
+      const started: ActiveSessionData = {
+        id: session.id,
+        timer,
+        createdAt: session.createdAt,
+        date: session.date,
+        isDeload: session.isDeload,
+        splitDayId: session.splitDayId,
+        splitDayName: name,
+        notes: session.notes,
+        sets,
+      };
+      showDay(session.splitDayId);
+      setActiveSession(started);
+      setPaused(null);
+      showNotes(session.notes);
+      const touches = touchesOf(session.id);
+      if (from === "running") return showToast({ message: `"${name}" is already under way`, type: "success" });
+      if (from === "paused") {
+        return showToast({
+          message: `Resumed "${name}"`,
           type: "success",
-          // Only while nothing is logged: Undo must not delete sets.
+          touches,
           onUndo: undoWith(showToast, async () => {
-            const now = live.current;
-            if (now?.id !== started || now.sets.length > 0) {
-              warn("Sets are logged; use Cancel workout instead");
+            const res = await pauseSessionAction({ sessionId: session.id });
+            if (res.success) setTimer(session.id, res.timer);
+            return res;
+          }),
+        });
+      }
+      if (from === "finished") {
+        return showToast({
+          message: `Reopened "${name}"`,
+          type: "success",
+          touches,
+          onUndo: undoWith(showToast, async () => {
+            if (live.current?.id !== session.id) {
+              warn("Finish or leave the current workout first");
               return true;
             }
-            const gone = await cancelSessionAction({ sessionId: started }).catch(() => null);
+            const res = await finishSessionAction({ sessionId: session.id });
+            if (res.success) {
+              setActiveSession(null);
+              setPaused((p) => (p?.id === session.id ? null : p));
+              setSessionNotes("");
+            }
+            return res;
+          }),
+        });
+      }
+      showToast({
+        message: `Started "${name}"`,
+        type: "success",
+        touches,
+        // Only while nothing is logged: Undo must not delete sets. The server checks too (`onlyEmpty`), so a set logged
+        // on another device is never deleted; its refusal shows in the toast (D-040).
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            const now = live.current;
+            if (now?.id !== session.id || now.sets.length > 0) {
+              warn(SETS_LOGGED);
+              return true;
+            }
+            const gone = await cancelSessionAction({ sessionId: session.id, onlyEmpty: true }).catch(() => null);
             if (gone?.success) {
-              clearWorkoutTime(started);
               setConfirmCancel(false);
               setActiveSession(null);
-              setPaused((p) => (p?.id === started ? null : p));
+              setPaused((p) => (p?.id === session.id ? null : p));
               setSessionNotes("");
             }
             return gone;
-          }),
-        });
-      } else {
-        warn(res.error);
-      }
-    } catch {
-      warn("Failed to start workout");
-    } finally {
-      setBusy(false);
-    }
+          },
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
+        ),
+      });
+    }, "Failed to start workout", spot);
   }
 
-  async function logSet(exercise: ExerciseItem) {
-    if (!activeSession) return;
+  /** The Pause and Resume button: the server stops or restarts the workout's timer, and Undo turns it back. */
+  function toggleTimer(spot?: Element | null) {
+    const session = activeSession;
+    if (!session) return;
+    const run = !session.timer.running;
+    const turn = async (on: boolean) => {
+      const res = on ? await resumeSessionAction({ sessionId: session.id }) : await pauseSessionAction({ sessionId: session.id });
+      if (res.success) setTimer(session.id, res.timer);
+      return res;
+    };
+    write(async () => {
+      const res = await turn(run);
+      if (!res.success) return warn(res.error);
+      showToast({
+        message: run ? "Resumed the timer" : "Paused the timer",
+        type: "success",
+        touches: touchesOf(session.id),
+        onUndo: undoWith(showToast, () => turn(!run)),
+      });
+    }, run ? "Failed to resume the timer" : "Failed to pause the timer", spot);
+  }
+
+  // The server numbers the set (D-040): two pages logging into one workout never repeat a number. The checks go back to
+  // unchecked for the next set (D-039); reps and value stay, for straight sets.
+  function logSet(exercise: ExerciseItem, spot?: Element | null) {
+    const session = activeSession;
+    if (!session) return;
     const state = inputStates[exercise.exerciseId] || emptyInput(exercise);
     if (!canLog(state)) return; // the button stays disabled until the set is complete
-
-    const repsNum = Number(state.reps);
-    const loadNum = Number(state.loadValue || 0);
-
-    setBusy(true);
-    try {
-      const existingSetsForExercise = activeSession.sets.filter(
-        (s) => s.exerciseId === exercise.exerciseId,
-      );
-      const setOrder = Math.max(0, ...existingSetsForExercise.map((s) => s.setOrder)) + 1; // not the count: a deleted middle set would repeat a number
-
+    write(async () => {
+      // The id is made here (D-040), so a set sent twice is one set.
       const res = await logSetAction({
-        sessionId: activeSession.id,
+        id: crypto.randomUUID(),
+        sessionId: session.id,
         exerciseId: exercise.exerciseId,
-        setOrder,
-        reps: repsNum,
+        reps: Number(state.reps),
         loadType: state.loadType,
-        loadValue: loadNum,
+        loadValue: Number(state.loadValue || 0),
         isFailure: state.isFailure,
         isPartial: state.isPartial,
         isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
       });
-
-      if (res.success) {
-        const logged: WorkoutSetData = {
-          id: res.set.id,
-          exerciseId: exercise.exerciseId,
-          setOrder: res.set.setOrder,
-          reps: res.set.reps,
-          loadType: res.set.loadType,
-          loadValue: res.set.loadValue,
-          extraKg: res.set.extraKg,
-          isFailure: res.set.isFailure,
-          isPartial: res.set.isPartial,
-          isGoodForm: res.set.isGoodForm,
-          flagAnomaly: res.set.flagAnomaly,
-          anomalyReason: res.set.anomalyReason,
-          notes: res.set.notes,
-          createdAt: res.set.createdAt,
-        };
-        setActiveSession((prev) => prev && { ...prev, sets: [...prev.sets, logged] });
-        showToast({
-          message: res.set.flagAnomaly
-            ? `Added set ${setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`
-            : `Added set ${setOrder}`,
-          type: res.set.flagAnomaly ? "warning" : "success",
-          onUndo: undoWith(showToast, async () => {
+      if (!res.success) return warn(res.error);
+      const logged: WorkoutSetData = {
+        id: res.set.id,
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.exerciseName,
+        muscleGroup: exercise.muscleGroup,
+        equipmentType: exercise.equipmentType,
+        setOrder: res.set.setOrder,
+        reps: res.set.reps,
+        loadType: res.set.loadType,
+        loadValue: res.set.loadValue,
+        extraKg: res.set.extraKg,
+        isFailure: res.set.isFailure,
+        isPartial: res.set.isPartial,
+        isGoodForm: res.set.isGoodForm,
+        flagAnomaly: res.set.flagAnomaly,
+        anomalyReason: res.set.anomalyReason,
+        notes: res.set.notes,
+        createdAt: res.set.createdAt,
+      };
+      setActiveSession((prev) => prev && { ...prev, sets: [...prev.sets, logged] });
+      setInputStates((prev) => ({ ...prev, [exercise.exerciseId]: { ...state, ...UNCHECKED } }));
+      showToast({
+        message: res.set.flagAnomaly
+          ? `Added set ${logged.setOrder} (below the ${exercise.minReps} – ${exercise.maxReps} target)`
+          : `Added set ${logged.setOrder}`,
+        type: res.set.flagAnomaly ? "warning" : "success",
+        touches: [`workout_sets:${logged.id}`],
+        // A set already deleted (elsewhere) leaves nothing to undo, and never a row that is not saved.
+        onUndo: undoWith(
+          showToast,
+          async () => {
             dropSet(logged.id);
-            const gone = await deleteSetAction(logged.id).then((r) => r.success, () => false);
-            if (!gone) putBackSet(logged);
+            const gone = await deleteSetAction(logged.id).catch(() => null);
+            if (gone?.success || (gone && gone.error === SET_GONE)) return true;
+            putBackSet(logged);
             return gone;
-          }),
-        });
-      } else {
-        warn(res.error);
-      }
-    } catch {
-      warn("Failed to add set");
-    } finally {
-      setBusy(false);
-    }
+          },
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
+        ),
+      });
+    }, "Failed to add set", spot);
   }
 
-  // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
-  function deleteSet(set: WorkoutSetData) {
+  // Nothing waits on the network: the row leaves and the toast shows at once; a refused delete puts the row back and
+  // says why (a finished workout keeps its sets).
+  function deleteSet(set: WorkoutSetData, spot?: Element | null) {
     if (!activeSession) return;
     const sessionId = activeSession.id;
-    const deleted = deleteSetAction(set.id).then(
-      (r) => r.success,
-      () => false,
+    once(
+      `workout_sets:${set.id}`,
+      () => {
+        const deleted = deleteSetAction(set.id).catch(() => null);
+        dropSet(set.id);
+        showToast({
+          message: `Removed set ${set.setOrder}`,
+          touches: [`workout_sets:${set.id}`],
+          onUndo: undoWith(showToast, async () => {
+            if (!(await deleted)?.success) return true; // the refusal below put it back, or it was gone already
+            const res = await logSetAction({
+              id: set.id,
+              createdAt: set.createdAt,
+              sessionId,
+              exerciseId: set.exerciseId,
+              setOrder: set.setOrder,
+              reps: set.reps,
+              loadType: set.loadType,
+              loadValue: Number(set.loadValue),
+              extraKg: Number(set.extraKg),
+              isFailure: set.isFailure,
+              isPartial: set.isPartial,
+              isGoodForm: set.isGoodForm,
+              flagAnomaly: set.flagAnomaly,
+              anomalyReason: set.anomalyReason as AnomalyReason,
+              notes: set.notes || undefined,
+            }).catch(() => null);
+            // A set logged meanwhile may have taken its number: the server gives it the next one.
+            if (res?.success) putBackSet({ ...set, setOrder: res.set.setOrder });
+            return !!res?.success;
+          }, "Failed to restore set"),
+        });
+        return deleted.then((res) => {
+          if (res?.success || res?.error === SET_GONE) return;
+          putBackSet(set);
+          warn(res ? res.error : "Failed to remove set");
+        });
+      },
+      spot,
     );
-    dropSet(set.id);
-    showToast({
-      message: `Removed set ${set.setOrder}`,
-      onUndo: undoWith(showToast, async () => {
-        if (!(await deleted)) return true; // the failure path below puts it back
-        const res = await logSetAction({
-          id: set.id,
-          createdAt: set.createdAt,
-          sessionId,
-          exerciseId: set.exerciseId,
-          setOrder: set.setOrder,
-          reps: set.reps,
-          loadType: set.loadType,
-          loadValue: Number(set.loadValue),
-          extraKg: Number(set.extraKg),
-          isFailure: set.isFailure,
-          isPartial: set.isPartial,
-          isGoodForm: set.isGoodForm,
-          flagAnomaly: set.flagAnomaly,
-          anomalyReason: set.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
-          notes: set.notes || undefined,
-        }).catch(() => null);
-        if (res?.success) putBackSet(set);
-        return !!res?.success;
-      }, "Failed to restore set"),
+  }
+
+  /** Shows the notes the server holds: the field's text and what the next save changes from. */
+  function showNotes(notes: string | null | undefined) {
+    savedNotes.current = notes ?? "";
+    setSessionNotes(notes ?? "");
+  }
+
+  /**
+   * Saves the notes field when the server would save it as other notes than it holds (D-040: the change only, refused
+   * when they changed elsewhere), after any save in flight. Answers false when the save was refused or failed; it says why.
+   */
+  function saveNotes(text = sessionNotes): Promise<boolean> {
+    const session = activeSession;
+    if (!session) return notesSave.current;
+    const run = notesSave.current.then(async () => {
+      const from = savedNotes.current;
+      // Compared as the server saves it (trimmed, invisible-only is none); too long text goes, for the server's reason.
+      const to = sessionNote.safeParse(text);
+      if (to.success && (to.data ?? "") === from) return true;
+      const res = await saveSessionNotesAction({ sessionId: session.id, notes: { from: from || null, to: text } }).catch(() => null);
+      notesAnswered(res);
+      if (!res?.success) {
+        warn(res ? res.error : "Failed to save the notes");
+        return false;
+      }
+      savedNotes.current = res.notes ?? "";
+      showToast({
+        message: "Saved the notes",
+        type: "success",
+        touches: touchesOf(session.id),
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            const back = await saveSessionNotesAction({ sessionId: session.id, notes: { from: res.notes, to: from || null } });
+            notesAnswered(back);
+            if (back.success && live.current?.id === session.id) showNotes(back.notes);
+            return back;
+          },
+          (back) => (back && !back.success ? back.error : "Failed to restore the notes"),
+        ),
+      });
+      return true;
     });
-    void deleted.then((ok) => {
-      if (ok) return;
-      putBackSet(set);
-      warn("Failed to remove set");
-    });
+    notesSave.current = run;
+    return run;
   }
 
-  function exit() {
-    setLeft(true);
-    setPaused(activeSession);
-    setConfirmCancel(false);
-    setActiveSession(null);
+  // Exit pauses the timer: a workout left for later does not count the time away. Resume (the banner) runs it again.
+  // Notes typed and not saved yet are saved first.
+  function exit(spot?: Element | null) {
+    const session = activeSession;
+    if (!session) return;
+    write(async () => {
+      if (!(await saveNotes())) return;
+      const res = await pauseSessionAction({ sessionId: session.id });
+      if (!res.success) return warn(res.error);
+      setPaused({ ...session, timer: res.timer, notes: savedNotes.current || null });
+      setConfirmCancel(false);
+      setActiveSession(null);
+    }, "Failed to leave the workout", spot);
   }
 
-  function resume() {
-    if (!paused) return;
-    const dayId = paused.splitDayId;
-    if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
-    setTimerPaused(false);
-    setLeft(false);
-    setActiveSession(paused);
-    setPaused(null);
+  function resume(spot?: Element | null) {
+    const session = paused;
+    if (!session) return;
+    write(async () => {
+      const res = await resumeSessionAction({ sessionId: session.id });
+      if (!res.success) return warn(res.error);
+      showDay(session.splitDayId);
+      setActiveSession({ ...session, timer: res.timer });
+      setPaused(null);
+      showNotes(session.notes);
+    }, "Failed to resume the workout", spot);
   }
 
-  // Undo hands a workout back as it was, unless another one was started in the meantime.
-  function takeBack(back: () => Promise<ActiveSessionData | null>, snap: SessionSnapshot, failed: string) {
+  // Undo hands a workout back as it was, unless another one was started in the meantime. A refusal shows the server's
+  // own words (D-040); `failed` only when no answer came.
+  function takeBack(back: () => Promise<Answer<{ session: ActiveSessionData }>>, failed: string) {
     return undoWith(
       showToast,
       async () => {
@@ -249,114 +440,122 @@ export function useWorkout({
           warn("Finish or leave the current workout first");
           return true;
         }
-        const restored = await back().catch(() => null);
-        if (!restored) return false;
-        saveWorkoutTime(restored.id, snap.seconds); // before the workout shows, so the timer picks it up
-        if (restored.splitDayId && days.some((d) => d.id === restored.splitDayId)) selectDay(restored.splitDayId);
-        setTimerPaused(false);
-        setSessionNotes(snap.notes);
-        setActiveSession(restored);
-        return true;
+        const res = await back();
+        if (!res.success) return res;
+        showDay(res.session.splitDayId);
+        showNotes(res.session.notes);
+        setActiveSession(res.session);
+        return res;
       },
-      failed,
+      (back) => (back && !back.success ? back.error : failed),
     );
   }
 
-  async function cancel() {
-    if (!activeSession) return;
-    const snap = { session: activeSession, seconds: timer.seconds(), notes: sessionNotes };
-    setBusy(true);
-    try {
-      const res = await cancelSessionAction({ sessionId: activeSession.id });
-      if (!res.success) throw new Error("not cancelled");
-      clearWorkoutTime(snap.session.id);
+  /** Undo of Cancel, and of a Finish that deleted an empty workout: the workout comes back with its ids, sets and timer. */
+  function restore(snap: ActiveSessionData, timer: WorkoutTimer) {
+    return async (): Promise<Answer<{ session: ActiveSessionData }>> => {
+      const res = await restoreSessionAction({
+        id: snap.id,
+        createdAt: snap.createdAt,
+        date: snap.date,
+        splitDayId: snap.splitDayId,
+        isDeload: snap.isDeload,
+        notes: snap.notes ?? null,
+        timerSeconds: timer.seconds,
+        timerRunning: timer.running,
+        sets: snap.sets.map((x) => ({
+          id: x.id,
+          createdAt: x.createdAt,
+          exerciseId: x.exerciseId,
+          setOrder: x.setOrder,
+          reps: x.reps,
+          loadType: x.loadType as "kg" | "plates" | "bodyweight",
+          loadValue: Number(x.loadValue),
+          extraKg: Number(x.extraKg),
+          isFailure: x.isFailure,
+          isPartial: x.isPartial,
+          isGoodForm: x.isGoodForm,
+          flagAnomaly: x.flagAnomaly,
+          anomalyReason: x.anomalyReason as AnomalyReason,
+          notes: x.notes,
+        })),
+      });
+      if (!res.success) return res;
+      const { session, sets } = res.details;
+      return {
+        success: true,
+        session: {
+          id: session.id,
+          timer: res.details.timer,
+          createdAt: session.createdAt,
+          date: session.date,
+          isDeload: session.isDeload,
+          splitDayId: session.splitDayId,
+          splitDayName: snap.splitDayName,
+          notes: session.notes,
+          sets,
+        },
+      };
+    };
+  }
+
+  // The notes are saved first, so the Undo brings them back too.
+  function cancel(spot?: Element | null) {
+    const session = activeSession;
+    if (!session) return;
+    write(async () => {
+      if (!(await saveNotes())) return;
+      const snap = { ...session, notes: savedNotes.current || null };
+      const res = await cancelSessionAction({ sessionId: session.id });
+      if (!res.success) return warn(res.error);
       setConfirmCancel(false);
       setActiveSession(null);
       setSessionNotes("");
       showToast({
         message: "Cancelled the workout",
         type: "success",
-        onUndo: takeBack(
-          async () => {
-            const res = await restoreSessionAction({
-              id: snap.session.id,
-              createdAt: snap.session.createdAt,
-              date: snap.session.date,
-              splitDayId: snap.session.splitDayId,
-              isDeload: snap.session.isDeload,
-              notes: snap.notes || null,
-              sets: snap.session.sets.map((x) => ({
-                id: x.id,
-                createdAt: x.createdAt,
-                exerciseId: x.exerciseId,
-                setOrder: x.setOrder,
-                reps: x.reps,
-                loadType: x.loadType as "kg" | "plates" | "bodyweight",
-                loadValue: Number(x.loadValue),
-                extraKg: Number(x.extraKg),
-                isFailure: x.isFailure,
-                isPartial: x.isPartial,
-                isGoodForm: x.isGoodForm,
-                flagAnomaly: x.flagAnomaly,
-                anomalyReason: x.anomalyReason as RestoreSessionInput["sets"][number]["anomalyReason"],
-                notes: x.notes,
-              })),
-            });
-            if (!res.success) return null;
-            const { session, sets } = res.details;
-            return {
-              id: session.id,
-              createdAt: session.createdAt,
-              date: session.date,
-              isDeload: session.isDeload,
-              splitDayId: session.splitDayId,
-              splitDayName: snap.session.splitDayName,
-              sets,
-            };
-          },
-          snap,
-          "Failed to restore the workout",
-        ),
+        touches: touchesOf(snap.id, snap.sets),
+        onUndo: takeBack(restore(snap, res.timer), "Failed to restore the workout"),
       });
-    } catch {
-      warn("Failed to cancel workout");
-    } finally {
-      setBusy(false);
-    }
+    }, "Failed to cancel workout", spot);
   }
 
-  async function finish() {
-    if (!activeSession) return;
-    const snap = { session: activeSession, seconds: timer.seconds(), notes: sessionNotes };
-    const minutes = workoutMinutes(snap.seconds);
-    setBusy(true);
-    try {
-      const done = await finishSessionAction({
-        sessionId: activeSession.id,
-        durationMinutes: minutes,
-        notes: sessionNotes || undefined,
-      });
-      if (!done.success) {
-        warn(done.error);
-        return;
-      }
-      clearWorkoutTime(snap.session.id);
+  // The server counts the duration (D-039); a workout with no sets is deleted, and Undo brings it back open. Notes typed
+  // and not saved yet are saved first.
+  function finish(spot?: Element | null) {
+    const session = activeSession;
+    if (!session) return;
+    write(async () => {
+      if (!(await saveNotes())) return;
+      const snap = { ...session, notes: savedNotes.current || null };
+      const done = await finishSessionAction({ sessionId: session.id });
+      if (!done.success) return warn(done.error);
       setActiveSession(null);
       setSessionNotes("");
+      // The sets too: a set's Undo after Finish would take a set out of a finished workout.
+      const touches = touchesOf(session.id, session.sets);
+      if (done.deleted) {
+        return showToast({
+          message: "No sets logged: the workout was removed",
+          type: "success",
+          touches,
+          // The server found no sets: sets this page still showed were deleted elsewhere and stay deleted.
+          onUndo: takeBack(restore({ ...snap, sets: [] }, done.timer), "Failed to restore the workout"),
+        });
+      }
       showToast({
-        message: `Finished the workout · ${minutes} min`,
+        message: `Finished the workout · ${done.session.durationMinutes} min`,
         type: "success",
+        touches,
         onUndo: takeBack(
-          async () => ((await reopenSessionAction({ sessionId: snap.session.id })).success ? snap.session : null),
-          snap,
+          async () => {
+            const res = await reopenSessionAction({ sessionId: session.id });
+            return res.success ? { success: true, session: { ...snap, timer: res.timer } } : res;
+          },
           "Failed to reopen the workout",
         ),
       });
-    } catch {
-      warn("Failed to finish workout");
-    } finally {
-      setBusy(false);
-    }
+    }, "Failed to finish workout", spot);
   }
 
   return {
@@ -366,14 +565,14 @@ export function useWorkout({
     setConfirmCancel,
     sessionNotes,
     setSessionNotes,
-    timerPaused,
-    setTimerPaused,
+    saveNotes,
     openEx,
     setOpenEx,
     inputStates,
     setInputStates,
-    timer,
+    clock,
     start,
+    toggleTimer,
     logSet,
     deleteSet,
     exit,

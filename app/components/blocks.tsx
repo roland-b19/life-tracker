@@ -476,6 +476,7 @@ export function FormActions({
 export function FormModal({
   isOpen,
   onClose,
+  onCancel,
   title,
   onSubmit,
   error,
@@ -487,6 +488,8 @@ export function FormModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
+  /** Runs on the form's Cancel only (not Escape, a click outside or the close button), before `onClose`. */
+  onCancel?: () => void;
   title: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => unknown;
   error?: string | null;
@@ -510,7 +513,15 @@ export function FormModal({
           {children}
           {error && <ErrorText id={errorId}>{error}</ErrorText>}
         </div>
-        <FormActions onCancel={onClose} busy={busy} canSubmit={canSubmit} submitLabel={submitLabel} />
+        <FormActions
+          onCancel={() => {
+            onCancel?.();
+            onClose();
+          }}
+          busy={busy}
+          canSubmit={canSubmit}
+          submitLabel={submitLabel}
+        />
       </form>
     </Modal>
   );

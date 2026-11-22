@@ -1,24 +1,28 @@
 "use client";
 
-import { toISODate, weekday } from "@/lib/format-date";
+import { weekday } from "@/lib/format-date";
 import type { MuscleGroupKey } from "@/lib/gym-muscles";
-import { progressSets, type HistoryEntry } from "@/lib/gym-progress";
+import { progressSets, type HistoryEntry, type PlateWeights } from "@/lib/gym-progress";
 import { useMemo, useState } from "react";
 import { Banner, Page, SmallButton } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
+import { useServerState } from "../components/server-state";
 import { ActiveWorkout } from "./active-workout";
 import { CustomExercises, type CustomExercise } from "./custom-exercises";
-import { DayEditor } from "./day-editor";
+import { DayEditor, type DiscardedEdit } from "./day-editor";
 import { DeloadCard } from "./deload-card";
 import { HistoryCard } from "./history-card";
 import { MuscleExplorer } from "./muscle-map";
 import { ProgressPanel } from "./progress-panel";
 import { TrainingDays } from "./training-days";
 import type { ActiveSessionData, DeloadInfo, LibraryExercise, SplitDay } from "./types";
-import { useWorkout } from "./use-workout";
+import { formatClock, useWorkout } from "./use-workout";
 
 interface GymClientProps {
   userName: string;
+  /** The server's day, so the server and the browser render the same page (the browser's clock may differ). */
+  today: string;
+  plateWeights: PlateWeights;
   split: {
     id: string;
     name: string;
@@ -31,16 +35,17 @@ interface GymClientProps {
   openSession: ActiveSessionData | null;
 }
 
-export function GymClient({ userName, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
+export function GymClient({ userName, today, plateWeights, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
   const days = split?.days ?? [];
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
-    const today = weekday(toISODate());
-    const todayMatch = days.find((d) => d.dayOfWeek === today);
+    const todayMatch = days.find((d) => d.dayOfWeek === weekday(today));
     return todayMatch ? todayMatch.id : days[0]?.id ?? "";
   });
-  const [isDeloadMode, setIsDeloadMode] = useState(deload.isDeloadDue || deload.inDeloadWeek);
+  // Follows the server: a deload week saved for this week turns it on without a reload; a tap still sets it by hand.
+  const [isDeloadMode, setIsDeloadMode] = useServerState(deload.isDeloadDue || deload.inDeloadWeek);
   const [busy, setBusy] = useState(false); // one saving flag: every control on the page waits for the same write
-  const [editingDay, setEditingDay] = useState<SplitDay | null>(null);
+  // The day being edited, as it was when the editor opened, and the discarded edits an Undo reopens it with.
+  const [editing, setEditing] = useState<{ day: SplitDay; resume?: DiscardedEdit } | null>(null);
   const [isFolded, toggleFolded] = useFolded("gym");
   const w = useWorkout({ openSession, days, isDeloadMode, setBusy, selectDay: setSelectedDayId });
   const { activeSession, paused } = w;
@@ -57,10 +62,10 @@ export function GymClient({ userName, split, deload, history, exercises, customE
 
   return (
     <Page userName={userName}>
-      <DeloadCard deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
+      <DeloadCard today={today} deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
 
       {activeSession ? (
-        <ActiveWorkout w={w} day={currentDay} history={history} busy={busy} />
+        <ActiveWorkout w={w} day={days.find((d) => d.id === activeSession.splitDayId)} history={history} busy={busy} />
       ) : (
         <>
           {paused && (
@@ -68,28 +73,40 @@ export function GymClient({ userName, split, deload, history, exercises, customE
               label="Workout in progress"
               className="resume-bar"
               title="Workout in progress"
-              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged`}
+              sub={`${paused.splitDayName || "Workout"} · ${paused.sets.length} ${paused.sets.length === 1 ? "set" : "sets"} logged · ${formatClock(w.clock)}`}
             >
-              <SmallButton onClick={w.resume}>Resume</SmallButton>
+              <SmallButton disabled={busy} onClick={(e) => w.resume(e.currentTarget)}>Resume</SmallButton>
             </Banner>
           )}
           <TrainingDays
+            today={today}
             days={days}
             selectedId={selectedDayId}
             onSelect={setSelectedDayId}
             busy={busy}
             hasPaused={Boolean(paused)}
-            onStart={(day) => void w.start(day)}
-            onEdit={setEditingDay}
+            onStart={w.start}
+            onEdit={(day) => setEditing({ day })}
           />
-          <ProgressPanel sets={progress} />
+          <ProgressPanel today={today} sets={progress} deloadWeeks={deload.weeks} plateWeights={plateWeights} />
           <MuscleExplorer dayGroups={dayGroups} planned={days.flatMap((d) => d.exercises.map((ex) => ({ ...ex, dayName: d.name })))} />
           <CustomExercises exercises={customExercises} fold={{ folded: isFolded("custom"), onToggle: () => toggleFolded("custom") }} />
           <HistoryCard history={history} />
         </>
       )}
 
-      {editingDay && <DayEditor key={editingDay.id} day={editingDay} exercises={exercises} busy={busy} setBusy={setBusy} onClose={() => setEditingDay(null)} />}
+      {editing && (
+        <DayEditor
+          key={editing.day.id}
+          day={editing.day}
+          resume={editing.resume}
+          exercises={exercises}
+          busy={busy}
+          setBusy={setBusy}
+          onClose={() => setEditing(null)}
+          onReopen={(resume) => setEditing({ day: days.find((d) => d.id === editing.day.id) ?? editing.day, resume })}
+        />
+      )}
     </Page>
   );
 }

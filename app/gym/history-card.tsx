@@ -47,7 +47,11 @@ export function HistoryCard({ history }: { history: HistoryEntry[] }) {
                       <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
                     </span>
                     <span className="muted number-tabular history-progress">
-                      {h.progress !== null ? `Weight ${kgDelta(h.progress)} vs the week before` : "Nothing to compare with yet"}
+                      {h.deloadWeek
+                        ? "Deload week, left out of progress"
+                        : h.progress !== null
+                          ? `Weight ${kgDelta(h.progress)} vs the week before`
+                          : "Nothing to compare with yet"}
                     </span>
                   </button>
                   {open && (
