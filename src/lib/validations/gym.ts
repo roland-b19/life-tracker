@@ -19,6 +19,11 @@ export const MORE_THAN_ZERO = "Must be more than 0";
 export const AT_MOST_PLATE_KG = `Must be at most ${GYM_LIMITS.plateKg}`;
 /** Why a kg or plates set with a value of 0 cannot be logged (a bodyweight set can), in the set form and on the server. */
 export const ZERO_LOAD = "Enter a value above 0, or pick BW.";
+/**
+ * What a change of a workout's notes answers when the stored notes are no longer the ones the screen showed (D-040): the
+ * client then takes the server's notes as the ones its next save changes from.
+ */
+export const NOTES_CHANGED = "These notes changed on another device. Check them and try again.";
 /** What deleting a set that is no longer there answers: the client then has nothing to put back. */
 export const SET_GONE = "Set not found.";
 /** Whether a number has at most two decimals. */
@@ -37,6 +42,12 @@ const note = (max: number) =>
     .max(max)
     .transform((s) => (visible(s) ? s : null))
     .nullish();
+
+/**
+ * A workout's notes as the server saves them (trimmed; null when nothing visible is left). The notes field compares its
+ * text with this too, so it sends nothing the server would answer with "Nothing to save.".
+ */
+export const sessionNote = note(GYM_LIMITS.sessionNotes);
 
 /**
  * The spaces an exercise name collapses, as one regular expression for both sides: `exerciseNameKey` here and `nameKey`
@@ -58,8 +69,8 @@ export const exerciseNameKey = (name: string) =>
 
 const setFields = z.object({
   // The device makes the id (D-040); Undo also sends the time and the set's number, to bring a deleted set back as it
-  // was. The server checks the time falls within the workout, and numbers a new set itself (D-040: a log sends only what
-  // the device knows, so two devices never pick one number).
+  // was (the next free number when a set logged meanwhile took its own). The server checks the time falls within the
+  // workout, and numbers a new set itself (D-040: a log sends only what the device knows, so two devices never pick one number).
   id: newId,
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + SET_TIME_SKEW_MS, "Date cannot be in the future").optional(),
   sessionId: uuid,
@@ -103,7 +114,7 @@ export const finishSessionSchema = z.object({ sessionId: uuid });
  * between is never lost.
  */
 export const saveSessionNotesSchema = z
-  .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: note(GYM_LIMITS.sessionNotes) }).strict() })
+  .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
   .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), "Nothing to save.");
 
 const weekSunday = isoDate.refine((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 0, "A deload week starts on a Sunday");
@@ -129,7 +140,7 @@ export const restoreSessionSchema = z.object({
   date: isoDate,
   splitDayId: uuid.optional().nullable(),
   isDeload: z.boolean(),
-  notes: note(GYM_LIMITS.sessionNotes),
+  notes: sessionNote,
   timerSeconds: z.number().int().min(0).max(1_000_000).default(0),
   timerRunning: z.boolean().default(false),
   // A set put back as it was stored, so the new-set rule of logSetSchema does not apply.

@@ -102,7 +102,7 @@ export async function saveSessionNotesAction(rawInput: unknown) {
   });
 }
 
-/** Cancel: the workout and its sets go; answers its timer, which Undo puts back. */
+/** Cancel: an open workout and its sets go (a finished one is refused); answers its timer, which Undo puts back. */
 export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();

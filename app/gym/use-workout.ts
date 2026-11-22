@@ -1,10 +1,11 @@
 "use client";
 
 import { toISODate } from "@/lib/format-date";
-import { SET_GONE, type RestoreSessionInput } from "@/lib/validations/gym";
+import { NOTES_CHANGED, SET_GONE, sessionNote, type RestoreSessionInput } from "@/lib/validations/gym";
 import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
 import { undoWith, useToast } from "../components/toast";
 import { emptyInput, canLog, UNCHECKED, type SetInput } from "./exercise-logger";
 import type { ActiveSessionData, ExerciseItem, SplitDay, WorkoutSetData, WorkoutTimer } from "./types";
@@ -90,6 +91,15 @@ export function useWorkout({
   useEffect(() => {
     live.current = activeSession ?? paused;
   });
+  // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
+  // next save changes from, so the device is not refused again; the field keeps what was typed.
+  const [serverOpen] = useServerState(openSession);
+  const notesStale = useRef(false);
+  useEffect(() => {
+    if (!notesStale.current || !serverOpen || serverOpen.id !== live.current?.id) return;
+    notesStale.current = false;
+    savedNotes.current = serverOpen.notes ?? "";
+  }, [serverOpen]);
 
   const dropSet = (id: string) => setActiveSession((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {
@@ -322,7 +332,8 @@ export function useWorkout({
               anomalyReason: set.anomalyReason as AnomalyReason,
               notes: set.notes || undefined,
             }).catch(() => null);
-            if (res?.success) putBackSet(set);
+            // A set logged meanwhile may have taken its number: the server gives it the next one.
+            if (res?.success) putBackSet({ ...set, setOrder: res.set.setOrder });
             return !!res?.success;
           }, "Failed to restore set"),
         });
@@ -343,17 +354,20 @@ export function useWorkout({
   }
 
   /**
-   * Saves the notes field when it differs from the server's notes (D-040: the change only, refused when they changed
-   * elsewhere), after any save in flight. Answers false when the save was refused or failed; it says why.
+   * Saves the notes field when the server would save it as other notes than it holds (D-040: the change only, refused
+   * when they changed elsewhere), after any save in flight. Answers false when the save was refused or failed; it says why.
    */
   function saveNotes(text = sessionNotes): Promise<boolean> {
     const session = activeSession;
     if (!session) return notesSave.current;
     const run = notesSave.current.then(async () => {
       const from = savedNotes.current;
-      if (text.trim() === from) return true;
+      // Compared as the server saves it (trimmed, invisible-only is none); too long text goes, for the server's reason.
+      const to = sessionNote.safeParse(text);
+      if (to.success && (to.data ?? "") === from) return true;
       const res = await saveSessionNotesAction({ sessionId: session.id, notes: { from: from || null, to: text } }).catch(() => null);
       if (!res?.success) {
+        if (res?.error === NOTES_CHANGED) notesStale.current = true;
         warn(res ? res.error : "Failed to save the notes");
         return false;
       }
@@ -515,7 +529,8 @@ export function useWorkout({
           message: "No sets logged: the workout was removed",
           type: "success",
           touches,
-          onUndo: takeBack(restore(snap, done.timer), "Failed to restore the workout"),
+          // The server found no sets: sets this page still showed were deleted elsewhere and stay deleted.
+          onUndo: takeBack(restore({ ...snap, sets: [] }, done.timer), "Failed to restore the workout"),
         });
       }
       showToast({

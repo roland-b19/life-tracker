@@ -18,6 +18,7 @@ import {
   GYM_LIMITS,
   LogSetInput,
   NAME_SPACES,
+  NOTES_CHANGED,
   RestoreDeloadWeeksInput,
   RestoreSessionInput,
   SaveSessionNotesInput,
@@ -393,9 +394,6 @@ export async function finishWorkoutSession(userId: string, input: FinishSessionI
   });
 }
 
-/** What a change of the notes answers when the stored notes are no longer the ones the screen showed (D-040). */
-export const NOTES_CHANGED = "These notes changed on another device. Check them and try again.";
-
 /**
  * Save an open workout's notes (D-040): `to` is written only while the stored notes still equal `from`. A finished
  * workout's are history (D-039); null when the workout is not the user's. Answers the notes as saved (trimmed, or null).
@@ -511,15 +509,20 @@ export async function restoreWorkoutSession(userId: string, input: RestoreSessio
 }
 
 /**
- * Delete a workout the user started but does not want (its sets go with it). Owner only. Answers its timer at that
- * moment, which Undo puts back.
+ * Delete an open workout the user started but does not want (its sets go with it). Owner only (undefined otherwise); a
+ * finished workout is history (D-039) and is refused, also from a page that still shows it open. Answers its timer at
+ * that moment, which Undo puts back.
  */
 export async function cancelWorkoutSession(userId: string, sessionId: string) {
-  const [deleted] = await db
-    .delete(workoutSessions)
-    .where(and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId)))
-    .returning();
-  return deleted && { id: deleted.id, timer: workoutTimer(deleted) };
+  return db.transaction(async (tx) => {
+    await lockUser(tx, "session", userId); // a Finish at the same moment lands before the Cancel (refused) or after it
+    const mine = and(eq(workoutSessions.id, sessionId), eq(workoutSessions.userId, userId));
+    const [row] = await tx.select({ durationMinutes: workoutSessions.durationMinutes }).from(workoutSessions).where(mine);
+    if (!row) return undefined;
+    if (row.durationMinutes !== null) throw new Refusal(WORKOUT_FINISHED);
+    const [deleted] = await tx.delete(workoutSessions).where(mine).returning();
+    return { id: deleted.id, timer: workoutTimer(deleted) };
+  });
 }
 
 /**
@@ -578,14 +581,15 @@ export async function logWorkoutSet(userId: string, input: LogSetInput) {
     const flagAnomaly = input.flagAnomaly || below;
     const anomalyReason = input.anomalyReason ?? (below ? "too_heavy" : null);
     const extraKg = input.loadType === "bodyweight" ? 0 : input.extraKg;
-    // A new set takes the next number of its exercise in this workout; Undo of a delete brings its own back.
+    // A new set takes the next number of its exercise in this workout. Undo of a delete brings its own back, unless a set
+    // logged meanwhile took it: then it takes the next one too, so no two sets of an exercise share a number.
+    const taken = await tx
+      .select({ setOrder: workoutSets.setOrder })
+      .from(workoutSets)
+      .where(and(eq(workoutSets.sessionId, input.sessionId), eq(workoutSets.exerciseId, input.exerciseId)));
     let setOrder = input.setOrder;
-    if (setOrder === undefined) {
-      const [last] = await tx
-        .select({ max: sql<number | null>`max(${workoutSets.setOrder})` })
-        .from(workoutSets)
-        .where(and(eq(workoutSets.sessionId, input.sessionId), eq(workoutSets.exerciseId, input.exerciseId)));
-      setOrder = (last?.max ?? 0) + 1;
+    if (setOrder === undefined || taken.some((s) => s.setOrder === setOrder)) {
+      setOrder = Math.max(0, ...taken.map((s) => s.setOrder)) + 1;
       if (setOrder > GYM_LIMITS.sets) throw new Refusal(`At most ${GYM_LIMITS.sets} sets of one exercise in a workout.`);
     }
 

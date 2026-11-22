@@ -23,7 +23,6 @@ import {
   getWorkoutSessionDetails,
   logWorkoutSet,
   EXERCISE_GONE,
-  NOTES_CHANGED,
   WORKOUT_FINISHED,
   WORKOUT_GONE,
 } from "@/lib/gym";
@@ -47,7 +46,7 @@ import {
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
+import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, NOTES_CHANGED, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
@@ -491,6 +490,21 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await log(a)).setOrder).toBe(4); // the highest plus one: a deleted middle set is not reused
       succeeded(await deleteSetAction(third.id));
       expect((await log(a, { id: second.id, setOrder: 2 })).setOrder).toBe(2); // Undo of the delete brings set 2 back as it was
+    });
+
+    it("Undo of a delete whose number a set logged meanwhile took gives it the next free number", async () => {
+      const ex = (await trainingDay(userA)).exercises[0].exerciseId;
+      const session = await begin(userA);
+      const log = async (more: Partial<LogSetInput> = {}) =>
+        succeeded(await logSetAction(setOf(session.id, ex, { id: randomUUID(), setOrder: undefined, ...more }))).set;
+      await log();
+      await log();
+      const third = await log();
+      succeeded(await deleteSetAction(third.id));
+      expect((await log()).setOrder).toBe(3); // a new set 3
+      expect((await log({ id: third.id, createdAt: third.createdAt, setOrder: 3 })).setOrder).toBe(4); // the Undo
+      const numbers = await admin.query("SELECT set_order FROM workout_sets WHERE session_id = $1 ORDER BY set_order", [session.id]);
+      expect(numbers.rows.map((r) => r.set_order)).toEqual([1, 2, 3, 4]);
     });
 
     it("refuses a 51st set of one exercise", async () => {
@@ -1149,6 +1163,35 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("rejects a malformed id", async () => {
       expect(await cancelSessionAction({ sessionId: "nope" })).toEqual({ success: false, error: "Invalid id" });
+    });
+
+    // A page that still shows the workout open after another page finished it (D-039: a finished workout is history).
+    it("refuses to cancel a finished workout and deletes nothing; another user and signed out learn nothing", async () => {
+      const id = await startWithSet(userA);
+      succeeded(await finishSessionAction({ sessionId: id }));
+      const before = await sessionsOf(userA);
+      expect(await cancelSessionAction({ sessionId: id })).toEqual({ success: false, error: WORKOUT_FINISHED });
+      expect(await sessionsOf(userA)).toEqual(before);
+      expect(await setCount(id)).toBe(1);
+      authState.id = userB;
+      expect(await cancelSessionAction({ sessionId: id })).toEqual({ success: false, error: WORKOUT_GONE });
+      authState.id = "";
+      expect(await cancelSessionAction({ sessionId: id })).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await sessionsOf(userA)).toEqual(before);
+      expect(await setCount(id)).toBe(1);
+    });
+
+    it("a Cancel and a Finish at once: one of them wins, never both", async () => {
+      const id = await startWithSet(userA);
+      const [cancelled, finished] = await Promise.all([cancelSessionAction({ sessionId: id }), finishSessionAction({ sessionId: id })]);
+      expect([cancelled.success, finished.success].filter(Boolean)).toHaveLength(1);
+      if (cancelled.success) {
+        expect(finished).toEqual({ success: false, error: WORKOUT_GONE });
+        expect(await sessionsOf(userA)).toEqual([]);
+      } else {
+        expect(cancelled).toEqual({ success: false, error: WORKOUT_FINISHED });
+        expect(await setCount(id)).toBe(1);
+      }
     });
 
     it("finds only the owner's unfinished recent workout", async () => {

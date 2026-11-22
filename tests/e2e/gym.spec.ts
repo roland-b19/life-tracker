@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, settled, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, refreshesDone, settled, test } from "./helpers";
 
 // A new user gets the default split (Upper / Lower 5-Day) when the page first loads. The day the page selects at load
 // depends on the date and some days are rest days, so the spec always picks a day by its name, never by the date.
@@ -530,6 +530,29 @@ test("a set logged in one page into a workout another page finished is refused, 
   await other.close();
 });
 
+// D-039: Cancel deletes an open workout only, so a page still showing a workout another page finished cannot delete it.
+test("Cancel in one page of a workout another page finished is refused, and History keeps the workout", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await logSet(page);
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
+
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(page.getByText(/^Finished the workout/)).toBeVisible();
+  await other.getByRole("button", { name: "Cancel workout" }).click();
+  await andSettle(other, () => other.getByRole("button", { name: "Delete", exact: true }).click());
+  await expect(toast(other, "This workout is already finished.")).toBeVisible();
+  await expect(other.getByText("Cancelled the workout")).toBeHidden();
+  expect(await setCount(await userIdOf(page))).toBe(1);
+  await other.close();
+
+  await openGym(page);
+  await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
+});
+
 // D-039: the timer lives on the workout row, so every page shows the same time.
 test("a workout paused in one page shows the same paused time in another after its refresh", async ({ signedInPage: page }) => {
   await openGym(page);
@@ -710,6 +733,32 @@ test("Undo of a workout removed for having no sets, refused because another page
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
 });
 
+// Finish removes a workout whose sets were all deleted elsewhere; its Undo brings the workout back with none of them.
+test("Undo of a workout removed on Finish because another page deleted its sets brings it back with no sets", async ({ signedInPage: page }) => {
+  const removed = "No sets logged: the workout was removed";
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await logSet(page);
+  await expect(page.getByText(SET_LINE)).toBeVisible();
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await other.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+  await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
+  await expect(other.getByText("Removed set 1")).toBeVisible();
+  await other.close();
+
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(page.getByText(removed)).toBeVisible();
+  await andSettle(page, () => undoIn(page, removed).click());
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(page.getByText(SET_LINE)).toBeHidden();
+  expect(await setCount(await userIdOf(page))).toBe(0);
+  await openGym(page);
+  await expect(banner(page).getByText(`${DAY} · 0 sets logged`)).toBeVisible();
+});
+
 // D-040: a newer change to the workout takes the Undo away from the older toasts that touch it.
 test("Pause takes the Started toast's Undo away, and Resume the Paused toast's", async ({ signedInPage: page }) => {
   await openGym(page);
@@ -776,6 +825,55 @@ test("the workout's notes are kept when leaving it, after a reload and on Finish
   const userId = await userIdOf(page);
   const { rows } = await asAdmin((admin) => admin.query("SELECT notes, duration_minutes IS NOT NULL AS finished FROM workout_sessions WHERE user_id = $1", [userId]));
   expect(rows).toEqual([{ notes: "Felt strong, new best", finished: true }]);
+});
+
+// Notes the server saves as none (only invisible characters) are no change: Exit, Finish and Cancel go on with nothing to save.
+test("notes of only an invisible character do not stop Exit, Finish or Cancel", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await notes(page).fill("\u200B");
+  await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click());
+  await expect(banner(page)).toBeVisible();
+
+  await andSettle(page, () => banner(page).getByRole("button", { name: "Resume" }).click());
+  await notes(page).fill("\u200B");
+  await page.getByRole("button", { name: "Cancel workout" }).click();
+  await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+  await expect(page.getByText("Cancelled the workout")).toBeVisible();
+
+  await startWorkout(page, DAY);
+  await notes(page).fill("\u200B");
+  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
+  await expect(page.getByText("No sets logged: the workout was removed")).toBeVisible();
+  await expect(page.getByText("Nothing to save.")).toBeHidden();
+});
+
+// D-040: notes changed on another page refuse this page's save; the next save changes the server's notes and keeps the typed text.
+test("notes refused because another page changed them are saved on the next try, with the text typed here", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  const other = await page.context().newPage();
+  await openGym(other);
+  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+  await notes(other).fill("From the other page");
+  await andSettle(other, () => notes(other).blur(), "From the other page");
+  await expect(other.getByText("Saved the notes")).toBeVisible();
+  await other.close();
+
+  await notes(page).fill("From this page");
+  await andSettle(page, () => notes(page).blur(), "From this page");
+  await expect(toast(page, "These notes changed on another device. Check them and try again.")).toBeVisible();
+  await expect(notes(page)).toHaveValue("From this page");
+  // The refresh after the refusal brings the server's notes; React commits it a few tasks after its response.
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click(), "From this page");
+  await expect(banner(page)).toBeVisible();
+  const userId = await userIdOf(page);
+  const { rows } = await asAdmin((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
+  expect(rows).toEqual([{ notes: "From this page" }]);
 });
 
 // GYMB-05: Undo of "Added set" after another page deleted that set leaves nothing behind, not a row that is not saved.
