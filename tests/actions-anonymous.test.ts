@@ -27,8 +27,8 @@ describe("server actions reject anonymous callers", () => {
     expect(Object.keys(modules).length).toBeGreaterThan(0);
   });
 
-  // An action whose session check runs inside `respond` answers the signed-out refusal (D-010); one that checks before it
-  // throws. Either way it never succeeds and never fails on the (missing) input first.
+  // Every action checks the session first thing inside `respond`, so a signed-out caller gets the signed-out refusal
+  // (D-010): never a throw, a success, or a failure on the (missing) input first.
   it.each(Object.entries(modules))("every export of %s requires a session", async (file, load) => {
     // Feature flags on, so a disabled-flag error cannot hide a missing session check.
     vi.stubEnv("NEXT_PUBLIC_CLAUDE_ENABLED", "true");
@@ -40,7 +40,7 @@ describe("server actions reject anonymous callers", () => {
         (answer) => ({ answer }),
         (e: unknown) => ({ thrown: e instanceof Error ? e.message : String(e) }),
       );
-      expect([{ answer: { success: false, error: SIGNED_OUT } }, { thrown: "Authentication required." }], `${file}:${name}`).toContainEqual(outcome);
+      expect(outcome, `${file}:${name}`).toEqual({ answer: { success: false, error: SIGNED_OUT } });
     }
   });
 });
