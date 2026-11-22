@@ -33,15 +33,31 @@ function countRefreshes(page: Page) {
 const itemName = () => `Shell ${randomUUID().slice(0, 8)}`;
 
 /**
- * Takes this one page offline and back through Chromium's network emulation (what DevTools' Offline does). Unlike
- * `context.setOffline`, which can let the page hear "online" before every part of its network is back, the page's
- * network and `navigator.onLine` change in one step, so a test sees the app's behavior and not that gap.
+ * Takes this one page offline and back through Chromium's network emulation (what DevTools' Offline does): the page's
+ * network and `navigator.onLine` change in one call. The page can still hear "online" a moment before its requests get
+ * through: a test that checks what the page does once back online uses `backOnline`.
  */
 async function network(page: Page) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Network.enable");
   return (online: boolean) =>
     cdp.send("Network.emulateNetworkConditions", { offline: !online, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+}
+
+/**
+ * Brings the page back online and lets the page act on it once its own requests get through. Chromium's emulation can
+ * tell the page "online" before its requests get through: a request sent at once from the "online" handler can still
+ * fail as disconnected (in a probe of 480, 3 did, 2 of them the first time back online; none of the requests sent after
+ * the emulation answered). The app's check then fails and the refresh waits for the next focus, minute or "online", as
+ * on a device whose network is still settling, so a test would not see what it checks. The page's clock is stopped
+ * first, so the timer the "online" handler sets runs only after a request of the page's own has got through.
+ */
+async function backOnline(page: Page, setOnline: (online: boolean) => Promise<unknown>) {
+  await stopClock(page);
+  await setOnline(true);
+  const marker = `/robots.txt?online=${randomUUID()}`;
+  await expect.poll(() => page.evaluate((url) => fetch(url, { cache: "no-store" }).then((r) => r.ok, () => false), marker)).toBe(true);
+  await page.clock.resume();
 }
 
 /** The server checks the page sends before a refresh it missed while offline. */
@@ -160,7 +176,7 @@ test("a refresh that comes due while offline runs once, on screen, when the devi
     await page.clock.runFor(61_000);
     await settled(page);
     expect(refreshes).toHaveLength(0);
-    await setOnline(true);
+    await backOnline(page, setOnline);
     await expect(mine.getByText(after, { exact: true })).toBeVisible();
     expect(checks).toHaveLength(1);
     expect(refreshes).toHaveLength(1);
@@ -206,7 +222,7 @@ test("back online, a refresh waits until the server answers, so an open form kee
   await page.unroute("**/*");
   await setOnline(false);
   await settled(page);
-  await setOnline(true);
+  await backOnline(page, setOnline);
   await expect.poll(() => refreshes.length).toBe(1);
   await page.clock.runFor(2000);
   await settled(page);
