@@ -1,6 +1,6 @@
 ---
 summary: Where the project stands: roadmap, work in progress, next steps, open questions and tracked migrations.
-last_verified: 2026-11-20
+last_verified: 2026-11-22
 ---
 
 # Status
@@ -32,7 +32,7 @@ last_verified: 2026-11-20
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; part M (migration `0032`) merged and run on live; part A built and verified, its PR next; parts B and C building; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M and A merged (#169, #170), M run on live; part C (steps 14–17) built and verified, its review and PR next; part B (steps 9–13) in its last fix round; part D (steps 18–20) building, then part E; accepted edges in D-045 and D-046; the owner's choices are in their private report.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
