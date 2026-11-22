@@ -87,7 +87,7 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
   // The id the open add form's task gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
   const addId = useRef("");
   const [savingIn, setSavingIn] = useState<number | null>(null);
@@ -169,7 +169,7 @@ export function TodosClient({
   };
 
   const openForm = (todo?: TodoItem) => {
-    setErrorMsg(null);
+    setErrorMsg("");
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
@@ -197,7 +197,7 @@ export function TodosClient({
     const stillOpen = () => from === formOpening.current;
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
-    setErrorMsg(null);
+    setErrorMsg("");
     setSavingIn(from);
     try {
       if (before) {
@@ -562,7 +562,7 @@ export function TodosClient({
           value={titleInput}
           onChange={(e) => {
             setTitleInput(e.target.value);
-            setErrorMsg(null);
+            setErrorMsg("");
           }}
           aria-invalid={errorMsg ? true : undefined}
           aria-describedby={errorMsg ? "task-title-error" : undefined}

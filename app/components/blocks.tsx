@@ -487,7 +487,7 @@ export function FormModal({
   onCancel?: () => void;
   title: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => unknown;
-  error?: string | null;
+  error?: string;
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
   busy?: boolean;
