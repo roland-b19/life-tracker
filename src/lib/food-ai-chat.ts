@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, logMeal } from "./food";
 import { logMealSchema } from "./validations/food";
+import { roundTo } from "./number-format";
 import { runClaude } from "./claude-cli";
 import { getClaudeToken } from "./claude-connection";
 
@@ -16,7 +17,7 @@ interface FoodChatContext {
   time: string;
 }
 
-type LoggedMeal = Awaited<ReturnType<typeof logMeal>>["meal"];
+type LoggedMeal = NonNullable<Awaited<ReturnType<typeof logMeal>>["meal"]>;
 
 // What the model must answer with; the CLI enforces it, the app checks it again below.
 const RESPONSE_SCHEMA = {
@@ -51,15 +52,18 @@ const MAX_REPLY = 2000;
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
+/** The word a left-out line uses for a meal key that is not a plain word already. */
+const FIELD_WORDS: Record<string, string> = { isEstimated: "estimate" };
+
 /**
  * Why a meal was left out, from its first validation issue, as one phrase that names the field once: the schema's own
- * words when they name it ("calories must be 10.000 or less"), else the field and zod's words ("fat must be at least 0",
- * "name is required"). The only issue with no field is "all zero".
+ * words when they name it ("calories must be 10.000 or less"), else the field, in plain words, and zod's words
+ * ("protein must be a number", "estimate is not valid"). The only issue with no field is "all zero".
  */
 function whyLeftOut(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue.path.length) return "every value rounds to 0";
-  const field = issue.path.join(".");
+  const field = issue.path.map((key) => FIELD_WORDS[String(key)] ?? String(key)).join(".");
   const message = issue.message;
   if (new RegExp(`\\b${field}\\b`, "i").test(message)) return lowerFirst(message);
   if (message === "Required") return `${field} is required`;
@@ -75,9 +79,8 @@ function mealLabel(meal: unknown, index: number): string {
   return typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : `Meal ${index + 1}`;
 }
 
-const num = (v: string | number) => Math.round(Number(v) * 10) / 10;
 const macros = (m: { calories: number; protein: string | number; carbs: string | number; fat: string | number }) =>
-  `${m.calories} kcal, P ${num(m.protein)} g, C ${num(m.carbs)} g, F ${num(m.fat)} g`;
+  `${m.calories} kcal, P ${roundTo(Number(m.protein), 1)} g, C ${roundTo(Number(m.carbs), 1)} g, F ${roundTo(Number(m.fat), 1)} g`;
 const list = (lines: string[]) => (lines.length ? lines.map((l) => `  - ${l}`).join("\n") : "  - none");
 
 /**
@@ -168,10 +171,21 @@ export async function sendFoodChatMessage(
       leftOut.push(`${label}: not a meal`);
       continue;
     }
-    const calories = "calories" in meal && typeof meal.calories === "number" ? Math.round(meal.calories) : undefined;
+    // Whole calories, as the form takes them; anything but a number goes to the schema as it came, so text says
+    // "must be a number" as in the other number fields.
+    const sent = "calories" in meal ? meal.calories : undefined;
+    const calories = typeof sent === "number" ? Math.round(sent) : sent;
     const parsed = logMealSchema.safeParse({ ...meal, calories, date: ctx.date });
-    if (parsed.success) logged.push((await logMeal(userId, { ...parsed.data, isEstimated: true })).meal);
-    else leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
+    if (!parsed.success) {
+      leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
+      continue;
+    }
+    // A meal id already saved (sent twice in this answer, or an older meal's) adds nothing (D-040), so it is not listed
+    // again: the answer's list, and its Undo, hold only the meals this answer added. An id another user's meal holds
+    // saves nothing, so it is left out, as logging by hand refuses it.
+    const { meal: saved, repeated } = await logMeal(userId, { ...parsed.data, isEstimated: true });
+    if (!saved) leftOut.push(`${label}: this meal could not be saved`);
+    else if (!repeated) logged.push(saved);
   }
   let reply = answer.reply.trim() || "Done.";
   if (reply.length > MAX_REPLY) {

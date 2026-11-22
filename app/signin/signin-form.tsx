@@ -59,7 +59,7 @@ export function SignInForm({ provider, denied, next }: { provider: string; denie
     } else {
       setErrorMsg(
         result?.error === "CredentialsSignin"
-          ? "Please enter a username of up to 64 lower-case letters, numbers or dashes."
+          ? "Please enter a username of up to 64 lower-case letters, numbers or dashes"
           : "Failed to sign in",
       );
       setBusy(false);

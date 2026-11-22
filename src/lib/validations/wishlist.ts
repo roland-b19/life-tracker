@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { newId, uuid, visible } from "./common";
+import { roundTo } from "@/lib/number-format";
+import { FUTURE_DATE, newId, uuid, visible } from "./common";
 
 /** The refusal for an item that is not there (deleted on another device, or another user's): the client drops its row. */
 export const WISHLIST_ITEM_GONE = "This item no longer exists.";
@@ -17,7 +18,7 @@ const wishlistFields = z.object({
     .min(0.01, "Price must be at least 0.01")
     .max(10000000, "Price exceeds maximum threshold")
     // Cents, as stored: the priority must be derived from the price the row actually holds (249.999 is stored as 250.00).
-    .transform((n) => Math.round(n * 100) / 100),
+    .transform((n) => roundTo(n, 2)),
   category: categorySchema.default("other"),
 });
 
@@ -35,7 +36,7 @@ export const updateWishlistItemSchema = z.object({
 /** Undo of a delete: the same row back, so it keeps its id and its place in the list. */
 export const restoreWishlistItemSchema = wishlistFields.extend({
   id: uuid,
-  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future"),
+  createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, FUTURE_DATE),
 });
 
 export type AddWishlistItemInput = z.input<typeof addWishlistItemSchema>;

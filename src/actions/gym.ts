@@ -18,6 +18,7 @@ import {
   saveSplitDaySchema,
   sessionIdSchema,
   SET_GONE,
+  WORKOUT_GONE,
 } from "@/lib/validations/gym";
 import { Refusal, respond } from "@/lib/validations/result";
 import {
@@ -39,7 +40,6 @@ import {
   saveWorkoutNotes,
   setWorkoutTimer,
   EXERCISE_GONE,
-  WORKOUT_GONE,
 } from "@/lib/gym";
 
 /** A workout is made today; a day either side covers the user's timezone and a page left open past midnight. */

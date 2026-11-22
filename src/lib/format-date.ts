@@ -4,6 +4,11 @@ export function formatDMY(iso: string): string {
   return `${d}.${m}.${y}`;
 }
 
+/** "2026-11-04" -> "04.11" (d.m, a chart's day label). */
+export function formatDM(iso: string): string {
+  return formatDMY(iso).slice(0, 5);
+}
+
 // "Today" is the user's calendar day, not the server's: Vercel and the Azure container run in UTC.
 export const APP_TZ = "Europe/Bucharest";
 const todayFormat = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ });

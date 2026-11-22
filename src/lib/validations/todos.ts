@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { categorySchema } from "./categories";
-import { isoDate, newId, uuid, visible } from "./common";
+import { FUTURE_DATE, isoDate, newId, uuid, visible } from "./common";
 
 const todoSpaceSchema = z.enum(["personal", "business"]);
 // "none" for a one-off task, "daily" for a repeating one.
@@ -26,7 +26,7 @@ const todoFields = z.object({
 export const addTodoSchema = todoFields.extend({ id: newId });
 
 // A time the screen sends back (Undo) can be a minute ahead of the server clock, never more: a year-2099 time would pin a task on top for good.
-const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, "Date cannot be in the future");
+const notInFuture = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, FUTURE_DATE);
 
 /** Undo of a delete: the same row back, with its id. */
 export const restoreTodoSchema = todoFields.extend({

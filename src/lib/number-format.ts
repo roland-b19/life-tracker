@@ -18,6 +18,15 @@ export function formatNumber(value: number | string, decimals = 0): string {
 }
 
 /**
+ * `value` rounded to `decimals` decimals, as a number: `roundTo(1234.567, 2)` is 1234.57 and `roundTo(0.1 + 0.2, 1)` is
+ * 0.3. The one way the app rounds a value it keeps or adds up (U4); showing a number is `formatNumber`/`formatAmount`.
+ */
+export function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+/**
  * A measured amount (grams, kilograms) in the app's number format with at most `decimals` decimals and no trailing
  * zeros: 72.4 shows "72,4", 80 shows "80", 1500.25 shows "1.500,25".
  */

@@ -9,10 +9,11 @@ vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
+import { logMealSchema } from "@/lib/validations/food";
 import { saveClaudeToken } from "@/lib/claude-connection";
 import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
-import { succeeded } from "./succeeded";
+import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { db } from "@/server/db";
 import { recipes } from "@/db/schema";
@@ -152,14 +153,38 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect(result.meals.map((m) => m?.name)).toEqual(["Iaurt"]);
     // One phrase per line that names the field once, also where the schema's own words name it.
     expect(result.leftOut).toEqual([
-      "Pâine: fat must be at least 0",
-      "Supă: calories is required",
+      "Pâine: protein, carbs and fat can't be negative",
+      "Supă: calories must be a number",
       "Meal 3: not a meal",
       "Tort întreg: calories must be 10.000 or less",
       "Unt: protein, carbs and fat must each be 1.000 g or less",
       "Paste: protein must be a number",
     ]);
     expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["Iaurt"]);
+  });
+
+  // Every key a meal can carry (the schema's own, the date aside: the server sets it) gets a line in plain words: no
+  // camelCase key, and a non-number says "must be a number" in every number field.
+  it("names every meal key in plain words when it leaves a meal out", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-keys-${randomUUID()}`);
+    const valid = { name: "Iaurt", calories: 120, protein: 10, carbs: 8, fat: 5 };
+    const bad: Record<string, unknown> = { name: "", calories: "multe", protein: "multe", carbs: "multe", fat: "multe", isEstimated: "da", id: "nu-e-un-id" };
+    expect(Object.keys(bad).sort()).toEqual(Object.keys(logMealSchema.shape).filter((key) => key !== "date").sort());
+    mockClaude({ reply: "Ok.", meals: Object.entries(bad).map(([key, value]) => ({ ...valid, [key]: value })) });
+
+    const result = await sendFoodChatMessage(owner, "iaurt", [], ctx);
+
+    expect(result.leftOut).toEqual([
+      "Meal 1: name is required",
+      "Iaurt: calories must be a number",
+      "Iaurt: protein must be a number",
+      "Iaurt: carbs must be a number",
+      "Iaurt: fat must be a number",
+      "Iaurt: estimate is not valid",
+      "Iaurt: invalid id",
+    ]);
+    for (const line of result.leftOut) expect(line).not.toMatch(/[a-z][A-Z]/);
   });
 
   it("saves the first 10 valid meals of a longer answer and says the rest were left out", async () => {
@@ -235,6 +260,26 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect((await getDailyFoodSummary(userId, ctx.date)).meals).toHaveLength(before);
   });
 
+  it("lists a meal id the answer sends twice once, as one meal, and never an older meal sent again", async () => {
+    process.env.AUTH_DEV = "true";
+    const owner = await seedUser(`chat-repeat-${randomUUID()}`);
+    const older = (await logMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 })).meal!;
+    const id = randomUUID();
+    mockClaude({
+      reply: "Gata.",
+      meals: [
+        { id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 },
+        { id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 },
+        { id: older.id, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 },
+      ],
+    });
+
+    const result = await sendFoodChatMessage(owner, "Am mâncat o supă", [], ctx);
+
+    expect(result.meals.map((m) => m.id)).toEqual([id]);
+    expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.id).sort()).toEqual([id, older.id].sort());
+  });
+
   it("only ever adds meals: anything else in the answer changes nothing", async () => {
     process.env.AUTH_DEV = "true";
     const owner = await seedUser(`chat-scope-${randomUUID()}`);
@@ -300,7 +345,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     const input = { message: "o banană", history: [], date: today, time: ctx.time };
 
     it("rejects anonymous requests", async () => {
-      expect(await sendFoodChatMessageAction(input)).toEqual({ success: false, error: SIGNED_OUT });
+      expect(await sendFoodChatMessageAction(input)).toEqual(refused(SIGNED_OUT));
     });
 
     it("logs meals only for the signed-in owner", async () => {
@@ -318,11 +363,29 @@ describe("Food assistant: context prompt and structured answer", () => {
       expect((await getDailyFoodSummary(stranger, today)).meals).toHaveLength(0);
     });
 
+    it("never lists, changes or shows another user's meal sent under its id, and says it was left out", async () => {
+      const owner = await seedUser(`chat-owner-${randomUUID()}`);
+      const stranger = await seedUser(`chat-stranger-${randomUUID()}`);
+      const theirs = (await logMeal(stranger, { date: today, name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal!;
+      const strangerBefore = await getDailyFoodSummary(stranger, today);
+      process.env.AUTH_DEV = "true";
+      mockClaude({ reply: "Gata.", meals: [{ id: theirs.id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 }] });
+      authState.id = owner;
+
+      const res = succeeded(await sendFoodChatMessageAction(input));
+
+      expect(res.meals).toEqual([]);
+      expect(res.leftOut).toEqual(["Supă: this meal could not be saved"]);
+      expect(res.freshSummary).toBeNull();
+      expect(await getDailyFoodSummary(stranger, today)).toEqual(strangerBefore);
+      expect((await getDailyFoodSummary(owner, today)).meals).toEqual([]);
+    });
+
     it("writes only into today or yesterday, like logging by hand", async () => {
       authState.id = userId;
       process.env.AUTH_DEV = "true";
       for (const date of ["2026-11-05", "2999-01-01"]) {
-        expect(await sendFoodChatMessageAction({ ...input, date })).toEqual({ success: false, error: "Only today and yesterday can be changed." });
+        expect(await sendFoodChatMessageAction({ ...input, date })).toEqual(refused("Only today and yesterday can be changed."));
       }
       expect(runClaude).not.toHaveBeenCalled();
     });
@@ -338,17 +401,18 @@ describe("Food assistant: context prompt and structured answer", () => {
 
       succeeded(await sendFoodChatMessageAction({ ...input, history: [...turns] }));
 
-      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toMatchObject({
-        success: false,
-        error: expect.any(String),
-      });
+      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toEqual(refused("Pick one of the options"));
       expect(runClaude).toHaveBeenCalledTimes(1);
     });
 
     it("rejects invalid input before calling the model", async () => {
       authState.id = userId;
-      for (const bad of [{ message: "   " }, { time: "25:00" }, { message: "x".repeat(1001) }]) {
-        expect(await sendFoodChatMessageAction({ ...input, ...bad })).toMatchObject({ success: false, error: expect.any(String) });
+      for (const [bad, error] of [
+        [{ message: "   " }, "Required"],
+        [{ time: "25:00" }, "Invalid format"],
+        [{ message: "x".repeat(1001) }, "Too long (max 1000)"],
+      ] as const) {
+        expect(await sendFoodChatMessageAction({ ...input, ...bad })).toEqual(refused(error));
       }
       expect(runClaude).not.toHaveBeenCalled();
     });

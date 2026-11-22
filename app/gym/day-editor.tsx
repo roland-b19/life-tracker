@@ -2,6 +2,7 @@
 
 import { visible } from "@/lib/validations/common";
 import { EXERCISE_NAME_MIN, exerciseNameKey, GYM_LIMITS, MIN_OVER_MAX, NAME_REQUIRED, NAME_TOO_SHORT, ROUTINE_RANGE } from "@/lib/validations/gym";
+import { alreadyExists } from "@/lib/validations/result";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
@@ -44,6 +45,16 @@ export function dayProblem(name: string, rows: { exerciseId: string; targetSets:
   if (bad) return `${nameOf(bad.exerciseId)}: ${MIN_OVER_MAX}`;
   if (!visible(name)) return NAME_REQUIRED;
   return "";
+}
+
+/**
+ * What stops a new exercise from being made, in the server's words ("" when nothing does): a name shorter than the
+ * minimum, or one an exercise in `known` already has (compared as the server does).
+ */
+export function exerciseNameProblem(name: string, known: { name: string }[]) {
+  if (name.length < EXERCISE_NAME_MIN) return NAME_TOO_SHORT;
+  const same = known.find((e) => exerciseNameKey(e.name) === exerciseNameKey(name));
+  return same ? alreadyExists(same.name) : "";
 }
 
 /** An editing session that was dismissed: Undo of "Changes discarded" reopens the editor with it. */
@@ -208,13 +219,9 @@ export function DayEditor({
   async function addCustomExercise() {
     const name = customName.trim();
     if (!visible(name)) return;
-    if (name.length < EXERCISE_NAME_MIN) {
-      setErrorMsg(NAME_TOO_SHORT);
-      return;
-    }
-    const same = known.find((e) => exerciseNameKey(e.name) === exerciseNameKey(name));
-    if (same) {
-      setErrorMsg(`"${same.name}" already exists.`);
+    const problem = exerciseNameProblem(name, known);
+    if (problem) {
+      setErrorMsg(problem);
       return;
     }
     setErrorMsg("");

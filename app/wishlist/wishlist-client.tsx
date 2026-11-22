@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { WISHLIST_ITEM_GONE } from "@/lib/validations/wishlist";
 import { linkOf } from "@/lib/link";
-import { formatNumber } from "@/lib/number-format";
+import { formatNumber, roundTo } from "@/lib/number-format";
 import { AnimatedNumber } from "../components/animated-number";
 import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect } from "../components/blocks";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
@@ -64,8 +64,7 @@ const SORT_BY: Record<Sort, (a: WishlistItemData, b: WishlistItemData) => number
 };
 
 // Lei in the app's number format (D-037): whole lei without decimals, cents with two ("1.234" and "99,90").
-const centsOf = (n: number) => Math.round(n * 100);
-const decimalsOf = (n: number) => (centsOf(n) % 100 ? 2 : 0);
+const decimalsOf = (n: number) => (Number.isInteger(roundTo(n, 2)) ? 0 : 2);
 const formatRon = (n: number) => formatNumber(n, decimalsOf(n));
 
 /** What a wishlist toast touches (D-040): the item's row. */
@@ -127,8 +126,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const foldKey = (category: string) => `${filterRange}/${category}`;
   const sorted = items.filter((i) => filterRange === "all" || rangeOf(i) === filterRange).sort(SORT_BY[sort]);
   const filteredItems = groupOrder(categories, items).flatMap((c) => sorted.filter((i) => i.category === c));
-  // Summed in cents, so the total holds exactly the cents of its items.
-  const totalCost = filteredItems.reduce((sum, item) => sum + centsOf(Number(item.estimatedPrice)), 0) / 100;
+  // Prices have two decimals; the sum is rounded back to two, so float error does not show in the total.
+  const totalCost = roundTo(filteredItems.reduce((sum, item) => sum + Number(item.estimatedPrice), 0), 2);
   const tabLabel = FILTERS.find((f) => f.value === filterRange)!.label;
 
   const toInput = (item: WishlistItemData) => ({
@@ -166,7 +165,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!visible(name)) return setErrorMsg("Please enter an item name.");
+    if (!visible(name)) return setErrorMsg("Please enter an item name");
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     setErrorMsg("");
     const input = {

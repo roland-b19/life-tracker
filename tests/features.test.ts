@@ -1,14 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const authState = vi.hoisted(() => ({ id: "00000000-0000-0000-0000-000000000001" }));
-vi.mock("@/server/auth", () => ({ requireUser: vi.fn(async () => authState.id) }));
+vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
+import { authState } from "./auth";
 
 import { isClaudeEnabled, isPushEnabled } from "@/lib/features";
 import { connectClaudeAction, disconnectClaudeAction } from "@/actions/claude-connection";
 import { sendFoodChatMessageAction } from "@/actions/food-chat";
 import { savePushSubscriptionAction } from "@/actions/todos";
 
-afterEach(() => vi.unstubAllEnvs());
+// A signed-in caller, so a refusal here comes from the flag, not from the session check.
+beforeEach(() => (authState.id = "00000000-0000-0000-0000-000000000001"));
+afterEach(() => {
+  vi.unstubAllEnvs();
+  authState.id = "";
+});
 
 describe("feature flags", () => {
   it("are off unless set to true", () => {

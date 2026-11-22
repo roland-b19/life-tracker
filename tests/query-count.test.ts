@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +13,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 import { sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { seedUser } from "./auth";
+import { succeeded } from "./succeeded";
 import { startSession } from "@/server/sessions";
 import { getExercises, getUserSplitWithDays } from "@/lib/gym";
 import { getShoppingCategories } from "@/lib/food";
@@ -95,7 +95,7 @@ describe("a page view with two years of data stays cheap", () => {
   it("the todos page loads everything in one action, with few queries", async () => {
     const { loadTodosViewAction } = await import("@/actions/todos");
     const { result, queries, bytes } = await measure(() => loadTodosViewAction());
-    expect(result.success).toBe(true);
+    succeeded(result);
     // 13 = the session check, the rollover update, the day's rows and the done dates, for 2 spaces and 2 views, plus history.
     expect(queries, sent.map((q) => q.text.slice(0, 100)).join("\n")).toBeLessThanOrEqual(13);
     expect(bytes).toBeLessThanOrEqual(20_000);
@@ -103,8 +103,8 @@ describe("a page view with two years of data stays cheap", () => {
 
   it("no action re-renders the page: every client keeps its own state", () => {
     // `providers.tsx` refreshes the router cache once the writes stop, so a write never has to revalidate a path.
-    for (const file of readdirSync("src/actions")) {
-      expect(readFileSync(`src/actions/${file}`, "utf8"), file).not.toContain("revalidatePath");
-    }
+    const actions = import.meta.glob("../src/actions/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    expect(Object.keys(actions).length).toBeGreaterThan(0);
+    for (const [file, text] of Object.entries(actions)) expect(text, file).not.toContain("revalidatePath");
   });
 });

@@ -11,12 +11,12 @@ export const categorySchema = z.string().trim().toLowerCase().min(1, "Name is re
 export const CATEGORY_GONE = "Category not found.";
 
 /** A category the user manages; "other" is the built-in fallback and cannot be added, renamed or deleted. */
-const managedCategorySchema = categorySchema.refine((c) => c !== "other", '"other" is built in.');
+const managedCategorySchema = categorySchema.refine((c) => c !== "other", '"other" is built in');
 
 export const categoryNameSchema = z.object({ scope: categoryScopeSchema, name: managedCategorySchema });
 export const renameCategorySchema = z
   .object({ scope: categoryScopeSchema, from: managedCategorySchema, to: managedCategorySchema })
-  .refine((r) => r.from !== r.to, { message: "That is already its name.", path: ["to"] });
+  .refine((r) => r.from !== r.to, { message: "That is already its name", path: ["to"] });
 
 /** Undo of a rename or delete: what the change reported, sent back as it was. */
 export const revertCategorySchema = z.object({
@@ -32,5 +32,5 @@ export const revertCategorySchema = z.object({
 /** The list's categories in their new order, top first. */
 export const reorderCategoriesSchema = z.object({
   scope: categoryScopeSchema,
-  names: z.array(managedCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique."),
+  names: z.array(managedCategorySchema).max(200).refine((n) => new Set(n).size === n.length, "Names must be unique"),
 });

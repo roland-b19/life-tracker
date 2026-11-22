@@ -31,7 +31,7 @@ import { ensureUserNutritionTargets } from "./food-seed";
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
 import { addDays } from "./format-date";
-import { formatAmount } from "./number-format";
+import { formatAmount, roundTo } from "./number-format";
 import { lockUser } from "./gym-seed";
 
 
@@ -81,9 +81,9 @@ export async function getDailyFoodSummary(userId: string, date: string) {
 
   for (const m of dayMeals) {
     totalCalories += m.calories;
-    totalProtein += parseFloat(m.protein) || 0;
-    totalCarbs += parseFloat(m.carbs) || 0;
-    totalFat += parseFloat(m.fat) || 0;
+    totalProtein += Number(m.protein);
+    totalCarbs += Number(m.carbs);
+    totalFat += Number(m.fat);
   }
 
   return {
@@ -91,9 +91,9 @@ export async function getDailyFoodSummary(userId: string, date: string) {
     meals: dayMeals,
     totals: {
       calories: totalCalories,
-      protein: Math.round(totalProtein * 10) / 10,
-      carbs: Math.round(totalCarbs * 10) / 10,
-      fat: Math.round(totalFat * 10) / 10,
+      protein: roundTo(totalProtein, 1),
+      carbs: roundTo(totalCarbs, 1),
+      fat: roundTo(totalFat, 1),
     },
     metrics: metrics ?? {
       waterMl: 0,
@@ -242,9 +242,6 @@ const itemKey = (row: { name: string; unit: string }) => `${row.name.toLowerCase
 
 const ITEM_NOT_SAVED = "This item could not be saved.";
 
-/** The two decimals the amount column keeps. */
-const round2 = (value: number) => Math.round(value * 100) / 100;
-
 const tooMuch = (name: string, amount: number, unit: string) =>
   new Refusal(`"${name}" would be ${formatAmount(amount, 2)} ${unit}; the most is ${formatAmount(MAX_SHOPPING_AMOUNT, 0)}.`);
 
@@ -284,7 +281,7 @@ export async function addShoppingItem(userId: string, input: AddShoppingItemInpu
       .limit(1);
 
     if (same) {
-      const amount = same.isBought ? input.amount : round2(Number(same.amount) + input.amount);
+      const amount = same.isBought ? input.amount : roundTo(Number(same.amount) + input.amount, 2);
       if (amount > MAX_SHOPPING_AMOUNT) throw tooMuch(same.name, amount, same.unit);
       const merged = { amount: amount.toFixed(2), category: input.category, isBought: false, checkedAt: new Date() };
       if (!input.id) {
@@ -546,7 +543,7 @@ async function moveUnit(tx: Tx, userId: string, from: string, to: string, only?:
     const into = row.clearedAt === null ? byKey.get(itemKey({ name: row.name, unit: to })) : undefined;
     if (into) {
       if (!factor) throw new Refusal(`"${row.name}" is on the list in both ${from} and ${to}, which can't be added up. Change one of them first.`);
-      const sum = round2(Number(into.amount) + amount * factor);
+      const sum = roundTo(Number(into.amount) + amount * factor, 2);
       if (sum > MAX_SHOPPING_AMOUNT) throw tooMuch(into.name, sum, to);
       merges.push({ id: row.id, into: into.id, amount: Number(into.amount), category: into.category, isBought: into.isBought });
       const [merged] = await tx
@@ -561,12 +558,12 @@ async function moveUnit(tx: Tx, userId: string, from: string, to: string, only?:
     itemIds.push(row.id);
     if (!factor) continue;
     const back = exact?.get(row.id);
-    const raw = back !== undefined && round2(back / factor) === amount ? back : amount * factor;
+    const raw = back !== undefined && roundTo(back / factor, 2) === amount ? back : amount * factor;
     if (row.clearedAt === null && (raw < 0.01 || raw > MAX_SHOPPING_AMOUNT))
       throw new Refusal(`"${row.name}" would be ${formatAmount(raw, 3)} ${to}; an amount is between 0,01 and ${formatAmount(MAX_SHOPPING_AMOUNT, 0)}.`);
     amounts.push({ id: row.id, amount });
     // A cleared row is history: it keeps the nearest amount the column allows.
-    const next = Math.min(MAX_SHOPPING_AMOUNT, Math.max(0.01, round2(raw)));
+    const next = Math.min(MAX_SHOPPING_AMOUNT, Math.max(0.01, roundTo(raw, 2)));
     await tx.update(shoppingItems).set({ unit: to, amount: next.toFixed(2) }).where(eq(shoppingItems.id, row.id));
   }
   if (!factor && itemIds.length > 0) await tx.update(shoppingItems).set({ unit: to }).where(inArray(shoppingItems.id, itemIds));
@@ -721,7 +718,7 @@ export async function restoreShoppingItems(userId: string, itemIds: string[]) {
         byKey.set(itemKey(row), row);
         continue;
       }
-      const amount = round2(Number(same.amount) + Number(row.amount));
+      const amount = roundTo(Number(same.amount) + Number(row.amount), 2);
       if (amount > MAX_SHOPPING_AMOUNT) throw tooMuch(same.name, amount, same.unit);
       const [into] = await tx
         .update(shoppingItems)

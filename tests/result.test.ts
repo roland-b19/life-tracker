@@ -57,7 +57,7 @@ describe("zod issues become people's messages", () => {
 
   it("keeps a schema's own message", async () => {
     expect(await messageFor(isoDate, "2026-02-30")).toBe("Invalid date format (YYYY-MM-DD)");
-    expect(await messageFor(categoryNameSchema, { scope: "wishlist", name: "other" })).toBe('"other" is built in.');
+    expect(await messageFor(categoryNameSchema, { scope: "wishlist", name: "other" })).toBe('"other" is built in');
   });
 
   it("answers an empty, spaces-only or invisible category name with the schema's own message", async () => {
@@ -85,21 +85,40 @@ describe("newId: an add's id made on the device", () => {
   });
 });
 
-describe("a refusal several actions give is written once [U6]", () => {
+describe("a refusal or check several actions give is written once [U6]", () => {
   const sources = import.meta.glob(["../src/**/*.{ts,tsx}", "../app/**/*.{ts,tsx}"], { query: "?raw", import: "default", eager: true }) as Record<
     string,
     string
   >;
-  // Gym still words its own duplicate name; it moves to alreadyExists with the gym pages.
-  const files = Object.entries(sources).filter(([file]) => !/gym/.test(file));
-  const writtenIn = (words: string) => files.filter(([, text]) => text.includes(words)).map(([file]) => file);
+  const writtenIn = (words: string) =>
+    Object.entries(sources)
+      .filter(([, text]) => text.includes(words))
+      .map(([file]) => file);
 
   it.each([
     ["Category not found.", "../src/lib/validations/categories.ts"],
     ["has changed since.", "../src/lib/validations/result.ts"],
     ["already exists.", "../src/lib/validations/result.ts"],
     ["Only today and yesterday can be changed.", "../src/lib/validations/food.ts"],
+    ["Date cannot be in the future", "../src/lib/validations/common.ts"],
+    ["Maximum two decimal places", "../src/lib/validations/common.ts"],
+    ["Nothing to save", "../src/lib/validations/common.ts"],
+    ["< 1e-6", "../src/lib/validations/common.ts"],
   ])("%s", (words, home) => {
     expect(writtenIn(words)).toEqual([home]);
   });
+
+  // Both halves of a hand rounding to decimals: `Math.round(x * 10…)` (scaling up) and `Math.round(…) / 10…` (back down).
+  it("rounds to decimals only in roundTo (src/lib/number-format.ts) [U4]", () => {
+    const rounding = /Math\.round\([\w.]+\s*\*\s*(10+|factor)\b|Math\.round\([^;]*\)\s*\/\s*(10+|factor)\b/;
+    expect(Object.entries(sources).filter(([, text]) => rounding.test(text)).map(([file]) => file)).toEqual(["../src/lib/number-format.ts"]);
+  });
+});
+
+// Action result (D-010): a test narrows an action's answer with `succeeded()` (tests/succeeded.ts), never by hand.
+it("narrows an action's answer in the tests only through succeeded() [D-010]", () => {
+  const tests = import.meta.glob("./**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+  const byHand = /if \(!\w+\.success\b|\b(\w+)\.success (\?|&&)[^;]*\b\1\./;
+  expect(Object.keys(tests).length).toBeGreaterThan(30);
+  expect(Object.entries(tests).filter(([, text]) => byHand.test(text)).map(([file]) => file)).toEqual(["./succeeded.ts"]);
 });

@@ -7,7 +7,7 @@ import { deleteClaudeToken, getStoredConnection, restoreClaudeConnection, saveCl
 import { respond } from "@/lib/validations/result";
 
 // The long-lived OAuth token printed by `claude setup-token`.
-const TOKEN_HINT = "Please paste the token that claude setup-token prints.";
+const TOKEN_HINT = "Please paste the token that claude setup-token prints";
 const tokenSchema = z.object({
   token: z.string(TOKEN_HINT).trim().regex(/^sk-ant-[A-Za-z0-9_-]{20,500}$/, TOKEN_HINT),
 });

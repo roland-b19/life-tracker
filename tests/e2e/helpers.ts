@@ -23,6 +23,35 @@ export function isRefresh(page: Page, request: Request) {
   );
 }
 
+/**
+ * The warnings React logs from now on about a page that hydrated with other markup than the server sent, or about the
+ * script tag the theme runs in <head> (InlineScript); the list grows as they come.
+ */
+export function hydrationWarnings(page: Page) {
+  const seen: string[] = [];
+  page.on("console", (m) => /hydrat|script tag/i.test(m.text()) && seen.push(m.text()));
+  return seen;
+}
+
+/** The router refreshes of a page from now on (the list grows as they start). */
+export function countRefreshes(page: Page) {
+  const seen: Request[] = [];
+  page.on("request", (r) => isRefresh(page, r) && seen.push(r));
+  return seen;
+}
+
+/** A server action of the page: Next sends them as POSTs with this header. With `body`, only one whose body holds it. */
+export function isWrite(request: Request, body?: string) {
+  return request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body));
+}
+
+/** The server actions the page sends from now on (those whose body holds `body`, when given); the list grows as they start. */
+export function countWrites(page: Page, body?: string) {
+  const seen: Request[] = [];
+  page.on("request", (r) => isWrite(r, body) && seen.push(r));
+  return seen;
+}
+
 function watchRefreshes(page: Page) {
   const state = { due: false, running: new Set<Request>() };
   let writes = 0;
@@ -30,7 +59,7 @@ function watchRefreshes(page: Page) {
   const covering = new Map<Request, number>();
   page.on("response", (response) => {
     const request = response.request();
-    if (request.method() === "POST" && "next-action" in request.headers() && response.ok()) {
+    if (isWrite(request) && response.ok()) {
       writes++;
       state.due = true;
     }
@@ -82,14 +111,33 @@ export function headIsQuiet() {
 /**
  * Resolves once the refresh the last server action left due, and every refresh under way, has finished (the page must
  * be the `signedInPage` fixture's, which `watchRefreshes` follows). A test that then changes the data elsewhere, or
- * signs the page out, knows the page's own refresh can no longer show that change.
+ * signs the page out, knows the page's own refresh can no longer show that change. On a paused clock, `tick` moves it
+ * that many ms before each look, so the refresh timer fires, and so does one a later write sets.
  */
-export async function refreshesDone(page: Page) {
+export async function refreshesDone(page: Page, { tick = 0 } = {}) {
   const state = refreshesDue.get(page);
   if (!state) throw new Error("refreshesDone needs the signedInPage fixture's page");
   await expect
-    .poll(() => state.due || state.running.size > 0, { message: "the refresh after the last server action, and those under way" })
+    .poll(
+      async () => {
+        if (tick) await page.clock.runFor(tick);
+        return state.due || state.running.size > 0;
+      },
+      { message: "the refresh after the last server action, and those under way" },
+    )
     .toBe(false);
+}
+
+/**
+ * Signs the page out once its own refreshes are done (`refreshesDone`), and holds every refresh of the page on screen
+ * after that: the app refreshes 600 ms after any answer, and a signed-out refresh goes to the sign-in form, so holding
+ * it keeps on screen what a refused write left there.
+ */
+export async function signOutHere(page: Page) {
+  await refreshesDone(page);
+  const path = new URL(page.url()).pathname;
+  await page.route((url) => url.pathname === path, (route) => (isRefresh(page, route.request()) ? undefined : route.fallback()));
+  await page.context().clearCookies();
 }
 
 // Serious and critical findings fail the spec. The scan waits for the refresh a write left due, then for a quiet <head>
@@ -104,14 +152,11 @@ export async function expectNoSeriousViolations(page: Page) {
 }
 
 // A click that starts a server action returns once the action has answered, so the next step never races the database
-// (a reload would otherwise abort an action still in flight). Next sends server actions as POSTs with this header.
+// (a reload would otherwise abort an action still in flight).
 // A page that refreshes its list after a write sends a second action, so `body` (a piece of the request body, such as
 // a title) names the action to wait for when an earlier refresh may still be in flight and would be taken for it.
 export async function andSettle(page: Page, act: () => Promise<void>, body?: string) {
-  const answered = page.waitForResponse((r) => {
-    const request = r.request();
-    return request.method() === "POST" && "next-action" in request.headers() && (!body || (request.postData() ?? "").includes(body));
-  });
+  const answered = page.waitForResponse((r) => isWrite(r.request(), body));
   await act();
   await answered;
 }
@@ -142,7 +187,7 @@ export const center = (box: { x: number; y: number; width: number; height: numbe
 export async function burst(page: Page, { x, y }: { x: number; y: number }) {
   let acts = 0;
   const count = (r: Request) => {
-    if (r.method() === "POST" && "next-action" in r.headers()) acts++;
+    if (isWrite(r)) acts++;
   };
   page.on("request", count);
   const started = Date.now();
@@ -152,6 +197,239 @@ export async function burst(page: Page, { x, y }: { x: number; y: number }) {
   await settled(page);
   page.off("request", count);
   return acts;
+}
+
+// A page that reads its list again after each write (Tasks) sends a second action with no body of its own, so the writes
+// of a `burst` are counted by a piece of their body: the ones whose body holds `body`.
+export async function writesIn(page: Page, spot: { x: number; y: number }, body: string) {
+  let writes = 0;
+  const count = (r: Request) => {
+    if (isWrite(r, body)) writes++;
+  };
+  page.on("request", count);
+  await burst(page, spot);
+  page.off("request", count);
+  return writes;
+}
+
+/**
+ * Stops the page's clock (installed before the page loaded) where it stands: from here on no timer fires until
+ * `runFor`, `fastForward` or `resume`. `pauseAt` refuses a time the clock has passed, and the running clock moves on
+ * between reading it and pausing; a refused `pauseAt` has paused the clock already, so the next read is exact. It is
+ * tried until it takes, however slow the calls are.
+ */
+export async function pauseClock(page: Page) {
+  await expect(async () => {
+    await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  }).toPass({ timeout: 5_000 });
+}
+
+/**
+ * Installs the page's clock standing still at `time` (now by default; a few milliseconds later, where `pauseClock`
+ * stops it), before the page loads: only `runFor`, `fastForward` and `resume` move it, however long the page takes to
+ * load.
+ */
+export async function installStoppedClock(page: Page, time = Date.now()) {
+  await page.clock.install({ time });
+  await pauseClock(page);
+}
+
+/**
+ * Holds the page's server actions from now on (those whose body holds `body`, when given) until the returned
+ * `release(lose)`; a held write has reached the server only once released. After it they go through, or, with
+ * `lose`, they and the later ones are lost on the way (the page sees a network error and the server writes nothing).
+ * `release` resolves once the writes held so far have gone on. The route is the path of the page on screen, where
+ * Next sends them.
+ */
+export async function holdWrites(page: Page, body?: string) {
+  let open: (lose: boolean) => void = () => {};
+  const held = new Promise<boolean>((resolve) => (open = resolve));
+  const gone: Promise<void>[] = [];
+  const path = new URL(page.url()).pathname;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      if (!isWrite(route.request(), body)) return route.fallback();
+      let wentOn = () => {};
+      gone.push(new Promise<void>((resolve) => (wentOn = resolve)));
+      if (await held) await route.abort();
+      else await route.fallback();
+      wentOn();
+    },
+  );
+  return async (lose = false) => {
+    open(lose);
+    await Promise.all(gone);
+  };
+}
+
+/**
+ * The first server action of the page on screen whose body holds `marker` reaches the server, which writes, but its
+ * answer is lost on the way back (the page sees a network error). Answers what that write sent.
+ */
+export async function loseAnswerOnce(page: Page, marker: string) {
+  let sent = "";
+  const path = new URL(page.url()).pathname;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      const request = route.request();
+      const body = request.postData() ?? "";
+      if (sent || !isWrite(request, marker)) return route.fallback();
+      sent = body;
+      await route.fetch();
+      await route.abort();
+    },
+  );
+  return () => sent;
+}
+
+/**
+ * Records each state the page shows from now on, as `sample(arg)` reads it in the page (undefined: nothing to record
+ * now), and answers a function that reads the states seen so far. A MutationObserver sees each change of the DOM, so no
+ * state slips between two checks; the document stays across client navigations (a reload would drop the record).
+ */
+export async function recordStates<A>(page: Page, sample: (arg: A) => string | undefined, arg?: A) {
+  await page.evaluate(`(() => {
+    const sample = (${sample.toString()});
+    const arg = ${JSON.stringify(arg ?? null)};
+    const seen = [];
+    const record = () => {
+      const state = sample(arg);
+      if (state !== undefined && seen.at(-1) !== state) seen.push(state);
+    };
+    record();
+    new MutationObserver(record).observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.seenStates = seen;
+  })()`);
+  return () => page.evaluate(() => (window as unknown as { seenStates: string[] }).seenStates);
+}
+
+/** For `recordStates`: the Wishlist's item list with `item` ("item") or without it ("none"), else the path on screen. */
+export function wishlistItemState(item: string) {
+  if (location.pathname !== "/wishlist") return location.pathname;
+  const list = [...document.querySelectorAll("section")].find((s) => /^Items\b/.test(s.querySelector("h2")?.textContent ?? ""));
+  if (!list) return undefined;
+  return list.textContent?.includes(item) ? "item" : "none";
+}
+
+/** The toast that shows `text`. */
+export const toast = (page: Page, text: string | RegExp) => page.locator(".toast-item").filter({ hasText: text });
+
+/** The Undo button of the toast that shows `text`. */
+export const undoIn = (page: Page, text: string | RegExp) => toast(page, text).getByRole("button", { name: "Undo" });
+
+/**
+ * Checks that the toast that shows `text` is on screen without an Undo (a newer change took it away, or it never had
+ * one). A toast runs out after 5 s, and a toast gone has no Undo either, so the page's clock must stand still from
+ * before the toast showed (`page.clock.install()` before the page opens, then `pauseClock`) however slow the run is;
+ * the check fails when the clock moved while it ran.
+ */
+export async function expectToastWithoutUndo(page: Page, text: string | RegExp) {
+  const now = () => page.evaluate(() => Date.now());
+  const held = await now();
+  await expect(toast(page, text)).toBeVisible();
+  await expect(undoIn(page, text)).toHaveCount(0);
+  expect(await now(), "the page's clock stands still (pauseClock)").toBe(held);
+}
+
+/**
+ * Closes the one toast on screen with its Dismiss button (one Undo or Dismiss at a time: a second toast fails the click)
+ * and waits until it has gone: no Dismiss is left, and `message`, when given, is off the page. A toast among others is
+ * closed with `toast(page, text)`'s own Dismiss button.
+ */
+export async function dismissToast(page: Page, message?: string | RegExp) {
+  const dismiss = page.getByRole("button", { name: "Dismiss notification" });
+  await dismiss.click();
+  if (message !== undefined) await expect(page.getByText(message)).toBeHidden();
+  await expect(dismiss).toHaveCount(0);
+}
+
+/** The Appearance card of Settings. */
+export const appearance = (page: Page) => page.getByRole("region", { name: "Appearance", exact: true });
+
+/** The theme the page shows: "light", "dark" or "auto" (the system's). */
+export const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme ?? "auto");
+
+/** A wishlist (or shopping) item name, new on each run. */
+export const itemName = () => `E2E item ${randomUUID().slice(0, 8)}`;
+
+/** Opens the Wishlist and waits until it takes input. */
+export async function openWishlist(page: Page) {
+  await page.goto("/wishlist");
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+}
+
+/**
+ * Adds a wishlist item through the New item form and waits for its row and its toast; `toastPrice` is the price as the
+ * toast shows it.
+ */
+export async function addItem(page: Page, name: string, price = "100", toastPrice = price) {
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill(price);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Added "${name}" (${toastPrice} RON)`, { exact: true })).toBeVisible();
+  // Ends the tap burst (D-043), so the next tap is a new one.
+  await page.keyboard.press("Shift");
+}
+
+/**
+ * The owner role, for what a page cannot see or do: counting rows, a change made elsewhere, deleting users (the app role
+ * cannot). The config refuses a non-local DATABASE_URL_MIGRATE, so this only ever touches the local test database.
+ */
+export async function asOwner<T>(run: (db: Pool) => Promise<T>) {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    return await run(db);
+  } finally {
+    await db.end();
+  }
+}
+
+/** A dev user name, new on each run. */
+export const devUserName = () => `e2e-${randomUUID().slice(0, 8)}`;
+
+/** Deletes the dev users of these names; their rows go with them (ON DELETE CASCADE). */
+export function deleteDevUsers(...names: string[]) {
+  return asOwner((db) => db.query("DELETE FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]));
+}
+
+/** The number of dev users of these names. */
+export async function devUserCount(...names: string[]) {
+  return (await asOwner((db) => db.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]))).rowCount;
+}
+
+/** The signed-in user's id, from the session the page has, for the SQL that checks or seeds their rows. */
+export async function signedInUserId(page: Page) {
+  const { user } = await (await page.request.get("/api/auth/session")).json();
+  return user.id as string;
+}
+
+/**
+ * Signs a fresh browser in through the /signin form as a new dev user, typing and pressing Continue as soon as the form
+ * lets it (it waits for its session check, so nothing typed is lost), and checks the user is signed in as that name: a
+ * signed-out visit to `path` goes to the form, which comes back to `path` (the form opened on its own lands on /todos),
+ * `landed` sees the page, and the name has a user row (a refused sign-in would bounce back to /signin). `signedIn` runs
+ * next with the name; the user is deleted afterwards.
+ */
+export async function signInThroughForm(page: Page, path: string, landed: (page: Page) => Promise<void>, signedIn?: (name: string) => Promise<void>) {
+  const name = devUserName();
+  try {
+    await page.goto(path, { waitUntil: "commit" });
+    if (path !== "/signin") await expect(page).toHaveURL(new RegExp(`/signin\\?next=${encodeURIComponent(path)}$`));
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(new RegExp(`${path === "/signin" ? "/todos" : path}$`));
+    await landed(page);
+    expect(await devUserCount(name)).toBe(1);
+    await signedIn?.(name);
+  } finally {
+    await deleteDevUsers(name);
+  }
 }
 
 async function signIn(page: Page, name: string) {
@@ -167,23 +445,17 @@ async function signIn(page: Page, name: string) {
   await expect(page).toHaveURL(/\/health$/);
 }
 
-// `signedInPage` signs in as a new dev user and deletes that user afterwards; the user's rows go with it (ON DELETE
-// CASCADE). The app role cannot delete users, so the cleanup uses the owner URL like the Vitest tests do. The config
-// refuses a non-local DATABASE_URL and DATABASE_URL_MIGRATE, so this only ever touches the local test database.
+// `signedInPage` signs in as a new dev user and deletes that user afterwards (`deleteDevUsers`, as the owner role: the
+// app role cannot delete users).
 export const test = base.extend<{ signedInPage: Page }>({
   signedInPage: async ({ page }, provide) => {
-    const name = `e2e-${randomUUID().slice(0, 8)}`;
-    const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+    const name = devUserName();
     try {
       watchRefreshes(page);
       await signIn(page, name);
       await provide(page);
     } finally {
-      try {
-        await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
-      } finally {
-        await admin.end();
-      }
+      await deleteDevUsers(name);
     }
   },
 });

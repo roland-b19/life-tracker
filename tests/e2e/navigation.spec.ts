@@ -1,8 +1,16 @@
-import { randomUUID } from "node:crypto";
 import { expect, type Page, type Route } from "@playwright/test";
-import { Pool } from "pg";
 import { CONTROL, EDGE_PX } from "../../app/components/edge-swipe";
-import { expectNoSeriousViolations, test } from "./helpers";
+import {
+  appearance,
+  deleteDevUsers,
+  devUserCount,
+  devUserName,
+  expectNoSeriousViolations,
+  installStoppedClock,
+  signInThroughForm,
+  test,
+  theme,
+} from "./helpers";
 
 // The app shell: tab bar, More menu, sidebar, the 404 page and the listeners every page has (D-035, MORE-03, MORE-06,
 // MORE-11, XR-11), and the sign-in form. The phone pieces are hidden from 1024px, so the flows set a phone width themselves.
@@ -205,11 +213,10 @@ test("a page that cannot be opened after another tab was pressed leaves the bar 
 
 test("a dev user name longer than 64 characters is refused with the message, not cut short (MORE-12)", async ({ page }) => {
   // 65 characters, new on each run
-  const name = `e2e-${randomUUID().slice(0, 8)}-${"a".repeat(52)}`;
+  const name = `${devUserName()}-${"a".repeat(52)}`;
   expect(name).toHaveLength(65);
   // Neither the name nor the name cut to 64 characters gets a user row
   const names = [name, name.slice(0, 64)];
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
   try {
     // As soon as the form takes typing (it waits for its session check, so nothing typed is lost)
     await page.goto("/signin", { waitUntil: "commit" });
@@ -217,46 +224,19 @@ test("a dev user name longer than 64 characters is refused with the message, not
     await field.fill(name);
     await expect(field).toHaveValue(name);
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes.")).toBeVisible();
+    await expect(page.getByText("Please enter a username of up to 64 lower-case letters, numbers or dashes")).toBeVisible();
     await expect(page).toHaveURL(/\/signin$/);
-    const rows = await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
-    expect(rows.rowCount).toBe(0);
+    expect(await devUserCount(...names)).toBe(0);
   } finally {
-    try {
-      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]);
-    } finally {
-      await admin.end();
-    }
+    await deleteDevUsers(...names);
   }
 });
 
-/**
- * Signs in through the /signin form of a fresh browser as a new dev user, typing and pressing Continue as soon as the
- * form lets it, and checks the user is signed in as that name: the signed-in shell shows (a refused sign-in would
- * bounce back to /signin) and the name has a user row. `act` runs before the page opens.
- */
-async function signInThroughForm(page: Page, act?: () => Promise<unknown>) {
-  const name = `e2e-${randomUUID().slice(0, 8)}`;
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-  try {
-    await act?.();
-    await page.goto("/signin", { waitUntil: "commit" });
-    await page.getByLabel("Username").fill(name);
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
-    await expect(page).toHaveURL(/\/todos$/);
-    expect((await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = $1", [name])).rowCount).toBe(1);
-  } finally {
-    try {
-      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
-    } finally {
-      await admin.end();
-    }
-  }
-}
+// The signed-in shell shows: a refused sign-in would bounce back to /signin.
+const shellShows = (page: Page) => expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
 
 test("a fresh browser signs in through the form as the name typed, pressing Continue as soon as it can [SIGNIN]", async ({ page }) => {
-  await signInThroughForm(page);
+  await signInThroughForm(page, "/signin", shellShows);
 });
 
 test("a sign-in whose CSRF token was refused is tried once more, and a second refusal is shown, not taken for a session [SIGNIN]", async ({
@@ -267,13 +247,14 @@ test("a sign-in whose CSRF token was refused is tried once more, and a second re
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: new URL("/api/auth/signin?csrf=true", route.request().url()).href }) });
   const callback = "**/api/auth/callback/credentials";
   // The first answer refuses the token: the form tries again and signs in
-  await signInThroughForm(page, () => page.route(callback, refuse, { times: 1 }));
+  await page.route(callback, refuse, { times: 1 });
+  await signInThroughForm(page, "/signin", shellShows);
 
   // Every answer refuses it: the form says so and stays
   await page.context().clearCookies();
   await page.route(callback, refuse);
   await page.goto("/signin");
-  await page.getByLabel("Username").fill(`e2e-${randomUUID().slice(0, 8)}`);
+  await page.getByLabel("Username").fill(devUserName());
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText("Failed to sign in")).toBeVisible();
   await expect(page).toHaveURL(/\/signin$/);
@@ -282,16 +263,14 @@ test("a sign-in whose CSRF token was refused is tried once more, and a second re
 test("a session check that never answers stops holding the sign-in form after 5 s; the sign-in then waits for its own session call [SIGNIN]", async ({
   page,
 }) => {
-  const name = `e2e-${randomUUID().slice(0, 8)}`;
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  const name = devUserName();
   const session = "**/api/auth/session";
   // Every session call is held, unanswered, until `hold` is turned off
   const held: Route[] = [];
   let hold = true;
   try {
     // Paused from the start: only runFor moves the time, however long the page takes to load
-    await page.clock.install({ time: new Date("2026-11-20T12:00:00Z") });
-    await page.clock.pauseAt(new Date("2026-11-20T12:00:01Z"));
+    await installStoppedClock(page, Date.parse("2026-11-20T12:00:00Z"));
     await page.route(session, (route) => (hold ? void held.push(route) : route.continue()));
     await page.goto("/signin", { waitUntil: "commit" });
     // The page's session check has gone out: the form is hydrated and its timer runs
@@ -315,22 +294,47 @@ test("a session check that never answers stops holding the sign-in form after 5 
     await proceed.click();
     expect((await callback).ok()).toBe(true);
     await expect.poll(() => held.length).toBeGreaterThan(before);
-    expect((await admin.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = $1", [name])).rowCount).toBe(1);
+    expect(await devUserCount(name)).toBe(1);
     await expect(page.getByRole("button", { name: "Signing in..." })).toBeDisabled();
     await expect(page).toHaveURL(/\/signin$/);
 
     // Once the session calls answer, the sign-in finishes as the typed name
     hold = false;
     for (const route of held.splice(0)) await route.continue();
-    await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
+    await shellShows(page);
     await expect(page).toHaveURL(/\/todos$/);
   } finally {
-    try {
-      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
-    } finally {
-      await admin.end();
-    }
+    await deleteDevUsers(name);
   }
+});
+
+// installStoppedClock stops the clock where it stands, as pauseClock does, not at a fixed second after `time`: a page
+// whose main thread is busy for 2 s right after the install (install wrapped here to make it so) answers the pause late,
+// past that second.
+test("a stopped clock installed while the page is busy stands still, however late the page answers", async ({ page }) => {
+  // The page's own clock, kept from before the install, times the busy spell
+  await page.evaluate(() => Object.assign(window, { realNow: performance.now.bind(performance) }));
+  const install = page.clock.install.bind(page.clock);
+  page.clock.install = async (options) => {
+    await install(options);
+    await page.evaluate(() => {
+      const realNow = (window as unknown as { realNow: () => number }).realNow;
+      const end = realNow() + 2_000;
+      while (realNow() < end);
+    });
+  };
+  const time = Date.parse("2026-11-20T12:00:00Z");
+  await installStoppedClock(page, time);
+  // Read twice, 100 ms apart by the page's own clock: the same time
+  const twice = await page.evaluate(() => {
+    const realNow = (window as unknown as { realNow: () => number }).realNow;
+    const first = Date.now();
+    const end = realNow() + 100;
+    while (realNow() < end);
+    return [first, Date.now()];
+  });
+  expect(twice[0]).toBeGreaterThan(time + 1_000);
+  expect(twice[1]).toBe(twice[0]);
 });
 
 test("the phone More menu is a modal dialog: focus moves in, stays in, and returns to More (MORE-03)", async ({ signedInPage: page }) => {
@@ -385,13 +389,11 @@ test("a signed-in 404 keeps the navigation; a signed-out one is a card of its ow
 });
 
 test("a theme picked in Settings applies in the other open tabs of the same browser (MORE-06)", async ({ signedInPage: page }) => {
-  const theme = (p: Page) => p.evaluate(() => document.documentElement.dataset.theme ?? "auto");
   const tasks = await page.context().newPage();
   const settings = await page.context().newPage();
   await tasks.goto("/todos");
   await settings.goto("/settings");
   await page.goto("/settings");
-  const appearance = (p: Page) => p.getByRole("region", { name: "Appearance", exact: true });
 
   await appearance(page).getByRole("tab", { name: "Dark", exact: true }).click();
   await expect.poll(() => theme(tasks)).toBe("dark");

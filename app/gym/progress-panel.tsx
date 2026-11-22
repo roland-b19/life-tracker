@@ -10,11 +10,12 @@ import { Segmented } from "../components/segmented";
 import { useServerState } from "../components/server-state";
 import { undoWith, useToast } from "../components/toast";
 import { savePlateWeightAction } from "@/actions/gym";
-import { addDays, weekStart } from "@/lib/format-date";
+import { addDays, formatDM, weekStart } from "@/lib/format-date";
 import { deloadWeeksIn, exerciseMeasure, exerciseSeries, type Measure, type PlateWeights } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 import { formatAmount } from "@/lib/number-format";
-import { AT_MOST_PLATE_KG, GYM_LIMITS, MORE_THAN_ZERO, TWO_DECIMALS, twoDecimals } from "@/lib/validations/gym";
+import { TWO_DECIMALS, twoDecimals } from "@/lib/validations/common";
+import { AT_MOST_PLATE_KG, GYM_LIMITS, MORE_THAN_ZERO } from "@/lib/validations/gym";
 
 type Range = "30" | "90" | "180" | "360";
 const RANGES: { value: Range; label: string }[] = (["30", "90", "180", "360"] as const).map((d) => ({ value: d, label: `${d}D` }));
@@ -34,8 +35,6 @@ const WHAT: Record<Measure, string> = {
   reps: "Most reps of each workout",
   added: "Most added weight (kg) of each workout",
 };
-
-const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
 
 /**
  * What stops a plate weight from being saved, in the server's own words ("" when nothing does); the limits are the
@@ -187,7 +186,7 @@ export function ProgressPanel({
           )}
         </ChartControls>
         <LineChart
-          points={series.map((p) => ({ label: dm(p.date), value: p.value, at: Date.parse(`${p.date}T00:00:00Z`) / 86_400_000 }))}
+          points={series.map((p) => ({ label: formatDM(p.date), value: p.value, at: Date.parse(`${p.date}T00:00:00Z`) / 86_400_000 }))}
           summary={`${measure ? WHAT[measure] : "Best"} over the last ${range} days`}
         />
         {!measure ? (
