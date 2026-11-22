@@ -5,8 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
 
-import { dayProgress, deloadWeeksIn, exerciseMeasure, exerciseSeries, exerciseUnit, kgDelta, progressSets, setKg, setLoad, weekStart, weeksBetween, withProgress, type PlateWeights } from "@/lib/gym-progress";
-import { addDays, toISODate } from "@/lib/format-date";
+import { dayProgress, deloadWeeksIn, exerciseMeasure, exerciseSeries, exerciseUnit, kgDelta, progressSets, setKg, setLoad, weeksBetween, withProgress, type PlateWeights } from "@/lib/gym-progress";
+import { addDays, toISODate, weekStart } from "@/lib/format-date";
 import type { HistorySession, HistorySet } from "@/lib/gym";
 import {
   cancelWorkoutSession,
@@ -46,12 +46,31 @@ import {
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, NOTES_CHANGED, SETS_LOGGED, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
+import {
+  AT_MOST_LOAD,
+  AT_MOST_PLATE_KG,
+  DELOAD_ORDER,
+  exerciseNameKey,
+  MIN_OVER_MAX,
+  MORE_THAN_ZERO,
+  NAME_REQUIRED,
+  NAME_TOO_SHORT,
+  NOT_NEGATIVE,
+  NOTES_CHANGED,
+  REPS_RANGE,
+  ROUTINE_RANGE,
+  SETS_LOGGED,
+  TWO_DECIMALS,
+  ZERO_LOAD,
+  type LogSetInput,
+} from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
 import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
 import { plateKgProblem } from "@/../app/gym/progress-panel";
+import { dayProblem } from "@/../app/gym/day-editor";
+import { deloadProblem } from "@/../app/gym/deload-card";
 import { setText } from "@/../app/gym/types";
 
 const TODAY = toISODate();
@@ -572,6 +591,62 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.25 })).toEqual({ success: true, previous: null });
     expect(await getPlateWeights(userA)).toEqual({ [shared]: 2.25 });
     expect(await getPlateWeights(userB)).toEqual({}); // per user
+  });
+
+  // The forms check before sending, with the schema's own words, so the user reads one message for one problem (U5).
+  it("says a set's reps and load limits, a day's routine and name, a new exercise's name and the deload order in the server's words", async () => {
+    const day = await trainingDay(userA);
+    const ex = day.exercises[0].exerciseId;
+    const session = await begin(userA);
+    const exercise = { id: ex, exerciseId: ex, exerciseName: "Bench", muscleGroup: "chest", equipmentType: "barbell", targetSets: 3, minReps: 8, maxReps: 12, orderIndex: 0 };
+    const form = (change: Partial<SetInput>): SetInput => ({ ...emptyInput(exercise), loadValue: "40", ...change });
+    const refusal = (error: string) => ({ success: false, error });
+    for (const reps of [0, 201, 1.5]) {
+      expect(await logSetAction(setOf(session.id, ex, { reps }))).toEqual(refusal(REPS_RANGE));
+      expect(inputProblem(form({ reps: String(reps) }))).toBe(REPS_RANGE);
+    }
+    expect(await logSetAction(setOf(session.id, ex, { loadValue: 1000.5 }))).toEqual(refusal(AT_MOST_LOAD));
+    expect(inputProblem(form({ loadValue: "1000.5" }))).toBe(AT_MOST_LOAD);
+    expect(await setCount(session.id)).toBe(0);
+
+    const save = (exercises: { targetSets: number; minReps: number; maxReps: number }[], name = day.name) =>
+      saveSplitDayAction({ id: day.id, name, isRest: false, exercises: exercises.map((r) => ({ exerciseId: ex, ...r })) });
+    const named = (id: string) => (id === ex ? "Bench" : "?");
+    const check = (rows: { targetSets: number; minReps: number; maxReps: number }[], name = day.name) =>
+      dayProblem(name, rows.map((r) => ({ exerciseId: ex, ...r })), named);
+    for (const row of [{ targetSets: 11, minReps: 5, maxReps: 8 }, { targetSets: 2, minReps: 0, maxReps: 8 }, { targetSets: 2, minReps: 5, maxReps: 101 }, { targetSets: 1.5, minReps: 5, maxReps: 8 }]) {
+      expect(await save([row])).toEqual(refusal(ROUTINE_RANGE));
+      expect(check([row])).toBe(`Bench: ${ROUTINE_RANGE}`); // the form also names the exercise
+    }
+    expect(await save([{ targetSets: 2, minReps: 9, maxReps: 8 }])).toEqual(refusal(MIN_OVER_MAX));
+    expect(check([{ targetSets: 2, minReps: 9, maxReps: 8 }])).toBe(`Bench: ${MIN_OVER_MAX}`);
+    for (const name of ["", "   "]) {
+      expect(await save([{ targetSets: 2, minReps: 5, maxReps: 8 }], name)).toEqual(refusal(NAME_REQUIRED));
+      expect(check([{ targetSets: 2, minReps: 5, maxReps: 8 }], name)).toBe(NAME_REQUIRED);
+    }
+    expect(check([{ targetSets: 10, minReps: 1, maxReps: 100 }])).toBe("");
+
+    // The new exercise form refuses a one-character name before sending (`NAME_TOO_SHORT`), as the server does.
+    expect(await addCustomExerciseAction({ id: randomUUID(), name: " B ", muscleGroup: "chest", equipmentType: "barbell" })).toEqual(refusal(NAME_TOO_SHORT));
+
+    const sunday = weekStart(TODAY);
+    expect(await saveDeloadWeeksAction({ last: sunday, next: sunday })).toEqual(refusal(DELOAD_ORDER));
+    expect(deloadProblem(sunday, sunday)).toBe(DELOAD_ORDER);
+    expect(deloadProblem(sunday, addDays(sunday, 7))).toBe("");
+    expect(deloadProblem("", sunday)).toBe("");
+  });
+
+  // One way to do each job (U1, U9, U11): every Undo goes through `undoWith` (or `takeBack`, which wraps it), and the
+  // weekday and a week's Sunday come from `src/lib/format-date.ts`, imported from there.
+  it("keeps the gym code's Undo, weekday and week start to their one way", async () => {
+    const sources = import.meta.glob(["../app/gym/**/*.{ts,tsx}", "../src/lib/gym*.ts", "../src/lib/validations/gym.ts"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    expect(Object.keys(sources).length).toBeGreaterThan(10);
+    const lines = (pattern: RegExp) =>
+      Object.entries(sources).flatMap(([file, text]) => text.split("\n").flatMap((line, i) => (pattern.test(line) ? [`${file}:${i + 1}: ${line.trim()}`] : [])));
+    expect(lines(/onUndo:(?!\s*(undoWith|takeBack)\()/)).toEqual([]);
+    expect(lines(/\.getUTCDay\(/)).toEqual([]);
+    expect(lines(/\bweekStart\b.*from "(\.\/|@\/lib\/)gym-progress"/)).toEqual([]);
+    expect("weekStart" in (await import("@/lib/gym-progress"))).toBe(false);
   });
 
   it("takes a set's time only within its workout, and saves a bodyweight set with no extra kg", async () => {
@@ -1221,17 +1296,56 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(await sessionsOf(userA)).toEqual([]);
     });
 
-    it("a Cancel and a Finish at once: one of them wins, never both", async () => {
-      const id = await startWithSet(userA);
-      const [cancelled, finished] = await Promise.all([cancelSessionAction({ sessionId: id }), finishSessionAction({ sessionId: id })]);
-      expect([cancelled.success, finished.success].filter(Boolean)).toHaveLength(1);
-      if (cancelled.success) {
-        expect(finished).toEqual({ success: false, error: WORKOUT_GONE });
-        expect(await sessionsOf(userA)).toEqual([]);
-      } else {
-        expect(cancelled).toEqual({ success: false, error: WORKOUT_FINISHED });
-        expect(await setCount(id)).toBe(1);
+    /**
+     * Runs `first` and `second` on the workout `id` so that each would see the other's write too late without the lock
+     * they share: a row lock held here stops `first` at its write (after it read the workout), then `second` starts, and
+     * both go once each waits on a lock. With the shared lock `second` waits for `first` to commit and reads its result;
+     * without it, `second` reads the workout as `first` found it and both succeed (or the late one breaks).
+     */
+    async function overlap<A, B>(id: string, first: () => Promise<A>, second: () => Promise<B>) {
+      // The backends of this database waiting on a lock (pg_locks is the whole server's; other worktrees use other databases).
+      const waiting = async (n: number) =>
+        vi.waitFor(
+          async () => {
+            const { rows } = await admin.query(
+              "SELECT count(*) AS n FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE NOT l.granted AND a.datname = current_database()",
+            );
+            expect(Number(rows[0].n)).toBe(n);
+          },
+          { timeout: 5000, interval: 20 },
+        );
+      const hold = await admin.connect();
+      try {
+        await hold.query("BEGIN");
+        await hold.query("SELECT 1 FROM workout_sessions WHERE id = $1 FOR UPDATE", [id]);
+        const a = first().catch((e: unknown) => e);
+        await waiting(1);
+        const b = second().catch((e: unknown) => e);
+        await waiting(2);
+        await hold.query("COMMIT");
+        return [await a, await b] as const;
+      } finally {
+        await hold.query("ROLLBACK").catch(() => undefined);
+        hold.release();
       }
+    }
+
+    // D-046: Cancel and Finish take the same lock, so the later one sees the earlier one's result, in either order.
+    it("a Finish and then a Cancel at the same moment: the Finish wins and the Cancel is refused, deleting nothing", async () => {
+      const id = await startWithSet(userA);
+      const [finished, cancelled] = await overlap(id, () => finishSessionAction({ sessionId: id }), () => cancelSessionAction({ sessionId: id }));
+      expect(finished).toMatchObject({ success: true, deleted: false });
+      expect(cancelled).toEqual({ success: false, error: WORKOUT_FINISHED });
+      expect((await sessionsOf(userA)).map((s) => s.duration_minutes)).toEqual([1]);
+      expect(await setCount(id)).toBe(1);
+    });
+
+    it("a Cancel and then a Finish at the same moment: the Cancel wins and the Finish finds no workout", async () => {
+      const id = await startWithSet(userA);
+      const [cancelled, finished] = await overlap(id, () => cancelSessionAction({ sessionId: id }), () => finishSessionAction({ sessionId: id }));
+      expect(cancelled).toMatchObject({ success: true });
+      expect(finished).toEqual({ success: false, error: WORKOUT_GONE });
+      expect(await sessionsOf(userA)).toEqual([]);
     });
 
     it("finds only the owner's unfinished recent workout", async () => {

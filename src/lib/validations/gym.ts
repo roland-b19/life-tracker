@@ -1,18 +1,48 @@
 import { z } from "zod";
 import { isoDate, newId, uuid, visible } from "./common";
+import { weekday } from "@/lib/format-date";
 import { MUSCLE_GROUP_KEYS } from "@/lib/gym-muscles";
+import { formatNumber } from "@/lib/number-format";
 
 /**
  * The limits of a logged set, one plate's kg, the sets of one exercise in a workout, a set's and a workout's note, an exercise's name
- * and a day's name (the varchar(255), varchar(500), varchar(120) and varchar(100) columns), shared by the forms and the
- * server.
+ * and a day's name (the varchar(255), varchar(500), varchar(120) and varchar(100) columns), and a day's routine (target
+ * sets and reps of each exercise), shared by the forms and the server.
  */
-export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, plateKg: 100, sets: 50, setNotes: 255, sessionNotes: 500, exerciseName: 120, dayName: 100 } as const;
+export const GYM_LIMITS = {
+  reps: 200,
+  load: 1000,
+  extra: 300,
+  plateKg: 100,
+  sets: 50,
+  setNotes: 255,
+  sessionNotes: 500,
+  exerciseName: 120,
+  dayName: 100,
+  targetSets: 10,
+  targetReps: 100,
+} as const;
+/** The fewest characters of an exercise's name. */
+export const EXERCISE_NAME_MIN = 2;
 
 /** What a weight below zero answers, in the set form and on the server. */
 export const NOT_NEGATIVE = "Can't be negative";
 /** What a weight with more than two decimals answers (the columns keep two), in the set form and on the server. */
 export const TWO_DECIMALS = "Maximum two decimal places.";
+/** What a set's reps outside 1 to the limit, or not whole, answer, in the set form and on the server. */
+export const REPS_RANGE = `Reps must be a whole number from 1 to ${GYM_LIMITS.reps}.`;
+/** What a set's weight above the limit answers, in the set form and on the server. */
+export const AT_MOST_LOAD = `Value can be at most ${formatNumber(GYM_LIMITS.load)}.`;
+/** What a routine's target sets or reps outside their limits, or not whole, answer, in the day editor and on the server. */
+export const ROUTINE_RANGE = `Sets must be whole numbers from 1 to ${GYM_LIMITS.targetSets} and reps from 1 to ${GYM_LIMITS.targetReps}.`;
+/** What a routine row whose min reps are above its max reps answers, in the day editor and on the server. */
+export const MIN_OVER_MAX = "Min reps must not exceed max reps";
+/** What a day's or an exercise's name with nothing visible answers, in the gym forms and on the server. */
+export const NAME_REQUIRED = "Name is required";
+/** What an exercise name shorter than the minimum answers, in the new exercise form and on the server. */
+export const NAME_TOO_SHORT = `The name must have at least ${EXERCISE_NAME_MIN} characters.`;
+/** What a next deload week not after the last one answers, in the deload dialog and on the server. */
+export const DELOAD_ORDER = "The next deload must come after the last one";
 /** What a plate weight of 0 or less answers, in the plate weight form and on the server. */
 export const MORE_THAN_ZERO = "Must be more than 0";
 /** What a plate weight above the limit answers, in the plate weight form and on the server. */
@@ -30,8 +60,8 @@ export const SET_GONE = "Set not found.";
 export const SETS_LOGGED = "Sets are logged; use Cancel workout instead.";
 /** Whether a number has at most two decimals. */
 export const twoDecimals = (value: number) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
-/** A set's weight: at least 0, at most `max`, with at most two decimals. */
-const weight = (max: number) => z.number().min(0, NOT_NEGATIVE).max(max).refine(twoDecimals, TWO_DECIMALS);
+/** A set's weight: at least 0, at most `max` (answering `tooBig` above it), with at most two decimals. */
+const weight = (max: number, tooBig?: string) => z.number().min(0, NOT_NEGATIVE).max(max, tooBig).refine(twoDecimals, TWO_DECIMALS);
 
 /** How far a set's time may sit outside its workout (before its start, after now): the device's clock may run a little off. */
 export const SET_TIME_SKEW_MS = 60_000;
@@ -78,9 +108,9 @@ const setFields = z.object({
   sessionId: uuid,
   exerciseId: uuid,
   setOrder: z.number().int().min(1).max(GYM_LIMITS.sets).optional(),
-  reps: z.number().int().min(1).max(GYM_LIMITS.reps),
+  reps: z.number().int(REPS_RANGE).min(1, REPS_RANGE).max(GYM_LIMITS.reps, REPS_RANGE),
   loadType: z.enum(["kg", "plates", "bodyweight"]),
-  loadValue: weight(GYM_LIMITS.load),
+  loadValue: weight(GYM_LIMITS.load, AT_MOST_LOAD),
   extraKg: weight(GYM_LIMITS.extra).default(0),
   isFailure: z.boolean().default(true),
   isPartial: z.boolean().default(false),
@@ -119,12 +149,12 @@ export const saveSessionNotesSchema = z
   .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
   .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), "Nothing to save.");
 
-const weekSunday = isoDate.refine((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 0, "A deload week starts on a Sunday");
+const weekSunday = isoDate.refine((d) => weekday(d) === 0, "A deload week starts on a Sunday");
 
 /** The last and the next deload week, each the Sunday that starts the week (Sunday to Saturday). */
 export const saveDeloadWeeksSchema = z
   .object({ last: weekSunday.nullable(), next: weekSunday.nullable() })
-  .refine((v) => !v.last || !v.next || v.next > v.last, { message: "The next deload must come after the last one", path: ["next"] });
+  .refine((v) => !v.last || !v.next || v.next > v.last, { message: DELOAD_ORDER, path: ["next"] });
 
 /** Undo of saving the deload weeks: the weeks that save removed come back and the weeks it added go. */
 export const restoreDeloadWeeksSchema = z.object({ add: z.array(weekSunday).max(60), remove: z.array(weekSunday).max(60) });
@@ -157,7 +187,7 @@ export const restoreSessionSchema = z.object({
 
 export const addCustomExerciseSchema = z.object({
   id: newId,
-  name: z.string().trim().min(2).max(GYM_LIMITS.exerciseName).refine(visible, "Name is required"),
+  name: z.string().trim().min(EXERCISE_NAME_MIN, NAME_TOO_SHORT).max(GYM_LIMITS.exerciseName).refine(visible, NAME_REQUIRED),
   muscleGroup: z.enum([...MUSCLE_GROUP_KEYS, "other"]),
   equipmentType: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
 });
@@ -167,18 +197,18 @@ export const customExerciseWithIdSchema = addCustomExerciseSchema.extend({ id: u
 
 export const saveSplitDaySchema = z.object({
   id: uuid,
-  name: z.string().trim().min(1).max(GYM_LIMITS.dayName).refine(visible, "Name is required"),
+  name: z.string().trim().min(1, NAME_REQUIRED).max(GYM_LIMITS.dayName).refine(visible, NAME_REQUIRED),
   isRest: z.boolean(),
   exercises: z
     .array(
       z
         .object({
           exerciseId: uuid,
-          targetSets: z.number().int().min(1).max(10),
-          minReps: z.number().int().min(1).max(100),
-          maxReps: z.number().int().min(1).max(100),
+          targetSets: z.number().int(ROUTINE_RANGE).min(1, ROUTINE_RANGE).max(GYM_LIMITS.targetSets, ROUTINE_RANGE),
+          minReps: z.number().int(ROUTINE_RANGE).min(1, ROUTINE_RANGE).max(GYM_LIMITS.targetReps, ROUTINE_RANGE),
+          maxReps: z.number().int(ROUTINE_RANGE).min(1, ROUTINE_RANGE).max(GYM_LIMITS.targetReps, ROUTINE_RANGE),
         })
-        .refine((e) => e.minReps <= e.maxReps, "Min reps must not exceed max reps"),
+        .refine((e) => e.minReps <= e.maxReps, MIN_OVER_MAX),
     )
     .max(20)
     .refine((list) => new Set(list.map((e) => e.exerciseId)).size === list.length, "Duplicate exercise"),

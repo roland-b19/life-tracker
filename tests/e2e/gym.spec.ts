@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, refreshesDone, settled, test } from "./helpers";
+import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, isRefresh, refreshesDone, settled, test } from "./helpers";
 
 // A new user gets the default split (Upper / Lower 5-Day) when the page first loads. The day the page selects at load
 // depends on the date and some days are rest days, so the spec always picks a day by its name, never by the date.
@@ -45,6 +45,21 @@ async function logSet(page: Page) {
 }
 
 const banner = (page: Page) => page.getByRole("region", { name: "Workout in progress" });
+
+// Another device of the page's user, on the Gym page: a browser of its own, since pages of one browser share the app's
+// BroadcastChannel (D-034) and a write in one refreshes the others at once. Its clock then stands still, so it refreshes
+// nothing by itself either: it shows what it loaded and its own writes, as a device that has not refreshed yet does.
+// Close it with `other.context().close()`.
+async function otherDevice(browser: Browser, page: Page) {
+  const device = await browser.newContext();
+  await device.addCookies(await page.context().cookies());
+  const other = await device.newPage();
+  await other.clock.install();
+  await openGym(other);
+  // A moment ahead: the clock moves on while the call travels, and it cannot be paused in its past.
+  await other.clock.pauseAt((await other.evaluate(() => Date.now())) + 100);
+  return other;
+}
 const history = (page: Page) => page.getByRole("region", { name: "History" });
 
 // Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
@@ -501,13 +516,12 @@ const setCount = async (userId: string) =>
     ).rows[0].count,
   );
 
-// D-039: a finished workout takes no more sets, also from a page that still shows it open.
-test("a set logged in one page into a workout another page finished is refused, and nothing is saved", async ({ signedInPage: page }) => {
+// D-039: a finished workout takes no more sets, also from a device that still shows it open.
+test("a set logged on one device into a workout another device finished is refused, and nothing is saved", async ({ signedInPage: page, browser }) => {
   await openGym(page);
   await startWorkout(page, DAY);
   await logSet(page);
-  const other = await page.context().newPage();
-  await openGym(other);
+  const other = await otherDevice(browser, page);
   await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
   await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
 
@@ -527,16 +541,16 @@ test("a set logged in one page into a workout another page finished is refused, 
   await expect(finished).toBeVisible();
   await expect(other.getByText(SET_LINE)).toBeVisible();
   expect(await setCount(userId)).toBe(1);
-  await other.close();
+  await other.context().close();
 });
 
-// D-039: Cancel deletes an open workout only, so a page still showing a workout another page finished cannot delete it.
-test("Cancel in one page of a workout another page finished is refused, and History keeps the workout", async ({ signedInPage: page }) => {
+// D-039: Cancel deletes an open workout only, so a device still showing a workout another device finished cannot delete
+// it; the refusal closes the Keep/Delete question and the toast says why.
+test("Cancel on one device of a workout another device finished is refused, closes its question, and History keeps the workout", async ({ signedInPage: page, browser }) => {
   await openGym(page);
   await startWorkout(page, DAY);
   await logSet(page);
-  const other = await page.context().newPage();
-  await openGym(other);
+  const other = await otherDevice(browser, page);
   await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
   await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
 
@@ -545,26 +559,29 @@ test("Cancel in one page of a workout another page finished is refused, and Hist
   await other.getByRole("button", { name: "Cancel workout" }).click();
   await andSettle(other, () => other.getByRole("button", { name: "Delete", exact: true }).click());
   await expect(toast(other, "This workout is already finished.")).toBeVisible();
+  await expect(other.getByText("Delete this workout and its sets?")).toBeHidden();
+  await expect(other.getByRole("button", { name: "Cancel workout" })).toBeVisible();
   await expect(other.getByText("Cancelled the workout")).toBeHidden();
   expect(await setCount(await userIdOf(page))).toBe(1);
-  await other.close();
+  await other.context().close();
 
   await openGym(page);
   await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
 });
 
-// D-046: the Undo of "Started" deletes the workout only while the server finds no set, so a set another page logged stays.
-test("Undo of Started after another page logged a set is refused with the server's reason, and the set stays", async ({ signedInPage: page }) => {
+// D-046: the Undo of "Started" deletes the workout only while the server finds no set, so a set another device logged stays.
+test("Undo of Started after another device logged a set is refused with the server's reason, and the set stays", async ({ signedInPage: page, browser }) => {
   await openGym(page);
   await startWorkout(page, DAY);
-  // Held under the mouse, the toast keeps its Undo while the other page works.
+  // Held under the mouse, the toast keeps its Undo while the other device works.
   await toast(page, `Started "${DAY}"`).hover();
-  const other = await page.context().newPage();
-  await openGym(other);
+  // This page's own refresh first: after the other device's set, a refresh would show it here.
+  await refreshesDone(page);
+  const other = await otherDevice(browser, page);
   await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
   await logSet(other);
   await expect(other.getByText(SET_LINE)).toBeVisible();
-  await other.close();
+  await other.context().close();
 
   await andSettle(page, () => undoIn(page, `Started "${DAY}"`).click());
   await expect(toast(page, "Sets are logged; use Cancel workout instead.")).toBeVisible();
@@ -573,6 +590,51 @@ test("Undo of Started after another page logged a set is refused with the server
   expect(await setCount(userId)).toBe(1);
   const { rows } = await asAdmin((admin) => admin.query("SELECT duration_minutes FROM workout_sessions WHERE user_id = $1", [userId]));
   expect(rows).toEqual([{ duration_minutes: null }]);
+});
+
+// D-034: the open workout follows the server, so this page shows what another device did after its next refresh, with
+// no reload: a pause, a set, and a Finish that takes the workout off the screen with a toast saying so.
+test("a workout paused, logged into and finished on another device shows so here after a refresh, with no reload", async ({
+  signedInPage: page,
+  browser,
+}) => {
+  // The page's clock, so a focus can refresh it: a focus within 2 s of the last refresh refreshes nothing.
+  await page.clock.install();
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+  const refresh = async () => {
+    await refreshesDone(page);
+    await page.clock.runFor(2000);
+    const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await refreshed;
+  };
+  const other = await otherDevice(browser, page);
+  try {
+    await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+    // Ends Resume's tap burst (D-043): Pause may sit where the banner's Resume was.
+    await other.keyboard.press("Shift");
+    await andSettle(other, () => other.getByRole("button", { name: "Pause", exact: true }).click());
+    await logSet(other);
+    await expect(other.getByText("Added set 1")).toBeVisible();
+
+    await refresh();
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+    await expect(page.getByText(SET_LINE)).toBeVisible();
+
+    await andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click());
+    await expect(other.getByText(/^Finished the workout/)).toBeVisible();
+    await refresh();
+    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeVisible();
+    await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+    await expect(banner(page)).toBeHidden();
+    await expect(history(page).getByText("1 workout", { exact: true })).toBeVisible();
+  } finally {
+    await other.context().close();
+  }
 });
 
 // D-039: the timer lives on the workout row, so every page shows the same time.
@@ -735,17 +797,18 @@ test("Start on another day after today's workout is finished is refused, and the
 });
 
 // D-040: an Undo the server refuses says why, in the server's words; its Retry stays.
-test("Undo of a workout removed for having no sets, refused because another page started one, shows the server's reason", async ({ signedInPage: page }) => {
+test("Undo of a workout removed for having no sets, refused because another device started one, shows the server's reason", async ({ signedInPage: page, browser }) => {
   const removed = "No sets logged: the workout was removed";
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText(removed)).toBeVisible();
-  const other = await page.context().newPage();
-  await openGym(other);
+  // This page's own refresh first: after the other device's Start, a refresh would show its workout here.
+  await refreshesDone(page);
+  const other = await otherDevice(browser, page);
   await startWorkout(other, DAY);
-  await other.close();
+  await other.context().close();
 
   await andSettle(page, () => undoIn(page, removed).click());
   const warning = toast(page, "A workout is already open. Resume or finish it first.");
@@ -755,21 +818,22 @@ test("Undo of a workout removed for having no sets, refused because another page
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
 });
 
-// Finish removes a workout whose sets were all deleted elsewhere; its Undo brings the workout back with none of them.
-test("Undo of a workout removed on Finish because another page deleted its sets brings it back with no sets", async ({ signedInPage: page }) => {
+// Finish removes a workout whose sets were all deleted on another device; its Undo brings the workout back with none of them.
+test("Undo of a workout removed on Finish because another device deleted its sets brings it back with no sets", async ({ signedInPage: page, browser }) => {
   const removed = "No sets logged: the workout was removed";
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
   await logSet(page);
   await expect(page.getByText(SET_LINE)).toBeVisible();
-  const other = await page.context().newPage();
-  await openGym(other);
+  // This page's own refresh first: after the other device's delete, a refresh would take the set off this page.
+  await refreshesDone(page);
+  const other = await otherDevice(browser, page);
   await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
   await other.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
   await expect(other.getByText("Removed set 1")).toBeVisible();
-  await other.close();
+  await other.context().close();
 
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText(removed)).toBeVisible();
@@ -930,20 +994,21 @@ test("Undo of saved notes refused because another page changed them leaves the n
   expect(rows).toEqual([{ notes: "Second try" }]);
 });
 
-// GYMB-05: Undo of "Added set" after another page deleted that set leaves nothing behind, not a row that is not saved.
-test("Undo of an added set another page already deleted adds no row back", async ({ signedInPage: page }) => {
+// GYMB-05: Undo of "Added set" after another device deleted that set leaves nothing behind, not a row that is not saved.
+test("Undo of an added set another device already deleted adds no row back", async ({ signedInPage: page, browser }) => {
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
   await logSet(page);
   await expect(undoIn(page, "Added set 1")).toBeVisible();
-  const other = await page.context().newPage();
-  await openGym(other);
+  // This page's own refresh first: after the other device's delete, a refresh would take the set off this page.
+  await refreshesDone(page);
+  const other = await otherDevice(browser, page);
   await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
   await other.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
   await expect(other.getByText("Removed set 1")).toBeVisible();
-  await other.close();
+  await other.context().close();
 
   await andSettle(page, () => undoIn(page, "Added set 1").click());
   // A set logged next is the only row: the deleted one did not come back.
