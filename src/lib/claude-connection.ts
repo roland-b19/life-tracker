@@ -50,13 +50,19 @@ export async function deleteClaudeToken(userId: string) {
   await db.delete(claudeConnections).where(eq(claudeConnections.userId, userId));
 }
 
-/** Undo: writes a previously stored (encrypted) token back. It must still decrypt, or it is refused. */
-export async function restoreClaudeConnection(userId: string, tokenEncrypted: string, connectedAt: Date) {
+/**
+ * Undo: writes a previously stored (encrypted) token back. It must still decrypt, or it is refused. A date in the
+ * future (a clock ahead, or a crafted call) is stored as now. Answers the date stored.
+ */
+export async function restoreClaudeConnection(userId: string, tokenEncrypted: string, wantedAt: Date) {
   decryptToken(tokenEncrypted);
+  const now = new Date();
+  const connectedAt = wantedAt > now ? now : wantedAt;
   await db
     .insert(claudeConnections)
     .values({ userId, tokenEncrypted, connectedAt })
     .onConflictDoUpdate({ target: claudeConnections.userId, set: { tokenEncrypted, connectedAt } });
+  return connectedAt;
 }
 
 /** When the owner connected Claude, or null. Never returns the token. */

@@ -1,26 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page } from "../components/blocks";
 import { AppearanceCard } from "../components/appearance-card";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
+import { useOnce } from "../components/once";
+import { useServerState } from "../components/server-state";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
 import { isClaudeEnabled } from "@/lib/features";
-import { formatDMY } from "@/lib/format-date";
+import { appDay, formatDMY } from "@/lib/format-date";
 
 interface SettingsClientProps {
   userName: string;
   initialConnectedAt: string | null;
 }
 
+/** What a Claude toast touches (D-040): the one connection row the user has. */
+const touches = ["claude_connections:*"];
+
 export function SettingsClient({ userName, initialConnectedAt }: SettingsClientProps) {
-  const [connectedAt, setConnectedAt] = useState(initialConnectedAt);
+  const [connectedAt, setConnectedAt] = useServerState(initialConnectedAt);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const { showToast } = useToast();
+  // Disconnect acts once per tap burst (D-043); Save gets the same from FormModal.
+  const once = useOnce();
+  const tappedButton = useRef<Element | null>(null);
 
   function openForm() {
     setErrorMsg("");
@@ -33,22 +41,20 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
     setErrorMsg("");
     setBusy(true);
     try {
-      const res = await connectClaudeAction({ token });
-      if (!res.success) {
-        setErrorMsg(res.error);
-        return;
-      }
+      const saved = connectClaudeAction({ token }).catch(() => null);
+      const res = await saved;
+      if (!res?.success) return setErrorMsg(res?.error ?? "Failed to connect Claude");
       const before = connectedAt;
       setConnectedAt(res.connectedAt);
       showToast({
         message: before ? "Saved the new Claude token" : "Connected Claude",
         type: "success",
+        touches,
+        saved,
         onUndo: undo(before, res.previous, res.connectedAt),
       });
       setToken("");
       setIsModalOpen(false);
-    } catch {
-      setErrorMsg("Failed to connect Claude");
     } finally {
       setBusy(false);
     }
@@ -58,32 +64,35 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
 
   // Puts the earlier connection back: the stored (still encrypted) token, or none when there was none.
   const undo = (before: string | null, previous: Previous, now: string | null) =>
-    undoWith(showToast, async () => {
-      setConnectedAt(before);
-      const ok = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).then(
-        (res) => res.success,
-        () => false,
-      );
-      if (!ok) setConnectedAt(now);
-      return ok;
-    });
+    undoWith(
+      showToast,
+      async () => {
+        setConnectedAt(before);
+        const back = await (previous ? restoreClaudeConnectionAction(previous) : disconnectClaudeAction()).catch(() => null);
+        if (!back?.success) setConnectedAt(now);
+        // A restore answers the date it stored (a future one is clamped to now).
+        else if (back && "connectedAt" in back) setConnectedAt(back.connectedAt);
+        return back;
+      },
+      (back) => (back && !back.success ? back.error : "Failed to undo"),
+    );
 
   async function handleDisconnect() {
     const before = connectedAt;
     setConnectedAt(null);
-    try {
-      const answer = await disconnectClaudeAction();
-      if (!answer.success) throw new Error(answer.error);
-      const { previous } = answer;
-      showToast({
-        message: "Disconnected Claude",
-        type: "success",
-        onUndo: undo(before, previous, null),
-      });
-    } catch {
+    const saved = disconnectClaudeAction().catch(() => null);
+    const answer = await saved;
+    if (!answer?.success) {
       setConnectedAt(before);
-      showToast({ message: "Failed to disconnect Claude", type: "warning" });
+      return showToast({ message: answer?.error ?? "Failed to disconnect Claude", type: "warning" });
     }
+    showToast({
+      message: "Disconnected Claude",
+      type: "success",
+      touches,
+      saved,
+      onUndo: undo(before, answer.previous, null),
+    });
   }
 
   return (
@@ -111,12 +120,13 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
                 {connectedAt === null ? (
                   <EmptyNote>Not connected.</EmptyNote>
                 ) : (
-                  <div className="entry-row item-row">
+                  <div className="entry-row item-row" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
                     <strong className="item-name">Claude account</strong>
                     <div className="item-meta">
-                      <span className="muted number-tabular">Connected {formatDMY(connectedAt)}</span>
+                      {/* The day it was connected on in the app's time zone, not in UTC. */}
+                      <span className="muted number-tabular">Connected {formatDMY(appDay(new Date(connectedAt)))}</span>
                     </div>
-                    <RowActions className="item-actions" onEdit={openForm} onDelete={handleDisconnect} editLabel="Replace the Claude token" deleteLabel="Disconnect Claude" deleteTitle="Disconnect" />
+                    <RowActions className="item-actions" onEdit={openForm} onDelete={() => once("claude", handleDisconnect, tappedButton.current)} editLabel="Replace the Claude token" deleteLabel="Disconnect Claude" deleteTitle="Disconnect" />
                   </div>
                 )}
               </ListBox>

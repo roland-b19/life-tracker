@@ -19,7 +19,7 @@ last_verified: 2026-11-18
 
 ## Domain rules
 - Price range from price: under 250 low, under 750 medium, otherwise high (`src/lib/rules.ts`).
-- Water, steps and weight are saved only for today (a past weigh-in can still be deleted, and its delete undone); meals for today and yesterday; tasks only for today and one day either side. Past days are read-only.
+- Water, steps and weight are saved only for today (a past weigh-in can still be deleted, and its delete undone); meals for today and yesterday; tasks only for today, with a day of slack backwards (a page left open past midnight) and none forwards (D-036). Past days are read-only.
 - Weight is one entry per day, 20 to 500 kg.
 - Nothing is soft-deleted, except Shopping: a deleted, merged or cleared item stays off the list until the next Clear bought, which keeps only its own batch and deletes the rest for good ([D-042](decisions/general.md)); an add that merges replaces the row it merges into, under the add's id (D-040), and its Undo re-inserts the old row. Elsewhere Undo re-inserts the row under its old id.
 - No health data is ever sent to an AI provider. The Claude chat runs only through a local `claude` CLI, with the flag off on Vercel and Azure ([architecture](architecture.md), Flags).
@@ -32,4 +32,4 @@ last_verified: 2026-11-18
 
 ## Configuration
 - `APP_TZ = "Europe/Bucharest"`, a constant in `src/lib/format-date.ts`. Servers run in UTC, so "today" is computed in this zone. The week starts on Sunday. Reminder times such as 09:00 are Bucharest time.
-- Query budgets per page with two years of data (gym 12 queries, food 12, todos 11, wishlist 3) protect the Neon and Vercel free-tier limits; they are enforced by `tests/query-count.test.ts`.
+- Query budgets per page with two years of data (gym 14 queries, health 13, todos 12 and its list reload 13, wishlist 4, each with the session row check, D-041) protect the Neon and Vercel free-tier limits; they are enforced by `tests/query-count.test.ts`.

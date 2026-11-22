@@ -4,7 +4,7 @@ import { requirePageUser } from "@/server/auth";
 import { WishlistClient } from "./wishlist-client";
 
 export default async function WishlistPage() {
-  const user = await requirePageUser();
+  const user = await requirePageUser("/wishlist");
 
   const [items, { wishlist }] = await Promise.all([getWishlist(user.id), getCategories(user.id, ["wishlist"])]);
 

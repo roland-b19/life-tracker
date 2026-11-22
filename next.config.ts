@@ -24,7 +24,8 @@ const nextConfig: NextConfig = {
   // Hides the floating Next.js dev-tools "N" button.
   devIndicators: false,
   // Visited and prefetched tabs open from the browser's cache without waiting for the server (the default for pages is 0).
-  // `app/providers.tsx` refreshes the cache after a write, so a tab never shows what it showed before the write.
+  // `app/providers.tsx` refreshes the cache after a write and holds a tap on a link until that refresh has started, so a
+  // tab never shows what it showed before the write.
   experimental: { staleTimes: { dynamic: 120, static: 300 } },
   // The Health page used to live at /food: old bookmarks and the installed app keep working.
   async redirects() {

@@ -13,6 +13,10 @@ import {
 import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAction, updateWishlistItemAction } from "@/actions/wishlist";
 import { priorityForPrice } from "@/lib/rules";
 import { succeeded } from "./succeeded";
+import { SIGNED_OUT } from "@/lib/validations/result";
+
+// The item an add made (tests that look at a repeated add call addWishlistItem itself).
+const add = async (userId: string, input: Parameters<typeof addWishlistItem>[1]) => (await addWishlistItem(userId, input)).item!;
 
 describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   let userA: string;
@@ -24,13 +28,13 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("allows user to add items to wishlist and query stats", async () => {
-    const item1 = await addWishlistItem(userA, {
+    const item1 = await add(userA, {
       name: "Ergonomic Office Chair",
       url: "https://example.com/chair",
       estimatedPrice: 1200.5,
     });
 
-    const item2 = await addWishlistItem(userA, {
+    const item2 = await add(userA, {
       name: "Mechanical Keyboard",
       url: null,
       estimatedPrice: 450,
@@ -46,7 +50,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("enforces multi-user isolation on wishlist", async () => {
-    const itemA = await addWishlistItem(userA, {
+    const itemA = await add(userA, {
       name: "User A Secret Gadget",
       estimatedPrice: 300,
     });
@@ -69,7 +73,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("lets the owner edit an item but not another user", async () => {
-    const item = await addWishlistItem(userA, {
+    const item = await add(userA, {
       name: "Desk Lamp",
       estimatedPrice: 80,
     });
@@ -92,23 +96,23 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("derives the priority from the price as stored (cents), not from the raw number", async () => {
-    const edge = await addWishlistItem(userA, { name: "Edge", estimatedPrice: 249.999 });
+    const edge = await add(userA, { name: "Edge", estimatedPrice: 249.999 });
     expect(edge.estimatedPrice).toBe("250.00");
     expect(edge.priority).toBe("medium");
-    const high = await addWishlistItem(userA, { name: "Edge high", estimatedPrice: "749.996" as unknown as number });
+    const high = await add(userA, { name: "Edge high", estimatedPrice: "749.996" as unknown as number });
     expect([high.estimatedPrice, high.priority]).toEqual(["750.00", "high"]);
-    expect((await addWishlistItem(userA, { name: "Floor", estimatedPrice: 0.0149 })).estimatedPrice).toBe("0.01");
+    expect((await add(userA, { name: "Floor", estimatedPrice: 0.0149 })).estimatedPrice).toBe("0.01");
   });
 
   it("rejects names that are only spaces and trims the rest", async () => {
     await expect(addWishlistItem(userA, { name: "   ", estimatedPrice: 10 })).rejects.toThrow();
-    expect((await addWishlistItem(userA, { name: "  Lamp  ", estimatedPrice: 10 })).name).toBe("Lamp");
+    expect((await add(userA, { name: "  Lamp  ", estimatedPrice: 10 })).name).toBe("Lamp");
     await expect(addWishlistItem(userA, { name: "x".repeat(121), estimatedPrice: 10 })).rejects.toThrow();
-    expect((await addWishlistItem(userA, { name: "x".repeat(120), estimatedPrice: 10 })).name).toHaveLength(120);
+    expect((await add(userA, { name: "x".repeat(120), estimatedPrice: 10 })).name).toHaveLength(120);
   });
 
   it("accepts any text as a link", async () => {
-    const item = await addWishlistItem(userA, { name: "Lamp", url: "emag", estimatedPrice: 50 });
+    const item = await add(userA, { name: "Lamp", url: "emag", estimatedPrice: 50 });
     expect(item.url).toBe("emag");
   });
 
@@ -129,12 +133,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("updates an item for the owner only", async () => {
-    const item = await addWishlistItem(userA, { name: "Monitor", estimatedPrice: 300 });
+    const item = await add(userA, { name: "Monitor", estimatedPrice: 300 });
     const edit = { name: "Monitor 4K", estimatedPrice: 350 };
     authState.id = userB;
-    expect(await updateWishlistItemAction(item.id, edit)).toEqual({ success: false, error: "Item not found." });
+    expect(await updateWishlistItemAction(item.id, edit)).toEqual({ success: false, error: "This item no longer exists." });
     authState.id = "";
-    await expect(updateWishlistItemAction(item.id, edit)).rejects.toThrow();
+    expect(await updateWishlistItemAction(item.id, edit)).toEqual({ success: false, error: SIGNED_OUT });
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor");
     authState.id = userA;
     expect((await updateWishlistItemAction(item.id, edit)).success).toBe(true);
@@ -149,12 +153,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("restores a deleted item with its id and date, for the owner only", async () => {
-    const item = await addWishlistItem(userA, { name: "Headphones", estimatedPrice: 600 });
+    const item = await add(userA, { name: "Headphones", estimatedPrice: 600 });
     const input = { name: item.name, estimatedPrice: 600, id: item.id, createdAt: item.createdAt };
 
-    // Anonymous is rejected before anything is written.
+    // Anonymous is refused before anything is written.
     authState.id = "";
-    await expect(restoreWishlistItemAction(input)).rejects.toThrow();
+    expect(await restoreWishlistItemAction(input)).toEqual({ success: false, error: SIGNED_OUT });
 
     // While the row exists another user cannot take its id.
     authState.id = userB;
@@ -179,5 +183,59 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     await expect(
       restoreWishlistItem(userA, { ...base, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000) }),
     ).rejects.toThrow();
+  });
+
+  it("answers a repeated add with the item already there, once, and never another user's [D-040]", async () => {
+    authState.id = userA;
+    const id = randomUUID();
+    const input = { id, name: "Kettle", estimatedPrice: 150 };
+    expect(succeeded(await addWishlistItemAction(input))).toMatchObject({ repeated: false, item: { id, name: "Kettle" } });
+    expect(succeeded(await addWishlistItemAction({ ...input, name: "Changed meanwhile" }))).toMatchObject({ repeated: true, item: { id, name: "Kettle" } });
+    expect((await getWishlist(userA)).filter((i) => i.id === id)).toHaveLength(1);
+    // Another user sending that id writes nothing, changes nothing and learns nothing of the row.
+    authState.id = userB;
+    expect(await addWishlistItemAction({ ...input, name: "Hijacked" })).toEqual({ success: false, error: "This item could not be saved." });
+    expect((await getWishlist(userB)).find((i) => i.id === id)).toBeUndefined();
+    expect((await getWishlist(userA)).find((i) => i.id === id)?.name).toBe("Kettle");
+    authState.id = "";
+    expect(await addWishlistItemAction(input)).toEqual({ success: false, error: SIGNED_OUT });
+  });
+
+  it("refuses a delete that matches no row, in people's words [WISH-07]", async () => {
+    const item = await add(userA, { name: "Rug", estimatedPrice: 300 });
+    authState.id = userB;
+    expect(await deleteWishlistItemAction(item.id)).toEqual({ success: false, error: "This item no longer exists." });
+    authState.id = "";
+    expect(await deleteWishlistItemAction(item.id)).toEqual({ success: false, error: SIGNED_OUT });
+    authState.id = userA;
+    expect(await deleteWishlistItemAction(item.id)).toEqual({ success: true });
+    expect(await deleteWishlistItemAction(item.id)).toEqual({ success: false, error: "This item no longer exists." });
+    expect(await deleteWishlistItemAction(randomUUID())).toEqual({ success: false, error: "This item no longer exists." });
+    authState.id = "";
+  });
+
+  it("tells too-long text in people's words and saves nothing [WISH-06]", async () => {
+    authState.id = userA;
+    const before = (await getWishlist(userA)).length;
+    expect(await addWishlistItemAction({ name: "x".repeat(121), estimatedPrice: 10 })).toEqual({ success: false, error: "Too long (max 120)" });
+    expect(await addWishlistItemAction({ name: "Lamp", url: "x".repeat(501), estimatedPrice: 10 })).toEqual({ success: false, error: "Too long (max 500)" });
+    const item = await add(userA, { name: "Shelf", estimatedPrice: 10 });
+    expect(await updateWishlistItemAction(item.id, { name: "x".repeat(121) })).toEqual({ success: false, error: "Too long (max 120)" });
+    expect((await getWishlist(userA)).length).toBe(before + 1);
+    expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Shelf");
+    authState.id = "";
+  });
+
+  it("changes only the fields an edit sends, so another tab's change stays [D-040]", async () => {
+    authState.id = userA;
+    const item = await add(userA, { name: "Bike", url: "shop.ro", estimatedPrice: 900, category: "sport" });
+    // Two tabs opened the same item: one renames it, the other changes its price.
+    expect(succeeded(await updateWishlistItemAction(item.id, { name: "Road bike" })).item).toMatchObject({ name: "Road bike", estimatedPrice: "900.00", url: "shop.ro" });
+    expect(succeeded(await updateWishlistItemAction(item.id, { estimatedPrice: 120.5 })).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50", priority: "low", category: "sport" });
+    expect(succeeded(await updateWishlistItemAction(item.id, { url: null })).item).toMatchObject({ name: "Road bike", url: null });
+    expect(succeeded(await updateWishlistItemAction(item.id, {})).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50" });
+    authState.id = userB;
+    expect(await updateWishlistItemAction(item.id, {})).toEqual({ success: false, error: "This item no longer exists." });
+    authState.id = "";
   });
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { andSettle, expectNoSeriousViolations, test } from "./helpers";
+import { Pool } from "pg";
+import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
 
 const claudeCard = (page: Page) => page.getByRole("region", { name: "Claude", exact: true });
 
@@ -194,4 +195,48 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   expect(await pickFades("Light")).toBe(false);
 
   expect(reactWarnings).toEqual([]);
+});
+
+test("a signed-out visit to /settings comes back to /settings after sign-in, and the connect date is the app's day [PATH, MORE-02]", async ({ page }) => {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await page.goto("/settings", { waitUntil: "commit" });
+    await expect(page).toHaveURL(/\/signin\?next=%2Fsettings$/);
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await connect(page, fakeToken());
+    // 22:30 UTC on 1 March is already 2 March in Bucharest, the app's time zone.
+    await admin.query(
+      "UPDATE claude_connections SET connected_at = '2026-03-01T22:30:00Z' FROM users WHERE users.id = claude_connections.user_id AND users.issuer = 'dev' AND users.subject = $1",
+      [name],
+    );
+    await openSettings(page);
+    await expect(claudeCard(page).getByText("Connected 02.03.2026")).toBeVisible();
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+});
+
+test("a double tap on Save connects once [D-043]", async ({ signedInPage: page }) => {
+  await openSettings(page);
+  const token = fakeToken();
+  await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
+  const form = page.getByRole("dialog", { name: "Connect Claude" });
+  await form.getByLabel("Token").fill(token);
+  let writes = 0;
+  const count = (r: { method(): string; postData(): string | null }) => {
+    if (r.method() === "POST" && (r.postData() ?? "").includes(token)) writes++;
+  };
+  page.on("request", count);
+  await burst(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()));
+  page.off("request", count);
+  expect(writes).toBe(1);
+  await expect(account(page)).toBeVisible();
+  await expect(page.getByText("Connected Claude")).toHaveCount(1);
 });

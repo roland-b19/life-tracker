@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, type Request } from "@playwright/test";
+import { expect, type Locator, type Page, type Request } from "@playwright/test";
+import { Pool } from "pg";
 import { andSettle, burst, center, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
 
 async function openWishlist(page: Page) {
@@ -12,7 +13,7 @@ async function openWishlist(page: Page) {
 // axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("an anonymous visit to the Wishlist goes to a sign-in page without serious violations", { tag: "@a11y" }, async ({ page }) => {
   await page.goto("/wishlist");
-  await expect(page).toHaveURL(/\/signin$/);
+  await expect(page).toHaveURL(/\/signin\?next=%2Fwishlist$/);
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expectNoSeriousViolations(page);
 });
@@ -27,10 +28,10 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
 
   const name = `E2E item ${randomUUID().slice(0, 8)}`;
   const row = page.getByText(name, { exact: true });
-  const total = page.getByRole("region", { name: "Estimated Investment" });
+  const total = page.getByRole("region", { name: "Estimated investment · All" });
   const added = page.getByText(`Added "${name}" (1.234 RON)`);
   // The total counts up over about 600 ms, so it is checked with a retrying assertion.
-  const expectTotal = (amount: string) => expect(total).toHaveText(new RegExp(`^Estimated Investment\\s*${amount} RON$`));
+  const expectTotal = (amount: string) => expect(total).toHaveText(new RegExp(`^Estimated investment · All\\s*${amount} RON$`));
 
   async function addItem() {
     await page.getByRole("button", { name: "Add item" }).click();
@@ -153,4 +154,509 @@ test("a form submitted again while its save is unanswered saves once", async ({ 
   expect(writes).toHaveLength(1);
   await expect(page.getByText(`Added "${name}" (100 RON)`)).toHaveCount(1);
   await expect(page.getByText(name, { exact: true })).toHaveCount(1);
+});
+
+// Adds an item through the form and waits for its toast; `toast` is the price as the toast shows it.
+async function addItem(page: Page, name: string, price: string, toast = price) {
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill(price);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
+  await expect(page.getByText(`Added "${name}" (${toast} RON)`, { exact: true })).toBeVisible();
+  // Ends the tap burst (D-043), so the next tap is a new one.
+  await page.keyboard.press("Shift");
+}
+
+const itemRow = (page: Page, name: string) =>
+  page.locator(".item-row").filter({ has: page.getByText(name, { exact: true }) });
+
+test("a signed-out visit to /wishlist goes to the sign-in form, which comes back to /wishlist [PATH]", async ({ page }) => {
+  const name = `e2e-${randomUUID().slice(0, 8)}`;
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    await page.goto("/wishlist", { waitUntil: "commit" });
+    await expect(page).toHaveURL(/\/signin\?next=%2Fwishlist$/);
+    await page.getByLabel("Username").fill(name);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(/\/wishlist$/);
+    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  } finally {
+    try {
+      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
+    } finally {
+      await admin.end();
+    }
+  }
+});
+
+test("a price keeps its cents in the badge, the total, the toast and the edit form, in the app's number format [WISH-05, WISH-08]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const [a, b] = [`E2E item ${randomUUID().slice(0, 8)}`, `E2E item ${randomUUID().slice(0, 8)}`];
+  await addItem(page, a, "1234,5", "1.234,50");
+  await addItem(page, b, "100", "100");
+  await expect(itemRow(page, a)).toContainText("1.234,50 RON");
+  await expect(itemRow(page, b)).toContainText("100 RON");
+  const total = page.getByRole("region", { name: "Estimated investment · All" });
+  await expect(total).toHaveText(/^Estimated investment · All\s*1\.334,50 RON$/);
+  await page.getByRole("button", { name: `Edit ${a}`, exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Edit item" }).getByLabel("Price (RON)")).toHaveValue("1.234,50");
+});
+
+test("the total names the open tab, and the tab and the sort are kept on this device [WISH-09, WISH-11]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const [cheap, dear] = [`E2E cheap ${randomUUID().slice(0, 8)}`, `E2E dear ${randomUUID().slice(0, 8)}`];
+  await addItem(page, cheap, "10");
+  await addItem(page, dear, "1000", "1.000");
+  await page.getByRole("tab", { name: "< 250" }).click();
+  await expect(page.getByRole("region", { name: "Estimated investment · < 250" })).toHaveText(/10 RON$/);
+  await page.getByRole("tab", { name: "All" }).click();
+  await page.getByLabel("Sort items").selectOption({ label: "Price ↓" });
+  const names = page.locator(".item-name");
+  await expect(names).toHaveText([dear, cheap]);
+  await page.getByRole("tab", { name: "750+" }).click();
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Estimated investment · 750+" })).toHaveText(/1\.000 RON$/);
+  await page.getByRole("tab", { name: "All" }).click();
+  await expect(page.getByLabel("Sort items")).toHaveValue("price-desc");
+  await expect(names).toHaveText([dear, cheap]);
+});
+
+test("too-long text shows the server's words in the form and keeps what was typed [WISH-06]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  const long = "x".repeat(121);
+  await form.getByLabel("Name", { exact: true }).fill(long);
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(long);
+  await form.getByLabel("Price (RON)").fill("10");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(form.getByText("Too long (max 120)")).toBeVisible();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(long);
+});
+
+test("a double tap on an item's Delete deletes it once [WISH-01]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const [a, b] = [`E2E item ${randomUUID().slice(0, 8)}`, `E2E item ${randomUUID().slice(0, 8)}`];
+  await addItem(page, a, "10");
+  await addItem(page, b, "20");
+  await page.getByRole("button", { name: "Dismiss notification" }).first().click();
+  await page.getByRole("button", { name: "Dismiss notification" }).first().click();
+  const remove = page.getByRole("button", { name: `Delete ${b}`, exact: true });
+  expect(await burst(page, center(await remove.boundingBox()))).toBe(1);
+  await expect(page.getByText(`Removed "${b}"`, { exact: true })).toHaveCount(1);
+  await expect(page.getByText(a, { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Failed/)).toHaveCount(0);
+});
+
+// D-040: a newer change to a row takes the Undo off the older toasts about that row, and only those.
+test("a newer change takes the Undo off the older toasts about the same item, and only those [D-040]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const [a, b] = [`E2E item ${randomUUID().slice(0, 8)}`, `E2E item ${randomUUID().slice(0, 8)}`];
+  await addItem(page, a, "10");
+  await addItem(page, b, "20");
+  const toast = (text: string) => page.locator(".toast-item").filter({ hasText: text });
+  // b's add toast stays; a is edited, then deleted.
+  await page.getByRole("button", { name: `Edit ${a}`, exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Edit item" });
+  await form.getByLabel("Price (RON)").fill("15");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(toast(`Saved "${a}"`).getByRole("button", { name: "Undo" })).toBeVisible();
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Delete ${a}`, exact: true }).click());
+  await expect(toast(`Removed "${a}"`).getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(toast(`Saved "${a}"`).getByRole("button", { name: "Undo" })).toHaveCount(0);
+  await expect(toast(`Added "${a}"`).getByRole("button", { name: "Undo" })).toHaveCount(0);
+  await expect(toast(`Added "${b}"`).getByRole("button", { name: "Undo" })).toBeVisible();
+});
+
+test("a category delete's toast loses its Undo once an item it moved is edited [D-040]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const category = `cat${randomUUID().slice(0, 6)}`;
+  await page.getByRole("button", { name: "Add category" }).click();
+  const catForm = page.getByRole("dialog", { name: "New category" });
+  await catForm.getByLabel("Name", { exact: true }).fill(category);
+  await andSettle(page, () => catForm.getByRole("button", { name: "Save" }).click(), `"name":"${category}"`);
+  await expect(catForm).toBeHidden();
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill("10");
+  await form.getByLabel("Category").selectOption(category);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${category}`, exact: true }).click());
+  const removed = page.locator(".toast-item").filter({ hasText: `Removed "${category}"` });
+  await expect(removed.getByRole("button", { name: "Undo" })).toBeVisible();
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Edit item" });
+  await edit.getByLabel("Price (RON)").fill("12");
+  await andSettle(page, () => edit.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
+  await expect(removed.getByRole("button", { name: "Undo" })).toHaveCount(0);
+});
+
+test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  let lost = false;
+  // The first add reaches the server, but its answer never comes back.
+  await page.route("**/wishlist", async (route) => {
+    const r = route.request();
+    if (!lost && r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${name}"`)) {
+      lost = true;
+      await route.fetch();
+      return route.abort();
+    }
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill("10");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByText("Failed to save item. Please try again.")).toBeVisible();
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name}"`);
+  const toast = page.locator(".toast-item").filter({ hasText: `Already added "${name}"` });
+  await expect(toast).toBeVisible();
+  await expect(toast.getByRole("button", { name: "Undo" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText(name, { exact: true })).toHaveCount(1);
+});
+
+test("an edit sends only what it changed, so another tab's change to the item stays [MORE-08, D-040]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "100");
+  // This tab opens the edit form; another tab then changes the price.
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Edit item" });
+  const other = await page.context().newPage();
+  try {
+    await openWishlist(other);
+    await other.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const otherForm = other.getByRole("dialog", { name: "Edit item" });
+    await otherForm.getByLabel("Price (RON)").fill("300");
+    await andSettle(other, () => otherForm.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
+  // This form still shows the old price; it renames only.
+  await expect(form.getByLabel("Price (RON)")).toHaveValue("100");
+  await form.getByLabel("Name", { exact: true }).fill(`${name} v2`);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await page.reload();
+  await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
+});
+
+test("an item deleted in one tab leaves another tab after its refresh, without a reload [SERVER-STATE]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "10");
+  const other = await page.context().newPage();
+  try {
+    await openWishlist(other);
+    await expect(other.getByText(name, { exact: true })).toBeVisible();
+    // A mark on the window: a reload would drop it.
+    await other.evaluate(() => Object.assign(window, { kept: true }));
+    await andSettle(page, () => page.getByRole("button", { name: `Delete ${name}`, exact: true }).click());
+    await expect(other.getByText(name, { exact: true })).toBeHidden();
+    expect(await other.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
+  } finally {
+    await other.close();
+  }
+});
+
+test("a New item form opened while an earlier save is unanswered stays open when that save answers [WISH-12]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const [first, second] = [`E2E item ${randomUUID().slice(0, 8)}`, `E2E item ${randomUUID().slice(0, 8)}`];
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${first}"`)) await held;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(first);
+  await form.getByLabel("Price (RON)").fill("10");
+  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"name":"${first}"`));
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await page.getByRole("button", { name: "Add item" }).click();
+  await form.getByLabel("Name", { exact: true }).fill(second);
+  release();
+  await answered;
+  await expect(page.getByText(`Added "${first}" (10 RON)`, { exact: true })).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue(second);
+  await form.getByLabel("Price (RON)").fill("20");
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${second}"`);
+  await expect(page.getByText(`Added "${second}" (20 RON)`, { exact: true })).toBeVisible();
+  await expect(form).toBeHidden();
+});
+
+test("a refusal that answers after the form was closed with Cancel shows the server's words in a toast, and nothing is saved [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)} ${"x".repeat(120)}`;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${name}"`)) await held;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New item" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByLabel("Price (RON)").fill("10");
+  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"name":"${name}"`));
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  release();
+  await answered;
+  await expect(page.locator(".toast-item").filter({ hasText: "Too long (max 120)" })).toBeVisible();
+  await expect(form).toBeHidden();
+  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
+  try {
+    expect((await admin.query("SELECT 1 FROM wishlist_items WHERE name = $1", [name])).rowCount).toBe(0);
+  } finally {
+    await admin.end();
+  }
+});
+
+test("an edit's Undo puts back on screen only the fields it undoes, so another tab's change to the item stays [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "100");
+  // This tab opens the edit form; another tab then changes the price; this form renames only.
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Edit item" });
+  const other = await page.context().newPage();
+  try {
+    await openWishlist(other);
+    await other.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const otherForm = other.getByRole("dialog", { name: "Edit item" });
+    await otherForm.getByLabel("Price (RON)").fill("300");
+    await andSettle(other, () => otherForm.getByRole("button", { name: "Save" }).click());
+    await expect(other.getByText(`Saved "${name}"`, { exact: true })).toBeVisible();
+  } finally {
+    await other.close();
+  }
+  await form.getByLabel("Name", { exact: true }).fill(`${name} v2`);
+  // The refresh the rename leaves due has landed before the Undo, so nothing but the Undo changes the row meanwhile.
+  const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name} v2"`);
+  await refreshed;
+  await settled(page);
+  await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
+  // The Undo's answer is held: the screen shows the old name and keeps the other tab's price.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${name}"`)) await held;
+    await route.fallback();
+  });
+  await page.keyboard.press("Shift");
+  const toast = page.locator(".toast-item").filter({ hasText: `Saved "${name} v2"` });
+  await toast.getByRole("button", { name: "Undo" }).click();
+  await expect(itemRow(page, name)).toContainText("300 RON");
+  await andSettle(page, async () => release(), `"name":"${name}"`);
+  await expect(itemRow(page, name)).toContainText("300 RON");
+});
+
+test("an edit's Undo keeps on screen another tab's change made after the save, also when the Undo fails [D-040]", async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "100");
+  const undo = page.locator(".toast-item").filter({ hasText: `Saved "${name} v2"` }).getByRole("button", { name: "Undo" });
+  // Another tab has the item's edit form open with a new price, saved only after this tab's rename.
+  const other = await page.context().newPage();
+  try {
+    await openWishlist(other);
+    await other.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const otherForm = other.getByRole("dialog", { name: "Edit item" });
+    await otherForm.getByLabel("Price (RON)").fill("300");
+    await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+    const form = page.getByRole("dialog", { name: "Edit item" });
+    await form.getByLabel("Name", { exact: true }).fill(`${name} v2`);
+    await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${name} v2"`);
+    await undo.hover(); // keeps the toast open meanwhile
+    await expect(itemRow(page, `${name} v2`)).toContainText("100 RON");
+    // The other tab's save reaches this tab with the refresh it tells it to run.
+    await andSettle(other, () => otherForm.getByRole("button", { name: "Save" }).click());
+    await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
+  } finally {
+    await other.close();
+  }
+  // The Undo's answer is held, then fails: the screen shows the old name while held and the new one after, the other
+  // tab's price throughout. A failed answer leaves no refresh due, so only the Undo changes the row.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() !== "POST" || !(route.request().postData() ?? "").includes(`"name":"${name}"`)) return route.fallback();
+    await held;
+    await route.fulfill({ status: 500, contentType: "text/plain", body: "boom" });
+  });
+  await undo.click();
+  await expect(itemRow(page, name)).toContainText("300 RON");
+  release();
+  await expect(page.getByText("Failed to undo the edit")).toBeVisible();
+  await expect(itemRow(page, `${name} v2`)).toContainText("300 RON");
+  // The Retry writes the old name back and keeps the price. The refresh its answer leaves due is held, so the row checked
+  // is the one the answer put on screen, not one the refresh corrected: the page asks for that refresh 600 ms after the
+  // answer, by when the answer is on screen.
+  await page.unroute("**/wishlist");
+  let releaseRefresh = () => {};
+  const refreshHeld = new Promise<void>((resolve) => (releaseRefresh = resolve));
+  await page.route(
+    (url) => url.pathname === "/wishlist",
+    async (route) => {
+      if (isRefresh(page, route.request())) await refreshHeld;
+      await route.fallback();
+    },
+  );
+  const refreshAsked = page.waitForRequest((r) => isRefresh(page, r));
+  await andSettle(page, () => page.getByRole("button", { name: "Retry" }).click(), `"name":"${name}"`);
+  await refreshAsked;
+  await expect(itemRow(page, name)).toContainText("300 RON");
+  releaseRefresh();
+});
+
+// The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a
+// link while a write is unanswered, or before the refresh it left due, waits until that refresh has started
+// (app/providers.tsx), so the page it opens is never older than the last write. Each test records every state the page
+// goes through (a MutationObserver, which sees each DOM change; the document stays across client navigations), so no
+// state slips between two checks and nothing waits by time.
+
+/**
+ * Records each state the Wishlist's categories card shows from now on: its names, or "empty". Answers the states seen so
+ * far. Tasks has a categories card of its own, so only the Wishlist counts.
+ */
+async function recordCategories(page: Page) {
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    const sample = () => {
+      if (location.pathname !== "/wishlist") return;
+      const card = [...document.querySelectorAll("section")].find((s) => /^Categories\b/.test(s.querySelector("h2")?.textContent ?? ""));
+      if (!card) return;
+      const names = [...card.querySelectorAll(".category-name")].map((n) => n.textContent);
+      const state = card.textContent?.includes("No categories yet.") ? "empty" : names.join(",");
+      if (seen.at(-1) !== state) seen.push(state);
+    };
+    sample();
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
+    Object.assign(window, { seenCategories: seen });
+  });
+  return () => page.evaluate(() => (window as unknown as { seenCategories: string[] }).seenCategories);
+}
+
+/**
+ * Adds two categories, deletes the second while its answer is held, goes to Tasks and back on the given navigation
+ * while it is held, then again after the answer. The card never shows the deleted category again, nor no categories.
+ */
+async function deleteThenNavigate(page: Page, navigation: string, press: (target: Locator) => Promise<void>) {
+  await openWishlist(page);
+  const [kept, deleted] = [`cat${randomUUID().slice(0, 6)}`, `cat${randomUUID().slice(0, 6)}`];
+  const card = page.getByRole("region", { name: /^Categories/ });
+  for (const category of [kept, deleted]) {
+    await press(page.getByRole("button", { name: "Add category" }));
+    const form = page.getByRole("dialog", { name: "New category" });
+    await form.getByLabel("Name", { exact: true }).fill(category);
+    await andSettle(page, () => press(form.getByRole("button", { name: "Save" })), `"name":"${category}"`);
+    await expect(form).toBeHidden();
+  }
+  // No wait for the refresh after these adds: a tap right after them is the case to cover.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/wishlist", async (route) => {
+    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"name":"${deleted}"`)) await held;
+    await route.fallback();
+  });
+  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"name":"${deleted}"`));
+  await press(page.getByRole("button", { name: `Delete category ${deleted}`, exact: true }));
+  await expect(card.getByText(deleted, { exact: true })).toBeHidden();
+  const seen = await recordCategories(page);
+  // Marks the document: a full reload would drop it.
+  await page.evaluate(() => Object.assign(window, { kept: true }));
+  const nav = page.getByRole("navigation", { name: navigation });
+  await press(nav.getByRole("link", { name: "Tasks" }));
+  await settled(page);
+  await press(nav.getByRole("link", { name: "Wishlist" }));
+  await settled(page);
+  release();
+  await answered;
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(card.getByText(kept, { exact: true })).toBeVisible();
+  // Tasks and back again, now that the delete has answered
+  await press(nav.getByRole("link", { name: "Tasks" }));
+  await expect(page).toHaveURL(/\/todos$/);
+  await press(nav.getByRole("link", { name: "Wishlist" }));
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(card.getByText(kept, { exact: true })).toBeVisible();
+  await settled(page);
+  expect(await seen()).toEqual([kept]);
+  expect(await page.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
+}
+
+test("Tasks and back while a category delete is unanswered never shows the deleted category or no categories [WISH-13]", async ({
+  signedInPage: page,
+}) => {
+  await deleteThenNavigate(page, "Main Navigation", (target) => target.click());
+});
+
+test.describe("at phone width with touch", () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
+
+  test("Tasks and back while a category delete is unanswered never shows the deleted category or no categories [WISH-13]", async ({
+    signedInPage: page,
+  }) => {
+    await deleteThenNavigate(page, "Mobile Navigation", (target) => target.tap());
+  });
+});
+
+test("Tasks and back right after an add never shows the list without the new item [WISH-13]", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Price (RON)").fill("7");
+  await andSettle(page, () => page.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  // Each state of the item list from now on, while the Wishlist is on screen: with the item, or without it
+  await page.evaluate((item) => {
+    const seen: string[] = [];
+    const sample = () => {
+      if (location.pathname !== "/wishlist") return;
+      const list = [...document.querySelectorAll("section")].find((s) => /^Items\b/.test(s.querySelector("h2")?.textContent ?? ""));
+      if (!list) return;
+      const state = list.textContent?.includes(item) ? "item" : "none";
+      if (seen.at(-1) !== state) seen.push(state);
+    };
+    sample();
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true });
+    Object.assign(window, { seenItems: seen });
+  }, name);
+  // Tasks and back at once, well within the 600 ms after which the refresh would come on its own
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Tasks" }).click();
+  await expect(page).toHaveURL(/\/todos$/);
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Estimated investment · All" })).toHaveText(/^Estimated investment · All\s*7 RON$/);
+  await settled(page);
+  expect(await page.evaluate(() => (window as unknown as { seenItems: string[] }).seenItems)).toEqual(["item"]);
 });

@@ -10,6 +10,7 @@ import { claudeConnections } from "@/db/schema";
 import { connectClaudeAction, disconnectClaudeAction, restoreClaudeConnectionAction } from "@/actions/claude-connection";
 import { decryptToken, encryptToken, getClaudeConnection, getClaudeToken } from "@/lib/claude-connection";
 import { succeeded } from "./succeeded";
+import { SIGNED_OUT } from "@/lib/validations/result";
 
 const TOKEN = "sk-ant-oat01-test-token-abcdefghijklmnopqrstuvwxyz";
 
@@ -99,11 +100,27 @@ describe("Claude connection", () => {
     expect(await getClaudeToken(owner)).toBe(OLD);
   });
 
-  it("rejects anonymous callers", async () => {
-    await expect(restoreClaudeConnectionAction({ tokenEncrypted: "x", connectedAt: new Date().toISOString() })).rejects.toThrow(
-      "Authentication required.",
-    );
-    await expect(connectClaudeAction({ token: TOKEN })).rejects.toThrow("Authentication required.");
-    await expect(disconnectClaudeAction()).rejects.toThrow("Authentication required.");
+  it("refuses signed-out callers in people's words, before anything is read or written", async () => {
+    const refused = { success: false, error: SIGNED_OUT };
+    expect(await restoreClaudeConnectionAction({ tokenEncrypted: "x", connectedAt: new Date().toISOString() })).toEqual(refused);
+    expect(await connectClaudeAction({ token: TOKEN })).toEqual(refused);
+    expect(await disconnectClaudeAction()).toEqual(refused);
+  });
+
+  it("stores a restored date from the future as now [MORE-13]", async () => {
+    const owner = await seedUser();
+    authState.id = owner;
+    const before = Date.now();
+    const sealed = encryptToken(TOKEN);
+    const future = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    const back = succeeded(await restoreClaudeConnectionAction({ tokenEncrypted: sealed, connectedAt: future }));
+    const stored = (await getClaudeConnection(owner))!.connectedAt.getTime();
+    expect(stored).toBeGreaterThanOrEqual(before);
+    expect(stored).toBeLessThanOrEqual(Date.now());
+    expect(new Date(back.connectedAt).getTime()).toBe(stored);
+    // A past date is kept as sent.
+    const past = new Date(Date.now() - 3 * 86_400_000);
+    await restoreClaudeConnectionAction({ tokenEncrypted: sealed, connectedAt: past.toISOString() });
+    expect((await getClaudeConnection(owner))!.connectedAt.getTime()).toBe(past.getTime());
   });
 });
