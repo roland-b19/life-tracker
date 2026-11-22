@@ -62,7 +62,7 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
 
   return (
     <Page userName={userName}>
-      <DeloadCard deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
+      <DeloadCard today={today} deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
 
       {activeSession ? (
         <ActiveWorkout w={w} day={days.find((d) => d.id === activeSession.splitDayId)} history={history} busy={busy} />

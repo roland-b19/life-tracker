@@ -52,6 +52,7 @@ import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
 import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
+import { plateKgProblem } from "@/../app/gym/progress-panel";
 import { setText } from "@/../app/gym/types";
 
 const TODAY = toISODate();
@@ -527,8 +528,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   it("checks a plate weight like the form: above 0, at most 100 kg, two decimals (GYMC-05)", async () => {
     const shared = (await getExercises(userA)).find((e) => e.userId === null)!.id;
     expect(await savePlateWeightAction({ exerciseId: shared, kg: 0 })).toEqual({ success: false, error: "Must be more than 0" });
+    // The form shows the server's own words for 0 and a negative (it keeps Save off for them).
+    expect(plateKgProblem("0")).toBe("Must be more than 0");
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: -1 })).toEqual({ success: false, error: plateKgProblem("-1") });
+    expect(plateKgProblem("0.5")).toBe("");
     expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.555 })).toEqual({ success: false, error: TWO_DECIMALS });
-    expect((await savePlateWeightAction({ exerciseId: shared, kg: 100.5 })).success).toBe(false);
+    expect(await savePlateWeightAction({ exerciseId: shared, kg: 100.5 })).toEqual({ success: false, error: "Must be at most 100" });
     expect(await getPlateWeights(userA)).toEqual({});
     expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.25 })).toEqual({ success: true, previous: null });
     expect(await getPlateWeights(userA)).toEqual({ [shared]: 2.25 });
@@ -1389,7 +1394,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(after.progress).toBeCloseTo(10); // against the week before the deload
       expect(after.deloadWeek).toBe(false);
       expect(noDay.progress).toBeNull();
-      expect(kgDelta(2.5)).toBe("+2.5 kg");
+      expect(kgDelta(2.5)).toBe("+2,5 kg"); // the app's number format (D-037)
+      expect(kgDelta(-1234.5)).toBe("−1.234,5 kg");
       expect(kgDelta(-1)).toBe("−1 kg");
       expect(kgDelta(0)).toBe("0 kg");
       expect(kgDelta(null)).toBe("—");

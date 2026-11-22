@@ -1082,6 +1082,49 @@ test("a signed-in user sets the weight of 1 plate, and the chart turns to kg, wi
   await expect(card.getByText("70", { exact: true })).toBeVisible();
 });
 
+// Verify-B4 FAIL 1.3: 0 and a negative keep Save off and say why, in the server's words, on a phone's touch screen. And
+// Undo of a changed weight puts the one before back (the Undo sends the old value, not the new one).
+test("the plate weight form says why 0 or a negative is refused, and Undo of a change puts the old weight back, on a phone", async ({
+  signedInPage,
+  browser,
+}) => {
+  const userId = await pastWorkouts(signedInPage, [{ date: plusDays(appToday(), -7), exercise: ROW, loadType: "plates", load: 7 }]);
+  const weights = async () =>
+    (await asAdmin((admin) => admin.query("SELECT kg FROM exercise_plate_weights WHERE user_id = $1", [userId]))).rows.map((r) => r.kg);
+  await asAdmin((admin) =>
+    admin.query("INSERT INTO exercise_plate_weights (user_id, exercise_id, kg) SELECT $1, id, 10 FROM exercises WHERE user_id IS NULL AND name = $2", [userId, ROW]),
+  );
+  // A touch screen of its own at phone width, signed in as the fixture's user.
+  const context = await browser.newContext({ storageState: await signedInPage.context().storageState(), hasTouch: true, viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(new URL("/gym", signedInPage.url()).href);
+    const card = progress(page);
+    await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
+    await card.getByRole("button", { name: `Edit 1 plate of ${ROW} in kg` }).tap();
+    const dialog = page.getByRole("dialog", { name: "Plate weight" });
+    const field = dialog.getByLabel(`1 plate of ${ROW} (kg)`);
+    const save = dialog.getByRole("button", { name: "Save" });
+    for (const value of ["0", "-1"]) {
+      await field.fill(value);
+      await expect(dialog.getByRole("alert")).toHaveText("Must be more than 0");
+      await expect(save).toBeDisabled();
+    }
+    await field.fill("12,5");
+    await expect(dialog.getByRole("alert")).toBeHidden();
+    await andSettle(page, () => save.tap());
+    await expect(dialog).toBeHidden();
+    await expect(card.getByText("1 plate = 12,5 kg")).toBeVisible();
+    expect(await weights()).toEqual(["12.50"]);
+
+    await andSettle(page, () => undoIn(page, `1 plate of ${ROW} = 12,5 kg`).tap());
+    await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
+    expect(await weights()).toEqual(["10.00"]);
+  } finally {
+    await context.close();
+  }
+});
+
 // GYMC-06: a bodyweight exercise charts its reps or the kg it adds. GYMC-11: the exercise, the period and that choice
 // are kept on the device.
 test("a bodyweight exercise charts reps or added weight, and the progress controls are kept after a reload", async ({ signedInPage: page }) => {
@@ -1104,7 +1147,8 @@ test("a bodyweight exercise charts reps or added weight, and the progress contro
   await card.getByRole("tablist", { name: "Chart period" }).getByRole("tab", { name: "30D" }).click();
   const added = card.getByRole("img", { name: "Most added weight (kg) of each workout over the last 30 days" });
   await expect(added).toBeVisible();
-  await expect(card.getByText("7.5", { exact: true })).toBeVisible();
+  // The value axis in the app's number format (D-037, GYMC-02).
+  await expect(card.getByText("7,5", { exact: true })).toBeVisible();
   await expect(card.getByText("12", { exact: true })).toBeHidden();
 
   await openGym(page);
@@ -1132,6 +1176,18 @@ test("History leaves deload weeks out of the comparison and compares past them",
   await expect(progress(page).getByText("110", { exact: true })).toBeVisible();
   await expect(progress(page).getByText("100", { exact: true })).toBeVisible();
   await expect(progress(page).getByText("60", { exact: true })).toBeHidden();
+});
+
+// The deload dialog lists its weeks from the server's day: a browser whose clock is a week ahead still marks the
+// server's week as this week.
+test("the deload dialog lists its weeks from the server's day", async ({ signedInPage: page }) => {
+  await page.clock.install({ time: new Date(Date.now() + 7 * 86_400_000) });
+  await openGym(page);
+  await page.getByRole("button", { name: "Edit deload weeks" }).click();
+  const last = page.getByRole("dialog", { name: "Deload weeks" }).getByLabel("Last deload");
+  const sunday = sundayOf(appToday());
+  const dmy = (iso: string) => iso.split("-").reverse().join(".");
+  await expect(last.getByRole("option", { name: /\(this week\)$/ })).toHaveText(`${dmy(sunday)} - ${dmy(plusDays(sunday, 6))} (this week)`);
 });
 
 // Item 2 (D-043): the banner's Resume locks its own spot, so a double tap resumes once and the second tap lands nowhere.

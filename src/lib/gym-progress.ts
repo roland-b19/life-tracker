@@ -1,4 +1,5 @@
 import { addDays, weekStart } from "./format-date";
+import { formatAmount } from "./number-format";
 import type { HistorySession, HistorySet } from "./gym";
 
 export { weekStart };
@@ -148,11 +149,11 @@ export function progressSets(history: HistorySession[], open: OpenWorkout | null
   return sets.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** A weight change as the user reads it: "+2.5 kg", "−1 kg", "0 kg". */
+/** A weight change as the user reads it, in the app's number format (D-037): "+2,5 kg", "−1 kg", "0 kg". */
 export const kgDelta = (n: number | null) => {
   if (n === null) return "—";
   const r = Math.round(n * 100) / 100;
-  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r)} kg`;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${formatAmount(Math.abs(r), 2)} kg`;
 };
 
 /**

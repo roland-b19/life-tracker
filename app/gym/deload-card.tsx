@@ -1,6 +1,6 @@
 "use client";
 
-import { addDays, formatDMY, toISODate } from "@/lib/format-date";
+import { addDays, formatDMY } from "@/lib/format-date";
 import { weekStart } from "@/lib/gym-progress";
 import { useState } from "react";
 import { Card, FormModal, SelectField, Toggle } from "../components/blocks";
@@ -9,9 +9,12 @@ import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
 import { restoreDeloadWeeksAction, saveDeloadWeeksAction } from "@/actions/gym";
 
-/** The 10 weeks a deload select lists, from this week forward (step 1) or back (step -1), plus the week already chosen if it is outside them. */
-function deloadOptions(step: 1 | -1, current: string, none: string) {
-  const first = weekStart(toISODate());
+/**
+ * The 10 weeks a deload select lists, from this week forward (step 1) or back (step -1), plus the week already chosen if
+ * it is outside them. `today` is the server's day, so the server and the browser list the same weeks.
+ */
+function deloadOptions(today: string, step: 1 | -1, current: string, none: string) {
+  const first = weekStart(today);
   const weeks = Array.from({ length: 10 }, (_, i) => addDays(first, 7 * step * i));
   if (current && !weeks.includes(current)) weeks.push(current);
   weeks.sort();
@@ -20,12 +23,14 @@ function deloadOptions(step: 1 | -1, current: string, none: string) {
 
 /** Where the deload cycle stands, the "Deload session" switch, and the dialog that sets the last and next deload week. */
 export function DeloadCard({
+  today,
   deload,
   isDeloadMode,
   onDeloadMode,
   busy,
   setBusy,
 }: {
+  today: string; // the server's day
   deload: DeloadInfo;
   isDeloadMode: boolean;
   onDeloadMode: (on: boolean) => void;
@@ -106,14 +111,14 @@ export function DeloadCard({
           label="Last deload"
           disabled={busy}
           value={draft?.last ?? ""}
-          options={deloadOptions(-1, draft?.last ?? "", "Not set")}
+          options={deloadOptions(today, -1, draft?.last ?? "", "Not set")}
           onChange={(e) => setDraft((d) => d && { ...d, last: e.target.value })}
         />
         <SelectField
           label="Next deload"
           disabled={busy}
           value={draft?.next ?? ""}
-          options={deloadOptions(1, draft?.next ?? "", "Not chosen")}
+          options={deloadOptions(today, 1, draft?.next ?? "", "Not chosen")}
           onChange={(e) => setDraft((d) => d && { ...d, next: e.target.value })}
         />
       </FormModal>

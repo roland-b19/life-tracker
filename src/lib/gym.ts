@@ -38,13 +38,16 @@ interface DeloadStatus {
   cycleLength: number;
   /** No next deload week chosen and the cycle is over: a deload is due. */
   isDeloadDue: boolean;
-  /** This calendar week (Sunday to Saturday) is a deload week, chosen or logged. */
+  /** This calendar week (Sunday to Saturday) is a deload week the user chose in the setting. */
   inDeloadWeek: boolean;
   /** The latest deload week up to this one, as the Sunday that starts it. */
   lastDeloadWeek: string | null;
   /** The first deload week after this one, if the user chose one. */
   nextDeloadWeek: string | null;
-  /** Every deload week the user chose, oldest first: the progress figures leave them out (D-038). */
+  /**
+   * Every deload week the user chose, oldest first. The progress figures leave each of them out whole, and also the
+   * week of any workout started as a deload (`deloadWeeksIn`, D-038).
+   */
   weeks: string[];
 }
 
@@ -672,7 +675,10 @@ export async function getWorkoutSessionDetails(userId: string, sessionId: string
   return { session, sets, timer: workoutTimer(session) };
 }
 
-/** Every deload week (the Sunday that starts it): the weeks the user chose. A single deload session does not make its week one. */
+/**
+ * The deload weeks the user chose in the setting (the Sunday that starts each): the cycle counts only these. The
+ * progress figures also leave out the week of any deload session (`deloadWeeksIn`).
+ */
 async function deloadWeekSet(userId: string): Promise<Set<string>> {
   const marked = await db.select({ week: deloadWeeks.weekStart }).from(deloadWeeks).where(eq(deloadWeeks.userId, userId));
   return new Set(marked.map((m) => m.week));
@@ -682,8 +688,9 @@ const DEFAULT_CYCLE = 5;
 const MAX_CYCLE = 9; // the Edit dialog offers 10 weeks, so a gap beyond that is not a cycle
 
 /**
- * Deload cycle in calendar weeks (Sunday to Saturday, the same weeks the Progress tab skips). A deload week is one the
- * user chose. Week 1 is the week after the last deload (or the first workout's week);
+ * Deload cycle in calendar weeks (Sunday to Saturday). A deload week here is one the user chose; the progress figures
+ * leave out those weeks whole plus the week of any deload session (`deloadWeeksIn`). Week 1 is the week after the
+ * last deload (or the first workout's week);
  * the length N is the gap between the last deload and the chosen next one, else the gap between the last two deloads,
  * else 5. With no next deload chosen, a deload is due once week N is over.
  */

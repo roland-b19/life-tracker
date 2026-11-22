@@ -36,6 +36,12 @@ const WHAT: Record<Measure, string> = {
 };
 
 const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
+
+/**
+ * Why the plate weight form refuses a value Save stays off for ("" when nothing does): 0 or less, in the server's own
+ * words for it. The other limits (100 kg, two decimals) are the server's answer after Save.
+ */
+export const plateKgProblem = (kg: string) => (kg !== "" && Number(kg) <= 0 ? "Must be more than 0" : "");
 const kgText = (kg: number) => `${formatAmount(kg, 2)} kg`;
 
 /**
@@ -192,7 +198,7 @@ export function ProgressPanel({
         onClose={() => setEditing(null)}
         title="Plate weight"
         onSubmit={savePlate}
-        error={errorMsg}
+        error={plateKgProblem(editing?.kg ?? "") || errorMsg}
         busy={saving}
         canSubmit={!!editing?.kg && Number(editing.kg) > 0}
       >
