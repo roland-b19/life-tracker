@@ -13,6 +13,10 @@ export const GYM_LIMITS = { reps: 200, load: 1000, extra: 300, plateKg: 100, set
 export const NOT_NEGATIVE = "Can't be negative";
 /** What a weight with more than two decimals answers (the columns keep two), in the set form and on the server. */
 export const TWO_DECIMALS = "Maximum two decimal places.";
+/** What a plate weight of 0 or less answers, in the plate weight form and on the server. */
+export const MORE_THAN_ZERO = "Must be more than 0";
+/** What a plate weight above the limit answers, in the plate weight form and on the server. */
+export const AT_MOST_PLATE_KG = `Must be at most ${GYM_LIMITS.plateKg}`;
 /** Why a kg or plates set with a value of 0 cannot be logged (a bodyweight set can), in the set form and on the server. */
 export const ZERO_LOAD = "Enter a value above 0, or pick BW.";
 /** What deleting a set that is no longer there answers: the client then has nothing to put back. */
@@ -79,7 +83,7 @@ export const logSetSchema = setFields.refine((s) => s.loadType === "bodyweight" 
 /** "1 plate = X kg" for one exercise (D-038): above 0, the column's two decimals; null clears it (the Undo of a first save). */
 export const savePlateWeightSchema = z.object({
   exerciseId: uuid,
-  kg: z.number().positive().max(GYM_LIMITS.plateKg).refine(twoDecimals, TWO_DECIMALS).nullable(),
+  kg: z.number().positive(MORE_THAN_ZERO).max(GYM_LIMITS.plateKg, AT_MOST_PLATE_KG).refine(twoDecimals, TWO_DECIMALS).nullable(),
 });
 
 // The day is optional here so that a missing one is refused with words of its own, not zod's "Required".

@@ -47,7 +47,7 @@ import {
   saveSplitDayAction,
   startSessionAction,
 } from "@/actions/gym";
-import { exerciseNameKey, NOT_NEGATIVE, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
+import { AT_MOST_PLATE_KG, exerciseNameKey, MORE_THAN_ZERO, NOT_NEGATIVE, TWO_DECIMALS, ZERO_LOAD, type LogSetInput } from "@/lib/validations/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { succeeded } from "./succeeded";
 import { setExercises } from "@/../app/gym/active-workout";
@@ -527,13 +527,15 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
   it("checks a plate weight like the form: above 0, at most 100 kg, two decimals (GYMC-05)", async () => {
     const shared = (await getExercises(userA)).find((e) => e.userId === null)!.id;
-    expect(await savePlateWeightAction({ exerciseId: shared, kg: 0 })).toEqual({ success: false, error: "Must be more than 0" });
-    // The form shows the server's own words for 0 and a negative (it keeps Save off for them).
-    expect(plateKgProblem("0")).toBe("Must be more than 0");
-    expect(await savePlateWeightAction({ exerciseId: shared, kg: -1 })).toEqual({ success: false, error: plateKgProblem("-1") });
-    expect(plateKgProblem("0.5")).toBe("");
-    expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.555 })).toEqual({ success: false, error: TWO_DECIMALS });
-    expect(await savePlateWeightAction({ exerciseId: shared, kg: 100.5 })).toEqual({ success: false, error: "Must be at most 100" });
+    expect([MORE_THAN_ZERO, AT_MOST_PLATE_KG]).toEqual(["Must be more than 0", "Must be at most 100"]);
+    // The form refuses each value with the server's own words for it (and keeps Save off for it).
+    const refused = [[0, MORE_THAN_ZERO], [-1, MORE_THAN_ZERO], [100.5, AT_MOST_PLATE_KG], [101, AT_MOST_PLATE_KG], [2.555, TWO_DECIMALS]] as const;
+    for (const [kg, reason] of refused) {
+      expect(await savePlateWeightAction({ exerciseId: shared, kg })).toEqual({ success: false, error: reason });
+      expect(plateKgProblem(String(kg))).toBe(reason);
+    }
+    for (const kg of ["0.5", "2.5", "100", ""]) expect(plateKgProblem(kg)).toBe("");
+    expect(plateKgProblem("abc")).toBe(""); // the number field's own error ("Must be a number")
     expect(await getPlateWeights(userA)).toEqual({});
     expect(await savePlateWeightAction({ exerciseId: shared, kg: 2.25 })).toEqual({ success: true, previous: null });
     expect(await getPlateWeights(userA)).toEqual({ [shared]: 2.25 });
@@ -1395,6 +1397,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(after.deloadWeek).toBe(false);
       expect(noDay.progress).toBeNull();
       expect(kgDelta(2.5)).toBe("+2,5 kg"); // the app's number format (D-037)
+      expect(kgDelta(5)).toBe("+5 kg");
       expect(kgDelta(-1234.5)).toBe("−1.234,5 kg");
       expect(kgDelta(-1)).toBe("−1 kg");
       expect(kgDelta(0)).toBe("0 kg");

@@ -14,7 +14,7 @@ import { addDays } from "@/lib/format-date";
 import { deloadWeeksIn, exerciseMeasure, exerciseSeries, weekStart, type Measure, type PlateWeights } from "@/lib/gym-progress";
 import type { HistorySet } from "@/lib/gym";
 import { formatAmount } from "@/lib/number-format";
-import { GYM_LIMITS } from "@/lib/validations/gym";
+import { AT_MOST_PLATE_KG, GYM_LIMITS, MORE_THAN_ZERO, TWO_DECIMALS, twoDecimals } from "@/lib/validations/gym";
 
 type Range = "30" | "90" | "180" | "360";
 const RANGES: { value: Range; label: string }[] = (["30", "90", "180", "360"] as const).map((d) => ({ value: d, label: `${d}D` }));
@@ -38,10 +38,17 @@ const WHAT: Record<Measure, string> = {
 const dm = (iso: string) => iso.slice(5).split("-").reverse().join(".");
 
 /**
- * Why the plate weight form refuses a value Save stays off for ("" when nothing does): 0 or less, in the server's own
- * words for it. The other limits (100 kg, two decimals) are the server's answer after Save.
+ * What stops a plate weight from being saved, in the server's own words ("" when nothing does); the limits are the
+ * server's. Text that is not a number is the number field's own error.
  */
-export const plateKgProblem = (kg: string) => (kg !== "" && Number(kg) <= 0 ? "Must be more than 0" : "");
+export function plateKgProblem(kg: string) {
+  const n = Number(kg);
+  if (kg === "" || !Number.isFinite(n)) return "";
+  if (n <= 0) return MORE_THAN_ZERO;
+  if (n > GYM_LIMITS.plateKg) return AT_MOST_PLATE_KG;
+  if (!twoDecimals(n)) return TWO_DECIMALS;
+  return "";
+}
 const kgText = (kg: number) => `${formatAmount(kg, 2)} kg`;
 
 /**
@@ -95,6 +102,7 @@ export function ProgressPanel({
   const all = measure ? exerciseSeries(sets, chosen, measure, rules) : [];
   const series = all.filter((p) => p.date >= since);
   const plateKg = plates[chosen];
+  const plateProblem = plateKgProblem(editing?.kg ?? "");
   const usesPlates = sets.some((s) => s.exerciseId === chosen && s.loadType === "plates");
   const platesLeftOut = measure === "kg" && !plateKg && sets.some((s) => s.exerciseId === chosen && s.loadType === "plates" && !deload.has(weekStart(s.date)));
 
@@ -198,9 +206,9 @@ export function ProgressPanel({
         onClose={() => setEditing(null)}
         title="Plate weight"
         onSubmit={savePlate}
-        error={plateKgProblem(editing?.kg ?? "") || errorMsg}
+        error={plateProblem || errorMsg}
         busy={saving}
-        canSubmit={!!editing?.kg && Number(editing.kg) > 0}
+        canSubmit={!!editing?.kg && !Number.isNaN(Number(editing.kg)) && !plateProblem}
       >
         <Field
           label={`1 plate of ${editing?.name ?? name} (kg)`}
@@ -208,8 +216,11 @@ export function ProgressPanel({
           inputMode="decimal"
           disabled={saving}
           value={editing?.kg ?? ""}
-          onChange={(e) => setEditing((now) => now && { ...now, kg: e.target.value })}
-          max={GYM_LIMITS.plateKg}
+          onChange={(e) => {
+            // A changed value makes the server's last refusal stale
+            setErrorMsg("");
+            setEditing((now) => now && { ...now, kg: e.target.value });
+          }}
           required
         />
       </FormModal>

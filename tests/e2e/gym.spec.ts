@@ -1082,9 +1082,10 @@ test("a signed-in user sets the weight of 1 plate, and the chart turns to kg, wi
   await expect(card.getByText("70", { exact: true })).toBeVisible();
 });
 
-// Verify-B4 FAIL 1.3: 0 and a negative keep Save off and say why, in the server's words, on a phone's touch screen. And
-// Undo of a changed weight puts the one before back (the Undo sends the old value, not the new one).
-test("the plate weight form says why 0 or a negative is refused, and Undo of a change puts the old weight back, on a phone", async ({
+// Each value the server refuses keeps Save off and says why at once, in the server's words, on a phone's touch screen;
+// a refusal the server answered goes as soon as the value changes. And Undo of a changed weight puts the one before
+// back (the Undo sends the old value, not the new one).
+test("the plate weight form says why a value is refused, drops a stale refusal, and Undo of a change puts the old weight back, on a phone", async ({
   signedInPage,
   browser,
 }) => {
@@ -1105,11 +1106,33 @@ test("the plate weight form says why 0 or a negative is refused, and Undo of a c
     const dialog = page.getByRole("dialog", { name: "Plate weight" });
     const field = dialog.getByLabel(`1 plate of ${ROW} (kg)`);
     const save = dialog.getByRole("button", { name: "Save" });
-    for (const value of ["0", "-1"]) {
+    const moreThanZero = "Must be more than 0", atMost100 = "Must be at most 100";
+    const refused = [["0", moreThanZero], ["-1", moreThanZero], ["100.5", atMost100], ["101", atMost100], ["2,555", "Maximum two decimal places."], ["abc", "Must be a number"]];
+    for (const [value, reason] of refused) {
       await field.fill(value);
-      await expect(dialog.getByRole("alert")).toHaveText("Must be more than 0");
+      await expect(dialog.getByRole("alert")).toHaveText(reason);
       await expect(save).toBeDisabled();
     }
+    for (const value of ["2,5", "2.5", "100"]) {
+      await field.fill(value);
+      await expect(dialog.getByRole("alert")).toBeHidden();
+      await expect(save).toBeEnabled();
+    }
+
+    // The server refuses a value the form let through (its request is changed on the way): the next change drops the reason.
+    await page.route("**/gym", (route) => {
+      const body = route.request().postData() ?? "";
+      return route.fallback(route.request().method() === "POST" && body.includes('"kg":50') ? { postData: body.replace('"kg":50', '"kg":100.5') } : {});
+    });
+    await field.fill("50");
+    await andSettle(page, () => save.tap());
+    await expect(dialog.getByRole("alert")).toHaveText(atMost100);
+    await page.unroute("**/gym");
+    await field.fill("40");
+    await expect(dialog.getByRole("alert")).toBeHidden();
+    await expect(save).toBeEnabled();
+    await field.fill("abc");
+    await expect(dialog.getByRole("alert")).toHaveText("Must be a number"); // one reason: the field's own
     await field.fill("12,5");
     await expect(dialog.getByRole("alert")).toBeHidden();
     await andSettle(page, () => save.tap());
@@ -1178,17 +1201,19 @@ test("History leaves deload weeks out of the comparison and compares past them",
   await expect(progress(page).getByText("60", { exact: true })).toBeHidden();
 });
 
-// The deload dialog lists its weeks from the server's day: a browser whose clock is a week ahead still marks the
-// server's week as this week.
-test("the deload dialog lists its weeks from the server's day", async ({ signedInPage: page }) => {
-  await page.clock.install({ time: new Date(Date.now() + 7 * 86_400_000) });
-  await openGym(page);
-  await page.getByRole("button", { name: "Edit deload weeks" }).click();
-  const last = page.getByRole("dialog", { name: "Deload weeks" }).getByLabel("Last deload");
-  const sunday = sundayOf(appToday());
-  const dmy = (iso: string) => iso.split("-").reverse().join(".");
-  await expect(last.getByRole("option", { name: /\(this week\)$/ })).toHaveText(`${dmy(sunday)} - ${dmy(plusDays(sunday, 6))} (this week)`);
-});
+// The deload dialog lists its weeks from the server's day: a browser whose clock is a week ahead or behind still marks
+// the server's week as this week.
+for (const days of [7, -7]) {
+  test(`the deload dialog lists its weeks from the server's day, with the browser ${days} days off`, async ({ signedInPage: page }) => {
+    await page.clock.install({ time: new Date(Date.now() + days * 86_400_000) });
+    await openGym(page);
+    await page.getByRole("button", { name: "Edit deload weeks" }).click();
+    const last = page.getByRole("dialog", { name: "Deload weeks" }).getByLabel("Last deload");
+    const sunday = sundayOf(appToday());
+    const dmy = (iso: string) => iso.split("-").reverse().join(".");
+    await expect(last.getByRole("option", { name: /\(this week\)$/ })).toHaveText(`${dmy(sunday)} - ${dmy(plusDays(sunday, 6))} (this week)`);
+  });
+}
 
 // Item 2 (D-043): the banner's Resume locks its own spot, so a double tap resumes once and the second tap lands nowhere.
 test("a double tap on the banner's Resume resumes once", async ({ signedInPage: page }) => {
