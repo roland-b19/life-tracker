@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
+import {
+  andSettle,
+  appearance,
+  asOwner,
+  center,
+  dismissToast,
+  expectNoSeriousViolations,
+  signInThroughForm,
+  test,
+  theme,
+  writesIn,
+} from "./helpers";
 
 const claudeCard = (page: Page) => page.getByRole("region", { name: "Claude", exact: true });
 
@@ -27,12 +37,6 @@ async function connect(page: Page, token: string) {
   await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
   await saveToken(page, "Connect Claude", token);
   await expect(page.getByText("Connected Claude")).toBeVisible();
-}
-
-// Only one Undo button may exist at a time, so a toast is dismissed before the step that makes the next one.
-async function dismissToast(page: Page, message: string) {
-  await page.getByRole("button", { name: "Dismiss notification" }).click();
-  await expect(page.getByText(message)).toBeHidden();
 }
 
 const notConnected = (page: Page) => claudeCard(page).getByText("Not connected.");
@@ -120,8 +124,6 @@ test("a signed-in user replaces the token and disconnects, with Undo for each, a
   await expect(account(page)).toBeVisible();
 });
 
-const appearance = (page: Page) => page.getByRole("region", { name: "Appearance", exact: true });
-const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme ?? "auto");
 // The page color is the background of <html> (app/globals.css), a light-dark() token. A change of mode fades it while
 // data-theme-fade is set (D-025), so it is read once the fade is over; read before the fade starts, it is already final.
 async function pageColor(page: Page) {
@@ -198,29 +200,22 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
 });
 
 test("a signed-out visit to /settings comes back to /settings after sign-in, and the connect date is the app's day [PATH, MORE-02]", async ({ page }) => {
-  const name = `e2e-${randomUUID().slice(0, 8)}`;
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-  try {
-    await page.goto("/settings", { waitUntil: "commit" });
-    await expect(page).toHaveURL(/\/signin\?next=%2Fsettings$/);
-    await page.getByLabel("Username").fill(name);
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/settings$/);
-    await connect(page, fakeToken());
-    // 22:30 UTC on 1 March is already 2 March in Bucharest, the app's time zone.
-    await admin.query(
-      "UPDATE claude_connections SET connected_at = '2026-03-01T22:30:00Z' FROM users WHERE users.id = claude_connections.user_id AND users.issuer = 'dev' AND users.subject = $1",
-      [name],
-    );
-    await openSettings(page);
-    await expect(claudeCard(page).getByText("Connected 02.03.2026")).toBeVisible();
-  } finally {
-    try {
-      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
-    } finally {
-      await admin.end();
-    }
-  }
+  await signInThroughForm(
+    page,
+    "/settings",
+    (page) => connect(page, fakeToken()),
+    async (name) => {
+      // 22:30 UTC on 1 March is already 2 March in Bucharest, the app's time zone.
+      await asOwner((db) =>
+        db.query(
+          "UPDATE claude_connections SET connected_at = '2026-03-01T22:30:00Z' FROM users WHERE users.id = claude_connections.user_id AND users.issuer = 'dev' AND users.subject = $1",
+          [name],
+        ),
+      );
+      await openSettings(page);
+      await expect(claudeCard(page).getByText("Connected 02.03.2026")).toBeVisible();
+    },
+  );
 });
 
 test("a double tap on Save connects once [D-043]", async ({ signedInPage: page }) => {
@@ -229,14 +224,7 @@ test("a double tap on Save connects once [D-043]", async ({ signedInPage: page }
   await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
   const form = page.getByRole("dialog", { name: "Connect Claude" });
   await form.getByLabel("Token").fill(token);
-  let writes = 0;
-  const count = (r: { method(): string; postData(): string | null }) => {
-    if (r.method() === "POST" && (r.postData() ?? "").includes(token)) writes++;
-  };
-  page.on("request", count);
-  await burst(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()));
-  page.off("request", count);
-  expect(writes).toBe(1);
+  expect(await writesIn(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()), token)).toBe(1);
   await expect(account(page)).toBeVisible();
   await expect(page.getByText("Connected Claude")).toHaveCount(1);
 });

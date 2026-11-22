@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
+import { andSettle, burst, center, dismissToast, expectNoSeriousViolations, holdWrites, itemName, openWishlist, signOutHere, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -22,12 +22,6 @@ const label = (category: string) => category.charAt(0).toUpperCase() + category.
 const card = (page: Page) => page.getByRole("region", { name: /^Categories\b/ });
 const dismissButton = (page: Page) => page.getByRole("button", { name: "Dismiss notification" });
 
-// Only one toast is open at a time, so there is one Undo and one Dismiss button.
-async function dismissToast(page: Page) {
-  await dismissButton(page).click();
-  await expect(dismissButton(page)).toHaveCount(0);
-}
-
 // Saves the open item form and waits for the action's answer; `piece` names the item in the request body.
 async function saveItem(page: Page, form: Locator, piece: string, row: Locator) {
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), piece);
@@ -37,11 +31,7 @@ async function saveItem(page: Page, form: Locator, piece: string, row: Locator) 
 }
 
 const wishlist: Surface = {
-  async open(page) {
-    await page.goto("/wishlist");
-    await expect(page).toHaveURL(/\/wishlist$/);
-    await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
-  },
+  open: openWishlist,
   async addItem(page, name, category) {
     await page.getByRole("button", { name: "Add item" }).click();
     const form = page.getByRole("dialog", { name: "New item" });
@@ -157,7 +147,7 @@ async function expectAfterReload(surface: Surface, page: Page, state: State) {
 
 async function runCategoryFlow(surface: Surface, page: Page) {
   const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
-  const [item1, item2] = [`E2E item ${hex()}`, `E2E item ${hex()}`];
+  const [item1, item2] = [itemName(), itemName()];
   await surface.open(page);
 
   // Add, then Undo the add: the row goes, also after a reload. Add again: it stays after a reload.
@@ -360,13 +350,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
     if (r.method() !== "POST" || !("next-action" in r.headers())) return;
     for (const name of [a, b]) if ((r.postData() ?? "").includes(`"name":"${name}"`)) deleted.push(name);
   });
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/wishlist", async (route) => {
-    const r = route.request();
-    if (r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"name":"${a}"`)) await held;
-    await route.fallback();
-  });
+  const release = await holdWrites(page, `"name":"${a}"`);
 
   await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
   await expect.poll(() => deleted).toEqual([a]);
@@ -374,7 +358,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await page.keyboard.press("Shift");
   await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
   await expect(card(page).getByText(b, { exact: true })).toBeHidden();
-  release();
+  await andSettle(page, async () => release(), `"name":"${a}"`);
   await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
   expect(deleted).toEqual([a, b]);
@@ -489,8 +473,6 @@ test("the categories card takes a quick tap beside the deleted row's Delete butt
 // toast's Undo away, so the older Undo never writes over the newer change; toasts about other categories keep theirs.
 test("the categories card's older toast loses its Undo to a newer one about the same category", async ({ signedInPage: page }) => {
   const [a, b, c, d, e] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
-  const toast = (message: string) => page.locator(".toast-item").filter({ hasText: message });
-  const undoIn = (message: string) => toast(message).getByRole("button", { name: "Undo" });
   await wishlist.open(page);
   for (const name of [a, c, d]) {
     await addCategory(page, name);
@@ -500,23 +482,23 @@ test("the categories card's older toast loses its Undo to a newer one about the 
   // The same category: rename a to b, then delete b. The closed form's Save lay over a row's Delete, so Shift ends the
   // Save's tap burst (D-043) first; this test is about the toasts, not the guard.
   await renameCategory(page, a, b);
-  await expect(undoIn(`Renamed "${a}" to "${b}"`)).toBeVisible();
+  await expect(undoIn(page, `Renamed "${a}" to "${b}"`)).toBeVisible();
   await page.keyboard.press("Shift");
   await deleteCategory(page, b);
-  await expect(undoIn(`Removed "${b}"`)).toBeVisible();
+  await expect(undoIn(page, `Removed "${b}"`)).toBeVisible();
   // Counted at once, not with a retrying assertion, which an expiring toast would also satisfy; the toast is still
   // there afterwards, so its Undo is gone from a toast on screen.
-  expect(await undoIn(`Renamed "${a}" to "${b}"`).count()).toBe(0);
-  await expect(toast(`Renamed "${a}" to "${b}"`)).toBeVisible();
-  for (const message of [`Renamed "${a}"`, `Removed "${b}"`]) await toast(message).getByRole("button", { name: "Dismiss notification" }).click();
+  expect(await undoIn(page, `Renamed "${a}" to "${b}"`).count()).toBe(0);
+  await expect(toast(page, `Renamed "${a}" to "${b}"`)).toBeVisible();
+  for (const message of [`Renamed "${a}"`, `Removed "${b}"`]) await toast(page, message).getByRole("button", { name: "Dismiss notification" }).click();
   await expect(dismissButton(page)).toHaveCount(0);
 
   // Two categories: rename c to e, then delete d.
   await renameCategory(page, c, e);
   await page.keyboard.press("Shift");
   await deleteCategory(page, d);
-  await expect(undoIn(`Renamed "${c}" to "${e}"`)).toBeVisible();
-  await expect(undoIn(`Removed "${d}"`)).toBeVisible();
+  await expect(undoIn(page, `Renamed "${c}" to "${e}"`)).toBeVisible();
+  await expect(undoIn(page, `Removed "${d}"`)).toBeVisible();
 });
 
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
@@ -538,9 +520,10 @@ test("the categories card shows why the server refused a delete or an Undo", asy
   await expect(page.getByText(`Can't undo: "${b}" has changed since.`, { exact: true })).toBeVisible();
   await dismissToast(page);
 
-  // Signed out: the delete is refused with the sign-in message.
-  await page.context().clearCookies();
-  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click(), `"name":"${b}"`);
+  // Signed out: the delete is refused with the sign-in message. The page's refresh, done before the sign-out, shows the
+  // other tab's name.
+  await signOutHere(page);
+  await andSettle(page, () => page.getByRole("button", { name: `Delete category ${c}`, exact: true }).click(), `"name":"${c}"`);
   await expect(page.getByText("You're signed out. Sign in again.", { exact: true })).toBeVisible();
 });
 

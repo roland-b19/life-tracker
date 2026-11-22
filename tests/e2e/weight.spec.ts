@@ -1,6 +1,6 @@
-import { expect, type Page, type Request } from "@playwright/test";
-import { addDays, appDay, formatDM } from "../../src/lib/format-date";
-import { andSettle, expectNoSeriousViolations, isRefresh, settled, test } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { addDays, appDay, formatDM, toISODate } from "../../src/lib/format-date";
+import { andSettle, countRefreshes, dismissToast, expectNoSeriousViolations, settled, test } from "./helpers";
 
 async function openFood(page: Page) {
   await page.goto("/health");
@@ -18,8 +18,6 @@ async function addWeight(page: Page, kilograms: string) {
   await expect(card.getByText(`${kilograms} kg today`, { exact: true })).toBeVisible();
 }
 
-// The server's day: the tests run on the machine that serves the app. The page's own clock is moved with `page.clock`.
-const serverDay = () => appDay(new Date());
 // The first moment of the Bucharest day after `day`, found by stepping through the hours around it (the offset is 2 or 3).
 function midnightAfter(day: string) {
   let t = Date.parse(`${addDays(day, 1)}T00:00:00Z`) - 4 * 3600_000;
@@ -69,8 +67,7 @@ test("a signed-in user adds, edits and deletes today's weight, with Undo for the
   await expect(card.locator(".line-y span")).toHaveText(["72,4"]);
 
   // Edit it: the form opens with the saved value. Drop the "Added" toast first so only one Undo exists.
-  await page.getByRole("button", { name: "Dismiss notification" }).click();
-  await expect(page.getByText("Added 72,4 kg")).toBeHidden();
+  await dismissToast(page, "Added 72,4 kg");
   await card.getByRole("button", { name: "Edit today's weight" }).click();
   await expect(field).toHaveValue("72,40");
   await field.fill("71,8");
@@ -101,7 +98,8 @@ test("the weight card and chart show the server's day, whatever the device's clo
   const warnings = watchHydration(page);
   await openFood(page);
   await addWeight(page, "72,4");
-  const day = serverDay();
+  // The server's day: the tests run on the machine that serves the app. The page's own clock is moved with `page.clock`.
+  const day = toISODate();
   await page.clock.install({ time: new Date(midnightAfter(day) + 30 * 60_000) });
   await openFood(page);
   await expect(page.getByRole("region", { name: "Weight", exact: true }).getByText("72,4 kg today", { exact: true })).toBeVisible();
@@ -114,13 +112,12 @@ test("the weight card and chart show the server's day, whatever the device's clo
 // refresh, not from the device: here the server is still on today, so the chart still ends on it. No reload either.
 test("at midnight the page refreshes once and the chart keeps the server's day, without a reload [HTODAY-11]", async ({ signedInPage: page }) => {
   const warnings = watchHydration(page);
-  const day = serverDay();
+  const day = toISODate();
   await page.clock.install({ time: new Date(midnightAfter(day) - 30_000) });
   await openFood(page);
   await expect(lastAxisLabel(page)).toHaveText(formatDM(day));
   await page.evaluate(() => Object.assign(window, { kept: true }));
-  const refreshes: Request[] = [];
-  page.on("request", (r) => isRefresh(page, r) && refreshes.push(r));
+  const refreshes = countRefreshes(page);
   await page.clock.runFor(20_000);
   await settled(page);
   expect(refreshes).toHaveLength(0);

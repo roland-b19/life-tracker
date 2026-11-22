@@ -1,7 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { Pool } from "pg";
-import { andSettle, burst, center, expectNoSeriousViolations, test } from "./helpers";
+import {
+  andSettle,
+  asOwner,
+  center,
+  dismissToast,
+  expectNoSeriousViolations,
+  holdWrites,
+  loseAnswerOnce,
+  signInThroughForm,
+  test,
+  toast,
+  undoIn,
+  writesIn,
+} from "./helpers";
 
 // The page opens on the Daily tab of the Personal space, so a reload (which also starts on Daily) goes through here too.
 async function openTasks(page: Page, tab: "Daily" | "Today") {
@@ -41,17 +53,13 @@ test("a signed-in user adds, completes, edits and deletes a task, with Undo for 
   const renamed = `${title} renamed`;
   const row = (name: string) => page.getByText(name, { exact: true });
   const progress = page.getByRole("region", { name: "Progress" });
-  const dismissToast = async (message: string) => {
-    await page.getByRole("button", { name: "Dismiss notification" }).click();
-    await expect(page.getByText(message)).toBeHidden();
-  };
 
   // Add: the row, the toast and the Progress card.
   await expect(page.getByText("Nothing planned for today.")).toBeVisible();
   await addTask(page, title, "New task");
   await expect(page.getByText(`Added "${title}"`)).toBeVisible();
   await expect(progress.getByText("0 of 1 done")).toBeVisible();
-  await dismissToast(`Added "${title}"`);
+  await dismissToast(page, `Added "${title}"`);
 
   // Complete, then Undo the completion. Each answer is told apart by the box's new state: the page also reloads its
   // list after every change, and that earlier reload could otherwise be taken for the answer.
@@ -131,22 +139,7 @@ test("a daily task shows only on the Daily tab of its own space", async ({ signe
 });
 
 test("a signed-out visit to /todos goes to the sign-in form, which comes back to /todos [PATH]", async ({ page }) => {
-  const name = `e2e-${randomUUID().slice(0, 8)}`;
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-  try {
-    await page.goto("/todos", { waitUntil: "commit" });
-    await expect(page).toHaveURL(/\/signin\?next=%2Ftodos$/);
-    await page.getByLabel("Username").fill(name);
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page).toHaveURL(/\/todos$/);
-    await expect(page.getByRole("button", { name: "Add task" })).toBeVisible();
-  } finally {
-    try {
-      await admin.query("DELETE FROM users WHERE issuer = 'dev' AND subject = $1", [name]);
-    } finally {
-      await admin.end();
-    }
-  }
+  await signInThroughForm(page, "/todos", (page) => expect(page.getByRole("button", { name: "Add task" })).toBeVisible());
 });
 
 test("the Progress card counts the list on screen and names its tab [TASK-10]", async ({ signedInPage: page }) => {
@@ -163,19 +156,6 @@ test("the Progress card counts the list on screen and names its tab [TASK-10]", 
   await expect(progress.getByText("0 of 2 done")).toBeVisible();
   await expect(progress.getByText("Today", { exact: true })).toBeVisible();
 });
-
-// The page reads its list again after each write (a second action with no body of its own), so a burst's writes are
-// counted by a piece of their body.
-async function writesIn(page: Page, spot: { x: number; y: number }, body: string) {
-  let writes = 0;
-  const count = (r: { method(): string; postData(): string | null }) => {
-    if (r.method() === "POST" && (r.postData() ?? "").includes(body)) writes++;
-  };
-  page.on("request", count);
-  await burst(page, spot);
-  page.off("request", count);
-  return writes;
-}
 
 test("a double tap on Save or on a task's box writes once [D-043]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
@@ -195,16 +175,10 @@ test("a double tap on Save or on a task's box writes once [D-043]", async ({ sig
 test("a Save in a form opened again while the last opening's save is unanswered still saves [D-043]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   const [first, second] = [taskTitle(), taskTitle()];
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/todos", async (route) => {
-    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"title":"${first}"`)) await held;
-    await route.fallback();
-  });
+  const release = await holdWrites(page, `"title":"${first}"`);
   await page.getByRole("button", { name: "Add task" }).click();
   const form = page.getByRole("dialog", { name: "New task" });
   await form.getByLabel("Title").fill(first);
-  const firstAnswered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"title":"${first}"`));
   await form.getByRole("button", { name: "Save" }).click();
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(form).toBeHidden();
@@ -212,8 +186,7 @@ test("a Save in a form opened again while the last opening's save is unanswered 
   await page.getByRole("button", { name: "Add task" }).click();
   await form.getByLabel("Title").fill(second);
   await form.getByRole("button", { name: "Save" }).click();
-  release();
-  await firstAnswered;
+  await andSettle(page, async () => release(), `"title":"${first}"`);
   await expect(form).toBeHidden();
   await expect(page.getByText(first, { exact: true })).toBeVisible();
   await expect(page.getByText(second, { exact: true })).toBeVisible();
@@ -223,7 +196,7 @@ test("an Undo of a tick that fails says so and keeps a Retry, which puts the box
   await openTasks(page, "Today");
   const title = taskTitle();
   await addTask(page, title, "New task");
-  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await dismissToast(page);
   await andSettle(page, () => page.getByRole("button", { name: `Mark ${title} as complete` }).click(), `"isCompleted":true`);
   // The Undo's write gets a server error; the list's reload still goes through.
   await page.route("**/todos", (route) =>
@@ -232,7 +205,7 @@ test("an Undo of a tick that fails says so and keeps a Retry, which puts the box
       : route.fallback(),
   );
   await page.getByRole("button", { name: "Undo" }).click();
-  const warning = page.locator(".toast-item").filter({ hasText: "Failed to undo" });
+  const warning = toast(page, "Failed to undo");
   await expect(warning.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(page.getByRole("button", { name: `Mark ${title} as incomplete` })).toBeVisible();
   await page.unroute("**/todos");
@@ -243,17 +216,8 @@ test("an Undo of a tick that fails says so and keeps a Retry, which puts the box
 test("an add whose answer was lost, saved again, adds once and says it was already added [D-040]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   const title = taskTitle();
-  let lost = false;
   // The first add reaches the server, but its answer never comes back.
-  await page.route("**/todos", async (route) => {
-    const r = route.request();
-    if (!lost && r.method() === "POST" && "next-action" in r.headers() && (r.postData() ?? "").includes(`"title":"${title}"`)) {
-      lost = true;
-      await route.fetch();
-      return route.abort();
-    }
-    await route.fallback();
-  });
+  await loseAnswerOnce(page, `"title":"${title}"`);
   await page.getByRole("button", { name: "Add task" }).click();
   const form = page.getByRole("dialog", { name: "New task" });
   await form.getByLabel("Title").fill(title);
@@ -261,9 +225,8 @@ test("an add whose answer was lost, saved again, adds once and says it was alrea
   await expect(form.getByText("Failed to save task")).toBeVisible();
   await page.keyboard.press("Shift");
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"title":"${title}"`);
-  const toast = page.locator(".toast-item").filter({ hasText: `Already added "${title}"` });
-  await expect(toast).toBeVisible();
-  await expect(toast.getByRole("button", { name: "Undo" })).toHaveCount(0);
+  await expect(toast(page, `Already added "${title}"`)).toBeVisible();
+  await expect(undoIn(page, `Already added "${title}"`)).toHaveCount(0);
   await openTasks(page, "Today");
   await expect(page.getByText(title, { exact: true })).toHaveCount(1);
 });
@@ -273,19 +236,18 @@ test("a newer change takes the Undo off the older toasts about the same task, an
   const [a, b] = [taskTitle(), taskTitle()];
   await addTask(page, a, "New task");
   await addTask(page, b, "New task");
-  const toast = (text: string) => page.locator(".toast-item").filter({ hasText: text });
   // b's add toast stays; a is edited, then deleted.
   await page.getByRole("button", { name: `Edit ${a}` }).click();
   const form = page.getByRole("dialog", { name: "Edit task" });
   await form.getByLabel("Title").fill(`${a} v2`);
   await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"title":"${a} v2"`);
-  await expect(toast(`Saved "${a} v2"`).getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(undoIn(page, `Saved "${a} v2"`)).toBeVisible();
   await page.keyboard.press("Shift");
   await andSettle(page, () => page.getByRole("button", { name: `Delete ${a} v2` }).click());
-  await expect(toast(`Removed "${a} v2"`).getByRole("button", { name: "Undo" })).toBeVisible();
-  await expect(toast(`Saved "${a} v2"`).getByRole("button", { name: "Undo" })).toHaveCount(0);
-  await expect(toast(`Added "${a}"`).getByRole("button", { name: "Undo" })).toHaveCount(0);
-  await expect(toast(`Added "${b}"`).getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(undoIn(page, `Removed "${a} v2"`)).toBeVisible();
+  await expect(undoIn(page, `Saved "${a} v2"`)).toHaveCount(0);
+  await expect(undoIn(page, `Added "${a}"`)).toHaveCount(0);
+  await expect(undoIn(page, `Added "${b}"`)).toBeVisible();
 });
 
 test("a task deleted in one tab leaves another tab after its refresh, and closes its open edit form [SERVER-STATE, TASK-03]", async ({
@@ -318,27 +280,15 @@ test("a refusal that answers after the form was closed with Cancel shows the ser
 }) => {
   await openTasks(page, "Today");
   const title = `${taskTitle()} ${"x".repeat(150)}`;
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/todos", async (route) => {
-    if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"title":"${title}"`)) await held;
-    await route.fallback();
-  });
+  const release = await holdWrites(page, `"title":"${title}"`);
   await page.getByRole("button", { name: "Add task" }).click();
   const form = page.getByRole("dialog", { name: "New task" });
   await form.getByLabel("Title").fill(title);
-  const answered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(`"title":"${title}"`));
   await form.getByRole("button", { name: "Save" }).click();
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(form).toBeHidden();
-  release();
-  await answered;
-  await expect(page.locator(".toast-item").filter({ hasText: "Too long (max 150)" })).toBeVisible();
+  await andSettle(page, async () => release(), `"title":"${title}"`);
+  await expect(toast(page, "Too long (max 150)")).toBeVisible();
   await expect(form).toBeHidden();
-  const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
-  try {
-    expect((await admin.query("SELECT 1 FROM todos WHERE title = $1", [title])).rowCount).toBe(0);
-  } finally {
-    await admin.end();
-  }
+  expect((await asOwner((db) => db.query("SELECT 1 FROM todos WHERE title = $1", [title]))).rowCount).toBe(0);
 });
