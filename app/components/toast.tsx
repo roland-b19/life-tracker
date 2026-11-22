@@ -62,7 +62,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="toast-container" aria-live="polite">
+      {/* One status region for the whole stack, there before any toast, so each new toast is said once; not on each
+          toast, as a region added with its text is not reliably read and one inside this region would be read twice.
+          aria-atomic="false": status reads its whole content by default, which would repeat the older toasts. */}
+      <div className="toast-container" role="status" aria-atomic="false">
         {toasts.map((t) => (
           <ToastItem key={t.id} toast={t} onExpire={removeToast}>
             <span className="toast-message">

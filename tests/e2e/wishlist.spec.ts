@@ -23,6 +23,28 @@ test("the Wishlist has no serious violations", { tag: "@a11y" }, async ({ signed
   await expectNoSeriousViolations(page);
 });
 
+test("a toast is said once, by the one status region that holds the stack, without serious violations [A12]", { tag: "@a11y" }, async ({
+  signedInPage: page,
+}) => {
+  await openWishlist(page);
+  const name = `E2E item ${randomUUID().slice(0, 8)}`;
+  await addItem(page, name, "10");
+  const message = page.getByRole("status").getByText(`Added "${name}" (10 RON)`, { exact: true });
+  await expect(message).toBeVisible();
+  // The live regions the message sits in: exactly one, which reads only what is added, not the whole stack again.
+  const regions = await message.evaluate((el) => {
+    const live: { atomic: string | null }[] = [];
+    for (let at: Element | null = el; at; at = at.parentElement) {
+      const role = at.getAttribute("role");
+      const polite = at.getAttribute("aria-live");
+      if ((polite && polite !== "off") || role === "status" || role === "alert" || role === "log") live.push({ atomic: at.getAttribute("aria-atomic") });
+    }
+    return live;
+  });
+  expect(regions).toEqual([{ atomic: "false" }]);
+  await expectNoSeriousViolations(page);
+});
+
 test("a signed-in user adds, undoes, deletes and restores a wishlist item", async ({ signedInPage: page }) => {
   await openWishlist(page);
 
@@ -168,8 +190,14 @@ async function addItem(page: Page, name: string, price: string, toast = price) {
   await page.keyboard.press("Shift");
 }
 
+// An item's row, found by what it holds rather than by its class: the innermost element with both its name and its
+// Edit button.
 const itemRow = (page: Page, name: string) =>
-  page.locator(".item-row").filter({ has: page.getByText(name, { exact: true }) });
+  page
+    .locator("*")
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .filter({ has: page.getByRole("button", { name: `Edit ${name}`, exact: true }) })
+    .last();
 
 test("a signed-out visit to /wishlist goes to the sign-in form, which comes back to /wishlist [PATH]", async ({ page }) => {
   const name = `e2e-${randomUUID().slice(0, 8)}`;
@@ -214,14 +242,19 @@ test("the total names the open tab, and the tab and the sort are kept on this de
   await expect(page.getByRole("region", { name: "Estimated investment · < 250" })).toHaveText(/10 RON$/);
   await page.getByRole("tab", { name: "All" }).click();
   await page.getByLabel("Sort items").selectOption({ label: "Price ↓" });
-  const names = page.locator(".item-name");
-  await expect(names).toHaveText([dear, cheap]);
+  // The rows in their order, by their Edit buttons' names
+  const edits = page.getByRole("button", { name: new RegExp(`^Edit (${dear}|${cheap})$`) });
+  const inOrder = async (...names: string[]) => {
+    await expect(edits).toHaveCount(names.length);
+    for (const [i, n] of names.entries()) await expect(edits.nth(i)).toHaveAccessibleName(`Edit ${n}`);
+  };
+  await inOrder(dear, cheap);
   await page.getByRole("tab", { name: "750+" }).click();
   await page.reload();
   await expect(page.getByRole("region", { name: "Estimated investment · 750+" })).toHaveText(/1\.000 RON$/);
   await page.getByRole("tab", { name: "All" }).click();
   await expect(page.getByLabel("Sort items")).toHaveValue("price-desc");
-  await expect(names).toHaveText([dear, cheap]);
+  await inOrder(dear, cheap);
 });
 
 test("too-long text shows the server's words in the form and keeps what was typed [WISH-06]", async ({ signedInPage: page }) => {

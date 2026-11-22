@@ -126,7 +126,9 @@ test("the outer pixels of the open modal card and More menu at the edge are guar
     for (const x of [left, right]) expect(await touchCancelled(page, x, box.y + box.height / 2)).toBe(true);
   };
   await page.getByRole("button", { name: "Add item" }).click();
-  const card = page.locator(".modal-card");
+  // The card, found by what it holds rather than by its class: the outermost element in the dialog that holds its title
+  // (the dialog itself is the full-screen backdrop around it)
+  const card = page.getByRole("dialog", { name: "New item" }).locator("*").filter({ has: page.getByRole("heading", { name: "New item" }) }).first();
   await expect(card).toBeVisible();
   await edgePixels((await card.boundingBox())!);
   await page.keyboard.press("Escape");
