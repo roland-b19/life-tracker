@@ -12,6 +12,7 @@ import {
   dismissToast,
   expectNoSeriousViolations,
   headIsQuiet,
+  holdWrites,
   hydrationWarnings,
   installStoppedClock,
   isRefresh,
@@ -1173,6 +1174,27 @@ for (const { refusal, error, type } of NOT_ENDING) {
     await expect(banner(page)).toBeHidden();
   });
 }
+
+// A refusal that does not end the workout keeps it in hand (D-039), so a save already waiting behind the refused one still
+// goes: the over-the-limit notes are held on their way while the field is changed and Exit tapped.
+test("a notes save waiting behind a refusal that does not end the workout is sent, and Exit goes on", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await typeTooLong(page, "Held ");
+  const release = await holdWrites(page, "Held ");
+  await notes(page).blur();
+  await notes(page).fill("Second try");
+
+  await page.getByRole("button", { name: "Exit, finish later" }).click();
+  await release();
+  await expect(banner(page)).toBeVisible();
+  await expect(toast(page, `Too long (max ${GYM_LIMITS.sessionNotes})`)).toHaveCount(1);
+  await expect(toast(page, "Saved the notes")).toHaveCount(1);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
+  expect(rows).toEqual([{ notes: "Second try" }]);
+});
 
 // GYMB-05: Undo of "Added set" after another device deleted that set leaves nothing behind, not a row that is not saved.
 test("Undo of an added set another device already deleted adds no row back", async ({ signedInPage: page, browser }) => {
