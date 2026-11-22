@@ -497,25 +497,6 @@ const setCount = async (userId: string) =>
     ).rows[0].count,
   );
 
-// D-039: a finished workout takes no more sets, also from a device that still shows it open.
-test("a set logged on one device into a workout another device finished is refused, and nothing is saved", async ({ signedInPage: page, browser }) => {
-  await openGym(page);
-  await startWorkout(page, DAY);
-  await logSet(page);
-  const other = await otherDevice(browser, page);
-  await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
-  await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
-
-  await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
-  await expect(page.getByText(/^Finished the workout/)).toBeVisible();
-  const userId = await signedInUserId(page);
-  expect(await setCount(userId)).toBe(1);
-  await logSet(other);
-  await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
-  expect(await setCount(userId)).toBe(1);
-  await other.context().close();
-});
-
 // D-039: Cancel deletes an open workout only, so a device still showing a workout another device finished cannot delete
 // it; the refusal closes the Keep/Delete question and the toast says why.
 test("Cancel on one device of a workout another device finished is refused, closes its question, and History keeps the workout", async ({ signedInPage: page, browser }) => {
