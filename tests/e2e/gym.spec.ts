@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Browser, type Locator, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 import { andSettle, burst, center, expectNoSeriousViolations, headIsQuiet, isRefresh, refreshesDone, settled, test } from "./helpers";
 
@@ -933,6 +933,184 @@ test("notes of only an invisible character do not stop Exit, Finish or Cancel", 
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText("No sets logged: the workout was removed")).toBeVisible();
   await expect(page.getByText("Nothing to save.")).toBeHidden();
+});
+
+// D-034: Next sends a write without waiting for a refresh on its way, and applies that refresh once the write's own change
+// is on screen. A refresh the server rendered before Start (no workout open) must not end the workout Start put on screen.
+// The refresh after Cancel is rendered at once and its answer held until Start has answered.
+test("a refresh rendered before Start and answered after it leaves the started workout on screen", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  // The page holds the open workout as the server sent it, so the held page (none open) is a change to it.
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await page.getByRole("button", { name: "Cancel workout" }).click();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let rendered = () => {};
+  const renderedBeforeStart = new Promise<void>((resolve) => (rendered = resolve));
+  let stale: Request | undefined;
+  await page.route(
+    (url) => url.pathname === "/gym",
+    async (route) => {
+      if (stale || !isRefresh(page, route.request())) return route.fallback();
+      stale = route.request();
+      const answer = await route.fetch();
+      rendered();
+      await held;
+      await route.fulfill({ response: answer });
+    },
+  );
+  await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+  await expect(page.getByText("Cancelled the workout")).toBeVisible();
+  await renderedBeforeStart;
+  await startWorkout(page, DAY);
+  release();
+  await stale!.response();
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+  await notes(page).fill("Still in hand");
+});
+
+// The same race with no request held: the refresh after Cancel (rendered before Start, with no write on its way) has
+// fully arrived, and Start is tapped a few ms after Next takes it, before it is on screen.
+for (const ms of [1, 2, 4]) {
+  test(`Start tapped ${ms} ms after a refresh rendered before it has arrived leaves the started workout on screen`, async ({ signedInPage: page }) => {
+    // Under the app's own fetch: the next refresh, once armed, is read whole and handed on when the test says, and
+    // Start is tapped `ms` after that (the moment is the case under test, not a wait).
+    await page.addInitScript(() => {
+      const realFetch = window.fetch;
+      const trap: { armed: boolean; arrived: boolean; go?: (ms: number) => void; start?: HTMLElement } = { armed: false, arrived: false };
+      Object.assign(window, { trap });
+      window.fetch = async (input, init) => {
+        const res = await realFetch(input, init);
+        const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+        if (trap.armed && headers.has("rsc") && !headers.has("next-router-prefetch") && !headers.has("next-router-segment-prefetch")) {
+          trap.armed = false;
+          await res.clone().arrayBuffer();
+          const after = await new Promise<number>((go) => {
+            trap.go = go;
+            trap.arrived = true;
+          });
+          setTimeout(() => trap.start?.click(), after);
+        }
+        return res;
+      };
+    });
+    type Trap = { trap: { armed: boolean; arrived: boolean; go: (ms: number) => void; start: HTMLElement } };
+    await openGym(page);
+    await startWorkout(page, DAY);
+    await refreshesDone(page);
+    await page.evaluate(headIsQuiet);
+    await page.getByRole("button", { name: "Cancel workout" }).click();
+    await page.evaluate(() => ((window as unknown as Trap).trap.armed = true));
+    await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+    await expect(page.getByText("Cancelled the workout")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as unknown as Trap).trap.arrived)).toBe(true);
+    await page
+      .getByRole("region", { name: "Training days" })
+      .getByRole("button", { name: `Start ${DAY}`, exact: true })
+      .evaluate((button) => ((window as unknown as Trap).trap.start = button as HTMLElement));
+    await andSettle(page, () => page.evaluate((after) => (window as unknown as Trap).trap.go(after), ms));
+    await refreshesDone(page);
+    await page.evaluate(headIsQuiet);
+    await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+  });
+}
+
+// A refresh rendered before Start and answered after it while the device is offline: no newer refresh follows it, and the
+// workout stays in hand, then and once the device is back online.
+test("a refresh rendered before Start and answered after it, offline since, leaves the started workout in hand", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await page.getByRole("button", { name: "Cancel workout" }).click();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let rendered = () => {};
+  const renderedBeforeStart = new Promise<void>((resolve) => (rendered = resolve));
+  let stale: Request | undefined;
+  await page.route(
+    (url) => url.pathname === "/gym",
+    async (route) => {
+      if (stale || !isRefresh(page, route.request())) return route.fallback();
+      stale = route.request();
+      const answer = await route.fetch();
+      rendered();
+      await held;
+      await route.fulfill({ response: answer });
+    },
+  );
+  await andSettle(page, () => page.getByRole("button", { name: "Delete", exact: true }).click());
+  await expect(page.getByText("Cancelled the workout")).toBeVisible();
+  await renderedBeforeStart;
+  // Offline from Start's answer on: the refresh it leaves due waits for the network, so no refresh replaces the held one.
+  let answered = false;
+  await page.route(
+    (url) => url.pathname === "/gym",
+    async (route) => {
+      if (answered || route.request().method() !== "POST") return route.fallback();
+      answered = true;
+      const answer = await route.fetch();
+      await page.context().setOffline(true);
+      await route.fulfill({ response: answer });
+    },
+  );
+  await startWorkout(page, DAY);
+  // Every page Next puts on screen replaces the tags it hoists into <head>: the held page is on screen once they change.
+  const shown = page.evaluate(
+    () => new Promise<void>((resolve) => new MutationObserver((_, seen) => (seen.disconnect(), resolve())).observe(document.head, { childList: true, subtree: true })),
+  );
+  release();
+  await stale!.response();
+  await shown;
+  await page.evaluate(headIsQuiet);
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeHidden();
+
+  const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
+  await page.context().setOffline(false);
+  await refreshed;
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(banner(page)).toBeHidden();
+  await notes(page).fill("Still in hand");
+});
+
+// D-034: a workout finished on another device before this page's first refresh after Start (the page showed none open
+// before Start, and shows none again) still leaves the screen, with the toast.
+test("a workout finished on another device before the first refresh after Start leaves this page too", async ({ signedInPage: page, browser }) => {
+  await openGym(page);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(
+    (url) => url.pathname === "/gym",
+    async (route) => {
+      if (isRefresh(page, route.request())) await held;
+      await route.fallback();
+    },
+  );
+  await startWorkout(page, DAY);
+  const other = await otherDevice(browser, page);
+  try {
+    await andSettle(other, () => banner(other).getByRole("button", { name: "Resume" }).click());
+    // Ends Resume's tap burst (D-043): Finish may sit where the banner's Resume was.
+    await other.keyboard.press("Shift");
+    await andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click());
+    await expect(other.getByText("No sets logged: the workout was removed")).toBeVisible();
+    release();
+    await refreshesDone(page);
+    await expect(toast(page, "This workout was finished or cancelled on another device.")).toBeVisible();
+    await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
+    await expect(banner(page)).toBeHidden();
+  } finally {
+    await other.context().close();
+  }
 });
 
 // D-040: notes changed on another page refuse this page's save; the next save changes the server's notes and keeps the typed text.

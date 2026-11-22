@@ -948,6 +948,55 @@ test("a double tap on the meal Save or on a water add writes once [D-043]", asyn
   await expect(water).toContainText("250 / 3.000 ml");
 });
 
+// The water and goals forms send each value with the one they opened with (D-040). Opened again before their last save
+// has answered, they still show the value from before it, so a Save then would be refused as changed on another device:
+// Save waits for that answer, which closes the form, and the next opening starts from the saved value.
+test("a water or goals form opened again while its last save is unanswered holds Save until the answer [D-043]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const forms = [
+    { region: "Water", edit: "Edit water and goal", dialog: "Edit water", field: "Water today (ml)", first: "1000", saved: "1.000", toast: "Water set to 1.000 ml", next: "1500", shown: "1.500 / 3.000 ml" },
+    { region: "Nutrition", edit: "Edit goals", dialog: "Edit goals", field: "Calories (kcal)", first: "2800", saved: "2.800", toast: "Saved nutrition goals", next: "2900", shown: "/ 2.900 kcal" },
+  ];
+  for (const { region: regionName, edit, dialog, field, first, saved, toast, next, shown } of forms) {
+    const region = page.getByRole("region", { name: regionName });
+    const form = page.getByRole("dialog", { name: dialog });
+    const marker = `"to":${first}`;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/health", async (route) => {
+      if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(marker)) await held;
+      await route.fallback();
+    });
+    await region.getByRole("button", { name: edit }).click();
+    await form.getByLabel(field).fill(first);
+    const firstAnswered = page.waitForResponse((r) => (r.request().postData() ?? "").includes(marker));
+    await form.getByRole("button", { name: "Save" }).click();
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await expect(form).toBeHidden();
+    await region.getByRole("button", { name: edit }).click();
+    await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+    await expect(form.getByLabel(field)).toBeDisabled();
+    release();
+    await firstAnswered;
+    await page.unroute("**/health");
+    await expect(form).toBeHidden();
+    await expect(page.getByText(toast)).toBeVisible();
+    await page.getByRole("button", { name: "Dismiss notification" }).click();
+
+    await region.getByRole("button", { name: edit }).click();
+    await expect(form.getByLabel(field)).toHaveValue(saved);
+    await form.getByLabel(field).fill(next);
+    await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+    await expect(form).toBeHidden();
+    await expect(region).toContainText(shown);
+    await expect(page.getByText("This changed on another device")).toHaveCount(0);
+    await page.getByRole("button", { name: "Dismiss notification" }).click();
+  }
+  await openHealth(page, "Today");
+  await expect(page.getByRole("region", { name: "Water" })).toContainText("1.500 / 3.000 ml");
+  await expect(page.getByRole("region", { name: "Nutrition" })).toContainText("/ 2.900 kcal");
+});
+
 test("a meal deleted in one tab leaves another tab after its refresh, without a reload [SERVER-STATE]", async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   await addMeal(page);

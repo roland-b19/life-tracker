@@ -4,11 +4,13 @@ import { requireUser } from "@/server/auth";
 import { toISODate } from "@/lib/format-date";
 import { metricDayEditable } from "@/lib/rules";
 import { uuid } from "@/lib/validations/common";
-import { Refusal, respond } from "@/lib/validations/result";
+import { CATEGORY_GONE } from "@/lib/validations/categories";
+import { alreadyExists, changedSince, Refusal, respond } from "@/lib/validations/result";
 import {
   addShoppingItemSchema,
   logMealSchema,
   logWeightSchema,
+  ONLY_TODAY_AND_YESTERDAY,
   restoreMealSchema,
   restoreWeightSchema,
   renameShoppingCategorySchema,
@@ -49,7 +51,7 @@ import {
 
 /** Meals are written for today or yesterday only; older days are history. */
 function assertWritableDay(date: string) {
-  if (!metricDayEditable(date, toISODate())) throw new Refusal("Only today and yesterday can be changed.");
+  if (!metricDayEditable(date, toISODate())) throw new Refusal(ONLY_TODAY_AND_YESTERDAY);
 }
 
 /** Water, steps and weight are saved for today only (Europe/Bucharest): they are measured on the day. */
@@ -220,7 +222,7 @@ export async function addShoppingCategoryAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
-    if (!(await addShoppingCategory(userId, name, kind))) throw new Refusal(`"${name}" already exists.`);
+    if (!(await addShoppingCategory(userId, name, kind))) throw new Refusal(alreadyExists(name));
     return { name };
   });
 }
@@ -239,7 +241,7 @@ export async function renameShoppingCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { kind, from, to } = renameShoppingCategorySchema.parse(rawInput);
     const change = await renameShoppingCategory(userId, from, to, kind);
-    if (!change) throw new Refusal("Category not found.");
+    if (!change) throw new Refusal(CATEGORY_GONE);
     return { change };
   });
 }
@@ -249,7 +251,7 @@ export async function deleteShoppingCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { kind, name } = shoppingCategoryNameSchema.parse(rawInput);
     const change = await deleteShoppingCategory(userId, name, kind);
-    if (!change) throw new Refusal("Category not found.");
+    if (!change) throw new Refusal(CATEGORY_GONE);
     return { change };
   });
 }
@@ -259,7 +261,7 @@ export async function revertShoppingCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { kind, ...input } = revertShoppingCategorySchema.parse(rawInput);
     const done = await revertShoppingCategory(userId, input, kind);
-    if (!done) throw new Refusal(`Can't undo: "${input.current}" has changed since.`);
+    if (!done) throw new Refusal(changedSince(input.current));
     return done;
   });
 }

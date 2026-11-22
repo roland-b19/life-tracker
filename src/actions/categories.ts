@@ -2,14 +2,14 @@
 
 import { requireUser } from "@/server/auth";
 import { addCategory, deleteCategory, renameCategory, reorderCategories, revertCategory } from "@/lib/categories";
-import { categoryNameSchema, renameCategorySchema, reorderCategoriesSchema, revertCategorySchema } from "@/lib/validations/categories";
-import { Refusal, respond } from "@/lib/validations/result";
+import { CATEGORY_GONE, categoryNameSchema, renameCategorySchema, reorderCategoriesSchema, revertCategorySchema } from "@/lib/validations/categories";
+import { alreadyExists, changedSince, Refusal, respond } from "@/lib/validations/result";
 
 export async function addCategoryAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { scope, name } = categoryNameSchema.parse(rawInput);
-    if (!(await addCategory(userId, scope, name))) throw new Refusal(`"${name}" already exists.`);
+    if (!(await addCategory(userId, scope, name))) throw new Refusal(alreadyExists(name));
     return { name };
   });
 }
@@ -19,7 +19,7 @@ export async function renameCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { scope, from, to } = renameCategorySchema.parse(rawInput);
     const change = await renameCategory(userId, scope, from, to);
-    if (!change) throw new Refusal("Category not found.");
+    if (!change) throw new Refusal(CATEGORY_GONE);
     return { change };
   });
 }
@@ -29,7 +29,7 @@ export async function deleteCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { scope, name } = categoryNameSchema.parse(rawInput);
     const change = await deleteCategory(userId, scope, name);
-    if (!change) throw new Refusal("Category not found.");
+    if (!change) throw new Refusal(CATEGORY_GONE);
     return { change };
   });
 }
@@ -39,7 +39,7 @@ export async function revertCategoryAction(rawInput: unknown) {
     const userId = await requireUser();
     const { scope, ...input } = revertCategorySchema.parse(rawInput);
     const done = await revertCategory(userId, scope, input);
-    if (!done) throw new Refusal(`Can't undo: "${input.current}" has changed since.`);
+    if (!done) throw new Refusal(changedSince(input.current));
     return done;
   });
 }

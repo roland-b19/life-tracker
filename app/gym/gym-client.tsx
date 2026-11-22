@@ -33,9 +33,11 @@ interface GymClientProps {
   exercises: LibraryExercise[];
   customExercises: CustomExercise[];
   openSession: ActiveSessionData | null;
+  /** The refresh the server rendered this page for (`x-refresh` in `app/providers.tsx`); 0 when it is not a refresh. */
+  refresh: number;
 }
 
-export function GymClient({ userName, today, plateWeights, split, deload, history, exercises, customExercises, openSession }: GymClientProps) {
+export function GymClient({ userName, today, plateWeights, split, deload, history, exercises, customExercises, openSession, refresh }: GymClientProps) {
   const days = split?.days ?? [];
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
     const todayMatch = days.find((d) => d.dayOfWeek === weekday(today));
@@ -47,7 +49,7 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
   // The day being edited, as it was when the editor opened, and the discarded edits an Undo reopens it with.
   const [editing, setEditing] = useState<{ day: SplitDay; resume?: DiscardedEdit } | null>(null);
   const [isFolded, toggleFolded] = useFolded("gym");
-  const w = useWorkout({ openSession, days, isDeloadMode, setBusy, selectDay: setSelectedDayId });
+  const w = useWorkout({ openSession, refresh, days, isDeloadMode, setBusy, selectDay: setSelectedDayId });
   const { activeSession, paused } = w;
 
   // The Progress tab draws from what the page already holds (history plus the workout in hand): no load, no skeleton.

@@ -7,7 +7,13 @@ import { authState, seedUser } from "./auth";
 
 import { succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
-import { CHANGED_ELSEWHERE, MAX_WATER_ML, mealHasValue, SHOPPING_ITEM_GONE, WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
+import {
+  CHANGED_ELSEWHERE,
+  MAX_WATER_ML,
+  mealHasValue,
+  SHOPPING_ITEM_GONE,
+  WEIGHT_ENTRY_GONE,
+} from "@/lib/validations/food";
 import { db } from "@/server/db";
 import { addDays, toISODate } from "@/lib/format-date";
 import { eq } from "drizzle-orm";
@@ -1242,6 +1248,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
       const empty = { date: toISODate(), name: "Meal", calories: 0, protein: 0.04, carbs: 0.04, fat: 0 };
       expect(await logMealAction(empty)).toEqual({ success: false, error: "Enter calories or a macro above 0." });
+      expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
+    });
+
+    it("refuses a meal over a limit in one sentence that names the field once [U5]", async () => {
+      authState.id = userA;
+      const meal = { date: toISODate(), name: "Meal", calories: 100, protein: 0, carbs: 0, fat: 0 };
+      expect(await logMealAction({ ...meal, calories: 10001 })).toEqual({ success: false, error: "Calories must be 10.000 or less" });
+      expect(await logMealAction({ ...meal, fat: 1000.5 })).toEqual({ success: false, error: "Protein, carbs and fat must each be 1.000 g or less" });
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
   });

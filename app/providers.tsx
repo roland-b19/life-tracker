@@ -36,6 +36,13 @@ const isPagePayload = (text: string) => /^[#~]?[0-9a-f]+:/.test(text) && text.en
 const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
   new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
 
+// Each refresh of the page on screen carries its number (`x-refresh`), and the server page can render it back. Next
+// sends a write without waiting for a refresh on its way and applies that refresh after the write's own change, so a
+// page can tell a server value rendered before a write's answer (its refresh number is at most the one sent by then).
+let sent = 0;
+/** The number of the last refresh sent: a page rendered for a higher one was rendered after this moment. */
+export const refreshesSent = () => sent;
+
 /**
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
  * refreshes this page once the writes stop and tells the other copies, which refresh too; every copy also refreshes
@@ -188,6 +195,8 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
         if (url.pathname !== location.pathname) return navigate(input, init, url.pathname);
         // A refresh of this page: Next dropped its copies of the pages before sending it, so a waiting tap can go.
         if (held) queueMicrotask(release);
+        headers.set("x-refresh", String(++sent));
+        return realFetch(input, { ...init, headers });
       }
       return realFetch(input, init);
     };

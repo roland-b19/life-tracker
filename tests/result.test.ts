@@ -84,3 +84,22 @@ describe("newId: an add's id made on the device", () => {
     expect(await messageFor(z.object({ id: newId }), { id: "not-an-id" })).toBe("Invalid id");
   });
 });
+
+describe("a refusal several actions give is written once [U6]", () => {
+  const sources = import.meta.glob(["../src/**/*.{ts,tsx}", "../app/**/*.{ts,tsx}"], { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >;
+  // Gym still words its own duplicate name; it moves to alreadyExists with the gym pages.
+  const files = Object.entries(sources).filter(([file]) => !/gym/.test(file));
+  const writtenIn = (words: string) => files.filter(([, text]) => text.includes(words)).map(([file]) => file);
+
+  it.each([
+    ["Category not found.", "../src/lib/validations/categories.ts"],
+    ["has changed since.", "../src/lib/validations/result.ts"],
+    ["already exists.", "../src/lib/validations/result.ts"],
+    ["Only today and yesterday can be changed.", "../src/lib/validations/food.ts"],
+  ])("%s", (words, home) => {
+    expect(writtenIn(words)).toEqual([home]);
+  });
+});

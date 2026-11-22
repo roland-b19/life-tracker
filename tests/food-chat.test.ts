@@ -102,7 +102,7 @@ describe("Food assistant: context prompt and structured answer", () => {
 
     expect(result.reply).toBe("Am adăugat prânzul.");
     expect(result.meals).toHaveLength(1);
-    expect(result.leftOut).toEqual(["Meal 2: name: Required"]);
+    expect(result.leftOut).toEqual(["Meal 2: name is required"]);
     const call = runClaude.mock.calls[0][0];
     expect(call.token).toBeNull();
     expect(call.input).toContain("La prânz am mâncat 200 g somon");
@@ -131,7 +131,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["1 măr"]);
   });
 
-  it("leaves out an invalid meal, names it and the field, and logs the rest", async () => {
+  it("leaves out an invalid meal, names it and the field once, and logs the rest", async () => {
     process.env.AUTH_DEV = "true";
     const owner = await seedUser(`chat-invalid-${randomUUID()}`);
     mockClaude({
@@ -141,16 +141,23 @@ describe("Food assistant: context prompt and structured answer", () => {
         { name: "Supă", calories: "multe", protein: 5, carbs: 10, fat: 2 },
         "o ciocolată",
         { name: "Iaurt", calories: 120, protein: 10, carbs: 8, fat: 5 },
+        { name: "Tort întreg", calories: 10001, protein: 50, carbs: 900, fat: 400 },
+        { name: "Unt", calories: 7000, protein: 9, carbs: 1, fat: 1001 },
+        { name: "Paste", calories: 300, protein: "multe", carbs: 60, fat: 2 },
       ],
     });
 
     const result = await sendFoodChatMessage(owner, "pâine, supă, ciocolată și iaurt", [], ctx);
 
     expect(result.meals.map((m) => m?.name)).toEqual(["Iaurt"]);
+    // One phrase per line that names the field once, also where the schema's own words name it.
     expect(result.leftOut).toEqual([
-      "Pâine: fat: Must be at least 0",
-      expect.stringMatching(/^Supă: calories: /),
+      "Pâine: fat must be at least 0",
+      "Supă: calories is required",
       "Meal 3: not a meal",
+      "Tort întreg: calories must be 10.000 or less",
+      "Unt: protein, carbs and fat must each be 1.000 g or less",
+      "Paste: protein must be a number",
     ]);
     expect((await getDailyFoodSummary(owner, ctx.date)).meals.map((m) => m.name)).toEqual(["Iaurt"]);
   });

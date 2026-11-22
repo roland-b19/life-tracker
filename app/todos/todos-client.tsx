@@ -87,7 +87,7 @@ export function TodosClient({
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
   // The id the open add form's task gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
   const addId = useRef("");
   const [savingIn, setSavingIn] = useState<number | null>(null);
@@ -169,7 +169,7 @@ export function TodosClient({
   };
 
   const openForm = (todo?: TodoItem) => {
-    setErrorMsg(null);
+    setErrorMsg("");
     setEditing(todo ?? null);
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
@@ -197,7 +197,7 @@ export function TodosClient({
     const stillOpen = () => from === formOpening.current;
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
-    setErrorMsg(null);
+    setErrorMsg("");
     setSavingIn(from);
     try {
       if (before) {
@@ -292,7 +292,13 @@ export function TodosClient({
   const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
     updateList(task.space, (list) => list.map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos));
 
-  const toggle = async (todo: TodoItem, next: boolean, withUndo: boolean, completedAt?: Date | null) => {
+  // A tick, or (withUndo false) its Undo, whose failure undoWith tells. Answers the server's answer.
+  const toggle = async (
+    todo: TodoItem,
+    next: boolean,
+    withUndo: boolean,
+    completedAt?: Date | null,
+  ): Promise<Awaited<ReturnType<typeof toggleTodoAction>> | null> => {
     ++requestId.current;
     setCompleted(todo, next, completedAt);
     const saved = toggleTodoAction({ id: todo.id, isCompleted: next, completedAt }).catch(() => null);
@@ -301,13 +307,18 @@ export function TodosClient({
         message: next ? `Completed "${todo.title}"` : `Marked "${todo.title}" not done`,
         touches: touches(todo.id),
         saved,
-        onUndo: () => void toggle(todo, !next, false, todo.completedAt),
+        onUndo: undoWith(
+          showToast,
+          () => toggle(todo, !next, false, todo.completedAt),
+          (back) => (back && !back.success ? back.error : "Failed to undo"),
+        ),
       });
     }
     const res = await saved;
-    if (!res?.success) warn(res?.error ?? "Failed to update task");
+    if (withUndo && !res?.success) warn(res?.error ?? "Failed to update task");
     // Refresh so the screen matches the database, whatever the server answered.
     await loadDay();
+    return res;
   };
 
   const handleToggleTodo = (todo: TodoItem) => once(`todos:${todo.id}`, () => toggle(todo, !todo.isCompleted, true), tappedButton.current);
@@ -391,6 +402,7 @@ export function TodosClient({
       showToast({
         message: "Reminders enabled",
         type: "success",
+        touches: [`push_subscriptions:${res.subscription.id}`],
         // Forgets the subscription here and on the server, so no reminder arrives.
         onUndo: undoWith(
           showToast,
@@ -550,7 +562,7 @@ export function TodosClient({
           value={titleInput}
           onChange={(e) => {
             setTitleInput(e.target.value);
-            setErrorMsg(null);
+            setErrorMsg("");
           }}
           aria-invalid={errorMsg ? true : undefined}
           aria-describedby={errorMsg ? "task-title-error" : undefined}

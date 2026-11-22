@@ -26,7 +26,7 @@ import {
   type RevertShoppingCategoryInput,
   type ValueChange,
 } from "./validations/food";
-import { Refusal } from "./validations/result";
+import { changedSince, Refusal } from "./validations/result";
 import { ensureUserNutritionTargets } from "./food-seed";
 import type { CategoryChange } from "./categories";
 import { compareShopping } from "./check-order";
@@ -331,7 +331,7 @@ export async function unmergeShoppingItem(userId: string, input: UnmergeShopping
     const { before } = input;
     const merged = stillListed((await tx.select().from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId))))[0]);
     if (merged.name.toLowerCase() !== before.name.toLowerCase() || merged.unit !== before.unit)
-      throw new Refusal(`Can't undo: "${merged.name}" has changed since.`);
+      throw new Refusal(changedSince(merged.name));
     await tx.delete(shoppingItems).where(eq(shoppingItems.id, merged.id));
     const [item] = await tx
       .insert(shoppingItems)
@@ -633,7 +633,7 @@ export async function revertShoppingCategory(userId: string, input: RevertShoppi
             .where(and(onList(userId), ne(shoppingItems.id, merged.id), sql`lower(${shoppingItems.name}) = lower(${merged.name})`, eq(shoppingItems.unit, merged.unit)))
             .limit(1)
         : [];
-      if (!into || twin) throw new Refusal(`Can't undo: "${current}" has changed since.`);
+      if (!into || twin) throw new Refusal(changedSince(current));
     }
     // A merge's target was under `current` before the change, so it stays there.
     const into = new Set(merges.map((m) => m.into));

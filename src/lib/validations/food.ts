@@ -2,20 +2,26 @@ import { z } from "zod";
 import { categorySchema } from "./categories";
 import { toISODate } from "@/lib/format-date";
 import { isoDate, newId, uuid, visible } from "./common";
+import { formatNumber } from "@/lib/number-format";
 
 /** One day of water holds at most this much; quick taps and totals stop here. */
 export const MAX_WATER_ML = 20000;
 /** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
 export const MAX_STEPS = 200000;
+/** The most one meal can hold; the Health form checks the same limits, with these words, before it saves. */
+export const MEAL_LIMITS = { calories: 10000, macroGrams: 1000 } as const;
+export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less`;
+export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less`;
+const macroGrams = z.number().min(0).max(MEAL_LIMITS.macroGrams, MEAL_MACROS_TOO_HIGH);
 
 const mealFields = z.object({
   date: isoDate,
   // The manual form has no name field (meals are not listed any more); the assistant still names its own.
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required").default("Meal"),
-  calories: z.number().int().min(0).max(10000),
-  protein: z.number().min(0).max(1000),
-  carbs: z.number().min(0).max(1000),
-  fat: z.number().min(0).max(1000),
+  calories: z.number().int().min(0).max(MEAL_LIMITS.calories, MEAL_CALORIES_TOO_HIGH),
+  protein: macroGrams,
+  carbs: macroGrams,
+  fat: macroGrams,
   isEstimated: z.boolean().default(false).optional(),
 });
 
@@ -56,16 +62,29 @@ export const logWeightSchema = z
 /** Undo of a delete: the same weigh-in, under its old id. */
 export const restoreWeightSchema = logWeightSchema.omit({ from: true }).extend({ id: uuid });
 
+/** The range each daily goal can take; the Health forms check the same ranges before they save. */
+export const GOAL_RANGES = {
+  calories: { min: 500, max: 10000 },
+  proteinGrams: { min: 20, max: 500 },
+  carbsGrams: { min: 0, max: 1000 },
+  fatGrams: { min: 0, max: 400 },
+  waterMl: { min: 500, max: 15000 },
+  steps: { min: 1000, max: MAX_STEPS },
+} as const;
+const goal = ({ min, max }: { min: number; max: number }) => z.number().int().min(min).max(max);
 const targetFields = {
-  calories: z.number().int().min(500).max(10000),
-  proteinGrams: z.number().int().min(20).max(500),
-  carbsGrams: z.number().int().min(0).max(1000),
-  fatGrams: z.number().int().min(0).max(400),
-  waterMl: z.number().int().min(500).max(15000),
-  steps: z.number().int().min(1000).max(MAX_STEPS),
+  calories: goal(GOAL_RANGES.calories),
+  proteinGrams: goal(GOAL_RANGES.proteinGrams),
+  carbsGrams: goal(GOAL_RANGES.carbsGrams),
+  fatGrams: goal(GOAL_RANGES.fatGrams),
+  waterMl: goal(GOAL_RANGES.waterMl),
+  steps: goal(GOAL_RANGES.steps),
 };
 const NOTHING_TO_SAVE = "Nothing to save.";
 const anySet = (values: unknown[]) => values.some((value) => value !== undefined);
+
+/** The answer for a meal written into a day older than yesterday: older days are history. */
+export const ONLY_TODAY_AND_YESTERDAY = "Only today and yesterday can be changed.";
 
 /** The answer when a stored number is no longer the one the screen showed: another device changed it first. */
 export const CHANGED_ELSEWHERE = "This changed on another device. Check the new value and try again.";

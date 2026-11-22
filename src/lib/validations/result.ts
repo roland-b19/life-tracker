@@ -11,6 +11,12 @@ export type Answer<T extends object = object> = ({ success: true } & T) | Failur
 /** What a signed-out caller is told (D-040): a refusal the page can show, never a server error. */
 export const SIGNED_OUT = "You're signed out. Sign in again.";
 
+/** A name the user gave is taken already. */
+export const alreadyExists = (name: string) => `"${name}" already exists.`;
+
+/** An Undo refused because the row it would put back has changed since the change it undoes (D-040). */
+export const changedSince = (name: string) => `Can't undo: "${name}" has changed since.`;
+
 const numberLimit = (bound: "most" | "least", n: number | bigint, inclusive?: boolean) =>
   inclusive === false ? `Must be ${bound === "most" ? "less" : "more"} than ${n}` : `Must be at ${bound} ${n}`;
 
