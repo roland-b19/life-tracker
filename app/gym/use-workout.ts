@@ -118,6 +118,10 @@ export function useWorkout({
     setSessionNotes("");
     setEnded({ id: handId });
   }
+  const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
+  useEffect(() => {
+    live.current = activeSession ?? paused;
+  });
   const toldEnded = useRef(ended);
   useEffect(() => {
     if (!ended || toldEnded.current === ended) return;
@@ -131,6 +135,9 @@ export function useWorkout({
    */
   const refused = (id: string, error: string) => {
     if (error !== WORKOUT_FINISHED && error !== WORKOUT_GONE) return warn(error);
+    // At once, not at the next render: a write already waiting on this one (Exit's or Finish's notes save, after the
+    // save the tap's blur sent) then sends nothing, so it is not refused and told a second time.
+    if (live.current?.id === id) live.current = null;
     setOpen((o) => (o?.id === id ? null : o));
     setHandId((hand) => (hand === id ? null : hand));
     setConfirmCancel(false);
@@ -145,10 +152,6 @@ export function useWorkout({
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
   const clock = useClock((activeSession ?? paused)?.timer);
-  const live = useRef<ActiveSessionData | null>(null); // the workout in hand, for an Undo that comes back later
-  useEffect(() => {
-    live.current = activeSession ?? paused;
-  });
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
   // next save changes from, so the device is not refused again; the field keeps what was typed.
   const notesStale = useRef(false);
@@ -422,11 +425,13 @@ export function useWorkout({
   /**
    * Saves the notes field when the server would save it as other notes than it holds (D-040: the change only, refused
    * when they changed elsewhere), after any save in flight. Answers false when the save was refused or failed; it says why.
+   * A workout no longer in hand once that save has answered (it ended elsewhere, and that refusal said so) sends nothing.
    */
   function saveNotes(text = sessionNotes): Promise<boolean> {
     const session = activeSession;
     if (!session) return notesSave.current;
     const run = notesSave.current.then(async () => {
+      if (live.current?.id !== session.id) return false;
       const from = savedNotes.current;
       // Compared as the server saves it (trimmed, invisible-only is none); too long text goes, for the server's reason.
       const to = sessionNote.safeParse(text);

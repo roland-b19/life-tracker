@@ -1126,6 +1126,9 @@ test("notes refused because another page changed them are saved on the next try,
   // The refresh after the refusal brings the server's notes; React commits it a few tasks after its response.
   await refreshesDone(page);
   await page.evaluate(headIsQuiet);
+  // Only a workout that ended elsewhere leaves the screen on a refusal (D-039): this one stays in hand.
+  await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
+  await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(0);
   await andSettle(page, () => page.getByRole("button", { name: "Exit, finish later" }).click(), "From this page");
   await expect(banner(page)).toBeVisible();
   const userId = await userIdOf(page);
@@ -1657,11 +1660,21 @@ test("a double tap on the banner's Resume resumes once", async ({ signedInPage: 
 });
 
 // A write refused because the workout ended elsewhere (finished: WORKOUT_FINISHED; cancelled: WORKOUT_GONE) takes the
-// workout off the screen at once, with one toast; the refresh that follows the write shows no second one. The other
-// device's clock stands still, so the workout leaves before any refresh; the clock then runs again for the refresh. A
-// set's Delete in a cancelled workout finds no set (SET_GONE), so that workout leaves at the next refresh instead.
+// workout off the screen at once, with one toast, and sends no other write after it; the refresh that follows shows no
+// second toast. The other device's clock stands still, so the workout leaves before any refresh; the clock then runs
+// again for the refresh. Notes typed and not saved yet go with the tap's blur, so Exit and Finish then send nothing of
+// their own. A set's Delete in a cancelled workout finds no set (SET_GONE, which says nothing of the workout), so that
+// workout leaves on the refresh that follows the answer, with the same one toast.
 const ENDINGS = ["finished", "cancelled"] as const;
-const STALE_WRITES: { write: string; act: (other: Page) => Promise<void>; endings?: readonly (typeof ENDINGS)[number][] }[] = [
+const typedThen = (button: string) => async (other: Page) => {
+  await notes(other).fill("Typed here");
+  await andSettle(other, () => other.getByRole("button", { name: button }).click(), "Typed here");
+};
+const STALE_WRITES: {
+  write: string;
+  act: (other: Page) => Promise<void>;
+  onRefresh?: (typeof ENDINGS)[number];
+}[] = [
   {
     write: "Cancel",
     act: async (other) => {
@@ -1677,12 +1690,31 @@ const STALE_WRITES: { write: string; act: (other: Page) => Promise<void>; ending
       await other.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
       await andSettle(other, () => other.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
     },
-    endings: ["finished"],
+    onRefresh: "cancelled",
   },
+  {
+    write: "Pause",
+    act: async (other) => {
+      // Ends Resume's tap burst (D-043): Pause may sit where the banner's Resume was.
+      await other.keyboard.press("Shift");
+      await andSettle(other, () => other.getByRole("button", { name: "Pause", exact: true }).click());
+    },
+  },
+  {
+    write: "a notes save",
+    act: async (other) => {
+      await notes(other).fill("Typed here");
+      await andSettle(other, () => notes(other).blur(), "Typed here");
+    },
+  },
+  { write: "Exit", act: (other) => andSettle(other, () => other.getByRole("button", { name: "Exit, finish later" }).click()) },
+  { write: "notes typed, then Exit,", act: typedThen("Exit, finish later") },
+  { write: "notes typed, then Finish,", act: typedThen("Finish workout") },
 ];
-for (const { write, act, endings = ENDINGS } of STALE_WRITES) {
-  for (const ended of endings) {
-    test(`${write} of a workout ${ended} on another device takes it off the screen at once, with one toast [D-039]`, async ({ signedInPage: page, browser }) => {
+for (const { write, act, onRefresh } of STALE_WRITES) {
+  for (const ended of ENDINGS) {
+    const when = onRefresh === ended ? "on the refresh that follows" : "at once";
+    test(`${write} of a workout ${ended} on another device takes it off the screen ${when}, with one toast [D-039]`, async ({ signedInPage: page, browser }) => {
       await openGym(page);
       await startWorkout(page, DAY);
       await logSet(page);
@@ -1697,14 +1729,25 @@ for (const { write, act, endings = ENDINGS } of STALE_WRITES) {
       }
       const userId = await userIdOf(page);
       const sets = await setCount(userId);
+      let writes = 0;
+      other.on("request", (r) => {
+        if (r.method() === "POST" && "next-action" in r.headers()) writes++;
+      });
 
       await act(other);
-      await expect(other.getByRole("timer", { name: "Workout time" })).toBeHidden();
-      await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
+      if (onRefresh === ended) {
+        await settled(other);
+        await expect(other.getByRole("timer", { name: "Workout time" })).toBeVisible();
+        await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(0);
+      } else {
+        await expect(other.getByRole("timer", { name: "Workout time" })).toBeHidden();
+        await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
+      }
       const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()));
       await other.clock.resume();
       await refreshed;
       await other.evaluate(headIsQuiet);
+      expect(writes).toBe(1);
       await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
       await expect(toast(other, WORKOUT_FINISHED)).toHaveCount(0);
       await expect(toast(other, WORKOUT_GONE)).toHaveCount(0);
