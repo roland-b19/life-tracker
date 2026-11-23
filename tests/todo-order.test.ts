@@ -8,6 +8,7 @@ import { authState, seedUser } from "./auth";
 import { addTodo, deleteTodo, getDailyTodos, restoreTodo, toggleTodo } from "@/lib/todos";
 import { deleteCategory } from "@/lib/categories";
 import { addDays, toISODate } from "@/lib/format-date";
+import { resetDb } from "./db";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
@@ -18,7 +19,7 @@ describe("Task order: only the user's own actions move a task", () => {
   let user: string;
 
   beforeEach(async () => {
-    await admin.query("TRUNCATE TABLE todos, push_subscriptions, users CASCADE");
+    await resetDb(admin);
     user = await seedUser(`user-${randomUUID()}`);
     authState.id = user;
   });

@@ -72,6 +72,7 @@ import { plateKgProblem } from "@/../app/gym/progress-panel";
 import { dayProblem, exerciseNameProblem } from "@/../app/gym/day-editor";
 import { deloadProblem } from "@/../app/gym/deload-card";
 import { setText } from "@/../app/gym/types";
+import { resetDb } from "./db";
 
 const TODAY = toISODate();
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
@@ -111,11 +112,11 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   let userB: string;
 
   beforeAll(async () => {
-    await admin.query("TRUNCATE TABLE workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE");
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query("TRUNCATE TABLE workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE");
+    await resetDb(admin);
     userA = await seedUser(`user-a-${randomUUID()}`);
     userB = await seedUser(`user-b-${randomUUID()}`);
     authState.id = userA;

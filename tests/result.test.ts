@@ -115,10 +115,17 @@ describe("a refusal or check several actions give is written once [U6]", () => {
   });
 });
 
+// Every test file, as text, for the checks on how the tests are written.
+const tests = import.meta.glob("./**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
 // Action result (D-010): a test narrows an action's answer with `succeeded()` (tests/succeeded.ts), never by hand.
+const byHand = /if \(!\w+\.success\b|\b(\w+)\.success (\?|&&)[^;]*\b\1\./;
 it("narrows an action's answer in the tests only through succeeded() [D-010]", () => {
-  const tests = import.meta.glob("./**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
-  const byHand = /if \(!\w+\.success\b|\b(\w+)\.success (\?|&&)[^;]*\b\1\./;
   expect(Object.keys(tests).length).toBeGreaterThan(30);
   expect(Object.entries(tests).filter(([, text]) => byHand.test(text)).map(([file]) => file)).toEqual(["./succeeded.ts"]);
+});
+
+// One reset for the unit tests' database (D-047): only tests/db.ts empties tables. The bracket keeps this line out.
+it("empties the test database only in resetDb (tests/db.ts) [D-047]", () => {
+  expect(Object.entries(tests).filter(([, text]) => /\bTRUNCAT[E]\b/.test(text)).map(([file]) => file)).toEqual(["./db.ts"]);
 });

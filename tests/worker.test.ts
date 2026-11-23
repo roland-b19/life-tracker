@@ -13,6 +13,7 @@ import {
   localTime,
   parseMessage,
 } from "../worker/lib.mjs";
+import { resetDb } from "./db";
 
 // The worker connects with the app's own database role, so its queries run through the same role here.
 const app = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -66,7 +67,7 @@ describe("worker: queue messages", () => {
 
 describe("worker: which reminders are due (flag-independent, Azure only)", () => {
   beforeEach(async () => {
-    await admin.query("TRUNCATE TABLE todos, push_subscriptions, users CASCADE");
+    await resetDb(admin);
   });
   const due = async (time = "09:00", day = toISODate()) => (await app.query(DUE_REMINDERS_SQL, [time, day])).rows.map((r) => r.todoId);
 
@@ -112,7 +113,7 @@ describe("worker: which reminders are due (flag-independent, Azure only)", () =>
 
 describe("worker: delivering a reminder", () => {
   beforeEach(async () => {
-    await admin.query("TRUNCATE TABLE todos, push_subscriptions, users CASCADE");
+    await resetDb(admin);
   });
 
   it("sends the owner's task title to every device of the owner", async () => {

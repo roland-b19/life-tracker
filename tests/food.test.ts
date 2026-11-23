@@ -66,6 +66,7 @@ import {
   updateStepsAction,
   updateTargetsAction,
 } from "@/actions/food";
+import { resetDb } from "./db";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 /** Adds a shopping item and answers the row (new or merged into). */
@@ -76,15 +77,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   let userB: string;
 
   beforeAll(async () => {
-    await admin.query(
-      "TRUNCATE TABLE shopping_items, recipe_ingredients, recipes, meals, daily_metrics, nutrition_targets, workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE",
-    );
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query(
-      "TRUNCATE TABLE shopping_items, recipe_ingredients, recipes, meals, daily_metrics, nutrition_targets, workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE",
-    );
+    await resetDb(admin);
     userA = await seedUser(`user-a-${randomUUID()}`);
     userB = await seedUser(`user-b-${randomUUID()}`);
     authState.id = userA;

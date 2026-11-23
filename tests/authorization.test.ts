@@ -18,6 +18,7 @@ import { addCustomExercise, EXERCISE_GONE, getExercises, getPlateWeights } from 
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
 import { securityHeaders } from "@/../next.config";
+import { resetDb } from "./db";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 
@@ -49,11 +50,11 @@ describe("weight authorization", () => {
   });
 
   beforeAll(async () => {
-    await admin.query("TRUNCATE TABLE weight_entries, users CASCADE");
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query("TRUNCATE TABLE weight_entries, users CASCADE");
+    await resetDb(admin);
     authState.id = await seedUser(`a-${randomUUID()}`);
   });
 

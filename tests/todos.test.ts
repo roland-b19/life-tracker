@@ -30,6 +30,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { FUTURE_DATE } from "@/lib/validations/common";
 import { TODO_GONE } from "@/lib/validations/todos";
+import { resetDb } from "./db";
 
 // The task an add made (tests that look at a repeated add call addTodo itself).
 const add = async (userId: string, input: Parameters<typeof addTodo>[1]) => (await addTodo(userId, input)).todo!;
@@ -41,15 +42,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   let userB: string;
 
   beforeAll(async () => {
-    await admin.query(
-      "TRUNCATE TABLE todos, push_subscriptions, users CASCADE",
-    );
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query(
-      "TRUNCATE TABLE todos, push_subscriptions, users CASCADE",
-    );
+    await resetDb(admin);
     userA = await seedUser(`user-a-${randomUUID()}`);
     userB = await seedUser(`user-b-${randomUUID()}`);
     authState.id = userA;
