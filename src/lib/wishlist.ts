@@ -118,12 +118,8 @@ export async function restoreWishlistItem(
  * Edits an item in place: only the fields the edit sent (the ones it changed, D-040), so another tab's change to another
  * field stays. A new price brings its priority. Null when the item is not the user's.
  */
-export async function updateWishlistItem(
-  userId: string,
-  itemId: string,
-  rawInput: UpdateWishlistItemInput,
-): Promise<WishlistItemData | null> {
-  const validated = updateWishlistItemSchema.parse(rawInput);
+export async function updateWishlistItem(userId: string, rawInput: UpdateWishlistItemInput): Promise<WishlistItemData | null> {
+  const { id: itemId, ...validated } = updateWishlistItemSchema.parse(rawInput);
   const changes = {
     ...(validated.name !== undefined && { name: validated.name }),
     ...(validated.url !== undefined && { url: validated.url || null }),

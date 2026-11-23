@@ -90,7 +90,7 @@ export function RowActions({
 
 const PAGE = 10;
 
-/** The button that shows more of a long list (useMore, useMoreDialog). */
+/** The button that opens the whole of a long list (useMoreDialog). */
 function MoreButton({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" className="btn-sm more-btn" onClick={onClick}>
@@ -100,17 +100,8 @@ function MoreButton({ onClick }: { onClick: () => void }) {
 }
 
 /**
- * A long list shows 10 rows; `more` (put it last inside the list's ListBox) adds 10 at a time.
- */
-export function useMore<T>(list: T[]) {
-  const [shown, setShown] = useState(PAGE);
-  const more = list.length > shown && <MoreButton key="more" onClick={() => setShown((n) => n + PAGE)} />;
-  return [list.slice(0, shown), more] as const;
-}
-
-/**
  * A long list shows its first 10 rows; More (put it last inside the list's ListBox) opens the whole list in a dialog
- * over the blurred page, drawn with the same `row` (Health's meals, D-029).
+ * over the blurred page, drawn with the same `row` (Health's meals, D-029; Gym history, D-047).
  */
 export function useMoreDialog<T>(list: T[], title: string, row: (item: T) => ReactNode) {
   const [open, setOpen] = useState(false);

@@ -32,7 +32,7 @@ import {
   getDailyMetricsHistory,
   getPastFoods,
   listWeightEntries,
-  logMeal,
+  addMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreShoppingItems,
@@ -51,7 +51,7 @@ import {
   deleteMealAction,
   deleteShoppingItemAction,
   deleteShoppingCategoryAction,
-  logMealAction,
+  addMealAction,
   renameShoppingCategoryAction,
   reorderShoppingCategoriesAction,
   restoreMealAction,
@@ -66,6 +66,7 @@ import {
   updateStepsAction,
   updateTargetsAction,
 } from "@/actions/food";
+import { resetDb } from "./db";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });
 /** Adds a shopping item and answers the row (new or merged into). */
@@ -76,15 +77,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   let userB: string;
 
   beforeAll(async () => {
-    await admin.query(
-      "TRUNCATE TABLE shopping_items, recipe_ingredients, recipes, meals, daily_metrics, nutrition_targets, workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE",
-    );
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query(
-      "TRUNCATE TABLE shopping_items, recipe_ingredients, recipes, meals, daily_metrics, nutrition_targets, workout_sets, workout_sessions, workout_split_day_exercises, workout_split_days, workout_splits, exercises, weight_entries, users CASCADE",
-    );
+    await resetDb(admin);
     userA = await seedUser(`user-a-${randomUUID()}`);
     userB = await seedUser(`user-b-${randomUUID()}`);
     authState.id = userA;
@@ -124,7 +121,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   it("sums a day's macros to one decimal and lists them so in the assistant's prompt [U4]", async () => {
     const today = "2026-11-04";
     for (const [name, protein] of [["A", 0.1], ["B", 0.2], ["C", 33.3], ["D", 33.3], ["E", 33.3]] as const) {
-      await logMeal(userA, { date: today, name, calories: 100, protein, carbs: protein, fat: 2.5 });
+      await addMeal(userA, { date: today, name, calories: 100, protein, carbs: protein, fat: 2.5 });
     }
     expect((await getDailyFoodSummary(userA, today)).totals).toEqual({ calories: 500, protein: 100.2, carbs: 100.2, fat: 12.5 });
     const prompt = await buildFoodChatPrompt(userA, { date: today, time: "12:00" });
@@ -136,7 +133,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const today = "2026-11-04";
 
     // User A logs a meal and water
-    await logMeal(userA, {
+    await addMeal(userA, {
       date: today,
       name: "Chicken & Rice",
       calories: 650,
@@ -164,7 +161,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   });
 
   it("prevents cross-user meal deletion", async () => {
-    const meal = (await logMeal(userA, {
+    const meal = (await addMeal(userA, {
       date: "2026-11-04",
       name: "Salmon",
       calories: 500,
@@ -184,7 +181,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
   it("deletes a meal and Undo brings the same row back: id, time, macros, estimate flag", async () => {
     const today = toISODate();
-    const meal = succeeded(await logMealAction({ date: today, name: "Salmon", calories: 500, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true })).meal!;
+    const meal = succeeded(await addMealAction({ date: today, name: "Salmon", calories: 500, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true })).meal!;
     const [before] = (await getDailyFoodSummary(userA, today)).meals;
     expect(before.id).toBe(meal.id);
     const undo = { id: meal.id, date: today, name: meal.name, calories: meal.calories, protein: 40.5, carbs: 10, fat: 25.2, isEstimated: true, createdAt: meal.createdAt.toISOString() };
@@ -213,16 +210,16 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
   });
 
   it("lists past foods newest first, one per name, up to the limit", async () => {
-    for (let i = 0; i < 5; i++) await logMeal(userA, { date: "2026-10-31", name: `Food ${i}`, calories: 100, protein: 1, carbs: 1, fat: 1 });
-    await logMeal(userA, { date: "2026-10-31", name: "FOOD 0", calories: 250, protein: 1, carbs: 1, fat: 1 }); // same name, other case, logged last
+    for (let i = 0; i < 5; i++) await addMeal(userA, { date: "2026-10-31", name: `Food ${i}`, calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await addMeal(userA, { date: "2026-10-31", name: "FOOD 0", calories: 250, protein: 1, carbs: 1, fat: 1 }); // same name, other case, logged last
     const foods = await getPastFoods(userA, 3);
     expect(foods.map((f) => f.name.toLowerCase())).toEqual(["food 0", "food 4", "food 3"]);
     expect(foods[0].calories).toBe(250);
   });
 
   it("leaves meals the old forget feature hid out of past foods", async () => {
-    await logMeal(userA, { date: "2026-10-31", name: "Hidden", calories: 100, protein: 1, carbs: 1, fat: 1 });
-    await logMeal(userA, { date: "2026-10-31", name: "Shown", calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await addMeal(userA, { date: "2026-10-31", name: "Hidden", calories: 100, protein: 1, carbs: 1, fat: 1 });
+    await addMeal(userA, { date: "2026-10-31", name: "Shown", calories: 100, protein: 1, carbs: 1, fat: 1 });
     await admin.query("UPDATE meals SET forgotten = true WHERE user_id = $1 AND name = 'Hidden'", [userA]);
     expect((await getPastFoods(userA)).map((f) => f.name)).toEqual(["Shown"]);
   });
@@ -243,7 +240,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const again = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Milk", amount: 1, unit: "l", category: "dairy" }));
     expect(again.item.isBought).toBe(false);
     expect(again.before).toEqual(before);
-    succeeded(await unmergeShoppingItemAction({ itemId: again.item.id, before: { ...before, amount: Number(before.amount) } }));
+    succeeded(await unmergeShoppingItemAction({ id: again.item.id, before: { ...before, amount: Number(before.amount) } }));
     expect(await getShoppingList(userA)).toEqual([before]);
     authState.id = "";
     expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
@@ -253,14 +250,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const item = await addItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "pantry" });
     const bought = async () => (await getShoppingList(userA)).find((i) => i.id === item.id)?.isBought;
     authState.id = userB;
-    await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+    await expect(toggleShoppingItemAction({ id: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
     await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
     authState.id = "";
-    expect(await toggleShoppingItemAction(item.id, true)).toEqual(refused(SIGNED_OUT));
+    expect(await toggleShoppingItemAction({ id: item.id, isBought: true })).toEqual(refused(SIGNED_OUT));
     expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
     expect(await bought()).toBe(false); // still on A's list, untouched
     authState.id = userA;
-    await toggleShoppingItemAction(item.id, true);
+    await toggleShoppingItemAction({ id: item.id, isBought: true });
     expect(await bought()).toBe(true);
   });
 
@@ -291,7 +288,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await restoreShoppingItems(userA, [oil.id]);
     expect(await getShoppingList(userA)).toHaveLength(2);
 
-    const edited = await updateShoppingItem(userA, { itemId: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
+    const edited = await updateShoppingItem(userA, { id: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
     expect(edited).toMatchObject({ name: "Rapeseed Oil", unit: "l", category: "oils" });
     expect(await renameShoppingCategory(userA, "pantry", "dry goods")).not.toBeNull();
     expect((await getShoppingList(userA)).map((i) => i.category).sort()).toEqual(["dry goods", "oils"]);
@@ -305,7 +302,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
-    await expect(updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).rejects.toThrow(SHOPPING_ITEM_GONE);
+    await expect(updateShoppingItem(userB, { id: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).rejects.toThrow(SHOPPING_ITEM_GONE);
     expect(await renameShoppingCategory(userB, "oils", "x")).toBeNull();
     expect((await restoreShoppingItems(userB, [oil.id])).items).toHaveLength(0);
   });
@@ -368,7 +365,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await list()).toEqual(["Eggs 2 pcs produce"]);
       expect(await rowCount(userA)).toBe(1);
 
-      const undo = { itemId: add.id, before: { ...old, amount: Number(old.amount) } };
+      const undo = { id: add.id, before: { ...old, amount: Number(old.amount) } };
       authState.id = userB;
       expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
       authState.id = "";
@@ -386,17 +383,17 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const { item: old } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
       const undoOf = async () => {
         const { item, before } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
-        return { itemId: item.id, before: { ...before!, amount: Number(before!.amount) } };
+        return { id: item.id, before: { ...before!, amount: Number(before!.amount) } };
       };
       const undo = await undoOf();
-      succeeded(await deleteShoppingItemAction(undo.itemId));
+      succeeded(await deleteShoppingItemAction(undo.id));
       expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await list()).toEqual([]);
       expect((await admin.query("SELECT id FROM shopping_items WHERE id = $1", [old.id])).rows).toEqual([]);
 
       succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
       const renamed = await undoOf();
-      succeeded(await updateShoppingItemAction({ itemId: renamed.itemId, name: "Green tea", amount: 2, unit: "pcs", category: "other" }));
+      succeeded(await updateShoppingItemAction({ id: renamed.id, name: "Green tea", amount: 2, unit: "pcs", category: "other" }));
       expect(await unmergeShoppingItemAction(renamed)).toEqual(refused('Can\'t undo: "Green tea" has changed since.'));
       expect(await list()).toEqual(["Green tea 2 pcs other"]);
     });
@@ -439,7 +436,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await list()).toEqual(["MILK 3 l dairy"]);
 
       // The same after Clear bought, and a sum past the cap refuses the whole Undo.
-      succeeded(await toggleShoppingItemAction(again.id, true));
+      succeeded(await toggleShoppingItemAction({ id: again.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [again.id] }));
       succeeded(await addShoppingItemAction({ name: "Milk", amount: 999, unit: "l", category: "dairy" }));
       expect(await restoreShoppingItemsAction({ itemIds: [again.id] })).toEqual(refused('"Milk" would be 1.002 l; the most is 1.000.'));
@@ -508,10 +505,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // The row it merged into gone for good (cleared, then the next Clear bought): nothing to split.
       const [merged] = (await getShoppingList(userA)).filter((i) => i.unit === "kg");
       await deleteShoppingItemAction(twin.id);
-      succeeded(await toggleShoppingItemAction(merged.id, true));
+      succeeded(await toggleShoppingItemAction({ id: merged.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [merged.id] }));
       const other = succeeded(await addShoppingItemAction({ name: "Salt" })).item;
-      succeeded(await toggleShoppingItemAction(other.id, true));
+      succeeded(await toggleShoppingItemAction({ id: other.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [other.id] })); // purges the batch before it
       expect(await revertShoppingCategoryAction(undo)).toEqual(refused('Can\'t undo: "kg" has changed since.'));
       expect((await admin.query("SELECT cleared_at FROM shopping_items WHERE id = $1", [flourG.id])).rows).toEqual([]);
@@ -521,22 +518,22 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const apple = succeeded(await addShoppingItemAction({ name: "Apple" })).item;
       succeeded(await addShoppingItemAction({ name: "Banana" }));
       const names = async () => (await getShoppingList(userA)).map((i) => i.name);
-      const ticked = succeeded(await toggleShoppingItemAction(apple.id, true));
+      const ticked = succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true }));
       expect(await names()).toEqual(["Banana", "Apple"]);
       authState.id = userB;
-      expect(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SHOPPING_ITEM_GONE));
       authState.id = "";
-      expect(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).toEqual(refused(SIGNED_OUT));
+      expect(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SIGNED_OUT));
       authState.id = userA;
       // Undo sends the time the box had before the tick (none), so Apple is back above Banana.
-      expect(succeeded(await toggleShoppingItemAction(apple.id, false, apple.checkedAt)).item.checkedAt).toBeNull();
+      expect(succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).item.checkedAt).toBeNull();
       expect(await names()).toEqual(["Apple", "Banana"]);
       // A plain untick is a new change: the row goes last among the unbought.
-      succeeded(await toggleShoppingItemAction(apple.id, true));
-      succeeded(await toggleShoppingItemAction(apple.id, false));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true }));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: false }));
       expect(await names()).toEqual(["Banana", "Apple"]);
       // The Undo of the untick sends the tick's time back, as text the way a page sends it.
-      succeeded(await toggleShoppingItemAction(apple.id, true, ticked.item.checkedAt!.toISOString()));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true, checkedAt: ticked.item.checkedAt!.toISOString() }));
       expect((await getShoppingList(userA)).find((i) => i.id === apple.id)?.checkedAt).toEqual(ticked.item.checkedAt);
     });
 
@@ -585,12 +582,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await addShoppingItemAction({ name: "Tea", category: "one more" })).toEqual(refused("You can have at most 200 categories."));
       expect(await rowCount(userA)).toBe(0);
       const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea", category: "c1" }));
-      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "pcs", category: "one more" })).toEqual(
+      expect(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 2, unit: "pcs", category: "one more" })).toEqual(
         refused("You can have at most 200 categories."),
       );
       await admin.query("INSERT INTO shopping_units (user_id, name, sort_order) SELECT $1, 'u' || g, g FROM generate_series(1, 200) g", [userA]);
       expect(await addShoppingItemAction({ name: "Rice", unit: "sack" })).toEqual(refused("You can have at most 200 units."));
-      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "sack", category: "c1" })).toEqual(
+      expect(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 2, unit: "sack", category: "c1" })).toEqual(
         refused("You can have at most 200 units."),
       );
       expect(await list()).toEqual(["Tea 1 pcs c1"]);
@@ -671,7 +668,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     it("refuses an edit of an item no longer on the list, for its owner and anyone else alike [HSHOP-16]", async () => {
       const { item } = succeeded(await addShoppingItemAction({ name: "Jam", category: "pantry" }));
-      const edit = { itemId: item.id, name: "Jam", amount: 2, unit: "jar", category: "pantry" };
+      const edit = { id: item.id, name: "Jam", amount: 2, unit: "jar", category: "pantry" };
       authState.id = userB;
       expect(await updateShoppingItemAction(edit)).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await list()).toEqual(["Jam 1 pcs pantry"]);
@@ -686,14 +683,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const { item: jam } = succeeded(await addShoppingItemAction({ name: "Jam" }));
       const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea" }));
       succeeded(await deleteShoppingItemAction(jam.id));
-      expect(await toggleShoppingItemAction(jam.id, true)).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await toggleShoppingItemAction({ id: jam.id, isBought: true })).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await deleteShoppingItemAction(jam.id)).toEqual(refused(SHOPPING_ITEM_GONE));
       // The edit names an item still on the list (Tea, pcs), yet the item's absence is what it says.
-      expect(await updateShoppingItemAction({ itemId: jam.id, name: "Tea", amount: 1, unit: "pcs", category: "other" })).toEqual(
+      expect(await updateShoppingItemAction({ id: jam.id, name: "Tea", amount: 1, unit: "pcs", category: "other" })).toEqual(
         refused(SHOPPING_ITEM_GONE),
       );
       expect(await list()).toEqual(["Tea 1 pcs other"]);
-      succeeded(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" }));
+      succeeded(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" }));
     });
   });
 
@@ -703,7 +700,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const itemId = randomUUID();
       const today = toISODate();
       const answers = await Promise.all([
-        logMealAction({ date: today, name: "Test", calories: 100, protein: 10, carbs: 10, fat: 2 }),
+        addMealAction({ date: today, name: "Test", calories: 100, protein: 10, carbs: 10, fat: 2 }),
         deleteMealAction(itemId),
         restoreMealAction({ id: itemId, date: today, name: "Test", calories: 100, protein: 0, carbs: 0, fat: 0 }),
         saveWeightAction({ date: today, kilograms: 80 }),
@@ -713,12 +710,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         updateStepsAction({ date: today, steps: { from: 0, to: 5000 } }),
         updateTargetsAction({ calories: { from: 3350, to: 2000 } }),
         addShoppingItemAction({ id: itemId, name: "Eggs" }),
-        toggleShoppingItemAction(itemId, true),
-        toggleShoppingItemAction(itemId, false, new Date()),
+        toggleShoppingItemAction({ id: itemId, isBought: true }),
+        toggleShoppingItemAction({ id: itemId, isBought: false, checkedAt: new Date() }),
         deleteShoppingItemAction(itemId),
         clearBoughtItemsAction({ itemIds: [itemId] }),
-        updateShoppingItemAction({ itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
-        unmergeShoppingItemAction({ itemId, before: { id: randomUUID(), name: "Eggs", amount: 1, unit: "pcs", category: "dairy", isBought: false, checkedAt: null } }),
+        updateShoppingItemAction({ id: itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
+        unmergeShoppingItemAction({ id: itemId, before: { id: randomUUID(), name: "Eggs", amount: 1, unit: "pcs", category: "dairy", isBought: false, checkedAt: null } }),
         renameShoppingCategoryAction({ from: "dairy", to: "fridge" }),
         restoreShoppingItemsAction({ itemIds: [itemId] }),
         reorderShoppingCategoriesAction({ names: ["dairy"] }),
@@ -862,7 +859,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const today = toISODate();
 
       // 1. Log meal
-      const mealRes = succeeded(await logMealAction({
+      const mealRes = succeeded(await addMealAction({
         date: today,
         name: "Whey Shake",
         calories: 200,
@@ -911,19 +908,19 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // 5. Shopping: add, edit, rename, clear and undo
       const { item } = succeeded(await addShoppingItemAction({ name: "Eggs", amount: 6, category: "Dairy" }));
       expect(item.category).toBe("dairy");
-      const editRes = succeeded(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" }));
+      const editRes = succeeded(await updateShoppingItemAction({ id: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" }));
       expect(Number(editRes.item.amount)).toBe(10);
       succeeded(await renameShoppingCategoryAction({ from: "dairy", to: "fridge" }));
-      expect(await updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
-      expect(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
+      expect(await updateShoppingItemAction({ id: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
+      expect(await updateShoppingItemAction({ id: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
 
       // Renaming onto another item with the same name and unit is refused as data (any case), not merged.
       const { item: milk } = succeeded(await addShoppingItemAction({ name: "Milk", amount: 1, unit: "l", category: "dairy" }));
-      expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toEqual(refused("\"EGGS\" is already on the list with this unit."));
-      succeeded(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
+      expect(await updateShoppingItemAction({ id: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toEqual(refused("\"EGGS\" is already on the list with this unit."));
+      succeeded(await updateShoppingItemAction({ id: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
 
       // 6. Toggle, clear bought items and undo
-      await toggleShoppingItemAction(item.id, true);
+      await toggleShoppingItemAction({ id: item.id, isBought: true });
       const clearRes = succeeded(await clearBoughtItemsAction({ itemIds: [item.id] }));
       expect(clearRes.deletedCount).toBe(1);
       expect(succeeded(await restoreShoppingItemsAction({ itemIds: [item.id] })).items).toHaveLength(1);
@@ -931,11 +928,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // Another user cannot edit or restore it.
       authState.id = userB;
       expect(
-        await updateShoppingItemAction({ itemId: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
+        await updateShoppingItemAction({ id: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
       ).toEqual(refused(SHOPPING_ITEM_GONE));
       await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual(refused("Item not found."));
       expect(succeeded(await clearBoughtItemsAction({ itemIds: [item.id] })).deletedCount).toBe(0);
-      await expect(toggleShoppingItemAction(item.id, true)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+      await expect(toggleShoppingItemAction({ id: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
       await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await renameShoppingCategoryAction({ from: "fridge", to: "x" })).toEqual(refused(CATEGORY_GONE));
       authState.id = userA;
@@ -974,9 +971,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const locked = "Only today and yesterday can be changed.";
       const meal = { name: "Oats", calories: 100, protein: 1, carbs: 1, fat: 1 };
       for (const date of [addDays(today, -2), addDays(today, 1)]) {
-        await expect(logMealAction({ ...meal, date })).resolves.toEqual(refused(locked));
+        await expect(addMealAction({ ...meal, date })).resolves.toEqual(refused(locked));
       }
-      succeeded(await logMealAction({ ...meal, date: addDays(today, -1) })); // yesterday is the grace day
+      succeeded(await addMealAction({ ...meal, date: addDays(today, -1) })); // yesterday is the grace day
     });
 
     describe("water, steps and weight are saved for today only (Bucharest), with a fixed clock", () => {
@@ -1115,9 +1112,9 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
       const today = toISODate();
       expect(
-        await logMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
+        await addMealAction({ date: today, name: "   ", calories: 1, protein: 0, carbs: 0, fat: 0 }),
       ).toEqual(refused("Required"));
-      expect(succeeded(await logMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal?.name).toBe("Rice");
+      expect(succeeded(await addMealAction({ date: today, name: "  Rice  ", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal?.name).toBe("Rice");
     });
 
     it("keeps only the last 7 days of water and steps, per owner", async () => {
@@ -1169,8 +1166,8 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       authState.id = userA;
       const today = toISODate();
       const meal = { id: randomUUID(), date: today, name: "Oats", calories: 300, protein: 10, carbs: 50, fat: 5 };
-      const first = succeeded(await logMealAction(meal));
-      const again = succeeded(await logMealAction(meal)); // the answer was lost, the device sends it again
+      const first = succeeded(await addMealAction(meal));
+      const again = succeeded(await addMealAction(meal)); // the answer was lost, the device sends it again
       expect(again.meal?.id).toBe(first.meal?.id);
       expect([first.repeated, again.repeated]).toEqual([false, true]); // the page says "Already saved", without an Undo
       expect((await getDailyFoodSummary(userA, today)).meals).toHaveLength(1);
@@ -1230,12 +1227,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     it("never lets an id another user owns change, add or show anything", async () => {
       const today = toISODate();
       authState.id = userB;
-      const theirs = succeeded(await logMealAction({ id: randomUUID(), date: today, name: "Theirs", calories: 500, protein: 0, carbs: 0, fat: 0 }));
+      const theirs = succeeded(await addMealAction({ id: randomUUID(), date: today, name: "Theirs", calories: 500, protein: 0, carbs: 0, fat: 0 }));
       const theirWeight = succeeded(await saveWeightAction({ id: randomUUID(), date: today, kilograms: 70 }));
 
       authState.id = userA;
       // Refused with a reason that names nothing of theirs.
-      expect(await logMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 })).toEqual(refused("This meal could not be saved."));
+      expect(await addMealAction({ id: theirs.meal!.id, date: today, name: "Mine", calories: 100, protein: 0, carbs: 0, fat: 0 })).toEqual(refused("This meal could not be saved."));
       expect(await saveWeightAction({ id: theirWeight.entry.id, date: today, kilograms: 90 })).toEqual(refused("This weight could not be saved."));
 
       expect((await getDailyFoodSummary(userA, today)).meals).toEqual([]);
@@ -1250,15 +1247,15 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(mealHasValue({ calories: 1, protein: 0, carbs: 0, fat: 0 })).toBe(true);
       authState.id = userA;
       const empty = { date: toISODate(), name: "Meal", calories: 0, protein: 0.04, carbs: 0.04, fat: 0 };
-      expect(await logMealAction(empty)).toEqual(refused("Enter calories or a macro above 0"));
+      expect(await addMealAction(empty)).toEqual(refused("Enter calories or a macro above 0"));
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
 
     it("refuses a meal over a limit in one sentence that names the field once [U5]", async () => {
       authState.id = userA;
       const meal = { date: toISODate(), name: "Meal", calories: 100, protein: 0, carbs: 0, fat: 0 };
-      expect(await logMealAction({ ...meal, calories: 10001 })).toEqual(refused("Calories must be 10.000 or less"));
-      expect(await logMealAction({ ...meal, fat: 1000.5 })).toEqual(refused("Protein, carbs and fat must each be 1.000 g or less"));
+      expect(await addMealAction({ ...meal, calories: 10001 })).toEqual(refused("Calories must be 10.000 or less"));
+      expect(await addMealAction({ ...meal, fat: 1000.5 })).toEqual(refused("Protein, carbs and fat must each be 1.000 g or less"));
       expect((await getDailyFoodSummary(userA, toISODate())).meals).toEqual([]);
     });
   });

@@ -7,6 +7,7 @@ import {
   devUserName,
   expectNoSeriousViolations,
   installStoppedClock,
+  newDevice,
   signInThroughForm,
   test,
   theme,
@@ -85,11 +86,7 @@ test("a touch that starts within 20px of the left or right edge is cancelled, on
 
 test("a tap on the outer pixels of a control at the edge still works; the edge background stays cancelled (SWIPE)", async ({ signedInPage, browser }) => {
   // A touch screen of its own, signed in as the fixture's user.
-  const context = await browser.newContext({
-    storageState: await signedInPage.context().storageState(),
-    hasTouch: true,
-    viewport: PHONE,
-  });
+  const context = await newDevice(browser, signedInPage, { hasTouch: true, viewport: PHONE });
   const page = await context.newPage();
   try {
     await page.goto(new URL("/todos", signedInPage.url()).href);
@@ -388,12 +385,14 @@ test("a signed-in 404 keeps the navigation; a signed-out one is a card of its ow
   }
 });
 
-test("a theme picked in Settings applies in the other open tabs of the same browser (MORE-06)", async ({ signedInPage: page }) => {
+test("a theme picked in Settings applies in the other open tabs of the same browser, with no reload (MORE-06, D-047)", async ({ signedInPage: page }) => {
   const tasks = await page.context().newPage();
   const settings = await page.context().newPage();
   await tasks.goto("/todos");
   await settings.goto("/settings");
   await page.goto("/settings");
+  // A page load would drop these marks
+  for (const other of [tasks, settings]) await other.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
 
   await appearance(page).getByRole("tab", { name: "Dark", exact: true }).click();
   await expect.poll(() => theme(tasks)).toBe("dark");
@@ -403,6 +402,7 @@ test("a theme picked in Settings applies in the other open tabs of the same brow
   await appearance(page).getByRole("tab", { name: "Auto", exact: true }).click();
   await expect.poll(() => theme(tasks)).toBe("auto");
   await expect(appearance(settings).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
+  for (const other of [tasks, settings]) expect(await other.evaluate(() => (window as unknown as { kept?: boolean }).kept)).toBe(true);
   await tasks.close();
   await settings.close();
 });

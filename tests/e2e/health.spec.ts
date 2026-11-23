@@ -12,6 +12,7 @@ import {
   holdWrites,
   itemName,
   loseAnswerOnce,
+  newDevice,
   pauseClock,
   refreshesDone,
   settled,
@@ -456,6 +457,87 @@ test("saving an edit of an item deleted meanwhile closes the form and drops the 
   await expect(shoppingRow(page, name)).toHaveCount(0);
 });
 
+// An edit sends the whole form, so the form keeps its opening while the save is out (D-047): opened again for the same
+// item before the answer, it waits with what it sent, and the answer closes it. Opened for another item meanwhile, it is
+// a fresh opening with that item.
+test("the shopping item form opened again while its save is out waits with what it sent, only for the same item [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await openHealth(page, "Shopping");
+  const [name, other, renamed] = [itemName(), itemName(), itemName()];
+  await addShoppingItem(page, name, 2);
+  await dismissToast(page, `Added "${name}"`);
+  await addShoppingItem(page, other, 1);
+  await dismissToast(page, `Added "${other}"`);
+  const form = page.getByRole("dialog", { name: "Edit shopping item" });
+  const field = form.getByLabel("Name");
+  const writes = countWrites(page, `"name":"${renamed}"`);
+  const release = await holdWrites(page, `"name":"${renamed}"`);
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await field.fill(renamed);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit ${other}`, exact: true }).click();
+  await expect(field).toHaveValue(other);
+  await expect(field).toBeEnabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(renamed);
+  await andSettle(page, async () => release(), `"name":"${renamed}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Saved "${renamed}"`, { exact: true })).toBeVisible();
+  await expect(itemLine(page, renamed, 2)).toBeVisible();
+  expect(writes).toHaveLength(1);
+});
+
+// Each item's unanswered save is kept on its own (D-047): an add saved while an edit's save is out (Next sends it once
+// the edit answers) leaves the edit's opening as it was, so the item opened again still waits with what it sent, and the
+// rename stays. A fresh opening there would show the old name, and its Save would undo the rename.
+test("the shopping item form opened again after an add still waits with what it sent [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const [name, renamed, added] = [itemName(), itemName(), itemName()];
+  await addShoppingItem(page, name, 2);
+  await dismissToast(page, `Added "${name}"`);
+  const form = page.getByRole("dialog", { name: "Edit shopping item" });
+  const field = form.getByLabel("Name");
+  const release = await holdWrites(page, `"name":"${renamed}"`);
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await field.fill(renamed);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  const add = page.getByRole("dialog", { name: "New shopping item" });
+  await add.getByLabel("Name").fill(added);
+  await add.getByRole("button", { name: "Save" }).click();
+  await expect(add.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await add.getByRole("button", { name: "Cancel" }).click();
+  await expect(add).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(renamed);
+  // The add goes once the edit answers, so its answer comes last.
+  await andSettle(page, async () => release(), `"name":"${added}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Saved "${renamed}"`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Added "${added}"`, { exact: true })).toBeVisible();
+  await expect(itemLine(page, renamed, 2)).toBeVisible();
+  const user = await signedInUserId(page);
+  const { rows } = await asOwner((db) => db.query("SELECT name FROM shopping_items WHERE user_id = $1 AND cleared_at IS NULL ORDER BY name", [user]));
+  expect(rows.map((r) => r.name)).toEqual([renamed, added].sort());
+});
+
 // A category delete's toast touches the items it moved (D-040): editing one of them takes that toast's Undo, which would
 // otherwise move the edited item back. The page's clock stands still from the delete on, so its toast does not run out.
 test("editing an item that a category delete moved takes the delete's Undo [TOUCHES]", async ({ signedInPage: page }) => {
@@ -590,9 +672,8 @@ test("Undo of a weight edit another device changed since is refused and keeps th
     await andSettle(p, () => form.getByRole("button", { name: "Save" }).click());
     await expect(form).toBeHidden();
   };
-  const device = await browser.newContext();
+  const device = await newDevice(browser, page);
   try {
-    await device.addCookies(await page.context().cookies());
     const other = await device.newPage();
     await openHealth(page, "Today");
     await openHealth(other, "Today");
@@ -696,9 +777,8 @@ test("Undo of a weigh-in add refused when signed out keeps the weigh-in on scree
 async function mergeAwayElsewhere(page: Page, browser: Browser, name: string) {
   await addShoppingItem(page, name, 1);
   await refreshesDone(page); // a refresh that lands after the merge would show the merged row, and the page would not be stale
-  const context = await browser.newContext();
+  const context = await newDevice(browser, page);
   try {
-    await context.addCookies(await page.context().cookies());
     const other = await context.newPage();
     await openHealth(other, "Shopping");
     await other.getByRole("button", { name: "Add item" }).click();
@@ -902,7 +982,8 @@ test("a double tap on the meal Save or on a water add writes once [D-043]", asyn
 
 // The water and goals forms send each value with the one they opened with (D-040). Opened again before their last save
 // has answered, they still show the value from before it, so a Save then would be refused as changed on another device:
-// Save waits for that answer, which closes the form, and the next opening starts from the saved value.
+// Save waits for that answer, which closes the form, and the next opening starts from the saved value. While it waits,
+// the form shows the value it sent.
 test("a water or goals form opened again while its last save is unanswered holds Save until the answer [D-043]", async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   const forms = [
@@ -922,6 +1003,7 @@ test("a water or goals form opened again while its last save is unanswered holds
     await region.getByRole("button", { name: edit }).click();
     await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
     await expect(form.getByLabel(field)).toBeDisabled();
+    await expect(form.getByLabel(field)).toHaveValue(saved);
     await andSettle(page, async () => release(), marker);
     await expect(form).toBeHidden();
     await expect(page.getByText(message)).toBeVisible();
@@ -939,6 +1021,46 @@ test("a water or goals form opened again while its last save is unanswered holds
   await openHealth(page, "Today");
   await expect(page.getByRole("region", { name: "Water" })).toContainText("1.500 / 3.000 ml");
   await expect(page.getByRole("region", { name: "Nutrition" })).toContainText("/ 2.900 kcal");
+});
+
+// Each of the water and steps forms keeps its own opening and its own values: the steps form opened while the water
+// save is out is a fresh opening with the day's steps, and the water form opened again still waits with the water it
+// sent. A refusal then leaves that value in the form for the owner to fix or save again.
+test("the water form opened again while its save is out shows what it sent, after the steps form, and keeps it when refused [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await openHealth(page, "Today");
+  const water = page.getByRole("region", { name: "Water" });
+  const waterForm = page.getByRole("dialog", { name: "Edit water" });
+  const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
+  const marker = `"to":1000`;
+  const release = await holdWrites(page, marker);
+  await water.getByRole("button", { name: "Edit water and goal" }).click();
+  await waterForm.getByLabel("Water today (ml)").fill("1000");
+  await waterForm.getByRole("button", { name: "Save" }).click();
+  await expect(waterForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await waterForm.getByRole("button", { name: "Cancel" }).click();
+  await expect(waterForm).toBeHidden();
+
+  await page.getByRole("region", { name: "Steps" }).getByRole("button", { name: "Edit steps and goal" }).click();
+  await expect(stepsForm.getByLabel("Steps today")).toHaveValue("0");
+  await expect(stepsForm.getByLabel("Steps today")).toBeEnabled();
+  await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
+  await stepsForm.getByRole("button", { name: "Cancel" }).click();
+  await expect(stepsForm).toBeHidden();
+
+  await water.getByRole("button", { name: "Edit water and goal" }).click();
+  await expect(waterForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(waterForm.getByLabel("Water today (ml)")).toHaveValue("1.000");
+  await release(true);
+  await expect(waterForm.getByRole("alert")).toHaveText("Failed to save water");
+  await expect(waterForm.getByLabel("Water today (ml)")).toHaveValue("1.000");
+  await expect(waterForm.getByLabel("Water today (ml)")).toBeEnabled();
+  // The held route still drops a save of 1000, so the owner's fix is another amount.
+  await waterForm.getByLabel("Water today (ml)").fill("1100");
+  await andSettle(page, () => waterForm.getByRole("button", { name: "Save" }).click(), `"to":1100`);
+  await expect(waterForm).toBeHidden();
+  await expect(water).toContainText("1.100 / 3.000 ml");
 });
 
 test("a meal deleted in one tab leaves another tab after its refresh, without a reload [SERVER-STATE]", async ({ signedInPage: page }) => {
@@ -967,9 +1089,8 @@ test("the open tab is kept on this device after a reload, and not on another dev
   await expect(page).toHaveURL(/\/health$/);
 
   // Another browser with the same session opens on Today.
-  const context = await browser.newContext();
+  const context = await newDevice(browser, page);
   try {
-    await context.addCookies(await page.context().cookies());
     const other = await context.newPage();
     await other.goto("/health");
     await expect(other.getByRole("button", { name: "Add meal" })).toBeVisible();
@@ -1032,9 +1153,8 @@ test("two tabs editing different goals, or steps and its goal, both keep their c
 // why and then the current value, and the database keeps the first device's change.
 test("a stale device's water tap, steps or goal save is refused and then shows the current value [D-040]", async ({ signedInPage: page, browser }) => {
   const CHANGED = "This changed on another device. Check the new value and try again.";
-  const device = await browser.newContext();
+  const device = await newDevice(browser, page);
   try {
-    await device.addCookies(await page.context().cookies());
     const other = await device.newPage();
     await openHealth(page, "Today");
     await openHealth(other, "Today");
@@ -1122,7 +1242,16 @@ test("the water, steps and meal forms refuse a value out of range in words that 
   await mealForm.getByLabel("Fat (g)").fill("-1");
   await mealForm.getByRole("button", { name: "Save" }).click();
   await expect(mealForm.getByRole("alert")).toHaveText(MEAL_MACROS_NEGATIVE);
+  // Several wrong values: the form names the first one the server's schema refuses, a negative protein before carbs
+  // over the limit.
+  await mealForm.getByLabel("Calories (kcal)").fill("5");
+  await mealForm.getByLabel("Protein (g)").fill("-1");
+  await mealForm.getByLabel("Carbs (g)").fill("2000");
   await mealForm.getByLabel("Fat (g)").fill("");
+  await mealForm.getByRole("button", { name: "Save" }).click();
+  await expect(mealForm.getByRole("alert")).toHaveText(MEAL_MACROS_NEGATIVE);
+  await mealForm.getByLabel("Protein (g)").fill("10");
+  await mealForm.getByLabel("Carbs (g)").fill("");
   await mealForm.getByLabel("Calories (kcal)").fill("-5");
   await mealForm.getByRole("button", { name: "Save" }).click();
   await expect(mealForm.getByRole("alert")).toHaveText(MEAL_CALORIES_NEGATIVE);
@@ -1159,8 +1288,8 @@ test("the water taps wait while a water edit's save is unanswered, then add to t
   await expect(water).toContainText("1.250 / 3.000 ml");
 });
 
-// Water and steps share one dialog, and the Today tab one form error: a water save lost after its form was closed shows
-// nothing in the steps or meal form opened meanwhile, and shows in its own form while that one is open.
+// The Today tab's forms share one form error: a water save lost after its form was closed shows nothing in the steps or
+// meal form opened meanwhile (it is a toast then), and shows in its own form while that one is open.
 test("a lost water save shows its error only in the water form, not in the steps or meal form opened meanwhile", async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   const water = page.getByRole("region", { name: "Water" });
@@ -1173,13 +1302,15 @@ test("a lost water save shows its error only in the water form, not in the steps
     return release;
   };
 
-  // The steps form, opened while the water save is out, waits for it and then shows no error of its own.
+  // The steps form is a form of its own: opened while the water save is out, it does not wait for it, and shows no
+  // error of the water save's.
   let release = await startWaterSave(1000);
   await waterForm.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("region", { name: "Steps" }).getByRole("button", { name: "Edit steps and goal" }).click();
   const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
-  await expect(stepsForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
   await release(true);
+  await expect(page.getByText("Failed to save water", { exact: true })).toBeVisible();
   await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
   await expect(stepsForm.getByRole("alert")).toHaveCount(0);
   await stepsForm.getByRole("button", { name: "Cancel" }).click();
@@ -1237,4 +1368,100 @@ test("a lost goals save shows its error only in the goals form, not in the water
   release = await startGoalsSave(2900);
   await release(true);
   await expect(goalsForm.getByRole("alert")).toHaveText("Failed to save goals");
+});
+
+// An answer belongs to its opening (D-047): a goals save refused after its form was cancelled says so in a toast, and
+// the form opened next starts with no error.
+test("a goals save refused after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const nutrition = page.getByRole("region", { name: "Nutrition" });
+  const goalsForm = page.getByRole("dialog", { name: "Edit goals" });
+  const release = await holdWrites(page, `"to":2800`);
+  await nutrition.getByRole("button", { name: "Edit goals" }).click();
+  await goalsForm.getByLabel("Calories (kcal)").fill("2800");
+  await goalsForm.getByRole("button", { name: "Save" }).click();
+  await expect(goalsForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await goalsForm.getByRole("button", { name: "Cancel" }).click();
+  await expect(goalsForm).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to save goals")).toBeVisible();
+
+  await nutrition.getByRole("button", { name: "Edit goals" }).click();
+  await expect(goalsForm.getByLabel("Calories (kcal)")).toHaveValue("3.350");
+  await expect(goalsForm.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(goalsForm.getByRole("alert")).toHaveCount(0);
+});
+
+// The same for a shopping add: lost after Cancel, it says so in a toast, the list stays empty and the form opened next
+// starts with no error.
+test("a shopping add lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  const release = await holdWrites(page, `"name":"${name}"`);
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New shopping item" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to add item")).toBeVisible();
+  await expect(page.getByText("Your shopping list is empty.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  await expect(form.getByLabel("Name")).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
+// The same for a meal: lost after Cancel, it says so in a toast and no meal is shown; the form opened next still holds
+// what was typed (the meal fields clear only on a save), with no error.
+test("a meal save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  // A number no other meal test uses, to find this meal's write.
+  const kcal = 500 + Math.floor(Math.random() * 400);
+  const release = await holdWrites(page, `"calories":${kcal}`);
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const form = page.getByRole("dialog", { name: "New meal" });
+  await form.getByLabel("Calories (kcal)").fill(String(kcal));
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to add meal")).toBeVisible();
+  await expect(page.getByRole("button", { name: deleteMeal(String(kcal)) })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add meal" }).click();
+  await expect(form.getByLabel("Calories (kcal)")).toHaveValue(String(kcal));
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
+// The chat's Send writes once per tap burst through the shared guard (D-047): two submits that come before the page
+// has drawn the first one's "Sending..." send one message. Nothing reaches the server: the held message is lost.
+test("two quick Sends in the food chat send one message [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const pick = page.getByRole("tab", { name: "Assistant" });
+  await pick.click();
+  await expect(pick).toHaveAttribute("aria-selected", "true");
+  const chat = page.getByRole("region", { name: "Food assistant" });
+  const text = `two eggs ${Date.now()}`;
+  const writes = countWrites(page, text);
+  const release = await holdWrites(page, text);
+  await chat.getByLabel("Message").fill(text);
+  const send = chat.getByRole("button", { name: "Send" });
+  await send.evaluate((button: HTMLButtonElement) => {
+    button.form!.requestSubmit(button);
+    button.form!.requestSubmit(button);
+  });
+  await expect(chat.getByRole("button", { name: "Sending..." })).toBeDisabled();
+  await settled(page);
+  expect(writes).toHaveLength(1);
+  // Next sends a page's actions one after another, so a second message would go out once the first is lost.
+  await release(true);
+  await expect(toast(page, "Failed to send message")).toBeVisible();
+  await expect(chat.getByLabel("Message")).toHaveValue(text);
+  await expect(chat.getByRole("button", { name: "Send" })).toBeEnabled();
+  await settled(page);
+  expect(writes).toHaveLength(1);
 });

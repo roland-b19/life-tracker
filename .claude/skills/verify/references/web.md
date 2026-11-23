@@ -12,7 +12,7 @@
   A known issue the user decides to fix later goes in `.exclude()` or `.disableRules()` with a comment naming it, never by dropping the scan.
 - **Stable specs:**
   - find elements by role, label or text (`getByRole('button', { name: 'Pay' })`), never by CSS classes or DOM paths
-  - use Playwright's auto-waiting assertions (`await expect(locator).toBeVisible()`); never `waitForTimeout`
+  - use Playwright's auto-waiting assertions (`await expect(locator).toBeVisible()`); never `waitForTimeout`, except inside the one helper the KB conventions name for a human tap's rhythm
   - each test creates the data it needs and depends on no other test
   - keep `retries: 0`, so a flaky test shows up instead of hiding
   - set `trace: 'retain-on-failure'`, so a failure leaves a trace to read instead of a re-run

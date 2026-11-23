@@ -1,10 +1,11 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
-import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, Field, FormModal, SelectField } from "../components/blocks";
+import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, Field, FormModal, SelectField, type FormOpening } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { useFolded } from "../components/categories-card";
 import { useDeviceState } from "../components/device-state";
+import { refusal } from "../components/forms";
 import { EditButton } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { useServerState } from "../components/server-state";
@@ -75,8 +76,8 @@ export function ProgressPanel({
   const [plates, setPlates] = useServerState(plateWeights);
   const [editing, setEditing] = useState<{ exerciseId: string; name: string; kg: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
 
   const exercises = useMemo(() => {
     const names = new Map<string, string>();
@@ -115,42 +116,34 @@ export function ProgressPanel({
     });
 
   /** Saves "1 plate = X kg"; Undo writes the old value back (none before: the plate weight goes again). */
-  async function savePlate(e: FormEvent<HTMLFormElement>) {
+  async function savePlate(e: FormEvent<HTMLFormElement>, { stillOpen }: FormOpening) {
     e.preventDefault();
     if (!editing) return;
     const { exerciseId: id, name: exercise } = editing;
     const kg = Number(editing.kg);
     setErrorMsg("");
-    setSaving(true);
-    try {
-      const saved = await savePlateWeightAction({ exerciseId: id, kg });
-      if (!saved.success) {
-        setErrorMsg(saved.error);
-        return;
-      }
-      const { previous } = saved;
-      showPlate(id, kg);
-      setEditing(null);
-      showToast({
-        message: `1 plate of ${exercise} = ${kgText(kg)}`,
-        type: "success",
-        touches: [`exercise_plate_weights:${id}`],
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            showPlate(id, previous);
-            const back = await savePlateWeightAction({ exerciseId: id, kg: previous }).catch(() => null);
-            if (!back?.success) showPlate(id, kg);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the plate weight"),
-        ),
-      });
-    } catch {
-      setErrorMsg("Failed to save the plate weight");
-    } finally {
-      setSaving(false);
-    }
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const saved = await savePlateWeightAction({ exerciseId: id, kg }).catch(() => null);
+    if (!saved?.success) return refused(saved?.error ?? "Failed to save the plate weight");
+    const { previous } = saved;
+    showPlate(id, kg);
+    if (stillOpen()) setEditing(null);
+    showToast({
+      message: `1 plate of ${exercise} = ${kgText(kg)}`,
+      type: "success",
+      touches: [`exercise_plate_weights:${id}`],
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          showPlate(id, previous);
+          const back = await savePlateWeightAction({ exerciseId: id, kg: previous }).catch(() => null);
+          if (!back?.success) showPlate(id, kg);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the plate weight"),
+      ),
+    });
   }
 
   return (
@@ -206,14 +199,12 @@ export function ProgressPanel({
         title="Plate weight"
         onSubmit={savePlate}
         error={plateProblem || errorMsg}
-        busy={saving}
         canSubmit={!!editing?.kg && !Number.isNaN(Number(editing.kg)) && !plateProblem}
       >
         <Field
           label={`1 plate of ${editing?.name ?? name} (kg)`}
           type="number"
           inputMode="decimal"
-          disabled={saving}
           value={editing?.kg ?? ""}
           onChange={(e) => {
             // A changed value makes the server's last refusal stale

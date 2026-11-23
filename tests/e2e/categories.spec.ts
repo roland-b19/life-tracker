@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, expectToastWithoutUndo, holdWrites, itemName, openWishlist, pauseClock, signedInUserId, signOutHere, test, toast, undoIn } from "./helpers";
+import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, expectToastWithoutUndo, holdWrites, itemName, openWishlist, pauseClock, signedInUserId, signOutHere, tapAfter, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -103,8 +103,8 @@ async function deleteCategory(page: Page, name: string) {
   await expect(page.getByText(`Removed "${name}"; its items are in Other`, { exact: true })).toBeVisible();
 }
 
-// `piece` is the part of the request body that tells the Undo's write apart from an earlier reload: the name of an
-// undone add (it is a delete), "dropCurrent" for an undone rename or delete (it is a revert).
+// `piece` is the part of the request body that names the Undo's write: the name of an undone add (it is a delete),
+// "dropCurrent" for an undone rename or delete (it is a revert).
 async function undo(page: Page, piece: string) {
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click(), piece);
 }
@@ -337,7 +337,8 @@ for (const size of [
 }
 
 // The double-tap lock is per row (D-043): a tap on another row's Delete while a delete is still unanswered deletes that
-// row too. Next sends it once the first one answers, so the first delete's answer is held until both taps are in.
+// row too. Next sends it once the first one answers, so the first delete's answer is held until both taps are in. The
+// release waits for the second delete's answer, which comes after the first's: a reload while it is on its way aborts it.
 test("the categories card deletes another row while a delete is unanswered", async ({ signedInPage: page }) => {
   const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
   await wishlist.open(page);
@@ -355,13 +356,103 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await page.keyboard.press("Shift");
   await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
   await expect(card(page).getByText(b, { exact: true })).toBeHidden();
-  await andSettle(page, async () => release(), `"name":"${a}"`);
+  await andSettle(page, async () => release(), `"name":"${b}"`);
   await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
   expect(deleted()).toEqual([a, b]);
 
   await wishlist.open(page);
   await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
+// A rename keeps its opening while it is out (D-047), but only for its own category: Edit on another category, or Add,
+// opened meanwhile is a fresh opening with its own name, enabled. Opening the renamed category again, after those, waits
+// for the rename with the name it sent, and the answer closes it.
+test("the categories card keeps a rename's opening only for the same category [D-047]", async ({ signedInPage: page }) => {
+  const [a, b, x] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const writes = countWrites(page, `"to":"${x}"`);
+  const release = await holdWrites(page, `"to":"${x}"`);
+  const edit = page.getByRole("dialog", { name: "Edit category" });
+  const field = edit.getByLabel("Name", { exact: true });
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await field.fill(x);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).click();
+  await expect(field).toHaveValue(b);
+  await expect(field).toBeEnabled();
+  await expect(edit.getByRole("button", { name: "Save" })).toBeEnabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: "Add category" }).click();
+  const add = page.getByRole("dialog", { name: "New category" });
+  await expect(add.getByLabel("Name", { exact: true })).toHaveValue("");
+  await expect(add.getByLabel("Name", { exact: true })).toBeEnabled();
+  await add.getByRole("button", { name: "Cancel" }).click();
+  await expect(add).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(x);
+  await andSettle(page, async () => release(), `"to":"${x}"`);
+  await expect(edit).toBeHidden();
+  await expect(page.getByText(`Renamed "${a}" to "${x}"`, { exact: true })).toBeVisible();
+  expect(writes).toHaveLength(1);
+});
+
+// Each category's unanswered rename is kept on its own (D-047): another category renamed while the first rename is out
+// (Next sends it once the first one answers) leaves the first one's opening as it was, so opened again it still waits
+// with the name it sent. A fresh opening there would show the old name, and its Save would be refused as changed on
+// another device.
+test("the categories card opened again after another category's rename still waits with the name it sent [D-047]", async ({ signedInPage: page }) => {
+  const [a, b, x, y] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const release = await holdWrites(page, `"to":"${x}"`);
+  const edit = page.getByRole("dialog", { name: "Edit category" });
+  const field = edit.getByLabel("Name", { exact: true });
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await field.fill(x);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).click();
+  await expect(field).toHaveValue(b);
+  await field.fill(y);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(x);
+  // The second rename goes once the first one answers, so its answer comes last.
+  await andSettle(page, async () => release(), `"to":"${y}"`);
+  await expect(edit).toBeHidden();
+  await expect(page.getByText(`Renamed "${a}" to "${x}"`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Renamed "${b}" to "${y}"`, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(x, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(y, { exact: true })).toBeVisible();
+  const user = await signedInUserId(page);
+  const { rows } = await asOwner((db) => db.query("SELECT name FROM item_categories WHERE user_id = $1 ORDER BY name", [user]));
+  expect(rows.map((r) => r.name)).toEqual([x, y].sort());
 });
 
 // A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
@@ -396,10 +487,9 @@ test("the categories card takes a quick Undo tap after a Delete on a phone", asy
   const started = Date.now();
   await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
   await expect(undoButton).toBeVisible();
-  await page.waitForTimeout(Math.max(0, 100 - (Date.now() - started)));
-  const undoNow = center(await undoButton.boundingBox());
-  expect(Date.now() - started).toBeLessThan(400);
-  await andSettle(page, () => page.mouse.click(undoNow.x, undoNow.y), "dropCurrent");
+  let tapped = Infinity;
+  await andSettle(page, async () => void (tapped = await tapAfter(page, started, 100, undoButton)), "dropCurrent");
+  expect(tapped).toBeLessThan(400);
   await expect(card(page).getByText(a, { exact: true })).toBeVisible();
 
   // The server has it back too.
@@ -430,10 +520,7 @@ test("the categories card takes a quick Dismiss tap over the deleted row's Delet
   const started = Date.now();
   await andSettle(page, () => page.mouse.click(dismissAt.x, dismissAt.y), `"name":"${a}"`);
   await expect(dismissButton(page)).toBeVisible();
-  await page.waitForTimeout(Math.max(0, 50 - (Date.now() - started)));
-  const dismissNow = center(await dismissButton(page).boundingBox());
-  expect(Date.now() - started).toBeLessThan(400);
-  await page.mouse.click(dismissNow.x, dismissNow.y);
+  expect(await tapAfter(page, started, 50, dismissButton(page))).toBeLessThan(400);
   // The mouse over the toast holds it open, so only the Dismiss can close it; the bound stays under its own 5 s anyway.
   await expect(dismissButton(page)).toHaveCount(0, { timeout: 2_000 });
 });
@@ -499,6 +586,53 @@ test("the categories card's older toast loses its Undo to a newer one about the 
   await expect(undoIn(page, `Removed "${d}"`)).toBeVisible();
 });
 
+// A toast shows when the screen shows the change (D-047): a move and a delete change the screen at once, so their toasts
+// do not wait for the server. An Undo tapped before the delete answers waits for it, then puts the row back.
+test("the categories card's move and delete show their toast before the server answers [D-047]", async ({ signedInPage: page }) => {
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const rows = card(page).locator(".category-name");
+
+  let release = await holdWrites(page, `"names":`);
+  await card(page).getByRole("button", { name: `Drag ${b} to reorder`, exact: true }).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(rows).toHaveText([b, a]);
+  await expect(undoIn(page, `Moved "${b}"`)).toBeVisible();
+  await andSettle(page, async () => release(), `"names":`);
+  await dismissToast(page);
+
+  release = await holdWrites(page, `"name":"${a}"`);
+  await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
+  await expect(rows).toHaveText([b]);
+  await undoIn(page, `Removed "${a}"; its items are in Other`).click();
+  await andSettle(page, async () => release(), "dropCurrent");
+  await expect(rows).toHaveText([b, a]);
+
+  await wishlist.open(page);
+  await expect(rows).toHaveText([b, a]);
+});
+
+// A one-word name of a usual length stays on one line at phone width on every page with the card; only a name longer
+// than the line breaks (overflow-wrap: anywhere).
+test("the categories card keeps a one-word name on one line on a phone", async ({ signedInPage: page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  for (const surface of [tasksDaily, wishlist, healthShopping]) {
+    await surface.open(page);
+    await addCategory(page, "browsercheck");
+    await dismissToast(page);
+    const name = card(page).locator(".category-name", { hasText: "browsercheck" });
+    const { height, lineHeight } = await name.evaluate((el) => ({
+      height: el.getBoundingClientRect().height,
+      lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+    }));
+    expect(height, page.url()).toBeLessThan(1.5 * lineHeight);
+  }
+});
+
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
 test("the categories card shows why the server refused a delete or an Undo", async ({ signedInPage: page }) => {
   const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
@@ -544,6 +678,28 @@ test("the categories card refuses a name over 50 characters without cutting it",
   await expect(card(page).locator(".entry-row")).toHaveCount(0);
 
   await wishlist.open(page);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
+// An answer belongs to its opening (D-047): an add lost after its form was cancelled says so in a toast, and the form
+// opened next starts with no error.
+test("a category save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  const name = `e2e-cat-${hex()}`;
+  await wishlist.open(page);
+  const release = await holdWrites(page, `"name":"${name}"`);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to save category")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add category" }).click();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
   await expect(card(page).locator(".entry-row")).toHaveCount(0);
 });
 

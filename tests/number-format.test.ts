@@ -12,8 +12,8 @@ import {
 } from "@/lib/number-format";
 import { kgDelta, setKg } from "@/lib/gym-progress";
 import { addWishlistItemSchema } from "@/lib/validations/wishlist";
-import { logMealSchema, MEAL_CALORIES_NEGATIVE, setWaterSchema, updateNutritionTargetsSchema, updateStepsSchema } from "@/lib/validations/food";
-import { logSetSchema, REPS_RANGE, ROUTINE_RANGE, saveSplitDaySchema } from "@/lib/validations/gym";
+import { addMealSchema, MEAL_CALORIES_NEGATIVE, setWaterSchema, updateNutritionTargetsSchema, updateStepsSchema } from "@/lib/validations/food";
+import { addSetSchema, REPS_RANGE, ROUTINE_RANGE, saveSplitDaySchema } from "@/lib/validations/gym";
 import "@/lib/validations/result";
 import { sevenDayAverage } from "@/lib/weight-stats";
 
@@ -132,14 +132,14 @@ describe("a negative whole number: the field passes it on and the server refuses
   });
 
   it.each([
-    ["a meal's calories", logMealSchema, { date: "2026-11-01", calories: -2, protein: 1, carbs: 0, fat: 0 }, MEAL_CALORIES_NEGATIVE],
+    ["a meal's calories", addMealSchema, { date: "2026-11-01", calories: -2, protein: 1, carbs: 0, fat: 0 }, MEAL_CALORIES_NEGATIVE],
     ["the water total", setWaterSchema, { date: "2026-11-01", waterMl: { from: 0, to: -2 } }, "Must be at least 0"],
     ["the water total it showed", setWaterSchema, { date: "2026-11-01", waterMl: { from: -2, to: 0 } }, "Must be at least 0"],
     ["the water goal", setWaterSchema, { date: "2026-11-01", goal: { from: 3000, to: -2 } }, "Must be at least 500"],
     ["the steps total", updateStepsSchema, { date: "2026-11-01", steps: { from: 0, to: -2 } }, "Must be at least 0"],
     ["the steps goal", updateStepsSchema, { date: "2026-11-01", goal: { from: 10000, to: -2 } }, "Must be at least 1000"],
     ["a nutrition goal", updateNutritionTargetsSchema, { calories: { from: 2000, to: -2 } }, "Must be at least 500"],
-    ["a set's reps", logSetSchema, { sessionId: id, exerciseId: id, reps: -2, loadType: "kg", loadValue: 50 }, REPS_RANGE],
+    ["a set's reps", addSetSchema, { sessionId: id, exerciseId: id, reps: -2, loadType: "kg", loadValue: 50 }, REPS_RANGE],
     ["a routine's sets", saveSplitDaySchema, { id, name: "Push", isRest: false, exercises: [{ exerciseId: id, targetSets: -2, minReps: 8, maxReps: 12 }] }, ROUTINE_RANGE],
     ["a routine's reps", saveSplitDaySchema, { id, name: "Push", isRest: false, exercises: [{ exerciseId: id, targetSets: 3, minReps: -2, maxReps: 12 }] }, ROUTINE_RANGE],
   ])("%s", (_field, schema, input, message) => {

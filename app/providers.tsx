@@ -28,6 +28,10 @@ const EVERY = 60_000;
 // A tap on a link waits at most this long for the unanswered writes, the refresh they left due, or the server check of
 // a refresh missed offline, so nothing that never answers can keep the app on one page.
 const HOLD = 10_000;
+// A server check that fails while a refresh is missed tries again this much later, at most RETRIES times in a row; then
+// the next focus, minute or "online" does.
+const RETRY = 3000;
+const RETRIES = 3;
 
 // A page payload (React Server Components) is rows like `0:...`, each ending in a newline, after an optional marker
 // byte ('#' or '~'). Next does nothing with a navigation answer that is HTTP 200 but not one of these.
@@ -41,7 +45,11 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
 // page can tell a server value rendered before a write's answer (its refresh number is at most the one sent by then).
 let sent = 0;
 /** The number of the last refresh sent: a page rendered for a higher one was rendered after this moment. */
-export const refreshesSent = () => sent;
+const refreshesSent = () => sent;
+// Given to pages by `Providers` (D-044); a function, so the page reads the number when it needs it (at a write's answer).
+const RefreshesSentContext = createContext<() => number>(() => 0);
+/** The function that gives the number of the last refresh sent. */
+export const useRefreshesSent = () => useContext(RefreshesSentContext);
 
 /**
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
@@ -65,6 +73,8 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     let due = false;
     // A refresh that came due while offline, run once the device is back online and the server answers
     let missed = false;
+    // The failed server checks in a row since the last "online" or answer
+    let retries = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
     // The link a tap waits on (the latest one), and the timer that lets it through after HOLD
@@ -112,17 +122,25 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
     };
     // "Online" can come before the server is reachable (a network still settling, a captive portal), and a refresh that
     // fails becomes a full page load that drops an open form: after a missed refresh the server must answer a small
-    // request first (`/api/health`, which the service worker never answers). Until it does, the next focus, minute or
-    // "online" tries again, and a tap that waits goes through: the copy is all there is.
+    // request first (`/api/health`, which the service worker never answers). Until it does, a tap that waits goes
+    // through (the copy is all there is), and the check runs again 3 s later, up to 3 times; after that the next focus,
+    // minute or "online" tries again.
     const check = () => {
+      const failed = () => {
+        release();
+        if (!missed || retries >= RETRIES) return;
+        retries++;
+        refresh(RETRY);
+      };
       realFetch("/api/health", { cache: "no-store" }).then(
         (res) => {
-          if (!res.ok) return release();
+          if (!res.ok) return failed();
+          retries = 0;
           if (!missed) return;
           missed = false;
           refresh();
         },
-        () => release(),
+        failed,
       );
     };
     // A refresh while a write is on its way could show the screen from before it: it waits for the answer.
@@ -228,7 +246,10 @@ function AppShell({ onPageNotOpened }: { onPageNotOpened: (failed: NotOpened) =>
       else day.check();
     };
     const onVisible = () => document.visibilityState === "visible" && onFocus();
-    const onOnline = () => missed && refresh();
+    const onOnline = () => {
+      retries = 0;
+      if (missed) refresh();
+    };
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
@@ -336,7 +357,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <ToastProvider>
         <AppShell onPageNotOpened={setNotOpened} />
-        <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
+        <RefreshesSentContext.Provider value={refreshesSent}>
+          <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
+        </RefreshesSentContext.Provider>
       </ToastProvider>
     </SessionProvider>
   );

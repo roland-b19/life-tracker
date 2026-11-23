@@ -12,11 +12,12 @@ interface Toast {
   type?: "success" | "warning";
   /** Shows an Undo button that runs this. */
   onUndo?: (from: UndoFrom) => void;
-  /** Shows a Retry button that runs this: a restore that failed (undoWith). */
+  /** Shows a Retry button that runs this: a restore that got no answer (undoWith). */
   onRetry?: () => void;
   /**
-   * The rows the change behind the toast touched, as "<table>:<row id>" or "<table>:*" for a whole list. A newer toast
-   * that touches one of them takes this toast's Undo and Retry away, so an older Undo never writes over a newer change.
+   * The rows the change behind the toast touched, as "<table>:<row id>" or "<table>:*" for a whole list (or a key the
+   * device keeps, as `THEME_STORAGE`). A newer toast that touches one of them takes this toast's Undo and Retry away, so
+   * an older Undo never writes over a newer change.
    */
   touches?: string[];
   /** The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. */
@@ -177,25 +178,32 @@ type Written = boolean | { success?: boolean } | null | undefined;
 
 const succeeded = (back: Written) => back === true || (!!back && typeof back === "object" && !!back.success);
 
+/** A refusal's reason: the `error` of a `{ success: false, error }` answer. */
+const reason = (back: Written) =>
+  !!back && typeof back === "object" && "error" in back && typeof back.error === "string" ? back.error : undefined;
+
 /**
  * An Undo that writes the old state back. The screen goes back first inside `write`, which puts it right again when the
- * write fails; a write that throws or does not answer success shows `failed` (or what it returns for the answer) as a
- * warning with a Retry that runs the restore again, and that touches what the Undo's toast touched.
+ * write fails. A write the server refused (it answered `{ success: false, error }`) shows `failed` (or what it returns
+ * for the answer; by default the refusal's reason) as a warning with no Retry: the server has answered, and the same
+ * restore would be refused again. A write that got no answer (it threw, or answered `null`, `undefined` or `false`)
+ * shows `failed` with a Retry that runs the restore again, and that touches what the Undo's toast touched.
  * A `write` that has already told the user why it did nothing returns `true`.
  */
 export function undoWith<R extends Written>(
   showToast: ToastContextValue["showToast"],
   write: () => Promise<R>,
-  failed: string | ((back: Exclude<R, true> | null) => string) = "Failed to undo",
+  failed: string | ((back: Exclude<R, true> | null) => string) = (back) => reason(back) ?? "Failed to undo",
 ) {
   const undo = async (from?: UndoFrom) => {
     const back = await write().catch(() => null);
     if (succeeded(back)) return;
+    const answered = !!back && typeof back === "object";
     showToast({
       message: typeof failed === "function" ? failed(back as Exclude<R, true> | null) : failed,
       type: "warning",
       touches: from?.touches,
-      onRetry: () => void undo(from),
+      onRetry: answered ? undefined : () => void undo(from),
     });
   };
   return undo;

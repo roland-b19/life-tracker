@@ -464,11 +464,27 @@ export function FormActions({
   );
 }
 
+/** One opening of a form, as `FormModal` hands it to its `onSubmit` (and its `stillOpen` to children written as a function). */
+export type FormOpening = {
+  /** The id an add sends (D-040): made once per opening, so a Save again after a lost answer sends the same one. */
+  id: string;
+  /** Whether this opening is still on screen: an answer closes or marks only its own opening. */
+  stillOpen: () => boolean;
+};
+
+/** The fields of a form written as a function of its opening; a component, so `stillOpen` is only handed on, never run, as it renders. */
+function OpeningFields({ fields, stillOpen }: { fields: (opening: Pick<FormOpening, "stillOpen">) => ReactNode; stillOpen: () => boolean }) {
+  return fields({ stillOpen });
+}
+
 /**
- * A modal holding a form: the fields (children) in a stack, the error under them, then Cancel and Save. `busy`
- * disables Save and says "Saving..."; `canSubmit` is false while a required field is empty.
+ * A modal holding a form: the fields (children) in a stack, the error under them, then Cancel and Save. The form owns
+ * its openings (D-047): `onSubmit` gets the opening's `id` and `stillOpen`, and while the opening's save is unanswered
+ * Save says "Saving..." and the fields are disabled. `canSubmit` is false while a required field is empty. Children
+ * written as a function get the opening's `stillOpen` too, for an action inside the form (the day editor's "Create and
+ * add"): its answer changes only the opening it was sent from.
  */
-export function FormModal({
+export function FormModal<Sent = never>({
   isOpen,
   onClose,
   onCancel,
@@ -476,7 +492,10 @@ export function FormModal({
   onSubmit,
   error,
   errorId,
-  busy,
+  keepsOpening,
+  subject,
+  snapshot,
+  onOpen,
   canSubmit,
   submitLabel,
   children,
@@ -486,41 +505,121 @@ export function FormModal({
   /** Runs on the form's Cancel only (not Escape, a click outside or the close button), before `onClose`. */
   onCancel?: () => void;
   title: string;
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => unknown;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>, opening: FormOpening) => unknown;
   error?: string;
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
-  busy?: boolean;
+  /**
+   * Opened again before the save of the opening on screen has answered, the form goes on as that opening: it waits, and
+   * the answer closes it or shows its refusal in it (D-043, D-047). A form passes it when a second save from a fresh
+   * opening would go wrong: its save sends the values it opened with as `from` (D-040), so the second would be refused
+   * as changed on another device; or the fresh opening would show the values from before the first save, so its Save
+   * would undo the first (the day editor, the deload form, the custom exercise and shopping item forms). The opening
+   * goes on showing the values it sent, disabled, so a refusal leaves them for the owner to fix: the form sets its
+   * fields in `onOpen`, never as it opens.
+   */
+  keepsOpening?: boolean;
+  /**
+   * What the opening edits, for a form that edits one of several things (a category, a custom exercise): opened again
+   * for another one, or for an add, while a save is out, it is a fresh opening, not the save's; opened for the save's
+   * one again after that, it is the save's opening again, and `onOpen` gets back what `snapshot` took at the Save. Each
+   * subject's unanswered save is kept on its own, so another one's save meanwhile changes nothing for it.
+   */
+  subject?: string;
+  /** With `subject`: the values the form sends, taken at each Save, for `onOpen` to put back. */
+  snapshot?: () => Sent;
+  /**
+   * Runs before an opening shows: the form sets its fields here. A fresh opening runs it with nothing, a kept opening
+   * shown again after another one set the fields runs it with what its Save sent, and a kept opening shown again right
+   * after itself does not run it.
+   */
+  onOpen?: (sent?: Sent) => void;
   canSubmit?: boolean;
   submitLabel?: string;
-  children: ReactNode;
+  children: ReactNode | ((opening: Pick<FormOpening, "stillOpen">) => ReactNode);
 }) {
   // One submit until the handler settles, and the rest of a double tap on Save is swallowed, so it neither submits
   // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too. The lock
   // belongs to one opening of the form: a save still unanswered after Cancel never holds the Save of the next opening.
   const once = useOnce();
-  const [opening, setOpening] = useState(0);
+  // The opening on screen (or last shown), and the last one made: a kept opening can be shown again after a newer one.
+  const [{ opening, made }, setOpenings] = useState({ opening: 0, made: 0 });
+  // Each subject's unanswered save: the opening it was sent from and what it sent. An answer takes away only its own.
+  const [saves, setSaves] = useState<ReadonlyMap<string | undefined, { opening: number; sent?: Sent }>>(() => new Map());
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen) setOpening(opening + 1);
+    const out = saves.get(subject);
+    if (isOpen && keepsOpening && out) setOpenings({ opening: out.opening, made });
+    else if (isOpen) setOpenings({ opening: made + 1, made: made + 1 });
   }
+  // The unanswered save of the opening on screen (or last shown), if any.
+  const savingIn = [...saves.values()].find((s) => s.opening === opening);
+  const saving = isOpen && !!savingIn;
+  // The last opening `onOpen` ran for: its fields are set in the same commit, before the browser paints the form.
+  const started = useRef(-1);
+  useLayoutEffect(() => {
+    if (!isOpen || started.current === opening) return;
+    started.current = opening;
+    onOpen?.(savingIn?.sent);
+  });
+  // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.
+  const shown = useRef<number | null>(null);
+  useEffect(() => {
+    shown.current = isOpen ? opening : null;
+    return () => {
+      shown.current = null;
+    };
+  }, [isOpen, opening]);
+  // Each opening's id, kept for a kept opening shown again after another one: only the last opening's and those whose
+  // save is out stay, so the map holds no more than the openings that can still save.
+  const ids = useRef(new Map<number, string>());
+  useEffect(() => {
+    const live = new Set([opening, ...[...saves.values()].map((s) => s.opening)]);
+    for (const kept of ids.current.keys()) if (!live.has(kept)) ids.current.delete(kept);
+  }, [opening, saves]);
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!once(`form:${opening}`, () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
+    const from = opening;
+    const of = subject;
+    const sent = snapshot?.();
+    const id = ids.current.get(from) ?? crypto.randomUUID();
+    ids.current.set(from, id);
+    const ran = once(
+      `form:${from}`,
+      () => {
+        let answered = false;
+        const answer = Promise.resolve(onSubmit(e, { id, stillOpen: () => shown.current === from })).finally(() => {
+          answered = true;
+          setSaves((now) => {
+            if (now.get(of)?.opening !== from) return now;
+            const left = new Map(now);
+            left.delete(of);
+            return left;
+          });
+        });
+        // A submit the page answers at once (a field it refuses) never shows as saving.
+        queueMicrotask(() => {
+          if (!answered) setSaves((now) => new Map(now).set(of, { opening: from, sent }));
+        });
+        return answer;
+      },
+      (e.nativeEvent as SubmitEvent).submitter,
+    );
+    if (!ran) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <form onSubmit={submit}>
-        <div className="form-stack">
-          {children}
+        <fieldset className="form-stack" disabled={saving}>
+          {typeof children === "function" ? <OpeningFields fields={children} stillOpen={() => shown.current === opening} /> : children}
           {error && <ErrorText id={errorId}>{error}</ErrorText>}
-        </div>
+        </fieldset>
         <FormActions
           onCancel={() => {
             onCancel?.();
             onClose();
           }}
-          busy={busy}
+          busy={saving}
           canSubmit={canSubmit}
           submitLabel={submitLabel}
         />

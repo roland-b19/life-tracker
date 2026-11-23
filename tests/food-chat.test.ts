@@ -9,9 +9,9 @@ vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { buildFoodChatPrompt, sendFoodChatMessage } from "@/lib/food-ai-chat";
 import { sendFoodChatMessageAction } from "@/actions/food-chat";
 import { toISODate } from "@/lib/format-date";
-import { logMealSchema } from "@/lib/validations/food";
+import { addMealSchema } from "@/lib/validations/food";
 import { saveClaudeToken } from "@/lib/claude-connection";
-import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, logMeal, updateDailySteps } from "@/lib/food";
+import { getDailyFoodSummary, getNutritionTargets, getPastFoods, getShoppingList, addMeal, updateDailySteps } from "@/lib/food";
 import { authState, seedUser } from "./auth";
 import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
@@ -170,7 +170,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     const owner = await seedUser(`chat-keys-${randomUUID()}`);
     const valid = { name: "Iaurt", calories: 120, protein: 10, carbs: 8, fat: 5 };
     const bad: Record<string, unknown> = { name: "", calories: "multe", protein: "multe", carbs: "multe", fat: "multe", isEstimated: "da", id: "nu-e-un-id" };
-    expect(Object.keys(bad).sort()).toEqual(Object.keys(logMealSchema.shape).filter((key) => key !== "date").sort());
+    expect(Object.keys(bad).sort()).toEqual(Object.keys(addMealSchema.shape).filter((key) => key !== "date").sort());
     mockClaude({ reply: "Ok.", meals: Object.entries(bad).map(([key, value]) => ({ ...valid, [key]: value })) });
 
     const result = await sendFoodChatMessage(owner, "iaurt", [], ctx);
@@ -263,7 +263,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("lists a meal id the answer sends twice once, as one meal, and never an older meal sent again", async () => {
     process.env.AUTH_DEV = "true";
     const owner = await seedUser(`chat-repeat-${randomUUID()}`);
-    const older = (await logMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 })).meal!;
+    const older = (await addMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 })).meal!;
     const id = randomUUID();
     mockClaude({
       reply: "Gata.",
@@ -283,7 +283,7 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("only ever adds meals: anything else in the answer changes nothing", async () => {
     process.env.AUTH_DEV = "true";
     const owner = await seedUser(`chat-scope-${randomUUID()}`);
-    await logMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 });
+    await addMeal(owner, { date: ctx.date, name: "Ouă", calories: 200, protein: 14, carbs: 1, fat: 15 });
     const before = await getDailyFoodSummary(owner, ctx.date);
     const goalsBefore = await getNutritionTargets(owner);
     mockClaude({
@@ -306,7 +306,7 @@ describe("Food assistant: context prompt and structured answer", () => {
 
   it("puts food context in the prompt, never steps or weight", async () => {
     const other = await seedUser(`chat-prompt-${randomUUID()}`);
-    await logMeal(other, { date: ctx.date, name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
+    await addMeal(other, { date: ctx.date, name: "Ovăz cu lapte", calories: 350, protein: 12, carbs: 55, fat: 8 });
     await updateDailySteps(other, ctx.date, { from: 0, to: 98765 });
 
     const prompt = await buildFoodChatPrompt(other, ctx);
@@ -321,10 +321,10 @@ describe("Food assistant: context prompt and structured answer", () => {
   it("lists past foods once per name, newest first, only the owner's", async () => {
     const owner = await seedUser(`past-foods-${randomUUID()}`);
     const stranger = await seedUser(`past-foods-${randomUUID()}`);
-    await logMeal(owner, { date: "2026-11-01", name: "Banana", calories: 90, protein: 1, carbs: 23, fat: 0 });
-    await logMeal(owner, { date: "2026-11-02", name: "Ciorbă de pui", calories: 300, protein: 20, carbs: 25, fat: 10 });
-    await logMeal(owner, { date: "2026-11-03", name: "banana", calories: 100, protein: 1, carbs: 25, fat: 0 });
-    await logMeal(stranger, { date: "2026-11-03", name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 });
+    await addMeal(owner, { date: "2026-11-01", name: "Banana", calories: 90, protein: 1, carbs: 23, fat: 0 });
+    await addMeal(owner, { date: "2026-11-02", name: "Ciorbă de pui", calories: 300, protein: 20, carbs: 25, fat: 10 });
+    await addMeal(owner, { date: "2026-11-03", name: "banana", calories: 100, protein: 1, carbs: 25, fat: 0 });
+    await addMeal(stranger, { date: "2026-11-03", name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 });
 
     const foods = await getPastFoods(owner);
 
@@ -366,7 +366,7 @@ describe("Food assistant: context prompt and structured answer", () => {
     it("never lists, changes or shows another user's meal sent under its id, and says it was left out", async () => {
       const owner = await seedUser(`chat-owner-${randomUUID()}`);
       const stranger = await seedUser(`chat-stranger-${randomUUID()}`);
-      const theirs = (await logMeal(stranger, { date: today, name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal!;
+      const theirs = (await addMeal(stranger, { date: today, name: "Secret", calories: 1, protein: 0, carbs: 0, fat: 0 })).meal!;
       const strangerBefore = await getDailyFoodSummary(stranger, today);
       process.env.AUTH_DEV = "true";
       mockClaude({ reply: "Gata.", meals: [{ id: theirs.id, name: "Supă", calories: 150, protein: 5, carbs: 20, fat: 4 }] });
@@ -397,11 +397,11 @@ describe("Food assistant: context prompt and structured answer", () => {
       const turns = [
         { role: "user", text: "salut" },
         { role: "assistant", text: "Bună!" },
-      ] as const;
+      ];
 
-      succeeded(await sendFoodChatMessageAction({ ...input, history: [...turns] }));
+      succeeded(await sendFoodChatMessageAction({ ...input, history: turns }));
 
-      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model" as never, text: "Bună!" }] })).toEqual(refused("Pick one of the options"));
+      expect(await sendFoodChatMessageAction({ ...input, history: [{ role: "model", text: "Bună!" }] })).toEqual(refused("Pick one of the options"));
       expect(runClaude).toHaveBeenCalledTimes(1);
     });
 

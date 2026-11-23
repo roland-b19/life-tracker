@@ -79,11 +79,11 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     });
     const edit = { name: "Desk Lamp Pro", estimatedPrice: 99.9 };
 
-    expect(await updateWishlistItem(userB, item.id, edit)).toBeNull();
+    expect(await updateWishlistItem(userB, { id: item.id, ...edit })).toBeNull();
     const unchanged = (await getWishlist(userA)).find((i) => i.id === item.id);
     expect(unchanged?.name).toBe("Desk Lamp");
 
-    const updated = await updateWishlistItem(userA, item.id, edit);
+    const updated = await updateWishlistItem(userA, { id: item.id, ...edit });
     expect(updated?.name).toBe("Desk Lamp Pro");
     expect(Number(updated?.estimatedPrice)).toBe(99.9);
     expect(updated?.priority).toBe("low");
@@ -136,12 +136,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     const item = await add(userA, { name: "Monitor", estimatedPrice: 300 });
     const edit = { name: "Monitor 4K", estimatedPrice: 350 };
     authState.id = userB;
-    expect(await updateWishlistItemAction(item.id, edit)).toEqual(refused("This item no longer exists."));
+    expect(await updateWishlistItemAction({ id: item.id, ...edit })).toEqual(refused("This item no longer exists."));
     authState.id = "";
-    expect(await updateWishlistItemAction(item.id, edit)).toEqual(refused(SIGNED_OUT));
+    expect(await updateWishlistItemAction({ id: item.id, ...edit })).toEqual(refused(SIGNED_OUT));
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor");
     authState.id = userA;
-    succeeded(await updateWishlistItemAction(item.id, edit));
+    succeeded(await updateWishlistItemAction({ id: item.id, ...edit }));
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor 4K");
     authState.id = "";
   });
@@ -220,7 +220,7 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     expect(await addWishlistItemAction({ name: "x".repeat(121), estimatedPrice: 10 })).toEqual(refused("Too long (max 120)"));
     expect(await addWishlistItemAction({ name: "Lamp", url: "x".repeat(501), estimatedPrice: 10 })).toEqual(refused("Too long (max 500)"));
     const item = await add(userA, { name: "Shelf", estimatedPrice: 10 });
-    expect(await updateWishlistItemAction(item.id, { name: "x".repeat(121) })).toEqual(refused("Too long (max 120)"));
+    expect(await updateWishlistItemAction({ id: item.id, name: "x".repeat(121) })).toEqual(refused("Too long (max 120)"));
     expect((await getWishlist(userA)).length).toBe(before + 1);
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Shelf");
     authState.id = "";
@@ -230,12 +230,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     authState.id = userA;
     const item = await add(userA, { name: "Bike", url: "shop.ro", estimatedPrice: 900, category: "sport" });
     // Two tabs opened the same item: one renames it, the other changes its price.
-    expect(succeeded(await updateWishlistItemAction(item.id, { name: "Road bike" })).item).toMatchObject({ name: "Road bike", estimatedPrice: "900.00", url: "shop.ro" });
-    expect(succeeded(await updateWishlistItemAction(item.id, { estimatedPrice: 120.5 })).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50", priority: "low", category: "sport" });
-    expect(succeeded(await updateWishlistItemAction(item.id, { url: null })).item).toMatchObject({ name: "Road bike", url: null });
-    expect(succeeded(await updateWishlistItemAction(item.id, {})).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50" });
+    expect(succeeded(await updateWishlistItemAction({ id: item.id, name: "Road bike" })).item).toMatchObject({ name: "Road bike", estimatedPrice: "900.00", url: "shop.ro" });
+    expect(succeeded(await updateWishlistItemAction({ id: item.id, estimatedPrice: 120.5 })).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50", priority: "low", category: "sport" });
+    expect(succeeded(await updateWishlistItemAction({ id: item.id, url: null })).item).toMatchObject({ name: "Road bike", url: null });
+    expect(succeeded(await updateWishlistItemAction({ id: item.id })).item).toMatchObject({ name: "Road bike", estimatedPrice: "120.50" });
     authState.id = userB;
-    expect(await updateWishlistItemAction(item.id, {})).toEqual(refused("This item no longer exists."));
+    expect(await updateWishlistItemAction({ id: item.id })).toEqual(refused("This item no longer exists."));
     authState.id = "";
   });
 });

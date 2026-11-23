@@ -11,6 +11,7 @@ import {
   holdWrites,
   isRefresh,
   itemName,
+  newDevice,
   openWishlist,
   pauseClock,
   recordStates,
@@ -55,10 +56,23 @@ async function backOnline(page: Page, setOnline: (online: boolean) => Promise<un
   await page.clock.resume();
 }
 
+/** Waits until the page has heard it is online again, so a stopped clock can then run the timer its handler set. */
+const heardOnline = (page: Page) => expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+
 /** The server checks the page sends before a refresh it missed while offline. */
 function countChecks(page: Page) {
   const seen: Request[] = [];
   page.on("request", (r) => new URL(r.url()).pathname === "/api/health" && seen.push(r));
+  return seen;
+}
+
+/**
+ * The server checks that failed. A check's failure reaches the page a moment after Playwright sees the request: a test
+ * that runs the clock to the check's next try first waits for this count, then for a request of the page's own.
+ */
+function countFailedChecks(page: Page) {
+  const seen: Request[] = [];
+  page.on("requestfailed", (r) => new URL(r.url()).pathname === "/api/health" && seen.push(r));
   return seen;
 }
 
@@ -83,8 +97,7 @@ test("a save in one tab refreshes another tab of the same browser within 2 s [SY
 });
 
 test("another browser refreshes when it gets the focus back [SYNC]", async ({ signedInPage: page, browser }) => {
-  const context = await browser.newContext();
-  await context.addCookies(await page.context().cookies());
+  const context = await newDevice(browser, page);
   const other = await context.newPage();
   try {
     await other.clock.install();
@@ -199,19 +212,23 @@ test("back online, a refresh waits until the server answers, so an open form kee
   await settled(page);
   // The device says it is online, but the server is not reachable yet: a refresh sent now would fail, and Next would
   // turn it into a full page load
+  const failed = countFailedChecks(page);
   await page.route("**/*", (route) => route.abort("internetdisconnected"));
+  await pauseClock(page);
   await setOnline(true);
+  await heardOnline(page);
   await page.clock.runFor(2000);
+  await expect.poll(() => failed.length).toBe(1);
   await settled(page);
   expect(checks).toHaveLength(1);
   expect(refreshes).toHaveLength(0);
   expect(await isKept(page)).toBe(true);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
-  // The next trigger, with the server answering, refreshes once
+  // The check runs again 3 s after it failed (D-047); the server answers now, so the page refreshes once
   await page.unroute("**/*");
-  await setOnline(false);
-  await settled(page);
-  await backOnline(page, setOnline);
+  await page.clock.runFor(3000);
+  await expect.poll(() => checks.length).toBe(2);
+  await page.clock.resume();
   await expect.poll(() => refreshes.length).toBe(1);
   await page.clock.runFor(2000);
   await settled(page);
@@ -219,6 +236,102 @@ test("back online, a refresh waits until the server answers, so an open form kee
   expect(refreshes).toHaveLength(1);
   expect(await isKept(page)).toBe(true);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
+});
+
+test("a server check that keeps failing tries again 3 times, 3 s apart, and a new online starts over", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const failed = countFailedChecks(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await page.clock.runFor(61_000);
+  await settled(page);
+  await page.route("**/*", (route) => route.abort("internetdisconnected"));
+  await pauseClock(page);
+  // Each try fails; the next one comes 3 s later (D-047). The clock stays before the next 60 s refresh of an open page.
+  const tries = async (from: number, to: number) => {
+    for (let n = from; n <= to; n++) {
+      if (n > from) await page.clock.runFor(3000);
+      else await page.clock.runFor(1);
+      await expect.poll(() => checks.length).toBe(n);
+      await expect.poll(() => failed.length).toBe(n);
+      await settled(page);
+    }
+  };
+  await setOnline(true);
+  await heardOnline(page);
+  await tries(1, 4);
+  // After 3 tries the next focus, minute or "online" checks again
+  await page.clock.runFor(10_000);
+  await settled(page);
+  expect(checks).toHaveLength(4);
+  await setOnline(false);
+  await setOnline(true);
+  await heardOnline(page);
+  await tries(5, 8);
+  await page.clock.runFor(10_000);
+  await settled(page);
+  expect(checks).toHaveLength(8);
+  expect(refreshes).toHaveLength(0);
+});
+
+// The tries count starts over once a check is answered, not only on a new "online": here the page does not hear the
+// second "online" (a lost event), so only the answer can have reset the count the first run left at 1.
+test("after a check answered, the next refresh missed offline gets its 3 tries again, also without an online event", async ({ signedInPage: page }) => {
+  await page.addInitScript(() =>
+    window.addEventListener("online", (e) => (window as unknown as { deaf?: boolean }).deaf && e.stopImmediatePropagation(), true),
+  );
+  await page.clock.install();
+  await openWishlist(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const failed = countFailedChecks(page);
+  const setOnline = await network(page);
+  const failChecks = () => page.route("**/api/health", (route) => route.abort("internetdisconnected"));
+  // The n-th check, which fails (the fails so far, the answered one left out)
+  const nextTry = async (n: number, ms: number, fails = n) => {
+    await page.clock.runFor(ms);
+    await expect.poll(() => checks.length).toBe(n);
+    await expect.poll(() => failed.length).toBe(fails);
+    await settled(page);
+  };
+
+  // First run: the first check fails, the try 3 s later is answered and the page refreshes
+  await setOnline(false);
+  await page.clock.runFor(61_000);
+  await settled(page);
+  await failChecks();
+  await pauseClock(page);
+  await setOnline(true);
+  await heardOnline(page);
+  await nextTry(1, 1);
+  await page.unroute("**/api/health");
+  await page.clock.runFor(3000);
+  await expect.poll(() => checks.length).toBe(2);
+  await page.clock.resume();
+  await expect.poll(() => refreshes.length).toBe(1);
+
+  // Second run, with "online" lost: the focus starts the check, which fails, and 3 more tries follow 3 s apart
+  await setOnline(false);
+  await page.clock.runFor(61_000);
+  await settled(page);
+  await failChecks();
+  await pauseClock(page);
+  await page.evaluate(() => ((window as unknown as { deaf: boolean }).deaf = true));
+  await setOnline(true);
+  await heardOnline(page);
+  await page.clock.runFor(2000);
+  await settled(page);
+  expect(checks).toHaveLength(2);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await nextTry(3, 1, 2);
+  for (const n of [4, 5, 6]) await nextTry(n, 3000, n - 1);
+  await page.clock.runFor(10_000);
+  await settled(page);
+  expect(checks).toHaveLength(6);
+  expect(refreshes).toHaveLength(1);
 });
 
 test("coming back online with no refresh due refreshes nothing", async ({ signedInPage: page }) => {

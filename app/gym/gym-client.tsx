@@ -64,7 +64,7 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
 
   return (
     <Page userName={userName}>
-      <DeloadCard today={today} deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} setBusy={setBusy} />
+      <DeloadCard today={today} deload={deload} isDeloadMode={isDeloadMode} onDeloadMode={setIsDeloadMode} busy={busy} />
 
       {activeSession ? (
         <ActiveWorkout w={w} day={days.find((d) => d.id === activeSession.splitDayId)} history={history} busy={busy} />
@@ -97,18 +97,21 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
         </>
       )}
 
-      {editing && (
-        <DayEditor
-          key={editing.day.id}
-          day={editing.day}
-          resume={editing.resume}
-          exercises={exercises}
-          busy={busy}
-          setBusy={setBusy}
-          onClose={() => setEditing(null)}
-          onReopen={(resume) => setEditing({ day: days.find((d) => d.id === editing.day.id) ?? editing.day, resume })}
-        />
-      )}
+      {/* One editor per day, mounted while the page shows the day, so it keeps its opening while its save is out (D-047). */}
+      {days.map((day) => {
+        const open = editing?.day.id === day.id ? editing : undefined;
+        return (
+          <DayEditor
+            key={day.id}
+            isOpen={Boolean(open)}
+            day={open?.day ?? day}
+            resume={open?.resume}
+            exercises={exercises}
+            onClose={() => setEditing(null)}
+            onReopen={(resume) => setEditing({ day, resume })}
+          />
+        );
+      })}
     </Page>
   );
 }

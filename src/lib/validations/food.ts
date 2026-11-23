@@ -8,7 +8,7 @@ import { formatNumber, roundTo } from "@/lib/number-format";
 export const MAX_WATER_ML = 20000;
 /** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
 export const MAX_STEPS = 200000;
-/** The most one meal can hold; the Health form checks the same limits, with these words, before it saves. */
+/** The most one meal can hold; the Health form checks them through `mealAmounts` before it saves. */
 export const MEAL_LIMITS = { calories: 10000, macroGrams: 1000 } as const;
 export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less`;
 export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less`;
@@ -34,7 +34,10 @@ const mealFields = z.object({
 export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
   meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => roundTo(grams, 1) > 0);
 
-export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
+/** A meal's amounts alone: the Health meal form checks them with this before it saves, in the server's words. */
+export const mealAmounts = mealFields.pick({ calories: true, protein: true, carbs: true, fat: true });
+
+export const addMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
 
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = mealFields.extend({ id: uuid, createdAt: z.string().datetime().optional() });
@@ -47,7 +50,7 @@ const weightKilograms = z.number("Please enter a valid weight").min(20, WEIGHT_R
  * One weigh-in a day: saving a day that already has one replaces its kilograms. The Undo of an edit also sends `from`,
  * the value it undoes: it writes only while the day still holds that value (D-040).
  */
-export const logWeightSchema = z
+export const saveWeightSchema = z
   .object({
     id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
@@ -58,7 +61,7 @@ export const logWeightSchema = z
   .strict();
 
 /** Undo of a delete: the same weigh-in, under its old id. */
-export const restoreWeightSchema = logWeightSchema.omit({ from: true }).extend({ id: uuid });
+export const restoreWeightSchema = saveWeightSchema.omit({ from: true }).extend({ id: uuid });
 
 /** The range each daily goal can take; the Health forms check the same ranges before they save. */
 export const GOAL_RANGES = {
@@ -111,9 +114,6 @@ export const updateStepsSchema = z
   .object({ date: isoDate, steps: valueChange(z.number().int().min(0).max(MAX_STEPS)).optional(), goal: valueChange(targetFields.steps).optional() })
   .refine((v) => anySet([v.steps, v.goal]), NOTHING_TO_SAVE);
 
-/** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
-export const shoppingCategorySchema = categorySchema;
-
 /** The most one shopping item can hold: an add or a merge that would pass it is refused. */
 export const MAX_SHOPPING_AMOUNT = 1000;
 /** How many names each of the two shopping lists (categories, units) holds at most. */
@@ -133,16 +133,16 @@ const shoppingItemFields = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
   amount: shoppingAmount.default(1),
   unit: z.string().trim().toLowerCase().min(1).max(30).default("pcs"),
-  category: shoppingCategorySchema.default("other"),
+  category: categorySchema.default("other"),
 });
 
 export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
 
-export const updateShoppingItemSchema = shoppingItemFields.extend({ itemId: uuid });
+export const updateShoppingItemSchema = shoppingItemFields.extend({ id: uuid });
 
-/** Undo of an add that merged: the merged row (`itemId`) and the row it replaced, as it was. */
+/** Undo of an add that merged: the merged row (`id`) and the row it replaced, as it was. */
 export const unmergeShoppingItemSchema = z.object({
-  itemId: uuid,
+  id: uuid,
   before: shoppingItemFields.extend({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable() }),
 });
 
@@ -157,16 +157,16 @@ const managed = <T extends { kind: ShoppingKind }>(schema: z.ZodType<T>, names: 
     .refine((v) => v.kind !== "unit" || !names(v).includes("pcs"), '"pcs" is built in')
     .refine((v) => v.kind !== "unit" || names(v).every((n) => n.length <= 30), "Too long (max 30)");
 
-export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }), (v) => [v.name]);
+export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: categorySchema }), (v) => [v.name]);
 export const reorderShoppingCategoriesSchema = managed(
   z.object({
     kind: shoppingKindSchema,
-    names: z.array(shoppingCategorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique"),
+    names: z.array(categorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique"),
   }),
   (v) => v.names,
 );
 export const renameShoppingCategorySchema = managed(
-  z.object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema }),
+  z.object({ kind: shoppingKindSchema, from: categorySchema, to: categorySchema }),
   (v) => [v.from, v.to],
 ).refine((v) => v.from !== v.to, { message: "That is already its name", path: ["to"] });
 
@@ -177,13 +177,13 @@ export const renameShoppingCategorySchema = managed(
 export const revertShoppingCategorySchema = managed(
   z.object({
     kind: shoppingKindSchema,
-    name: shoppingCategorySchema,
-    current: shoppingCategorySchema,
+    name: categorySchema,
+    current: categorySchema,
     sortOrder: z.number().int(),
     itemIds: z.array(uuid).max(MAX_CLEARED),
     dropCurrent: z.boolean(),
     merges: z
-      .array(z.object({ id: uuid, into: uuid, amount: shoppingAmount, category: shoppingCategorySchema, isBought: z.boolean() }))
+      .array(z.object({ id: uuid, into: uuid, amount: shoppingAmount, category: categorySchema, isBought: z.boolean() }))
       .max(MAX_CLEARED)
       .default([]),
     amounts: z.array(z.object({ id: uuid, amount: shoppingAmount })).max(MAX_CLEARED).default([]),
@@ -192,14 +192,14 @@ export const revertShoppingCategorySchema = managed(
 );
 
 /** A tick, or its Undo: Undo sends the time the box had before (`checkedAt`), so the row goes back to its place. */
-export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
+export const toggleShoppingItemSchema = z.object({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(MAX_CLEARED) });
 
 export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
-export type LogWeightInput = z.infer<typeof logWeightSchema>;
+export type SaveWeightInput = z.infer<typeof saveWeightSchema>;
 export type RestoreWeightInput = z.infer<typeof restoreWeightSchema>;
-export type LogMealInput = z.infer<typeof logMealSchema>;
+export type AddMealInput = z.infer<typeof addMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type AddShoppingItemInput = z.infer<typeof addShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

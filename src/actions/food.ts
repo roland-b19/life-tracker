@@ -8,8 +8,8 @@ import { CATEGORY_GONE } from "@/lib/validations/categories";
 import { alreadyExists, changedSince, Refusal, respond } from "@/lib/validations/result";
 import {
   addShoppingItemSchema,
-  logMealSchema,
-  logWeightSchema,
+  addMealSchema,
+  saveWeightSchema,
   ONLY_TODAY_AND_YESTERDAY,
   restoreMealSchema,
   restoreWeightSchema,
@@ -33,7 +33,7 @@ import {
   deleteShoppingCategory,
   deleteShoppingItem,
   deleteWeightEntry,
-  logMeal,
+  addMeal,
   renameShoppingCategory,
   reorderShoppingCategories,
   restoreMeal,
@@ -63,21 +63,21 @@ function assertToday(date: string) {
  * Adds a meal; a repeat of the same add (same id) answers the meal already there with `repeated`, an id another user
  * holds is refused.
  */
-export async function logMealAction(rawInput: unknown) {
+export async function addMealAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const parsed = logMealSchema.parse(rawInput);
+    const parsed = addMealSchema.parse(rawInput);
     assertWritableDay(parsed.date);
-    const { meal, repeated } = await logMeal(userId, parsed);
+    const { meal, repeated } = await addMeal(userId, parsed);
     if (!meal) throw new Refusal("This meal could not be saved.");
     return { meal, repeated };
   });
 }
 
-export async function deleteMealAction(mealId: string) {
+export async function deleteMealAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    return { deleted: await deleteMeal(userId, uuid.parse(mealId), assertWritableDay) };
+    return { deleted: await deleteMeal(userId, uuid.parse(id), assertWritableDay) };
   });
 }
 
@@ -101,7 +101,7 @@ export async function restoreMealAction(rawInput: unknown) {
 export async function saveWeightAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const input = logWeightSchema.parse(rawInput);
+    const input = saveWeightSchema.parse(rawInput);
     assertToday(input.date);
     const { entry, previous, repeated } = await saveWeightEntry(userId, input);
     if (!entry) throw new Refusal("This weight could not be saved.");
@@ -110,10 +110,10 @@ export async function saveWeightAction(rawInput: unknown) {
 }
 
 /** Deletes a weigh-in of any day: a past entry can still go, and its Undo puts it back. */
-export async function deleteWeightAction(entryId: string) {
+export async function deleteWeightAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    await deleteWeightEntry(userId, uuid.parse(entryId));
+    await deleteWeightEntry(userId, uuid.parse(id));
     return {};
   });
 }
@@ -175,19 +175,19 @@ export async function unmergeShoppingItemAction(rawInput: unknown) {
 }
 
 /** A tick; its Undo also sends the time the box had before (`checkedAt`), so the row goes back to its place. */
-export async function toggleShoppingItemAction(itemId: string, isBought: boolean, checkedAt?: Date | string | null) {
+export async function toggleShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const input = toggleShoppingItemSchema.parse({ itemId, isBought, checkedAt });
-    const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
+    const input = toggleShoppingItemSchema.parse(rawInput);
+    const item = await toggleShoppingItem(userId, input.id, input.isBought, input.checkedAt);
     return { item };
   });
 }
 
-export async function deleteShoppingItemAction(itemId: string) {
+export async function deleteShoppingItemAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
+    const deleted = await deleteShoppingItem(userId, uuid.parse(id));
     return { deleted };
   });
 }

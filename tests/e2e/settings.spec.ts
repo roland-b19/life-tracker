@@ -7,10 +7,15 @@ import {
   center,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
+  holdWrites,
   hydrationWarnings,
+  pauseClock,
   signInThroughForm,
   test,
   theme,
+  toast,
+  undoIn,
   writesIn,
 } from "./helpers";
 
@@ -181,20 +186,80 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   expect(await theme(page)).toBe("auto");
   expect(await pageColor(page)).toBe(light);
 
-  // A change of mode fades the colors (data-theme-fade, set as the click is handled), but not with reduced motion.
-  const pickFades = (choice: string) =>
+  // A change of mode fades the colors (data-theme-fade, set right before the new data-theme), but not with reduced motion.
+  const pickFades = (choice: "Dark" | "Light") =>
     appearance(page)
       .getByRole("tab", { name: choice, exact: true })
-      .evaluate((tab: HTMLElement) => {
-        tab.click();
-        return "themeFade" in document.documentElement.dataset;
-      });
+      .evaluate(
+        (tab: HTMLElement, mode) =>
+          new Promise<boolean>((resolve) => {
+            const root = document.documentElement;
+            new MutationObserver((_, observer) => {
+              if (root.dataset.theme !== mode) return;
+              observer.disconnect();
+              resolve("themeFade" in root.dataset);
+            }).observe(root, { attributeFilter: ["data-theme"] });
+            tab.click();
+          }),
+        choice.toLowerCase(),
+      );
   expect(await pickFades("Dark")).toBe(true);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-fade");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await pickFades("Light")).toBe(false);
 
   expect(reactWarnings).toEqual([]);
+});
+
+test("a second theme change takes the first toast's Undo away; its own Undo puts the first change back [D-040, D-047]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openSettings(page);
+  await pauseClock(page);
+  await pick(page, "Dark");
+  await expect(undoIn(page, "Appearance set to Dark")).toBeVisible();
+  await pick(page, "Light");
+  await expectToastWithoutUndo(page, "Appearance set to Dark");
+  await undoIn(page, "Appearance set to Light").click();
+  await expect(appearance(page).getByRole("tab", { name: "Dark", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("dark");
+});
+
+test("a theme kept before D-047 (a raw light or dark) still applies and is kept as JSON from then on; an unreadable one is Auto", async ({ signedInPage: page }) => {
+  const stored = () => page.evaluate(() => localStorage.getItem("lt-theme"));
+  await openSettings(page);
+  await page.evaluate(() => localStorage.setItem("lt-theme", "light"));
+  await openSettings(page);
+  expect(await theme(page)).toBe("light");
+  await expect(appearance(page).getByRole("tab", { name: "Light", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await stored()).toBe(JSON.stringify("light"));
+
+  await page.evaluate(() => localStorage.setItem("lt-theme", "{not json"));
+  await openSettings(page);
+  expect(await theme(page)).toBe("auto");
+  await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
+});
+
+// The head script (app/components/theme.ts) must read the stored JSON: if it misses it, the page paints in the system's
+// mode and switches once React applies the choice, a flash. An init script records `data-theme` on <html> when <body>
+// first appears (the head script has run, React has not) and every value it takes after that.
+test("a theme stored as JSON is on <html> from the first paint after a reload, with no change after (no flash) [D-024, D-047]", async ({ signedInPage: page }) => {
+  await openSettings(page);
+  await pick(page, "Light"); // against this project's dark system scheme
+  expect(await page.evaluate(() => localStorage.getItem("lt-theme"))).toBe(JSON.stringify("light"));
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { themes: string[] }).themes = seen;
+    new MutationObserver(() => {
+      if (!document.body) return; // <html> too may not be there yet when this script runs
+      const now = document.documentElement.dataset.theme ?? "auto";
+      if (seen.length === 0) seen.push(`body:${now}`);
+      else if (!seen.at(-1)!.endsWith(`:${now}`)) seen.push(`attr:${now}`);
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-theme"] });
+  });
+  await openSettings(page);
+  await expect(appearance(page).getByRole("tab", { name: "Light", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => theme(page)).toBe("light"); // hydrated, and the choice applied by then whatever the head did
+  expect(await page.evaluate(() => (window as unknown as { themes: string[] }).themes)).toEqual(["body:light"]);
 });
 
 test("a signed-out visit to /settings comes back to /settings after sign-in, and the connect date is the app's day [PATH, MORE-02]", async ({ page }) => {
@@ -225,4 +290,26 @@ test("a double tap on Save connects once [D-043]", async ({ signedInPage: page }
   expect(await writesIn(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()), token)).toBe(1);
   await expect(account(page)).toBeVisible();
   await expect(page.getByText("Connected Claude")).toHaveCount(1);
+});
+
+// An answer belongs to its opening (D-047): a connect lost after its form was cancelled says so in a toast, the form
+// opened next starts with no error, and Claude stays not connected.
+test("a token save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openSettings(page);
+  const token = fakeToken();
+  const release = await holdWrites(page, token);
+  await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
+  const form = page.getByRole("dialog", { name: "Connect Claude" });
+  await form.getByLabel("Token").fill(token);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to connect Claude")).toBeVisible();
+  await expect(notConnected(page)).toBeVisible();
+
+  await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
+  await expect(form.getByLabel("Token")).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
 });

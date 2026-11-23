@@ -8,7 +8,6 @@ import {
   restoreTodoSchema,
   pushSubscriptionSchema,
   TODO_GONE,
-  TodoSpace,
   toggleTodoSchema,
   updateTodoSchema,
 } from "@/lib/validations/todos";
@@ -18,7 +17,6 @@ import {
   addTodo,
   deleteTodo,
   findTodo,
-  getDailyTodos,
   removePushSubscription,
   restoreTodo,
   savePushSubscription,
@@ -103,26 +101,14 @@ export async function updateTodoAction(rawInput: unknown) {
 }
 
 /** Deleted for good; Undo restores it from the screen's copy. A task that is not there is not a failure: `deleted` says so. */
-export async function deleteTodoAction(todoId: string) {
+export async function deleteTodoAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const parsed = deleteTodoSchema.parse({ id: todoId });
+    const parsed = deleteTodoSchema.parse({ id });
     const task = await findTodo(userId, parsed.id);
     if (!task) return { deleted: false };
     assertChangeable(task);
     return { deleted: (await deleteTodo(userId, parsed.id)) !== null };
-  });
-}
-
-/**
- * Everything the Tasks page shows for today, in one round trip: Next runs server actions one at a time,
- * so separate calls would cost a session, a network trip and a wait each, in a row.
- */
-export async function loadTodosViewAction() {
-  return respond(async () => {
-    const userId = await requireUser();
-    const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-    return { daily: await both((space) => getDailyTodos(userId, space, toISODate())) };
   });
 }
 

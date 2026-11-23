@@ -21,7 +21,6 @@ import {
   addTodoAction,
   deletePushSubscriptionAction,
   deleteTodoAction,
-  loadTodosViewAction,
   restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
@@ -31,6 +30,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { FUTURE_DATE } from "@/lib/validations/common";
 import { TODO_GONE } from "@/lib/validations/todos";
+import { resetDb } from "./db";
 
 // The task an add made (tests that look at a repeated add call addTodo itself).
 const add = async (userId: string, input: Parameters<typeof addTodo>[1]) => (await addTodo(userId, input)).todo!;
@@ -42,15 +42,11 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
   let userB: string;
 
   beforeAll(async () => {
-    await admin.query(
-      "TRUNCATE TABLE todos, push_subscriptions, users CASCADE",
-    );
+    await resetDb(admin);
   });
 
   beforeEach(async () => {
-    await admin.query(
-      "TRUNCATE TABLE todos, push_subscriptions, users CASCADE",
-    );
+    await resetDb(admin);
     userA = await seedUser(`user-a-${randomUUID()}`);
     userB = await seedUser(`user-b-${randomUUID()}`);
     authState.id = userA;
@@ -341,6 +337,21 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       authState.id = userA;
       expect(succeeded(await deletePushSubscriptionAction(endpoint)).deleted).toBe(true);
       expect(succeeded(await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
+    });
+
+    it("saves a push subscription into the caller's rows only: another user cannot replace the owner's, anonymous is refused", async () => {
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
+      const endpoint = "https://fcm.googleapis.com/fcm/send/owner-endpoint";
+      const rowsOf = async () =>
+        (await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint))).map((r) => [r.userId, r.p256dhKey]).sort();
+      succeeded(await savePushSubscriptionAction({ endpoint, p256dhKey: "owner-p256dh", authKey: "owner-auth" }));
+      authState.id = "";
+      expect(await savePushSubscriptionAction({ endpoint, p256dhKey: "anon-p256dh", authKey: "anon-auth" })).toEqual(refused(SIGNED_OUT));
+      expect(await rowsOf()).toEqual([[userA, "owner-p256dh"]]);
+      authState.id = userB;
+      succeeded(await savePushSubscriptionAction({ endpoint, p256dhKey: "other-p256dh", authKey: "other-auth" }));
+      expect(await rowsOf()).toEqual([[userA, "owner-p256dh"], [userB, "other-p256dh"]].sort());
+      authState.id = userA;
     });
 
     it("keeps one row per endpoint when the same browser subscribes twice", async () => {
@@ -844,27 +855,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const old = await add(userA, { space: "personal", title: "Old", dueDate: addDays(today, -3), isRecurring: false, recurrencePattern: "none" });
       await expect(updateTodoAction({ id: old.id, title: "New" })).resolves.toEqual(refused("Tasks can only be added or changed for today."));
       await expect(deleteTodoAction(old.id)).resolves.toEqual(refused("Tasks can only be added or changed for today."));
-    });
-  });
-
-  describe("loadTodosViewAction (the page's single read)", () => {
-    it("returns both spaces for the owner only, always for today", async () => {
-      const today = toISODate();
-      await add(userA, { space: "personal", title: "Mine", dueDate: today, isRecurring: false, recurrencePattern: "none" });
-      await add(userA, { space: "personal", title: "Habit", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
-      // A task planned for a later day (before Move was removed) stays out of today's list.
-      await add(userA, { space: "business", title: "Later", dueDate: addDays(today, 2), isRecurring: false, recurrencePattern: "none" });
-
-      authState.id = userA;
-      const view = succeeded(await loadTodosViewAction());
-      expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
-      expect(view.daily[1].todos).toEqual([]);
-
-      authState.id = userB;
-      expect(succeeded(await loadTodosViewAction()).daily[0].todos).toEqual([]);
-
-      authState.id = "";
-      expect(await loadTodosViewAction()).toEqual(refused(SIGNED_OUT));
     });
   });
 });

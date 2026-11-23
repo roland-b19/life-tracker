@@ -5,7 +5,8 @@ import { compareShopping } from "@/lib/check-order";
 import { formatAmount, formatNumber } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
 import { MAX_CLEARED, SHOPPING_ITEM_GONE } from "@/lib/validations/food";
-import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, SmallButton } from "../components/blocks";
+import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, SmallButton, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { undoWith, useToast } from "../components/toast";
 import { useOnce } from "../components/once";
 import { useServerState } from "../components/server-state";
@@ -81,13 +82,9 @@ export function ShoppingTab({
   // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
-  // The id the open add form's item gets (D-040): made when the form opens and kept until the add is answered, so a
-  // second Save after a lost answer sends the same id and adds nothing.
-  const addId = useRef("");
   // Items deleted one by one since the last Clear bought: it purges them for good, so its toast takes their Undos too.
   const offList = useRef(new Set<string>());
   const [errorMsg, setErrorMsg] = useState("");
-  const [busy, setBusy] = useState(false);
   // Shopping input state
   const [shopName, setShopName] = useState("");
   const [shopAmount, setShopAmount] = useState("1");
@@ -108,14 +105,19 @@ export function ShoppingTab({
   });
 
   function openShopForm(item: ShoppingItemData | null) {
-    setErrorMsg("");
     setEditingShop(item);
-    setShopName(item?.name ?? "");
-    setShopAmount(item ? String(Number(item.amount)) : "1");
-    setShopUnit(item?.unit ?? "pcs");
-    setShopCategory(item?.category ?? "other");
-    if (!item) addId.current = crypto.randomUUID();
     setIsShopModalOpen(true);
+  }
+
+  const shopForm = () => ({ name: shopName, amount: shopAmount, unit: shopUnit, category: shopCategory });
+
+  // A new opening starts from the item as listed, or empty for an add; the save's opening, shown again, from what it sent.
+  function startShopForm(sent?: ReturnType<typeof shopForm>) {
+    setErrorMsg("");
+    setShopName(sent?.name ?? editingShop?.name ?? "");
+    setShopAmount(sent?.amount ?? (editingShop ? String(Number(editingShop.amount)) : "1"));
+    setShopUnit(sent?.unit ?? editingShop?.unit ?? "pcs");
+    setShopCategory(sent?.category ?? editingShop?.category ?? "other");
   }
 
   const upsertShop = (item: ShoppingItemData) =>
@@ -124,80 +126,69 @@ export function ShoppingTab({
 
   /**
    * Adds an item; the server adds the amount to the same item (name and unit) when it is already on the list, which then
-   * takes the new category (D-042) and the add's id. The id comes from the form (addId), so a repeat of the same add
-   * after a lost answer adds nothing (D-040): the server answers the row the first one made, and the toast says it was
-   * already added, without an Undo (whether that add merged is no longer known).
+   * takes the new category (D-042) and the add's id. The id is the form opening's, so a repeat of the same add after a
+   * lost answer adds nothing (D-040): the server answers the row the first one made, and the toast says it was already
+   * added, without an Undo (whether that add merged is no longer known). Answers the refusal, or "" once added.
    */
-  async function addShopping(input: { name: string; amount: number; unit: string; category: string }) {
-    setBusy(true);
-    try {
-      const saved = addShoppingItemAction({ id: addId.current, ...input }).catch(() => null);
-      const res = await saved;
-      if (!res?.success) {
-        setErrorMsg(res?.error ?? "Failed to add item");
-        return false;
-      }
-      const item = res.item as ShoppingItemData;
-      const before = res.before as ShoppingItemData | null;
-      if (before) dropShop(before.id);
-      upsertShop(item);
-      showToast(
-        res.repeated
-          ? { message: `Already added "${item.name}"`, type: "success", touches: touches([item.id]), saved }
-          : !before
-          ? {
-              message: `Added "${item.name}"`,
-              type: "success",
-              touches: touches([item.id]),
-              saved,
-              onUndo: undoWith(
-                showToast,
-                async () => {
-                  dropShop(item.id);
-                  const gone = await deleteShoppingItemAction(item.id).catch(() => null);
-                  // An item already off the list (deleted or merged on another device) stays off the screen.
-                  if (!gone?.success && gone?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
-                  return gone;
-                },
-                (back) => (back && !back.success ? back.error : "Failed to undo"),
-              ),
-            }
-          : {
-              message: "Merged with existing item",
-              type: "success",
-              touches: touches([item.id, before.id]),
-              saved,
-              // The row the add replaced comes back under its own id; a refusal (the item deleted or changed since) says why.
-              onUndo: undoWith(
-                showToast,
-                async () => {
-                  dropShop(item.id);
-                  upsertShop(before);
-                  const back = await unmergeShoppingItemAction({
-                    itemId: item.id,
-                    before: { ...toShopInput(before), id: before.id, isBought: before.isBought, checkedAt: before.checkedAt },
-                  }).catch(() => null);
-                  if (!back?.success) {
-                    dropShop(before.id);
-                    if (back?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
-                  }
-                  return back;
-                },
-                (back) => (back && !back.success ? back.error : "Failed to undo the merge"),
-              ),
-            },
-      );
-      return true;
-    } finally {
-      setBusy(false);
-    }
+  async function addShopping(id: string, input: { name: string; amount: number; unit: string; category: string }) {
+    const res = await addShoppingItemAction({ id, ...input }).catch(() => null);
+    if (!res?.success) return res?.error ?? "Failed to add item";
+    const item = res.item as ShoppingItemData;
+    const before = res.before as ShoppingItemData | null;
+    if (before) dropShop(before.id);
+    upsertShop(item);
+    showToast(
+      res.repeated
+        ? { message: `Already added "${item.name}"`, type: "success", touches: touches([item.id]) }
+        : !before
+        ? {
+            message: `Added "${item.name}"`,
+            type: "success",
+            touches: touches([item.id]),
+            onUndo: undoWith(
+              showToast,
+              async () => {
+                dropShop(item.id);
+                const gone = await deleteShoppingItemAction(item.id).catch(() => null);
+                // An item already off the list (deleted or merged on another device) stays off the screen.
+                if (!gone?.success && gone?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
+                return gone;
+              },
+              (back) => (back && !back.success ? back.error : "Failed to undo"),
+            ),
+          }
+        : {
+            message: "Merged with existing item",
+            type: "success",
+            touches: touches([item.id, before.id]),
+            // The row the add replaced comes back under its own id; a refusal (the item deleted or changed since) says why.
+            onUndo: undoWith(
+              showToast,
+              async () => {
+                dropShop(item.id);
+                upsertShop(before);
+                const back = await unmergeShoppingItemAction({
+                  id: item.id,
+                  before: { ...toShopInput(before), id: before.id, isBought: before.isBought, checkedAt: before.checkedAt },
+                }).catch(() => null);
+                if (!back?.success) {
+                  dropShop(before.id);
+                  if (back?.error !== SHOPPING_ITEM_GONE) upsertShop(item);
+                }
+                return back;
+              },
+              (back) => (back && !back.success ? back.error : "Failed to undo the merge"),
+            ),
+          },
+    );
+    return "";
   }
 
   // Writes an edited item into the list; the bought state stays as it is on screen.
   const replaceShop = (to: ShoppingItemData) =>
     setShoppingList((prev) => prev.map((i) => (i.id === to.id ? { ...to, isBought: i.isBought, checkedAt: i.checkedAt } : i)));
 
-  async function handleShopSubmit(e: React.FormEvent) {
+  async function handleShopSubmit(e: React.FormEvent, { id, stillOpen }: FormOpening) {
     e.preventDefault();
     const input = {
       name: shopName.trim(),
@@ -209,46 +200,43 @@ export function ShoppingTab({
     if (!visible(input.name)) return;
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     setErrorMsg("");
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = refusal(stillOpen, setErrorMsg, warn);
 
     if (!editingShop) {
-      if (await addShopping(input)) setIsShopModalOpen(false);
+      const why = await addShopping(id, input);
+      if (why) refused(why);
+      else if (stillOpen()) setIsShopModalOpen(false);
       return;
     }
     const before = editingShop;
-    setBusy(true);
-    try {
-      const saved = updateShoppingItemAction({ ...input, itemId: before.id }).catch(() => null);
-      const res = await saved;
-      if (!res?.success) {
-        if (res?.error !== SHOPPING_ITEM_GONE) return setErrorMsg(res?.error ?? "Failed to save item");
-        // Deleted on another device: the form closes and the row leaves.
-        setIsShopModalOpen(false);
-        dropShop(before.id);
-        return warn(res.error);
-      }
-      const item = res.item as ShoppingItemData;
-      replaceShop(item);
-      setIsShopModalOpen(false);
-      showToast({
-        message: `Saved "${item.name}"`,
-        type: "success",
-        touches: touches([item.id]),
-        saved,
-        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            replaceShop(before);
-            const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
-            if (!back?.success) replaceShop(item);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-        ),
-      });
-    } finally {
-      setBusy(false);
+    const res = await updateShoppingItemAction({ ...input, id: before.id }).catch(() => null);
+    if (!res?.success) {
+      if (res?.error !== SHOPPING_ITEM_GONE) return refused(res?.error ?? "Failed to save item");
+      // Deleted on another device: the form closes and the row leaves.
+      if (stillOpen()) setIsShopModalOpen(false);
+      dropShop(before.id);
+      return warn(res.error);
     }
+    const item = res.item as ShoppingItemData;
+    replaceShop(item);
+    if (stillOpen()) setIsShopModalOpen(false);
+    showToast({
+      message: `Saved "${item.name}"`,
+      type: "success",
+      touches: touches([item.id]),
+      // Writes the old values back; if that fails the edit stays, so the screen matches the database.
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          replaceShop(before);
+          const back = await updateShoppingItemAction({ ...toShopInput(before), id: before.id }).catch(() => null);
+          if (!back?.success) replaceShop(item);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   /** The shared Categories card re-files the items: a rename or delete moves them, Undo moves `only` back. */
@@ -271,7 +259,7 @@ export function ShoppingTab({
     const setBought = (isBought: boolean, checkedAt: Date | string | null) =>
       setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt } : i)));
     setBought(next, new Date());
-    const saved = toggleShoppingItemAction(item.id, next).catch(() => null);
+    const saved = toggleShoppingItemAction({ id: item.id, isBought: next }).catch(() => null);
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
@@ -283,7 +271,7 @@ export function ShoppingTab({
           setBought(!next, item.checkedAt);
           const done = await saved;
           if (!done?.success) return true; // the failure path below put it back
-          const back = await toggleShoppingItemAction(item.id, !next, item.checkedAt).catch(() => null);
+          const back = await toggleShoppingItemAction({ id: item.id, isBought: !next, checkedAt: item.checkedAt }).catch(() => null);
           if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
         },
@@ -438,35 +426,40 @@ export function ShoppingTab({
     </Dashboard>
       )}
 
+      {/* An edit's save sends the whole form, so the form keeps its opening while its save is out (D-047): opened again for
+          the same item, or for an add, before the answer, also after another one, it waits for that save with what it
+          sent, as a fresh opening would show the item from before it and its Save would undo it. Opened for another
+          item, it is a fresh opening. */}
       <FormModal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
         title={editingShop ? "Edit shopping item" : "New shopping item"}
         onSubmit={handleShopSubmit}
         error={errorMsg}
-        busy={busy}
+        keepsOpening
+        subject={editingShop?.id ?? ""}
+        snapshot={shopForm}
+        onOpen={startShopForm}
         canSubmit={visible(shopName)}
       >
-        <Field label="Name" type="text" disabled={busy} value={shopName} onChange={(e) => setShopName(e.target.value)} required />
+        <Field label="Name" type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} required />
         <FieldPair>
           <Field
             label="Amount"
             type="number"
             inputMode="decimal"
-            disabled={busy}
             value={shopAmount}
             onChange={(e) => setShopAmount(e.target.value)}
           />
           <SelectField
             label="Unit"
-            disabled={busy}
             value={shopUnit}
             onChange={(e) => setShopUnit(e.target.value)}
             // An item whose unit the list lacks keeps it as an option.
             options={[...new Set(["pcs", ...units, shopUnit])].map((u) => ({ value: u, label: u }))}
           />
         </FieldPair>
-        <CategoryField categories={categories} value={shopCategory} onChange={setShopCategory} disabled={busy} />
+        <CategoryField categories={categories} value={shopCategory} onChange={setShopCategory} />
       </FormModal>
     </>
   );

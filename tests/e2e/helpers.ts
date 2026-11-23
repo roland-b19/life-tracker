@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Page, type Request } from "@playwright/test";
+import { expect, test as base, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
 // After a server action answers HTTP 2xx the app refreshes the router 600 ms after the last answer, and it also
@@ -153,8 +153,8 @@ export async function expectNoSeriousViolations(page: Page) {
 
 // A click that starts a server action returns once the action has answered, so the next step never races the database
 // (a reload would otherwise abort an action still in flight).
-// A page that refreshes its list after a write sends a second action, so `body` (a piece of the request body, such as
-// a title) names the action to wait for when an earlier refresh may still be in flight and would be taken for it.
+// `body` (a piece of the request body, such as a title) names the action to wait for when another action of the page,
+// an earlier one still unanswered, could be taken for it.
 export async function andSettle(page: Page, act: () => Promise<void>, body?: string) {
   const answered = page.waitForResponse((r) => isWrite(r.request(), body));
   await act();
@@ -178,29 +178,40 @@ export const center = (box: { x: number; y: number; width: number; height: numbe
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
 
+/**
+ * Taps `target` (a spot, or the middle of an element, read just before the tap) `ms` after `started` (a `Date.now()`),
+ * or at once when that time has passed: the rhythm of a human double tap, the one time wait the specs allow (D-047).
+ * Answers how many ms after `started` the tap went.
+ */
+export async function tapAfter(page: Page, started: number, ms: number, target: { x: number; y: number } | Locator) {
+  await page.waitForTimeout(Math.max(0, ms - (Date.now() - started)));
+  const { x, y } = "x" in target ? target : center(await target.boundingBox());
+  const at = Date.now() - started;
+  await page.mouse.click(x, y);
+  return at;
+}
+
 // Two separate clicks on one spot, the way a quick double tap arrives: each is a click of its own (not a double click).
 // The second comes about 40 ms after the first, and never before the first write's answer (a local answer takes about
 // 25 ms), so it lands on whatever the first left there. Before that answer, the guard's per-target lock would refuse a
 // repeat on the same target and hide whether the spot swallowed it; a tap on another target, such as the next row's
 // Delete, would go through. Answers how many writes it set off. A second write starts during the second click, and a dialog
-// it opens is on the page by then, so nothing waits by time: `settled` sees a write the click sent.
-export async function burst(page: Page, { x, y }: { x: number; y: number }) {
+// it opens is on the page by then, so nothing else waits by time: `settled` sees a write the click sent.
+export async function burst(page: Page, spot: { x: number; y: number }) {
   let acts = 0;
   const count = (r: Request) => {
     if (isWrite(r)) acts++;
   };
   page.on("request", count);
   const started = Date.now();
-  await andSettle(page, () => page.mouse.click(x, y));
-  await page.waitForTimeout(Math.max(0, 40 - (Date.now() - started)));
-  await page.mouse.click(x, y);
+  await andSettle(page, () => page.mouse.click(spot.x, spot.y));
+  await tapAfter(page, started, 40, spot);
   await settled(page);
   page.off("request", count);
   return acts;
 }
 
-// A page that reads its list again after each write (Tasks) sends a second action with no body of its own, so the writes
-// of a `burst` are counted by a piece of their body: the ones whose body holds `body`.
+// The writes of a `burst` whose body holds `body`, for a page that sends other actions around them.
 export async function writesIn(page: Page, spot: { x: number; y: number }, body: string) {
   let writes = 0;
   const count = (r: Request) => {
@@ -407,6 +418,17 @@ export async function devUserCount(...names: string[]) {
 export async function signedInUserId(page: Page) {
   const { user } = await (await page.request.get("/api/auth/session")).json();
   return user.id as string;
+}
+
+/**
+ * Another device of the page's user: a browser context of its own (with `options`, such as a phone's viewport and touch)
+ * holding only the page's cookies, so it shares the session but none of the page's localStorage. Close it with
+ * `close()` on the returned context.
+ */
+export async function newDevice(browser: Browser, page: Page, options?: BrowserContextOptions) {
+  const device = await browser.newContext(options);
+  await device.addCookies(await page.context().cookies());
+  return device;
 }
 
 /**

@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { BigNumber, Card, Field, FormModal } from "../components/blocks";
+import { BigNumber, Card, Field, FormModal, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { EditButton, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { useOnce } from "../components/once";
@@ -31,12 +32,10 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   const [kilograms, setKilograms] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
-  // The id a new day's weigh-in gets (D-040): made when the form opens and kept until the save is answered, so a second
-  // Save after a lost answer sends the same id and the server answers the row the first one made.
-  const addId = useRef("");
   // The weigh-in the form showed when it opened: an edit's Undo writes it back, even when a Save again after a lost
   // answer finds the day already at the new value (so the server's `previous` is that value).
   const opened = useRef<WeightEntry | null>(null);
@@ -50,7 +49,6 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     setKilograms(current?.kilograms ?? "");
     setEditing(current?.id ?? null);
     opened.current = current;
-    addId.current = crypto.randomUUID();
     setOpen(true);
   }
 
@@ -84,26 +82,28 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     return saved;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>, { id, stillOpen }: FormOpening) {
     event.preventDefault();
     setErrorMsg("");
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = refusal(stillOpen, setErrorMsg, warn);
     const value = Number(kilograms);
+    // This opening's weigh-in: the form opened again meanwhile has its own.
+    const shown = opened.current;
     // The screen can be behind the database (another device): the server creates the day or changes the row it already
-    // has. The id comes from the form (addId), so a repeat of the same add after a lost answer adds nothing (D-040) and
-    // says it was already saved, without an Undo.
-    const saved = saveWeightAction({ id: addId.current, date: today, kilograms: value }).catch(() => null);
-    const res = await saved;
-    if (!res?.success) return setErrorMsg(res?.error ?? "Failed to save weight");
+    // has. The id is the form opening's, so a repeat of the same add after a lost answer adds nothing (D-040) and says it
+    // was already saved, without an Undo.
+    const res = await saveWeightAction({ id, date: today, kilograms: value }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save weight");
     const { entry, previous, repeated } = res;
-    setOpen(false);
+    if (stillOpen()) setOpen(false);
     upsert(entry);
-    if (repeated) return showToast({ message: "Already saved", type: "success", touches: touches(entry), saved });
+    if (repeated) return showToast({ message: "Already saved", type: "success", touches: touches(entry) });
     if (!previous) {
       showToast({
         message: `Added ${kg(value)} kg`,
         type: "success",
         touches: touches(entry),
-        saved,
         onUndo: undoWith(showToast, async () => {
           setEntries((list) => list.filter((e) => e.id !== entry.id));
           const gone = await deleteWeightAction(entry.id).catch(() => null);
@@ -114,12 +114,11 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
       });
       return;
     }
-    const before = opened.current?.date === previous.date ? opened.current : previous;
+    const before = shown?.date === previous.date ? shown : previous;
     showToast({
       message: `Weight set to ${kg(value)} kg`,
       type: "success",
       touches: touches(entry),
-      saved,
       // Writes the old value back; if that fails the edit stays, so the screen matches the database.
       onUndo: undoWith(
         showToast,

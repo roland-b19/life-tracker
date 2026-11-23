@@ -1,9 +1,9 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { Card } from "./blocks";
+import { useDeviceState } from "./device-state";
 import { Segmented } from "./segmented";
-import { fadeTheme, THEME_STORAGE } from "./theme";
+import { THEME_STORAGE } from "./theme";
 import { undoWith, useToast } from "./toast";
 
 type Theme = "auto" | "light" | "dark";
@@ -14,58 +14,20 @@ const OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
-let theme: Theme | null = null; // read from storage on first use in the browser
-const listeners = new Set<() => void>();
-
-const loadTheme = (): Theme => {
-  if (!theme) {
-    try {
-      const stored = localStorage.getItem(THEME_STORAGE);
-      theme = stored === "light" || stored === "dark" ? stored : "auto";
-    } catch {
-      theme = "auto"; // storage blocked: the page follows the system
-    }
-  }
-  return theme;
-};
-
-const applyTheme = (next: Theme) => {
-  theme = next;
-  fadeTheme();
-  const root = document.documentElement;
-  if (next === "auto") delete root.dataset.theme;
-  else root.dataset.theme = next;
-  listeners.forEach((l) => l());
-};
-
-const setTheme = (next: Theme) => {
-  applyTheme(next);
-  try {
-    if (next === "auto") localStorage.removeItem(THEME_STORAGE);
-    else localStorage.setItem(THEME_STORAGE, next);
-  } catch {} // storage blocked: the choice lasts until the page reloads
-};
-
 /**
- * Follows a choice made in another tab of this browser: `storage` fires in every other tab when the key changes (or
- * when the whole storage is cleared: `key` null). Other devices keep their own choice. Installed for every page by
- * `ShellListeners` in the root layout.
+ * The Appearance choice of this device (D-024, D-047), kept like a view control: `[theme, set]`. Every tab of the
+ * browser follows a change; `ShellListeners` applies it to the page.
  */
-export function followThemeFromOtherTabs(e: StorageEvent) {
-  if (e.key !== THEME_STORAGE && e.key !== null) return;
-  theme = null; // read the stored choice again
-  const next = loadTheme();
-  if (next !== (document.documentElement.dataset.theme ?? "auto")) applyTheme(next);
+export function useTheme() {
+  const [stored, set] = useDeviceState<Theme>(THEME_STORAGE, "auto");
+  // A stored value can be any string, so it is narrowed here.
+  const theme: Theme = stored === "light" || stored === "dark" ? stored : "auto";
+  return [theme, set] as const;
 }
-
-const subscribe = (l: () => void) => {
-  listeners.add(l);
-  return () => void listeners.delete(l);
-};
 
 /** Auto (follow the system), Light or Dark for this device; the script in the root layout applies it on every load. */
 export function AppearanceCard() {
-  const value = useSyncExternalStore(subscribe, loadTheme, () => "auto" as const);
+  const [value, setTheme] = useTheme();
   const { showToast } = useToast();
 
   const pick = (next: Theme) => {
@@ -75,6 +37,7 @@ export function AppearanceCard() {
     showToast({
       message: `Appearance set to ${OPTIONS.find((o) => o.value === next)!.label}`,
       type: "success",
+      touches: [THEME_STORAGE],
       onUndo: undoWith(showToast, async () => (setTheme(before), true)),
     });
   };
