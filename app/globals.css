@@ -1568,6 +1568,14 @@ main > .error {
   margin-bottom: 1.25rem;
 }
 
+/* A form dialog's fields sit in a fieldset that disables them while a save is out (FormModal): it adds no frame */
+fieldset.form-stack {
+  min-width: 0;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  border: 0;
+}
+
 .badge-row {
   display: flex;
   flex-wrap: wrap;

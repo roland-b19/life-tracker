@@ -464,9 +464,18 @@ export function FormActions({
   );
 }
 
+/** One opening of a form, as `FormModal` hands it to its `onSubmit`. */
+export type FormOpening = {
+  /** The id an add sends (D-040): made once per opening, so a Save again after a lost answer sends the same one. */
+  id: string;
+  /** Whether this opening is still on screen: an answer closes or marks only its own opening. */
+  stillOpen: () => boolean;
+};
+
 /**
- * A modal holding a form: the fields (children) in a stack, the error under them, then Cancel and Save. `busy`
- * disables Save and says "Saving..."; `canSubmit` is false while a required field is empty.
+ * A modal holding a form: the fields (children) in a stack, the error under them, then Cancel and Save. The form owns
+ * its openings (D-047): `onSubmit` gets the opening's `id` and `stillOpen`, and while the opening's save is unanswered
+ * Save says "Saving..." and the fields are disabled. `canSubmit` is false while a required field is empty.
  */
 export function FormModal({
   isOpen,
@@ -476,6 +485,7 @@ export function FormModal({
   onSubmit,
   error,
   errorId,
+  sendsFrom,
   busy,
   canSubmit,
   submitLabel,
@@ -486,10 +496,17 @@ export function FormModal({
   /** Runs on the form's Cancel only (not Escape, a click outside or the close button), before `onClose`. */
   onCancel?: () => void;
   title: string;
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => unknown;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>, opening: FormOpening) => unknown;
   error?: string;
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
+  /**
+   * The save sends the values the form opened with as the ones it changes (D-040). Opened again before that save has
+   * answered, the form would show those values again and its Save would be refused as changed on another device, so it
+   * goes on as the same opening: it waits, and the answer closes it or shows its refusal in it (D-043).
+   */
+  sendsFrom?: boolean;
+  /** Deprecated (D-047): only the forms not moved yet onto FormModal's own saving state pass it (conventions.md, Busy flags); never in new code. */
   busy?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
@@ -500,27 +517,58 @@ export function FormModal({
   // belongs to one opening of the form: a save still unanswered after Cancel never holds the Save of the next opening.
   const once = useOnce();
   const [opening, setOpening] = useState(0);
+  // The opening whose save is unanswered, if any.
+  const [savingIn, setSavingIn] = useState<number | null>(null);
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen) setOpening(opening + 1);
+    if (isOpen && !(sendsFrom && savingIn === opening)) setOpening(opening + 1);
   }
+  const saving = isOpen && savingIn === opening;
+  // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.
+  const shown = useRef<number | null>(null);
+  useEffect(() => {
+    shown.current = isOpen ? opening : null;
+    return () => {
+      shown.current = null;
+    };
+  }, [isOpen, opening]);
+  const ids = useRef({ opening: -1, id: "" });
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (!once(`form:${opening}`, () => onSubmit(e), (e.nativeEvent as SubmitEvent).submitter)) e.preventDefault();
+    const from = opening;
+    if (ids.current.opening !== from) ids.current = { opening: from, id: crypto.randomUUID() };
+    const { id } = ids.current;
+    const ran = once(
+      `form:${from}`,
+      () => {
+        let answered = false;
+        const answer = Promise.resolve(onSubmit(e, { id, stillOpen: () => shown.current === from })).finally(() => {
+          answered = true;
+          setSavingIn((now) => (now === from ? null : now));
+        });
+        // A submit the page answers at once (a field it refuses) never shows as saving.
+        queueMicrotask(() => {
+          if (!answered) setSavingIn(from);
+        });
+        return answer;
+      },
+      (e.nativeEvent as SubmitEvent).submitter,
+    );
+    if (!ran) e.preventDefault();
   };
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <form onSubmit={submit}>
-        <div className="form-stack">
+        <fieldset className="form-stack" disabled={saving}>
           {children}
           {error && <ErrorText id={errorId}>{error}</ErrorText>}
-        </div>
+        </fieldset>
         <FormActions
           onCancel={() => {
             onCancel?.();
             onClose();
           }}
-          busy={busy}
+          busy={saving || busy}
           canSubmit={canSubmit}
           submitLabel={submitLabel}
         />
