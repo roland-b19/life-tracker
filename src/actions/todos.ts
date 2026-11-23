@@ -8,7 +8,6 @@ import {
   restoreTodoSchema,
   pushSubscriptionSchema,
   TODO_GONE,
-  TodoSpace,
   toggleTodoSchema,
   updateTodoSchema,
 } from "@/lib/validations/todos";
@@ -18,7 +17,6 @@ import {
   addTodo,
   deleteTodo,
   findTodo,
-  getDailyTodos,
   removePushSubscription,
   restoreTodo,
   savePushSubscription,
@@ -118,14 +116,6 @@ export async function deleteTodoAction(todoId: string) {
  * Everything the Tasks page shows for today, in one round trip: Next runs server actions one at a time,
  * so separate calls would cost a session, a network trip and a wait each, in a row.
  */
-export async function loadTodosViewAction() {
-  return respond(async () => {
-    const userId = await requireUser();
-    const both = <T>(read: (space: TodoSpace) => Promise<T>) => Promise.all([read("personal"), read("business")]);
-    return { daily: await both((space) => getDailyTodos(userId, space, toISODate())) };
-  });
-}
-
 export async function savePushSubscriptionAction(rawInput: unknown) {
   assertPushEnabled();
   return respond(async () => {

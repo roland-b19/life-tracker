@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, expectToastWithoutUndo, holdWrites, itemName, openWishlist, pauseClock, signedInUserId, signOutHere, test, toast, undoIn } from "./helpers";
+import { andSettle, asOwner, burst, center, countWrites, dismissToast, expectNoSeriousViolations, expectToastWithoutUndo, holdWrites, itemName, openWishlist, pauseClock, signedInUserId, signOutHere, tapAfter, test, toast, undoIn } from "./helpers";
 
 // The shared categories card (app/components/categories-card.tsx) on the three pages that use it, D-016. One driver runs
 // the whole flow, so the pages cannot drift apart: only how a page opens and how an item is added differ.
@@ -103,8 +103,8 @@ async function deleteCategory(page: Page, name: string) {
   await expect(page.getByText(`Removed "${name}"; its items are in Other`, { exact: true })).toBeVisible();
 }
 
-// `piece` is the part of the request body that tells the Undo's write apart from an earlier reload: the name of an
-// undone add (it is a delete), "dropCurrent" for an undone rename or delete (it is a revert).
+// `piece` is the part of the request body that names the Undo's write: the name of an undone add (it is a delete),
+// "dropCurrent" for an undone rename or delete (it is a revert).
 async function undo(page: Page, piece: string) {
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click(), piece);
 }
@@ -396,10 +396,9 @@ test("the categories card takes a quick Undo tap after a Delete on a phone", asy
   const started = Date.now();
   await andSettle(page, () => page.mouse.click(remove.x, remove.y), `"name":"${a}"`);
   await expect(undoButton).toBeVisible();
-  await page.waitForTimeout(Math.max(0, 100 - (Date.now() - started)));
-  const undoNow = center(await undoButton.boundingBox());
-  expect(Date.now() - started).toBeLessThan(400);
-  await andSettle(page, () => page.mouse.click(undoNow.x, undoNow.y), "dropCurrent");
+  let tapped = Infinity;
+  await andSettle(page, async () => void (tapped = await tapAfter(page, started, 100, undoButton)), "dropCurrent");
+  expect(tapped).toBeLessThan(400);
   await expect(card(page).getByText(a, { exact: true })).toBeVisible();
 
   // The server has it back too.
@@ -430,10 +429,7 @@ test("the categories card takes a quick Dismiss tap over the deleted row's Delet
   const started = Date.now();
   await andSettle(page, () => page.mouse.click(dismissAt.x, dismissAt.y), `"name":"${a}"`);
   await expect(dismissButton(page)).toBeVisible();
-  await page.waitForTimeout(Math.max(0, 50 - (Date.now() - started)));
-  const dismissNow = center(await dismissButton(page).boundingBox());
-  expect(Date.now() - started).toBeLessThan(400);
-  await page.mouse.click(dismissNow.x, dismissNow.y);
+  expect(await tapAfter(page, started, 50, dismissButton(page))).toBeLessThan(400);
   // The mouse over the toast holds it open, so only the Dismiss can close it; the bound stays under its own 5 s anyway.
   await expect(dismissButton(page)).toHaveCount(0, { timeout: 2_000 });
 });
@@ -497,6 +493,36 @@ test("the categories card's older toast loses its Undo to a newer one about the 
   await deleteCategory(page, d);
   await expect(undoIn(page, `Renamed "${c}" to "${e}"`)).toBeVisible();
   await expect(undoIn(page, `Removed "${d}"`)).toBeVisible();
+});
+
+// A toast shows when the screen shows the change (D-047): a move and a delete change the screen at once, so their toasts
+// do not wait for the server. An Undo tapped before the delete answers waits for it, then puts the row back.
+test("the categories card's move and delete show their toast before the server answers [D-047]", async ({ signedInPage: page }) => {
+  const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const rows = card(page).locator(".category-name");
+
+  let release = await holdWrites(page, `"names":`);
+  await card(page).getByRole("button", { name: `Drag ${b} to reorder`, exact: true }).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(rows).toHaveText([b, a]);
+  await expect(undoIn(page, `Moved "${b}"`)).toBeVisible();
+  await andSettle(page, async () => release(), `"names":`);
+  await dismissToast(page);
+
+  release = await holdWrites(page, `"name":"${a}"`);
+  await page.getByRole("button", { name: `Delete category ${a}`, exact: true }).click();
+  await expect(rows).toHaveText([b]);
+  await undoIn(page, `Removed "${a}"; its items are in Other`).click();
+  await andSettle(page, async () => release(), "dropCurrent");
+  await expect(rows).toHaveText([b, a]);
+
+  await wishlist.open(page);
+  await expect(rows).toHaveText([b, a]);
 });
 
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".

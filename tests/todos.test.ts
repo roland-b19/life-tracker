@@ -21,7 +21,6 @@ import {
   addTodoAction,
   deletePushSubscriptionAction,
   deleteTodoAction,
-  loadTodosViewAction,
   restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
@@ -844,27 +843,6 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const old = await add(userA, { space: "personal", title: "Old", dueDate: addDays(today, -3), isRecurring: false, recurrencePattern: "none" });
       await expect(updateTodoAction({ id: old.id, title: "New" })).resolves.toEqual(refused("Tasks can only be added or changed for today."));
       await expect(deleteTodoAction(old.id)).resolves.toEqual(refused("Tasks can only be added or changed for today."));
-    });
-  });
-
-  describe("loadTodosViewAction (the page's single read)", () => {
-    it("returns both spaces for the owner only, always for today", async () => {
-      const today = toISODate();
-      await add(userA, { space: "personal", title: "Mine", dueDate: today, isRecurring: false, recurrencePattern: "none" });
-      await add(userA, { space: "personal", title: "Habit", dueDate: today, isRecurring: true, recurrencePattern: "daily" });
-      // A task planned for a later day (before Move was removed) stays out of today's list.
-      await add(userA, { space: "business", title: "Later", dueDate: addDays(today, 2), isRecurring: false, recurrencePattern: "none" });
-
-      authState.id = userA;
-      const view = succeeded(await loadTodosViewAction());
-      expect(view.daily[0].todos.map((t) => t.title).sort()).toEqual(["Habit", "Mine"]);
-      expect(view.daily[1].todos).toEqual([]);
-
-      authState.id = userB;
-      expect(succeeded(await loadTodosViewAction()).daily[0].todos).toEqual([]);
-
-      authState.id = "";
-      expect(await loadTodosViewAction()).toEqual(refused(SIGNED_OUT));
     });
   });
 });

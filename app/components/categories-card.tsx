@@ -50,10 +50,8 @@ interface Props {
   onChange: (update: (prev: string[]) => string[]) => void;
   /** The page re-files its items: a rename (merging onto an existing name included) or a delete (to "other"). `only` limits it to those item ids (Undo). */
   onRefile: (from: string, to: string, only?: string[]) => void;
-  /** Called once the server has saved a change or an Undo, so a page that reads its items from the server reads them after it. */
-  onSynced?: () => void;
-  /** The ids of the items on screen in a category. With it a delete moves the items at once, not after the server answers; a failed delete moves exactly those back. */
-  idsIn?: (category: string) => string[];
+  /** The ids of the items on screen in a category: a delete moves them at once, not after the server answers; a failed delete moves exactly those back. */
+  idsIn: (category: string) => string[];
 }
 
 /** What a rename or delete reported moving, as the server sent it. */
@@ -66,7 +64,7 @@ interface Change {
 }
 
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
-export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, idsIn }: Props) {
+export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: Props) {
   const { showToast } = useToast();
   const noun = api.noun ?? "category";
   const builtIn = api.builtIn ?? "other";
@@ -95,26 +93,24 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     onChange(() => update);
   };
 
-  // The new order shows at once (the pages list their items in it too); a failed save puts the old one back, and Undo saves it again.
-  async function move(from: number, to: number) {
+  // The new order and its toast show at once (the pages list their items in it too); a failed save puts the old order
+  // back and takes the toast away, and Undo saves the old order again.
+  function move(from: number, to: number) {
     const next = [...categories];
     next.splice(to, 0, ...next.splice(from, 1));
     const previous = categories;
     reorder(next);
-    const res = await api.reorder(next).catch(() => null);
-    if (!res?.success) {
-      reorder(previous);
-      showToast({ message: why(res, `Failed to move ${noun}`), type: "warning" });
-      return;
-    }
+    const saved = api.reorder(next).catch(() => null);
     showToast({
       message: `Moved "${next[to]}"`,
       type: "success",
       // A move saves the whole list's order.
       touches: touches(next),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
+          if (!(await saved)?.success) return true; // the failure path below put it back
           reorder(previous);
           const back = await api.reorder(previous).catch(() => null);
           if (!back?.success) reorder(next);
@@ -123,6 +119,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         undoFailed,
       ),
     });
+    void saved.then((res) => {
+      if (res?.success) return;
+      reorder(previous);
+      showToast({ message: why(res, `Failed to move ${noun}`), type: "warning" });
+    });
+    return saved;
   }
   const dragRow = useDragSort(move);
 
@@ -135,33 +137,27 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
 
   // Puts a renamed or deleted category and exactly its items back. The screen changes first; a failure takes back exactly
   // what it changed (never a name that was not on screen), so no orphan category shows.
-  const revert = (name: string, current: string, change: Change, dropCurrent: boolean, at: number) =>
-    undoWith(
-      showToast,
-      async () => {
-        // Filled in by the update below, which React has run by the time the server answers.
-        let added = false;
-        let droppedAt = -1;
-        onChange((prev) => {
-          droppedAt = dropCurrent ? prev.indexOf(current) : -1;
-          const without = droppedAt >= 0 ? prev.filter((c) => c !== current) : prev;
-          added = !without.includes(name);
-          return added ? [...without.slice(0, at), name, ...without.slice(at)] : without;
-        });
-        onRefile(current, name, change.itemIds);
-        const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
-        onSynced?.();
-        if (!back?.success) {
-          onChange((prev) => insertAt(added ? prev.filter((c) => c !== name) : prev, current, droppedAt));
-          onRefile(name, current, change.itemIds);
-        } else if (back.keptCurrent) {
-          // The server kept it right after the restored one.
-          onChange((prev) => insertAt(prev, current, prev.indexOf(name) + 1));
-        }
-        return back;
-      },
-      undoFailed,
-    );
+  async function revert(name: string, current: string, change: Change, dropCurrent: boolean, at: number) {
+    // Filled in by the update below, which React has run by the time the server answers.
+    let added = false;
+    let droppedAt = -1;
+    onChange((prev) => {
+      droppedAt = dropCurrent ? prev.indexOf(current) : -1;
+      const without = droppedAt >= 0 ? prev.filter((c) => c !== current) : prev;
+      added = !without.includes(name);
+      return added ? [...without.slice(0, at), name, ...without.slice(at)] : without;
+    });
+    onRefile(current, name, change.itemIds);
+    const back = await api.revert({ name, current, dropCurrent, ...change }).catch(() => null);
+    if (!back?.success) {
+      onChange((prev) => insertAt(added ? prev.filter((c) => c !== name) : prev, current, droppedAt));
+      onRefile(name, current, change.itemIds);
+    } else if (back.keptCurrent) {
+      // The server kept it right after the restored one.
+      onChange((prev) => insertAt(prev, current, prev.indexOf(name) + 1));
+    }
+    return back;
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -194,7 +190,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
                 return prev.filter((c) => c !== to);
               });
               const gone = await api.remove(to).catch(() => null);
-              onSynced?.();
               if (!gone?.success) onChange((prev) => insertAt(prev, to, was));
               // Items filed under it since go to the fallback, like any delete.
               else onRefile(to, builtIn);
@@ -209,7 +204,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
         const change = res.change;
         const at = categories.indexOf(from);
         onRefile(from, to);
-        onSynced?.();
         onChange((prev) =>
           prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
         );
@@ -217,7 +211,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
           message: `Renamed "${from}" to "${to}"`,
           type: "success",
           touches: touches([from, to], change.itemIds),
-          onUndo: revert(from, to, change, !change.merged, at),
+          onUndo: undoWith(showToast, () => revert(from, to, change, !change.merged, at), undoFailed),
         });
       }
       setOpen(false);
@@ -228,30 +222,40 @@ export function CategoriesCard({ api, categories, onChange, onRefile, onSynced, 
     }
   }
 
-  // The row leaves, its items move to Other and the toast shows at once; a failed delete puts them back. Undo re-files exactly the items
-  // that moved to Other.
-  async function remove(cat: string) {
+  // The row leaves, its items move to Other and the toast shows at once; a failed delete puts them back and takes the
+  // toast away. Undo waits for the delete, then re-files exactly the items the server moved to Other.
+  function remove(cat: string) {
     const at = categories.indexOf(cat);
-    const moved = idsIn?.(cat);
+    const moved = idsIn(cat);
     onChange((prev) => prev.filter((c) => c !== cat));
-    if (moved) onRefile(cat, builtIn, moved);
-    const res = await api.remove(cat).catch(() => null);
-    if (!res?.success) {
-      onChange((prev) => insertAt(prev, cat, at));
-      if (moved) onRefile(builtIn, cat, moved);
-      onSynced?.();
-      showToast({ message: why(res, `Failed to remove ${noun}`), type: "warning" });
-      return;
-    }
-    const change = res.change;
-    onRefile(cat, builtIn);
-    onSynced?.();
+    onRefile(cat, builtIn, moved);
+    const saved = api.remove(cat).catch(() => null);
     showToast({
       // Units show as stored ("pcs"); categories with a capital.
       message: `Removed "${cat}"; its items are in ${noun === "unit" ? builtIn : categoryLabel(builtIn)}`,
-      touches: touches([cat], change.itemIds),
-      onUndo: revert(cat, builtIn, change, false, at),
+      touches: touches([cat], moved),
+      saved,
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const done = await saved;
+          if (!done?.success) return true; // the failure path below put it back
+          return revert(cat, builtIn, done.change, false, at);
+        },
+        undoFailed,
+      ),
     });
+    void saved.then((res) => {
+      if (!res?.success) {
+        onChange((prev) => insertAt(prev, cat, at));
+        onRefile(builtIn, cat, moved);
+        showToast({ message: why(res, `Failed to remove ${noun}`), type: "warning" });
+      } else {
+        // Items filed under it meanwhile (another tab) go to the fallback too.
+        onRefile(cat, builtIn);
+      }
+    });
+    return saved;
   }
 
   return (

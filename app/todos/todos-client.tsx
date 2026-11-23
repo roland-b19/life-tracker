@@ -16,7 +16,6 @@ import {
   addTodoAction,
   deletePushSubscriptionAction,
   deleteTodoAction,
-  loadTodosViewAction,
   restoreTodoAction,
   savePushSubscriptionAction,
   toggleTodoAction,
@@ -70,12 +69,11 @@ export function TodosClient({
   // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
-  // The list shows this view, which follows the controls once the tasks have loaded.
+  // The list shows this view, which follows the controls a render later.
   const [view, setView] = useState({
     space: "personal" as TodoSpace,
     tab: "daily" as TaskTab,
   });
-  const viewId = useRef(0);
   // The page position when a switch started: the list changes a render after the controls, so put the page back then too.
   const scrolled = useRef<number | null>(null);
   useLayoutEffect(() => {
@@ -102,11 +100,6 @@ export function TodosClient({
   // Push notifications state
   const [pushSupported, setPushSupported] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
-
-  // Bumped by every load and by every change made on screen, so an older refresh never lands over a newer state.
-  const requestId = useRef(0);
-  // The load a day switch started; a later switch that needs no load of its own waits for it.
-  const loading = useRef<Promise<void>>(Promise.resolve());
 
   const isDaily = tab === "daily";
   const listDaily = view.tab === "daily";
@@ -140,21 +133,6 @@ export function TodosClient({
       .catch(() => {});
   }, []);
 
-  // Loads both spaces and swaps them in with one state update, so the list never flashes empty.
-  const loadDay = async () => {
-    const id = ++requestId.current;
-    try {
-      const view = await loadTodosViewAction();
-      if (!view.success) throw new Error(view.error);
-      if (id === requestId.current) {
-        setPersonalTodos(view.daily[0].todos);
-        setBusinessTodos(view.daily[1].todos);
-      }
-    } catch {
-      showToast({ message: "Failed to load tasks", type: "warning" });
-    }
-  };
-
   // The controls switch at once; the list follows a render later.
   const switchView = (next: { space?: TodoSpace; tab?: TaskTab }) => {
     const target = { space, tab, ...next };
@@ -162,10 +140,7 @@ export function TodosClient({
     scrolled.current = window.scrollY;
     setSpace(target.space);
     setTab(target.tab);
-    const n = ++viewId.current;
-    void loading.current.then(() => {
-      if (n === viewId.current) setView(target);
-    });
+    setView(target);
   };
 
   const openForm = (todo?: TodoItem) => {
@@ -215,8 +190,7 @@ export function TodosClient({
         // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
         const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof Editable]])) as Partial<Editable>;
         const after = { ...before, ...changed };
-        ++requestId.current;
-        replace(after);
+        putFields(before, changed);
         keepCategory(after);
         if (stillOpen()) closeForm();
         showToast({
@@ -228,12 +202,10 @@ export function TodosClient({
           onUndo: undoWith(
             showToast,
             async () => {
-              ++requestId.current;
-              replace({ ...after, ...undo });
+              putFields(before, undo);
               const back = await updateTodoAction({ id: before.id, ...undo }).catch(() => null);
               if (back?.success) keepCategory({ ...after, ...undo });
-              else replace(after);
-              void loadDay();
+              else putFields(before, changed);
               return back;
             },
             (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
@@ -253,7 +225,6 @@ export function TodosClient({
         const res = await saved;
         if (!res?.success) return refused(res?.error ?? "Failed to save task");
         const created = res.todo;
-        ++requestId.current;
         if (shows(created)) putBack(created);
         keepCategory(created);
         if (stillOpen()) closeForm();
@@ -269,11 +240,9 @@ export function TodosClient({
                 onUndo: undoWith(
                   showToast,
                   async () => {
-                    ++requestId.current;
                     drop(created);
                     const back = await deleteTodoAction(created.id).catch(() => null);
                     if (!back?.success && shows(created)) putBack(created);
-                    void loadDay();
                     return back;
                   },
                   (back) => (back && !back.success ? back.error : "Failed to undo"),
@@ -281,7 +250,6 @@ export function TodosClient({
               },
         );
       }
-      await loadDay();
     } finally {
       setSavingIn((now) => (now === from ? null : now));
     }
@@ -289,8 +257,20 @@ export function TodosClient({
 
   // `completedAt` is when the box last changed: ticked goes to the top of the done tasks, unticked to the bottom of the open ones.
   // Undo passes the time from before the change, so the task goes back to where it was; left out, it is now.
-  const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) =>
-    updateList(task.space, (list) => list.map((t) => (t.id === task.id ? { ...t, isCompleted, completedAt } : t)).sort(compareTodos));
+  // Answers the box as the screen held it before, filled in by the update, which React has run by the time the server answers.
+  const setCompleted = (task: TodoItem, isCompleted: boolean, completedAt: Date | null = new Date()) => {
+    const was = { isCompleted: task.isCompleted, completedAt: task.completedAt };
+    updateList(task.space, (list) =>
+      list
+        .map((t) => {
+          if (t.id !== task.id) return t;
+          Object.assign(was, { isCompleted: t.isCompleted, completedAt: t.completedAt });
+          return { ...t, isCompleted, completedAt };
+        })
+        .sort(compareTodos),
+    );
+    return was;
+  };
 
   // A tick, or (withUndo false) its Undo, whose failure undoWith tells. Answers the server's answer.
   const toggle = async (
@@ -299,8 +279,7 @@ export function TodosClient({
     withUndo: boolean,
     completedAt?: Date | null,
   ): Promise<Awaited<ReturnType<typeof toggleTodoAction>> | null> => {
-    ++requestId.current;
-    setCompleted(todo, next, completedAt);
+    const was = setCompleted(todo, next, completedAt);
     const saved = toggleTodoAction({ id: todo.id, isCompleted: next, completedAt }).catch(() => null);
     if (withUndo) {
       showToast({
@@ -315,9 +294,9 @@ export function TodosClient({
       });
     }
     const res = await saved;
+    // A failed write puts the box back as it was; the refresh after an answer brings the rest (D-034).
+    if (!res?.success) setCompleted(todo, was.isCompleted, was.completedAt);
     if (withUndo && !res?.success) warn(res?.error ?? "Failed to update task");
-    // Refresh so the screen matches the database, whatever the server answered.
-    await loadDay();
     return res;
   };
 
@@ -327,9 +306,10 @@ export function TodosClient({
   const putBack = (task: TodoItem) =>
     updateList(task.space, (list) => (list.some((t) => t.id === task.id) ? list : [...list, task].sort(compareTodos)));
 
-  // The task as edited, where the server would sort it (a task deleted meanwhile stays off).
-  const replace = (task: TodoItem) =>
-    updateList(task.space, (list) => (list.some((t) => t.id === task.id) ? [...list.filter((t) => t.id !== task.id), task].sort(compareTodos) : list));
+  // Puts these fields onto the task as the screen holds it now, so a change another tab made since stays on screen (a task
+  // deleted meanwhile stays off); the D-034 refresh brings the rest.
+  const putFields = (task: TodoItem, fields: Partial<TodoItem>) =>
+    updateList(task.space, (list) => list.map((t) => (t.id === task.id ? { ...t, ...fields } : t)).sort(compareTodos));
 
   // The server files a saved task under its category and creates the category if it is gone (an Undo after the category was deleted): the card shows it too.
   const keepCategory = ({ space, category }: TodoItem) =>
@@ -345,7 +325,6 @@ export function TodosClient({
   // Nothing waits on the network: the row leaves and the toast shows at once; a failed delete puts the row back.
   // Undo restores the same task.
   const handleDeleteTodo = (target: TodoItem) => {
-    ++requestId.current;
     drop(target);
     const saved = deleteTodoAction(target.id).catch(() => null);
     // true: removed now; false: the call failed; "gone": it was already deleted elsewhere, so there is nothing to undo.
@@ -357,7 +336,6 @@ export function TodosClient({
       onUndo: undoWith(
         showToast,
         async () => {
-          ++requestId.current;
           if ((await deleted) === "gone") return true; // deleted elsewhere: Undo must not bring it back
           // Only onto the list it was on, if that is still the one on screen.
           if (shows(target)) putBack(target);
@@ -365,7 +343,6 @@ export function TodosClient({
           const back = await restoreTodoAction(snapshot(target)).catch(() => null);
           if (back?.success) keepCategory(target);
           else if (shows(target)) drop(target);
-          void loadDay();
           return back;
         },
         (back) => (back && !back.success ? back.error : "Failed to restore task"),
@@ -374,7 +351,7 @@ export function TodosClient({
     void saved.then((res) => {
       if (res?.success) {
         if (!res.deleted) warn(`"${target.title}" was already removed`);
-        return void loadDay();
+        return;
       }
       if (shows(target)) putBack(target);
       warn(res?.error ?? "Failed to remove task");
@@ -510,8 +487,6 @@ export function TodosClient({
                 });
               }}
               idsIn={(c) => todosMap[view.space].filter((t) => t.category === c).map((t) => t.id)}
-              // Read the tasks again once the server has saved (or undone) the change.
-              onSynced={() => void loadDay()}
             />
           )}
         </DashboardMain>

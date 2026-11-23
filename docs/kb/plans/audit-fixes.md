@@ -22,7 +22,7 @@ The findings' IDs (GYMA-01, X-STALE, ...) come from the owner's private audit re
 - [x] Every finding named in a step has a unit test or an e2e assertion for its fixed behavior in that step's `tests:` — checked by each part's PR proof table, one row per finding ID.
 - [x] Each new or changed action refuses another user and a signed-out caller with `{ success: false, error }`, never a 500 — checked by the area test files and `tests/actions-anonymous.test.ts`; after part E, no action calls `requireUser()` outside `respond` (a `grep` in step 21).
 - [x] Signing out on one device leaves another device signed in, and a request with the signed-out token is refused — checked by `tests/auth-guard.test.ts`.
-- [x] Query budgets hold: `/gym` 14, `/health` 13, `/todos` 12, `/wishlist` 4, `loadTodosViewAction` 13 — checked by `tests/query-count.test.ts`.
+- [x] Query budgets hold: `/gym` 14, `/health` 13, `/todos` 12, `/wishlist` 4, `loadTodosViewAction` 13 — checked by `tests/query-count.test.ts`. Since D-047 `loadTodosViewAction` and its budget are gone (Tasks no longer reloads its list).
 - [x] `npm run check` and `npm run e2e` pass; CI is green on every part's PR.
 - [ ] Every build agent's work is checked, as soon as that agent finishes, by a fresh verify agent (no build context) that walks a checklist for that agent's steps in the browser on local test users and finds no open item — checked by its report, read by the owner. This session writes each checklist from the steps and the private report (what to open, type and see, and what to check in the test database) and keeps it in the session's notes folder outside the repo, since it quotes the report.
 

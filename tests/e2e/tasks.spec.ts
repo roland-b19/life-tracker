@@ -3,18 +3,21 @@ import { expect, type Page } from "@playwright/test";
 import {
   andSettle,
   asOwner,
+  burst,
   center,
+  countWrites,
   dismissToast,
   expectNoSeriousViolations,
   expectToastWithoutUndo,
   holdWrites,
   loseAnswerOnce,
   pauseClock,
+  recordStates,
+  refreshesDone,
   signInThroughForm,
   test,
   toast,
   undoIn,
-  writesIn,
 } from "./helpers";
 
 // The page opens on the Daily tab of the Personal space, so a reload (which also starts on Daily) goes through here too.
@@ -63,8 +66,7 @@ test("a signed-in user adds, completes, edits and deletes a task, with Undo for 
   await expect(progress.getByText("0 of 1 done")).toBeVisible();
   await dismissToast(page, `Added "${title}"`);
 
-  // Complete, then Undo the completion. Each answer is told apart by the box's new state: the page also reloads its
-  // list after every change, and that earlier reload could otherwise be taken for the answer.
+  // Complete, then Undo the completion; each wait names its write by the box's new state.
   const ticked = `"isCompleted":true`;
   const unticked = `"isCompleted":false`;
   await andSettle(page, () => page.getByRole("button", { name: `Mark ${title} as complete` }).click(), ticked);
@@ -165,13 +167,59 @@ test("a double tap on Save or on a task's box writes once [D-043]", async ({ sig
   await page.getByRole("button", { name: "Add task" }).click();
   const form = page.getByRole("dialog", { name: "New task" });
   await form.getByLabel("Title").fill(title);
-  expect(await writesIn(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()), `"title":"${title}"`)).toBe(1);
+  expect(await burst(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()))).toBe(1);
   await expect(page.getByText(title, { exact: true })).toHaveCount(1);
   await page.keyboard.press("Shift");
   const box = page.getByRole("button", { name: `Mark ${title} as complete` });
-  expect(await writesIn(page, center(await box.boundingBox()), `"isCompleted"`)).toBe(1);
+  expect(await burst(page, center(await box.boundingBox()))).toBe(1);
   await expect(page.getByRole("button", { name: `Mark ${title} as incomplete` })).toBeVisible();
   await expect(page.getByRole("region", { name: "Progress" }).getByText("1 of 1 done")).toBeVisible();
+});
+
+test("a tick sends one write: the list is not read again after it [D-047]", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  const title = taskTitle();
+  await addTask(page, title, "New task");
+  await refreshesDone(page);
+  const writes = countWrites(page);
+  await andSettle(page, () => page.getByRole("button", { name: `Mark ${title} as complete` }).click());
+  await expect(page.getByRole("button", { name: `Mark ${title} as incomplete` })).toBeVisible();
+  // The refresh after the answer (D-034) has come and gone, so a read the tick set off has been sent by then.
+  await refreshesDone(page);
+  expect(writes.map((r) => r.postData())).toEqual([expect.stringContaining(`"isCompleted":true`)]);
+});
+
+// The row is merged, not replaced by the values the form opened with: another tab's tick, shown here while the form was
+// open, stays on screen through the save, never flashing back before the refresh brings it.
+test("an edit saved here keeps another tab's change to the same task on screen [D-047]", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  const title = taskTitle();
+  const renamed = `${title} renamed`;
+  await addTask(page, title, "New task");
+  await page.getByRole("button", { name: `Edit ${title}` }).click();
+  const form = page.getByRole("dialog", { name: "Edit task" });
+  await expect(form).toBeVisible();
+  const other = await page.context().newPage();
+  try {
+    await openTasks(other, "Today");
+    await andSettle(other, () => other.getByRole("button", { name: `Mark ${title} as complete` }).click());
+  } finally {
+    await other.close();
+  }
+  // This tab's refresh shows the tick behind the open form.
+  await expect(page.getByRole("button", { name: `Mark ${title} as incomplete` })).toBeVisible();
+  await refreshesDone(page);
+  const box = await recordStates(
+    page,
+    (name: string) => document.querySelector(`button[aria-label="Mark ${name} as complete"]`) ? "open"
+      : document.querySelector(`button[aria-label="Mark ${name} as incomplete"]`) ? "done" : undefined,
+    renamed,
+  );
+  await form.getByLabel("Title").fill(renamed);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"title":"${renamed}"`);
+  await expect(page.getByRole("button", { name: `Mark ${renamed} as incomplete` })).toBeVisible();
+  await refreshesDone(page);
+  expect(await box()).toEqual(["done"]);
 });
 
 test("a Save in a form opened again while the last opening's save is unanswered still saves [D-043]", async ({ signedInPage: page }) => {
