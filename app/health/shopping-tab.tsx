@@ -6,6 +6,7 @@ import { formatAmount, formatNumber } from "@/lib/number-format";
 import { visible } from "@/lib/validations/common";
 import { MAX_CLEARED, SHOPPING_ITEM_GONE } from "@/lib/validations/food";
 import { AddButton, Card, Checkbox, Dashboard, EmptyNote, Field, FieldPair, FormModal, SelectField, SmallButton, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { undoWith, useToast } from "../components/toast";
 import { useOnce } from "../components/once";
 import { useServerState } from "../components/server-state";
@@ -200,11 +201,11 @@ export function ShoppingTab({
     // The server checks the limits; its message shows in the form, which keeps what was typed.
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
+    const refused = refusal(stillOpen, setErrorMsg, warn);
 
     if (!editingShop) {
-      const refusal = await addShopping(id, input);
-      if (refusal) refused(refusal);
+      const why = await addShopping(id, input);
+      if (why) refused(why);
       else if (stillOpen()) setIsShopModalOpen(false);
       return;
     }

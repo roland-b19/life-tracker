@@ -636,6 +636,28 @@ test("the categories card refuses a name over 50 characters without cutting it",
   await expect(card(page).locator(".entry-row")).toHaveCount(0);
 });
 
+// An answer belongs to its opening (D-047): an add lost after its form was cancelled says so in a toast, and the form
+// opened next starts with no error.
+test("a category save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  const name = `e2e-cat-${hex()}`;
+  await wishlist.open(page);
+  const release = await holdWrites(page, `"name":"${name}"`);
+  await page.getByRole("button", { name: "Add category" }).click();
+  const form = page.getByRole("dialog", { name: "New category" });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to save category")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add category" }).click();
+  await expect(form.getByLabel("Name", { exact: true })).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
+  await expect(card(page).locator(".entry-row")).toHaveCount(0);
+});
+
 // The card's fold is kept on the device (useDeviceState), so it is still folded after a reload.
 test("the categories card stays folded after a reload", async ({ signedInPage: page }) => {
   const name = `e2e-cat-${hex()}`;

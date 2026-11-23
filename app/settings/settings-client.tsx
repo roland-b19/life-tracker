@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { AddButton, Card, Dashboard, DashboardMain, EmptyNote, Field, FormModal, Page, type FormOpening } from "../components/blocks";
 import { AppearanceCard } from "../components/appearance-card";
+import { refusal } from "../components/forms";
 import { ListBox, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { useOnce } from "../components/once";
@@ -25,6 +26,7 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
   const [token, setToken] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   // Disconnect acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
@@ -38,12 +40,10 @@ export function SettingsClient({ userName, initialConnectedAt }: SettingsClientP
   async function handleSubmit(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     setErrorMsg("");
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = refusal(stillOpen, setErrorMsg, warn);
     const res = await connectClaudeAction({ token }).catch(() => null);
-    if (!res?.success) {
-      // A refusal shows in the form while it is on screen, else as a toast.
-      const message = res?.error ?? "Failed to connect Claude";
-      return stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" });
-    }
+    if (!res?.success) return refused(res?.error ?? "Failed to connect Claude");
     const before = connectedAt;
     setConnectedAt(res.connectedAt);
     showToast({

@@ -14,7 +14,7 @@ import {
   type ValueChange,
 } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, type FormOpening, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
-import { changedFields } from "../components/forms";
+import { changedFields, refusal } from "../components/forms";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
@@ -196,9 +196,9 @@ export function FoodClient({
   // A refused save shows in its form while that opening is on screen, and as a warning toast once it is not. A value
   // another device changed first closes the form with the reason, so the refresh shows the current value.
   const refused = (error: string, stillOpen: () => boolean, close: () => void) => {
-    if (stillOpen() && error !== CHANGED_ELSEWHERE) return setErrorMsg(error);
-    if (stillOpen()) close();
-    setStatusMessage(error);
+    const elsewhere = error === CHANGED_ELSEWHERE;
+    if (elsewhere && stillOpen()) close();
+    refusal(() => !elsewhere && stillOpen(), setErrorMsg, setStatusMessage)(error);
   };
 
   const mealKeys = (meals: MealData[]) => meals.map((m) => `meals:${m.id}`);
@@ -281,8 +281,8 @@ export function FoodClient({
     e.preventDefault();
     if (!mealHasValue(entered)) return;
     // The server's own check, so the form refuses with its limits and words, in its order.
-    const refusal = mealAmounts.safeParse(entered).error?.issues[0]?.message;
-    if (refusal) return setErrorMsg(refusal);
+    const problem = mealAmounts.safeParse(entered).error?.issues[0]?.message;
+    if (problem) return setErrorMsg(problem);
 
     setErrorMsg("");
     // The id comes from the form's opening, so a repeat of the same save after a lost answer adds nothing (D-040).

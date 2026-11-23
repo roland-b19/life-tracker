@@ -4,6 +4,7 @@ import { addDays, formatDMY, weekStart } from "@/lib/format-date";
 import { DELOAD_ORDER } from "@/lib/validations/gym";
 import { useState } from "react";
 import { Card, FormModal, SelectField, Toggle, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { EditButton } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
@@ -39,6 +40,7 @@ export function DeloadCard({
   busy: boolean; // the Gym page's saving flag: the switch and Edit wait for the workout write
 }) {
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   const [open, setOpen] = useState(false);
   // Last and next deload week being edited (Sundays, "" for none); kept while the dialog is closed, so the form opened
   // again while its save is out shows the weeks it sent.
@@ -54,27 +56,23 @@ export function DeloadCard({
     }
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null });
-      if (!res.success) return refused(res.error);
-      if (stillOpen()) setOpen(false);
-      const { last, added, removed } = res;
-      showToast({
-        // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.
-        message: last && last !== (draft.last || null) && last !== draft.next ? `Saved. Past deload weeks stay: the last is ${formatDMY(last)}.` : "Saved deload weeks",
-        type: "success",
-        touches: [...added, ...removed].map((w) => `deload_weeks:${w}`),
-        // Exactly the weeks that save removed come back and the ones it added go.
-        onUndo: undoWith(
-          showToast,
-          () => restoreDeloadWeeksAction({ add: removed, remove: added }),
-          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-        ),
-      });
-    } catch {
-      refused("Failed to save deload weeks");
-    }
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save deload weeks");
+    if (stillOpen()) setOpen(false);
+    const { last, added, removed } = res;
+    showToast({
+      // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.
+      message: last && last !== (draft.last || null) && last !== draft.next ? `Saved. Past deload weeks stay: the last is ${formatDMY(last)}.` : "Saved deload weeks",
+      type: "success",
+      touches: [...added, ...removed].map((w) => `deload_weeks:${w}`),
+      // Exactly the weeks that save removed come back and the ones it added go.
+      onUndo: undoWith(
+        showToast,
+        () => restoreDeloadWeeksAction({ add: removed, remove: added }),
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   return (
