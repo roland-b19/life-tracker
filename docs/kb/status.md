@@ -32,7 +32,7 @@ last_verified: 2026-11-23
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers is decided (D-047) and being built in batches (H1 Tasks and test plumbing, H2 Gym and shell, then the form hook, the second-device helper and the action names last); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers is decided (D-047) and being built in batches (H1 Tasks and test plumbing, built and verified; H2 Gym and shell, then the form hook, the second-device helper and the action names last); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -44,7 +44,7 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 - Data storage: the database, backups, limits and what stays on the device.
 
 ## Open questions
-None open: the owner's round settled the audit leftovers (D-047), including the theme toast's `touches`, the two More forms, the recipe tables and the 375 category-name wrap (being fixed in H1).
+None open: the owner's round settled the audit leftovers (D-047), including the theme toast's `touches`, the two More forms and the recipe tables.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
