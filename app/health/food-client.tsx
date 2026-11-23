@@ -392,10 +392,8 @@ export function FoodClient({
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}`);
     const before = metricBase;
-    const change: MetricChange = {
-      ...(value === before.amount ? {} : { amount: { from: before.amount, to: value } }),
-      ...(goal === before.goal ? {} : { goal: { from: before.goal, to: goal } }),
-    };
+    const patch = changedFields(before, { amount: value, goal });
+    const change: MetricChange = Object.fromEntries(Object.entries(patch).map(([key, to]) => [key, { from: before[key as keyof typeof before], to }]));
     if (change.amount === undefined && change.goal === undefined) return setMetricOpen(null);
     const undo: MetricChange = { amount: reversed(change.amount), goal: reversed(change.goal) };
     const close = () => setMetricOpen((open) => (open === metric ? null : open));

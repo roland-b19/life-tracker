@@ -168,6 +168,11 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(fromForms(withoutBusy)).toContainEqual({ handler: "submit", held: false });
   });
 
+  // D-047: one changedFields helper (app/components/forms.ts) finds what an edit changed, never a change built inline.
+  it("the Health water/steps and goals forms find what changed with changedFields", () => {
+    for (const handler of ["handleMetricSubmit", "handleGoalsSubmit"]) expect(bodyOf(foodClient, handler), handler).toContain("changedFields(");
+  });
+
   it.each(Object.entries(sources))("%s", (_file, text) => {
     expect(fromForms(text).filter(({ held }) => !held)).toEqual([]);
   });
