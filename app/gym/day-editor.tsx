@@ -6,7 +6,7 @@ import { alreadyExists } from "@/lib/validations/result";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
-import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle } from "../components/blocks";
+import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle, type FormOpening } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -66,23 +66,23 @@ export interface DiscardedEdit {
 
 /**
  * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
- * arrow keys to reorder, new exercise). Mounted only while open, so each opening starts fresh, or from `resume`.
+ * arrow keys to reorder, new exercise). Mounted for as long as the page shows the day, so its form keeps its opening
+ * while its save is out (D-047): opened again before the answer, it waits for that save, as a fresh opening would show
+ * the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
  * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
  * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
  */
 export function DayEditor({
+  isOpen,
   day,
   exercises,
-  busy,
-  setBusy,
   resume,
   onClose,
   onReopen,
 }: {
+  isOpen: boolean;
   day: SplitDay;
   exercises: LibraryExercise[];
-  busy: boolean;
-  setBusy: (busy: boolean) => void;
   resume?: DiscardedEdit;
   onClose: () => void;
   onReopen: (edit: DiscardedEdit) => void;
@@ -93,16 +93,18 @@ export function DayEditor({
   const [errorMsg, setErrorMsg] = useState("");
   const [addId, setAddId] = useState("");
   const [query, setQuery] = useState("");
-  const move = (from: number, to: number) =>
+  // `at`, not `from`: the day's save sends no compare-and-set `from` (D-043), and the static check reads this code with it.
+  const move = (at: number, to: number) =>
     setDraft((d) => {
       const list = [...d.exercises];
-      list.splice(to, 0, ...list.splice(from, 1));
+      list.splice(to, 0, ...list.splice(at, 1));
       return { ...d, exercises: list };
     });
   const dragRow = useDragSort(move);
   const known = [...exercises, ...created.filter((c) => !exercises.some((e) => e.id === c.id))];
   // The names as the editor opened: a row whose exercise is deleted elsewhere keeps the name the user knows.
-  const [seen] = useState(() => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]));
+  const names = () => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]);
+  const [seen, setSeen] = useState(names);
   const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? seen.get(id) ?? "Exercise";
   const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
   // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
@@ -121,6 +123,27 @@ export function DayEditor({
   // The new exercise's id, made when its form opens and kept until that opening closes (D-040, D-047): Create and add
   // sent again after a lost answer is the same exercise, and the name check skips it, as the refresh already lists it.
   const customId = useRef("");
+  // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
+  // disables and labels, never the guard). It belongs to one opening: a new opening starts without it.
+  const [creating, setCreating] = useState(false);
+  // Each opening starts from the day as saved, or from `resume`. The form itself knows whether the opening is new.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setDraft(resume?.draft ?? toDraft(day));
+      setCreated(resume?.created ?? []);
+      setSeen(names());
+      setErrorMsg("");
+      setCreating(false);
+      setAddId("");
+      setQuery("");
+      setShowCustom(false);
+      setCustomName("");
+      setCustomMuscle("chest");
+      setCustomEquipment("barbell");
+    }
+  }
   function openCustom() {
     customId.current = crypto.randomUUID();
     setShowCustom(true);
@@ -181,7 +204,7 @@ export function DayEditor({
     setAddId("");
   }
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     const rows = draft.exercises.map((x) => ({
       exerciseId: x.exerciseId,
@@ -195,11 +218,12 @@ export function DayEditor({
       return;
     }
     setErrorMsg("");
-    setBusy(true);
+    // A refusal shows in the editor while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
       if (res.success) {
-        onClose();
+        if (stillOpen()) onClose();
         showToast({
           message: `Saved "${draft.name.trim()}"`,
           type: "success",
@@ -214,16 +238,16 @@ export function DayEditor({
         });
       } else {
         // The editor stays open with the day as it was typed, so nothing is lost.
-        setErrorMsg(res.error);
+        refused(res.error);
       }
     } catch {
-      setErrorMsg("Failed to save day");
-    } finally {
-      setBusy(false);
+      refused("Failed to save day");
     }
   }
 
-  async function addCustomExercise() {
+  // The answer changes the draft, the new exercise's form and the error only in the opening it was sent from (D-047): after
+  // that opening closed, a refusal shows as a toast and a new exercise stays in the library with its toast and Undo.
+  async function addCustomExercise(stillOpen: () => boolean) {
     const name = customName.trim();
     if (!visible(name)) return;
     const problem = exerciseNameProblem(name, known.filter((e) => e.id !== customId.current));
@@ -232,27 +256,31 @@ export function DayEditor({
       return;
     }
     setErrorMsg("");
-    setBusy(true);
+    setCreating(true);
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const res = await addCustomExerciseAction({ id: customId.current, name, muscleGroup: customMuscle, equipmentType: customEquipment });
       if (res.success) {
         // A new exercise is made for this day, so it goes straight into the routine. A repeat answers the row the first
         // add made, so the screen takes the server's row.
         const { id: exerciseId, name: madeName, muscleGroup, equipmentType } = res.exercise;
-        setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
-        setCreated((list) => [...list, { id: exerciseId, name: madeName, muscleGroup, equipmentType }]);
-        setShowCustom(false);
-        setCustomName("");
+        const added = stillOpen();
+        if (added) {
+          setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
+          setCreated((list) => [...list, { id: exerciseId, name: madeName, muscleGroup, equipmentType }]);
+          setShowCustom(false);
+          setCustomName("");
+        }
         showToast({
           message: `Created "${madeName}"`,
           type: "success",
           touches: [`exercises:${exerciseId}`],
-          // Refused once a routine or a set uses it, so Undo never deletes data.
+          // Refused once a routine or a set uses it, so Undo never deletes data. It takes the row out of the draft it went into.
           onUndo: undoWith(
             showToast,
             async () => {
               const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
-              if (gone?.success) {
+              if (gone?.success && added) {
                 setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
                 setCreated((list) => list.filter((x) => x.id !== exerciseId));
               }
@@ -262,205 +290,203 @@ export function DayEditor({
           ),
         });
       } else {
-        setErrorMsg(res.error);
+        refused(res.error);
       }
     } catch {
-      setErrorMsg("Failed to add exercise");
+      refused("Failed to add exercise");
     } finally {
-      setBusy(false);
+      if (stillOpen()) setCreating(false);
     }
   }
 
   return (
     <FormModal
-      isOpen
+      isOpen={isOpen}
       onClose={close}
       onCancel={() => void cancel()}
+      keepsOpening
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}
-      busy={busy}
-      canSubmit={visible(draft.name) && (draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
+      canSubmit={!creating && visible(draft.name) && (draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
     >
-      <Field
-        label="Name"
-        disabled={busy}
-        type="text"
-        required
-        maxLength={GYM_LIMITS.dayName}
-        value={draft.name}
-        onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-      />
-      <Toggle label="Rest day" disabled={busy} checked={draft.isRest} onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })} />
-
-      {!draft.isRest && (
+      {({ stillOpen }) => (
         <>
-          <ListBox className="routine-list">
-            {draft.exercises.length === 0 && <EmptyNote>No exercises yet.</EmptyNote>}
-            {draft.exercises.map((row, i) => {
-              const name = nameOf(row.exerciseId);
-              return (
-                <div key={row.exerciseId} className="routine-row" data-sort>
-                  <DragHandle
-                    disabled={busy}
-                    label={`Drag ${name} to reorder`}
-                    {...dragRow}
-                    onKeyDown={(e) => {
-                      const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
-                      if (to < 0 || to >= draft.exercises.length) return;
-                      e.preventDefault();
-                      move(i, to);
-                    }}
-                  />
-                  <div className="routine-row-body">
-                    <div className="routine-row-head">
-                      <strong>
-                        {i + 1}. {name}
-                      </strong>
-                      <div className="row-actions">
-                        <DeleteButton label={`Remove ${name}`} title="Remove" onClick={() => removeRow(row.exerciseId)} />
+          <Field
+            label="Name"
+            type="text"
+            required
+            maxLength={GYM_LIMITS.dayName}
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          />
+          <Toggle label="Rest day" checked={draft.isRest} onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })} />
+
+          {!draft.isRest && (
+            <>
+              <ListBox className="routine-list">
+                {draft.exercises.length === 0 && <EmptyNote>No exercises yet.</EmptyNote>}
+                {draft.exercises.map((row, i) => {
+                  const name = nameOf(row.exerciseId);
+                  return (
+                    <div key={row.exerciseId} className="routine-row" data-sort>
+                      <DragHandle
+                        label={`Drag ${name} to reorder`}
+                        {...dragRow}
+                        onKeyDown={(e) => {
+                          const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                          if (to < 0 || to >= draft.exercises.length) return;
+                          e.preventDefault();
+                          move(i, to);
+                        }}
+                      />
+                      <div className="routine-row-body">
+                        <div className="routine-row-head">
+                          <strong>
+                            {i + 1}. {name}
+                          </strong>
+                          <div className="row-actions">
+                            <DeleteButton label={`Remove ${name}`} title="Remove" onClick={() => removeRow(row.exerciseId)} />
+                          </div>
+                        </div>
+                        <div className="routine-fields">
+                          <Field
+                            label="Sets"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={10}
+                            required
+                            className="number-tabular"
+                            value={row.targetSets}
+                            onChange={(e) => patchRow(i, { targetSets: e.target.value })}
+                          />
+                          <Field
+                            label="Min reps"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={100}
+                            required
+                            className="number-tabular"
+                            value={row.minReps}
+                            onChange={(e) => patchRow(i, { minReps: e.target.value })}
+                          />
+                          <Field
+                            label="Max reps"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={100}
+                            required
+                            className="number-tabular"
+                            value={row.maxReps}
+                            onChange={(e) => patchRow(i, { maxReps: e.target.value })}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="routine-fields">
-                      <Field
-                        label="Sets"
-                        disabled={busy}
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={10}
-                        required
-                        className="number-tabular"
-                        value={row.targetSets}
-                        onChange={(e) => patchRow(i, { targetSets: e.target.value })}
-                      />
-                      <Field
-                        label="Min reps"
-                        disabled={busy}
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={100}
-                        required
-                        className="number-tabular"
-                        value={row.minReps}
-                        onChange={(e) => patchRow(i, { minReps: e.target.value })}
-                      />
-                      <Field
-                        label="Max reps"
-                        disabled={busy}
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={100}
-                        required
-                        className="number-tabular"
-                        value={row.maxReps}
-                        onChange={(e) => patchRow(i, { maxReps: e.target.value })}
-                      />
-                    </div>
-                  </div>
+                  );
+                })}
+              </ListBox>
+
+              {addable.length > 0 && draft.exercises.length < 20 && (
+                <div className="routine-add">
+                  <Field
+                    label="Search exercises"
+                    type="text"
+                    enterKeyHint="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Enter only searches; it does not submit the whole day.
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
+                  />
+                  {found.length === 0 ? (
+                    <EmptyNote>No exercise matches.</EmptyNote>
+                  ) : (
+                    <>
+                      <Label text="Exercise">
+                        <select value={pick} onChange={(e) => setAddId(e.target.value)}>
+                          {groups.map((g) => (
+                            <optgroup key={g} label={muscleLabel(g)}>
+                              {found
+                                .filter((e) => e.muscleGroup === g)
+                                .map((e) => (
+                                  <option key={e.id} value={e.id}>
+                                    {e.name}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </Label>
+                      <button type="button" className="secondary btn-sm" onClick={addRow}>
+                        <PlusIcon size={14} />
+                        Add exercise
+                      </button>
+                    </>
+                  )}
                 </div>
-              );
-            })}
-          </ListBox>
-
-          {addable.length > 0 && draft.exercises.length < 20 && (
-            <div className="routine-add">
-              <Field
-                label="Search exercises"
-                disabled={busy}
-                type="text"
-                enterKeyHint="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  // Enter only searches; it does not submit the whole day.
-                  if (e.key === "Enter") e.preventDefault();
-                }}
-              />
-              {found.length === 0 ? (
-                <EmptyNote>No exercise matches.</EmptyNote>
-              ) : (
-                <>
-                  <Label text="Exercise">
-                    <select disabled={busy} value={pick} onChange={(e) => setAddId(e.target.value)}>
-                      {groups.map((g) => (
-                        <optgroup key={g} label={muscleLabel(g)}>
-                          {found
-                            .filter((e) => e.muscleGroup === g)
-                            .map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {e.name}
-                              </option>
-                            ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </Label>
-                  <button type="button" className="secondary btn-sm" onClick={addRow}>
-                    <PlusIcon size={14} />
-                    Add exercise
-                  </button>
-                </>
               )}
-            </div>
-          )}
 
-          {draft.exercises.length < 20 &&
-            (showCustom ? (
-              <div className="custom-exercise" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
-                <Field
-                  label="New exercise"
-                  disabled={busy}
-                  type="text"
-                  maxLength={GYM_LIMITS.exerciseName}
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter creates the exercise instead of submitting the whole day.
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      once("create", addCustomExercise, null);
-                    }
-                  }}
-                />
-                <FieldPair>
-                  <SelectField
-                    label="Muscle group"
-                    disabled={busy}
-                    value={customMuscle}
-                    onChange={(e) => setCustomMuscle(e.target.value as MuscleGroupKey | "other")}
-                    options={[...MUSCLE_GROUP_KEYS.map((g) => ({ value: g, label: MUSCLE_GROUP_LABEL[g] })), { value: "other", label: "Other" }]}
-                  />
-                  <SelectField
-                    label="Equipment"
-                    disabled={busy}
-                    value={customEquipment}
-                    onChange={(e) => setCustomEquipment(e.target.value as typeof customEquipment)}
-                    options={[
-                      { value: "barbell", label: "Barbell" },
-                      { value: "dumbbell", label: "Dumbbell" },
-                      { value: "cable", label: "Cable" },
-                      { value: "machine", label: "Machine" },
-                      { value: "bodyweight", label: "Bodyweight" },
-                    ]}
-                  />
-                </FieldPair>
-                <FormActions
-                  compact
-                  onCancel={() => setShowCustom(false)}
-                  onSubmit={() => once("create", addCustomExercise, tappedButton.current)}
-                  canSubmit={!busy && visible(customName)}
-                  submitLabel="Create and add"
-                />
-              </div>
-            ) : (
-              <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={openCustom}>
-                <PlusIcon size={14} />
-                New exercise
-              </button>
-            ))}
+              {draft.exercises.length < 20 &&
+                (showCustom ? (
+                  <div className="custom-exercise" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
+                    <Field
+                      label="New exercise"
+                      disabled={creating}
+                      type="text"
+                      maxLength={GYM_LIMITS.exerciseName}
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      onKeyDown={(e) => {
+                        // Enter creates the exercise instead of submitting the whole day.
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          once(`create:${customId.current}`, () => addCustomExercise(stillOpen), null);
+                        }
+                      }}
+                    />
+                    <FieldPair>
+                      <SelectField
+                        label="Muscle group"
+                        disabled={creating}
+                        value={customMuscle}
+                        onChange={(e) => setCustomMuscle(e.target.value as MuscleGroupKey | "other")}
+                        options={[...MUSCLE_GROUP_KEYS.map((g) => ({ value: g, label: MUSCLE_GROUP_LABEL[g] })), { value: "other", label: "Other" }]}
+                      />
+                      <SelectField
+                        label="Equipment"
+                        disabled={creating}
+                        value={customEquipment}
+                        onChange={(e) => setCustomEquipment(e.target.value as typeof customEquipment)}
+                        options={[
+                          { value: "barbell", label: "Barbell" },
+                          { value: "dumbbell", label: "Dumbbell" },
+                          { value: "cable", label: "Cable" },
+                          { value: "machine", label: "Machine" },
+                          { value: "bodyweight", label: "Bodyweight" },
+                        ]}
+                      />
+                    </FieldPair>
+                    <FormActions
+                      compact
+                      onCancel={() => setShowCustom(false)}
+                      onSubmit={() => once(`create:${customId.current}`, () => addCustomExercise(stillOpen), tappedButton.current)}
+                      canSubmit={!creating && visible(customName)}
+                      submitLabel="Create and add"
+                    />
+                  </div>
+                ) : (
+                  <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={openCustom}>
+                    <PlusIcon size={14} />
+                    New exercise
+                  </button>
+                ))}
+            </>
+          )}
         </>
       )}
     </FormModal>

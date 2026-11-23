@@ -750,7 +750,7 @@ export function FoodClient({
           title={metric === "water" ? "Edit water" : "Edit steps"}
           onSubmit={(e, opening) => handleMetricSubmit(e, metric, opening)}
           error={errorMsg}
-          sendsFrom
+          keepsOpening
           canSubmit={metricInput !== "" && metricGoalInput !== ""}
         >
           <Field
@@ -780,7 +780,7 @@ export function FoodClient({
         title="Edit goals"
         onSubmit={handleGoalsSubmit}
         error={errorMsg}
-        sendsFrom
+        keepsOpening
         canSubmit={!Object.values(goalInputs).some((v) => v === "")}
       >
         {NUTRITION_GOALS.map((g) => (

@@ -344,21 +344,30 @@ const codeOf = (node: ts.Node) => {
   return read(node).join("\n");
 };
 
+// A tag written `FormModal`, or a name of this file declared `const X = FormModal` (directly or through another such name).
+const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
+  if (!ts.isIdentifier(tag)) return false;
+  const declaration = tag.text === "FormModal" ? undefined : declarationOf(tag.text, tag);
+  if (!declaration) return tag.text === "FormModal";
+  if (seen.has(declaration) || !ts.isVariableDeclaration(declaration) || !declaration.initializer) return false;
+  return isFormModal(declaration.initializer, seen.add(declaration));
+};
+
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
 // second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
-// for a form that passes `sendsFrom` (D-047), or for one still on the deprecated `busy` bridge (conventions.md, Busy flags).
+// for a form that passes `keepsOpening` (D-047). Any other form may pass it too (the day editor, the deload form).
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
   // `{ from: x, to: y }`, `{ to, from }` or a call such as `rename(from, to)`: the old value next to the new one. Not seen:
   // a quoted key (`{ "from": x }`), the two set in two statements (`o.from = x; o.to = y`), or more than 60 characters
   // between them.
-  const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b|\bto\b\s*[:,][^;]{0,60}?\bfrom\b\s*[:,}]/.test(code);
-  // Each `<FormModal>` in `text` whose save sends a `from`, and whether it holds Save (passes `sendsFrom` or `busy={…}`).
+  const sendsAFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b|\bto\b\s*[:,][^;]{0,60}?\bfrom\b\s*[:,}]/.test(code);
+  // Each `<FormModal>` in `text` whose save sends a `from`, and whether it holds Save (passes `keepsOpening`).
   // A FormModal is a tag written `FormModal` or a name of this file declared as one (`const Modal = FormModal`, directly or
   // through another such name). The handler is the name `onSubmit` gives, `{save}` or an inline arrow that only calls one,
   // `{(e) => save(e)}`, or else the inline function itself. A name is looked up from the FormModal out (declarationOf) and
   // must be a function of this file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another
   // kind, is an unknown handler and fails. The save sends a `from` when the code the handler runs (codeOf) matches
-  // sendsFrom, comments included. That code follows, however deep and each name looked up by scope in this file, at least
+  // sendsAFrom, comments included. That code follows, however deep and each name looked up by scope in this file, at least
   // these flows (nameCode): calls to functions of this file; a name's declaration and every write to it (an assignment, and
   // for a value that is not a function a call or JSX prop it is handed to or a method called on it); a state value's setter
   // calls, plain (`[value, setValue]`) or destructured (`[{ value }, setForm]`), and the call a setter is handed to
@@ -373,14 +382,6 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   // more than the save may run, so a form that sends no `from` can be flagged. It may also read more than this list, which
   // can only flag more; two known examples: a write keyed by a name (`table[key] = …` counts as a write to `key`), and a
   // `catch (x)` parameter resolving to an outer `x`.
-  // A tag written `FormModal`, or a name of this file declared `const X = FormModal` (directly or through another such name).
-  const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
-    if (!ts.isIdentifier(tag)) return false;
-    const declaration = tag.text === "FormModal" ? undefined : declarationOf(tag.text, tag);
-    if (!declaration) return tag.text === "FormModal";
-    if (seen.has(declaration) || !ts.isVariableDeclaration(declaration) || !declaration.initializer) return false;
-    return isFormModal(declaration.initializer, seen.add(declaration));
-  };
   const fromForms = (text: string) => {
     const forms: { handler: string; held: boolean }[] = [];
     const visit = (node: ts.Node) => {
@@ -397,7 +398,7 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
         const fn = name ? functionOf(declarationOf(name.text, name)) && (inline ?? name) : inline;
         const handler = name?.text ?? value?.getText() ?? "no onSubmit";
         if (!fn) forms.push({ handler, held: false });
-        else if (sendsFrom(codeOf(fn))) forms.push({ handler, held: Boolean(prop("sendsFrom") || prop("busy")?.initializer) });
+        else if (sendsAFrom(codeOf(fn))) forms.push({ handler, held: Boolean(prop("keepsOpening")) });
       }
       ts.forEachChild(node, visit);
     };
@@ -405,23 +406,28 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     return forms;
   };
   const categoriesCard = sources["../app/components/categories-card.tsx"];
+  // The categories card with its `keepsOpening` taken away: its rename then sends a `from` with nothing holding Save.
+  const categoriesUnheld = categoriesCard.replace(/^\s*keepsOpening\n/m, "");
 
   it("finds the known ones: Health water/steps and goals, and the categories card", () => {
     expect(fromForms(foodClient).map(({ handler }) => handler)).toEqual(["handleMetricSubmit", "handleGoalsSubmit"]);
     expect(fromForms(categoriesCard).map(({ handler }) => handler)).toEqual(["submit"]);
   });
 
-  it("fails on a copy of the Health form with sendsFrom removed, and of the categories card with busy removed", () => {
-    const withoutSendsFrom = foodClient.replace(/^\s*sendsFrom\n/m, "");
-    expect(withoutSendsFrom).not.toBe(foodClient);
-    expect(fromForms(withoutSendsFrom)).toContainEqual({ handler: "handleMetricSubmit", held: false });
-    const withoutBusy = categoriesCard.replace("busy={busy}", "");
-    expect(withoutBusy).not.toBe(categoriesCard);
-    expect(fromForms(withoutBusy)).toContainEqual({ handler: "submit", held: false });
+  it("fails on a copy of the Health form or of the categories card with keepsOpening removed, also with a busy in its place", () => {
+    const withoutKeepsOpening = foodClient.replace(/^\s*keepsOpening\n/m, "");
+    expect(withoutKeepsOpening).not.toBe(foodClient);
+    expect(fromForms(withoutKeepsOpening)).toContainEqual({ handler: "handleMetricSubmit", held: false });
+    expect(categoriesUnheld).not.toBe(categoriesCard);
+    expect(fromForms(categoriesUnheld)).toContainEqual({ handler: "submit", held: false });
+    // The old `busy` bridge is gone (D-047): a busy given instead of keepsOpening holds nothing.
+    const withBusy = categoriesCard.replace(/^(\s*)keepsOpening\n/m, "$1busy={busy}\n");
+    expect(withBusy).toContain("busy={busy}");
+    expect(fromForms(withBusy)).toContainEqual({ handler: "submit", held: false });
   });
 
   // Each onSubmit shape, and each way of declaring a handler (put before `function submit`, named `send` so it does not
-  // clash with the card's own `save`), on a copy of the categories card with busy removed: a `from` sent by the handler,
+  // clash with the card's own `save`), on a copy of the categories card with keepsOpening removed: a `from` sent by the handler,
   // by a helper it calls (however deep or however declared) or in a value it hands to a call, or a handler that is not a
   // function of this file (`onSave`, a prop), fails.
   it.each([
@@ -437,9 +443,8 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     ["send", "const doRename = () => renameCategoryAction({ scope, from, to });\n  function send(e: React.FormEvent) { e.preventDefault(); return doRename(); }"],
     ["send", "const doRename = useCallback(async () => { await renameCategoryAction({ scope, from, to }); }, []);\n  function send(e: React.FormEvent) { e.preventDefault(); return doRename(); }"],
     ["send", "async function doRename() { await renameCategoryAction({ scope, from, to }); }\n  async function step() { await doRename(); }\n  async function send(e: React.FormEvent) { e.preventDefault(); await step(); }"],
-  ])("fails on a copy of the categories card with busy removed and onSubmit={%s} %s", (shape, declared) => {
-    const copy = categoriesCard
-      .replace("busy={busy}", "")
+  ])("fails on a copy of the categories card with keepsOpening removed and onSubmit={%s} %s", (shape, declared) => {
+    const copy = categoriesUnheld
       .replace("onSubmit={submit}", `onSubmit={${shape}}`)
       .replace("  function submit(", `  ${declared}\n  function submit(`);
     expect(copy).toContain(`onSubmit={${shape}}`);
@@ -455,9 +460,9 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     ["(e) => send(e)", "async function send(e: React.FormEvent, { input = { scope, from: prev, to: next } } = {}) { e.preventDefault(); await renameCategoryAction(input); }"],
     ["send", "let input = { scope, name: next };\n  if (from) input = { scope, from: prev, to: next };\n  function send(e: React.FormEvent) { e.preventDefault(); void renameCategoryAction(input); }"],
     ["send", "const send = (e: React.FormEvent) => renameCategoryAction({ scope, to, from });"],
-  ])("fails on a copy of the categories card with busy removed and onSubmit={%s} %s, and not without its from", (shape, declared) => {
+  ])("fails on a copy of the categories card with keepsOpening removed and onSubmit={%s} %s, and not without its from", (shape, declared) => {
     const copy = (code: string) =>
-      categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", `onSubmit={${shape}}`).replace("  function submit(", `  ${code}\n  function submit(`);
+      categoriesUnheld.replace("onSubmit={submit}", `onSubmit={${shape}}`).replace("  function submit(", `  ${code}\n  function submit(`);
     const without = declared.replace(/, from(: prev)?\b/g, "");
     expect(without).not.toBe(declared);
     expect(copy(declared)).toContain(`  ${declared}\n  function submit(`);
@@ -479,10 +484,9 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     ["FormModal", "if (errorMsg) {\n    var input = { scope, from: prev, to: next };\n  }\n  function send(e: React.FormEvent) { e.preventDefault(); void renameCategoryAction(input!); }"],
     ["Modal", "const Modal = FormModal;\n  async function send(e: React.FormEvent) { e.preventDefault(); await renameCategoryAction({ scope, from: prev, to: next }); }"],
     ["Modal", "const Base = FormModal;\n  const Modal = Base;\n  async function send(e: React.FormEvent) { e.preventDefault(); await renameCategoryAction({ scope, from: prev, to: next }); }"],
-  ])("fails on a copy of the categories card with busy removed, <%s onSubmit={send}> and %s, and not without its from", (tag, declared) => {
+  ])("fails on a copy of the categories card with keepsOpening removed, <%s onSubmit={send}> and %s, and not without its from", (tag, declared) => {
     const copy = (code: string) =>
-      categoriesCard
-        .replace("busy={busy}", "")
+      categoriesUnheld
         .replace("onSubmit={submit}", "onSubmit={send}")
         .replace(/(<\/?)FormModal\b(?=[\s>])/g, `$1${tag}`)
         .replace("  function submit(", `  ${code}\n  function submit(`);
@@ -514,10 +518,9 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     [PICKER, `${STATE}${SEND("input")}`, "<Picker onPick={(v) => setInput(v)} />"],
     ["", `const [{ input }, setForm] = useState<{ input: never }>({ input: null as never });\n  function edit() { setForm({ input: { scope, from: prev, to: next } as never }); }${SEND("input")}`, ""],
     ["", `const [[input], setForm] = useState<[never]>([null as never]);\n  function edit() { setForm([{ scope, from: prev, to: next } as never]); }${SEND("input")}`, ""],
-  ])("fails on a copy of the categories card with busy removed, onSubmit={send}, %s %s and %s in the form, and not without its from", (top, declared, child) => {
+  ])("fails on a copy of the categories card with keepsOpening removed, onSubmit={send}, %s %s and %s in the form, and not without its from", (top, declared, child) => {
     const copy = (code: string, component: string) =>
-      categoriesCard
-        .replace("busy={busy}", "")
+      categoriesUnheld
         .replace("onSubmit={submit}", "onSubmit={send}")
         .replace("export function CategoriesCard(", `${component}export function CategoriesCard(`)
         .replace("        <Field label=\"Name\"", `        ${child}\n        <Field label="Name"`)
@@ -532,9 +535,9 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   });
 
   // Two components in one file that each declare `save`: each FormModal reads its own component's.
-  it("fails on a copy of the categories card with busy removed and onSubmit={save}, after another component's save with no from", () => {
+  it("fails on a copy of the categories card with keepsOpening removed and onSubmit={save}, after another component's save with no from", () => {
     const other = `function Other() {\n  async function save(e: React.FormEvent) {\n    e.preventDefault();\n    await addCategoryAction({ scope: "wishlist", name: "x" });\n  }\n  return <FormModal isOpen onClose={() => {}} title="x" onSubmit={save}>x</FormModal>;\n}\n\n`;
-    const copy = categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", "onSubmit={save}").replace("export function CategoriesCard(", `${other}export function CategoriesCard(`);
+    const copy = categoriesUnheld.replace("onSubmit={submit}", "onSubmit={save}").replace("export function CategoriesCard(", `${other}export function CategoriesCard(`);
     expect(copy).toContain(`${other}export function CategoriesCard(`);
     expect(fromForms(copy)).toEqual([{ handler: "save", held: false }]);
   });
@@ -552,16 +555,46 @@ describe("a form finds what an edit changed with changedFields [D-047]", () => {
 });
 
 // D-047: FormModal owns each opening's saving state (Save says "Saving..." and the fields wait while the opening's save
-// is out), so a migrated form passes no `busy` of its own. The forms not moved yet are listed in conventions.md (Busy flags).
+// is out), so no form in `app/` passes a `busy` of its own.
 describe("a migrated form leaves its saving state to FormModal [D-047]", () => {
-  const migrated = ["../app/todos/todos-client.tsx", "../app/wishlist/wishlist-client.tsx", "../app/health/food-client.tsx"];
-  const formModals = (text: string) => [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].map(([, props]) => props);
+  // The prop names of each FormModal in `text` (a tag written `FormModal` or a local name for it), read from its syntax tree.
+  const formModals = (text: string) => {
+    const found: string[][] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isJsxOpeningLikeElement(node) && isFormModal(node.tagName)) found.push(node.attributes.properties.map((p) => (ts.isJsxAttribute(p) ? p.name.getText() : "...")));
+      ts.forEachChild(node, visit);
+    };
+    visit(treeOf(text));
+    return found;
+  };
+  const forms = Object.entries(sources).filter(([, text]) => text.includes("<FormModal"));
 
-  it.each(migrated)("%s", (file) => {
-    const props = formModals(sources[file]);
-    expect(props.length).toBeGreaterThan(0);
-    expect(props.length).toBe(sources[file].split("<FormModal").length - 1);
-    expect(props.filter((p) => /\bbusy=/.test(p))).toEqual([]);
+  it("finds the forms of Tasks, Wishlist, Health, Settings, the categories card and Gym", () => {
+    expect(forms.map(([file]) => file)).toEqual(expect.arrayContaining([
+      "../app/components/categories-card.tsx",
+      "../app/gym/custom-exercises.tsx",
+      "../app/gym/day-editor.tsx",
+      "../app/gym/deload-card.tsx",
+      "../app/gym/progress-panel.tsx",
+      "../app/health/food-client.tsx",
+      "../app/health/shopping-tab.tsx",
+      "../app/health/weight-card.tsx",
+      "../app/settings/settings-client.tsx",
+      "../app/todos/todos-client.tsx",
+      "../app/wishlist/wishlist-client.tsx",
+    ]));
+  });
+
+  it("fails on a copy of the categories card that passes busy", () => {
+    const copy = sources["../app/components/categories-card.tsx"].replace(/^(\s*)keepsOpening\n/m, "$1keepsOpening\n$1busy={false}\n");
+    expect(copy).toContain("busy={false}");
+    expect(formModals(copy).flat()).toContain("busy");
+  });
+
+  it.each(forms)("%s", (_file, text) => {
+    const props = formModals(text);
+    expect(props.length).toBe(text.split("<FormModal").length - 1);
+    expect(props.filter((names) => names.includes("busy"))).toEqual([]);
   });
 });
 

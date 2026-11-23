@@ -464,7 +464,7 @@ export function FormActions({
   );
 }
 
-/** One opening of a form, as `FormModal` hands it to its `onSubmit`. */
+/** One opening of a form, as `FormModal` hands it to its `onSubmit` (and its `stillOpen` to children written as a function). */
 export type FormOpening = {
   /** The id an add sends (D-040): made once per opening, so a Save again after a lost answer sends the same one. */
   id: string;
@@ -472,10 +472,17 @@ export type FormOpening = {
   stillOpen: () => boolean;
 };
 
+/** The fields of a form written as a function of its opening; a component, so `stillOpen` is only handed on, never run, as it renders. */
+function OpeningFields({ fields, stillOpen }: { fields: (opening: Pick<FormOpening, "stillOpen">) => ReactNode; stillOpen: () => boolean }) {
+  return fields({ stillOpen });
+}
+
 /**
  * A modal holding a form: the fields (children) in a stack, the error under them, then Cancel and Save. The form owns
  * its openings (D-047): `onSubmit` gets the opening's `id` and `stillOpen`, and while the opening's save is unanswered
- * Save says "Saving..." and the fields are disabled. `canSubmit` is false while a required field is empty.
+ * Save says "Saving..." and the fields are disabled. `canSubmit` is false while a required field is empty. Children
+ * written as a function get the opening's `stillOpen` too, for an action inside the form (the day editor's "Create and
+ * add"): its answer changes only the opening it was sent from.
  */
 export function FormModal({
   isOpen,
@@ -485,8 +492,7 @@ export function FormModal({
   onSubmit,
   error,
   errorId,
-  sendsFrom,
-  busy,
+  keepsOpening,
   canSubmit,
   submitLabel,
   children,
@@ -501,16 +507,16 @@ export function FormModal({
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
   /**
-   * The save sends the values the form opened with as the ones it changes (D-040). Opened again before that save has
-   * answered, the form would show those values again and its Save would be refused as changed on another device, so it
-   * goes on as the same opening: it waits, and the answer closes it or shows its refusal in it (D-043).
+   * Opened again before the save of the opening on screen has answered, the form goes on as that opening: it waits, and
+   * the answer closes it or shows its refusal in it (D-043, D-047). A form passes it when a second save from a fresh
+   * opening would go wrong: its save sends the values it opened with as `from` (D-040), so the second would be refused
+   * as changed on another device; or the fresh opening would show the values from before the first save, so its Save
+   * would undo the first (the day editor, the deload form).
    */
-  sendsFrom?: boolean;
-  /** Deprecated (D-047): only the forms not moved yet onto FormModal's own saving state pass it (conventions.md, Busy flags); never in new code. */
-  busy?: boolean;
+  keepsOpening?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
-  children: ReactNode;
+  children: ReactNode | ((opening: Pick<FormOpening, "stillOpen">) => ReactNode);
 }) {
   // One submit until the handler settles, and the rest of a double tap on Save is swallowed, so it neither submits
   // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too. The lock
@@ -522,7 +528,7 @@ export function FormModal({
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen && !(sendsFrom && savingIn === opening)) setOpening(opening + 1);
+    if (isOpen && !(keepsOpening && savingIn === opening)) setOpening(opening + 1);
   }
   const saving = isOpen && savingIn === opening;
   // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.
@@ -560,7 +566,7 @@ export function FormModal({
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <form onSubmit={submit}>
         <fieldset className="form-stack" disabled={saving}>
-          {children}
+          {typeof children === "function" ? <OpeningFields fields={children} stillOpen={() => shown.current === opening} /> : children}
           {error && <ErrorText id={errorId}>{error}</ErrorText>}
         </fieldset>
         <FormActions
@@ -568,7 +574,7 @@ export function FormModal({
             onCancel?.();
             onClose();
           }}
-          busy={saving || busy}
+          busy={saving}
           canSubmit={canSubmit}
           submitLabel={submitLabel}
         />

@@ -4,7 +4,7 @@ import { Fragment, useRef, useState, type ReactNode } from "react";
 import { addCategoryAction, deleteCategoryAction, renameCategoryAction, reorderCategoriesAction, revertCategoryAction } from "@/actions/categories";
 import type { CategoryScope } from "@/lib/validations/categories";
 import type { Answer } from "@/lib/validations/result";
-import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField } from "./blocks";
+import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField, type FormOpening } from "./blocks";
 import { useDeviceState } from "./device-state";
 import { ChevronRightIcon } from "./icons";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
@@ -72,7 +72,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
   const [from, setFrom] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [busy, setBusy] = useState(false);
   // Folded or open stays as the user left it, across pages and reloads.
   const [isFolded, toggleFolded] = useFolded("categories");
   // A Delete acts once per tap burst (D-043): the rest of a double tap on the tapped Delete is swallowed, so it neither
@@ -159,22 +158,23 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
     return back;
   }
 
-  function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
-    return save();
+    return save(stillOpen);
   }
 
-  async function save() {
+  async function save(stillOpen: () => boolean) {
     const to = name.trim().toLowerCase();
     if (!to) return;
     if (to === from) return setOpen(false);
     if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}"`);
     setErrorMsg("");
-    setBusy(true);
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       if (from === null) {
         const added = await api.add(to);
-        if (!added.success) return setErrorMsg(added.error);
+        if (!added.success) return refused(added.error);
         onChange((prev) => [...prev, to]);
         showToast({
           message: `Added "${to}"`,
@@ -200,7 +200,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
         });
       } else {
         const res = await api.rename(from, to);
-        if (!res.success) return setErrorMsg(res.error);
+        if (!res.success) return refused(res.error);
         const change = res.change;
         const at = categories.indexOf(from);
         onRefile(from, to);
@@ -214,11 +214,9 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
           onUndo: undoWith(showToast, () => revert(from, to, change, !change.merged, at), undoFailed),
         });
       }
-      setOpen(false);
+      if (stillOpen()) setOpen(false);
     } catch {
-      setErrorMsg(`Failed to save ${noun}`);
-    } finally {
-      setBusy(false);
+      refused(`Failed to save ${noun}`);
     }
   }
 
@@ -295,10 +293,10 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
         title={from ? `Edit ${noun}` : `New ${noun}`}
         onSubmit={submit}
         error={errorMsg}
-        busy={busy}
+        keepsOpening
         canSubmit={!!name.trim()}
       >
-        <Field label="Name" type="text" disabled={busy} value={name} onChange={(e) => setName(e.target.value)} required />
+        <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
         {from && <p className="muted move-hint">Its items move along. An existing name merges the two.</p>}
       </FormModal>
     </>
@@ -395,17 +393,14 @@ export function CategoryField({
   categories,
   value,
   onChange,
-  disabled,
 }: {
   categories: string[];
   value: string;
   onChange: (category: string) => void;
-  disabled?: boolean;
 }) {
   return (
     <SelectField
       label="Category"
-      disabled={disabled}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       options={[...new Set([...categories, value, "other"])].map((c) => ({ value: c, label: categoryLabel(c) }))}

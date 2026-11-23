@@ -440,6 +440,264 @@ test("a double tap on the day editor's Save saves once", async ({ signedInPage: 
   await expect(page.getByText(`Saved "${name}"`)).toBeVisible();
 });
 
+// FormModal owns each opening (D-047): a Gym form's save lost after its Cancel says so in a toast, not in the form opened
+// next, which is its own opening: its Save is free and the late answer leaves what is typed in it. Before, the Gym page's
+// saving flag (or the form's own) kept the form, or the button that opens it, waiting for the first save. A form that
+// keeps its opening while its save is out (`keepsOpening`: the day editor, the deload form) would wait for that save if
+// opened again before the answer, so it is opened again after it.
+async function lostAfterCancel(
+  page: Page,
+  o: { open: () => Promise<Locator>; type: (form: Locator, n: 1 | 2) => Promise<void>; held: string; failed: string; keepsOpening?: boolean },
+) {
+  const release = await holdWrites(page, o.held);
+  let form = await o.open();
+  await o.type(form, 1);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  const lose = async () => {
+    await release(true);
+    await expect(toast(page, o.failed)).toBeVisible();
+  };
+  if (o.keepsOpening) await lose();
+  form = await o.open();
+  await o.type(form, 2);
+  if (!o.keepsOpening) await lose();
+  await expect(form).toBeVisible();
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(form).toBeHidden();
+}
+
+test("a day save lost after Cancel shows as a toast, and the editor opened again saves its own edits [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const name = (n: number) => `Upper ${n} ${randomUUID().slice(0, 8)}`;
+  const names = [name(1), name(2)];
+  await lostAfterCancel(page, {
+    open: () => openEditor(page),
+    type: async (editor, n) => {
+      const field = editor.getByLabel("Name", { exact: true });
+      await field.fill(names[n - 1]);
+      if (n === 2) await expect(field).toHaveValue(names[1]);
+    },
+    held: `"name":"${names[0]}"`,
+    failed: "Failed to save day",
+    keepsOpening: true,
+  });
+  await expect(page.getByText(`Saved "${names[1]}"`)).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit ${names[1]}` })).toBeVisible();
+});
+
+test("a deload weeks save lost after Cancel shows as a toast, and the form opened again saves its own choice [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await page.getByRole("button", { name: "Edit deload weeks" }).click();
+      const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+    type: async (dialog, n) => {
+      const select = dialog.getByLabel(n === 1 ? "Last deload" : "Next deload");
+      const thisWeek = await select.getByRole("option", { name: /\(this week\)$/ }).textContent();
+      await select.selectOption({ label: thisWeek! });
+    },
+    held: `"last":"`,
+    failed: "Failed to save deload weeks",
+    keepsOpening: true,
+  });
+  await expect(page.getByText("Saved deload weeks")).toBeVisible();
+});
+
+// The day editor and the deload form keep their opening while its save is out (D-047, `keepsOpening`): opened again
+// before the answer, the form waits as the same opening (Save says "Saving...", the fields are disabled) and the answer
+// closes it. A form opened afresh would show the day or the weeks as they were, and its Save would undo the first one.
+test("the day editor opened again while its save is out waits for it, and the save's change stays [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const userId = await signedInUserId(page);
+  const sets = async () =>
+    (
+      await asOwner((admin) =>
+        admin.query(
+          `SELECT r.target_sets FROM workout_split_day_exercises r JOIN workout_split_days d ON d.id = r.split_day_id
+           JOIN exercises e ON e.id = r.exercise_id WHERE d.user_id = $1 AND d.name = $2 AND e.name = $3`,
+          [userId, DAY, EXERCISE],
+        ),
+      )
+    ).rows.map((r) => r.target_sets);
+  expect(await sets()).toEqual([2]);
+  const writes = countWrites(page, `"name":"${DAY}"`);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toBeDisabled();
+  await release();
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  expect(await sets()).toEqual([5]);
+  expect(writes).toHaveLength(1);
+
+  // Opened after the answer and its refresh, it is a new opening with the saved day.
+  await refreshesDone(page);
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+test("the deload form opened again while its save is out waits for it, and the save's week stays [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const userId = await signedInUserId(page);
+  const weeks = async () =>
+    (await asOwner((admin) => admin.query("SELECT week_start::text AS week FROM deload_weeks WHERE user_id = $1", [userId]))).rows.map((r) => r.week);
+  const thisWeek = weekStart(toISODate());
+  expect(await weeks()).toEqual([]);
+  const writes = countWrites(page, `"last":`);
+  const release = await holdWrites(page, `"last":"${thisWeek}"`);
+  const edit = page.getByRole("button", { name: "Edit deload weeks" });
+  const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+  await edit.click();
+  await dialog.getByLabel("Last deload").selectOption(thisWeek);
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+
+  await edit.click();
+  await expect(dialog.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(dialog.getByLabel("Last deload")).toBeDisabled();
+  await release();
+  await expect(dialog).toBeHidden();
+  await expect(toast(page, "Saved deload weeks")).toBeVisible();
+  expect(await weeks()).toEqual([thisWeek]);
+  expect(writes).toHaveLength(1);
+
+  // Opened after the answer and its refresh, it is a new opening with the saved week.
+  await refreshesDone(page);
+  await edit.click();
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+test("a custom exercise save lost after Cancel shows as a toast, and the form opened again saves its own name [D-047]", async ({ signedInPage: page }) => {
+  const names = [exerciseName(), exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [names[0]]);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
+      const form = page.getByRole("dialog", { name: "Edit exercise" });
+      await expect(form).toBeVisible();
+      return form;
+    },
+    type: async (form, n) => {
+      const field = form.getByLabel("Name", { exact: true });
+      await field.fill(names[n]);
+      if (n === 2) await expect(field).toHaveValue(names[2]);
+    },
+    held: `"name":"${names[1]}"`,
+    failed: "Failed to save exercise",
+  });
+  await expect(mine(page).getByText(names[2], { exact: true })).toBeVisible();
+  await expect(mine(page).getByText(names[1], { exact: true })).toHaveCount(0);
+});
+
+// An answer belongs to its opening (D-047): the first opening's save, answered with success after its Cancel while the
+// form is open again, neither closes that form nor clears what is typed in it, and its toast still shows.
+test("a custom exercise save answered after Cancel leaves the form opened again as it is, and still shows its toast [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const names = [exerciseName(), exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [names[0]]);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  const release = await holdWrites(page, `"name":"${names[1]}"`);
+  await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
+  await field.fill(names[1]);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
+  await field.fill(names[2]);
+  await andSettle(page, () => release(), `"name":"${names[1]}"`);
+  await expect(toast(page, `Saved "${names[1]}"`)).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(field).toHaveValue(names[2]);
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
+// "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
+// Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
+// in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a
+// lost answer says so in a toast. `name` is held from the first opening.
+async function createHeldThenReopen(page: Page, name: string) {
+  const release = await holdWrites(page, `"name":"${name}"`);
+  let editor = await openEditor(page);
+  await editor.getByRole("button", { name: "New exercise" }).click();
+  await editor.getByLabel("New exercise").fill(name);
+  await editor.getByRole("button", { name: "Create and add" }).click();
+  await expect(editor.getByRole("button", { name: "Save" })).toBeDisabled();
+  // The editor's Cancel, after the new exercise's own.
+  await editor.getByRole("button", { name: "Cancel" }).last().click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(7);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  return { editor, release };
+}
+
+test("a Create and add answered after the day editor's Cancel leaves the editor opened again as it is, and its Undo deletes the exercise [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await openGym(page);
+  const [name, other] = [exerciseName(), exerciseName()];
+  const { editor, release } = await createHeldThenReopen(page, name);
+  // A new exercise made in the new opening goes out after the held one (server actions go one at a time) and into it.
+  await editor.getByRole("button", { name: "New exercise" }).click();
+  await editor.getByLabel("New exercise").fill(other);
+  await editor.getByRole("button", { name: "Create and add" }).click();
+  await andSettle(page, () => release(), `"name":"${other}"`);
+  await expect(toast(page, `Created "${name}"`)).toBeVisible();
+  await expect(toast(page, `Created "${other}"`)).toBeVisible();
+  await expect(editor.getByText(`8. ${other}`)).toBeVisible();
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(8);
+  await expect(editor.getByRole("button", { name: `Remove ${name}` })).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+
+  await andSettle(page, () => undoIn(page, `Created "${name}"`).click());
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(8);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) =>
+    admin.query("SELECT name FROM exercises WHERE user_id = $1 AND name = ANY($2)", [userId, [name, other]]),
+  );
+  expect(rows.map((r: { name: string }) => r.name)).toEqual([other]);
+});
+
+test("a Create and add lost after the day editor's Cancel shows as a toast, not in the editor opened again [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const { editor, release } = await createHeldThenReopen(page, exerciseName());
+  await release(true);
+  await expect(toast(page, "Failed to add exercise")).toBeVisible();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(7);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
 test("saving this week as a deload week turns the deload switch on without a reload, so the workout started is a deload one", async ({
   signedInPage: page,
 }) => {
@@ -1740,6 +1998,28 @@ test("a signed-in user sets the weight of 1 plate, and the chart turns to kg, wi
   await openGym(page);
   await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
   await expect(card.getByText("70", { exact: true })).toBeVisible();
+});
+
+test("a plate weight save lost after Cancel shows as a toast, and the form opened again saves its own weight [D-047]", async ({ signedInPage: page }) => {
+  await pastWorkouts(page, [{ date: addDays(toISODate(), -7), exercise: ROW, loadType: "plates", load: 7 }]);
+  const card = progress(page);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await card.getByRole("button", { name: `Edit 1 plate of ${ROW} in kg` }).click();
+      const dialog = page.getByRole("dialog", { name: "Plate weight" });
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+    type: async (dialog, n) => {
+      const field = dialog.getByLabel(`1 plate of ${ROW} (kg)`);
+      await field.fill(n === 1 ? "12" : "15");
+      if (n === 2) await expect(field).toHaveValue("15");
+    },
+    held: `"kg":12`,
+    failed: "Failed to save the plate weight",
+  });
+  await expect(toast(page, `1 plate of ${ROW} = 15 kg`)).toBeVisible();
+  await expect(card.getByText("1 plate = 15 kg")).toBeVisible();
 });
 
 // Each value the server refuses keeps Save off and says why at once, in the server's words, on a phone's touch screen;

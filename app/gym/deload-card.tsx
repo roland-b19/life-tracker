@@ -3,7 +3,7 @@
 import { addDays, formatDMY, weekStart } from "@/lib/format-date";
 import { DELOAD_ORDER } from "@/lib/validations/gym";
 import { useState } from "react";
-import { Card, FormModal, SelectField, Toggle } from "../components/blocks";
+import { Card, FormModal, SelectField, Toggle, type FormOpening } from "../components/blocks";
 import { EditButton } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import type { DeloadInfo } from "./types";
@@ -31,21 +31,19 @@ export function DeloadCard({
   isDeloadMode,
   onDeloadMode,
   busy,
-  setBusy,
 }: {
   today: string; // the server's day
   deload: DeloadInfo;
   isDeloadMode: boolean;
   onDeloadMode: (on: boolean) => void;
-  busy: boolean;
-  setBusy: (busy: boolean) => void;
+  busy: boolean; // the Gym page's saving flag: the switch and Edit wait for the workout write
 }) {
   const { showToast } = useToast();
   // Last and next deload week being edited (Sundays, "" for none), null while the dialog is closed.
   const [draft, setDraft] = useState<{ last: string; next: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     if (!draft) return;
     const problem = deloadProblem(draft.last, draft.next);
@@ -53,15 +51,13 @@ export function DeloadCard({
       setErrorMsg(problem);
       return;
     }
-    setBusy(true);
     setErrorMsg("");
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null });
-      if (!res.success) {
-        setErrorMsg(res.error);
-        return;
-      }
-      setDraft(null);
+      if (!res.success) return refused(res.error);
+      if (stillOpen()) setDraft(null);
       const { last, added, removed } = res;
       showToast({
         // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.
@@ -76,9 +72,7 @@ export function DeloadCard({
         ),
       });
     } catch {
-      setErrorMsg("Failed to save deload weeks");
-    } finally {
-      setBusy(false);
+      refused("Failed to save deload weeks");
     }
   }
 
@@ -109,18 +103,18 @@ export function DeloadCard({
       >
         <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
       </Card>
-      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} busy={busy}>
+      {/* Opened again while its save is out, it waits for that save: a fresh opening would show the weeks from before it,
+          and its Save would undo it (D-047). */}
+      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} keepsOpening>
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
         <SelectField
           label="Last deload"
-          disabled={busy}
           value={draft?.last ?? ""}
           options={deloadOptions(today, -1, draft?.last ?? "", "Not set")}
           onChange={(e) => setDraft((d) => d && { ...d, last: e.target.value })}
         />
         <SelectField
           label="Next deload"
-          disabled={busy}
           value={draft?.next ?? ""}
           options={deloadOptions(today, 1, draft?.next ?? "", "Not chosen")}
           onChange={(e) => setDraft((d) => d && { ...d, next: e.target.value })}
