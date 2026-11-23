@@ -7,6 +7,7 @@ import {
   devUserName,
   expectNoSeriousViolations,
   installStoppedClock,
+  newDevice,
   signInThroughForm,
   test,
   theme,
@@ -85,11 +86,7 @@ test("a touch that starts within 20px of the left or right edge is cancelled, on
 
 test("a tap on the outer pixels of a control at the edge still works; the edge background stays cancelled (SWIPE)", async ({ signedInPage, browser }) => {
   // A touch screen of its own, signed in as the fixture's user.
-  const context = await browser.newContext({
-    storageState: await signedInPage.context().storageState(),
-    hasTouch: true,
-    viewport: PHONE,
-  });
+  const context = await newDevice(browser, signedInPage, { hasTouch: true, viewport: PHONE });
   const page = await context.newPage();
   try {
     await page.goto(new URL("/todos", signedInPage.url()).href);

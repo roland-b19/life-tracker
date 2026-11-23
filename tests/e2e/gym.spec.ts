@@ -19,6 +19,7 @@ import {
   loseAnswerOnce,
   installStoppedClock,
   isRefresh,
+  newDevice,
   pauseClock,
   refreshesDone,
   settled,
@@ -73,9 +74,7 @@ const banner = (page: Page) => page.getByRole("region", { name: "Workout in prog
 // refreshed yet does.
 // Close it with `other.context().close()`.
 async function otherDevice(browser: Browser, page: Page) {
-  const device = await browser.newContext();
-  await device.addCookies(await page.context().cookies());
-  const other = await device.newPage();
+  const other = await (await newDevice(browser, page)).newPage();
   await installStoppedClock(other);
   await openGym(other);
   return other;
@@ -1737,7 +1736,7 @@ test("the plate weight form says why a value is refused, drops a stale refusal, 
     admin.query("INSERT INTO exercise_plate_weights (user_id, exercise_id, kg) SELECT $1, id, 10 FROM exercises WHERE user_id IS NULL AND name = $2", [userId, ROW]),
   );
   // A touch screen of its own at phone width, signed in as the fixture's user.
-  const context = await browser.newContext({ storageState: await signedInPage.context().storageState(), hasTouch: true, viewport: { width: 375, height: 812 } });
+  const context = await newDevice(browser, signedInPage, { hasTouch: true, viewport: { width: 375, height: 812 } });
   const page = await context.newPage();
   try {
     await page.goto(new URL("/gym", signedInPage.url()).href);

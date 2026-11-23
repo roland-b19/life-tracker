@@ -140,3 +140,11 @@ it.each([
 it("empties the test database only in resetDb (tests/db.ts) [D-047]", () => {
   expect(Object.entries(tests).filter(([, text]) => /\bTRUNCAT[E]\b/.test(text)).map(([file]) => file)).toEqual(["./db.ts"]);
 });
+
+// One way to open a second device of the signed-in user in the browser specs: newDevice (tests/e2e/helpers.ts), a fresh
+// context with the page's cookies only. The bracket keeps this line out.
+it("opens another browser context in the e2e specs only through newDevice (tests/e2e/helpers.ts)", () => {
+  const specs = Object.entries(tests).filter(([file]) => file.startsWith("./e2e/"));
+  expect(specs.length).toBeGreaterThan(5);
+  expect(specs.filter(([, text]) => /\bbrowser\.newContex[t]\(/.test(text)).map(([file]) => file)).toEqual(["./e2e/helpers.ts"]);
+});

@@ -12,6 +12,7 @@ import {
   holdWrites,
   itemName,
   loseAnswerOnce,
+  newDevice,
   pauseClock,
   refreshesDone,
   settled,
@@ -590,9 +591,8 @@ test("Undo of a weight edit another device changed since is refused and keeps th
     await andSettle(p, () => form.getByRole("button", { name: "Save" }).click());
     await expect(form).toBeHidden();
   };
-  const device = await browser.newContext();
+  const device = await newDevice(browser, page);
   try {
-    await device.addCookies(await page.context().cookies());
     const other = await device.newPage();
     await openHealth(page, "Today");
     await openHealth(other, "Today");
@@ -696,9 +696,8 @@ test("Undo of a weigh-in add refused when signed out keeps the weigh-in on scree
 async function mergeAwayElsewhere(page: Page, browser: Browser, name: string) {
   await addShoppingItem(page, name, 1);
   await refreshesDone(page); // a refresh that lands after the merge would show the merged row, and the page would not be stale
-  const context = await browser.newContext();
+  const context = await newDevice(browser, page);
   try {
-    await context.addCookies(await page.context().cookies());
     const other = await context.newPage();
     await openHealth(other, "Shopping");
     await other.getByRole("button", { name: "Add item" }).click();
@@ -967,9 +966,8 @@ test("the open tab is kept on this device after a reload, and not on another dev
   await expect(page).toHaveURL(/\/health$/);
 
   // Another browser with the same session opens on Today.
-  const context = await browser.newContext();
+  const context = await newDevice(browser, page);
   try {
-    await context.addCookies(await page.context().cookies());
     const other = await context.newPage();
     await other.goto("/health");
     await expect(other.getByRole("button", { name: "Add meal" })).toBeVisible();
@@ -1032,9 +1030,8 @@ test("two tabs editing different goals, or steps and its goal, both keep their c
 // why and then the current value, and the database keeps the first device's change.
 test("a stale device's water tap, steps or goal save is refused and then shows the current value [D-040]", async ({ signedInPage: page, browser }) => {
   const CHANGED = "This changed on another device. Check the new value and try again.";
-  const device = await browser.newContext();
+  const device = await newDevice(browser, page);
   try {
-    await device.addCookies(await page.context().cookies());
     const other = await device.newPage();
     await openHealth(page, "Today");
     await openHealth(other, "Today");
