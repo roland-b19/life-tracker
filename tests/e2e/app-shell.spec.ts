@@ -55,10 +55,23 @@ async function backOnline(page: Page, setOnline: (online: boolean) => Promise<un
   await page.clock.resume();
 }
 
+/** Waits until the page has heard it is online again, so a stopped clock can then run the timer its handler set. */
+const heardOnline = (page: Page) => expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+
 /** The server checks the page sends before a refresh it missed while offline. */
 function countChecks(page: Page) {
   const seen: Request[] = [];
   page.on("request", (r) => new URL(r.url()).pathname === "/api/health" && seen.push(r));
+  return seen;
+}
+
+/**
+ * The server checks that failed. A check's failure reaches the page a moment after Playwright sees the request: a test
+ * that runs the clock to the check's next try first waits for this count, then for a request of the page's own.
+ */
+function countFailedChecks(page: Page) {
+  const seen: Request[] = [];
+  page.on("requestfailed", (r) => new URL(r.url()).pathname === "/api/health" && seen.push(r));
   return seen;
 }
 
@@ -199,19 +212,23 @@ test("back online, a refresh waits until the server answers, so an open form kee
   await settled(page);
   // The device says it is online, but the server is not reachable yet: a refresh sent now would fail, and Next would
   // turn it into a full page load
+  const failed = countFailedChecks(page);
   await page.route("**/*", (route) => route.abort("internetdisconnected"));
+  await pauseClock(page);
   await setOnline(true);
+  await heardOnline(page);
   await page.clock.runFor(2000);
+  await expect.poll(() => failed.length).toBe(1);
   await settled(page);
   expect(checks).toHaveLength(1);
   expect(refreshes).toHaveLength(0);
   expect(await isKept(page)).toBe(true);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
-  // The next trigger, with the server answering, refreshes once
+  // The check runs again 3 s after it failed (D-047); the server answers now, so the page refreshes once
   await page.unroute("**/*");
-  await setOnline(false);
-  await settled(page);
-  await backOnline(page, setOnline);
+  await page.clock.runFor(3000);
+  await expect.poll(() => checks.length).toBe(2);
+  await page.clock.resume();
   await expect.poll(() => refreshes.length).toBe(1);
   await page.clock.runFor(2000);
   await settled(page);
@@ -219,6 +236,45 @@ test("back online, a refresh waits until the server answers, so an open form kee
   expect(refreshes).toHaveLength(1);
   expect(await isKept(page)).toBe(true);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name);
+});
+
+test("a server check that keeps failing tries again 3 times, 3 s apart, and a new online starts over", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openWishlist(page);
+  const refreshes = countRefreshes(page);
+  const checks = countChecks(page);
+  const failed = countFailedChecks(page);
+  const setOnline = await network(page);
+  await setOnline(false);
+  await page.clock.runFor(61_000);
+  await settled(page);
+  await page.route("**/*", (route) => route.abort("internetdisconnected"));
+  await pauseClock(page);
+  // Each try fails; the next one comes 3 s later (D-047). The clock stays before the next 60 s refresh of an open page.
+  const tries = async (from: number, to: number) => {
+    for (let n = from; n <= to; n++) {
+      if (n > from) await page.clock.runFor(3000);
+      else await page.clock.runFor(1);
+      await expect.poll(() => checks.length).toBe(n);
+      await expect.poll(() => failed.length).toBe(n);
+      await settled(page);
+    }
+  };
+  await setOnline(true);
+  await heardOnline(page);
+  await tries(1, 4);
+  // After 3 tries the next focus, minute or "online" checks again
+  await page.clock.runFor(10_000);
+  await settled(page);
+  expect(checks).toHaveLength(4);
+  await setOnline(false);
+  await setOnline(true);
+  await heardOnline(page);
+  await tries(5, 8);
+  await page.clock.runFor(10_000);
+  await settled(page);
+  expect(checks).toHaveLength(8);
+  expect(refreshes).toHaveLength(0);
 });
 
 test("coming back online with no refresh due refreshes nothing", async ({ signedInPage: page }) => {
