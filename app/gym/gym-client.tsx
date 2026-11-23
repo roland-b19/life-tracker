@@ -108,7 +108,7 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
             resume={open?.resume}
             exercises={exercises}
             onClose={() => setEditing(null)}
-            onReopen={(resume) => setEditing({ day: days.find((d) => d.id === day.id) ?? day, resume })}
+            onReopen={(resume) => setEditing({ day, resume })}
           />
         );
       })}
