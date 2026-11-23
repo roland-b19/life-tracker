@@ -11,6 +11,7 @@ import {
   holdWrites,
   isRefresh,
   itemName,
+  newDevice,
   openWishlist,
   pauseClock,
   recordStates,
@@ -96,8 +97,7 @@ test("a save in one tab refreshes another tab of the same browser within 2 s [SY
 });
 
 test("another browser refreshes when it gets the focus back [SYNC]", async ({ signedInPage: page, browser }) => {
-  const context = await browser.newContext();
-  await context.addCookies(await page.context().cookies());
+  const context = await newDevice(browser, page);
   const other = await context.newPage();
   try {
     await other.clock.install();

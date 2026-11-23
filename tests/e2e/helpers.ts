@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Locator, type Page, type Request } from "@playwright/test";
+import { expect, test as base, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
 // After a server action answers HTTP 2xx the app refreshes the router 600 ms after the last answer, and it also
@@ -418,6 +418,17 @@ export async function devUserCount(...names: string[]) {
 export async function signedInUserId(page: Page) {
   const { user } = await (await page.request.get("/api/auth/session")).json();
   return user.id as string;
+}
+
+/**
+ * Another device of the page's user: a browser context of its own (with `options`, such as a phone's viewport and touch)
+ * holding only the page's cookies, so it shares the session but none of the page's localStorage. Close it with
+ * `close()` on the returned context.
+ */
+export async function newDevice(browser: Browser, page: Page, options?: BrowserContextOptions) {
+  const device = await browser.newContext(options);
+  await device.addCookies(await page.context().cookies());
+  return device;
 }
 
 /**
