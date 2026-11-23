@@ -124,6 +124,55 @@ describe("field messages end with no full stop", () => {
   });
 });
 
+// D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
+// second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
+// for a form that passes `sendsFrom` (D-047), or for one still on the deprecated `busy` bridge (conventions.md, Busy flags).
+describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
+  // The body of the function or arrow `name` declared in `text`, from its first `{` to the matching `}`.
+  const bodyOf = (text: string, name: string) => {
+    const start = text.search(new RegExp(`(function ${name}\\b|const ${name} = )`));
+    if (start < 0) return "";
+    const open = text.indexOf("{", text.indexOf(")", start));
+    let depth = 0;
+    for (let i = open; i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}" && --depth === 0) return text.slice(open, i + 1);
+    }
+    return "";
+  };
+  // `{ from: x, to: y }` or a call such as `rename(from, to)`: the old value next to the new one.
+  const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
+  // Each FormModal in `text` whose onSubmit handler (named, or called by an inline arrow, or a function of this file it
+  // calls) sends a `from`, and whether it holds Save.
+  const fromForms = (text: string) =>
+    [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].flatMap(([, props]) => {
+      const handler = /onSubmit=\{(?:\([^)]*\)\s*=>\s*)?(\w+)/.exec(props)?.[1];
+      if (!handler) return [{ handler: props, held: false }];
+      const body = bodyOf(text, handler);
+      const called = [...body.matchAll(/\b(\w+)\(/g)].map(([, name]) => bodyOf(text, name));
+      return [body, ...called].some(sendsFrom) ? [{ handler, held: /\bsendsFrom\b|\bbusy=\{/.test(props) }] : [];
+    });
+  const categoriesCard = sources["../app/components/categories-card.tsx"];
+
+  it("finds the known ones: Health water/steps and goals, and the categories card", () => {
+    expect(fromForms(foodClient).map(({ handler }) => handler)).toEqual(["handleMetricSubmit", "handleGoalsSubmit"]);
+    expect(fromForms(categoriesCard).map(({ handler }) => handler)).toEqual(["submit"]);
+  });
+
+  it("fails on a copy of the Health form with sendsFrom removed, and of the categories card with busy removed", () => {
+    const withoutSendsFrom = foodClient.replace(/^\s*sendsFrom\n/m, "");
+    expect(withoutSendsFrom).not.toBe(foodClient);
+    expect(fromForms(withoutSendsFrom)).toContainEqual({ handler: "handleMetricSubmit", held: false });
+    const withoutBusy = categoriesCard.replace("busy={busy}", "");
+    expect(withoutBusy).not.toBe(categoriesCard);
+    expect(fromForms(withoutBusy)).toContainEqual({ handler: "submit", held: false });
+  });
+
+  it.each(Object.entries(sources))("%s", (_file, text) => {
+    expect(fromForms(text).filter(({ held }) => !held)).toEqual([]);
+  });
+});
+
 // D-047: FormModal owns each opening's saving state (Save says "Saving..." and the fields wait while the opening's save
 // is out), so a migrated form passes no `busy` of its own. The forms not moved yet are listed in conventions.md (Busy flags).
 describe("a migrated form leaves its saving state to FormModal [D-047]", () => {
