@@ -181,20 +181,44 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   expect(await theme(page)).toBe("auto");
   expect(await pageColor(page)).toBe(light);
 
-  // A change of mode fades the colors (data-theme-fade, set as the click is handled), but not with reduced motion.
-  const pickFades = (choice: string) =>
+  // A change of mode fades the colors (data-theme-fade, set right before the new data-theme), but not with reduced motion.
+  const pickFades = (choice: "Dark" | "Light") =>
     appearance(page)
       .getByRole("tab", { name: choice, exact: true })
-      .evaluate((tab: HTMLElement) => {
-        tab.click();
-        return "themeFade" in document.documentElement.dataset;
-      });
+      .evaluate(
+        (tab: HTMLElement, mode) =>
+          new Promise<boolean>((resolve) => {
+            const root = document.documentElement;
+            new MutationObserver((_, observer) => {
+              if (root.dataset.theme !== mode) return;
+              observer.disconnect();
+              resolve("themeFade" in root.dataset);
+            }).observe(root, { attributeFilter: ["data-theme"] });
+            tab.click();
+          }),
+        choice.toLowerCase(),
+      );
   expect(await pickFades("Dark")).toBe(true);
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-fade");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await pickFades("Light")).toBe(false);
 
   expect(reactWarnings).toEqual([]);
+});
+
+test("a theme kept before D-047 (a raw light or dark) still applies and is kept as JSON from then on; an unreadable one is Auto", async ({ signedInPage: page }) => {
+  const stored = () => page.evaluate(() => localStorage.getItem("lt-theme"));
+  await openSettings(page);
+  await page.evaluate(() => localStorage.setItem("lt-theme", "light"));
+  await openSettings(page);
+  expect(await theme(page)).toBe("light");
+  await expect(appearance(page).getByRole("tab", { name: "Light", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await stored()).toBe(JSON.stringify("light"));
+
+  await page.evaluate(() => localStorage.setItem("lt-theme", "{not json"));
+  await openSettings(page);
+  expect(await theme(page)).toBe("auto");
+  await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
 });
 
 test("a signed-out visit to /settings comes back to /settings after sign-in, and the connect date is the app's day [PATH, MORE-02]", async ({ page }) => {

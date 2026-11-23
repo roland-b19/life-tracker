@@ -17,6 +17,7 @@ import {
 // unless CI=1, so to run this file alone without Postgres use the command in conventions.md (Gotchas, Postgres for tests).
 const sources = import.meta.glob("../app/**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const foodClient = sources["../app/health/food-client.tsx"];
+const code = import.meta.glob("../app/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 
 it("finds the sources", () => {
   expect(Object.keys(sources).length).toBeGreaterThan(30);
@@ -28,6 +29,18 @@ describe("every form's error state starts as an empty string [D-009]", () => {
   it.each(Object.entries(sources))("%s", (_file, text) => {
     const states = [...text.matchAll(/\[errorMsg, setErrorMsg\] = useState(<[^>]*>)?\(([^)]*)\)/g)];
     expect(states.filter(([, typed, initial]) => typed || ["", "null", "undefined"].includes(initial.trim())).map(([line]) => line)).toEqual([]);
+  });
+});
+
+// conventions.md, View controls per device (D-041, D-047): what the device keeps goes through `useDeviceState`; only the
+// theme's head script, which runs before React, reads the same storage itself.
+describe("only useDeviceState and the theme's head script touch localStorage [D-047]", () => {
+  const allowed = ["../app/components/device-state.ts", "../app/components/theme.ts"];
+  it("finds both", () => {
+    expect(Object.keys(code)).toEqual(expect.arrayContaining(allowed));
+  });
+  it.each(Object.entries(code).filter(([file]) => !allowed.includes(file)))("%s", (_file, text) => {
+    expect(text).not.toContain("localStorage");
   });
 });
 

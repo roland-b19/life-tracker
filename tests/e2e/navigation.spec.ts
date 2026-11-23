@@ -388,12 +388,14 @@ test("a signed-in 404 keeps the navigation; a signed-out one is a card of its ow
   }
 });
 
-test("a theme picked in Settings applies in the other open tabs of the same browser (MORE-06)", async ({ signedInPage: page }) => {
+test("a theme picked in Settings applies in the other open tabs of the same browser, with no reload (MORE-06, D-047)", async ({ signedInPage: page }) => {
   const tasks = await page.context().newPage();
   const settings = await page.context().newPage();
   await tasks.goto("/todos");
   await settings.goto("/settings");
   await page.goto("/settings");
+  // A page load would drop these marks
+  for (const other of [tasks, settings]) await other.evaluate(() => ((window as unknown as { kept: boolean }).kept = true));
 
   await appearance(page).getByRole("tab", { name: "Dark", exact: true }).click();
   await expect.poll(() => theme(tasks)).toBe("dark");
@@ -403,6 +405,7 @@ test("a theme picked in Settings applies in the other open tabs of the same brow
   await appearance(page).getByRole("tab", { name: "Auto", exact: true }).click();
   await expect.poll(() => theme(tasks)).toBe("auto");
   await expect(appearance(settings).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
+  for (const other of [tasks, settings]) expect(await other.evaluate(() => (window as unknown as { kept?: boolean }).kept)).toBe(true);
   await tasks.close();
   await settings.close();
 });
