@@ -337,7 +337,8 @@ for (const size of [
 }
 
 // The double-tap lock is per row (D-043): a tap on another row's Delete while a delete is still unanswered deletes that
-// row too. Next sends it once the first one answers, so the first delete's answer is held until both taps are in.
+// row too. Next sends it once the first one answers, so the first delete's answer is held until both taps are in. The
+// release waits for the second delete's answer, which comes after the first's: a reload while it is on its way aborts it.
 test("the categories card deletes another row while a delete is unanswered", async ({ signedInPage: page }) => {
   const [a, b] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
   await wishlist.open(page);
@@ -355,7 +356,7 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await page.keyboard.press("Shift");
   await page.getByRole("button", { name: `Delete category ${b}`, exact: true }).click();
   await expect(card(page).getByText(b, { exact: true })).toBeHidden();
-  await andSettle(page, async () => release(), `"name":"${a}"`);
+  await andSettle(page, async () => release(), `"name":"${b}"`);
   await expect(page.getByText(`Removed "${a}"; its items are in Other`, { exact: true })).toBeVisible();
   await expect(page.getByText(`Removed "${b}"; its items are in Other`, { exact: true })).toBeVisible();
   expect(deleted()).toEqual([a, b]);
