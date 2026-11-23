@@ -71,20 +71,24 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     }
   }
 
-  async function remove(e: CustomExercise) {
+  // The row leaves and the toast shows at once (D-047); a refused delete, or one with no answer, puts the row back, takes
+  // the toast away and says why.
+  function remove(e: CustomExercise) {
     setGone((g) => [...g, e.id]);
-    const res = await deleteCustomExerciseAction(e.id).catch(() => null);
-    if (!res?.success) {
+    const saved = deleteCustomExerciseAction(e.id).catch(() => null);
+    void saved.then((res) => {
+      if (res?.success) return;
       setGone((g) => g.filter((id) => id !== e.id));
       showToast({ message: res ? res.error : `Failed to delete "${e.name}"`, type: "warning" });
-      return;
-    }
+    });
     showToast({
       message: `Removed "${e.name}"`,
       touches: touches(e.id),
+      saved,
       onUndo: undoWith(
         showToast,
         async () => {
+          if (!(await saved)?.success) return true; // the delete never happened; the failure above said why
           const back = await restoreCustomExerciseAction(e).catch(() => null);
           if (back?.success) setGone((g) => g.filter((id) => id !== e.id));
           return back;
@@ -92,6 +96,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         (back) => (back && !back.success ? back.error : "Failed to restore exercise"),
       ),
     });
+    return saved;
   }
 
   return (

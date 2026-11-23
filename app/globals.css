@@ -2436,7 +2436,7 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
 }
 
 
-/* A long list's More button sits centred under its last row (useMore) */
+/* A long list's More button sits centred under its last row (useMoreDialog) */
 /* Measured from the last row's highlight band: one card padding above (the list gap is 0.25rem) and one below
    (0.5rem cancels the clip box's -0.5rem), the same inset the text keeps from the card edge. */
 .more-btn {

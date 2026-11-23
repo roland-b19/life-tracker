@@ -154,17 +154,29 @@ export function useWorkout({
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
   const clock = useClock((activeSession ?? paused)?.timer);
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
-  // next save changes from, so the device is not refused again; the field keeps what was typed.
-  const notesStale = useRef(false);
+  // next save changes from, so the device is not refused again. The field shows the server's notes, then what was typed
+  // (D-047; a space between them, as the field is one line), unless it holds them already: the next save keeps the other
+  // device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
+  // then sets what saves change from.
+  const [notesStale, setNotesStale] = useState(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
   const notesAnswered = (res: Answer | null) => {
-    if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
+    if (res && !res.success && res.error === NOTES_CHANGED) setNotesStale(true);
   };
+  const [notesSeen, setNotesSeen] = useState(server);
+  const [theirNotes, setTheirNotes] = useState<{ text: string } | null>(null);
+  if (notesSeen !== server) {
+    setNotesSeen(server);
+    if (notesStale && server && server.id === (activeSession ?? paused)?.id) {
+      const theirs = server.notes ?? "";
+      setNotesStale(false);
+      setTheirNotes({ text: theirs });
+      if (theirs) setSessionNotes((typed) => (typed.includes(theirs) ? typed : typed ? `${theirs} ${typed}` : theirs));
+    }
+  }
   useEffect(() => {
-    if (!notesStale.current || !server || server.id !== live.current?.id) return;
-    notesStale.current = false;
-    savedNotes.current = server.notes ?? "";
-  }, [server]);
+    if (theirNotes) savedNotes.current = theirNotes.text;
+  }, [theirNotes]);
 
   const dropSet = (id: string) => setOpen((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {
@@ -369,8 +381,8 @@ export function useWorkout({
     }, "Failed to add set", spot);
   }
 
-  // Nothing waits on the network: the row leaves and the toast shows at once; a refused delete puts the row back and
-  // says why (a finished workout keeps its sets).
+  // Nothing waits on the network: the row leaves and the toast shows at once (D-047); a refused delete, or one with no
+  // answer, puts the row back, takes the toast away and says why (a finished workout keeps its sets).
   function deleteSet(set: WorkoutSetData, spot?: Element | null) {
     if (!activeSession) return;
     const sessionId = activeSession.id;
@@ -382,6 +394,8 @@ export function useWorkout({
         showToast({
           message: `Removed set ${set.setOrder}`,
           touches: [`workout_sets:${set.id}`],
+          // A set already gone counts as removed (D-046, D-047): the toast stays.
+          saved: deleted.then((res) => (res && !res.success && res.error === SET_GONE ? { success: true as const } : res)),
           onUndo: undoWith(showToast, async () => {
             if (!(await deleted)?.success) return true; // the refusal below put it back, or it was gone already
             const res = await logSetAction({
@@ -403,8 +417,8 @@ export function useWorkout({
             }).catch(() => null);
             // A set logged meanwhile may have taken its number: the server gives it the next one.
             if (res?.success) putBackSet({ ...set, setOrder: res.set.setOrder });
-            return !!res?.success;
-          }, "Failed to restore set"),
+            return res;
+          }, (back) => (back && !back.success ? back.error : "Failed to restore set")),
         });
         return deleted.then((res) => {
           if (res?.success || res?.error === SET_GONE) return;
