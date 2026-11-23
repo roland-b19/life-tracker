@@ -38,6 +38,10 @@ last_verified: 2026-11-23
 6. Gym day editor: Cancel and Escape still work while a day save is out; after Cancel the day is saved anyway, and Escape shows a misleading "Changes discarded" (seen in the review of the D-047 round; it predates it).
 7. Health meal form: reopened and saved again before the first save answers, it adds the same meal twice (predates D-047).
 8. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
+9. Reopening a form after its save succeeded but before the D-034 refresh lands (about 600 ms) shows the old values: custom exercise, day editor, deload (predates D-047).
+10. FormModal forgets a held save when the page is left and opened again while it is out (`app/components/blocks.tsx`): a Save then could undo a rename.
+11. `write()` in `app/gym/use-workout.ts` no longer turns a throw from its own follow-up code (not the action) into "Failed to …"; the notes-merge prefix there reads oddly.
+12. The e2e log shows next-auth `client_fetch_error` lines from aborted session fetches; harmless, worth silencing.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
