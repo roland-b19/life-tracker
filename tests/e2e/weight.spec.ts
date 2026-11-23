@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { addDays, appDay, formatDM, toISODate } from "../../src/lib/format-date";
-import { andSettle, countRefreshes, dismissToast, expectNoSeriousViolations, hydrationWarnings, settled, test } from "./helpers";
+import { andSettle, countRefreshes, countWrites, dismissToast, expectNoSeriousViolations, holdWrites, hydrationWarnings, settled, test, toast } from "./helpers";
 
 async function openFood(page: Page) {
   await page.goto("/health");
@@ -120,4 +120,38 @@ test("at midnight the page refreshes once and the chart keeps the server's day, 
   await expect(lastAxisLabel(page)).toHaveText(formatDM(day));
   expect(await page.evaluate(() => (window as Window & { kept?: boolean }).kept)).toBe(true);
   expect(warnings).toEqual([]);
+});
+
+// FormModal owns each opening (D-047): the weight form opened again gets its own add id, and the first opening's save,
+// lost after its Cancel, says so in a toast and leaves the second opening as it is.
+test("a weight form opened again gets its own id, and a save lost after Cancel shows as a toast [D-047]", async ({ signedInPage: page }) => {
+  await openFood(page);
+  const card = page.getByRole("region", { name: "Weight", exact: true });
+  const form = page.getByRole("dialog", { name: "Edit weight" });
+  const field = form.getByLabel("Weight today (kg)");
+  const writes = countWrites(page, `"kilograms":`);
+  const release = await holdWrites(page, `"kilograms":81.5`);
+  await card.getByRole("button", { name: "Edit today's weight" }).click();
+  await field.fill("81,5");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await card.getByRole("button", { name: "Edit today's weight" }).click();
+  await field.fill("82,3");
+  await release(true);
+  await expect(toast(page, "Failed to save weight")).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(field).toHaveValue("82,3");
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"kilograms":82.3`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText("Added 82,3 kg")).toBeVisible();
+  await expect(card.getByText("82,3 kg today", { exact: true })).toBeVisible();
+  const ids = writes.map((r) => /"id":"([0-9a-f-]{36})"/.exec(r.postData() ?? "")?.[1]);
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(2);
 });

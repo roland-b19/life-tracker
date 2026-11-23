@@ -425,6 +425,90 @@ test("a double tap on the day editor's Save saves once", async ({ signedInPage: 
   await expect(page.getByText(`Saved "${name}"`)).toBeVisible();
 });
 
+// FormModal owns each opening (D-047): a Gym form's save lost after its Cancel says so in a toast, not in the form opened
+// next, which is its own opening: its Save is free and the late answer leaves what is typed in it. Before, the Gym page's
+// saving flag (or the form's own) kept the form, or the button that opens it, waiting for the first save.
+async function lostAfterCancel(page: Page, o: { open: () => Promise<Locator>; type: (form: Locator, n: 1 | 2) => Promise<void>; held: string; failed: string }) {
+  const release = await holdWrites(page, o.held);
+  let form = await o.open();
+  await o.type(form, 1);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  form = await o.open();
+  await o.type(form, 2);
+  await release(true);
+  await expect(toast(page, o.failed)).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click());
+  await expect(form).toBeHidden();
+}
+
+test("a day save lost after Cancel shows as a toast, and the editor opened again saves its own edits [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const name = (n: number) => `Upper ${n} ${randomUUID().slice(0, 8)}`;
+  const names = [name(1), name(2)];
+  await lostAfterCancel(page, {
+    open: () => openEditor(page),
+    type: async (editor, n) => {
+      const field = editor.getByLabel("Name", { exact: true });
+      await field.fill(names[n - 1]);
+      if (n === 2) await expect(field).toHaveValue(names[1]);
+    },
+    held: `"name":"${names[0]}"`,
+    failed: "Failed to save day",
+  });
+  await expect(page.getByText(`Saved "${names[1]}"`)).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit ${names[1]}` })).toBeVisible();
+});
+
+test("a deload weeks save lost after Cancel shows as a toast, and the form opened again saves its own choice [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await page.getByRole("button", { name: "Edit deload weeks" }).click();
+      const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+    type: async (dialog, n) => {
+      const select = dialog.getByLabel(n === 1 ? "Last deload" : "Next deload");
+      const thisWeek = await select.getByRole("option", { name: /\(this week\)$/ }).textContent();
+      await select.selectOption({ label: thisWeek! });
+    },
+    held: `"last":"`,
+    failed: "Failed to save deload weeks",
+  });
+  await expect(page.getByText("Saved deload weeks")).toBeVisible();
+});
+
+test("a custom exercise save lost after Cancel shows as a toast, and the form opened again saves its own name [D-047]", async ({ signedInPage: page }) => {
+  const names = [exerciseName(), exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [names[0]]);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
+      const form = page.getByRole("dialog", { name: "Edit exercise" });
+      await expect(form).toBeVisible();
+      return form;
+    },
+    type: async (form, n) => {
+      const field = form.getByLabel("Name", { exact: true });
+      await field.fill(names[n]);
+      if (n === 2) await expect(field).toHaveValue(names[2]);
+    },
+    held: `"name":"${names[1]}"`,
+    failed: "Failed to save exercise",
+  });
+  await expect(mine(page).getByText(names[2], { exact: true })).toBeVisible();
+  await expect(mine(page).getByText(names[1], { exact: true })).toHaveCount(0);
+});
+
 test("saving this week as a deload week turns the deload switch on without a reload, so the workout started is a deload one", async ({
   signedInPage: page,
 }) => {
@@ -1720,6 +1804,28 @@ test("a signed-in user sets the weight of 1 plate, and the chart turns to kg, wi
   await openGym(page);
   await expect(card.getByText("1 plate = 10 kg")).toBeVisible();
   await expect(card.getByText("70", { exact: true })).toBeVisible();
+});
+
+test("a plate weight save lost after Cancel shows as a toast, and the form opened again saves its own weight [D-047]", async ({ signedInPage: page }) => {
+  await pastWorkouts(page, [{ date: addDays(toISODate(), -7), exercise: ROW, loadType: "plates", load: 7 }]);
+  const card = progress(page);
+  await lostAfterCancel(page, {
+    open: async () => {
+      await card.getByRole("button", { name: `Edit 1 plate of ${ROW} in kg` }).click();
+      const dialog = page.getByRole("dialog", { name: "Plate weight" });
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+    type: async (dialog, n) => {
+      const field = dialog.getByLabel(`1 plate of ${ROW} (kg)`);
+      await field.fill(n === 1 ? "12" : "15");
+      if (n === 2) await expect(field).toHaveValue("15");
+    },
+    held: `"kg":12`,
+    failed: "Failed to save the plate weight",
+  });
+  await expect(toast(page, `1 plate of ${ROW} = 15 kg`)).toBeVisible();
+  await expect(card.getByText("1 plate = 15 kg")).toBeVisible();
 });
 
 // Each value the server refuses keeps Save off and says why at once, in the server's words, on a phone's touch screen;
