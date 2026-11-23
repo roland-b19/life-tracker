@@ -74,10 +74,10 @@ export async function addMealAction(rawInput: unknown) {
   });
 }
 
-export async function deleteMealAction(mealId: string) {
+export async function deleteMealAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    return { deleted: await deleteMeal(userId, uuid.parse(mealId), assertWritableDay) };
+    return { deleted: await deleteMeal(userId, uuid.parse(id), assertWritableDay) };
   });
 }
 
@@ -110,10 +110,10 @@ export async function saveWeightAction(rawInput: unknown) {
 }
 
 /** Deletes a weigh-in of any day: a past entry can still go, and its Undo puts it back. */
-export async function deleteWeightAction(entryId: string) {
+export async function deleteWeightAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    await deleteWeightEntry(userId, uuid.parse(entryId));
+    await deleteWeightEntry(userId, uuid.parse(id));
     return {};
   });
 }
@@ -179,15 +179,15 @@ export async function toggleShoppingItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const input = toggleShoppingItemSchema.parse(rawInput);
-    const item = await toggleShoppingItem(userId, input.itemId, input.isBought, input.checkedAt);
+    const item = await toggleShoppingItem(userId, input.id, input.isBought, input.checkedAt);
     return { item };
   });
 }
 
-export async function deleteShoppingItemAction(itemId: string) {
+export async function deleteShoppingItemAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const deleted = await deleteShoppingItem(userId, uuid.parse(itemId));
+    const deleted = await deleteShoppingItem(userId, uuid.parse(id));
     return { deleted };
   });
 }

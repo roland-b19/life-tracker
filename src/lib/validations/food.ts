@@ -138,11 +138,11 @@ const shoppingItemFields = z.object({
 
 export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
 
-export const updateShoppingItemSchema = shoppingItemFields.extend({ itemId: uuid });
+export const updateShoppingItemSchema = shoppingItemFields.extend({ id: uuid });
 
-/** Undo of an add that merged: the merged row (`itemId`) and the row it replaced, as it was. */
+/** Undo of an add that merged: the merged row (`id`) and the row it replaced, as it was. */
 export const unmergeShoppingItemSchema = z.object({
-  itemId: uuid,
+  id: uuid,
   before: shoppingItemFields.extend({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable() }),
 });
 
@@ -192,7 +192,7 @@ export const revertShoppingCategorySchema = managed(
 );
 
 /** A tick, or its Undo: Undo sends the time the box had before (`checkedAt`), so the row goes back to its place. */
-export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
+export const toggleShoppingItemSchema = z.object({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(MAX_CLEARED) });
 

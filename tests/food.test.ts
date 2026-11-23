@@ -240,7 +240,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const again = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Milk", amount: 1, unit: "l", category: "dairy" }));
     expect(again.item.isBought).toBe(false);
     expect(again.before).toEqual(before);
-    succeeded(await unmergeShoppingItemAction({ itemId: again.item.id, before: { ...before, amount: Number(before.amount) } }));
+    succeeded(await unmergeShoppingItemAction({ id: again.item.id, before: { ...before, amount: Number(before.amount) } }));
     expect(await getShoppingList(userA)).toEqual([before]);
     authState.id = "";
     expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
@@ -250,14 +250,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     const item = await addItem(userA, { name: "Bread", amount: 1, unit: "pcs", category: "pantry" });
     const bought = async () => (await getShoppingList(userA)).find((i) => i.id === item.id)?.isBought;
     authState.id = userB;
-    await expect(toggleShoppingItemAction({ itemId: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+    await expect(toggleShoppingItemAction({ id: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
     await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
     authState.id = "";
-    expect(await toggleShoppingItemAction({ itemId: item.id, isBought: true })).toEqual(refused(SIGNED_OUT));
+    expect(await toggleShoppingItemAction({ id: item.id, isBought: true })).toEqual(refused(SIGNED_OUT));
     expect(await deleteShoppingItemAction(item.id)).toEqual(refused(SIGNED_OUT));
     expect(await bought()).toBe(false); // still on A's list, untouched
     authState.id = userA;
-    await toggleShoppingItemAction({ itemId: item.id, isBought: true });
+    await toggleShoppingItemAction({ id: item.id, isBought: true });
     expect(await bought()).toBe(true);
   });
 
@@ -288,7 +288,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
     await restoreShoppingItems(userA, [oil.id]);
     expect(await getShoppingList(userA)).toHaveLength(2);
 
-    const edited = await updateShoppingItem(userA, { itemId: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
+    const edited = await updateShoppingItem(userA, { id: oil.id, name: "Rapeseed Oil", amount: 2, unit: "l", category: "oils" });
     expect(edited).toMatchObject({ name: "Rapeseed Oil", unit: "l", category: "oils" });
     expect(await renameShoppingCategory(userA, "pantry", "dry goods")).not.toBeNull();
     expect((await getShoppingList(userA)).map((i) => i.category).sort()).toEqual(["dry goods", "oils"]);
@@ -302,7 +302,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     // User B sees, changes and restores none of it.
     expect(await getShoppingList(userB)).toHaveLength(0);
-    await expect(updateShoppingItem(userB, { itemId: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).rejects.toThrow(SHOPPING_ITEM_GONE);
+    await expect(updateShoppingItem(userB, { id: oil.id, name: "X", amount: 1, unit: "pcs", category: "other" })).rejects.toThrow(SHOPPING_ITEM_GONE);
     expect(await renameShoppingCategory(userB, "oils", "x")).toBeNull();
     expect((await restoreShoppingItems(userB, [oil.id])).items).toHaveLength(0);
   });
@@ -365,7 +365,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await list()).toEqual(["Eggs 2 pcs produce"]);
       expect(await rowCount(userA)).toBe(1);
 
-      const undo = { itemId: add.id, before: { ...old, amount: Number(old.amount) } };
+      const undo = { id: add.id, before: { ...old, amount: Number(old.amount) } };
       authState.id = userB;
       expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
       authState.id = "";
@@ -383,17 +383,17 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const { item: old } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
       const undoOf = async () => {
         const { item, before } = succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
-        return { itemId: item.id, before: { ...before!, amount: Number(before!.amount) } };
+        return { id: item.id, before: { ...before!, amount: Number(before!.amount) } };
       };
       const undo = await undoOf();
-      succeeded(await deleteShoppingItemAction(undo.itemId));
+      succeeded(await deleteShoppingItemAction(undo.id));
       expect(await unmergeShoppingItemAction(undo)).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await list()).toEqual([]);
       expect((await admin.query("SELECT id FROM shopping_items WHERE id = $1", [old.id])).rows).toEqual([]);
 
       succeeded(await addShoppingItemAction({ id: randomUUID(), name: "Tea", amount: 1 }));
       const renamed = await undoOf();
-      succeeded(await updateShoppingItemAction({ itemId: renamed.itemId, name: "Green tea", amount: 2, unit: "pcs", category: "other" }));
+      succeeded(await updateShoppingItemAction({ id: renamed.id, name: "Green tea", amount: 2, unit: "pcs", category: "other" }));
       expect(await unmergeShoppingItemAction(renamed)).toEqual(refused('Can\'t undo: "Green tea" has changed since.'));
       expect(await list()).toEqual(["Green tea 2 pcs other"]);
     });
@@ -436,7 +436,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await list()).toEqual(["MILK 3 l dairy"]);
 
       // The same after Clear bought, and a sum past the cap refuses the whole Undo.
-      succeeded(await toggleShoppingItemAction({ itemId: again.id, isBought: true }));
+      succeeded(await toggleShoppingItemAction({ id: again.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [again.id] }));
       succeeded(await addShoppingItemAction({ name: "Milk", amount: 999, unit: "l", category: "dairy" }));
       expect(await restoreShoppingItemsAction({ itemIds: [again.id] })).toEqual(refused('"Milk" would be 1.002 l; the most is 1.000.'));
@@ -505,10 +505,10 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // The row it merged into gone for good (cleared, then the next Clear bought): nothing to split.
       const [merged] = (await getShoppingList(userA)).filter((i) => i.unit === "kg");
       await deleteShoppingItemAction(twin.id);
-      succeeded(await toggleShoppingItemAction({ itemId: merged.id, isBought: true }));
+      succeeded(await toggleShoppingItemAction({ id: merged.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [merged.id] }));
       const other = succeeded(await addShoppingItemAction({ name: "Salt" })).item;
-      succeeded(await toggleShoppingItemAction({ itemId: other.id, isBought: true }));
+      succeeded(await toggleShoppingItemAction({ id: other.id, isBought: true }));
       succeeded(await clearBoughtItemsAction({ itemIds: [other.id] })); // purges the batch before it
       expect(await revertShoppingCategoryAction(undo)).toEqual(refused('Can\'t undo: "kg" has changed since.'));
       expect((await admin.query("SELECT cleared_at FROM shopping_items WHERE id = $1", [flourG.id])).rows).toEqual([]);
@@ -518,22 +518,22 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const apple = succeeded(await addShoppingItemAction({ name: "Apple" })).item;
       succeeded(await addShoppingItemAction({ name: "Banana" }));
       const names = async () => (await getShoppingList(userA)).map((i) => i.name);
-      const ticked = succeeded(await toggleShoppingItemAction({ itemId: apple.id, isBought: true }));
+      const ticked = succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true }));
       expect(await names()).toEqual(["Banana", "Apple"]);
       authState.id = userB;
-      expect(await toggleShoppingItemAction({ itemId: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SHOPPING_ITEM_GONE));
       authState.id = "";
-      expect(await toggleShoppingItemAction({ itemId: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SIGNED_OUT));
+      expect(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).toEqual(refused(SIGNED_OUT));
       authState.id = userA;
       // Undo sends the time the box had before the tick (none), so Apple is back above Banana.
-      expect(succeeded(await toggleShoppingItemAction({ itemId: apple.id, isBought: false, checkedAt: apple.checkedAt })).item.checkedAt).toBeNull();
+      expect(succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: false, checkedAt: apple.checkedAt })).item.checkedAt).toBeNull();
       expect(await names()).toEqual(["Apple", "Banana"]);
       // A plain untick is a new change: the row goes last among the unbought.
-      succeeded(await toggleShoppingItemAction({ itemId: apple.id, isBought: true }));
-      succeeded(await toggleShoppingItemAction({ itemId: apple.id, isBought: false }));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true }));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: false }));
       expect(await names()).toEqual(["Banana", "Apple"]);
       // The Undo of the untick sends the tick's time back, as text the way a page sends it.
-      succeeded(await toggleShoppingItemAction({ itemId: apple.id, isBought: true, checkedAt: ticked.item.checkedAt!.toISOString() }));
+      succeeded(await toggleShoppingItemAction({ id: apple.id, isBought: true, checkedAt: ticked.item.checkedAt!.toISOString() }));
       expect((await getShoppingList(userA)).find((i) => i.id === apple.id)?.checkedAt).toEqual(ticked.item.checkedAt);
     });
 
@@ -582,12 +582,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       expect(await addShoppingItemAction({ name: "Tea", category: "one more" })).toEqual(refused("You can have at most 200 categories."));
       expect(await rowCount(userA)).toBe(0);
       const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea", category: "c1" }));
-      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "pcs", category: "one more" })).toEqual(
+      expect(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 2, unit: "pcs", category: "one more" })).toEqual(
         refused("You can have at most 200 categories."),
       );
       await admin.query("INSERT INTO shopping_units (user_id, name, sort_order) SELECT $1, 'u' || g, g FROM generate_series(1, 200) g", [userA]);
       expect(await addShoppingItemAction({ name: "Rice", unit: "sack" })).toEqual(refused("You can have at most 200 units."));
-      expect(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 2, unit: "sack", category: "c1" })).toEqual(
+      expect(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 2, unit: "sack", category: "c1" })).toEqual(
         refused("You can have at most 200 units."),
       );
       expect(await list()).toEqual(["Tea 1 pcs c1"]);
@@ -668,7 +668,7 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
 
     it("refuses an edit of an item no longer on the list, for its owner and anyone else alike [HSHOP-16]", async () => {
       const { item } = succeeded(await addShoppingItemAction({ name: "Jam", category: "pantry" }));
-      const edit = { itemId: item.id, name: "Jam", amount: 2, unit: "jar", category: "pantry" };
+      const edit = { id: item.id, name: "Jam", amount: 2, unit: "jar", category: "pantry" };
       authState.id = userB;
       expect(await updateShoppingItemAction(edit)).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await list()).toEqual(["Jam 1 pcs pantry"]);
@@ -683,14 +683,14 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       const { item: jam } = succeeded(await addShoppingItemAction({ name: "Jam" }));
       const { item: tea } = succeeded(await addShoppingItemAction({ name: "Tea" }));
       succeeded(await deleteShoppingItemAction(jam.id));
-      expect(await toggleShoppingItemAction({ itemId: jam.id, isBought: true })).toEqual(refused(SHOPPING_ITEM_GONE));
+      expect(await toggleShoppingItemAction({ id: jam.id, isBought: true })).toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await deleteShoppingItemAction(jam.id)).toEqual(refused(SHOPPING_ITEM_GONE));
       // The edit names an item still on the list (Tea, pcs), yet the item's absence is what it says.
-      expect(await updateShoppingItemAction({ itemId: jam.id, name: "Tea", amount: 1, unit: "pcs", category: "other" })).toEqual(
+      expect(await updateShoppingItemAction({ id: jam.id, name: "Tea", amount: 1, unit: "pcs", category: "other" })).toEqual(
         refused(SHOPPING_ITEM_GONE),
       );
       expect(await list()).toEqual(["Tea 1 pcs other"]);
-      succeeded(await updateShoppingItemAction({ itemId: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" }));
+      succeeded(await updateShoppingItemAction({ id: tea.id, name: "Tea", amount: 3, unit: "pcs", category: "other" }));
     });
   });
 
@@ -710,12 +710,12 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
         updateStepsAction({ date: today, steps: { from: 0, to: 5000 } }),
         updateTargetsAction({ calories: { from: 3350, to: 2000 } }),
         addShoppingItemAction({ id: itemId, name: "Eggs" }),
-        toggleShoppingItemAction({ itemId, isBought: true }),
-        toggleShoppingItemAction({ itemId, isBought: false, checkedAt: new Date() }),
+        toggleShoppingItemAction({ id: itemId, isBought: true }),
+        toggleShoppingItemAction({ id: itemId, isBought: false, checkedAt: new Date() }),
         deleteShoppingItemAction(itemId),
         clearBoughtItemsAction({ itemIds: [itemId] }),
-        updateShoppingItemAction({ itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
-        unmergeShoppingItemAction({ itemId, before: { id: randomUUID(), name: "Eggs", amount: 1, unit: "pcs", category: "dairy", isBought: false, checkedAt: null } }),
+        updateShoppingItemAction({ id: itemId, name: "Eggs", amount: 1, unit: "pcs", category: "dairy" }),
+        unmergeShoppingItemAction({ id: itemId, before: { id: randomUUID(), name: "Eggs", amount: 1, unit: "pcs", category: "dairy", isBought: false, checkedAt: null } }),
         renameShoppingCategoryAction({ from: "dairy", to: "fridge" }),
         restoreShoppingItemsAction({ itemIds: [itemId] }),
         reorderShoppingCategoriesAction({ names: ["dairy"] }),
@@ -908,19 +908,19 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // 5. Shopping: add, edit, rename, clear and undo
       const { item } = succeeded(await addShoppingItemAction({ name: "Eggs", amount: 6, category: "Dairy" }));
       expect(item.category).toBe("dairy");
-      const editRes = succeeded(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" }));
+      const editRes = succeeded(await updateShoppingItemAction({ id: item.id, name: "Eggs", amount: 10, unit: "pcs", category: "dairy" }));
       expect(Number(editRes.item.amount)).toBe(10);
       succeeded(await renameShoppingCategoryAction({ from: "dairy", to: "fridge" }));
-      expect(await updateShoppingItemAction({ itemId: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
-      expect(await updateShoppingItemAction({ itemId: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
+      expect(await updateShoppingItemAction({ id: item.id, name: "", amount: 1, unit: "pcs", category: "x" })).toEqual(refused("Required"));
+      expect(await updateShoppingItemAction({ id: item.id, name: "Eggs", amount: 1, unit: "  ", category: "x" })).toEqual(refused("Required"));
 
       // Renaming onto another item with the same name and unit is refused as data (any case), not merged.
       const { item: milk } = succeeded(await addShoppingItemAction({ name: "Milk", amount: 1, unit: "l", category: "dairy" }));
-      expect(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toEqual(refused("\"EGGS\" is already on the list with this unit."));
-      succeeded(await updateShoppingItemAction({ itemId: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
+      expect(await updateShoppingItemAction({ id: milk.id, name: "EGGS", amount: 1, unit: "PCS", category: "dairy" })).toEqual(refused("\"EGGS\" is already on the list with this unit."));
+      succeeded(await updateShoppingItemAction({ id: milk.id, name: "EGGS", amount: 1, unit: "l", category: "dairy" }));
 
       // 6. Toggle, clear bought items and undo
-      await toggleShoppingItemAction({ itemId: item.id, isBought: true });
+      await toggleShoppingItemAction({ id: item.id, isBought: true });
       const clearRes = succeeded(await clearBoughtItemsAction({ itemIds: [item.id] }));
       expect(clearRes.deletedCount).toBe(1);
       expect(succeeded(await restoreShoppingItemsAction({ itemIds: [item.id] })).items).toHaveLength(1);
@@ -928,11 +928,11 @@ describe("Food & Nutrition module: Data Access, Analytics & Authorization", () =
       // Another user cannot edit or restore it.
       authState.id = userB;
       expect(
-        await updateShoppingItemAction({ itemId: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
+        await updateShoppingItemAction({ id: item.id, name: "Mine", amount: 1, unit: "pcs", category: "other" }),
       ).toEqual(refused(SHOPPING_ITEM_GONE));
       await expect(restoreShoppingItemsAction({ itemIds: [item.id] })).resolves.toEqual(refused("Item not found."));
       expect(succeeded(await clearBoughtItemsAction({ itemIds: [item.id] })).deletedCount).toBe(0);
-      await expect(toggleShoppingItemAction({ itemId: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
+      await expect(toggleShoppingItemAction({ id: item.id, isBought: true })).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
       await expect(deleteShoppingItemAction(item.id)).resolves.toEqual(refused(SHOPPING_ITEM_GONE));
       expect(await renameShoppingCategoryAction({ from: "fridge", to: "x" })).toEqual(refused(CATEGORY_GONE));
       authState.id = userA;

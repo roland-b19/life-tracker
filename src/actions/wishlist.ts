@@ -32,10 +32,10 @@ export async function updateWishlistItemAction(rawInput: unknown) {
 }
 
 /** An item that is not there (deleted elsewhere, or another user's) is refused, so the screen says so. */
-export async function deleteWishlistItemAction(itemId: string) {
+export async function deleteWishlistItemAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    if (!(await deleteWishlistItem(userId, uuid.parse(itemId)))) throw gone();
+    if (!(await deleteWishlistItem(userId, uuid.parse(id)))) throw gone();
     return {};
   });
 }

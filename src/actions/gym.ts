@@ -149,10 +149,10 @@ export async function addSetAction(rawInput: unknown) {
   });
 }
 
-export async function deleteSetAction(setId: string) {
+export async function deleteSetAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
+    const deleted = await deleteWorkoutSet(userId, uuid.parse(id));
     if (!deleted) throw new Refusal(SET_GONE);
     return { deleted };
   });
@@ -196,10 +196,10 @@ export async function restoreCustomExerciseAction(rawInput: unknown) {
 }
 
 /** Delete of a custom exercise, and the Undo of creating one; refused when a routine or a set already uses it. */
-export async function deleteCustomExerciseAction(exerciseId: string) {
+export async function deleteCustomExerciseAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const outcome = await deleteCustomExercise(userId, uuid.parse(exerciseId));
+    const outcome = await deleteCustomExercise(userId, uuid.parse(id));
     if (outcome === "missing") throw new Refusal(EXERCISE_GONE);
     if (outcome === "in-use") throw new Refusal("This exercise is used by a routine or a workout, so it stays.");
     return {};

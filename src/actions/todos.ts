@@ -101,10 +101,10 @@ export async function updateTodoAction(rawInput: unknown) {
 }
 
 /** Deleted for good; Undo restores it from the screen's copy. A task that is not there is not a failure: `deleted` says so. */
-export async function deleteTodoAction(todoId: string) {
+export async function deleteTodoAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const parsed = deleteTodoSchema.parse({ id: todoId });
+    const parsed = deleteTodoSchema.parse({ id });
     const task = await findTodo(userId, parsed.id);
     if (!task) return { deleted: false };
     assertChangeable(task);

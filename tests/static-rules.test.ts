@@ -566,7 +566,8 @@ describe("a migrated form leaves its saving state to FormModal [D-047]", () => {
 });
 
 // conventions.md, Writes from the UI and Names (D-047): an action takes one input, `rawInput: unknown`, parsed by its
-// zod schema inside `respond`; a delete takes only the id (`(id: string)`), and an action with no input takes nothing.
+// zod schema inside `respond`; a delete takes only the row's id, named `id` (`(id: string)`; a push subscription's key is
+// its endpoint, so its delete takes `(endpoint: string)`), and an action with no input takes nothing.
 // A function that adds a row is `add...` in every layer, never `log...` or `create...`. An export these checks cannot
 // read fails, so a new kind of export is looked at before it passes.
 const actionFiles = import.meta.glob("../src/actions/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -584,7 +585,7 @@ function actionShapes(text: string): string[] {
     const name = s.name.text;
     const params = s.parameters.map((p) => `${p.name.getText()}: ${p.type?.getText() ?? "(no type)"}`);
     if (params.length === 0) return [];
-    if (name.startsWith("delete") && params.length === 1 && /^\w+: string$/.test(params[0])) return [];
+    if (name.startsWith("delete") && params.length === 1 && params[0] === (name === "deletePushSubscriptionAction" ? "endpoint: string" : "id: string")) return [];
     return params.length === 1 && params[0] === "rawInput: unknown" ? [] : [`${name}(${params.join(", ")})`];
   });
 }
@@ -615,13 +616,15 @@ describe("every action takes rawInput: unknown, a delete only its id [D-047]", (
       "export async function toggleThingAction(id: string, done: boolean) {}",
       "export async function addThingAction(id: string) {}",
       "export async function deleteThingAction(id: string, from: unknown) {}",
+      "export async function deleteThingAction(thingId: string) {}",
       "export const addThingAction = async (rawInput: unknown) => {};",
       "export { addThingAction } from './x';",
     ];
     for (const text of wrong) expect(actionShapes(text), text).toHaveLength(1);
     const right = [
       "export async function addThingAction(rawInput: unknown) {}",
-      "export async function deleteThingAction(thingId: string) {}",
+      "export async function deleteThingAction(id: string) {}",
+      "export async function deletePushSubscriptionAction(endpoint: string) {}",
       "export async function disconnectThingAction() {}",
       "export type Thing = { id: string };",
     ];
