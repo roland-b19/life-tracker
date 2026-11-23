@@ -97,7 +97,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   const done = async (userId: string, date: string, isDeload = false) => {
     const session = await begin(userId, date, isDeload);
     await addWorkoutSet(userId, setOf(session.id, (await trainingDay(userId)).exercises[0].exerciseId));
-    await finishWorkoutSession(userId, { sessionId: session.id });
+    await finishWorkoutSession(userId, { id: session.id });
     return session;
   };
   /** A user's workouts as stored. */
@@ -346,10 +346,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         expect(before.map((s) => [s.id, s.split_day_id])).toEqual([[sessionId, upper.id]]);
       };
       await refusedAndUnchanged(); // running
-      succeeded(await pauseSessionAction({ sessionId }));
+      succeeded(await pauseSessionAction({ id: sessionId }));
       await refusedAndUnchanged(); // paused
       succeeded(await addSetAction(setOf(sessionId, upper.exercises[0].exerciseId)));
-      succeeded(await finishSessionAction({ sessionId }));
+      succeeded(await finishSessionAction({ id: sessionId }));
       await refusedAndUnchanged(); // finished
       expect(await setCount(sessionId)).toBe(1);
 
@@ -381,20 +381,20 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const session = await begin(userA, "2026-11-20");
       const ex = (await trainingDay(userA)).exercises[0].exerciseId;
       at(10);
-      expect(await pauseSessionAction({ sessionId: session.id })).toEqual({ success: true, timer: { seconds: 600, running: false } });
-      expect(await pauseSessionAction({ sessionId: session.id })).toEqual({ success: true, timer: { seconds: 600, running: false } }); // a repeat changes nothing
+      expect(await pauseSessionAction({ id: session.id })).toEqual({ success: true, timer: { seconds: 600, running: false } });
+      expect(await pauseSessionAction({ id: session.id })).toEqual({ success: true, timer: { seconds: 600, running: false } }); // a repeat changes nothing
       at(40); // half an hour paused: another device reads the same stopped time
       expect((await getWorkoutSessionDetails(userA, session.id))!.timer).toEqual({ seconds: 600, running: false });
-      expect(await resumeSessionAction({ sessionId: session.id })).toEqual({ success: true, timer: { seconds: 600, running: true } });
+      expect(await resumeSessionAction({ id: session.id })).toEqual({ success: true, timer: { seconds: 600, running: true } });
       at(41);
       expect((await getOpenWorkoutSession(userA))!.timer).toEqual({ seconds: 660, running: true });
       succeeded(await addSetAction(setOf(session.id, ex)));
       at(70); // 00:40 the next day
-      const finished = succeeded(await finishSessionAction({ sessionId: session.id }));
+      const finished = succeeded(await finishSessionAction({ id: session.id }));
       expect(finished.session).toMatchObject({ date: "2026-11-20", durationMinutes: 40, timerSeconds: 2400, timerRunningSince: null });
       expect(finished.timer).toEqual({ seconds: 2400, running: false });
-      expect(await pauseSessionAction({ sessionId: session.id })).toEqual(refused(WORKOUT_FINISHED));
-      expect(await resumeSessionAction({ sessionId: session.id })).toEqual(refused(WORKOUT_FINISHED));
+      expect(await pauseSessionAction({ id: session.id })).toEqual(refused(WORKOUT_FINISHED));
+      expect(await resumeSessionAction({ id: session.id })).toEqual(refused(WORKOUT_FINISHED));
     });
 
     it("Start on a day with a finished workout reopens it, its timer running on from the time it had", async () => {
@@ -407,7 +407,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect((await getOpenWorkoutSession(userA))!.timer).toEqual({ seconds: 180, running: true });
       expect(await sessionsOf(userA)).toHaveLength(1);
       // Paused, then Start again: it runs on from where it stopped
-      await pauseSessionAction({ sessionId: first.id });
+      await pauseSessionAction({ id: first.id });
       at(20);
       expect((await addWorkoutSession(userA, await startInput(userA, "2026-11-20")))!).toMatchObject({ from: "paused", timer: { seconds: 180, running: true } });
     });
@@ -417,12 +417,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const ex = (await trainingDay(userA)).exercises[0].exerciseId;
     const session = await begin(userA);
     succeeded(await addSetAction(setOf(session.id, ex)));
-    succeeded(await saveSessionNotesAction({ sessionId: session.id, notes: { from: null, to: "first" } }));
-    const first = succeeded(await finishSessionAction({ sessionId: session.id }));
+    succeeded(await saveSessionNotesAction({ id: session.id, notes: { from: null, to: "first" } }));
+    const first = succeeded(await finishSessionAction({ id: session.id }));
     expect(first.deleted).toBe(false);
     const finished = refused(WORKOUT_FINISHED);
-    expect(await finishSessionAction({ sessionId: session.id })).toEqual(finished);
-    expect(await saveSessionNotesAction({ sessionId: session.id, notes: { from: "first", to: "second" } })).toEqual(finished);
+    expect(await finishSessionAction({ id: session.id })).toEqual(finished);
+    expect(await saveSessionNotesAction({ id: session.id, notes: { from: "first", to: "second" } })).toEqual(finished);
     expect(await addSetAction(setOf(session.id, ex, { setOrder: 2 }))).toEqual(finished);
     expect(await addSetAction(setOf(session.id, ex, { setOrder: 2, id: randomUUID() }))).toEqual(finished);
     expect(await setCount(session.id)).toBe(1);
@@ -432,7 +432,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
   it("Finish with no sets deletes the workout, and its Undo brings it back open with the same id, start and timer", async () => {
     const session = await begin(userA);
     await admin.query("UPDATE workout_sessions SET timer_seconds = 125, timer_running_since = NULL WHERE id = $1", [session.id]);
-    const gone = succeeded(await finishSessionAction({ sessionId: session.id }));
+    const gone = succeeded(await finishSessionAction({ id: session.id }));
     expect(gone).toMatchObject({ deleted: true, timer: { seconds: 125, running: false } });
     expect(await sessionsOf(userA)).toEqual([]);
     const { session: row, timer } = gone;
@@ -451,7 +451,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(succeeded(await log(1, `  ${"a".repeat(255)}  `)).set.notes).toBe("a".repeat(255));
     expect(await log(2, "a".repeat(256))).toEqual(refused("Too long (max 255)"));
     expect(succeeded(await log(2, "   ")).set.notes).toBeNull();
-    const save = (from: string | null, to: string) => saveSessionNotesAction({ sessionId: session.id, notes: { from, to } });
+    const save = (from: string | null, to: string) => saveSessionNotesAction({ id: session.id, notes: { from, to } });
     expect(await save(null, "b".repeat(501))).toEqual(refused("Too long (max 500)"));
     expect(succeeded(await save(null, ` ${"b".repeat(500)}\n`)).notes).toBe("b".repeat(500));
     expect(succeeded(await save("b".repeat(500), "   ")).notes).toBeNull();
@@ -463,7 +463,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("saves while the stored notes are the ones shown, refuses a change made elsewhere, and Finish keeps them", async () => {
       const session = await begin(userA);
-      const save = (from: string | null, to: string | null) => saveSessionNotesAction({ sessionId: session.id, notes: { from, to } });
+      const save = (from: string | null, to: string | null) => saveSessionNotesAction({ id: session.id, notes: { from, to } });
       expect(succeeded(await save(null, "  felt strong ")).notes).toBe("felt strong");
       // Another device still showing no notes: refused, and the notes stay
       expect(await save(null, "tired")).toEqual(refused(NOTES_CHANGED));
@@ -473,15 +473,15 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(succeeded(await save("felt strong", null)).notes).toBeNull();
       succeeded(await save(null, "felt strong"));
       succeeded(await addSetAction(setOf(session.id, (await trainingDay(userA)).exercises[0].exerciseId)));
-      expect(succeeded(await finishSessionAction({ sessionId: session.id })).session.notes).toBe("felt strong");
+      expect(succeeded(await finishSessionAction({ id: session.id })).session.notes).toBe("felt strong");
       expect(await save("felt strong", "later")).toEqual(refused(WORKOUT_FINISHED));
       expect(await notesOf(session.id)).toBe("felt strong");
     });
 
     it("refuses another user's workout and a signed-out caller, and their notes stay", async () => {
       const session = await begin(userA);
-      succeeded(await saveSessionNotesAction({ sessionId: session.id, notes: { from: null, to: "mine" } }));
-      const input = { sessionId: session.id, notes: { from: "mine", to: "not theirs" } };
+      succeeded(await saveSessionNotesAction({ id: session.id, notes: { from: null, to: "mine" } }));
+      const input = { id: session.id, notes: { from: "mine", to: "not theirs" } };
       authState.id = userB;
       expect(await saveSessionNotesAction(input)).toEqual(refused(WORKOUT_GONE));
       authState.id = "";
@@ -690,12 +690,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const before = await sessionsOf(userA);
     const sessionId = session.id;
     const calls = () => [
-      pauseSessionAction({ sessionId }),
-      resumeSessionAction({ sessionId }),
-      finishSessionAction({ sessionId }),
-      saveSessionNotesAction({ sessionId, notes: { from: null, to: "not theirs" } }),
-      cancelSessionAction({ sessionId }),
-      reopenSessionAction({ sessionId }),
+      pauseSessionAction({ id: sessionId }),
+      resumeSessionAction({ id: sessionId }),
+      finishSessionAction({ id: sessionId }),
+      saveSessionNotesAction({ id: sessionId, notes: { from: null, to: "not theirs" } }),
+      cancelSessionAction({ id: sessionId }),
+      reopenSessionAction({ id: sessionId }),
       addSetAction(setOf(sessionId, ex, { setOrder: 2 })),
     ];
     authState.id = userB;
@@ -706,10 +706,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     expect(await setCount(sessionId)).toBe(1);
 
     authState.id = userA; // the owner may
-    expect(succeeded(await pauseSessionAction({ sessionId })).timer.running).toBe(false);
-    expect(succeeded(await resumeSessionAction({ sessionId })).timer.running).toBe(true);
+    expect(succeeded(await pauseSessionAction({ id: sessionId })).timer.running).toBe(false);
+    expect(succeeded(await resumeSessionAction({ id: sessionId })).timer.running).toBe(true);
     succeeded(await addSetAction(setOf(sessionId, ex, { setOrder: 2 })));
-    expect(succeeded(await finishSessionAction({ sessionId })).deleted).toBe(false);
+    expect(succeeded(await finishSessionAction({ id: sessionId })).deleted).toBe(false);
   });
 
   it("deleteSetAction refuses another user's set id and a signed-out caller, and their set stays as it was", async () => {
@@ -733,7 +733,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     const ex = (await trainingDay(userA)).exercises[0].exerciseId;
     const session = await begin(userA);
     const set = succeeded(await addSetAction(setOf(session.id, ex))).set;
-    succeeded(await finishSessionAction({ sessionId: session.id }));
+    succeeded(await finishSessionAction({ id: session.id }));
     expect(await deleteSetAction(set.id)).toEqual(refused(WORKOUT_FINISHED));
     authState.id = userB;
     expect(await deleteSetAction(set.id)).toEqual(refused("Set not found."));
@@ -1150,12 +1150,12 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       authState.id = "";
       const id = randomUUID();
       const denied = async (run: Promise<unknown>) => expect(await run).toEqual(refused(SIGNED_OUT));
-      await denied(finishSessionAction({ sessionId: id }));
-      await denied(saveSessionNotesAction({ sessionId: id, notes: { from: null, to: "x" } }));
-      await denied(pauseSessionAction({ sessionId: id }));
-      await denied(resumeSessionAction({ sessionId: id }));
-      await denied(cancelSessionAction({ sessionId: id }));
-      await denied(reopenSessionAction({ sessionId: id }));
+      await denied(finishSessionAction({ id: id }));
+      await denied(saveSessionNotesAction({ id: id, notes: { from: null, to: "x" } }));
+      await denied(pauseSessionAction({ id: id }));
+      await denied(resumeSessionAction({ id: id }));
+      await denied(cancelSessionAction({ id: id }));
+      await denied(reopenSessionAction({ id: id }));
       await denied(restoreSessionAction({ date: TODAY, isDeload: false, sets: [] }));
       await denied(saveSplitDayAction({ id, name: "x", isRest: true, exercises: [] }));
       await denied(addCustomExerciseAction({ name: "Anon lift", muscleGroup: "chest", equipmentType: "barbell" }));
@@ -1224,7 +1224,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       // 4. Finish session
       const finishRes = succeeded(
         await finishSessionAction({
-          sessionId: startRes.session.id,
+          id: startRes.session.id,
         }),
       );
       expect(finishRes.session.durationMinutes).toBe(1); // counted by the server: under a minute counts as one
@@ -1241,7 +1241,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("lets the owner cancel a workout, sets included", async () => {
       const id = await startWithSet(userA);
-      succeeded(await cancelSessionAction({ sessionId: id }));
+      succeeded(await cancelSessionAction({ id: id }));
       expect(await getWorkoutSessionDetails(userA, id)).toBeNull();
       const left = await admin.query("SELECT 1 FROM workout_sets WHERE session_id = $1", [id]);
       expect(left.rowCount).toBe(0);
@@ -1250,29 +1250,29 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("denies another user and anonymous", async () => {
       const id = await startWithSet(userA);
       authState.id = userB;
-      expect(await cancelSessionAction({ sessionId: id })).toEqual(refused(WORKOUT_GONE));
+      expect(await cancelSessionAction({ id: id })).toEqual(refused(WORKOUT_GONE));
       expect(await cancelWorkoutSession(userB, id)).toBeUndefined();
       authState.id = "";
-      expect(await cancelSessionAction({ sessionId: id })).toEqual(refused(SIGNED_OUT));
+      expect(await cancelSessionAction({ id: id })).toEqual(refused(SIGNED_OUT));
       expect(await getWorkoutSessionDetails(userA, id)).not.toBeNull();
     });
 
     it("rejects a malformed id", async () => {
-      expect(await cancelSessionAction({ sessionId: "nope" })).toEqual(refused("Invalid id"));
+      expect(await cancelSessionAction({ id: "nope" })).toEqual(refused("Invalid id"));
     });
 
     // A page that still shows the workout open after another page finished it (D-039: a finished workout is history).
     it("refuses to cancel a finished workout and deletes nothing; another user and signed out learn nothing", async () => {
       const id = await startWithSet(userA);
-      succeeded(await finishSessionAction({ sessionId: id }));
+      succeeded(await finishSessionAction({ id: id }));
       const before = await sessionsOf(userA);
-      expect(await cancelSessionAction({ sessionId: id })).toEqual(refused(WORKOUT_FINISHED));
+      expect(await cancelSessionAction({ id: id })).toEqual(refused(WORKOUT_FINISHED));
       expect(await sessionsOf(userA)).toEqual(before);
       expect(await setCount(id)).toBe(1);
       authState.id = userB;
-      expect(await cancelSessionAction({ sessionId: id })).toEqual(refused(WORKOUT_GONE));
+      expect(await cancelSessionAction({ id: id })).toEqual(refused(WORKOUT_GONE));
       authState.id = "";
-      expect(await cancelSessionAction({ sessionId: id })).toEqual(refused(SIGNED_OUT));
+      expect(await cancelSessionAction({ id: id })).toEqual(refused(SIGNED_OUT));
       expect(await sessionsOf(userA)).toEqual(before);
       expect(await setCount(id)).toBe(1);
     });
@@ -1281,13 +1281,13 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("with onlyEmpty, refuses a workout that has a set and deletes nothing; another user and signed out learn nothing", async () => {
       const id = await startWithSet(userA);
       const before = await sessionsOf(userA);
-      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual(refused(SETS_LOGGED));
+      expect(await cancelSessionAction({ id: id, onlyEmpty: true })).toEqual(refused(SETS_LOGGED));
       expect(await sessionsOf(userA)).toEqual(before);
       expect(await setCount(id)).toBe(1);
       authState.id = userB;
-      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual(refused(WORKOUT_GONE));
+      expect(await cancelSessionAction({ id: id, onlyEmpty: true })).toEqual(refused(WORKOUT_GONE));
       authState.id = "";
-      expect(await cancelSessionAction({ sessionId: id, onlyEmpty: true })).toEqual(refused(SIGNED_OUT));
+      expect(await cancelSessionAction({ id: id, onlyEmpty: true })).toEqual(refused(SIGNED_OUT));
       expect(await sessionsOf(userA)).toEqual(before);
       expect(await setCount(id)).toBe(1);
     });
@@ -1295,7 +1295,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("with onlyEmpty, lets the owner cancel a workout with no set", async () => {
       authState.id = userA;
       const { session } = succeeded(await addSessionAction(await startInput(userA)));
-      expect(succeeded(await cancelSessionAction({ sessionId: session.id, onlyEmpty: true })).timer.running).toBe(true);
+      expect(succeeded(await cancelSessionAction({ id: session.id, onlyEmpty: true })).timer.running).toBe(true);
       expect(await sessionsOf(userA)).toEqual([]);
     });
 
@@ -1347,7 +1347,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     // D-046: Cancel and Finish take the same lock, so the later one sees the earlier one's result, in either order.
     it("a Finish and then a Cancel at the same moment: the Finish wins and the Cancel is refused, deleting nothing", async () => {
       const id = await startWithSet(userA);
-      const [finished, cancelled] = await overlap(id, () => finishSessionAction({ sessionId: id }), () => cancelSessionAction({ sessionId: id }));
+      const [finished, cancelled] = await overlap(id, () => finishSessionAction({ id: id }), () => cancelSessionAction({ id: id }));
       expect(finished).toMatchObject({ success: true, deleted: false });
       expect(cancelled).toEqual(refused(WORKOUT_FINISHED));
       expect((await sessionsOf(userA)).map((s) => s.duration_minutes)).toEqual([1]);
@@ -1356,7 +1356,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("a Cancel and then a Finish at the same moment: the Cancel wins and the Finish finds no workout", async () => {
       const id = await startWithSet(userA);
-      const [cancelled, finished] = await overlap(id, () => cancelSessionAction({ sessionId: id }), () => finishSessionAction({ sessionId: id }));
+      const [cancelled, finished] = await overlap(id, () => cancelSessionAction({ id: id }), () => finishSessionAction({ id: id }));
       succeeded(cancelled);
       expect(finished).toEqual(refused(WORKOUT_GONE));
       expect(await sessionsOf(userA)).toEqual([]);
@@ -1368,7 +1368,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       expect(open?.session.id).toBe(id);
       expect(open?.sets).toHaveLength(1);
       expect(await getOpenWorkoutSession(userB)).toBeNull();
-      succeeded(await finishSessionAction({ sessionId: id }));
+      succeeded(await finishSessionAction({ id: id }));
       expect(await getOpenWorkoutSession(userA)).toBeNull();
     });
   });
@@ -1380,7 +1380,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const session = await begin(userId, date);
       succeeded(await addSetAction({ sessionId: session.id, exerciseId: exercise.id, setOrder: 1, reps: 8, loadType: "kg", loadValue: 40 }));
       if (minutes) {
-        succeeded(await finishSessionAction({ sessionId: session.id }));
+        succeeded(await finishSessionAction({ id: session.id }));
         await admin.query("UPDATE workout_sessions SET duration_minutes = $2 WHERE id = $1", [session.id, minutes]);
       }
       return { id: session.id, exerciseId: exercise.id };
@@ -1389,23 +1389,23 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     it("finishes a workout for the owner only", async () => {
       const { id } = await finished(userA, TODAY, null);
       authState.id = userB;
-      expect(await finishSessionAction({ sessionId: id })).toEqual(refused(WORKOUT_GONE));
+      expect(await finishSessionAction({ id: id })).toEqual(refused(WORKOUT_GONE));
       authState.id = "";
-      expect(await finishSessionAction({ sessionId: id })).toEqual(refused(SIGNED_OUT));
+      expect(await finishSessionAction({ id: id })).toEqual(refused(SIGNED_OUT));
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(id);
       authState.id = userA;
-      expect(await finishSessionAction({ sessionId: id })).toMatchObject({ success: true, deleted: false, session: { durationMinutes: 1 } });
+      expect(await finishSessionAction({ id: id })).toMatchObject({ success: true, deleted: false, session: { durationMinutes: 1 } });
     });
 
     it("reopens a finished workout for the owner only", async () => {
       const { id } = await finished(userA, TODAY, 50);
       authState.id = userB;
-      expect(await reopenSessionAction({ sessionId: id })).toEqual(refused(WORKOUT_GONE));
+      expect(await reopenSessionAction({ id: id })).toEqual(refused(WORKOUT_GONE));
       authState.id = "";
-      expect(await reopenSessionAction({ sessionId: id })).toEqual(refused(SIGNED_OUT));
+      expect(await reopenSessionAction({ id: id })).toEqual(refused(SIGNED_OUT));
       expect(await getOpenWorkoutSession(userA)).toBeNull(); // still finished
       authState.id = userA;
-      succeeded(await reopenSessionAction({ sessionId: id }));
+      succeeded(await reopenSessionAction({ id: id }));
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(id);
     });
 
@@ -1413,9 +1413,9 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const old = await finished(userA, addDays(TODAY, -30), null); // left open a month ago: still the open one
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(old.id);
       expect(await addSessionAction(await startInput(userA))).toEqual(refused("A workout is already open. Resume or finish it first."));
-      succeeded(await finishSessionAction({ sessionId: old.id }));
+      succeeded(await finishSessionAction({ id: old.id }));
       const started = succeeded(await addSessionAction(await startInput(userA)));
-      expect(await reopenSessionAction({ sessionId: old.id })).toEqual(refused("A workout is already open. Resume or finish it first."));
+      expect(await reopenSessionAction({ id: old.id })).toEqual(refused("A workout is already open. Resume or finish it first."));
       expect(await getOpenWorkoutSession(userA)).toMatchObject({ session: { id: started.session.id } });
       expect(await restoreSessionAction({ date: TODAY, isDeload: false, sets: [] })).toEqual(refused("A workout is already open. Resume or finish it first."));
     });
@@ -1427,7 +1427,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
         isDeload: false,
         sets: [{ exerciseId, setOrder: 1, reps: 8, loadType: "kg" as const, loadValue: 40, extraKg: 0, isFailure: true, isPartial: false, isGoodForm: true, flagAnomaly: false }],
       };
-      await cancelSessionAction({ sessionId: id });
+      await cancelSessionAction({ id: id });
       const back = succeeded(await restoreSessionAction(input));
       expect(back.details.sets).toHaveLength(1);
       expect((await getOpenWorkoutSession(userA))?.session.id).toBe(back.details.session.id);
@@ -1443,7 +1443,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       const { id, exerciseId } = await finished(userA, TODAY, null);
       const before = (await getWorkoutSessionDetails(userA, id))!;
       const set = before.sets[0];
-      await cancelSessionAction({ sessionId: id });
+      await cancelSessionAction({ id: id });
       const input = {
         id,
         createdAt: before.session.createdAt,
@@ -1482,10 +1482,10 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     it("Undo of Finish clears the duration and keeps the notes", async () => {
       const { id } = await finished(userA, TODAY, null);
-      succeeded(await saveSessionNotesAction({ sessionId: id, notes: { from: null, to: "felt strong" } }));
-      succeeded(await finishSessionAction({ sessionId: id }));
+      succeeded(await saveSessionNotesAction({ id: id, notes: { from: null, to: "felt strong" } }));
+      succeeded(await finishSessionAction({ id: id }));
       expect((await getWorkoutSessionDetails(userA, id))?.session.notes).toBe("felt strong");
-      const { timer } = succeeded(await reopenSessionAction({ sessionId: id }));
+      const { timer } = succeeded(await reopenSessionAction({ id: id }));
       expect(timer.running).toBe(true); // the timer runs on from the time it had
       const open = (await getWorkoutSessionDetails(userA, id))!.session;
       expect(open.durationMinutes).toBeNull();
@@ -1498,7 +1498,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
       authState.id = userB;
       const withDay = succeeded(await restoreSessionAction({ date: TODAY, isDeload: false, splitDayId: dayA, sets: [] }));
       expect(withDay.details.session.splitDayId).toBeNull();
-      succeeded(await cancelSessionAction({ sessionId: withDay.details.session.id })); // one open workout per user
+      succeeded(await cancelSessionAction({ id: withDay.details.session.id })); // one open workout per user
       const custom = await addCustomExercise(userA, { name: "Secret lift", muscleGroup: "chest", equipmentType: "barbell" });
       const res = await restoreSessionAction({
         date: TODAY,

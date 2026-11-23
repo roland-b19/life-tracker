@@ -67,7 +67,7 @@ export async function addSessionAction(rawInput: unknown) {
 export async function pauseSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, false);
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).id, false);
     if (!timer) throw new Refusal(WORKOUT_GONE);
     return { timer };
   });
@@ -77,7 +77,7 @@ export async function pauseSessionAction(rawInput: unknown) {
 export async function resumeSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, true);
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).id, true);
     if (!timer) throw new Refusal(WORKOUT_GONE);
     return { timer };
   });
@@ -110,8 +110,8 @@ export async function saveSessionNotesAction(rawInput: unknown) {
 export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId, onlyEmpty } = cancelSessionSchema.parse(rawInput);
-    const deleted = await cancelWorkoutSession(userId, sessionId, onlyEmpty);
+    const { id, onlyEmpty } = cancelSessionSchema.parse(rawInput);
+    const deleted = await cancelWorkoutSession(userId, id, onlyEmpty);
     if (!deleted) throw new Refusal(WORKOUT_GONE);
     return { timer: deleted.timer };
   });
@@ -121,8 +121,8 @@ export async function cancelSessionAction(rawInput: unknown) {
 export async function reopenSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId } = sessionIdSchema.parse(rawInput);
-    const reopened = await reopenWorkoutSession(userId, sessionId);
+    const { id } = sessionIdSchema.parse(rawInput);
+    const reopened = await reopenWorkoutSession(userId, id);
     if (!reopened) throw new Refusal(WORKOUT_GONE);
     return reopened;
   });

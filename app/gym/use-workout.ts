@@ -240,7 +240,7 @@ export function useWorkout({
           type: "success",
           touches,
           onUndo: undoWith(showToast, async () => {
-            const res = await pauseSessionAction({ sessionId: session.id });
+            const res = await pauseSessionAction({ id: session.id });
             if (res.success) setTimer(session.id, res.timer);
             return res;
           }),
@@ -256,7 +256,7 @@ export function useWorkout({
               warn("Finish or leave the current workout first");
               return true;
             }
-            const res = await finishSessionAction({ sessionId: session.id });
+            const res = await finishSessionAction({ id: session.id });
             if (res.success) {
               setOpen((o) => (o?.id === session.id ? null : o));
               setHandId(null);
@@ -280,7 +280,7 @@ export function useWorkout({
               warn(SETS_LOGGED);
               return true;
             }
-            const gone = await cancelSessionAction({ sessionId: session.id, onlyEmpty: true }).catch(() => null);
+            const gone = await cancelSessionAction({ id: session.id, onlyEmpty: true }).catch(() => null);
             if (gone?.success) {
               setConfirmCancel(false);
               setOpen((o) => (o?.id === session.id ? null : o));
@@ -301,7 +301,7 @@ export function useWorkout({
     if (!session) return;
     const run = !session.timer.running;
     const turn = async (on: boolean) => {
-      const res = on ? await resumeSessionAction({ sessionId: session.id }) : await pauseSessionAction({ sessionId: session.id });
+      const res = on ? await resumeSessionAction({ id: session.id }) : await pauseSessionAction({ id: session.id });
       if (res.success) setTimer(session.id, res.timer);
       return res;
     };
@@ -455,7 +455,7 @@ export function useWorkout({
       // Compared as the server saves it (trimmed, invisible-only is none); too long text goes, for the server's reason.
       const to = sessionNote.safeParse(text);
       if (to.success && (to.data ?? "") === from) return true;
-      const res = await saveSessionNotesAction({ sessionId: session.id, notes: { from: from || null, to: text } }).catch(() => null);
+      const res = await saveSessionNotesAction({ id: session.id, notes: { from: from || null, to: text } }).catch(() => null);
       notesAnswered(res);
       if (!res?.success) {
         if (res) refused(session.id, res.error);
@@ -470,7 +470,7 @@ export function useWorkout({
         onUndo: undoWith(
           showToast,
           async () => {
-            const back = await saveSessionNotesAction({ sessionId: session.id, notes: { from: res.notes, to: from || null } });
+            const back = await saveSessionNotesAction({ id: session.id, notes: { from: res.notes, to: from || null } });
             notesAnswered(back);
             if (back.success && live.current?.id === session.id) showNotes(back.notes);
             return back;
@@ -496,7 +496,7 @@ export function useWorkout({
     if (!session) return;
     write(async () => {
       if (!(await saveNotes())) return;
-      const res = await pauseSessionAction({ sessionId: session.id });
+      const res = await pauseSessionAction({ id: session.id });
       if (!res.success) return refused(session.id, res.error);
       setOpen({ ...session, timer: res.timer, notes: savedNotes.current || null });
       setConfirmCancel(false);
@@ -508,7 +508,7 @@ export function useWorkout({
     const session = paused;
     if (!session) return;
     write(async () => {
-      const res = await resumeSessionAction({ sessionId: session.id });
+      const res = await resumeSessionAction({ id: session.id });
       if (!res.success) return warn(res.error);
       showDay(session.splitDayId);
       setOpen({ ...session, timer: res.timer });
@@ -595,7 +595,7 @@ export function useWorkout({
       // A refusal (of the notes or of the Cancel) closes the Keep/Delete question too: the toast says why.
       if (!(await saveNotes())) return setConfirmCancel(false);
       const snap = { ...session, notes: savedNotes.current || null };
-      const res = await cancelSessionAction({ sessionId: session.id });
+      const res = await cancelSessionAction({ id: session.id });
       setConfirmCancel(false);
       if (!res.success) return refused(session.id, res.error);
       setOpen(null);
@@ -618,7 +618,7 @@ export function useWorkout({
     write(async () => {
       if (!(await saveNotes())) return;
       const snap = { ...session, notes: savedNotes.current || null };
-      const done = await finishSessionAction({ sessionId: session.id });
+      const done = await finishSessionAction({ id: session.id });
       if (!done.success) return refused(session.id, done.error);
       setOpen(null);
       setHandId(null);
@@ -640,7 +640,7 @@ export function useWorkout({
         touches,
         onUndo: takeBack(
           async () => {
-            const res = await reopenSessionAction({ sessionId: session.id });
+            const res = await reopenSessionAction({ id: session.id });
             return res.success ? { success: true, session: { ...snap, timer: res.timer } } : res;
           },
           "Failed to reopen the workout",

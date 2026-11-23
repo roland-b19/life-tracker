@@ -143,7 +143,7 @@ export const addSessionSchema = z.object({
 });
 
 // The server counts the duration from the workout's own timer (D-039). The notes are saved on their own, as they change.
-export const finishSessionSchema = z.object({ sessionId: uuid });
+export const finishSessionSchema = z.object({ id: uuid });
 
 /**
  * A change of an open workout's notes (D-040): the notes the screen showed (`from`, null for none) and the new ones
@@ -151,7 +151,7 @@ export const finishSessionSchema = z.object({ sessionId: uuid });
  * between is never lost.
  */
 export const saveSessionNotesSchema = z
-  .object({ sessionId: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
+  .object({ id: uuid, notes: z.object({ from: z.string().max(GYM_LIMITS.sessionNotes).nullable(), to: sessionNote }).strict() })
   .refine((v) => (v.notes.from ?? "") !== (v.notes.to ?? ""), NOTHING_TO_SAVE);
 
 const weekSunday = isoDate.refine((d) => weekday(d) === 0, "A deload week starts on a Sunday");
@@ -165,13 +165,13 @@ export const saveDeloadWeeksSchema = z
 export const restoreDeloadWeeksSchema = z.object({ add: z.array(weekSunday).max(60), remove: z.array(weekSunday).max(60) });
 
 /** One workout by id: Pause, Resume and the Undo of Finish. */
-export const sessionIdSchema = z.object({ sessionId: uuid });
+export const sessionIdSchema = z.object({ id: uuid });
 
 /**
  * Cancel a workout. `onlyEmpty` (the Undo of "Started") cancels it only while it has no set, so that Undo never deletes a
  * set logged on another device; the Cancel workout button sends none.
  */
-export const cancelSessionSchema = z.object({ sessionId: uuid, onlyEmpty: z.boolean().optional() });
+export const cancelSessionSchema = z.object({ id: uuid, onlyEmpty: z.boolean().optional() });
 
 /**
  * Undo of cancelling a workout, or of a Finish that deleted an empty one: the session as it was, with all its sets (same
