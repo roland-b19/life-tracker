@@ -124,22 +124,23 @@ describe("field messages end with no full stop", () => {
   });
 });
 
+// The body of the function or arrow `name` declared in `text`, from its first `{` to the matching `}`.
+const bodyOf = (text: string, name: string) => {
+  const start = text.search(new RegExp(`(function ${name}\\b|const ${name} = )`));
+  if (start < 0) return "";
+  const open = text.indexOf("{", text.indexOf(")", start));
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return text.slice(open, i + 1);
+  }
+  return "";
+};
+
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
 // second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
 // for a form that passes `sendsFrom` (D-047), or for one still on the deprecated `busy` bridge (conventions.md, Busy flags).
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
-  // The body of the function or arrow `name` declared in `text`, from its first `{` to the matching `}`.
-  const bodyOf = (text: string, name: string) => {
-    const start = text.search(new RegExp(`(function ${name}\\b|const ${name} = )`));
-    if (start < 0) return "";
-    const open = text.indexOf("{", text.indexOf(")", start));
-    let depth = 0;
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}" && --depth === 0) return text.slice(open, i + 1);
-    }
-    return "";
-  };
   // `{ from: x, to: y }` or a call such as `rename(from, to)`: the old value next to the new one.
   const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
   // Each FormModal in `text` whose onSubmit handler (or a function of this file it calls) sends a `from`, and whether it
@@ -178,13 +179,15 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(fromForms(copy).filter(({ held }) => !held)).not.toEqual([]);
   });
 
-  // D-047: one changedFields helper (app/components/forms.ts) finds what an edit changed, never a change built inline.
-  it("the Health water/steps and goals forms find what changed with changedFields", () => {
-    for (const handler of ["handleMetricSubmit", "handleGoalsSubmit"]) expect(bodyOf(foodClient, handler), handler).toContain("changedFields(");
-  });
-
   it.each(Object.entries(sources))("%s", (_file, text) => {
     expect(fromForms(text).filter(({ held }) => !held)).toEqual([]);
+  });
+});
+
+// D-047: one changedFields helper (app/components/forms.ts) finds what an edit changed, never a change built inline.
+describe("a form finds what an edit changed with changedFields [D-047]", () => {
+  it("the Health water/steps and goals forms", () => {
+    for (const handler of ["handleMetricSubmit", "handleGoalsSubmit"]) expect(bodyOf(foodClient, handler), handler).toContain("changedFields(");
   });
 });
 
