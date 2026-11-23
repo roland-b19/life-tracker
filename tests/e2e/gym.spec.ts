@@ -285,10 +285,13 @@ test("a signed-in user creates and deletes a custom exercise, with Undo, also af
   await openGym(page);
   await expect(mine(page).getByText(name, { exact: true })).toBeVisible();
 
-  // Delete, then Undo the delete: the same exercise comes back, also after a reload.
-  await andSettle(page, () => mine(page).getByRole("button", { name: `Delete ${name}` }).click());
+  // Delete, then Undo the delete: the same exercise comes back, also after a reload. The row leaves and the toast
+  // shows before the answer (D-047).
+  const release = await holdWrites(page);
+  await mine(page).getByRole("button", { name: `Delete ${name}` }).click();
   await expect(mine(page).getByText(name, { exact: true })).toBeHidden();
   await expect(page.getByText(`Removed "${name}"`)).toBeVisible();
+  await andSettle(page, () => release());
   await andSettle(page, () => page.getByRole("button", { name: "Undo" }).click());
   await expect(mine(page).getByText(name, { exact: true })).toBeVisible();
   await openGym(page);
@@ -1289,6 +1292,47 @@ test("Undo of a deleted set 3 after a new set 3 was logged shows it as set 4, wi
     { set_order: 3, load_value: "80.00" },
     { set_order: 4, load_value: "70.00" },
   ]);
+});
+
+// D-047: the set leaves and its toast shows at once; a delete whose answer is lost puts the set back and takes the
+// toast away. The page's clock stands still, so the toast cannot have run out by itself.
+test("a set delete whose answer is lost takes its Removed set toast away and puts the set back", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await logSet(page);
+  await dismissToast(page, "Added set 1");
+  await refreshesDone(page, { tick: 1000 });
+  await pauseClock(page);
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click();
+  await expect(page.getByText(SET_LINE)).toBeHidden();
+  await expect(toast(page, "Removed set 1")).toBeVisible();
+  await release(true);
+  await expect(page.getByText(SET_LINE)).toBeVisible();
+  await expect(toast(page, "Removed set 1")).toHaveCount(0);
+  expect(await setCount(await signedInUserId(page))).toBe(1);
+});
+
+// D-047: a refused Undo of a set delete says the server's reason. (Whether it offers Retry is the toast's rule, D-047's
+// "Retry only when no answer came", built and tested with the toast.)
+test("Undo of a deleted set refused because the workout was finished elsewhere shows the server's reason", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await logSet(page);
+  await dismissToast(page, "Added set 1");
+  await andSettle(page, () => page.getByRole("button", { name: `Delete set 1 of ${EXERCISE}` }).click());
+  // Held under the mouse, the toast keeps its Undo while the workout is finished elsewhere; the page's own refresh is
+  // done first, so it cannot take the workout off the screen.
+  await toast(page, "Removed set 1").hover();
+  await refreshesDone(page);
+  const userId = await signedInUserId(page);
+  await asOwner((admin) => admin.query("UPDATE workout_sessions SET duration_minutes = 1 WHERE user_id = $1", [userId]));
+  await andSettle(page, () => undoIn(page, "Removed set 1").click());
+  await expect(toast(page, WORKOUT_FINISHED)).toBeVisible();
+  expect(await setCount(userId)).toBe(0);
 });
 
 // GYMB-07, GYMB-08, GYMB-18: the set form says why a value cannot be logged, and each new set starts with the checks off.

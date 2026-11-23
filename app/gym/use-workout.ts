@@ -369,8 +369,8 @@ export function useWorkout({
     }, "Failed to add set", spot);
   }
 
-  // Nothing waits on the network: the row leaves and the toast shows at once; a refused delete puts the row back and
-  // says why (a finished workout keeps its sets).
+  // Nothing waits on the network: the row leaves and the toast shows at once (D-047); a refused delete, or one with no
+  // answer, puts the row back, takes the toast away and says why (a finished workout keeps its sets).
   function deleteSet(set: WorkoutSetData, spot?: Element | null) {
     if (!activeSession) return;
     const sessionId = activeSession.id;
@@ -382,6 +382,8 @@ export function useWorkout({
         showToast({
           message: `Removed set ${set.setOrder}`,
           touches: [`workout_sets:${set.id}`],
+          // A set already gone counts as removed (D-046, D-047): the toast stays.
+          saved: deleted.then((res) => (res && !res.success && res.error === SET_GONE ? { success: true as const } : res)),
           onUndo: undoWith(showToast, async () => {
             if (!(await deleted)?.success) return true; // the refusal below put it back, or it was gone already
             const res = await logSetAction({
@@ -403,8 +405,8 @@ export function useWorkout({
             }).catch(() => null);
             // A set logged meanwhile may have taken its number: the server gives it the next one.
             if (res?.success) putBackSet({ ...set, setOrder: res.set.setOrder });
-            return !!res?.success;
-          }, "Failed to restore set"),
+            return res;
+          }, (back) => (back && !back.success ? back.error : "Failed to restore set")),
         });
         return deleted.then((res) => {
           if (res?.success || res?.error === SET_GONE) return;
