@@ -1,7 +1,7 @@
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
-import { touchesOverlap } from "@/../app/components/toast";
+import { touchesOverlap, undoWith } from "@/../app/components/toast";
 import { pushSubscriptions } from "@/db/schema";
 
 const sources = import.meta.glob("../app/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -25,6 +25,31 @@ describe("touchesOverlap [X-UNDO-STACK, XR-02, XR-07, HTODAY-08, MORE-10]", () =
   it("never matches a toast that names nothing", () => {
     expect(touchesOverlap(undefined, ["meals:7"])).toBe(false);
     expect(touchesOverlap(["meals:7"], undefined)).toBe(false);
+  });
+});
+
+// conventions.md, Undo (D-047): a Retry is for an answer that never came; a refusal is the server's answer, so the
+// warning says it and offers nothing to try again.
+describe("undoWith offers Retry only when no answer came [D-047]", () => {
+  const undoAnswering = async (write: () => Promise<unknown>) => {
+    const showToast = vi.fn();
+    await undoWith(showToast, write as () => Promise<{ success?: boolean } | null>)({ touches: ["meals:1"] });
+    return showToast.mock.calls.map(([toast]) => ({ message: toast.message, retry: typeof toast.onRetry === "function", touches: toast.touches }));
+  };
+
+  it("shows a refusal's reason (by default) with no Retry", async () => {
+    expect(await undoAnswering(async () => ({ success: false, error: "This item no longer exists." }))).toEqual([
+      { message: "This item no longer exists.", retry: false, touches: ["meals:1"] },
+    ]);
+  });
+  it("keeps a Retry when the write did not answer, threw or said no", async () => {
+    for (const write of [async () => null, async () => undefined, async () => false, () => Promise.reject(new Error("lost"))]) {
+      expect(await undoAnswering(write)).toEqual([{ message: "Failed to undo", retry: true, touches: ["meals:1"] }]);
+    }
+  });
+  it("says nothing when the write succeeded", async () => {
+    expect(await undoAnswering(async () => ({ success: true }))).toEqual([]);
+    expect(await undoAnswering(async () => true)).toEqual([]);
   });
 });
 

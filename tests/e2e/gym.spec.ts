@@ -607,6 +607,7 @@ test("Undo of Started after another device logged a set is refused with the serv
 
   await andSettle(page, () => undoIn(page, `Started "${DAY}"`).click());
   await expect(toast(page, "Sets are logged; use Cancel workout instead.")).toBeVisible();
+  await expect(toast(page, "Sets are logged; use Cancel workout instead.").getByRole("button", { name: "Retry" })).toBeHidden();
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
   const userId = await signedInUserId(page);
   expect(await setCount(userId)).toBe(1);
@@ -820,7 +821,7 @@ test("Start on another day after today's workout is finished is refused, and the
   expect(rows).toEqual([{ name: DAY, finished: true }]);
 });
 
-// D-040: an Undo the server refuses says why, in the server's words; its Retry stays.
+// D-040, D-047: an Undo the server refuses says why, in the server's words, with no Retry: the server has answered.
 test("Undo of a workout removed for having no sets, refused because another device started one, shows the server's reason", async ({ signedInPage: page, browser }) => {
   const removed = "No sets logged: the workout was removed";
   await openGym(page);
@@ -837,7 +838,7 @@ test("Undo of a workout removed for having no sets, refused because another devi
   await andSettle(page, () => undoIn(page, removed).click());
   const warning = toast(page, "A workout is already open. Resume or finish it first.");
   await expect(warning).toBeVisible();
-  await expect(warning.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(warning.getByRole("button", { name: "Retry" })).toBeHidden();
   await expect(page.getByText("Failed to restore the workout")).toBeHidden();
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
 });
@@ -1427,8 +1428,8 @@ test("a set delete answered that the set is gone keeps its Removed set toast", a
   expect(await setCount(userId)).toBe(0);
 });
 
-// D-047: a refused Undo of a set delete says the server's reason. (Whether it offers Retry is the toast's rule, D-047's
-// "Retry only when no answer came", built and tested with the toast.)
+// D-047: a refused Undo of a set delete says the server's reason, with no Retry (a Retry is only for an answer that
+// never came).
 test("Undo of a deleted set refused because the workout was finished elsewhere shows the server's reason", async ({ signedInPage: page }) => {
   await openGym(page);
   await startWorkout(page, DAY);
@@ -1444,6 +1445,7 @@ test("Undo of a deleted set refused because the workout was finished elsewhere s
   await asOwner((admin) => admin.query("UPDATE workout_sessions SET duration_minutes = 1 WHERE user_id = $1", [userId]));
   await andSettle(page, () => undoIn(page, "Removed set 1").click());
   await expect(toast(page, WORKOUT_FINISHED)).toBeVisible();
+  await expect(toast(page, WORKOUT_FINISHED).getByRole("button", { name: "Retry" })).toBeHidden();
   expect(await setCount(userId)).toBe(0);
 });
 
