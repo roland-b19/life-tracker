@@ -11,8 +11,8 @@ import {
 } from "@/db/schema";
 import {
   AddShoppingItemInput,
-  LogMealInput,
-  LogWeightInput,
+  AddMealInput,
+  SaveWeightInput,
   RestoreMealInput,
   RestoreWeightInput,
   UnmergeShoppingItemInput,
@@ -108,7 +108,7 @@ export async function getDailyFoodSummary(userId: string, date: string) {
  * answers it, with `repeated`. An id another user's meal holds writes nothing and answers a null meal, so it neither
  * changes nor shows that row.
  */
-export async function logMeal(userId: string, input: LogMealInput) {
+export async function addMeal(userId: string, input: AddMealInput) {
   const created = await db
     .insert(meals)
     .values({
@@ -319,14 +319,14 @@ function stillListed<T>(row: T | undefined): T {
 }
 
 /**
- * Undo of a merging add: takes the merged row (`itemId`) off and puts the row it replaced back under its old id, with
+ * Undo of a merging add: takes the merged row (`id`) off and puts the row it replaced back under its old id, with
  * its old values. Refused when the merged row has left the list or no longer has that name and unit.
  */
 export async function unmergeShoppingItem(userId: string, input: UnmergeShoppingItemInput) {
   return db.transaction(async (tx) => {
     await lockShopping(tx, userId);
     const { before } = input;
-    const merged = stillListed((await tx.select().from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId))))[0]);
+    const merged = stillListed((await tx.select().from(shoppingItems).where(and(eq(shoppingItems.id, input.id), onList(userId))))[0]);
     if (merged.name.toLowerCase() !== before.name.toLowerCase() || merged.unit !== before.unit)
       throw new Refusal(changedSince(merged.name));
     await tx.delete(shoppingItems).where(eq(shoppingItems.id, merged.id));
@@ -342,14 +342,14 @@ export async function unmergeShoppingItem(userId: string, input: UnmergeShopping
 }
 
 /** Whether another item on the list already has this name and unit (any case): the add form merges those, so an edit must not make two. */
-async function hasDuplicateShoppingItem(q: Pick<typeof db, "select">, userId: string, input: { itemId: string; name: string; unit: string }) {
+async function hasDuplicateShoppingItem(q: Pick<typeof db, "select">, userId: string, input: { id: string; name: string; unit: string }) {
   const [row] = await q
     .select({ id: shoppingItems.id })
     .from(shoppingItems)
     .where(
       and(
         onList(userId),
-        ne(shoppingItems.id, input.itemId),
+        ne(shoppingItems.id, input.id),
         sql`lower(${shoppingItems.name}) = lower(${input.name})`,
         sql`lower(${shoppingItems.unit}) = lower(${input.unit})`,
       ),
@@ -366,12 +366,12 @@ async function hasDuplicateShoppingItem(q: Pick<typeof db, "select">, userId: st
 export async function updateShoppingItem(userId: string, input: UpdateShoppingItemInput) {
   return db.transaction(async (tx) => {
     await lockShopping(tx, userId);
-    stillListed((await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.id, input.itemId), onList(userId))))[0]);
+    stillListed((await tx.select({ id: shoppingItems.id }).from(shoppingItems).where(and(eq(shoppingItems.id, input.id), onList(userId))))[0]);
     if (await hasDuplicateShoppingItem(tx, userId, input)) throw new Refusal(`"${input.name}" is already on the list with this unit.`);
     const [updated] = await tx
       .update(shoppingItems)
       .set({ name: input.name, amount: input.amount.toFixed(2), unit: input.unit, category: input.category })
-      .where(and(eq(shoppingItems.id, input.itemId), onList(userId)))
+      .where(and(eq(shoppingItems.id, input.id), onList(userId)))
       .returning();
     await ensureShoppingCategory(userId, input.category, "category", tx);
     await ensureShoppingCategory(userId, input.unit, "unit", tx);
@@ -761,7 +761,7 @@ export async function listWeightEntries(userId: string, since?: string) {
  * write is keyed by the user and the day (the update is filtered by `userId`), and it sets an absolute value, so a
  * repeat changes nothing more.
  */
-export async function saveWeightEntry(userId: string, input: LogWeightInput) {
+export async function saveWeightEntry(userId: string, input: SaveWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
   return db.transaction(async (tx) => {
     await lockUser(tx, "weight", userId); // two saves of a new day at once must not both insert

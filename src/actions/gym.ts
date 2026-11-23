@@ -9,7 +9,7 @@ import {
   addSessionSchema,
   cancelSessionSchema,
   finishSessionSchema,
-  logSetSchema,
+  addSetSchema,
   restoreDeloadWeeksSchema,
   restoreSessionSchema,
   saveDeloadWeeksSchema,
@@ -30,7 +30,7 @@ import {
   updateCustomExercise,
   deleteWorkoutSet,
   finishWorkoutSession,
-  logWorkoutSet,
+  addWorkoutSet,
   reopenWorkoutSession,
   restoreDeloadWeeks,
   restoreWorkoutSession,
@@ -52,7 +52,7 @@ function nearToday(date: string, daysBack = 1) {
  * Start a workout on a training day (D-039): one per day, so a day that already has one gets it back, open and timing.
  * Answers the workout with its sets and timer, and `from`: how it was found, which Undo reverses.
  */
-export async function startSessionAction(rawInput: unknown) {
+export async function addSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = addSessionSchema.parse(rawInput);
@@ -67,7 +67,7 @@ export async function startSessionAction(rawInput: unknown) {
 export async function pauseSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, false);
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).id, false);
     if (!timer) throw new Refusal(WORKOUT_GONE);
     return { timer };
   });
@@ -77,7 +77,7 @@ export async function pauseSessionAction(rawInput: unknown) {
 export async function resumeSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).sessionId, true);
+    const timer = await setWorkoutTimer(userId, sessionIdSchema.parse(rawInput).id, true);
     if (!timer) throw new Refusal(WORKOUT_GONE);
     return { timer };
   });
@@ -110,8 +110,8 @@ export async function saveSessionNotesAction(rawInput: unknown) {
 export async function cancelSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId, onlyEmpty } = cancelSessionSchema.parse(rawInput);
-    const deleted = await cancelWorkoutSession(userId, sessionId, onlyEmpty);
+    const { id, onlyEmpty } = cancelSessionSchema.parse(rawInput);
+    const deleted = await cancelWorkoutSession(userId, id, onlyEmpty);
     if (!deleted) throw new Refusal(WORKOUT_GONE);
     return { timer: deleted.timer };
   });
@@ -121,8 +121,8 @@ export async function cancelSessionAction(rawInput: unknown) {
 export async function reopenSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const { sessionId } = sessionIdSchema.parse(rawInput);
-    const reopened = await reopenWorkoutSession(userId, sessionId);
+    const { id } = sessionIdSchema.parse(rawInput);
+    const reopened = await reopenWorkoutSession(userId, id);
     if (!reopened) throw new Refusal(WORKOUT_GONE);
     return reopened;
   });
@@ -140,19 +140,19 @@ export async function restoreSessionAction(rawInput: unknown) {
   });
 }
 
-export async function logSetAction(rawInput: unknown) {
+export async function addSetAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const set = await logWorkoutSet(userId, logSetSchema.parse(rawInput));
+    const set = await addWorkoutSet(userId, addSetSchema.parse(rawInput));
     if (!set) throw new Refusal("This set could not be saved.");
     return { set };
   });
 }
 
-export async function deleteSetAction(setId: string) {
+export async function deleteSetAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const deleted = await deleteWorkoutSet(userId, uuid.parse(setId));
+    const deleted = await deleteWorkoutSet(userId, uuid.parse(id));
     if (!deleted) throw new Refusal(SET_GONE);
     return { deleted };
   });
@@ -196,10 +196,10 @@ export async function restoreCustomExerciseAction(rawInput: unknown) {
 }
 
 /** Delete of a custom exercise, and the Undo of creating one; refused when a routine or a set already uses it. */
-export async function deleteCustomExerciseAction(exerciseId: string) {
+export async function deleteCustomExerciseAction(id: string) {
   return respond(async () => {
     const userId = await requireUser();
-    const outcome = await deleteCustomExercise(userId, uuid.parse(exerciseId));
+    const outcome = await deleteCustomExercise(userId, uuid.parse(id));
     if (outcome === "missing") throw new Refusal(EXERCISE_GONE);
     if (outcome === "in-use") throw new Refusal("This exercise is used by a routine or a workout, so it stays.");
     return {};

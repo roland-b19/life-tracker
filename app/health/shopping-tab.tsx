@@ -174,7 +174,7 @@ export function ShoppingTab({
                   dropShop(item.id);
                   upsertShop(before);
                   const back = await unmergeShoppingItemAction({
-                    itemId: item.id,
+                    id: item.id,
                     before: { ...toShopInput(before), id: before.id, isBought: before.isBought, checkedAt: before.checkedAt },
                   }).catch(() => null);
                   if (!back?.success) {
@@ -217,7 +217,7 @@ export function ShoppingTab({
     const before = editingShop;
     setBusy(true);
     try {
-      const saved = updateShoppingItemAction({ ...input, itemId: before.id }).catch(() => null);
+      const saved = updateShoppingItemAction({ ...input, id: before.id }).catch(() => null);
       const res = await saved;
       if (!res?.success) {
         if (res?.error !== SHOPPING_ITEM_GONE) return setErrorMsg(res?.error ?? "Failed to save item");
@@ -239,7 +239,7 @@ export function ShoppingTab({
           showToast,
           async () => {
             replaceShop(before);
-            const back = await updateShoppingItemAction({ ...toShopInput(before), itemId: before.id }).catch(() => null);
+            const back = await updateShoppingItemAction({ ...toShopInput(before), id: before.id }).catch(() => null);
             if (!back?.success) replaceShop(item);
             return back;
           },
@@ -271,7 +271,7 @@ export function ShoppingTab({
     const setBought = (isBought: boolean, checkedAt: Date | string | null) =>
       setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt } : i)));
     setBought(next, new Date());
-    const saved = toggleShoppingItemAction(item.id, next).catch(() => null);
+    const saved = toggleShoppingItemAction({ id: item.id, isBought: next }).catch(() => null);
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
@@ -283,7 +283,7 @@ export function ShoppingTab({
           setBought(!next, item.checkedAt);
           const done = await saved;
           if (!done?.success) return true; // the failure path below put it back
-          const back = await toggleShoppingItemAction(item.id, !next, item.checkedAt).catch(() => null);
+          const back = await toggleShoppingItemAction({ id: item.id, isBought: !next, checkedAt: item.checkedAt }).catch(() => null);
           if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
         },

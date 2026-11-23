@@ -25,8 +25,9 @@ const wishlistFields = z.object({
 /** A new item, with the id the add form made when it opened (D-040). */
 export const addWishlistItemSchema = wishlistFields.extend({ id: newId });
 
-/** An edit sends only the fields it changed (D-040); the others keep what is stored. A null or empty link clears it. */
+/** An edit sends the item's id and only the fields it changed (D-040); the others keep what is stored. A null or empty link clears it. */
 export const updateWishlistItemSchema = z.object({
+  id: uuid,
   name: wishlistFields.shape.name.optional(),
   url: wishlistFields.shape.url,
   estimatedPrice: wishlistFields.shape.estimatedPrice.optional(),

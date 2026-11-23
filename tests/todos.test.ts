@@ -339,6 +339,21 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       expect(succeeded(await deletePushSubscriptionAction(endpoint)).deleted).toBe(false);
     });
 
+    it("saves a push subscription into the caller's rows only: another user cannot replace the owner's, anonymous is refused", async () => {
+      vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
+      const endpoint = "https://fcm.googleapis.com/fcm/send/owner-endpoint";
+      const rowsOf = async () =>
+        (await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint))).map((r) => [r.userId, r.p256dhKey]).sort();
+      succeeded(await savePushSubscriptionAction({ endpoint, p256dhKey: "owner-p256dh", authKey: "owner-auth" }));
+      authState.id = "";
+      expect(await savePushSubscriptionAction({ endpoint, p256dhKey: "anon-p256dh", authKey: "anon-auth" })).toEqual(refused(SIGNED_OUT));
+      expect(await rowsOf()).toEqual([[userA, "owner-p256dh"]]);
+      authState.id = userB;
+      succeeded(await savePushSubscriptionAction({ endpoint, p256dhKey: "other-p256dh", authKey: "other-auth" }));
+      expect(await rowsOf()).toEqual([[userA, "owner-p256dh"], [userB, "other-p256dh"]].sort());
+      authState.id = userA;
+    });
+
     it("keeps one row per endpoint when the same browser subscribes twice", async () => {
       vi.stubEnv("NEXT_PUBLIC_PUSH_ENABLED", "true");
       const endpoint = "https://fcm.googleapis.com/fcm/send/twice-endpoint";

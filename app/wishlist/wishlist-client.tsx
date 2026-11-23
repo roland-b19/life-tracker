@@ -161,7 +161,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
 
     if (before) {
       const changed = changedFields(toInput(before), input);
-      const res = await updateWishlistItemAction(before.id, changed).catch(() => null);
+      const res = await updateWishlistItemAction({ id: before.id, ...changed }).catch(() => null);
       if (!res?.success) {
         if (res?.error !== WISHLIST_ITEM_GONE) return refused(res?.error ?? "Failed to save item. Please try again.");
         // Deleted on another device: the form closes and the row leaves.
@@ -186,7 +186,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
           showToast,
           async () => {
             putFields(before.id, fieldsOf(before));
-            const back = await updateWishlistItemAction(before.id, undo).catch(() => null);
+            const back = await updateWishlistItemAction({ id: before.id, ...undo }).catch(() => null);
             if (back?.success) {
               putFields(before.id, fieldsOf(back.item as WishlistItemData));
               keepCategory(before.category);

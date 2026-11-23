@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getDailyFoodSummary, getNutritionTargets, getPastFoods, logMeal } from "./food";
-import { logMealSchema } from "./validations/food";
+import { getDailyFoodSummary, getNutritionTargets, getPastFoods, addMeal } from "./food";
+import { addMealSchema } from "./validations/food";
 import { roundTo } from "./number-format";
 import { runClaude } from "./claude-cli";
 import { getClaudeToken } from "./claude-connection";
@@ -17,7 +17,7 @@ interface FoodChatContext {
   time: string;
 }
 
-type LoggedMeal = NonNullable<Awaited<ReturnType<typeof logMeal>>["meal"]>;
+type LoggedMeal = NonNullable<Awaited<ReturnType<typeof addMeal>>["meal"]>;
 
 // What the model must answer with; the CLI enforces it, the app checks it again below.
 const RESPONSE_SCHEMA = {
@@ -175,7 +175,7 @@ export async function sendFoodChatMessage(
     // "must be a number" as in the other number fields.
     const sent = "calories" in meal ? meal.calories : undefined;
     const calories = typeof sent === "number" ? Math.round(sent) : sent;
-    const parsed = logMealSchema.safeParse({ ...meal, calories, date: ctx.date });
+    const parsed = addMealSchema.safeParse({ ...meal, calories, date: ctx.date });
     if (!parsed.success) {
       leftOut.push(`${label}: ${whyLeftOut(parsed.error)}`);
       continue;
@@ -183,7 +183,7 @@ export async function sendFoodChatMessage(
     // A meal id already saved (sent twice in this answer, or an older meal's) adds nothing (D-040), so it is not listed
     // again: the answer's list, and its Undo, hold only the meals this answer added. An id another user's meal holds
     // saves nothing, so it is left out, as logging by hand refuses it.
-    const { meal: saved, repeated } = await logMeal(userId, { ...parsed.data, isEstimated: true });
+    const { meal: saved, repeated } = await addMeal(userId, { ...parsed.data, isEstimated: true });
     if (!saved) leftOut.push(`${label}: this meal could not be saved`);
     else if (!repeated) logged.push(saved);
   }

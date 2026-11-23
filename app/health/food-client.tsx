@@ -29,7 +29,7 @@ import {
   setWaterAction,
   deleteMealAction,
   restoreMealAction,
-  logMealAction,
+  addMealAction,
   updateStepsAction,
   updateTargetsAction,
 } from "@/actions/food";
@@ -282,7 +282,7 @@ export function FoodClient({
 
     setErrorMsg("");
     // The id comes from the form's opening, so a repeat of the same save after a lost answer adds nothing (D-040).
-    const res = await logMealAction({ id, date: todayDate, ...entered }).catch(() => null);
+    const res = await addMealAction({ id, date: todayDate, ...entered }).catch(() => null);
     if (!res?.success) return refused(res?.error ?? "Failed to add meal", stillOpen, () => setIsMealModalOpen(false));
     const meal = res.meal as MealData;
     applyMeal(meal, 1);

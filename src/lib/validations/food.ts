@@ -37,7 +37,7 @@ export const mealHasValue = (meal: { calories: number; protein: number; carbs: n
 /** A meal's amounts alone: the Health meal form checks them with this before it saves, in the server's words. */
 export const mealAmounts = mealFields.pick({ calories: true, protein: true, carbs: true, fat: true });
 
-export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
+export const addMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
 
 /** Undo of a delete: the same meal, under its old id and time. */
 export const restoreMealSchema = mealFields.extend({ id: uuid, createdAt: z.string().datetime().optional() });
@@ -50,7 +50,7 @@ const weightKilograms = z.number("Please enter a valid weight").min(20, WEIGHT_R
  * One weigh-in a day: saving a day that already has one replaces its kilograms. The Undo of an edit also sends `from`,
  * the value it undoes: it writes only while the day still holds that value (D-040).
  */
-export const logWeightSchema = z
+export const saveWeightSchema = z
   .object({
     id: newId,
     // A weigh-in is a measurement: it cannot be in the future.
@@ -61,7 +61,7 @@ export const logWeightSchema = z
   .strict();
 
 /** Undo of a delete: the same weigh-in, under its old id. */
-export const restoreWeightSchema = logWeightSchema.omit({ from: true }).extend({ id: uuid });
+export const restoreWeightSchema = saveWeightSchema.omit({ from: true }).extend({ id: uuid });
 
 /** The range each daily goal can take; the Health forms check the same ranges before they save. */
 export const GOAL_RANGES = {
@@ -138,11 +138,11 @@ const shoppingItemFields = z.object({
 
 export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
 
-export const updateShoppingItemSchema = shoppingItemFields.extend({ itemId: uuid });
+export const updateShoppingItemSchema = shoppingItemFields.extend({ id: uuid });
 
-/** Undo of an add that merged: the merged row (`itemId`) and the row it replaced, as it was. */
+/** Undo of an add that merged: the merged row (`id`) and the row it replaced, as it was. */
 export const unmergeShoppingItemSchema = z.object({
-  itemId: uuid,
+  id: uuid,
   before: shoppingItemFields.extend({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable() }),
 });
 
@@ -192,14 +192,14 @@ export const revertShoppingCategorySchema = managed(
 );
 
 /** A tick, or its Undo: Undo sends the time the box had before (`checkedAt`), so the row goes back to its place. */
-export const toggleShoppingItemSchema = z.object({ itemId: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
+export const toggleShoppingItemSchema = z.object({ id: uuid, isBought: z.boolean(), checkedAt: z.coerce.date().nullable().optional() });
 
 export const restoreShoppingItemsSchema = z.object({ itemIds: z.array(uuid).min(1).max(MAX_CLEARED) });
 
 export type RestoreMealInput = z.infer<typeof restoreMealSchema>;
-export type LogWeightInput = z.infer<typeof logWeightSchema>;
+export type SaveWeightInput = z.infer<typeof saveWeightSchema>;
 export type RestoreWeightInput = z.infer<typeof restoreWeightSchema>;
-export type LogMealInput = z.infer<typeof logMealSchema>;
+export type AddMealInput = z.infer<typeof addMealSchema>;
 export type UpdateNutritionTargetsInput = z.infer<typeof updateNutritionTargetsSchema>;
 export type AddShoppingItemInput = z.infer<typeof addShoppingItemSchema>;
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;

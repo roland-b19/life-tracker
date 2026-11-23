@@ -25,19 +25,19 @@ describe("sevenDayAverage", () => {
   });
 });
 
-describe("logWeightSchema", () => {
+describe("saveWeightSchema", () => {
   it("accepts two decimals that float math would reject (78.4, 80.1) and refuses three", async () => {
-    const { logWeightSchema } = await import("@/lib/validations/food");
+    const { saveWeightSchema } = await import("@/lib/validations/food");
     const id = crypto.randomUUID();
-    for (const kilograms of [78.4, 80.1, 72.35]) expect(logWeightSchema.safeParse({ id, date: "2026-11-11", kilograms }).success).toBe(true);
-    expect(logWeightSchema.safeParse({ id, date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
+    for (const kilograms of [78.4, 80.1, 72.35]) expect(saveWeightSchema.safeParse({ id, date: "2026-11-11", kilograms }).success).toBe(true);
+    expect(saveWeightSchema.safeParse({ id, date: "2026-11-11", kilograms: 78.123 }).success).toBe(false);
   });
 
   it("refuses a future day, accepts today", async () => {
-    const { logWeightSchema } = await import("@/lib/validations/food");
+    const { saveWeightSchema } = await import("@/lib/validations/food");
     const { addDays, toISODate } = await import("@/lib/format-date");
     const id = crypto.randomUUID();
-    expect(logWeightSchema.safeParse({ id, date: toISODate(), kilograms: 80 }).success).toBe(true);
-    expect(logWeightSchema.safeParse({ id, date: addDays(toISODate(), 1), kilograms: 80 }).success).toBe(false);
+    expect(saveWeightSchema.safeParse({ id, date: toISODate(), kilograms: 80 }).success).toBe(true);
+    expect(saveWeightSchema.safeParse({ id, date: addDays(toISODate(), 1), kilograms: 80 }).success).toBe(false);
   });
 });
