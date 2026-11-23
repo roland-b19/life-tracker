@@ -145,13 +145,14 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
   // Each FormModal in `text` whose onSubmit handler (or a function of this file it calls) sends a `from`, and whether it
   // holds Save. The handler is read only from `onSubmit={name}` or an arrow whose whole body is one call of a name,
-  // `onSubmit={(…) => name(…)}`; any other shape is an unknown handler and fails.
+  // `onSubmit={(…) => name(…)}`, and only when `name` is declared in this file; any other shape, or a name declared
+  // elsewhere (a prop, an import), is an unknown handler and fails.
   const fromForms = (text: string) =>
     [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].flatMap(([, props]) => {
       const read = /onSubmit=\{(?:(\w+)|\([^)]*\)\s*=>\s*(\w+)\([^)]*\))\}/.exec(props);
       const handler = read?.[1] ?? read?.[2];
-      if (!handler) return [{ handler: props, held: false }];
-      const body = bodyOf(text, handler);
+      const body = handler ? bodyOf(text, handler) : "";
+      if (!body) return [{ handler: handler ?? props, held: false }];
       const called = [...body.matchAll(/\b(\w+)\(/g)].map(([, name]) => bodyOf(text, name));
       return [body, ...called].some(sendsFrom) ? [{ handler, held: /\bsendsFrom\b|\bbusy=\{/.test(props) }] : [];
     });
@@ -171,9 +172,10 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(fromForms(withoutBusy)).toContainEqual({ handler: "submit", held: false });
   });
 
-  // Only `onSubmit={name}` and an arrow that calls a name, `(…) => name(…)`, are read; any other shape is an unknown
-  // handler and fails, so a shape the guard cannot read never passes unseen.
-  it.each(["async (e) => submit(e)", "e => submit(e)", "(e) => void submit(e)"])("fails on a copy of the categories card with busy removed and onSubmit={%s}", (shape) => {
+  // Only `onSubmit={name}` and an arrow that calls a name, `(…) => name(…)`, are read, and only when `name` is declared in
+  // the file; any other shape, or a name from elsewhere such as a prop (`Inner({ onSave })`), is an unknown handler and
+  // fails, so a shape the guard cannot read never passes unseen.
+  it.each(["async (e) => submit(e)", "e => submit(e)", "(e) => void submit(e)", "onSave", "(e) => onSave(e)"])("fails on a copy of the categories card with busy removed and onSubmit={%s}", (shape) => {
     const copy = categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", `onSubmit={${shape}}`);
     expect(copy).toContain(`onSubmit={${shape}}`);
     expect(fromForms(copy).filter(({ held }) => !held)).not.toEqual([]);
