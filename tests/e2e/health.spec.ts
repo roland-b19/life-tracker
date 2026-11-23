@@ -1119,7 +1119,16 @@ test("the water, steps and meal forms refuse a value out of range in words that 
   await mealForm.getByLabel("Fat (g)").fill("-1");
   await mealForm.getByRole("button", { name: "Save" }).click();
   await expect(mealForm.getByRole("alert")).toHaveText(MEAL_MACROS_NEGATIVE);
+  // Several wrong values: the form names the first one the server's schema refuses, a negative protein before carbs
+  // over the limit.
+  await mealForm.getByLabel("Calories (kcal)").fill("5");
+  await mealForm.getByLabel("Protein (g)").fill("-1");
+  await mealForm.getByLabel("Carbs (g)").fill("2000");
   await mealForm.getByLabel("Fat (g)").fill("");
+  await mealForm.getByRole("button", { name: "Save" }).click();
+  await expect(mealForm.getByRole("alert")).toHaveText(MEAL_MACROS_NEGATIVE);
+  await mealForm.getByLabel("Protein (g)").fill("10");
+  await mealForm.getByLabel("Carbs (g)").fill("");
   await mealForm.getByLabel("Calories (kcal)").fill("-5");
   await mealForm.getByRole("button", { name: "Save" }).click();
   await expect(mealForm.getByRole("alert")).toHaveText(MEAL_CALORIES_NEGATIVE);
@@ -1156,8 +1165,8 @@ test("the water taps wait while a water edit's save is unanswered, then add to t
   await expect(water).toContainText("1.250 / 3.000 ml");
 });
 
-// Water and steps share one dialog, and the Today tab one form error: a water save lost after its form was closed shows
-// nothing in the steps or meal form opened meanwhile, and shows in its own form while that one is open.
+// The Today tab's forms share one form error: a water save lost after its form was closed shows nothing in the steps or
+// meal form opened meanwhile (it is a toast then), and shows in its own form while that one is open.
 test("a lost water save shows its error only in the water form, not in the steps or meal form opened meanwhile", async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   const water = page.getByRole("region", { name: "Water" });
@@ -1170,13 +1179,15 @@ test("a lost water save shows its error only in the water form, not in the steps
     return release;
   };
 
-  // The steps form, opened while the water save is out, waits for it and then shows no error of its own.
+  // The steps form is a form of its own: opened while the water save is out, it does not wait for it, and shows no
+  // error of the water save's.
   let release = await startWaterSave(1000);
   await waterForm.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("region", { name: "Steps" }).getByRole("button", { name: "Edit steps and goal" }).click();
   const stepsForm = page.getByRole("dialog", { name: "Edit steps" });
-  await expect(stepsForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
   await release(true);
+  await expect(page.getByText("Failed to save water", { exact: true })).toBeVisible();
   await expect(stepsForm.getByRole("button", { name: "Save" })).toBeEnabled();
   await expect(stepsForm.getByRole("alert")).toHaveCount(0);
   await stepsForm.getByRole("button", { name: "Cancel" }).click();
@@ -1234,4 +1245,54 @@ test("a lost goals save shows its error only in the goals form, not in the water
   release = await startGoalsSave(2900);
   await release(true);
   await expect(goalsForm.getByRole("alert")).toHaveText("Failed to save goals");
+});
+
+// An answer belongs to its opening (D-047): a goals save refused after its form was cancelled says so in a toast, and
+// the form opened next starts with no error.
+test("a goals save refused after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const nutrition = page.getByRole("region", { name: "Nutrition" });
+  const goalsForm = page.getByRole("dialog", { name: "Edit goals" });
+  const release = await holdWrites(page, `"to":2800`);
+  await nutrition.getByRole("button", { name: "Edit goals" }).click();
+  await goalsForm.getByLabel("Calories (kcal)").fill("2800");
+  await goalsForm.getByRole("button", { name: "Save" }).click();
+  await expect(goalsForm.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await goalsForm.getByRole("button", { name: "Cancel" }).click();
+  await expect(goalsForm).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to save goals")).toBeVisible();
+
+  await nutrition.getByRole("button", { name: "Edit goals" }).click();
+  await expect(goalsForm.getByLabel("Calories (kcal)")).toHaveValue("3.350");
+  await expect(goalsForm.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(goalsForm.getByRole("alert")).toHaveCount(0);
+});
+
+// The chat's Send writes once per tap burst through the shared guard (D-047): two submits that come before the page
+// has drawn the first one's "Sending..." send one message. Nothing reaches the server: the held message is lost.
+test("two quick Sends in the food chat send one message [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  const pick = page.getByRole("tab", { name: "Assistant" });
+  await pick.click();
+  await expect(pick).toHaveAttribute("aria-selected", "true");
+  const chat = page.getByRole("region", { name: "Food assistant" });
+  const text = `two eggs ${Date.now()}`;
+  const writes = countWrites(page, text);
+  const release = await holdWrites(page, text);
+  await chat.getByLabel("Message").fill(text);
+  const send = chat.getByRole("button", { name: "Send" });
+  await send.evaluate((button: HTMLButtonElement) => {
+    button.form!.requestSubmit(button);
+    button.form!.requestSubmit(button);
+  });
+  await expect(chat.getByRole("button", { name: "Sending..." })).toBeDisabled();
+  await settled(page);
+  expect(writes).toHaveLength(1);
+  // Next sends a page's actions one after another, so a second message would go out once the first is lost.
+  await release(true);
+  await expect(toast(page, "Failed to send message")).toBeVisible();
+  await expect(chat.getByLabel("Message")).toHaveValue(text);
+  await settled(page);
+  expect(writes).toHaveLength(1);
 });

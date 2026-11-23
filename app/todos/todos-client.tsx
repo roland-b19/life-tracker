@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
-import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup } from "../components/blocks";
+import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup, type FormOpening } from "../components/blocks";
+import { changedFields } from "../components/forms";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -49,13 +50,7 @@ export function TodosClient({
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   // The task the form opened on (its values then), null for a new task.
   const [editing, setEditing] = useState<TodoItem | null>(null);
-  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
-  // opened after it, and a form closed since (Cancel) counts as gone.
-  const formOpening = useRef(0);
-  const closeForm = () => {
-    formOpening.current += 1;
-    setIsTaskModalOpen(false);
-  };
+  const closeForm = () => setIsTaskModalOpen(false);
   // Each space's list as the server sent it; the edit form closes when another device deletes its task.
   const editingIn = (s: TodoSpace) => (isTaskModalOpen && editing?.space === s ? editing.id : null);
   const [personalTodos, setPersonalTodos] = useServerState(initialPersonalTodos, { editing: editingIn("personal"), onDeleted: closeForm });
@@ -86,11 +81,6 @@ export function TodosClient({
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
   const [errorMsg, setErrorMsg] = useState("");
-  // The id the open add form's task gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
-  const addId = useRef("");
-  const [savingIn, setSavingIn] = useState<number | null>(null);
-  const [opening, setOpening] = useState(0);
-  const saving = savingIn === opening;
   // Flows that finish seconds later (Undo, a refresh) read the controls as they are then.
   const latest = useRef({ tab });
   useEffect(() => {
@@ -149,109 +139,91 @@ export function TodosClient({
     setTitleInput(todo?.title ?? "");
     setReminderTimeInput(todo?.reminderTime ?? "");
     setCategoryInput(todo?.category ?? "other");
-    if (!todo) addId.current = crypto.randomUUID();
-    formOpening.current += 1;
-    setOpening(formOpening.current);
     setIsTaskModalOpen(true);
   };
 
-  // The fields an edit changes: only those are sent, so another tab's change to the rest stays (D-040).
   type Editable = Pick<TodoItem, "title" | "reminderTime" | "category">;
-  const changedFields = (from: TodoItem, to: Editable): Partial<Editable> =>
-    Object.fromEntries((Object.keys(to) as (keyof Editable)[]).filter((k) => to[k] !== from[k]).map((k) => [k, to[k]]));
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, { id, stillOpen }: FormOpening) => {
     e.preventDefault();
     const title = titleInput.trim();
     if (!title) return;
     const reminderTime = reminderTimeInput.trim() || null;
     const before = editing;
-    const from = formOpening.current;
-    // The answer belongs to the opening it came from: a form closed or opened since stays as it is, and a refusal is told
-    // in a toast.
-    const stillOpen = () => from === formOpening.current;
-    // The server checks the limits; its message shows in the form, which keeps what was typed.
+    // The answer belongs to the opening it came from: a form closed or opened since stays as it is. The server checks
+    // the limits; its message shows in the form, which keeps what was typed, or in a toast once the form is gone.
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
     setErrorMsg("");
-    setSavingIn(from);
-    try {
-      if (before) {
-        // Only a daily task has a category to pick; a one-off keeps the one it has.
-        const changed = changedFields(before, { title, reminderTime, category: before.isRecurring ? categoryInput : before.category });
-        const saved = updateTodoAction({ id: before.id, ...changed }).catch(() => null);
-        const res = await saved;
-        if (!res?.success) {
-          if (res?.error !== TODO_GONE) return refused(res?.error ?? "Failed to save task");
-          // Deleted on another device: the form closes and the row leaves.
-          if (stillOpen()) closeForm();
-          drop(before);
-          return warn(res.error);
-        }
-        // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
-        const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof Editable]])) as Partial<Editable>;
-        const after = { ...before, ...changed };
-        putFields(before, changed);
-        keepCategory(after);
+    if (before) {
+      // Only a daily task has a category to pick; a one-off keeps the one it has.
+      const changed = changedFields(before, { title, reminderTime, category: before.isRecurring ? categoryInput : before.category });
+      const res = await updateTodoAction({ id: before.id, ...changed }).catch(() => null);
+      if (!res?.success) {
+        if (res?.error !== TODO_GONE) return refused(res?.error ?? "Failed to save task");
+        // Deleted on another device: the form closes and the row leaves.
         if (stillOpen()) closeForm();
-        showToast({
-          message: `Saved "${title}"`,
-          type: "success",
-          touches: touches(before.id),
-          saved,
-          // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-          onUndo: undoWith(
-            showToast,
-            async () => {
-              putFields(before, undo);
-              const back = await updateTodoAction({ id: before.id, ...undo }).catch(() => null);
-              if (back?.success) keepCategory({ ...after, ...undo });
-              else putFields(before, changed);
-              return back;
-            },
-            (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-          ),
-        });
-      } else {
-        const saved = addTodoAction({
-          id: addId.current,
-          space,
-          title,
-          isRecurring: isDaily,
-          recurrencePattern: isDaily ? "daily" : "none",
-          dueDate: todayDate,
-          reminderTime,
-          category: isDaily ? categoryInput : "other",
-        }).catch(() => null);
-        const res = await saved;
-        if (!res?.success) return refused(res?.error ?? "Failed to save task");
-        const created = res.todo;
-        if (shows(created)) putBack(created);
-        keepCategory(created);
-        if (stillOpen()) closeForm();
-        // A repeat of an add whose answer was lost adds nothing (D-040): the toast says so, without an Undo.
-        showToast(
-          res.repeated
-            ? { message: `Already added "${created.title}"`, type: "success", touches: touches(created.id), saved }
-            : {
-                message: `Added "${created.title}"`,
-                type: "success",
-                touches: touches(created.id),
-                saved,
-                onUndo: undoWith(
-                  showToast,
-                  async () => {
-                    drop(created);
-                    const back = await deleteTodoAction(created.id).catch(() => null);
-                    if (!back?.success && shows(created)) putBack(created);
-                    return back;
-                  },
-                  (back) => (back && !back.success ? back.error : "Failed to undo"),
-                ),
-              },
-        );
+        drop(before);
+        return warn(res.error);
       }
-    } finally {
-      setSavingIn((now) => (now === from ? null : now));
+      // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
+      const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof Editable]])) as Partial<Editable>;
+      const after = { ...before, ...changed };
+      putFields(before, changed);
+      keepCategory(after);
+      if (stillOpen()) closeForm();
+      showToast({
+        message: `Saved "${title}"`,
+        type: "success",
+        touches: touches(before.id),
+        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            putFields(before, undo);
+            const back = await updateTodoAction({ id: before.id, ...undo }).catch(() => null);
+            if (back?.success) keepCategory({ ...after, ...undo });
+            else putFields(before, changed);
+            return back;
+          },
+          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+        ),
+      });
+    } else {
+      const res = await addTodoAction({
+        id,
+        space,
+        title,
+        isRecurring: isDaily,
+        recurrencePattern: isDaily ? "daily" : "none",
+        dueDate: todayDate,
+        reminderTime,
+        category: isDaily ? categoryInput : "other",
+      }).catch(() => null);
+      if (!res?.success) return refused(res?.error ?? "Failed to save task");
+      const created = res.todo;
+      if (shows(created)) putBack(created);
+      keepCategory(created);
+      if (stillOpen()) closeForm();
+      // A repeat of an add whose answer was lost adds nothing (D-040): the toast says so, without an Undo.
+      showToast(
+        res.repeated
+          ? { message: `Already added "${created.title}"`, type: "success", touches: touches(created.id) }
+          : {
+              message: `Added "${created.title}"`,
+              type: "success",
+              touches: touches(created.id),
+              onUndo: undoWith(
+                showToast,
+                async () => {
+                  drop(created);
+                  const back = await deleteTodoAction(created.id).catch(() => null);
+                  if (!back?.success && shows(created)) putBack(created);
+                  return back;
+                },
+                (back) => (back && !back.success ? back.error : "Failed to undo"),
+              ),
+            },
+      );
     }
   };
 
@@ -526,14 +498,12 @@ export function TodosClient({
         onSubmit={handleSubmit}
         error={errorMsg}
         errorId="task-title-error"
-        busy={saving}
         canSubmit={!!titleInput.trim()}
       >
         <Field
           label="Title"
           type="text"
           required
-          disabled={saving}
           value={titleInput}
           onChange={(e) => {
             setTitleInput(e.target.value);
@@ -543,11 +513,11 @@ export function TodosClient({
           aria-describedby={errorMsg ? "task-title-error" : undefined}
         />
         {(editing ? editing.isRecurring : isDaily) && (
-          <CategoryField categories={categories[editing?.space ?? space]} value={categoryInput} onChange={setCategoryInput} disabled={saving} />
+          <CategoryField categories={categories[editing?.space ?? space]} value={categoryInput} onChange={setCategoryInput} />
         )}
         {/* Without push there is nothing to remind with; an existing time stays untouched on save. */}
         {isPushEnabled() && (
-          <Field label="Reminder (optional)" type="time" disabled={saving} value={reminderTimeInput} onChange={(e) => setReminderTimeInput(e.target.value)} />
+          <Field label="Reminder (optional)" type="time" value={reminderTimeInput} onChange={(e) => setReminderTimeInput(e.target.value)} />
         )}
       </FormModal>
     </Page>

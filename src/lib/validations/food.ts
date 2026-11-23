@@ -8,7 +8,7 @@ import { formatNumber, roundTo } from "@/lib/number-format";
 export const MAX_WATER_ML = 20000;
 /** The most steps a day (or a step goal) can hold: the log and the goal share one limit. */
 export const MAX_STEPS = 200000;
-/** The most one meal can hold; the Health form checks the same limits, with these words, before it saves. */
+/** The most one meal can hold; the Health form checks them through `mealAmounts` before it saves. */
 export const MEAL_LIMITS = { calories: 10000, macroGrams: 1000 } as const;
 export const MEAL_CALORIES_TOO_HIGH = `Calories must be ${formatNumber(MEAL_LIMITS.calories)} or less`;
 export const MEAL_MACROS_TOO_HIGH = `Protein, carbs and fat must each be ${formatNumber(MEAL_LIMITS.macroGrams)} g or less`;
@@ -33,6 +33,9 @@ const mealFields = z.object({
  */
 export const mealHasValue = (meal: { calories: number; protein: number; carbs: number; fat: number }) =>
   meal.calories > 0 || [meal.protein, meal.carbs, meal.fat].some((grams) => roundTo(grams, 1) > 0);
+
+/** A meal's amounts alone: the Health meal form checks them with this before it saves, in the server's words. */
+export const mealAmounts = mealFields.pick({ calories: true, protein: true, carbs: true, fat: true });
 
 export const logMealSchema = mealFields.extend({ id: newId }).refine(mealHasValue, "Enter calories or a macro above 0");
 
