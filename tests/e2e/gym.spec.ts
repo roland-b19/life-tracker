@@ -822,14 +822,19 @@ test("Start on another day after today's workout is finished is refused, and the
 });
 
 // D-040, D-047: an Undo the server refuses says why, in the server's words, with no Retry: the server has answered.
+// The page's clock stands still from Finish on and moves 1 s only, for the refresh, so the Removed toast does not run
+// out while the other device loads and starts its workout.
 test("Undo of a workout removed for having no sets, refused because another device started one, shows the server's reason", async ({ signedInPage: page, browser }) => {
   const removed = "No sets logged: the workout was removed";
+  await page.clock.install();
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
+  await pauseClock(page);
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText(removed)).toBeVisible();
   // This page's own refresh first: after the other device's Start, a refresh would show its workout here.
+  await page.clock.runFor(1000);
   await refreshesDone(page);
   const other = await otherDevice(browser, page);
   await startWorkout(other, DAY);
