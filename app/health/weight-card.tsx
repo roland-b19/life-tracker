@@ -2,6 +2,7 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { BigNumber, Card, Field, FormModal, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { EditButton, RowActions } from "../components/lists";
 import { undoWith, useToast } from "../components/toast";
 import { useOnce } from "../components/once";
@@ -31,6 +32,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   const [kilograms, setKilograms] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
@@ -83,6 +85,8 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
   async function handleSubmit(event: FormEvent<HTMLFormElement>, { id, stillOpen }: FormOpening) {
     event.preventDefault();
     setErrorMsg("");
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = refusal(stillOpen, setErrorMsg, warn);
     const value = Number(kilograms);
     // This opening's weigh-in: the form opened again meanwhile has its own.
     const shown = opened.current;
@@ -90,11 +94,7 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
     // has. The id is the form opening's, so a repeat of the same add after a lost answer adds nothing (D-040) and says it
     // was already saved, without an Undo.
     const res = await saveWeightAction({ id, date: today, kilograms: value }).catch(() => null);
-    if (!res?.success) {
-      // A refusal shows in the form while it is on screen, else as a toast.
-      const message = res?.error ?? "Failed to save weight";
-      return stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" });
-    }
+    if (!res?.success) return refused(res?.error ?? "Failed to save weight");
     const { entry, previous, repeated } = res;
     if (stillOpen()) setOpen(false);
     upsert(entry);

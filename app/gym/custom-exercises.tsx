@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL } from "@/lib/gym-muscles";
 import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { ListBox, RowActions } from "../components/lists";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -24,6 +25,7 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 /** The user's own exercises: rename or re-file one, or delete it while no routine or workout uses it. Both have an Undo. */
 export function CustomExercises({ exercises, fold }: { exercises: CustomExercise[]; fold: { folded: boolean; onToggle: () => void } }) {
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   const [editing, setEditing] = useState<CustomExercise | null>(null);
   const [form, setForm] = useState({ name: "", muscleGroup: "chest", equipmentType: "barbell" });
   const [errorMsg, setErrorMsg] = useState("");
@@ -50,21 +52,17 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     const name = form.name.trim();
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const res = await updateCustomExerciseAction({ id: before.id, ...form, name });
-      if (!res.success) return refused(res.error);
-      if (stillOpen()) setEditing(null);
-      showToast({
-        message: `Saved "${name}"`,
-        type: "success",
-        touches: touches(before.id),
-        // Refused, with the reason, when another exercise has taken the old name since.
-        onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
-      });
-    } catch {
-      refused("Failed to save exercise");
-    }
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const res = await updateCustomExerciseAction({ id: before.id, ...form, name }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save exercise");
+    if (stillOpen()) setEditing(null);
+    showToast({
+      message: `Saved "${name}"`,
+      type: "success",
+      touches: touches(before.id),
+      // Refused, with the reason, when another exercise has taken the old name since.
+      onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
+    });
   }
 
   // The row leaves and the toast shows at once (D-047); a refused delete, or one with no answer, puts the row back, takes

@@ -1392,6 +1392,51 @@ test("a goals save refused after Cancel shows as a toast, not in the form [D-047
   await expect(goalsForm.getByRole("alert")).toHaveCount(0);
 });
 
+// The same for a shopping add: lost after Cancel, it says so in a toast, the list stays empty and the form opened next
+// starts with no error.
+test("a shopping add lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const name = itemName();
+  const release = await holdWrites(page, `"name":"${name}"`);
+  await page.getByRole("button", { name: "Add item" }).click();
+  const form = page.getByRole("dialog", { name: "New shopping item" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to add item")).toBeVisible();
+  await expect(page.getByText("Your shopping list is empty.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  await expect(form.getByLabel("Name")).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
+// The same for a meal: lost after Cancel, it says so in a toast and no meal is shown; the form opened next still holds
+// what was typed (the meal fields clear only on a save), with no error.
+test("a meal save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  // A number no other meal test uses, to find this meal's write.
+  const kcal = 500 + Math.floor(Math.random() * 400);
+  const release = await holdWrites(page, `"calories":${kcal}`);
+  await page.getByRole("button", { name: "Add meal" }).click();
+  const form = page.getByRole("dialog", { name: "New meal" });
+  await form.getByLabel("Calories (kcal)").fill(String(kcal));
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to add meal")).toBeVisible();
+  await expect(page.getByRole("button", { name: deleteMeal(String(kcal)) })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add meal" }).click();
+  await expect(form.getByLabel("Calories (kcal)")).toHaveValue(String(kcal));
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
 // The chat's Send writes once per tap burst through the shared guard (D-047): two submits that come before the page
 // has drawn the first one's "Sending..." send one message. Nothing reaches the server: the held message is lost.
 test("two quick Sends in the food chat send one message [D-047]", async ({ signedInPage: page }) => {

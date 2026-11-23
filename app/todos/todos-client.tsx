@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup, type FormOpening } from "../components/blocks";
-import { changedFields } from "../components/forms";
+import { changedFields, refusal } from "../components/forms";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -76,7 +76,7 @@ export function TodosClient({
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
   const [errorMsg, setErrorMsg] = useState("");
-  // Undo, which finishes seconds later, reads the tab as it is then.
+  // Flows that finish later (an add's answer, a failed delete, Undo) read the tab as it is then.
   const latest = useRef({ tab });
   useEffect(() => {
     latest.current = { tab };
@@ -145,7 +145,7 @@ export function TodosClient({
     const before = editing;
     // The answer belongs to the opening it came from: a form closed or opened since stays as it is. The server checks
     // the limits; its message shows in the form, which keeps what was typed, or in a toast once the form is gone.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
+    const refused = refusal(stillOpen, setErrorMsg, warn);
     setErrorMsg("");
     if (before) {
       // Only a daily task has a category to pick; a one-off keeps the one it has.
