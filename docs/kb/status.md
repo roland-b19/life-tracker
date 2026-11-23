@@ -32,9 +32,9 @@ last_verified: 2026-11-23
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers is decided (D-047) and being built in batches (H1 Tasks and test plumbing, H2a Gym, H2b the shell and T12 the second-device helper merged into the integration branch; and W2a the form hook's opening merged; then W2b, the rest of the form hook, and the action names last); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046.
-
-4. A flaky e2e test: `tests/e2e/categories.spec.ts` "the categories card deletes another row while a delete is unanswered" sometimes keeps a row after the reload (seen 3 in 12 runs, on base too); find the cause.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers is decided (D-047) and being built in batches (H1 Tasks and test plumbing, H2a Gym, H2b the shell and T12 the second-device helper merged into the integration branch; W2a the form hook's opening and I6 the action inputs and names merged; W2b, the rest of the form hook, in its fix round); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046.
+4. Flaky e2e tests, on base too, being fixed: `tests/e2e/categories.spec.ts` "the categories card deletes another row while a delete is unanswered" sometimes keeps a row after the reload (2 in 15 runs), and `tests/e2e/gym.spec.ts` near lines 909 and 1957 each failed once in a full run.
+5. `updateWishlistItem` parses its input twice (the action and `src/lib`); drop one parse.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
