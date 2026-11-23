@@ -35,6 +35,9 @@ last_verified: 2026-11-23
 3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers (D-047) is built and verified on one integration branch, in its PR; open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045, D-046 and D-047.
 4. Two e2e loose ends seen under load, not caused by a change: an ECONNRESET in the spec helper `signedInUserId` (`tests/e2e/helpers.ts`), and the Gym page's main thread stalled for about 14 s after a refresh.
 5. `updateWishlistItem` parses its input twice (the action and `src/lib`); drop one parse.
+6. Gym day editor: Cancel and Escape still work while a day save is out; after Cancel the day is saved anyway, and Escape shows a misleading "Changes discarded" (seen in the review of the D-047 round; it predates it).
+7. Health meal form: reopened and saved again before the first save answers, it adds the same meal twice (predates D-047).
+8. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
