@@ -406,35 +406,32 @@ export function FoodClient({
     const close = () => setMetricOpen((open) => (open === metric ? null : open));
     setErrorMsg("");
     if (metric === "water") setWaterSaving(true);
-    try {
-      const res = await writeMetric(metric, change);
-      if (!res?.success) return refused(res?.error ?? `Failed to save ${metric}`, stillOpen, close);
-      showSaved(metric, res);
-      if (stillOpen()) close();
-      const name = metric === "water" ? "Water" : "Steps";
-      const unit = metric === "water" ? " ml" : "";
-      const amount = `${formatNumber(value)}${unit}`;
-      const target = `${formatNumber(goal)}${unit}`;
-      showToast({
-        message:
-          change.goal === undefined ? `${name} set to ${amount}` : change.amount === undefined ? `${name} goal set to ${target}` : `${name} set to ${amount}, goal ${target}`,
-        type: "success",
-        touches: metricKeys(metric, change),
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            showChange(metric, undo);
-            const back = await writeMetric(metric, undo);
-            if (back?.success) showSaved(metric, back);
-            else showChange(metric, change);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-        ),
-      });
-    } finally {
-      if (metric === "water") setWaterSaving(false);
-    }
+    const res = await writeMetric(metric, change);
+    if (metric === "water") setWaterSaving(false);
+    if (!res?.success) return refused(res?.error ?? `Failed to save ${metric}`, stillOpen, close);
+    showSaved(metric, res);
+    if (stillOpen()) close();
+    const name = metric === "water" ? "Water" : "Steps";
+    const unit = metric === "water" ? " ml" : "";
+    const amount = `${formatNumber(value)}${unit}`;
+    const target = `${formatNumber(goal)}${unit}`;
+    showToast({
+      message:
+        change.goal === undefined ? `${name} set to ${amount}` : change.amount === undefined ? `${name} goal set to ${target}` : `${name} set to ${amount}, goal ${target}`,
+      type: "success",
+      touches: metricKeys(metric, change),
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          showChange(metric, undo);
+          const back = await writeMetric(metric, undo);
+          if (back?.success) showSaved(metric, back);
+          else showChange(metric, change);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   function openGoals() {
@@ -498,33 +495,28 @@ export function FoodClient({
       setStatusMessage(message);
     };
 
-    try {
-      // The server reads only the last 10 turns and rejects more than 20.
-      const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
-      const res = await sendFoodChatMessageAction({
-        message: text,
-        history,
-        date: todayDate,
-        time: appTime(),
+    // The server reads only the last 10 turns and rejects more than 20.
+    const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
+    const res = await sendFoodChatMessageAction({
+      message: text,
+      history,
+      date: todayDate,
+      time: appTime(),
+    }).catch(() => null);
+    setChatLoading(false);
+    if (!res?.success) return takeBack(res?.error ?? "Failed to send message");
+    const { meals } = res;
+    setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
+    if (res.freshSummary) setSummary(res.freshSummary);
+    if (meals.length) {
+      showToast({
+        message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
+        type: "success",
+        touches: mealKeys(meals),
+        onUndo: undoLogged(meals, (removed) =>
+          setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
+        ),
       });
-      if (!res.success) return takeBack(res.error);
-      const { meals } = res;
-      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
-      if (res.freshSummary) setSummary(res.freshSummary);
-      if (meals.length) {
-        showToast({
-          message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
-          type: "success",
-          touches: mealKeys(meals),
-          onUndo: undoLogged(meals, (removed) =>
-            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
-          ),
-        });
-      }
-    } catch {
-      takeBack("Failed to send message");
-    } finally {
-      setChatLoading(false);
     }
   }
 

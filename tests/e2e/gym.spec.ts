@@ -1793,6 +1793,25 @@ test("a set delete whose answer is lost takes its Removed set toast away and put
   expect(await setCount(await signedInUserId(page))).toBe(1);
 });
 
+// A workout write whose answer never comes says so, and the page's saving flag goes off with the answer, so every
+// control of the workout works again: here a set log, which leaves no set behind.
+test("a set log whose answer is lost says it failed, and the workout's buttons work again [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+  await page.getByLabel("Value").fill("60");
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: "Log set" }).click();
+  await expect(page.getByRole("button", { name: "Finish workout" })).toBeDisabled();
+  await release(true);
+  await expect(toast(page, "Failed to add set")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log set" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Finish workout" })).toBeEnabled();
+  await expect(page.getByText(SET_LINE)).toBeHidden();
+  expect(await setCount(await signedInUserId(page))).toBe(0);
+});
+
 // D-046, D-047: a set already gone from the server (another device deleted it) counts as removed: the set stays off
 // the screen and its toast stays, with its Undo, and no failure shows. The page's clock stands still, so the toast
 // cannot have run out by itself.

@@ -1461,6 +1461,7 @@ test("two quick Sends in the food chat send one message [D-047]", async ({ signe
   await release(true);
   await expect(toast(page, "Failed to send message")).toBeVisible();
   await expect(chat.getByLabel("Message")).toHaveValue(text);
+  await expect(chat.getByRole("button", { name: "Send" })).toBeEnabled();
   await settled(page);
   expect(writes).toHaveLength(1);
 });
