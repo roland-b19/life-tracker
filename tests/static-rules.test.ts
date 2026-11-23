@@ -246,14 +246,15 @@ const callerOf = (n: ts.Node): ts.Node[] => {
 };
 
 // A name's code: its declaration (a function's whole code, a variable's value, a parameter's default values, what a
-// `for (const c of list)` takes it from) and each expression in the scope that declares it that writes to it, the name
+// `for (const c of list)` or `for (const k in object)` takes it from) and each expression in the scope that declares it that writes to it, the name
 // resolved to that same declaration: an assignment to it or to a member of it (`name = …`, `name.current = …`, `name++`,
 // `delete name.x`, `for (name of list)`) and, unless it is a function (declared as one, or called anywhere), a call or JSX
 // prop it or a member of it is handed to (`Object.assign(name, …)`, `<C v={name} />`, with C's code) or a call of a method
 // of it (`name.push(…)`). For `const [value, setValue] = useState(…)` (or `useReducer`, `value` also a pattern such as
-// `[{ value }, setForm]`), `value`'s code also holds each call of `setValue` and what it is handed to. A callback's
-// parameter also holds what calls the callback (callerOf), the callback inline or named (`function pick`, `const pick =`
-// an arrow or `useCallback(…)`), at each place it is handed.
+// `[{ value }, setForm]`), `value`'s code also holds each call of `setValue` and the call it is handed to (`load(setValue)`,
+// `.then(setValue)`). A callback's parameter also holds what calls the callback (callerOf), the callback inline or named
+// (`function pick`, `const pick =` an arrow or `useCallback(…)`), at each place it is handed to a call or a JSX prop. A
+// callback or setter inside an options object (`load({ done: (v) => setValue(v) })`) is not followed.
 const nameCode = (name: string, declaration: ts.Node): ts.Node[] => {
   const own: ts.Node[] = [];
   if (ts.isFunctionDeclaration(declaration)) own.push(declaration);
@@ -343,15 +344,18 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   // must be a function of this file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another
   // kind, is an unknown handler and fails. The save sends a `from` when the code the handler runs (codeOf) matches
   // sendsFrom, comments included. That code follows, however deep and each name looked up by scope in this file, exactly
-  // these flows (nameCode): calls to functions of this file; a name's declaration and every write to it; a state value's
-  // setter calls, plain (`[value, setValue]`) or destructured (`[{ value }, setForm]`); a callback's parameter, read as the
-  // call it is handed to (`getDraft().then((d) => …)` reads `getDraft().then`); a `for…of` variable, read as its iterable;
-  // a component of this file handed a value or setter in JSX (`<Picker onPick={setInput} />` reads `Picker`); parameter
-  // defaults. Any other flow is not followed, for example: code from another file (an import, what a prop runs: `function
-  // submit(e) { onSave(e); }` is checked without `onSave`'s code, a namespace member: `<B.FormModal>` is not found), a
-  // FormModal imported under another name, an alias of a setter (`const update = setInput`), a custom hook of this file
-  // (`const [v, setV] = useDraft()`), and a value aliased then changed through the alias (`const t = input;
-  // Object.assign(t, …)`). This reads more than the save may run, so a form that sends no `from` can be flagged.
+  // these flows (nameCode): calls to functions of this file; a name's declaration and every write to it (an assignment, and
+  // for a value that is not a function a call or JSX prop it is handed to or a method called on it); a state value's setter
+  // calls, plain (`[value, setValue]`) or destructured (`[{ value }, setForm]`), and the call a setter is handed to
+  // (`load(setInput)`, `.then(setInput)`); a callback's parameter, read as the call it is handed to (`getDraft().then((d) =>
+  // …)` reads `getDraft().then`) or, handed to a JSX prop, as that element's component; a `for…of` or `for…in` variable,
+  // read as its iterable; a component of this file handed a value or setter in JSX (`<Picker onPick={setInput} />` reads
+  // `Picker`); parameter defaults. Any other flow is not followed, for example: code from another file (an import, what a
+  // prop runs: `function submit(e) { onSave(e); }` is checked without `onSave`'s code, a namespace member: `<B.FormModal>`
+  // is not found), a FormModal imported under another name, an alias of a setter (`const update = setInput`), a callback
+  // or setter inside an options object (`load({ done: (v) => setInput(v) })`), a custom hook of this file (`const [v, setV]
+  // = useDraft()`), and a value aliased then changed through the alias (`const t = input; Object.assign(t, …)`). This reads
+  // more than the save may run, so a form that sends no `from` can be flagged.
   // A tag written `FormModal`, or a name of this file declared `const X = FormModal` (directly or through another such name).
   const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
     if (!ts.isIdentifier(tag)) return false;
@@ -474,7 +478,7 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   });
 
   // A `from` that reaches the save through a callback's parameter (`.then((d) => …)`, a callback handed to a helper,
-  // `forEach`, a `for…of` variable), a component of this file handed a setter, a ref or a callback in JSX, or a
+  // `forEach`, a `for…of` or `for…in` variable), a component of this file handed a setter, a ref or a callback in JSX, or a
   // destructured state value's setter fails; the same copy without that `from` gives none.
   const SEND = (sent: string) => `\n  function send(e: React.FormEvent) { e.preventDefault(); void renameCategoryAction(${sent}); }`;
   const STATE = "const [input, setInput] = useState<never>(null as never);";
@@ -486,6 +490,7 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     ["", `const pending = useRef<never>(null as never);\n  useEffect(() => { void getDraft().then((d) => { pending.current = d; }); }, []);\n  async function getDraft() { return { scope, from: prev, to: next } as never; }${SEND("pending.current")}`, ""],
     ["", `const changes = [{ scope, from: prev, to: next }];\n  const batch: never[] = [];\n  changes.forEach((c) => batch.push(c as never));${SEND("batch[0]")}`, ""],
     ["", `const changes = [{ scope, from: prev, to: next }];\n  const batch: never[] = [];\n  for (const c of changes) batch.push(c as never);${SEND("batch[0]")}`, ""],
+    ["", `const batch: never[] = [];\n  for (const k in getChanges()) batch.push(k as never);\n  function getChanges() { return { scope, from: prev, to: next }; }${SEND("batch[0]")}`, ""],
     [PICKER, `${STATE}${SEND("input")}`, "<Picker onPick={setInput} />"],
     [FILLER, `const pending = useRef<never>(null as never);${SEND("pending.current")}`, "<Filler target={pending} />"],
     [PICKER, `${STATE}\n  const pick = useCallback((v: never) => setInput(v), []);${SEND("input")}`, "<Picker onPick={pick} />"],
