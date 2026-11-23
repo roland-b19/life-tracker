@@ -365,6 +365,51 @@ test("the categories card deletes another row while a delete is unanswered", asy
   await expect(card(page).locator(".entry-row")).toHaveCount(0);
 });
 
+// A rename keeps its opening while it is out (D-047), but only for its own category: Edit on another category, or Add,
+// opened meanwhile is a fresh opening with its own name, enabled. Opening the renamed category again, after those, waits
+// for the rename with the name it sent, and the answer closes it.
+test("the categories card keeps a rename's opening only for the same category [D-047]", async ({ signedInPage: page }) => {
+  const [a, b, x] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const writes = countWrites(page, `"to":"${x}"`);
+  const release = await holdWrites(page, `"to":"${x}"`);
+  const edit = page.getByRole("dialog", { name: "Edit category" });
+  const field = edit.getByLabel("Name", { exact: true });
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await field.fill(x);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).click();
+  await expect(field).toHaveValue(b);
+  await expect(field).toBeEnabled();
+  await expect(edit.getByRole("button", { name: "Save" })).toBeEnabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: "Add category" }).click();
+  const add = page.getByRole("dialog", { name: "New category" });
+  await expect(add.getByLabel("Name", { exact: true })).toHaveValue("");
+  await expect(add.getByLabel("Name", { exact: true })).toBeEnabled();
+  await add.getByRole("button", { name: "Cancel" }).click();
+  await expect(add).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(x);
+  await andSettle(page, async () => release(), `"to":"${x}"`);
+  await expect(edit).toBeHidden();
+  await expect(page.getByText(`Renamed "${a}" to "${x}"`, { exact: true })).toBeVisible();
+  expect(writes).toHaveLength(1);
+});
+
 // A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
 // enough to scroll the rows up to where the toast opens.
 async function onPhoneWith(page: Page, names: string[]) {

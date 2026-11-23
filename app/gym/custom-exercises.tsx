@@ -36,9 +36,10 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   const tappedButton = useRef<Element | null>(null);
   const touches = (id: string) => [`exercises:${id}`];
 
-  function open(e: CustomExercise) {
-    setEditing(e);
-    setForm({ name: e.name, muscleGroup: e.muscleGroup, equipmentType: e.equipmentType });
+  // A new opening starts from the exercise as listed; the save's opening, shown again, from what it sent.
+  function start(sent?: typeof form) {
+    if (!editing) return;
+    setForm(sent ?? { name: editing.name, muscleGroup: editing.muscleGroup, equipmentType: editing.equipmentType });
     setErrorMsg("");
   }
 
@@ -106,13 +107,27 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
                 <MuscleTag group={e.muscleGroup} />
                 <span className="muted entry-detail">{cap(e.equipmentType)}</span>
               </div>
-              <RowActions onEdit={() => open(e)} onDelete={() => once(e.id, () => remove(e), tappedButton.current)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
+              <RowActions onEdit={() => setEditing(e)} onDelete={() => once(e.id, () => remove(e), tappedButton.current)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>
           ))}
         </ListBox>
       </Card>
 
-      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} canSubmit={visible(form.name)}>
+      {/* The save sends the whole form, so the form keeps its opening while it is out (D-047): opened again for the same
+          exercise before the answer, also after another one, it waits for that save with what it sent, as a fresh opening
+          would show the exercise from before it and its Save would undo it. Opened for another exercise, it is a fresh opening. */}
+      <FormModal
+        isOpen={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit exercise"
+        onSubmit={save}
+        error={errorMsg}
+        keepsOpening
+        subject={editing?.id}
+        snapshot={() => form}
+        onOpen={start}
+        canSubmit={visible(form.name)}
+      >
         <Field label="Name" type="text" required maxLength={GYM_LIMITS.exerciseName} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <FieldPair>
           <SelectField

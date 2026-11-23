@@ -39,13 +39,14 @@ export function DeloadCard({
   busy: boolean; // the Gym page's saving flag: the switch and Edit wait for the workout write
 }) {
   const { showToast } = useToast();
-  // Last and next deload week being edited (Sundays, "" for none), null while the dialog is closed.
-  const [draft, setDraft] = useState<{ last: string; next: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  // Last and next deload week being edited (Sundays, "" for none); kept while the dialog is closed, so the form opened
+  // again while its save is out shows the weeks it sent.
+  const [draft, setDraft] = useState({ last: "", next: "" });
   const [errorMsg, setErrorMsg] = useState("");
 
   async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
-    if (!draft) return;
     const problem = deloadProblem(draft.last, draft.next);
     if (problem) {
       setErrorMsg(problem);
@@ -57,7 +58,7 @@ export function DeloadCard({
     try {
       const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null });
       if (!res.success) return refused(res.error);
-      if (stillOpen()) setDraft(null);
+      if (stillOpen()) setOpen(false);
       const { last, added, removed } = res;
       showToast({
         // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.
@@ -94,30 +95,38 @@ export function DeloadCard({
           <EditButton
             label="Edit deload weeks"
             disabled={busy}
-            onClick={() => {
-              setErrorMsg("");
-              setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
-            }}
+            onClick={() => setOpen(true)}
           />
         }
       >
         <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
       </Card>
-      {/* Opened again while its save is out, it waits for that save: a fresh opening would show the weeks from before it,
-          and its Save would undo it (D-047). */}
-      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} keepsOpening>
+      {/* Opened again while its save is out, it waits for that save with the weeks it sent: a fresh opening would show the
+          weeks from before it, and its Save would undo it (D-047). */}
+      <FormModal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Deload weeks"
+        onSubmit={save}
+        error={errorMsg}
+        keepsOpening
+        onOpen={() => {
+          setErrorMsg("");
+          setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
+        }}
+      >
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
         <SelectField
           label="Last deload"
-          value={draft?.last ?? ""}
-          options={deloadOptions(today, -1, draft?.last ?? "", "Not set")}
-          onChange={(e) => setDraft((d) => d && { ...d, last: e.target.value })}
+          value={draft.last}
+          options={deloadOptions(today, -1, draft.last, "Not set")}
+          onChange={(e) => setDraft((d) => ({ ...d, last: e.target.value }))}
         />
         <SelectField
           label="Next deload"
-          value={draft?.next ?? ""}
-          options={deloadOptions(today, 1, draft?.next ?? "", "Not chosen")}
-          onChange={(e) => setDraft((d) => d && { ...d, next: e.target.value })}
+          value={draft.next}
+          options={deloadOptions(today, 1, draft.next, "Not chosen")}
+          onChange={(e) => setDraft((d) => ({ ...d, next: e.target.value }))}
         />
       </FormModal>
     </>

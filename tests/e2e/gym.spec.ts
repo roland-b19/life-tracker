@@ -443,8 +443,8 @@ test("a double tap on the day editor's Save saves once", async ({ signedInPage: 
 // FormModal owns each opening (D-047): a Gym form's save lost after its Cancel says so in a toast, not in the form opened
 // next, which is its own opening: its Save is free and the late answer leaves what is typed in it. Before, the Gym page's
 // saving flag (or the form's own) kept the form, or the button that opens it, waiting for the first save. A form that
-// keeps its opening while its save is out (`keepsOpening`: the day editor, the deload form) would wait for that save if
-// opened again before the answer, so it is opened again after it.
+// keeps its opening while its save is out (`keepsOpening`: the day editor, the deload form, the custom exercise form)
+// would wait for that save if opened again before the answer, so it is opened again after it.
 async function lostAfterCancel(
   page: Page,
   o: { open: () => Promise<Locator>; type: (form: Locator, n: 1 | 2) => Promise<void>; held: string; failed: string; keepsOpening?: boolean },
@@ -541,6 +541,7 @@ test("the day editor opened again while its save is out waits for it, and the sa
   editor = await openEditor(page);
   await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(editor.getByLabel("Sets", { exact: true }).first()).toBeDisabled();
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
   await release();
   await expect(editor).toBeHidden();
   await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
@@ -552,6 +553,37 @@ test("the day editor opened again while its save is out waits for it, and the sa
   editor = await openEditor(page);
   await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
   await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+// The kept opening shows what it sent, so a refusal leaves the typed edits in the editor for the owner to fix or save
+// again; before, it showed the day as saved, under the refusal.
+test("the day editor opened again while its save is out shows what it sent, and keeps it when the save is refused [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await openGym(page);
+  const name = `Upper ${randomUUID().slice(0, 8)}`;
+  const release = await holdWrites(page, `"name":"${name}"`);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Name", { exact: true }).fill(name);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Name", { exact: true })).toHaveValue(name);
+  await expect(editor.getByLabel("Name", { exact: true })).toBeDisabled();
+  await release(true);
+  await expect(editor.getByRole("alert")).toHaveText("Failed to save day");
+  await expect(editor.getByLabel("Name", { exact: true })).toHaveValue(name);
+  await expect(editor.getByLabel("Name", { exact: true })).toBeEnabled();
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  // The held route still drops a save with that name, so the owner's fix gives the day another one.
+  await editor.getByLabel("Name", { exact: true }).fill(`${name} B`);
+  await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${name} B"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${name} B"`)).toBeVisible();
 });
 
 test("the deload form opened again while its save is out waits for it, and the save's week stays [D-047]", async ({ signedInPage: page }) => {
@@ -575,6 +607,8 @@ test("the deload form opened again while its save is out waits for it, and the s
   await edit.click();
   await expect(dialog.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(dialog.getByLabel("Last deload")).toBeDisabled();
+  // It shows the week it sent, not the weeks from before the save.
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
   await release();
   await expect(dialog).toBeHidden();
   await expect(toast(page, "Saved deload weeks")).toBeVisible();
@@ -606,21 +640,25 @@ test("a custom exercise save lost after Cancel shows as a toast, and the form op
     },
     held: `"name":"${names[1]}"`,
     failed: "Failed to save exercise",
+    keepsOpening: true,
   });
   await expect(mine(page).getByText(names[2], { exact: true })).toBeVisible();
   await expect(mine(page).getByText(names[1], { exact: true })).toHaveCount(0);
 });
 
-// An answer belongs to its opening (D-047): the first opening's save, answered with success after its Cancel while the
-// form is open again, neither closes that form nor clears what is typed in it, and its toast still shows.
-test("a custom exercise save answered after Cancel leaves the form opened again as it is, and still shows its toast [D-047]", async ({
+// The custom exercise form sends the whole form, so it keeps its opening while its save is out (D-047): opened again for
+// the same exercise before the answer, it waits with the name it sent, and the answer closes it. A fresh opening would
+// show the old name, and its Save would undo the rename. Opened for another exercise meanwhile, it is a fresh opening,
+// and the first exercise opened after that is the save's opening again.
+test("the custom exercise form opened again while its save is out waits with what it sent, and the rename stays [D-047]", async ({
   signedInPage: page,
 }) => {
   const names = [exerciseName(), exerciseName(), exerciseName()];
   await openGym(page);
-  await customExercises(page, [names[0]]);
+  await customExercises(page, [names[0], names[2]]);
   const form = page.getByRole("dialog", { name: "Edit exercise" });
   const field = form.getByLabel("Name", { exact: true });
+  const writes = countWrites(page, `"name":"${names[1]}"`);
   const release = await holdWrites(page, `"name":"${names[1]}"`);
   await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
   await field.fill(names[1]);
@@ -630,13 +668,28 @@ test("a custom exercise save answered after Cancel leaves the form opened again 
   await expect(form).toBeHidden();
 
   await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
-  await field.fill(names[2]);
-  await andSettle(page, () => release(), `"name":"${names[1]}"`);
-  await expect(toast(page, `Saved "${names[1]}"`)).toBeVisible();
-  await expect(form).toBeVisible();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(names[1]);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await mine(page).getByRole("button", { name: `Edit ${names[2]}` }).click();
   await expect(field).toHaveValue(names[2]);
+  await expect(field).toBeEnabled();
   await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
-  await expect(form.getByRole("alert")).toHaveCount(0);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  // Back on the first exercise after the other one, it is the save's opening again, with what it sent.
+  await mine(page).getByRole("button", { name: `Edit ${names[0]}` }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toHaveValue(names[1]);
+  await andSettle(page, () => release(), `"name":"${names[1]}"`);
+  await expect(form).toBeHidden();
+  await expect(toast(page, `Saved "${names[1]}"`)).toBeVisible();
+  await expect(mine(page).getByText(names[1], { exact: true })).toBeVisible();
+  expect(writes).toHaveLength(1);
 });
 
 // "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
@@ -1526,6 +1579,19 @@ test("a second notes refusal after the merged notes were saved elsewhere does no
   await refusedNotes(page, "X Mine more");
   await expect(notes(page)).toHaveValue("X Mine more");
   await exitSaves(page, "X Mine more");
+});
+
+// The field holds the server's notes only where the merge puts them (the whole field, or its start before a space), so
+// short notes that the typed text holds elsewhere ("5" in "Bench 5x5") still come first, and the save keeps them.
+test("short server notes inside the typed text are still put first after a notes refusal [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await refreshesDone(page);
+  await setServerNotes(page, "5");
+  await refusedNotes(page, "Bench 5x5");
+  await expect(notes(page)).toHaveValue("5 Bench 5x5");
+  await exitSaves(page, "5 Bench 5x5");
 });
 
 // Notes the server takes as over its limit, typed past the field's own limit (an older page, a paste the field let by).

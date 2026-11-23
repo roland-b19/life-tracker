@@ -104,13 +104,19 @@ export function ShoppingTab({
   });
 
   function openShopForm(item: ShoppingItemData | null) {
-    setErrorMsg("");
     setEditingShop(item);
-    setShopName(item?.name ?? "");
-    setShopAmount(item ? String(Number(item.amount)) : "1");
-    setShopUnit(item?.unit ?? "pcs");
-    setShopCategory(item?.category ?? "other");
     setIsShopModalOpen(true);
+  }
+
+  const shopForm = () => ({ name: shopName, amount: shopAmount, unit: shopUnit, category: shopCategory });
+
+  // A new opening starts from the item as listed, or empty for an add; the save's opening, shown again, from what it sent.
+  function startShopForm(sent?: ReturnType<typeof shopForm>) {
+    setErrorMsg("");
+    setShopName(sent?.name ?? editingShop?.name ?? "");
+    setShopAmount(sent?.amount ?? (editingShop ? String(Number(editingShop.amount)) : "1"));
+    setShopUnit(sent?.unit ?? editingShop?.unit ?? "pcs");
+    setShopCategory(sent?.category ?? editingShop?.category ?? "other");
   }
 
   const upsertShop = (item: ShoppingItemData) =>
@@ -419,12 +425,20 @@ export function ShoppingTab({
     </Dashboard>
       )}
 
+      {/* An edit's save sends the whole form, so the form keeps its opening while its save is out (D-047): opened again for
+          the same item, or for an add, before the answer, also after another one, it waits for that save with what it
+          sent, as a fresh opening would show the item from before it and its Save would undo it. Opened for another
+          item, it is a fresh opening. */}
       <FormModal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
         title={editingShop ? "Edit shopping item" : "New shopping item"}
         onSubmit={handleShopSubmit}
         error={errorMsg}
+        keepsOpening
+        subject={editingShop?.id ?? ""}
+        snapshot={shopForm}
+        onOpen={startShopForm}
         canSubmit={visible(shopName)}
       >
         <Field label="Name" type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} required />

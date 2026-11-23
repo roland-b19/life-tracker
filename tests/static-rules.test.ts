@@ -355,7 +355,8 @@ const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
 
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
 // second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
-// for a form that passes `keepsOpening` (D-047). Any other form may pass it too (the day editor, the deload form).
+// for a form that passes `keepsOpening` (D-047). Any other form may pass it too (the day editor, the deload form, the
+// custom exercise and shopping item forms).
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
   // `{ from: x, to: y }`, `{ to, from }` or a call such as `rename(from, to)`: the old value next to the new one. Not seen:
   // a quoted key (`{ "from": x }`), the two set in two statements (`o.from = x; o.to = y`), or more than 60 characters

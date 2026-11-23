@@ -156,8 +156,9 @@ export function useWorkout({
   const clock = useClock((activeSession ?? paused)?.timer);
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
   // next save changes from, so the device is not refused again. The field shows the server's notes, then what was typed
-  // (D-047; a space between them, as the field is one line), unless it holds them already: the next save keeps the other
-  // device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
+  // (D-047; a space between them, as the field is one line), unless it holds them already, where this merge puts them
+  // (the whole field, or its start before a space; not anywhere inside it, so short notes such as "5" are not taken as
+  // held by "Bench 5x5"): the next save keeps the other device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
   // then sets what saves change from.
   const [notesStale, setNotesStale] = useState(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
@@ -172,7 +173,8 @@ export function useWorkout({
       const theirs = server.notes ?? "";
       setNotesStale(false);
       setTheirNotes({ text: theirs });
-      if (theirs) setSessionNotes((typed) => (typed.includes(theirs) ? typed : typed ? `${theirs} ${typed}` : theirs));
+      const holds = (typed: string) => typed === theirs || typed.startsWith(`${theirs} `);
+      if (theirs) setSessionNotes((typed) => (holds(typed) ? typed : typed ? `${theirs} ${typed}` : theirs));
     }
   }
   useEffect(() => {

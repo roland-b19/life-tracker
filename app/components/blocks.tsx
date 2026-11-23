@@ -484,7 +484,7 @@ function OpeningFields({ fields, stillOpen }: { fields: (opening: Pick<FormOpeni
  * written as a function get the opening's `stillOpen` too, for an action inside the form (the day editor's "Create and
  * add"): its answer changes only the opening it was sent from.
  */
-export function FormModal({
+export function FormModal<Sent = never>({
   isOpen,
   onClose,
   onCancel,
@@ -493,6 +493,9 @@ export function FormModal({
   error,
   errorId,
   keepsOpening,
+  subject,
+  snapshot,
+  onOpen,
   canSubmit,
   submitLabel,
   children,
@@ -511,9 +514,25 @@ export function FormModal({
    * the answer closes it or shows its refusal in it (D-043, D-047). A form passes it when a second save from a fresh
    * opening would go wrong: its save sends the values it opened with as `from` (D-040), so the second would be refused
    * as changed on another device; or the fresh opening would show the values from before the first save, so its Save
-   * would undo the first (the day editor, the deload form).
+   * would undo the first (the day editor, the deload form, the custom exercise and shopping item forms). The opening
+   * goes on showing the values it sent, disabled, so a refusal leaves them for the owner to fix: the form sets its
+   * fields in `onOpen`, never as it opens.
    */
   keepsOpening?: boolean;
+  /**
+   * What the opening edits, for a form that edits one of several things (a category, a custom exercise): opened again
+   * for another one, or for an add, while a save is out, it is a fresh opening, not the save's; opened for the save's
+   * one again after that, it is the save's opening again, and `onOpen` gets back what `snapshot` took at the Save.
+   */
+  subject?: string;
+  /** With `subject`: the values the form sends, taken at each Save, for `onOpen` to put back. */
+  snapshot?: () => Sent;
+  /**
+   * Runs before an opening shows: the form sets its fields here. A fresh opening runs it with nothing, a kept opening
+   * shown again after another one set the fields runs it with what its Save sent, and a kept opening shown again right
+   * after itself does not run it.
+   */
+  onOpen?: (sent?: Sent) => void;
   canSubmit?: boolean;
   submitLabel?: string;
   children: ReactNode | ((opening: Pick<FormOpening, "stillOpen">) => ReactNode);
@@ -522,15 +541,24 @@ export function FormModal({
   // again nor lands on what lies under the closed dialog (D-043). Enter in a field names the Save button too. The lock
   // belongs to one opening of the form: a save still unanswered after Cancel never holds the Save of the next opening.
   const once = useOnce();
-  const [opening, setOpening] = useState(0);
-  // The opening whose save is unanswered, if any.
-  const [savingIn, setSavingIn] = useState<number | null>(null);
+  // The opening on screen (or last shown), and the last one made: a kept opening can be shown again after a newer one.
+  const [{ opening, made }, setOpenings] = useState({ opening: 0, made: 0 });
+  // The opening whose save is unanswered, if any, what it edits and what it sent.
+  const [savingIn, setSavingIn] = useState<{ opening: number; subject?: string; sent?: Sent } | null>(null);
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen && !(keepsOpening && savingIn === opening)) setOpening(opening + 1);
+    if (isOpen && keepsOpening && savingIn && savingIn.subject === subject) setOpenings({ opening: savingIn.opening, made });
+    else if (isOpen) setOpenings({ opening: made + 1, made: made + 1 });
   }
-  const saving = isOpen && savingIn === opening;
+  const saving = isOpen && savingIn?.opening === opening;
+  // The last opening `onOpen` ran for: its fields are set in the same commit, before the browser paints the form.
+  const started = useRef(-1);
+  useLayoutEffect(() => {
+    if (!isOpen || started.current === opening) return;
+    started.current = opening;
+    onOpen?.(savingIn?.opening === opening ? savingIn.sent : undefined);
+  });
   // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.
   const shown = useRef<number | null>(null);
   useEffect(() => {
@@ -539,22 +567,25 @@ export function FormModal({
       shown.current = null;
     };
   }, [isOpen, opening]);
-  const ids = useRef({ opening: -1, id: "" });
+  // Each opening's id, kept for a kept opening shown again after another one.
+  const ids = useRef(new Map<number, string>());
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     const from = opening;
-    if (ids.current.opening !== from) ids.current = { opening: from, id: crypto.randomUUID() };
-    const { id } = ids.current;
+    const of = subject;
+    const sent = snapshot?.();
+    const id = ids.current.get(from) ?? crypto.randomUUID();
+    ids.current.set(from, id);
     const ran = once(
       `form:${from}`,
       () => {
         let answered = false;
         const answer = Promise.resolve(onSubmit(e, { id, stillOpen: () => shown.current === from })).finally(() => {
           answered = true;
-          setSavingIn((now) => (now === from ? null : now));
+          setSavingIn((now) => (now?.opening === from ? null : now));
         });
         // A submit the page answers at once (a field it refuses) never shows as saving.
         queueMicrotask(() => {
-          if (!answered) setSavingIn(from);
+          if (!answered) setSavingIn({ opening: from, subject: of, sent });
         });
         return answer;
       },

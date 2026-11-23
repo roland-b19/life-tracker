@@ -128,9 +128,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
   const dragRow = useDragSort(move);
 
   function openForm(edit: string | null) {
-    setErrorMsg("");
     setFrom(edit);
-    setName(edit ?? "");
     setOpen(true);
   }
 
@@ -294,6 +292,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
         onSubmit={submit}
         error={errorMsg}
         keepsOpening
+        subject={from ?? ""}
+        snapshot={() => name}
+        onOpen={(sent) => {
+          setErrorMsg("");
+          setName(sent ?? from ?? "");
+        }}
         canSubmit={!!name.trim()}
       >
         <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
