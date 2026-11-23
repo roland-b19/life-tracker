@@ -103,7 +103,9 @@ export function DeloadCard({
       >
         <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
       </Card>
-      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg}>
+      {/* Opened again while its save is out, it waits for that save: a fresh opening would show the weeks from before it,
+          and its Save would undo it (D-047). */}
+      <FormModal isOpen={draft !== null} onClose={() => setDraft(null)} title="Deload weeks" onSubmit={save} error={errorMsg} keepsOpening>
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>
         <SelectField
           label="Last deload"

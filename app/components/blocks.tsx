@@ -485,7 +485,7 @@ export function FormModal({
   onSubmit,
   error,
   errorId,
-  sendsFrom,
+  keepsOpening,
   canSubmit,
   submitLabel,
   children,
@@ -500,11 +500,13 @@ export function FormModal({
   /** Ties the error to the field it is about (aria-describedby). */
   errorId?: string;
   /**
-   * The save sends the values the form opened with as the ones it changes (D-040). Opened again before that save has
-   * answered, the form would show those values again and its Save would be refused as changed on another device, so it
-   * goes on as the same opening: it waits, and the answer closes it or shows its refusal in it (D-043).
+   * Opened again before the save of the opening on screen has answered, the form goes on as that opening: it waits, and
+   * the answer closes it or shows its refusal in it (D-043, D-047). A form passes it when a second save from a fresh
+   * opening would go wrong: its save sends the values it opened with as `from` (D-040), so the second would be refused
+   * as changed on another device; or the fresh opening would show the values from before the first save, so its Save
+   * would undo the first (the day editor, the deload form).
    */
-  sendsFrom?: boolean;
+  keepsOpening?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
   children: ReactNode;
@@ -519,7 +521,7 @@ export function FormModal({
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen && !(sendsFrom && savingIn === opening)) setOpening(opening + 1);
+    if (isOpen && !(keepsOpening && savingIn === opening)) setOpening(opening + 1);
   }
   const saving = isOpen && savingIn === opening;
   // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.

@@ -155,3 +155,28 @@ test("a weight form opened again gets its own id, and a save lost after Cancel s
   expect(ids).toHaveLength(2);
   expect(new Set(ids).size).toBe(2);
 });
+
+// An answer belongs to its opening (D-047): the first opening's save, answered with success after its Cancel while the
+// form is open again, neither closes that form nor clears what is typed in it, and its toast still shows.
+test("a weight save answered after Cancel leaves the form opened again as it is, and still shows its toast [D-047]", async ({ signedInPage: page }) => {
+  await openFood(page);
+  const card = page.getByRole("region", { name: "Weight", exact: true });
+  const form = page.getByRole("dialog", { name: "Edit weight" });
+  const field = form.getByLabel("Weight today (kg)");
+  const release = await holdWrites(page, `"kilograms":81.5`);
+  await card.getByRole("button", { name: "Edit today's weight" }).click();
+  await field.fill("81,5");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await card.getByRole("button", { name: "Edit today's weight" }).click();
+  await field.fill("82,3");
+  await andSettle(page, () => release(), `"kilograms":81.5`);
+  await expect(toast(page, "Added 81,5 kg")).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(field).toHaveValue("82,3");
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});

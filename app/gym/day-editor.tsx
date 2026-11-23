@@ -66,17 +66,21 @@ export interface DiscardedEdit {
 
 /**
  * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
- * arrow keys to reorder, new exercise). Mounted only while open, so each opening starts fresh, or from `resume`.
+ * arrow keys to reorder, new exercise). Mounted for as long as the page shows the day, so its form keeps its opening
+ * while its save is out (D-047): opened again before the answer, it waits for that save, as a fresh opening would show
+ * the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
  * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
  * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
  */
 export function DayEditor({
+  isOpen,
   day,
   exercises,
   resume,
   onClose,
   onReopen,
 }: {
+  isOpen: boolean;
   day: SplitDay;
   exercises: LibraryExercise[];
   resume?: DiscardedEdit;
@@ -99,7 +103,8 @@ export function DayEditor({
   const dragRow = useDragSort(move);
   const known = [...exercises, ...created.filter((c) => !exercises.some((e) => e.id === c.id))];
   // The names as the editor opened: a row whose exercise is deleted elsewhere keeps the name the user knows.
-  const [seen] = useState(() => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]));
+  const names = () => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]);
+  const [seen, setSeen] = useState(names);
   const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? seen.get(id) ?? "Exercise";
   const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
   // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
@@ -121,6 +126,23 @@ export function DayEditor({
   // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
   // disables and labels, never the guard).
   const [creating, setCreating] = useState(false);
+  // Each opening starts from the day as saved, or from `resume`. The form itself knows whether the opening is new.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setDraft(resume?.draft ?? toDraft(day));
+      setCreated(resume?.created ?? []);
+      setSeen(names());
+      setErrorMsg("");
+      setAddId("");
+      setQuery("");
+      setShowCustom(false);
+      setCustomName("");
+      setCustomMuscle("chest");
+      setCustomEquipment("barbell");
+    }
+  }
   function openCustom() {
     customId.current = crypto.randomUUID();
     setShowCustom(true);
@@ -272,9 +294,10 @@ export function DayEditor({
 
   return (
     <FormModal
-      isOpen
+      isOpen={isOpen}
       onClose={close}
       onCancel={() => void cancel()}
+      keepsOpening
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}

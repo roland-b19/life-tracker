@@ -97,16 +97,21 @@ export function GymClient({ userName, today, plateWeights, split, deload, histor
         </>
       )}
 
-      {editing && (
-        <DayEditor
-          key={editing.day.id}
-          day={editing.day}
-          resume={editing.resume}
-          exercises={exercises}
-          onClose={() => setEditing(null)}
-          onReopen={(resume) => setEditing({ day: days.find((d) => d.id === editing.day.id) ?? editing.day, resume })}
-        />
-      )}
+      {/* One editor per day, mounted while the page shows the day, so it keeps its opening while its save is out (D-047). */}
+      {days.map((day) => {
+        const open = editing?.day.id === day.id ? editing : undefined;
+        return (
+          <DayEditor
+            key={day.id}
+            isOpen={Boolean(open)}
+            day={open?.day ?? day}
+            resume={open?.resume}
+            exercises={exercises}
+            onClose={() => setEditing(null)}
+            onReopen={(resume) => setEditing({ day: days.find((d) => d.id === day.id) ?? day, resume })}
+          />
+        );
+      })}
     </Page>
   );
 }

@@ -293,7 +293,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
         title={from ? `Edit ${noun}` : `New ${noun}`}
         onSubmit={submit}
         error={errorMsg}
-        sendsFrom
+        keepsOpening
         canSubmit={!!name.trim()}
       >
         <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
