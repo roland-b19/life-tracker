@@ -486,7 +486,6 @@ export function FormModal({
   error,
   errorId,
   sendsFrom,
-  busy,
   canSubmit,
   submitLabel,
   children,
@@ -506,8 +505,6 @@ export function FormModal({
    * goes on as the same opening: it waits, and the answer closes it or shows its refusal in it (D-043).
    */
   sendsFrom?: boolean;
-  /** Deprecated (D-047): only the forms not moved yet onto FormModal's own saving state pass it (conventions.md, Busy flags); never in new code. */
-  busy?: boolean;
   canSubmit?: boolean;
   submitLabel?: string;
   children: ReactNode;
@@ -568,7 +565,7 @@ export function FormModal({
             onCancel?.();
             onClose();
           }}
-          busy={saving || busy}
+          busy={saving}
           canSubmit={canSubmit}
           submitLabel={submitLabel}
         />

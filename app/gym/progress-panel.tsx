@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
-import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, Field, FormModal, SelectField } from "../components/blocks";
+import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, Field, FormModal, SelectField, type FormOpening } from "../components/blocks";
 import { LineChart } from "../components/charts";
 import { useFolded } from "../components/categories-card";
 import { useDeviceState } from "../components/device-state";
@@ -75,7 +75,6 @@ export function ProgressPanel({
   const [plates, setPlates] = useServerState(plateWeights);
   const [editing, setEditing] = useState<{ exerciseId: string; name: string; kg: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
 
   const exercises = useMemo(() => {
@@ -115,22 +114,20 @@ export function ProgressPanel({
     });
 
   /** Saves "1 plate = X kg"; Undo writes the old value back (none before: the plate weight goes again). */
-  async function savePlate(e: FormEvent<HTMLFormElement>) {
+  async function savePlate(e: FormEvent<HTMLFormElement>, { stillOpen }: FormOpening) {
     e.preventDefault();
     if (!editing) return;
     const { exerciseId: id, name: exercise } = editing;
     const kg = Number(editing.kg);
     setErrorMsg("");
-    setSaving(true);
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const saved = await savePlateWeightAction({ exerciseId: id, kg });
-      if (!saved.success) {
-        setErrorMsg(saved.error);
-        return;
-      }
+      if (!saved.success) return refused(saved.error);
       const { previous } = saved;
       showPlate(id, kg);
-      setEditing(null);
+      if (stillOpen()) setEditing(null);
       showToast({
         message: `1 plate of ${exercise} = ${kgText(kg)}`,
         type: "success",
@@ -147,9 +144,7 @@ export function ProgressPanel({
         ),
       });
     } catch {
-      setErrorMsg("Failed to save the plate weight");
-    } finally {
-      setSaving(false);
+      refused("Failed to save the plate weight");
     }
   }
 
@@ -206,14 +201,12 @@ export function ProgressPanel({
         title="Plate weight"
         onSubmit={savePlate}
         error={plateProblem || errorMsg}
-        busy={saving}
         canSubmit={!!editing?.kg && !Number.isNaN(Number(editing.kg)) && !plateProblem}
       >
         <Field
           label={`1 plate of ${editing?.name ?? name} (kg)`}
           type="number"
           inputMode="decimal"
-          disabled={saving}
           value={editing?.kg ?? ""}
           onChange={(e) => {
             // A changed value makes the server's last refusal stale

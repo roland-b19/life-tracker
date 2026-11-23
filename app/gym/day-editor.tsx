@@ -6,7 +6,7 @@ import { alreadyExists } from "@/lib/validations/result";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey } from "@/lib/gym-muscles";
 import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
-import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle } from "../components/blocks";
+import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle, type FormOpening } from "../components/blocks";
 import { PlusIcon } from "../components/icons";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -73,16 +73,12 @@ export interface DiscardedEdit {
 export function DayEditor({
   day,
   exercises,
-  busy,
-  setBusy,
   resume,
   onClose,
   onReopen,
 }: {
   day: SplitDay;
   exercises: LibraryExercise[];
-  busy: boolean;
-  setBusy: (busy: boolean) => void;
   resume?: DiscardedEdit;
   onClose: () => void;
   onReopen: (edit: DiscardedEdit) => void;
@@ -93,10 +89,11 @@ export function DayEditor({
   const [errorMsg, setErrorMsg] = useState("");
   const [addId, setAddId] = useState("");
   const [query, setQuery] = useState("");
-  const move = (from: number, to: number) =>
+  // `at`, not `from`: the day's save sends no compare-and-set `from` (D-043), and the static check reads this code with it.
+  const move = (at: number, to: number) =>
     setDraft((d) => {
       const list = [...d.exercises];
-      list.splice(to, 0, ...list.splice(from, 1));
+      list.splice(to, 0, ...list.splice(at, 1));
       return { ...d, exercises: list };
     });
   const dragRow = useDragSort(move);
@@ -121,6 +118,9 @@ export function DayEditor({
   // The new exercise's id, made when its form opens and kept until that opening closes (D-040, D-047): Create and add
   // sent again after a lost answer is the same exercise, and the name check skips it, as the refresh already lists it.
   const customId = useRef("");
+  // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
+  // disables and labels, never the guard).
+  const [creating, setCreating] = useState(false);
   function openCustom() {
     customId.current = crypto.randomUUID();
     setShowCustom(true);
@@ -181,7 +181,7 @@ export function DayEditor({
     setAddId("");
   }
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     const rows = draft.exercises.map((x) => ({
       exerciseId: x.exerciseId,
@@ -195,11 +195,12 @@ export function DayEditor({
       return;
     }
     setErrorMsg("");
-    setBusy(true);
+    // A refusal shows in the editor while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
       if (res.success) {
-        onClose();
+        if (stillOpen()) onClose();
         showToast({
           message: `Saved "${draft.name.trim()}"`,
           type: "success",
@@ -214,12 +215,10 @@ export function DayEditor({
         });
       } else {
         // The editor stays open with the day as it was typed, so nothing is lost.
-        setErrorMsg(res.error);
+        refused(res.error);
       }
     } catch {
-      setErrorMsg("Failed to save day");
-    } finally {
-      setBusy(false);
+      refused("Failed to save day");
     }
   }
 
@@ -232,7 +231,7 @@ export function DayEditor({
       return;
     }
     setErrorMsg("");
-    setBusy(true);
+    setCreating(true);
     try {
       const res = await addCustomExerciseAction({ id: customId.current, name, muscleGroup: customMuscle, equipmentType: customEquipment });
       if (res.success) {
@@ -267,7 +266,7 @@ export function DayEditor({
     } catch {
       setErrorMsg("Failed to add exercise");
     } finally {
-      setBusy(false);
+      setCreating(false);
     }
   }
 
@@ -279,19 +278,17 @@ export function DayEditor({
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}
-      busy={busy}
-      canSubmit={visible(draft.name) && (draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
+      canSubmit={!creating && visible(draft.name) && (draft.isRest || draft.exercises.every((x) => x.targetSets && x.minReps && x.maxReps))}
     >
       <Field
         label="Name"
-        disabled={busy}
         type="text"
         required
         maxLength={GYM_LIMITS.dayName}
         value={draft.name}
         onChange={(e) => setDraft({ ...draft, name: e.target.value })}
       />
-      <Toggle label="Rest day" disabled={busy} checked={draft.isRest} onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })} />
+      <Toggle label="Rest day" checked={draft.isRest} onChange={(e) => setDraft({ ...draft, isRest: e.target.checked })} />
 
       {!draft.isRest && (
         <>
@@ -302,7 +299,6 @@ export function DayEditor({
               return (
                 <div key={row.exerciseId} className="routine-row" data-sort>
                   <DragHandle
-                    disabled={busy}
                     label={`Drag ${name} to reorder`}
                     {...dragRow}
                     onKeyDown={(e) => {
@@ -324,7 +320,6 @@ export function DayEditor({
                     <div className="routine-fields">
                       <Field
                         label="Sets"
-                        disabled={busy}
                         type="number"
                         inputMode="numeric"
                         min={1}
@@ -336,7 +331,6 @@ export function DayEditor({
                       />
                       <Field
                         label="Min reps"
-                        disabled={busy}
                         type="number"
                         inputMode="numeric"
                         min={1}
@@ -348,7 +342,6 @@ export function DayEditor({
                       />
                       <Field
                         label="Max reps"
-                        disabled={busy}
                         type="number"
                         inputMode="numeric"
                         min={1}
@@ -369,7 +362,6 @@ export function DayEditor({
             <div className="routine-add">
               <Field
                 label="Search exercises"
-                disabled={busy}
                 type="text"
                 enterKeyHint="search"
                 value={query}
@@ -384,7 +376,7 @@ export function DayEditor({
               ) : (
                 <>
                   <Label text="Exercise">
-                    <select disabled={busy} value={pick} onChange={(e) => setAddId(e.target.value)}>
+                    <select value={pick} onChange={(e) => setAddId(e.target.value)}>
                       {groups.map((g) => (
                         <optgroup key={g} label={muscleLabel(g)}>
                           {found
@@ -412,7 +404,7 @@ export function DayEditor({
               <div className="custom-exercise" onClickCapture={(e) => (tappedButton.current = (e.target as Element).closest("button"))}>
                 <Field
                   label="New exercise"
-                  disabled={busy}
+                  disabled={creating}
                   type="text"
                   maxLength={GYM_LIMITS.exerciseName}
                   value={customName}
@@ -428,14 +420,14 @@ export function DayEditor({
                 <FieldPair>
                   <SelectField
                     label="Muscle group"
-                    disabled={busy}
+                    disabled={creating}
                     value={customMuscle}
                     onChange={(e) => setCustomMuscle(e.target.value as MuscleGroupKey | "other")}
                     options={[...MUSCLE_GROUP_KEYS.map((g) => ({ value: g, label: MUSCLE_GROUP_LABEL[g] })), { value: "other", label: "Other" }]}
                   />
                   <SelectField
                     label="Equipment"
-                    disabled={busy}
+                    disabled={creating}
                     value={customEquipment}
                     onChange={(e) => setCustomEquipment(e.target.value as typeof customEquipment)}
                     options={[
@@ -451,7 +443,7 @@ export function DayEditor({
                   compact
                   onCancel={() => setShowCustom(false)}
                   onSubmit={() => once("create", addCustomExercise, tappedButton.current)}
-                  canSubmit={!busy && visible(customName)}
+                  canSubmit={!creating && visible(customName)}
                   submitLabel="Create and add"
                 />
               </div>

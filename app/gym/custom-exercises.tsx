@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL } from "@/lib/gym-muscles";
-import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField } from "../components/blocks";
+import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField, type FormOpening } from "../components/blocks";
 import { ListBox, RowActions } from "../components/lists";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -27,7 +27,6 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   const [editing, setEditing] = useState<CustomExercise | null>(null);
   const [form, setForm] = useState({ name: "", muscleGroup: "chest", equipmentType: "barbell" });
   const [errorMsg, setErrorMsg] = useState("");
-  const [busy, setBusy] = useState(false);
   // A deleted row leaves at once; the refreshed page then no longer holds it.
   const [gone, setGone] = useState<string[]>([]);
   const shown = exercises.filter((e) => !gone.includes(e.id));
@@ -43,20 +42,18 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     setErrorMsg("");
   }
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     if (!editing) return;
     const before = editing;
     const name = form.name.trim();
     setErrorMsg("");
-    setBusy(true);
+    // A refusal shows in the form while it is on screen, else as a toast.
+    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
     try {
       const res = await updateCustomExerciseAction({ id: before.id, ...form, name });
-      if (!res.success) {
-        setErrorMsg(res.error);
-        return;
-      }
-      setEditing(null);
+      if (!res.success) return refused(res.error);
+      if (stillOpen()) setEditing(null);
       showToast({
         message: `Saved "${name}"`,
         type: "success",
@@ -65,9 +62,7 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
       });
     } catch {
-      setErrorMsg("Failed to save exercise");
-    } finally {
-      setBusy(false);
+      refused("Failed to save exercise");
     }
   }
 
@@ -117,19 +112,17 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
         </ListBox>
       </Card>
 
-      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} busy={busy} canSubmit={visible(form.name)}>
-        <Field label="Name" type="text" required maxLength={GYM_LIMITS.exerciseName} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} canSubmit={visible(form.name)}>
+        <Field label="Name" type="text" required maxLength={GYM_LIMITS.exerciseName} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <FieldPair>
           <SelectField
             label="Muscle group"
-            disabled={busy}
             value={form.muscleGroup}
             onChange={(e) => setForm({ ...form, muscleGroup: e.target.value })}
             options={[...MUSCLE_GROUP_KEYS.map((g) => ({ value: g, label: MUSCLE_GROUP_LABEL[g] })), { value: "other", label: "Other" }]}
           />
           <SelectField
             label="Equipment"
-            disabled={busy}
             value={form.equipmentType}
             onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}
             options={EQUIPMENT.map((q) => ({ value: q, label: cap(q) }))}
