@@ -624,6 +624,65 @@ test("a custom exercise save answered after Cancel leaves the form opened again 
   await expect(form.getByRole("alert")).toHaveCount(0);
 });
 
+// "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
+// Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
+// in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a
+// lost answer says so in a toast. `name` is held from the first opening.
+async function createHeldThenReopen(page: Page, name: string) {
+  const release = await holdWrites(page, `"name":"${name}"`);
+  let editor = await openEditor(page);
+  await editor.getByRole("button", { name: "New exercise" }).click();
+  await editor.getByLabel("New exercise").fill(name);
+  await editor.getByRole("button", { name: "Create and add" }).click();
+  await expect(editor.getByRole("button", { name: "Save" })).toBeDisabled();
+  // The editor's Cancel, after the new exercise's own.
+  await editor.getByRole("button", { name: "Cancel" }).last().click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(7);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  return { editor, release };
+}
+
+test("a Create and add answered after the day editor's Cancel leaves the editor opened again as it is, and its Undo deletes the exercise [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await openGym(page);
+  const [name, other] = [exerciseName(), exerciseName()];
+  const { editor, release } = await createHeldThenReopen(page, name);
+  // A new exercise made in the new opening goes out after the held one (server actions go one at a time) and into it.
+  await editor.getByRole("button", { name: "New exercise" }).click();
+  await editor.getByLabel("New exercise").fill(other);
+  await editor.getByRole("button", { name: "Create and add" }).click();
+  await andSettle(page, () => release(), `"name":"${other}"`);
+  await expect(toast(page, `Created "${name}"`)).toBeVisible();
+  await expect(toast(page, `Created "${other}"`)).toBeVisible();
+  await expect(editor.getByText(`8. ${other}`)).toBeVisible();
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(8);
+  await expect(editor.getByRole("button", { name: `Remove ${name}` })).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+
+  await andSettle(page, () => undoIn(page, `Created "${name}"`).click());
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(8);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) =>
+    admin.query("SELECT name FROM exercises WHERE user_id = $1 AND name = ANY($2)", [userId, [name, other]]),
+  );
+  expect(rows.map((r: { name: string }) => r.name)).toEqual([other]);
+});
+
+test("a Create and add lost after the day editor's Cancel shows as a toast, not in the editor opened again [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const { editor, release } = await createHeldThenReopen(page, exerciseName());
+  await release(true);
+  await expect(toast(page, "Failed to add exercise")).toBeVisible();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: /^Remove / })).toHaveCount(7);
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
 test("saving this week as a deload week turns the deload switch on without a reload, so the workout started is a deload one", async ({
   signedInPage: page,
 }) => {
