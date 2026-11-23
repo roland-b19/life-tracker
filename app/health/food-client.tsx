@@ -9,15 +9,12 @@ import {
   GOAL_RANGES,
   MAX_STEPS,
   MAX_WATER_ML,
-  MEAL_CALORIES_NEGATIVE,
-  MEAL_CALORIES_TOO_HIGH,
-  MEAL_LIMITS,
-  MEAL_MACROS_NEGATIVE,
-  MEAL_MACROS_TOO_HIGH,
+  mealAmounts,
   mealHasValue,
   type ValueChange,
 } from "@/lib/validations/food";
-import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
+import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, type FormOpening, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
+import { changedFields } from "../components/forms";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
@@ -101,10 +98,9 @@ const METRIC_MAX = { water: MAX_WATER_ML, steps: MAX_STEPS };
 const METRIC_GOAL = { water: GOAL_RANGES.waterMl, steps: GOAL_RANGES.steps };
 const METRIC_KEY = { water: "waterMl", steps: "steps" } as const;
 type Metric = keyof typeof METRIC_KEY;
-/** The Today tab's forms: the meal, the nutrition goals, and water or steps (one form, two uses). */
-type FormName = "meal" | "goals" | Metric;
+const METRICS = ["water", "steps"] as const;
 /**
- * What the water or steps dialog changed, each as the value it showed and the new one: only these are sent, and its Undo
+ * What the water or steps form changed, each as the value it showed and the new one: only these are sent, and its Undo
  * sends back only these, reversed.
  */
 type MetricChange = { amount?: ValueChange; goal?: ValueChange };
@@ -138,15 +134,11 @@ export function FoodClient({
   const [storedTab, setActiveTab] = useDeviceState(TAB_KEY, FIRST_TAB);
   const activeTab = storedTab === "shopping" || (storedTab === "chat" && isClaudeEnabled()) ? storedTab : "daily";
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
-  // The open form's error; only one form is open at a time. A save answered after its form was closed and another
-  // opened shows its error only when its own form is the one open (`showFormError`).
+  // The open form's error; only one form is open at a time, and a save answers in its form only while that opening is
+  // on screen (`refused`).
   const [errorMsg, setErrorMsg] = useState("");
-  const shownForm = useRef<FormName>("meal");
-  const showFormError = (form: FormName, message: string) => {
-    if (shownForm.current === form) setErrorMsg(message);
-  };
-  const [metricEdit, setMetricEdit] = useState<Metric>("water");
-  const [metricOpen, setMetricOpen] = useState(false);
+  // The water or steps form open, if any: each is its own form, so a save out in one never holds the other.
+  const [metricOpen, setMetricOpen] = useState<Metric | null>(null);
   const [metricInput, setMetricInput] = useState("");
   const [metricGoalInput, setMetricGoalInput] = useState("");
   // What an edit form showed when it opened: a save sends only the fields changed from these, each with the value it
@@ -155,25 +147,18 @@ export function FoodClient({
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
   const [goalsBase, setGoalsBase] = useState<Goals>(targets);
-  // While an edit form's save is unanswered its Save waits, also in the form opened again: that one shows the value
-  // from before the save, which the server would refuse as changed on another device. The water taps wait too, as they
-  // send the total on screen.
-  const [metricBusy, setMetricBusy] = useState(false);
-  const [goalsBusy, setGoalsBusy] = useState(false);
+  // While a water form's save is unanswered the water taps wait: they send the total on screen, which that save is
+  // about to change. Only disables the taps; the guard is `once` (D-047).
+  const [waterSaving, setWaterSaving] = useState(false);
   const { showToast } = useToast();
-  // A tap that writes acts once per tap burst (D-043): one water write at a time, one delete per meal. Forms get the
-  // same from FormModal.
+  // A tap that writes acts once per tap burst (D-043): one water write at a time, one delete per meal, one chat message
+  // at a time. Forms get the same from FormModal.
   const once = useOnce();
   // The button last tapped, set before its own handler runs.
   const tappedButton = useRef<Element | null>(null);
   const noteTap = (e: React.MouseEvent) => (tappedButton.current = (e.target as Element).closest("button"));
-  // The id the open meal form's meal gets (D-040): made when the form opens and kept until the add is answered, so a
-  // second Save after a lost answer sends the same id and adds nothing.
-  const mealId = useRef("");
   const openMealForm = () => {
-    shownForm.current = "meal";
     setErrorMsg("");
-    mealId.current = crypto.randomUUID();
     setIsMealModalOpen(true);
   };
 
@@ -203,6 +188,13 @@ export function FoodClient({
 
   const setStatusMessage = (message: string) => {
     if (message) showToast({ message, type: "warning" });
+  };
+  // A refused save shows in its form while that opening is on screen, and as a warning toast once it is not. A value
+  // another device changed first closes the form with the reason, so the refresh shows the current value.
+  const refused = (error: string, stillOpen: () => boolean, close: () => void) => {
+    if (stillOpen() && error !== CHANGED_ELSEWHERE) return setErrorMsg(error);
+    if (stillOpen()) close();
+    setStatusMessage(error);
   };
 
   const mealKeys = (meals: MealData[]) => meals.map((m) => `meals:${m.id}`);
@@ -281,34 +273,34 @@ export function FoodClient({
     return saved;
   }
 
-  async function handleLogMeal(e: React.FormEvent) {
+  async function handleLogMeal(e: React.FormEvent, { id, stillOpen }: FormOpening) {
     e.preventDefault();
     if (!mealHasValue(entered)) return;
-    // Same limits and words as logMealSchema.
-    if (entered.calories > MEAL_LIMITS.calories) return setErrorMsg(MEAL_CALORIES_TOO_HIGH);
-    if (Math.max(entered.protein, entered.carbs, entered.fat) > MEAL_LIMITS.macroGrams) return setErrorMsg(MEAL_MACROS_TOO_HIGH);
-    if (entered.calories < 0) return setErrorMsg(MEAL_CALORIES_NEGATIVE);
-    if (Math.min(entered.protein, entered.carbs, entered.fat) < 0) return setErrorMsg(MEAL_MACROS_NEGATIVE);
+    // The server's own check, so the form refuses with its limits and words, in its order.
+    const refusal = mealAmounts.safeParse(entered).error?.issues[0]?.message;
+    if (refusal) return setErrorMsg(refusal);
 
     setErrorMsg("");
-    // The id comes from the form (mealId), so a repeat of the same save after a lost answer adds nothing (D-040).
-    const saved = logMealAction({ id: mealId.current, date: todayDate, ...entered }).catch(() => null);
-    const res = await saved;
-    if (!res?.success) return showFormError("meal", res?.error ?? "Failed to add meal");
+    // The id comes from the form's opening, so a repeat of the same save after a lost answer adds nothing (D-040).
+    const res = await logMealAction({ id, date: todayDate, ...entered }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to add meal", stillOpen, () => setIsMealModalOpen(false));
     const meal = res.meal as MealData;
     applyMeal(meal, 1);
-    setMealCalories("");
-    setMealProtein("");
-    setMealCarbs("");
-    setMealFat("");
-    setIsMealModalOpen(false);
+    // Only the fields still holding what this save sent are cleared, so a form opened since keeps what was typed in it.
+    const sent: [string, (set: (now: string) => string) => void][] = [
+      [mealCalories, setMealCalories],
+      [mealProtein, setMealProtein],
+      [mealCarbs, setMealCarbs],
+      [mealFat, setMealFat],
+    ];
+    sent.forEach(([value, set]) => set((now) => (now === value ? "" : now)));
+    if (stillOpen()) setIsMealModalOpen(false);
     // A Save again after a lost answer finds the meal the first one logged (D-040): it says so, without an Undo.
-    if (res.repeated) return showToast({ message: "Already saved", type: "success", touches: mealKeys([meal]), saved });
+    if (res.repeated) return showToast({ message: "Already saved", type: "success", touches: mealKeys([meal]) });
     showToast({
       message: `Added meal (${formatNumber(meal.calories)} kcal)`,
       type: "success",
       touches: mealKeys([meal]),
-      saved,
       onUndo: undoLogged([meal]),
     });
   }
@@ -329,13 +321,6 @@ export function FoodClient({
         ? setWaterAction({ date: todayDate, ...(change.amount === undefined ? {} : { waterMl: change.amount }), ...goal })
         : updateStepsAction({ date: todayDate, ...(change.amount === undefined ? {} : { steps: change.amount }), ...goal })
     ).catch(() => null);
-  };
-  // A refused edit form: a value another device changed first closes it with the reason, so the refresh shows the
-  // current value; any other reason stays in the form. Either touches the form only while it is the one open.
-  const refuseForm = (form: FormName, error: string, close: () => void) => {
-    if (error !== CHANGED_ELSEWHERE) return showFormError(form, error);
-    if (shownForm.current === form) close();
-    showToast({ message: error, type: "warning" });
   };
   // Puts on the screen what the server saved.
   const showSaved = (metric: Metric, res: Awaited<ReturnType<typeof writeMetric>>) => {
@@ -389,19 +374,16 @@ export function FoodClient({
   }
 
   function openMetricEdit(metric: Metric) {
-    shownForm.current = metric;
     setErrorMsg("");
     const base = { amount: summary.metrics[METRIC_KEY[metric]], goal: goals[METRIC_KEY[metric]] };
     setMetricBase(base);
     setMetricInput(String(base.amount));
     setMetricGoalInput(String(base.goal));
-    setMetricEdit(metric);
-    setMetricOpen(true);
+    setMetricOpen(metric);
   }
 
-  async function handleMetricSubmit(e: React.FormEvent) {
+  async function handleMetricSubmit(e: React.FormEvent, metric: Metric, { stillOpen }: FormOpening) {
     e.preventDefault();
-    const metric = metricEdit;
     const value = Number(metricInput);
     const goal = Number(metricGoalInput);
     const range = METRIC_GOAL[metric];
@@ -414,16 +396,16 @@ export function FoodClient({
       ...(value === before.amount ? {} : { amount: { from: before.amount, to: value } }),
       ...(goal === before.goal ? {} : { goal: { from: before.goal, to: goal } }),
     };
-    if (change.amount === undefined && change.goal === undefined) return setMetricOpen(false);
+    if (change.amount === undefined && change.goal === undefined) return setMetricOpen(null);
     const undo: MetricChange = { amount: reversed(change.amount), goal: reversed(change.goal) };
+    const close = () => setMetricOpen((open) => (open === metric ? null : open));
     setErrorMsg("");
-    setMetricBusy(true);
+    if (metric === "water") setWaterSaving(true);
     try {
-      const saved = writeMetric(metric, change);
-      const res = await saved;
-      if (!res?.success) return refuseForm(metric, res?.error ?? `Failed to save ${metric}`, () => setMetricOpen(false));
+      const res = await writeMetric(metric, change);
+      if (!res?.success) return refused(res?.error ?? `Failed to save ${metric}`, stillOpen, close);
       showSaved(metric, res);
-      setMetricOpen(false);
+      if (stillOpen()) close();
       const name = metric === "water" ? "Water" : "Steps";
       const unit = metric === "water" ? " ml" : "";
       const amount = `${formatNumber(value)}${unit}`;
@@ -433,7 +415,6 @@ export function FoodClient({
           change.goal === undefined ? `${name} set to ${amount}` : change.amount === undefined ? `${name} goal set to ${target}` : `${name} set to ${amount}, goal ${target}`,
         type: "success",
         touches: metricKeys(metric, change),
-        saved,
         onUndo: undoWith(
           showToast,
           async () => {
@@ -447,62 +428,54 @@ export function FoodClient({
         ),
       });
     } finally {
-      setMetricBusy(false);
+      if (metric === "water") setWaterSaving(false);
     }
   }
 
   function openGoals() {
-    shownForm.current = "goals";
     setErrorMsg("");
     setGoalsBase(goals);
     setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
     setGoalsOpen(true);
   }
 
-  async function handleGoalsSubmit(e: React.FormEvent) {
+  async function handleGoalsSubmit(e: React.FormEvent, { stillOpen }: FormOpening) {
     e.preventDefault();
     const next = Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, Number(goalInputs[g.key])])) as Record<NutritionGoal, number>;
     const bad = NUTRITION_GOALS.find((g) => !Number.isInteger(next[g.key]) || next[g.key] < g.min || next[g.key] > g.max);
     if (bad) return setErrorMsg(`${bad.label.split(" ")[0]} must be between ${formatNumber(bad.min)} and ${formatNumber(bad.max)}`);
     // Only the goals this edit changed are sent, each with the value the form showed, so an older tab never writes back
     // goals it did not touch nor overwrites one another device changed (D-040).
-    const changed = NUTRITION_GOALS.filter((g) => next[g.key] !== goalsBase[g.key]).map((g) => g.key);
+    const patch: Partial<Goals> = changedFields(goalsBase, next);
+    const changed = Object.keys(patch) as NutritionGoal[];
     if (changed.length === 0) return setGoalsOpen(false);
-    const patch: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, next[key]]));
     const previous: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, goalsBase[key]]));
     const fromTo = (from: Partial<Goals>, to: Partial<Goals>) => Object.fromEntries(changed.map((key) => [key, { from: from[key], to: to[key] }]));
     setErrorMsg("");
-    setGoalsBusy(true);
-    try {
-      const saved = updateTargetsAction(fromTo(previous, patch)).catch(() => null);
-      const res = await saved;
-      if (!res?.success) return refuseForm("goals", res?.error ?? "Failed to save goals", () => setGoalsOpen(false));
-      putGoals(patch);
-      setGoalsOpen(false);
-      showToast({
-        message: "Saved nutrition goals",
-        type: "success",
-        touches: changed.map((key) => `nutrition_targets:${key}`),
-        saved,
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            putGoals(previous);
-            const back = await updateTargetsAction(fromTo(patch, previous)).catch(() => null);
-            if (!back?.success) putGoals(patch);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-        ),
-      });
-    } finally {
-      setGoalsBusy(false);
-    }
+    const res = await updateTargetsAction(fromTo(previous, patch)).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save goals", stillOpen, () => setGoalsOpen(false));
+    putGoals(patch);
+    if (stillOpen()) setGoalsOpen(false);
+    showToast({
+      message: "Saved nutrition goals",
+      type: "success",
+      touches: changed.map((key) => `nutrition_targets:${key}`),
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          putGoals(previous);
+          const back = await updateTargetsAction(fromTo(patch, previous)).catch(() => null);
+          if (!back?.success) putGoals(patch);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   async function handleSendChatMessage() {
     const text = chatInput.trim();
-    if (!text || chatLoading) return;
+    if (!text) return;
 
     const userMsg = { role: "user" as const, text };
     setChatMessages((prev) => [...prev, userMsg]);
@@ -652,10 +625,10 @@ export function FoodClient({
               <ProgressBar percent={waterPct} />
               <p className="muted metric-avg number-tabular">{average("waterMl", " ml")}</p>
               <div className="tap-buttons">
-                <button type="button" className="secondary tap-btn" disabled={metricBusy} onClick={waterTap(250)}>
+                <button type="button" className="secondary tap-btn" disabled={waterSaving} onClick={waterTap(250)}>
                   +250 ml
                 </button>
-                <button type="button" className="secondary tap-btn" disabled={metricBusy} onClick={waterTap(500)}>
+                <button type="button" className="secondary tap-btn" disabled={waterSaving} onClick={waterTap(500)}>
                   +500 ml
                 </button>
               </div>
@@ -707,7 +680,8 @@ export function FoodClient({
             className="chat-form"
             onSubmit={(e) => {
               e.preventDefault();
-              handleSendChatMessage();
+              // One message at a time (D-047): chatLoading only labels and disables.
+              once("chat", handleSendChatMessage, (e.nativeEvent as SubmitEvent).submitter);
             }}
           >
             <input
@@ -770,36 +744,37 @@ export function FoodClient({
         </FieldPair>
       </FormModal>
 
-      <FormModal
-        isOpen={metricOpen}
-        onClose={() => setMetricOpen(false)}
-        title={metricEdit === "water" ? "Edit water" : "Edit steps"}
-        onSubmit={handleMetricSubmit}
-        error={errorMsg}
-        busy={metricBusy}
-        canSubmit={metricInput !== "" && metricGoalInput !== ""}
-      >
-        <Field
-          label={metricEdit === "water" ? "Water today (ml)" : "Steps today"}
-          type="number"
-          inputMode="numeric"
-          required
-          disabled={metricBusy}
-          value={metricInput}
-          onChange={(e) => setMetricInput(e.target.value)}
-          className="number-tabular"
-        />
-        <Field
-          label={metricEdit === "water" ? "Daily goal (ml)" : "Daily goal (steps)"}
-          type="number"
-          inputMode="numeric"
-          required
-          disabled={metricBusy}
-          value={metricGoalInput}
-          onChange={(e) => setMetricGoalInput(e.target.value)}
-          className="number-tabular"
-        />
-      </FormModal>
+      {METRICS.map((metric) => (
+        <FormModal
+          key={metric}
+          isOpen={metricOpen === metric}
+          onClose={() => setMetricOpen(null)}
+          title={metric === "water" ? "Edit water" : "Edit steps"}
+          onSubmit={(e, opening) => handleMetricSubmit(e, metric, opening)}
+          error={errorMsg}
+          sendsFrom
+          canSubmit={metricInput !== "" && metricGoalInput !== ""}
+        >
+          <Field
+            label={metric === "water" ? "Water today (ml)" : "Steps today"}
+            type="number"
+            inputMode="numeric"
+            required
+            value={metricInput}
+            onChange={(e) => setMetricInput(e.target.value)}
+            className="number-tabular"
+          />
+          <Field
+            label={metric === "water" ? "Daily goal (ml)" : "Daily goal (steps)"}
+            type="number"
+            inputMode="numeric"
+            required
+            value={metricGoalInput}
+            onChange={(e) => setMetricGoalInput(e.target.value)}
+            className="number-tabular"
+          />
+        </FormModal>
+      ))}
 
       <FormModal
         isOpen={goalsOpen}
@@ -807,7 +782,7 @@ export function FoodClient({
         title="Edit goals"
         onSubmit={handleGoalsSubmit}
         error={errorMsg}
-        busy={goalsBusy}
+        sendsFrom
         canSubmit={!Object.values(goalInputs).some((v) => v === "")}
       >
         {NUTRITION_GOALS.map((g) => (
@@ -817,7 +792,6 @@ export function FoodClient({
             type="number"
             inputMode="numeric"
             required
-            disabled={goalsBusy}
             value={goalInputs[g.key]}
             onChange={(e) => setGoalInputs((prev) => ({ ...prev, [g.key]: e.target.value }))}
             className="number-tabular"

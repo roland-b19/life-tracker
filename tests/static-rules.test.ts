@@ -5,6 +5,7 @@ import { NOT_WHOLE } from "@/lib/number-format";
 import {
   GOAL_RANGES,
   logMealSchema,
+  mealAmounts,
   MEAL_CALORIES_NEGATIVE,
   MEAL_CALORIES_TOO_HIGH,
   MEAL_LIMITS,
@@ -46,13 +47,20 @@ describe("the Health form's limits and words are the schema's [U5]", () => {
     expect(MEAL_MACROS_TOO_HIGH).toBe("Protein, carbs and fat must each be 1.000 g or less");
   });
 
-  it("refuses a negative meal value with words that name the field, and the form checks it with the same words", () => {
+  it("refuses a negative meal value with words that name the field, and the form checks it with the schema itself", () => {
     expect(refusal({ ...meal, calories: -1 })).toBe(MEAL_CALORIES_NEGATIVE);
     for (const macro of ["protein", "carbs", "fat"]) expect(refusal({ ...meal, [macro]: -0.1 })).toBe(MEAL_MACROS_NEGATIVE);
     expect(MEAL_CALORIES_NEGATIVE).toBe("Calories can't be negative");
     expect(MEAL_MACROS_NEGATIVE).toBe("Protein, carbs and fat can't be negative");
-    expect(foodClient).toContain("return setErrorMsg(MEAL_CALORIES_NEGATIVE)");
-    expect(foodClient).toContain("return setErrorMsg(MEAL_MACROS_NEGATIVE)");
+    expect(foodClient).toContain("mealAmounts.safeParse(");
+    expect(foodClient).not.toMatch(/MEAL_LIMITS\.\w+\)? return/);
+  });
+
+  // The form shows the schema's first refusal, so with several wrong values it names the same one the server would.
+  it("names the first field the schema refuses, in the schema's order", () => {
+    const wrong = { ...meal, calories: 5, protein: -1, carbs: 2000 };
+    expect(refusal(wrong)).toBe(MEAL_MACROS_NEGATIVE);
+    expect(mealAmounts.safeParse(wrong).error?.issues[0]?.message).toBe(MEAL_MACROS_NEGATIVE);
   });
 
   // Field messages end with no full stop ("Name is required", "Must be at least 0"); the messages this form took from
@@ -116,46 +124,16 @@ describe("field messages end with no full stop", () => {
   });
 });
 
-// D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save with `busy` until the answer
-// comes, or a second Save sends the same `from` again and is refused with a false "changed on another device".
-describe("a FormModal whose save sends a compare-and-set from passes busy [D-043]", () => {
-  // The body of the function or arrow `name` declared in `text`, from its first `{` to the matching `}`.
-  const bodyOf = (text: string, name: string) => {
-    const start = text.search(new RegExp(`(function ${name}\\b|const ${name} = )`));
-    if (start < 0) return "";
-    const open = text.indexOf("{", text.indexOf(")", start));
-    let depth = 0;
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}" && --depth === 0) return text.slice(open, i + 1);
-    }
-    return "";
-  };
-  // `{ from: x, to: y }` or a call such as `rename(from, to)`: the old value next to the new one.
-  const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
-  // Each FormModal in `text` whose onSubmit handler (or a function of this file it calls) sends a `from`, and whether it
-  // passes `busy`.
-  const fromForms = (text: string) =>
-    [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].flatMap(([, props]) => {
-      const handler = /onSubmit=\{(\w+)\}/.exec(props)?.[1];
-      if (!handler) return [{ handler: props, busy: false }];
-      const body = bodyOf(text, handler);
-      const called = [...body.matchAll(/\b(\w+)\(/g)].map(([, name]) => bodyOf(text, name));
-      return [body, ...called].some(sendsFrom) ? [{ handler, busy: /\bbusy=\{/.test(props) }] : [];
-    });
+// D-047: FormModal owns each opening's saving state (Save says "Saving..." and the fields wait while the opening's save
+// is out), so a migrated form passes no `busy` of its own. The forms not moved yet are listed in conventions.md (Busy flags).
+describe("a migrated form leaves its saving state to FormModal [D-047]", () => {
+  const migrated = ["../app/todos/todos-client.tsx", "../app/wishlist/wishlist-client.tsx", "../app/health/food-client.tsx"];
+  const formModals = (text: string) => [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].map(([, props]) => props);
 
-  it("finds the known ones: Health water/steps and goals, and the categories card", () => {
-    expect(fromForms(foodClient).map(({ handler }) => handler)).toEqual(["handleMetricSubmit", "handleGoalsSubmit"]);
-    expect(fromForms(sources["../app/components/categories-card.tsx"]).map(({ handler }) => handler)).toEqual(["submit"]);
-  });
-
-  it("fails on a copy of the Health form with busy removed", () => {
-    const withoutBusy = foodClient.replace("busy={metricBusy}", "");
-    expect(withoutBusy).not.toBe(foodClient);
-    expect(fromForms(withoutBusy)).toContainEqual({ handler: "handleMetricSubmit", busy: false });
-  });
-
-  it.each(Object.entries(sources))("%s", (_file, text) => {
-    expect(fromForms(text).filter(({ busy }) => !busy)).toEqual([]);
+  it.each(migrated)("%s", (file) => {
+    const props = formModals(sources[file]);
+    expect(props.length).toBeGreaterThan(0);
+    expect(props.length).toBe(sources[file].split("<FormModal").length - 1);
+    expect(props.filter((p) => /\bbusy=/.test(p))).toEqual([]);
   });
 });
