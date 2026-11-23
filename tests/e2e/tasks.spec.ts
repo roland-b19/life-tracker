@@ -242,6 +242,41 @@ test("a Save in a form opened again while the last opening's save is unanswered 
   await expect(page.getByText(second, { exact: true })).toBeVisible();
 });
 
+// FormModal owns each opening (D-047): a form opened again gets its own add id, and the answer of the first opening's
+// save, coming while the second is on screen, neither closes it nor clears what is typed in it.
+test("a form opened again gets its own id, and the first opening's late answer leaves it as it is [D-047]", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  const [first, second] = [taskTitle(), taskTitle()];
+  const writes = countWrites(page, `"title":"E2E task `);
+  const release = await holdWrites(page, `"title":"${first}"`);
+  await page.getByRole("button", { name: "Add task" }).click();
+  const form = page.getByRole("dialog", { name: "New task" });
+  await form.getByLabel("Title").fill(first);
+  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: "Add task" }).click();
+  await form.getByLabel("Title").fill(second);
+  await andSettle(page, async () => release(), `"title":"${first}"`);
+  await expect(page.getByText(`Added "${first}"`, { exact: true })).toBeVisible();
+  await expect(form).toBeVisible();
+  await expect(form.getByLabel("Title")).toHaveValue(second);
+  await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"title":"${second}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Added "${second}"`, { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Already added/)).toHaveCount(0);
+  const ids = writes.map((r) => /"id":"([0-9a-f-]{36})"/.exec(r.postData() ?? "")?.[1]);
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(2);
+  await openTasks(page, "Today");
+  await expect(page.getByText(first, { exact: true })).toBeVisible();
+  await expect(page.getByText(second, { exact: true })).toBeVisible();
+});
+
 test("an Undo of a tick that fails says so and keeps a Retry, which puts the box back [D-040]", async ({ signedInPage: page }) => {
   await openTasks(page, "Today");
   const title = taskTitle();

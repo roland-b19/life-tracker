@@ -6,7 +6,8 @@ import { WISHLIST_ITEM_GONE } from "@/lib/validations/wishlist";
 import { linkOf } from "@/lib/link";
 import { formatNumber, roundTo } from "@/lib/number-format";
 import { AnimatedNumber } from "../components/animated-number";
-import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect } from "../components/blocks";
+import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect, type FormOpening } from "../components/blocks";
+import { changedFields } from "../components/forms";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -85,13 +86,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const [isModalOpen, setIsModalOpen] = useState(false);
   // The item the form opened on (its values then), null for a new item.
   const [editing, setEditing] = useState<WishlistItemData | null>(null);
-  // Which opening of the form is on screen: a save answers the opening it came from, so it never closes or marks one
-  // opened after it, and a form closed since (Cancel) counts as gone.
-  const formOpening = useRef(0);
-  const closeForm = () => {
-    formOpening.current += 1;
-    setIsModalOpen(false);
-  };
+  const closeForm = () => setIsModalOpen(false);
   // The edit form closes when another device deletes its item.
   const [items, setItems] = useServerState(initialItems, { editing: isModalOpen ? (editing?.id ?? null) : null, onDeleted: closeForm });
   const [categories, setCategories] = useServerState(initialCategories);
@@ -106,17 +101,12 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   // A Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
-  // The id the open add form's item gets (D-040): made when the form opens, so a second Save after a lost answer adds nothing.
-  const addId = useRef("");
-  const [savingIn, setSavingIn] = useState<number | null>(null);
-  const [opening, setOpening] = useState(0);
 
   // Form state
   const [name, setName] = useState("");
   const [estimatedPrice, setEstimatedPrice] = useState("");
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("other");
-  const busy = savingIn === opening;
   const [errorMsg, setErrorMsg] = useState("");
 
   // The range comes from the price, never from the stored column.
@@ -149,21 +139,10 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     setEstimatedPrice(item ? Number(item.estimatedPrice).toFixed(decimalsOf(Number(item.estimatedPrice))) : "");
     setUrl(item?.url ?? "");
     setCategory(item?.category ?? "other");
-    if (!item) addId.current = crypto.randomUUID();
-    formOpening.current += 1;
-    setOpening(formOpening.current);
     setIsModalOpen(true);
   }
 
-  /** The fields of `to` that differ from `from`: an edit sends only those (D-040). */
-  function changedFields(from: WishlistItemData, to: ReturnType<typeof toInput>) {
-    const was = toInput(from);
-    return Object.fromEntries(
-      (Object.keys(to) as (keyof typeof to)[]).filter((k) => (to[k] ?? null) !== (was[k] ?? null)).map((k) => [k, to[k] ?? null]),
-    ) as Partial<ReturnType<typeof toInput>>;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent, { id, stillOpen }: FormOpening) {
     e.preventDefault();
     if (!visible(name)) return setErrorMsg("Please enter an item name");
     // The server checks the limits; its message shows in the form, which keeps what was typed.
@@ -176,87 +155,76 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       category,
     };
     const before = editing;
-    const from = formOpening.current;
     // The answer belongs to the opening it came from: a form closed or opened since stays as it is, and a refusal is told
     // in a toast.
-    const stillOpen = () => from === formOpening.current;
     const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
 
-    setSavingIn(from);
-    try {
-      if (before) {
-        const changed = changedFields(before, input);
-        const saved = updateWishlistItemAction(before.id, changed).catch(() => null);
-        const res = await saved;
-        if (!res?.success) {
-          if (res?.error !== WISHLIST_ITEM_GONE) return refused(res?.error ?? "Failed to save item. Please try again.");
-          // Deleted on another device: the form closes and the row leaves.
-          if (stillOpen()) closeForm();
-          dropRow(before.id);
-          return warn(res.error);
-        }
-        const updated = res.item as WishlistItemData;
-        // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
-        const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, toInput(before)[k as keyof typeof changed] ?? null]));
-        // Those fields of a row as the screen holds them: the Undo puts back on screen only what it writes back.
-        const fieldsOf = (item: WishlistItemData) => Object.fromEntries(Object.keys(changed).map((k) => [k, item[k as keyof typeof changed]]));
-        replace(updated);
-        keepCategory(updated.category);
+    if (before) {
+      const changed = changedFields(toInput(before), input);
+      const res = await updateWishlistItemAction(before.id, changed).catch(() => null);
+      if (!res?.success) {
+        if (res?.error !== WISHLIST_ITEM_GONE) return refused(res?.error ?? "Failed to save item. Please try again.");
+        // Deleted on another device: the form closes and the row leaves.
         if (stillOpen()) closeForm();
-        showToast({
-          message: `Saved "${updated.name}"`,
-          type: "success",
-          touches: touches(updated.id),
-          saved,
-          // Writes the old values back; if that fails the edit stays, so the screen matches the database.
-          onUndo: undoWith(
-            showToast,
-            async () => {
-              putFields(before.id, fieldsOf(before));
-              const back = await updateWishlistItemAction(before.id, undo).catch(() => null);
-              if (back?.success) {
-                putFields(before.id, fieldsOf(back.item as WishlistItemData));
-                keepCategory(before.category);
-              } else putFields(before.id, fieldsOf(updated));
-              return back;
-            },
-            (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-          ),
-        });
-        return;
+        dropRow(before.id);
+        return warn(res.error);
       }
-      const saved = addWishlistItemAction({ id: addId.current, ...input }).catch(() => null);
-      const res = await saved;
-      if (!res?.success) return refused(res?.error ?? "Failed to save item. Please try again.");
-      const added = res.item as WishlistItemData;
-      setItems((prev) => [added, ...prev.filter((i) => i.id !== added.id)]);
-      keepCategory(added.category);
+      const updated = res.item as WishlistItemData;
+      // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
+      const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, toInput(before)[k as keyof typeof changed] ?? null]));
+      // Those fields of a row as the screen holds them: the Undo puts back on screen only what it writes back.
+      const fieldsOf = (item: WishlistItemData) => Object.fromEntries(Object.keys(changed).map((k) => [k, item[k as keyof typeof changed]]));
+      replace(updated);
+      keepCategory(updated.category);
       if (stillOpen()) closeForm();
-      // A repeat of an add whose answer was lost adds nothing (D-040): the toast says so, without an Undo.
-      showToast(
-        res.repeated
-          ? { message: `Already added "${added.name}"`, type: "success", touches: touches(added.id), saved }
-          : {
-              message: `Added "${added.name}" (${formatRon(Number(added.estimatedPrice))} RON)`,
-              type: "success",
-              touches: touches(added.id),
-              saved,
-              onUndo: undoWith(
-                showToast,
-                async () => {
-                  dropRow(added.id);
-                  const gone = await deleteWishlistItemAction(added.id).catch(() => null);
-                  // An item already deleted on another device stays off the screen.
-                  if (!gone?.success && gone?.error !== WISHLIST_ITEM_GONE) putBack(added);
-                  return gone;
-                },
-                (back) => (back && !back.success ? back.error : "Failed to undo"),
-              ),
-            },
-      );
-    } finally {
-      setSavingIn((now) => (now === from ? null : now));
+      showToast({
+        message: `Saved "${updated.name}"`,
+        type: "success",
+        touches: touches(updated.id),
+        // Writes the old values back; if that fails the edit stays, so the screen matches the database.
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            putFields(before.id, fieldsOf(before));
+            const back = await updateWishlistItemAction(before.id, undo).catch(() => null);
+            if (back?.success) {
+              putFields(before.id, fieldsOf(back.item as WishlistItemData));
+              keepCategory(before.category);
+            } else putFields(before.id, fieldsOf(updated));
+            return back;
+          },
+          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+        ),
+      });
+      return;
     }
+    const res = await addWishlistItemAction({ id, ...input }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save item. Please try again.");
+    const added = res.item as WishlistItemData;
+    setItems((prev) => [added, ...prev.filter((i) => i.id !== added.id)]);
+    keepCategory(added.category);
+    if (stillOpen()) closeForm();
+    // A repeat of an add whose answer was lost adds nothing (D-040): the toast says so, without an Undo.
+    showToast(
+      res.repeated
+        ? { message: `Already added "${added.name}"`, type: "success", touches: touches(added.id) }
+        : {
+            message: `Added "${added.name}" (${formatRon(Number(added.estimatedPrice))} RON)`,
+            type: "success",
+            touches: touches(added.id),
+            onUndo: undoWith(
+              showToast,
+              async () => {
+                dropRow(added.id);
+                const gone = await deleteWishlistItemAction(added.id).catch(() => null);
+                // An item already deleted on another device stays off the screen.
+                if (!gone?.success && gone?.error !== WISHLIST_ITEM_GONE) putBack(added);
+                return gone;
+              },
+              (back) => (back && !back.success ? back.error : "Failed to undo"),
+            ),
+          },
+    );
   }
 
   // A category was renamed or deleted: its items follow. The stored category is the only thing that changes.
@@ -372,21 +340,19 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         title={editing ? "Edit item" : "New item"}
         onSubmit={handleSubmit}
         error={errorMsg}
-        busy={busy}
         canSubmit={!!name.trim() && !!estimatedPrice}
       >
-        <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} disabled={busy} required />
+        <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
         <Field
           label="Price (RON)"
           type="number"
           value={estimatedPrice}
           onChange={(e) => setEstimatedPrice(e.target.value)}
-          disabled={busy}
           required
           className="number-tabular"
         />
-        <CategoryField categories={categories} value={category} onChange={setCategory} disabled={busy} />
-        <Field label="Link or store (optional)" type="text" value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} />
+        <CategoryField categories={categories} value={category} onChange={setCategory} />
+        <Field label="Link or store (optional)" type="text" value={url} onChange={(e) => setUrl(e.target.value)} />
       </FormModal>
     </Page>
   );
