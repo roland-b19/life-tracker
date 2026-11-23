@@ -607,7 +607,8 @@ test("Undo of Started after another device logged a set is refused with the serv
 
   await andSettle(page, () => undoIn(page, `Started "${DAY}"`).click());
   await expect(toast(page, "Sets are logged; use Cancel workout instead.")).toBeVisible();
-  await expect(toast(page, "Sets are logged; use Cancel workout instead.").getByRole("button", { name: "Retry" })).toBeHidden();
+  // Read once the toast shows (its buttons render with it): a check that waits would pass once the toast runs out.
+  expect(await toast(page, "Sets are logged; use Cancel workout instead.").getByRole("button", { name: "Retry" }).count()).toBe(0);
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
   const userId = await signedInUserId(page);
   expect(await setCount(userId)).toBe(1);
@@ -838,7 +839,7 @@ test("Undo of a workout removed for having no sets, refused because another devi
   await andSettle(page, () => undoIn(page, removed).click());
   const warning = toast(page, "A workout is already open. Resume or finish it first.");
   await expect(warning).toBeVisible();
-  await expect(warning.getByRole("button", { name: "Retry" })).toBeHidden();
+  expect(await warning.getByRole("button", { name: "Retry" }).count()).toBe(0);
   await expect(page.getByText("Failed to restore the workout")).toBeHidden();
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
 });
@@ -1445,7 +1446,7 @@ test("Undo of a deleted set refused because the workout was finished elsewhere s
   await asOwner((admin) => admin.query("UPDATE workout_sessions SET duration_minutes = 1 WHERE user_id = $1", [userId]));
   await andSettle(page, () => undoIn(page, "Removed set 1").click());
   await expect(toast(page, WORKOUT_FINISHED)).toBeVisible();
-  await expect(toast(page, WORKOUT_FINISHED).getByRole("button", { name: "Retry" })).toBeHidden();
+  expect(await toast(page, WORKOUT_FINISHED).getByRole("button", { name: "Retry" }).count()).toBe(0);
   expect(await setCount(userId)).toBe(0);
 });
 
