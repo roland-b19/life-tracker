@@ -171,9 +171,36 @@ const bodyOf = (text: string, name: string) => {
   return found.length === 1 ? found[0].body!.getText() : "";
 };
 
-// The code `fn` runs: its body and, transitively, what each name in it means in this file (declarationOf, from where
-// the name is used): a function's body (functionOf) or a variable's value. A name bound outside this file's code (a
-// prop, a parameter, an import) is not read.
+// The values a declaration gives its name: a variable's value and, for a `let` or `var`, every assignment to it in the
+// scope that declares it (`name = …`, `name ??= …` and the like, a destructuring one too), found by resolving each
+// assignment's left side to this declaration; for a parameter, its default values (all of that parameter's). Anything
+// else (an import, a parameter with no default) gives none.
+const valuesOf = (declaration: ts.Node | undefined): ts.Node[] => {
+  if (declaration && ts.isParameter(declaration)) {
+    const defaults: ts.Node[] = [];
+    const visit = (n: ts.Node) => {
+      if ((ts.isParameter(n) || ts.isBindingElement(n)) && n.initializer) defaults.push(n.initializer);
+      if (!ts.isTypeNode(n)) ts.forEachChild(n, visit);
+    };
+    visit(declaration);
+    return defaults;
+  }
+  if (!declaration || !ts.isVariableDeclaration(declaration)) return [];
+  const values: ts.Node[] = declaration.initializer ? [declaration.initializer] : [];
+  if (declaration.parent.flags & ts.NodeFlags.Constant) return values;
+  const names = (n: ts.Node): boolean => (ts.isIdentifier(n) && declarationOf(n.text, n) === declaration) || Boolean(ts.forEachChild(n, names));
+  const visit = (n: ts.Node) => {
+    const assigns = ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+    if (assigns && names(n.left)) values.push(n.right);
+    ts.forEachChild(n, visit);
+  };
+  visit(declaration.parent.parent.parent);
+  return values;
+};
+
+// The code `fn` runs: the whole function (its parameters with their default values, and its body) and, transitively,
+// what each name in it means in this file (declarationOf, from where the name is used): a function's whole code
+// (functionOf), or the values valuesOf gives. Code from another file (an import, or what a prop runs) is not read.
 const codeOf = (fn: Fn) => {
   const seen = new Set<ts.Node>();
   const read = (node: ts.Node | undefined): string[] => {
@@ -183,30 +210,33 @@ const codeOf = (fn: Fn) => {
     const visit = (n: ts.Node) => {
       if (ts.isIdentifier(n)) {
         const declaration = declarationOf(n.text, n);
-        texts.push(...read(functionOf(declaration)?.body ?? (declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined)));
+        const named = functionOf(declaration);
+        texts.push(...(named ? read(named) : valuesOf(declaration).flatMap(read)));
       }
       ts.forEachChild(n, visit);
     };
     visit(node);
     return texts;
   };
-  return read(fn.body).join("\n");
+  return read(fn).join("\n");
 };
 
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
 // second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
 // for a form that passes `sendsFrom` (D-047), or for one still on the deprecated `busy` bridge (conventions.md, Busy flags).
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
-  // `{ from: x, to: y }` or a call such as `rename(from, to)`: the old value next to the new one.
-  const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
+  // `{ from: x, to: y }`, `{ to, from }` or a call such as `rename(from, to)`: the old value next to the new one.
+  const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b|\bto\b\s*[:,][^;]{0,60}?\bfrom\b\s*[:,}]/.test(code);
   // Each `<FormModal>` in `text` whose save sends a `from`, and whether it holds Save (passes `sendsFrom` or `busy={…}`).
   // The handler is the name `onSubmit` gives, `{save}` or an inline arrow that only calls one, `{(e) => save(e)}`, or else
   // the inline function itself. A name is looked up from the FormModal out (declarationOf) and must be a function of this
   // file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another kind, is an unknown
-  // handler and fails. The save sends a `from` when the code the handler runs (codeOf: its body, every function of this
-  // file it calls however deep and however declared, and the values it uses; comments included) matches sendsFrom.
-  // Limit: code handed in from outside the file (a prop, a parameter, an import) is not read, so a handler that calls a
-  // prop in its body, `function submit(e) { onSave(e); }`, is checked without the code the prop runs.
+  // handler and fails. The save sends a `from` when the code the handler runs matches sendsFrom, comments included. That
+  // code (codeOf) is the whole handler, its parameters' default values included, every function of this file it calls or
+  // names however deep and however declared, and the values of the names it uses (valuesOf: a variable's value, every
+  // assignment to a `let` or `var`, a parameter's default values). Limits: code from another file is not read (an import,
+  // or what a prop runs: `function submit(e) { onSave(e); }` is checked without `onSave`'s code), and only a tag written
+  // `FormModal` is found (a FormModal imported under another name is not).
   const fromForms = (text: string) => {
     const forms: { handler: string; held: boolean }[] = [];
     const visit = (node: ts.Node) => {
@@ -232,7 +262,6 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     return forms;
   };
   const categoriesCard = sources["../app/components/categories-card.tsx"];
-
 
   it("finds the known ones: Health water/steps and goals, and the categories card", () => {
     expect(fromForms(foodClient).map(({ handler }) => handler)).toEqual(["handleMetricSubmit", "handleGoalsSubmit"]);
@@ -273,6 +302,24 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(copy).toContain(`onSubmit={${shape}}`);
     expect(copy).toContain(`  ${declared}\n  function submit(`);
     expect(fromForms(copy).filter(({ held }) => !held)).not.toEqual([]);
+  });
+
+  // A `from` in a parameter's default value (a helper's, the handler's own, a destructured one), in a later assignment to
+  // a `let`, or written after `to` fails; the same copy without that `from` gives none.
+  it.each([
+    ["send", "function doRename(input = { scope, from: prev, to: next }) { return renameCategoryAction(input); }\n  function send(e: React.FormEvent) { e.preventDefault(); return doRename(); }"],
+    ["(e) => send(e)", "async function send(e: React.FormEvent, input = { scope, from: prev, to: next }) { e.preventDefault(); await renameCategoryAction(input); }"],
+    ["(e) => send(e)", "async function send(e: React.FormEvent, { input = { scope, from: prev, to: next } } = {}) { e.preventDefault(); await renameCategoryAction(input); }"],
+    ["send", "let input = { scope, name: next };\n  if (from) input = { scope, from: prev, to: next };\n  function send(e: React.FormEvent) { e.preventDefault(); void renameCategoryAction(input); }"],
+    ["send", "const send = (e: React.FormEvent) => renameCategoryAction({ scope, to, from });"],
+  ])("fails on a copy of the categories card with busy removed and onSubmit={%s} %s, and not without its from", (shape, declared) => {
+    const copy = (code: string) =>
+      categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", `onSubmit={${shape}}`).replace("  function submit(", `  ${code}\n  function submit(`);
+    const without = declared.replace(/, from(: prev)?\b/g, "");
+    expect(without).not.toBe(declared);
+    expect(copy(declared)).toContain(`  ${declared}\n  function submit(`);
+    expect(fromForms(copy(declared)).filter(({ held }) => !held)).not.toEqual([]);
+    expect(fromForms(copy(without))).toEqual([]);
   });
 
   // Two components in one file that each declare `save`: each FormModal reads its own component's.
