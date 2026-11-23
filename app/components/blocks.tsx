@@ -522,7 +522,8 @@ export function FormModal<Sent = never>({
   /**
    * What the opening edits, for a form that edits one of several things (a category, a custom exercise): opened again
    * for another one, or for an add, while a save is out, it is a fresh opening, not the save's; opened for the save's
-   * one again after that, it is the save's opening again, and `onOpen` gets back what `snapshot` took at the Save.
+   * one again after that, it is the save's opening again, and `onOpen` gets back what `snapshot` took at the Save. Each
+   * subject's unanswered save is kept on its own, so another one's save meanwhile changes nothing for it.
    */
   subject?: string;
   /** With `subject`: the values the form sends, taken at each Save, for `onOpen` to put back. */
@@ -543,21 +544,24 @@ export function FormModal<Sent = never>({
   const once = useOnce();
   // The opening on screen (or last shown), and the last one made: a kept opening can be shown again after a newer one.
   const [{ opening, made }, setOpenings] = useState({ opening: 0, made: 0 });
-  // The opening whose save is unanswered, if any, what it edits and what it sent.
-  const [savingIn, setSavingIn] = useState<{ opening: number; subject?: string; sent?: Sent } | null>(null);
+  // Each subject's unanswered save: the opening it was sent from and what it sent. An answer takes away only its own.
+  const [saves, setSaves] = useState<ReadonlyMap<string | undefined, { opening: number; sent?: Sent }>>(() => new Map());
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
     setWasOpen(isOpen);
-    if (isOpen && keepsOpening && savingIn && savingIn.subject === subject) setOpenings({ opening: savingIn.opening, made });
+    const out = saves.get(subject);
+    if (isOpen && keepsOpening && out) setOpenings({ opening: out.opening, made });
     else if (isOpen) setOpenings({ opening: made + 1, made: made + 1 });
   }
-  const saving = isOpen && savingIn?.opening === opening;
+  // The unanswered save of the opening on screen (or last shown), if any.
+  const savingIn = [...saves.values()].find((s) => s.opening === opening);
+  const saving = isOpen && !!savingIn;
   // The last opening `onOpen` ran for: its fields are set in the same commit, before the browser paints the form.
   const started = useRef(-1);
   useLayoutEffect(() => {
     if (!isOpen || started.current === opening) return;
     started.current = opening;
-    onOpen?.(savingIn?.opening === opening ? savingIn.sent : undefined);
+    onOpen?.(savingIn?.sent);
   });
   // The opening on screen, for `stillOpen` in an answer that comes later; none once the form is closed or gone.
   const shown = useRef<number | null>(null);
@@ -567,8 +571,13 @@ export function FormModal<Sent = never>({
       shown.current = null;
     };
   }, [isOpen, opening]);
-  // Each opening's id, kept for a kept opening shown again after another one.
+  // Each opening's id, kept for a kept opening shown again after another one: only the last opening's and those whose
+  // save is out stay, so the map holds no more than the openings that can still save.
   const ids = useRef(new Map<number, string>());
+  useEffect(() => {
+    const live = new Set([opening, ...[...saves.values()].map((s) => s.opening)]);
+    for (const kept of ids.current.keys()) if (!live.has(kept)) ids.current.delete(kept);
+  }, [opening, saves]);
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     const from = opening;
     const of = subject;
@@ -581,11 +590,16 @@ export function FormModal<Sent = never>({
         let answered = false;
         const answer = Promise.resolve(onSubmit(e, { id, stillOpen: () => shown.current === from })).finally(() => {
           answered = true;
-          setSavingIn((now) => (now?.opening === from ? null : now));
+          setSaves((now) => {
+            if (now.get(of)?.opening !== from) return now;
+            const left = new Map(now);
+            left.delete(of);
+            return left;
+          });
         });
         // A submit the page answers at once (a field it refuses) never shows as saving.
         queueMicrotask(() => {
-          if (!answered) setSavingIn({ opening: from, subject: of, sent });
+          if (!answered) setSaves((now) => new Map(now).set(of, { opening: from, sent }));
         });
         return answer;
       },

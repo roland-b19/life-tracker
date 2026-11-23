@@ -410,6 +410,51 @@ test("the categories card keeps a rename's opening only for the same category [D
   expect(writes).toHaveLength(1);
 });
 
+// Each category's unanswered rename is kept on its own (D-047): another category renamed while the first rename is out
+// (Next sends it once the first one answers) leaves the first one's opening as it was, so opened again it still waits
+// with the name it sent. A fresh opening there would show the old name, and its Save would be refused as changed on
+// another device.
+test("the categories card opened again after another category's rename still waits with the name it sent [D-047]", async ({ signedInPage: page }) => {
+  const [a, b, x, y] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
+  await wishlist.open(page);
+  for (const name of [a, b]) {
+    await addCategory(page, name);
+    await dismissToast(page);
+  }
+  const release = await holdWrites(page, `"to":"${x}"`);
+  const edit = page.getByRole("dialog", { name: "Edit category" });
+  const field = edit.getByLabel("Name", { exact: true });
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await field.fill(x);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${b}`, exact: true }).click();
+  await expect(field).toHaveValue(b);
+  await field.fill(y);
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await edit.getByRole("button", { name: "Cancel" }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit category ${a}`, exact: true }).click();
+  await expect(edit.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(x);
+  // The second rename goes once the first one answers, so its answer comes last.
+  await andSettle(page, async () => release(), `"to":"${y}"`);
+  await expect(edit).toBeHidden();
+  await expect(page.getByText(`Renamed "${a}" to "${x}"`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Renamed "${b}" to "${y}"`, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(x, { exact: true })).toBeVisible();
+  await expect(card(page).getByText(y, { exact: true })).toBeVisible();
+  const user = await signedInUserId(page);
+  const { rows } = await asOwner((db) => db.query("SELECT name FROM item_categories WHERE user_id = $1 ORDER BY name", [user]));
+  expect(rows.map((r) => r.name)).toEqual([x, y].sort());
+});
+
 // A phone screen with the card holding `names`, in that order, and three more rows after them, so the page is tall
 // enough to scroll the rows up to where the toast opens.
 async function onPhoneWith(page: Page, names: string[]) {

@@ -497,6 +497,47 @@ test("the shopping item form opened again while its save is out waits with what 
   expect(writes).toHaveLength(1);
 });
 
+// Each item's unanswered save is kept on its own (D-047): an add saved while an edit's save is out (Next sends it once
+// the edit answers) leaves the edit's opening as it was, so the item opened again still waits with what it sent, and the
+// rename stays. A fresh opening there would show the old name, and its Save would undo the rename.
+test("the shopping item form opened again after an add still waits with what it sent [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Shopping");
+  const [name, renamed, added] = [itemName(), itemName(), itemName()];
+  await addShoppingItem(page, name, 2);
+  await dismissToast(page, `Added "${name}"`);
+  const form = page.getByRole("dialog", { name: "Edit shopping item" });
+  const field = form.getByLabel("Name");
+  const release = await holdWrites(page, `"name":"${renamed}"`);
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await field.fill(renamed);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: "Add item" }).click();
+  const add = page.getByRole("dialog", { name: "New shopping item" });
+  await add.getByLabel("Name").fill(added);
+  await add.getByRole("button", { name: "Save" }).click();
+  await expect(add.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await add.getByRole("button", { name: "Cancel" }).click();
+  await expect(add).toBeHidden();
+
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(renamed);
+  // The add goes once the edit answers, so its answer comes last.
+  await andSettle(page, async () => release(), `"name":"${added}"`);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Saved "${renamed}"`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Added "${added}"`, { exact: true })).toBeVisible();
+  await expect(itemLine(page, renamed, 2)).toBeVisible();
+  const user = await signedInUserId(page);
+  const { rows } = await asOwner((db) => db.query("SELECT name FROM shopping_items WHERE user_id = $1 AND cleared_at IS NULL ORDER BY name", [user]));
+  expect(rows.map((r) => r.name)).toEqual([renamed, added].sort());
+});
+
 // A category delete's toast touches the items it moved (D-040): editing one of them takes that toast's Undo, which would
 // otherwise move the edited item back. The page's clock stands still from the delete on, so its toast does not run out.
 test("editing an item that a category delete moved takes the delete's Undo [TOUCHES]", async ({ signedInPage: page }) => {

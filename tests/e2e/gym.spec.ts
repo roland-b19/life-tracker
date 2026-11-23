@@ -692,6 +692,50 @@ test("the custom exercise form opened again while its save is out waits with wha
   expect(writes).toHaveLength(1);
 });
 
+// Each exercise's unanswered save is kept on its own (D-047): another exercise saved while the first one's save is out
+// (Next sends it once the first one answers) leaves the first one's opening as it was, so opened again it still waits
+// with what it sent, and both renames stay. A fresh opening there would show the old name, and its Save would undo the
+// rename.
+test("the custom exercise form opened again after another exercise's save still waits with what it sent [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const [a, b, aNew, bNew] = [exerciseName(), exerciseName(), exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [a, b]);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  const release = await holdWrites(page, `"name":"${aNew}"`);
+  await mine(page).getByRole("button", { name: `Edit ${a}` }).click();
+  await field.fill(aNew);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await mine(page).getByRole("button", { name: `Edit ${b}` }).click();
+  await expect(field).toHaveValue(b);
+  await field.fill(bNew);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await mine(page).getByRole("button", { name: `Edit ${a}` }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(aNew);
+  // The second save goes once the first one answers, so its answer comes last.
+  await andSettle(page, () => release(), `"name":"${bNew}"`);
+  await expect(form).toBeHidden();
+  await expect(toast(page, `Saved "${aNew}"`)).toBeVisible();
+  await expect(toast(page, `Saved "${bNew}"`)).toBeVisible();
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) =>
+    admin.query("SELECT name FROM exercises WHERE user_id = $1 AND name = ANY($2) ORDER BY name", [userId, [a, b, aNew, bNew]]),
+  );
+  expect(rows.map((r) => r.name)).toEqual([aNew, bNew].sort());
+});
+
 // "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
 // Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
 // in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a
