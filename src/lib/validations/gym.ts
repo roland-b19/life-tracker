@@ -126,7 +126,7 @@ const setFields = z.object({
 });
 
 /** A new set: a kg or plates set needs a value above 0, as in the set form; a bodyweight set may add nothing. */
-export const logSetSchema = setFields.refine((s) => s.loadType === "bodyweight" || s.loadValue > 0, { message: ZERO_LOAD, path: ["loadValue"] });
+export const addSetSchema = setFields.refine((s) => s.loadType === "bodyweight" || s.loadValue > 0, { message: ZERO_LOAD, path: ["loadValue"] });
 
 /** "1 plate = X kg" for one exercise (D-038): above 0, the column's two decimals; null clears it (the Undo of a first save). */
 export const savePlateWeightSchema = z.object({
@@ -186,7 +186,7 @@ export const restoreSessionSchema = z.object({
   notes: sessionNote,
   timerSeconds: z.number().int().min(0).max(1_000_000).default(0),
   timerRunning: z.boolean().default(false),
-  // A set put back as it was stored, so the new-set rule of logSetSchema does not apply.
+  // A set put back as it was stored, so the new-set rule of addSetSchema does not apply.
   sets: z.array(setFields.omit({ sessionId: true }).required({ setOrder: true })).max(300),
 });
 
@@ -219,7 +219,7 @@ export const saveSplitDaySchema = z.object({
     .refine((list) => new Set(list.map((e) => e.exerciseId)).size === list.length, "Duplicate exercise"),
 });
 
-export type LogSetInput = z.infer<typeof logSetSchema>;
+export type AddSetInput = z.infer<typeof addSetSchema>;
 export type AddSessionInput = z.infer<typeof addSessionSchema>;
 export type RestoreSessionInput = z.infer<typeof restoreSessionSchema>;
 export type FinishSessionInput = z.infer<typeof finishSessionSchema>;

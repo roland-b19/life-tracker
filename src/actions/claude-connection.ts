@@ -12,11 +12,11 @@ const tokenSchema = z.object({
   token: z.string(TOKEN_HINT).trim().regex(/^sk-ant-[A-Za-z0-9_-]{20,500}$/, TOKEN_HINT),
 });
 
-export async function connectClaudeAction(input: z.input<typeof tokenSchema>) {
+export async function connectClaudeAction(rawInput: unknown) {
   assertClaudeEnabled();
   return respond(async () => {
     const userId = await requireUser();
-    const { token } = tokenSchema.parse(input);
+    const { token } = tokenSchema.parse(rawInput);
     const previous = await getStoredConnection(userId);
     const { connectedAt } = await saveClaudeToken(userId, token);
     return { connectedAt: connectedAt.toISOString(), previous: sealed(previous) };
@@ -39,11 +39,11 @@ const sealed = (row: { tokenEncrypted: string; connectedAt: Date } | null) =>
 
 const restoreSchema = z.object({ tokenEncrypted: z.string().max(2000), connectedAt: z.string().datetime() });
 
-export async function restoreClaudeConnectionAction(input: z.input<typeof restoreSchema>) {
+export async function restoreClaudeConnectionAction(rawInput: unknown) {
   assertClaudeEnabled();
   return respond(async () => {
     const userId = await requireUser();
-    const { tokenEncrypted, connectedAt } = restoreSchema.parse(input);
+    const { tokenEncrypted, connectedAt } = restoreSchema.parse(rawInput);
     const restoredAt = await restoreClaudeConnection(userId, tokenEncrypted, new Date(connectedAt));
     return { connectedAt: restoredAt.toISOString() };
   });

@@ -9,7 +9,7 @@ import {
   addSessionSchema,
   cancelSessionSchema,
   finishSessionSchema,
-  logSetSchema,
+  addSetSchema,
   restoreDeloadWeeksSchema,
   restoreSessionSchema,
   saveDeloadWeeksSchema,
@@ -30,7 +30,7 @@ import {
   updateCustomExercise,
   deleteWorkoutSet,
   finishWorkoutSession,
-  logWorkoutSet,
+  addWorkoutSet,
   reopenWorkoutSession,
   restoreDeloadWeeks,
   restoreWorkoutSession,
@@ -52,7 +52,7 @@ function nearToday(date: string, daysBack = 1) {
  * Start a workout on a training day (D-039): one per day, so a day that already has one gets it back, open and timing.
  * Answers the workout with its sets and timer, and `from`: how it was found, which Undo reverses.
  */
-export async function startSessionAction(rawInput: unknown) {
+export async function addSessionAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const parsed = addSessionSchema.parse(rawInput);
@@ -140,10 +140,10 @@ export async function restoreSessionAction(rawInput: unknown) {
   });
 }
 
-export async function logSetAction(rawInput: unknown) {
+export async function addSetAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const set = await logWorkoutSet(userId, logSetSchema.parse(rawInput));
+    const set = await addWorkoutSet(userId, addSetSchema.parse(rawInput));
     if (!set) throw new Refusal("This set could not be saved.");
     return { set };
   });

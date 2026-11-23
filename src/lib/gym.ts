@@ -16,7 +16,7 @@ import {
   AddSessionInput,
   FinishSessionInput,
   GYM_LIMITS,
-  LogSetInput,
+  AddSetInput,
   NAME_SPACES,
   NOTES_CHANGED,
   RestoreDeloadWeeksInput,
@@ -443,7 +443,7 @@ const withinWorkout = (at: Date, start: Date, now = Date.now()) =>
 export async function restoreWorkoutSession(userId: string, input: RestoreSessionInput) {
   const ids = [...new Set(input.sets.map((s) => s.exerciseId))];
   const sessionId = await db.transaction(async (tx) => {
-    await lockUser(tx, "exercise", userId); // the order `logWorkoutSet` takes them in: exercise, then session
+    await lockUser(tx, "exercise", userId); // the order `addWorkoutSet` takes them in: exercise, then session
     await lockUser(tx, "session", userId);
     await refuseIfOpen(tx, userId);
     const [sameDay] = await tx
@@ -552,7 +552,7 @@ export async function getOpenWorkoutSession(userId: string) {
  * repeat answers the row the first one made; an id that is another user's row creates nothing and answers null.
  * A bodyweight set is saved with no extra kg: the set form has none (D-031).
  */
-export async function logWorkoutSet(userId: string, input: LogSetInput) {
+export async function addWorkoutSet(userId: string, input: AddSetInput) {
   return db.transaction(async (tx) => {
     // The lock `deleteCustomExercise` takes: a custom exercise deleted at the same moment either stays (this set uses
     // it) or is gone before the check below. Then the lock Finish takes: a set never lands in a workout finished meanwhile.

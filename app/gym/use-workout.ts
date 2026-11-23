@@ -23,13 +23,13 @@ import {
   cancelSessionAction,
   deleteSetAction,
   finishSessionAction,
-  logSetAction,
+  addSetAction,
   pauseSessionAction,
   reopenSessionAction,
   restoreSessionAction,
   resumeSessionAction,
   saveSessionNotesAction,
-  startSessionAction,
+  addSessionAction,
 } from "@/actions/gym";
 
 type AnomalyReason = RestoreSessionInput["sets"][number]["anomalyReason"];
@@ -214,7 +214,7 @@ export function useWorkout({
   function start(day: SplitDay, spot?: Element | null) {
     if (day.isRest) return;
     write(async () => {
-      const res = await startSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode });
+      const res = await addSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode });
       if (!res.success) return warn(res.error);
       const { session, sets, timer, from, splitDayName: name } = res;
       const started: ActiveSessionData = {
@@ -326,7 +326,7 @@ export function useWorkout({
     if (!canLog(state)) return; // the button stays disabled until the set is complete
     write(async () => {
       // The id is made here (D-040), so a set sent twice is one set.
-      const res = await logSetAction({
+      const res = await addSetAction({
         id: crypto.randomUUID(),
         sessionId: session.id,
         exerciseId: exercise.exerciseId,
@@ -399,7 +399,7 @@ export function useWorkout({
           saved: deleted.then((res) => (res && !res.success && res.error === SET_GONE ? { success: true as const } : res)),
           onUndo: undoWith(showToast, async () => {
             if (!(await deleted)?.success) return true; // the refusal below put it back, or it was gone already
-            const res = await logSetAction({
+            const res = await addSetAction({
               id: set.id,
               createdAt: set.createdAt,
               sessionId,

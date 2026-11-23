@@ -18,11 +18,11 @@ const chatInputSchema = z.object({
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
 });
 
-export async function sendFoodChatMessageAction(input: z.input<typeof chatInputSchema>) {
+export async function sendFoodChatMessageAction(rawInput: unknown) {
   assertClaudeEnabled();
   return respond(async () => {
     const userId = await requireUser();
-    const { message, history, date, time } = chatInputSchema.parse(input);
+    const { message, history, date, time } = chatInputSchema.parse(rawInput);
     // Same rule as logging a meal by hand: the Assistant may not write into older days.
     if (!metricDayEditable(date, toISODate())) throw new Refusal(ONLY_TODAY_AND_YESTERDAY);
 

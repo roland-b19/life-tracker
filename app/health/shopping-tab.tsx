@@ -271,7 +271,7 @@ export function ShoppingTab({
     const setBought = (isBought: boolean, checkedAt: Date | string | null) =>
       setShoppingList((prev) => prev.map((i) => (i.id === item.id ? { ...i, isBought, checkedAt } : i)));
     setBought(next, new Date());
-    const saved = toggleShoppingItemAction(item.id, next).catch(() => null);
+    const saved = toggleShoppingItemAction({ itemId: item.id, isBought: next }).catch(() => null);
     showToast({
       message: next ? `Bought "${item.name}"` : `"${item.name}" is back on the list`,
       type: "success",
@@ -283,7 +283,7 @@ export function ShoppingTab({
           setBought(!next, item.checkedAt);
           const done = await saved;
           if (!done?.success) return true; // the failure path below put it back
-          const back = await toggleShoppingItemAction(item.id, !next, item.checkedAt).catch(() => null);
+          const back = await toggleShoppingItemAction({ itemId: item.id, isBought: !next, checkedAt: item.checkedAt }).catch(() => null);
           if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
         },

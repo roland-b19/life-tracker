@@ -11,8 +11,8 @@ import {
 } from "@/db/schema";
 import {
   AddShoppingItemInput,
-  LogMealInput,
-  LogWeightInput,
+  AddMealInput,
+  SaveWeightInput,
   RestoreMealInput,
   RestoreWeightInput,
   UnmergeShoppingItemInput,
@@ -108,7 +108,7 @@ export async function getDailyFoodSummary(userId: string, date: string) {
  * answers it, with `repeated`. An id another user's meal holds writes nothing and answers a null meal, so it neither
  * changes nor shows that row.
  */
-export async function logMeal(userId: string, input: LogMealInput) {
+export async function addMeal(userId: string, input: AddMealInput) {
   const created = await db
     .insert(meals)
     .values({
@@ -761,7 +761,7 @@ export async function listWeightEntries(userId: string, since?: string) {
  * write is keyed by the user and the day (the update is filtered by `userId`), and it sets an absolute value, so a
  * repeat changes nothing more.
  */
-export async function saveWeightEntry(userId: string, input: LogWeightInput) {
+export async function saveWeightEntry(userId: string, input: SaveWeightInput) {
   const kilograms = input.kilograms.toFixed(2);
   return db.transaction(async (tx) => {
     await lockUser(tx, "weight", userId); // two saves of a new day at once must not both insert

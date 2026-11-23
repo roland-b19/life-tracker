@@ -4,15 +4,7 @@ import { requireUser } from "@/server/auth";
 import { uuid } from "@/lib/validations/common";
 import { Refusal, respond } from "@/lib/validations/result";
 import { addWishlistItem, deleteWishlistItem, restoreWishlistItem, updateWishlistItem } from "@/lib/wishlist";
-import {
-  AddWishlistItemInput,
-  addWishlistItemSchema,
-  RestoreWishlistItemInput,
-  restoreWishlistItemSchema,
-  UpdateWishlistItemInput,
-  updateWishlistItemSchema,
-  WISHLIST_ITEM_GONE,
-} from "@/lib/validations/wishlist";
+import { addWishlistItemSchema, restoreWishlistItemSchema, updateWishlistItemSchema, WISHLIST_ITEM_GONE } from "@/lib/validations/wishlist";
 
 const gone = () => new Refusal(WISHLIST_ITEM_GONE);
 
@@ -20,7 +12,7 @@ const gone = () => new Refusal(WISHLIST_ITEM_GONE);
  * Adds an item; a repeat of the same add (same id) answers the item already there with `repeated`, an id another user
  * holds is refused.
  */
-export async function addWishlistItemAction(rawInput: AddWishlistItemInput) {
+export async function addWishlistItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const { item, repeated } = await addWishlistItem(userId, addWishlistItemSchema.parse(rawInput));
@@ -29,11 +21,11 @@ export async function addWishlistItemAction(rawInput: AddWishlistItemInput) {
   });
 }
 
-/** Changes only the fields the edit sent (D-040). */
-export async function updateWishlistItemAction(itemId: string, rawInput: UpdateWishlistItemInput) {
+/** Changes only the fields the edit sent (D-040), on the item `id` names. */
+export async function updateWishlistItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
-    const item = await updateWishlistItem(userId, uuid.parse(itemId), updateWishlistItemSchema.parse(rawInput));
+    const item = await updateWishlistItem(userId, updateWishlistItemSchema.parse(rawInput));
     if (!item) throw gone();
     return { item };
   });
@@ -48,7 +40,7 @@ export async function deleteWishlistItemAction(itemId: string) {
   });
 }
 
-export async function restoreWishlistItemAction(rawInput: RestoreWishlistItemInput) {
+export async function restoreWishlistItemAction(rawInput: unknown) {
   return respond(async () => {
     const userId = await requireUser();
     const item = await restoreWishlistItem(userId, restoreWishlistItemSchema.parse(rawInput));

@@ -5,7 +5,7 @@ import { toISODate } from "@/lib/format-date";
 import { NOT_WHOLE } from "@/lib/number-format";
 import {
   GOAL_RANGES,
-  logMealSchema,
+  addMealSchema,
   mealAmounts,
   MEAL_CALORIES_NEGATIVE,
   MEAL_CALORIES_TOO_HIGH,
@@ -48,7 +48,7 @@ describe("only useDeviceState and the theme's head script touch localStorage [D-
 
 describe("the Health form's limits and words are the schema's [U5]", () => {
   const meal = { id: randomUUID(), date: toISODate(), name: "Meal", calories: 100, protein: 0, carbs: 0, fat: 0 };
-  const refusal = (input: object) => logMealSchema.safeParse(input).error?.issues[0]?.message;
+  const refusal = (input: object) => addMealSchema.safeParse(input).error?.issues[0]?.message;
 
   it("refuses a meal over a limit with the message the form shows", () => {
     expect(refusal({ ...meal, calories: MEAL_LIMITS.calories })).toBeUndefined();
@@ -562,5 +562,84 @@ describe("a migrated form leaves its saving state to FormModal [D-047]", () => {
     expect(props.length).toBeGreaterThan(0);
     expect(props.length).toBe(sources[file].split("<FormModal").length - 1);
     expect(props.filter((p) => /\bbusy=/.test(p))).toEqual([]);
+  });
+});
+
+// conventions.md, Writes from the UI and Names (D-047): an action takes one input, `rawInput: unknown`, parsed by its
+// zod schema inside `respond`; a delete takes only the id (`(id: string)`), and an action with no input takes nothing.
+// A function that adds a row is `add...` in every layer, never `log...` or `create...`. An export these checks cannot
+// read fails, so a new kind of export is looked at before it passes.
+const actionFiles = import.meta.glob("../src/actions/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+const libFiles = import.meta.glob("../src/lib/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+const exported = (s: ts.Statement) => ts.canHaveModifiers(s) && !!ts.getModifiers(s)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+const isType = (s: ts.Statement) => ts.isTypeAliasDeclaration(s) || ts.isInterfaceDeclaration(s);
+const wrongVerb = (name: string) => /^(log|create|Log|Create)[A-Z]|^unreadable/.test(name);
+
+/** Each exported action's shape, or what makes it wrong. */
+function actionShapes(text: string): string[] {
+  return ts.createSourceFile("action.ts", text, ts.ScriptTarget.Latest, true).statements.flatMap((s) => {
+    if (ts.isExportDeclaration(s) || ts.isExportAssignment(s)) return [`unreadable export: ${s.getText()}`];
+    if (!exported(s) || isType(s)) return [];
+    if (!ts.isFunctionDeclaration(s) || !s.name) return [`unreadable export: ${s.getText().split("\n")[0]}`];
+    const name = s.name.text;
+    const params = s.parameters.map((p) => `${p.name.getText()}: ${p.type?.getText() ?? "(no type)"}`);
+    if (params.length === 0) return [];
+    if (name.startsWith("delete") && params.length === 1 && /^\w+: string$/.test(params[0])) return [];
+    return params.length === 1 && params[0] === "rawInput: unknown" ? [] : [`${name}(${params.join(", ")})`];
+  });
+}
+
+/** Every exported name in a file (functions, variables, types), or what could not be read. */
+function exportedNames(text: string): string[] {
+  return ts.createSourceFile("lib.ts", text, ts.ScriptTarget.Latest, true).statements.flatMap((s) => {
+    if (ts.isExportDeclaration(s) || ts.isExportAssignment(s)) return [`unreadable export: ${s.getText()}`];
+    if (!exported(s)) return [];
+    if (ts.isVariableStatement(s)) return s.declarationList.declarations.map((d) => d.name.getText());
+    if ((ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s) || ts.isEnumDeclaration(s) || isType(s)) && s.name) return [s.name.text];
+    return [`unreadable export: ${s.getText().split("\n")[0]}`];
+  });
+}
+
+describe("every action takes rawInput: unknown, a delete only its id [D-047]", () => {
+  it("finds the actions", () => {
+    expect(Object.keys(actionFiles).length).toBeGreaterThan(5);
+  });
+  it.each(Object.entries(actionFiles))("%s", (_file, text) => {
+    expect(actionShapes(text)).toEqual([]);
+  });
+  it("fails on the shapes it does not allow, and on an export it cannot read", () => {
+    const wrong = [
+      "export async function addThingAction(input: z.input<typeof schema>) {}",
+      "export async function addThingAction(rawInput: AddThingInput) {}",
+      "export async function updateThingAction(id: string, rawInput: unknown) {}",
+      "export async function toggleThingAction(id: string, done: boolean) {}",
+      "export async function addThingAction(id: string) {}",
+      "export async function deleteThingAction(id: string, from: unknown) {}",
+      "export const addThingAction = async (rawInput: unknown) => {};",
+      "export { addThingAction } from './x';",
+    ];
+    for (const text of wrong) expect(actionShapes(text), text).toHaveLength(1);
+    const right = [
+      "export async function addThingAction(rawInput: unknown) {}",
+      "export async function deleteThingAction(thingId: string) {}",
+      "export async function disconnectThingAction() {}",
+      "export type Thing = { id: string };",
+    ];
+    for (const text of right) expect(actionShapes(text), text).toEqual([]);
+  });
+});
+
+describe("no log... or create... names in src/lib or src/actions: an add is add... [D-047]", () => {
+  const files = Object.entries({ ...libFiles, ...actionFiles });
+  it("finds the files", () => {
+    expect(files.length).toBeGreaterThan(20);
+  });
+  it.each(files)("%s", (_file, text) => {
+    expect(exportedNames(text).filter(wrongVerb)).toEqual([]);
+  });
+  it("fails on a log or create name and on an export it cannot read, not on a word that only starts the same", () => {
+    for (const text of ["export async function logThing() {}", "export const createThingSchema = z.object({});", "export type LogThingInput = {};", "export * from './x';"])
+      expect(exportedNames(text).filter(wrongVerb), text).toHaveLength(1);
+    expect(exportedNames("export const logger = 1; export function createdAt() {}").filter(wrongVerb)).toEqual([]);
   });
 });
