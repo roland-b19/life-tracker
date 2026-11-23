@@ -14,7 +14,7 @@ import {
 import type { Answer } from "@/lib/validations/result";
 import { useEffect, useRef, useState } from "react";
 import { useOnce } from "../components/once";
-import { refreshesSent } from "../providers";
+import { useRefreshesSent } from "../providers";
 import { useServerState } from "../components/server-state";
 import { undoWith, useToast } from "../components/toast";
 import { emptyInput, canLog, UNCHECKED, type SetInput } from "./exercise-logger";
@@ -85,6 +85,7 @@ export function useWorkout({
 }) {
   const { showToast } = useToast();
   const once = useOnce();
+  const refreshesSent = useRefreshesSent();
   const warn = (message: string) => showToast({ message, type: "warning" });
   // A server value rendered for a refresh sent before the answer of the last write that put a workout in hand (`take`)
   // may be from before that write, and Next can apply it after the write's change: it is set aside, and the page keeps

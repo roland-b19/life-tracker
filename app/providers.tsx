@@ -41,7 +41,11 @@ const headersOf = (input: RequestInfo | URL, init?: RequestInit) =>
 // page can tell a server value rendered before a write's answer (its refresh number is at most the one sent by then).
 let sent = 0;
 /** The number of the last refresh sent: a page rendered for a higher one was rendered after this moment. */
-export const refreshesSent = () => sent;
+const refreshesSent = () => sent;
+// Given to pages by `Providers` (D-044); a function, so the page reads the number when it needs it (at a write's answer).
+const RefreshesSentContext = createContext<() => number>(() => 0);
+/** The function that gives the number of the last refresh sent. */
+export const useRefreshesSent = () => useContext(RefreshesSentContext);
 
 /**
  * Keeps every open copy of the app showing what the server holds. A write here (a server action answered HTTP 2xx)
@@ -336,7 +340,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <ToastProvider>
         <AppShell onPageNotOpened={setNotOpened} />
-        <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
+        <RefreshesSentContext.Provider value={refreshesSent}>
+          <PageNotOpenedContext.Provider value={notOpened}>{children}</PageNotOpenedContext.Provider>
+        </RefreshesSentContext.Provider>
       </ToastProvider>
     </SessionProvider>
   );
