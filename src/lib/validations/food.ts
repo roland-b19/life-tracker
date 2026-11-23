@@ -111,9 +111,6 @@ export const updateStepsSchema = z
   .object({ date: isoDate, steps: valueChange(z.number().int().min(0).max(MAX_STEPS)).optional(), goal: valueChange(targetFields.steps).optional() })
   .refine((v) => anySet([v.steps, v.goal]), NOTHING_TO_SAVE);
 
-/** Free text, so the user can add and rename categories; lower case so "Dairy" and "dairy" are one group. */
-export const shoppingCategorySchema = categorySchema;
-
 /** The most one shopping item can hold: an add or a merge that would pass it is refused. */
 export const MAX_SHOPPING_AMOUNT = 1000;
 /** How many names each of the two shopping lists (categories, units) holds at most. */
@@ -133,7 +130,7 @@ const shoppingItemFields = z.object({
   name: z.string().trim().min(1).max(120).refine(visible, "Name is required"),
   amount: shoppingAmount.default(1),
   unit: z.string().trim().toLowerCase().min(1).max(30).default("pcs"),
-  category: shoppingCategorySchema.default("other"),
+  category: categorySchema.default("other"),
 });
 
 export const addShoppingItemSchema = shoppingItemFields.extend({ id: newId });
@@ -157,16 +154,16 @@ const managed = <T extends { kind: ShoppingKind }>(schema: z.ZodType<T>, names: 
     .refine((v) => v.kind !== "unit" || !names(v).includes("pcs"), '"pcs" is built in')
     .refine((v) => v.kind !== "unit" || names(v).every((n) => n.length <= 30), "Too long (max 30)");
 
-export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: shoppingCategorySchema }), (v) => [v.name]);
+export const shoppingCategoryNameSchema = managed(z.object({ kind: shoppingKindSchema, name: categorySchema }), (v) => [v.name]);
 export const reorderShoppingCategoriesSchema = managed(
   z.object({
     kind: shoppingKindSchema,
-    names: z.array(shoppingCategorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique"),
+    names: z.array(categorySchema).max(MAX_SHOPPING_NAMES).refine((n) => new Set(n).size === n.length, "Names must be unique"),
   }),
   (v) => v.names,
 );
 export const renameShoppingCategorySchema = managed(
-  z.object({ kind: shoppingKindSchema, from: shoppingCategorySchema, to: shoppingCategorySchema }),
+  z.object({ kind: shoppingKindSchema, from: categorySchema, to: categorySchema }),
   (v) => [v.from, v.to],
 ).refine((v) => v.from !== v.to, { message: "That is already its name", path: ["to"] });
 
@@ -177,13 +174,13 @@ export const renameShoppingCategorySchema = managed(
 export const revertShoppingCategorySchema = managed(
   z.object({
     kind: shoppingKindSchema,
-    name: shoppingCategorySchema,
-    current: shoppingCategorySchema,
+    name: categorySchema,
+    current: categorySchema,
     sortOrder: z.number().int(),
     itemIds: z.array(uuid).max(MAX_CLEARED),
     dropCurrent: z.boolean(),
     merges: z
-      .array(z.object({ id: uuid, into: uuid, amount: shoppingAmount, category: shoppingCategorySchema, isBought: z.boolean() }))
+      .array(z.object({ id: uuid, into: uuid, amount: shoppingAmount, category: categorySchema, isBought: z.boolean() }))
       .max(MAX_CLEARED)
       .default([]),
     amounts: z.array(z.object({ id: uuid, amount: shoppingAmount })).max(MAX_CLEARED).default([]),
