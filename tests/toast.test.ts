@@ -54,13 +54,11 @@ describe("undoWith offers Retry only when no answer came [D-047]", () => {
 });
 
 // conventions.md, Undo keys: a toast with Undo names the rows it touches, so a newer toast about one of them takes its Undo
-// away. The theme toast changes no row (the theme lives on the device, D-024), so it has nothing to name.
+// away. The theme toast names the key the device keeps it under (D-047).
 describe("every Undo toast in app/ names the rows it touches [D-040]", () => {
-  const noRow = ["../app/components/appearance-card.tsx"];
-  const files = Object.entries(sources).filter(([file]) => !noRow.includes(file));
-  it("finds the sources and the one exception", () => {
+  const files = Object.entries(sources);
+  it("finds the sources", () => {
     expect(files.length).toBeGreaterThan(30);
-    expect(Object.keys(sources)).toEqual(expect.arrayContaining(noRow));
   });
   it.each(files)("%s", (file, text) => {
     const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

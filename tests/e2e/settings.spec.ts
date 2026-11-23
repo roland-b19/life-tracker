@@ -7,10 +7,13 @@ import {
   center,
   dismissToast,
   expectNoSeriousViolations,
+  expectToastWithoutUndo,
   hydrationWarnings,
+  pauseClock,
   signInThroughForm,
   test,
   theme,
+  undoIn,
   writesIn,
 } from "./helpers";
 
@@ -204,6 +207,19 @@ test("a signed-in user picks Light or Dark for this device, with Undo, also afte
   expect(await pickFades("Light")).toBe(false);
 
   expect(reactWarnings).toEqual([]);
+});
+
+test("a second theme change takes the first toast's Undo away; its own Undo puts the first change back [D-040, D-047]", async ({ signedInPage: page }) => {
+  await page.clock.install();
+  await openSettings(page);
+  await pauseClock(page);
+  await pick(page, "Dark");
+  await expect(undoIn(page, "Appearance set to Dark")).toBeVisible();
+  await pick(page, "Light");
+  await expectToastWithoutUndo(page, "Appearance set to Dark");
+  await undoIn(page, "Appearance set to Light").click();
+  await expect(appearance(page).getByRole("tab", { name: "Dark", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await theme(page)).toBe("dark");
 });
 
 test("a theme kept before D-047 (a raw light or dark) still applies and is kept as JSON from then on; an unreadable one is Auto", async ({ signedInPage: page }) => {

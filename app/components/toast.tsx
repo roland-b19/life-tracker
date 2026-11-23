@@ -15,8 +15,9 @@ interface Toast {
   /** Shows a Retry button that runs this: a restore that got no answer (undoWith). */
   onRetry?: () => void;
   /**
-   * The rows the change behind the toast touched, as "<table>:<row id>" or "<table>:*" for a whole list. A newer toast
-   * that touches one of them takes this toast's Undo and Retry away, so an older Undo never writes over a newer change.
+   * The rows the change behind the toast touched, as "<table>:<row id>" or "<table>:*" for a whole list (or a key the
+   * device keeps, as `THEME_STORAGE`). A newer toast that touches one of them takes this toast's Undo and Retry away, so
+   * an older Undo never writes over a newer change.
    */
   touches?: string[];
   /** The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. */

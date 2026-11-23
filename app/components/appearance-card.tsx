@@ -36,6 +36,7 @@ export function AppearanceCard() {
     showToast({
       message: `Appearance set to ${OPTIONS.find((o) => o.value === next)!.label}`,
       type: "success",
+      touches: [THEME_STORAGE],
       onUndo: undoWith(showToast, async () => (setTheme(before), true)),
     });
   };
