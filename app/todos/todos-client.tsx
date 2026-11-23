@@ -64,24 +64,19 @@ export function TodosClient({
   // A tick or a Delete acts once per tap burst (D-043); Save gets the same from FormModal.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
-  // The list shows this view, which follows the controls a render later.
-  const [view, setView] = useState({
-    space: "personal" as TodoSpace,
-    tab: "daily" as TaskTab,
-  });
-  // The page position when a switch started: the list changes a render after the controls, so put the page back then too.
+  // The page position when a switch started, put back once the list has changed.
   const scrolled = useRef<number | null>(null);
   useLayoutEffect(() => {
     if (scrolled.current !== null) window.scrollTo(0, scrolled.current);
     scrolled.current = null;
-  }, [view]);
+  }, [space, tab]);
 
   // Form state
   const [titleInput, setTitleInput] = useState("");
   const [reminderTimeInput, setReminderTimeInput] = useState("");
   const [categoryInput, setCategoryInput] = useState("other");
   const [errorMsg, setErrorMsg] = useState("");
-  // Flows that finish seconds later (Undo, a refresh) read the controls as they are then.
+  // Undo, which finishes seconds later, reads the tab as it is then.
   const latest = useRef({ tab });
   useEffect(() => {
     latest.current = { tab };
@@ -92,22 +87,21 @@ export function TodosClient({
   const [pushSubscribed, setPushSubscribed] = useState(false);
 
   const isDaily = tab === "daily";
-  const listDaily = view.tab === "daily";
   // The daily list shows its tasks under their category (each group in the list's own order); the Today list is flat.
   // Every list is today's: tasks are added for today only, and unfinished ones carry over.
   const listTodos = (() => {
-    const list = todosMap[view.space].filter((t) => t.isRecurring === listDaily);
-    return listDaily ? groupOrder(categories[view.space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
+    const list = todosMap[space].filter((t) => t.isRecurring === isDaily);
+    return isDaily ? groupOrder(categories[space], list).flatMap((c) => list.filter((t) => t.category === c)) : list;
   })();
   const [isFolded, toggleFolded] = useFolded("todos");
-  const foldKey = (category: string) => `${view.space}/${view.tab}/${category}`;
+  const foldKey = (category: string) => `${space}/${tab}/${category}`;
   // Whether a task belongs on the list the controls show now.
   const shows = (t: TodoItem) => {
     return t.isRecurring === (latest.current.tab === "daily");
   };
 
-  // Progress counts the list on screen (`view`: its space and tab), so it never shows the last day's numbers while the
-  // next one loads, and is labelled with that tab. A list with no tasks shows only a note, no ring.
+  // Progress counts the list on screen (its space and tab) and is labelled with that tab. A list with no tasks shows only
+  // a note, no ring.
   const doneCount = listTodos.filter((t) => t.isCompleted).length;
   const totalCount = listTodos.length;
   const percentage = Math.round((doneCount / (totalCount || 1)) * 100);
@@ -123,14 +117,13 @@ export function TodosClient({
       .catch(() => {});
   }, []);
 
-  // The controls switch at once; the list follows a render later.
+  // The controls and the list switch together; the page keeps its position.
   const switchView = (next: { space?: TodoSpace; tab?: TaskTab }) => {
     const target = { space, tab, ...next };
     if (target.space === space && target.tab === tab) return;
     scrolled.current = window.scrollY;
     setSpace(target.space);
     setTab(target.tab);
-    setView(target);
   };
 
   const openForm = (todo?: TodoItem) => {
@@ -411,7 +404,7 @@ export function TodosClient({
               {listTodos.length > 0 ? (
                 <GroupedList
                   items={listTodos}
-                  grouped={listDaily}
+                  grouped={isDaily}
                   isFolded={(c) => isFolded(foldKey(c))}
                   onToggle={(c) => toggleFolded(foldKey(c))}
                   row={(task) => (
@@ -424,9 +417,9 @@ export function TodosClient({
 
                       <div className="todo-main">
                         <span className={`todo-title ${task.isCompleted ? "completed" : ""}`}>{task.title}</span>
-                        {((!listDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
+                        {((!isDaily && task.isCarriedOver) || (task.reminderTime && isPushEnabled())) && (
                           <div className="badge-row">
-                            {!listDaily && task.isCarriedOver && <Badge kind="info">Carried over</Badge>}
+                            {!isDaily && task.isCarriedOver && <Badge kind="info">Carried over</Badge>}
                             {task.reminderTime && isPushEnabled() && <Badge kind="info">{task.reminderTime}</Badge>}
                           </div>
                         )}
@@ -438,27 +431,27 @@ export function TodosClient({
                 />
               ) : (
                 <EmptyNote>
-                  {listDaily ? "No daily tasks yet." : "Nothing planned for today."}
+                  {isDaily ? "No daily tasks yet." : "Nothing planned for today."}
                 </EmptyNote>
               )}
             </ListBox>
           </Card>
           {/* A daily task is filed under a category of its own space, so each space has its own list. */}
-          {view.tab === "daily" && (
+          {isDaily && (
             <CategoriesCard
-              key={view.space}
-              api={scopedCategories(view.space)}
-              categories={categories[view.space]}
-              onChange={(update) => setCategories((prev) => ({ ...prev, [view.space]: update(prev[view.space]) }))}
+              key={space}
+              api={scopedCategories(space)}
+              categories={categories[space]}
+              onChange={(update) => setCategories((prev) => ({ ...prev, [space]: update(prev[space]) }))}
               onRefile={(from, to, only) => {
-                updateList(view.space, (list) => {
+                updateList(space, (list) => {
                   // As the server files them: repeating tasks land on top of the new category as one block, in the order they had.
                   const moving = (t: TodoItem) => t.category === from && (!only || only.includes(t.id));
                   const placed = blockPlacements(list.filter((t) => moving(t) && t.isRecurring));
                   return list.map((t) => (!moving(t) ? t : { ...t, category: to, placedAt: placed.get(t.id) ?? t.placedAt })).sort(compareTodos);
                 });
               }}
-              idsIn={(c) => todosMap[view.space].filter((t) => t.category === c).map((t) => t.id)}
+              idsIn={(c) => todosMap[space].filter((t) => t.category === c).map((t) => t.id)}
             />
           )}
         </DashboardMain>
@@ -466,15 +459,15 @@ export function TodosClient({
         <DashboardAside>
           <Card id="progress-title" title="Progress">
             {!totalCount ? (
-              <EmptyNote>{listDaily ? "No daily tasks yet." : "No tasks for today."}</EmptyNote>
+              <EmptyNote>{isDaily ? "No daily tasks yet." : "No tasks for today."}</EmptyNote>
             ) : (
               <div className="dash-hero">
                 <div className="dash-hero-text">
                   {/* Plain numbers: the fraction never counts; only the ring fills (the user's call). */}
                   <BigNumber value={doneCount} of={`of ${totalCount} done`} />
-                  <span className="muted">{listDaily ? "Daily" : "Today"}</span>
+                  <span className="muted">{isDaily ? "Daily" : "Today"}</span>
                 </div>
-                <ProgressRing percent={percentage} label={`of ${listDaily ? "daily" : "the day's"} tasks done`} />
+                <ProgressRing percent={percentage} label={`of ${isDaily ? "daily" : "the day's"} tasks done`} />
               </div>
             )}
           </Card>

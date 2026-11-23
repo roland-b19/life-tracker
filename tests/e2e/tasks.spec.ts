@@ -142,6 +142,21 @@ test("a daily task shows only on the Daily tab of its own space", async ({ signe
   await expect(page.getByText("Nothing planned for today.")).toBeVisible();
 });
 
+// The page is made short, so every list scrolls past the point. The controls are clicked with a dispatched click: a real
+// click would first scroll them into view.
+test("a switch of space or task type keeps the page where it was", async ({ signedInPage: page }) => {
+  await page.setViewportSize({ width: 1280, height: 200 });
+  await openTasks(page, "Daily");
+  await addTask(page, taskTitle(), "New daily task");
+  await page.evaluate(() => window.scrollTo(0, 120));
+  for (const name of ["Business", "Today", "Personal", "Daily"]) {
+    const control = page.getByRole("tab", { name, exact: true });
+    await control.dispatchEvent("click");
+    await expect(control).toHaveAttribute("aria-selected", "true");
+    expect(await page.evaluate(() => window.scrollY)).toBe(120);
+  }
+});
+
 test("a signed-out visit to /todos goes to the sign-in form, which comes back to /todos [PATH]", async ({ page }) => {
   await signInThroughForm(page, "/todos", (page) => expect(page.getByRole("button", { name: "Add task" })).toBeVisible());
 });
