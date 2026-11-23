@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { toISODate } from "@/lib/format-date";
 import { NOT_WHOLE } from "@/lib/number-format";
@@ -124,33 +125,72 @@ describe("field messages end with no full stop", () => {
   });
 });
 
-// Where the `(` or `{` at `open` closes, counting the pairs inside it; -1 if it never does.
-const closing = (text: string, open: number) => {
-  const [o, c] = text[open] === "(" ? ["(", ")"] : ["{", "}"];
-  let depth = 0;
-  for (let i = open; i < text.length; i++) {
-    if (text[i] === o) depth++;
-    else if (text[i] === c && --depth === 0) return i;
+// The functions below read a file's syntax tree, as toast.test.ts does.
+const treeOf = (text: string) => ts.createSourceFile("form.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+type Fn = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+
+// Whether a declared name, or a destructuring pattern, binds `wanted`.
+const binds = (name: ts.BindingName, wanted: string): boolean =>
+  ts.isIdentifier(name) ? name.text === wanted : name.elements.some((e) => !ts.isOmittedExpression(e) && binds(e.name, wanted));
+
+// The declaration `name` means where `at` sits: the nearest scope around `at` (a function's parameters, a block, the
+// file) that declares it. A scope that declares it more than once gives undefined, as no declaration does.
+const declarationOf = (name: string, at: ts.Node): ts.Node | undefined => {
+  for (let scope = at.parent; scope; scope = scope.parent) {
+    const found: ts.Node[] = [];
+    if (ts.isFunctionLike(scope)) found.push(...scope.parameters.filter((p) => binds(p.name, name)));
+    if (ts.isBlock(scope) || ts.isSourceFile(scope))
+      for (const s of scope.statements) {
+        if (ts.isFunctionDeclaration(s) && s.body && s.name?.text === name) found.push(s);
+        if (ts.isVariableStatement(s)) found.push(...s.declarationList.declarations.filter((d) => binds(d.name, name)));
+      }
+    if (found.length) return found.length === 1 ? found[0] : undefined;
   }
-  return -1;
 };
 
-// The body of the function `name` declared in `text`, from its `{` to the matching `}`. It is read only from
-// `function name(…) {` or `const name = (…) => {` (also `async`, or one bare param `e => {`), with the `{` right after
-// the `)` or `=>` (a return type may sit between); any other declaration (an expression-bodied arrow, `useCallback(…)`)
-// or none gives "".
+// The function a declaration gives: `function name`, or `const name =` an arrow, a function expression or
+// `useCallback(fn, deps)`; anything else (a parameter, a destructured value, another value, none) gives undefined.
+const functionOf = (declaration: ts.Node | undefined): Fn | undefined => {
+  if (declaration && ts.isFunctionDeclaration(declaration)) return declaration.body ? declaration : undefined;
+  if (!declaration || !ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return undefined;
+  let value = declaration.initializer;
+  if (value && ts.isCallExpression(value) && /^(React\.)?useCallback$/.test(value.expression.getText())) value = value.arguments[0];
+  return value && (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) ? value : undefined;
+};
+
+// The body of the one function named `name` in `text`, whatever its shape (see functionOf); "" unless there is exactly one.
 const bodyOf = (text: string, name: string) => {
-  const at = text.search(new RegExp(`\\b(?:function ${name}\\b|const ${name}\\s*=)`));
-  const declared = at < 0 ? null : /^(?:function \w+\s*(?=\()|const \w+\s*=\s*(?:async\s+)?(?=\(|\w+\s*=>))/.exec(text.slice(at));
-  if (!declared) return "";
-  const after = at + declared[0].length;
-  const params = text[after] === "(" ? closing(text, after) : text.indexOf("=>", after) - 1;
-  const head = declared[0].startsWith("function") ? /^\s*(?::[^{};=]*)?\{/ : /^\s*(?::[^{};=]*)?=>\s*\{/;
-  const opens = params < 0 ? null : head.exec(text.slice(params + 1));
-  if (!opens) return "";
-  const open = params + opens[0].length;
-  const close = closing(text, open);
-  return close < 0 ? "" : text.slice(open, close + 1);
+  const found: Fn[] = [];
+  const visit = (node: ts.Node) => {
+    const named = (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name && ts.isIdentifier(node.name) && node.name.text === name;
+    const fn = named ? functionOf(node) : undefined;
+    if (fn) found.push(fn);
+    ts.forEachChild(node, visit);
+  };
+  visit(treeOf(text));
+  return found.length === 1 ? found[0].body!.getText() : "";
+};
+
+// The code `fn` runs: its body and, transitively, what each name in it means in this file (declarationOf, from where
+// the name is used): a function's body (functionOf) or a variable's value. A name bound outside this file's code (a
+// prop, a parameter, an import) is not read.
+const codeOf = (fn: Fn) => {
+  const seen = new Set<ts.Node>();
+  const read = (node: ts.Node | undefined): string[] => {
+    if (!node || seen.has(node)) return [];
+    seen.add(node);
+    const texts = [node.getText()];
+    const visit = (n: ts.Node) => {
+      if (ts.isIdentifier(n)) {
+        const declaration = declarationOf(n.text, n);
+        texts.push(...read(functionOf(declaration)?.body ?? (declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined)));
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(node);
+    return texts;
+  };
+  return read(fn.body).join("\n");
 };
 
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
@@ -159,22 +199,40 @@ const bodyOf = (text: string, name: string) => {
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
   // `{ from: x, to: y }` or a call such as `rename(from, to)`: the old value next to the new one.
   const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
-  // Each FormModal in `text` whose onSubmit handler (or a function of this file it calls) sends a `from`, and whether it
-  // holds Save. The handler is read only from `onSubmit={name}` or an arrow whose whole body is one call of a name,
-  // `onSubmit={(…) => name(…)}`, and only when `name` is declared in this file in a shape `bodyOf` reads (it fails
-  // closed); any other shape, or a name declared elsewhere (a prop, an import), is an unknown handler and fails.
-  // Accepted limit: it reads the handler's own body and the bodies of this file's functions that body calls, so a `from`
-  // sent further down, or from a called helper declared in a shape `bodyOf` does not read, is not followed.
-  const fromForms = (text: string) =>
-    [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].flatMap(([, props]) => {
-      const read = /onSubmit=\{(?:(\w+)|\([^)]*\)\s*=>\s*(\w+)\([^)]*\))\}/.exec(props);
-      const handler = read?.[1] ?? read?.[2];
-      const body = handler ? bodyOf(text, handler) : "";
-      if (!body) return [{ handler: handler ?? props, held: false }];
-      const called = [...body.matchAll(/\b(\w+)\(/g)].map(([, name]) => bodyOf(text, name));
-      return [body, ...called].some(sendsFrom) ? [{ handler, held: /\bsendsFrom\b|\bbusy=\{/.test(props) }] : [];
-    });
+  // Each `<FormModal>` in `text` whose save sends a `from`, and whether it holds Save (passes `sendsFrom` or `busy={…}`).
+  // The handler is the name `onSubmit` gives, `{save}` or an inline arrow that only calls one, `{(e) => save(e)}`, or else
+  // the inline function itself. A name is looked up from the FormModal out (declarationOf) and must be a function of this
+  // file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another kind, is an unknown
+  // handler and fails. The save sends a `from` when the code the handler runs (codeOf: its body, every function of this
+  // file it calls however deep and however declared, and the values it uses; comments included) matches sendsFrom.
+  // Limit: code handed in from outside the file (a prop, a parameter, an import) is not read, so a handler that calls a
+  // prop in its body, `function submit(e) { onSave(e); }`, is checked without the code the prop runs.
+  const fromForms = (text: string) => {
+    const forms: { handler: string; held: boolean }[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isJsxOpeningLikeElement(node) && node.tagName.getText() === "FormModal") {
+        const props = node.attributes.properties.filter(ts.isJsxAttribute);
+        const prop = (name: string) => props.find((p) => p.name.getText() === name);
+        const submit = prop("onSubmit")?.initializer;
+        const value = submit && ts.isJsxExpression(submit) ? submit.expression : undefined;
+        // A name it gives: `{save}`, or the one name an inline arrow only calls, `{(e) => save(e)}` (also after `void` or `await`).
+        const inline = value && (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) ? value : undefined;
+        let only = inline && !ts.isBlock(inline.body) ? inline.body : undefined;
+        while (only && (ts.isVoidExpression(only) || ts.isAwaitExpression(only) || ts.isParenthesizedExpression(only))) only = only.expression;
+        const name = value && ts.isIdentifier(value) ? value : only && ts.isCallExpression(only) && ts.isIdentifier(only.expression) ? only.expression : undefined;
+        const named = name && functionOf(declarationOf(name.text, name));
+        const fn = name ? named && (inline ?? named) : inline;
+        const handler = name?.text ?? value?.getText() ?? "no onSubmit";
+        if (!fn) forms.push({ handler, held: false });
+        else if (sendsFrom(codeOf(fn))) forms.push({ handler, held: Boolean(prop("sendsFrom") || prop("busy")?.initializer) });
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(treeOf(text));
+    return forms;
+  };
   const categoriesCard = sources["../app/components/categories-card.tsx"];
+
 
   it("finds the known ones: Health water/steps and goals, and the categories card", () => {
     expect(fromForms(foodClient).map(({ handler }) => handler)).toEqual(["handleMetricSubmit", "handleGoalsSubmit"]);
@@ -190,18 +248,23 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(fromForms(withoutBusy)).toContainEqual({ handler: "submit", held: false });
   });
 
-  // Only `onSubmit={name}` and an arrow that calls a name, `(…) => name(…)`, are read, and only when `name` is declared in
-  // the file with a brace body; any other shape, a name from elsewhere such as a prop (`Inner({ onSave })`), or a handler
-  // declared another way (put before `function submit`) is an unknown handler and fails, so it never passes unseen.
+  // Each onSubmit shape, and each way of declaring a handler (put before `function submit`, named `send` so it does not
+  // clash with the card's own `save`), on a copy of the categories card with busy removed: a `from` sent by the handler,
+  // by a helper it calls (however deep or however declared) or in a value it hands to a call, or a handler that is not a
+  // function of this file (`onSave`, a prop), fails.
   it.each([
     ["async (e) => submit(e)", ""],
     ["e => submit(e)", ""],
     ["(e) => void submit(e)", ""],
     ["onSave", ""],
     ["(e) => onSave(e)", ""],
-    ["save", "const save = (e) => api.rename(from, to);"],
-    ["save", "const save = (e) => renameCategoryAction(input);"],
-    ["save", "const save = useCallback(async (e) => { await renameCategoryAction({ scope, from, to }); }, []);"],
+    ["send", "const send = (e) => api.rename(from, to);"],
+    ["send", "const input = { scope, from, to };\n  const send = (e) => renameCategoryAction(input);"],
+    ["send", "const send = useCallback(async (e) => { await renameCategoryAction({ scope, from, to }); }, []);"],
+    ["send", "async function send(e: React.FormEvent): Promise<{ success: boolean }> { e.preventDefault(); return renameCategoryAction({ scope, from, to }); }"],
+    ["send", "const doRename = () => renameCategoryAction({ scope, from, to });\n  function send(e: React.FormEvent) { e.preventDefault(); return doRename(); }"],
+    ["send", "const doRename = useCallback(async () => { await renameCategoryAction({ scope, from, to }); }, []);\n  function send(e: React.FormEvent) { e.preventDefault(); return doRename(); }"],
+    ["send", "async function doRename() { await renameCategoryAction({ scope, from, to }); }\n  async function step() { await doRename(); }\n  async function send(e: React.FormEvent) { e.preventDefault(); await step(); }"],
   ])("fails on a copy of the categories card with busy removed and onSubmit={%s} %s", (shape, declared) => {
     const copy = categoriesCard
       .replace("busy={busy}", "")
@@ -210,6 +273,14 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(copy).toContain(`onSubmit={${shape}}`);
     expect(copy).toContain(`  ${declared}\n  function submit(`);
     expect(fromForms(copy).filter(({ held }) => !held)).not.toEqual([]);
+  });
+
+  // Two components in one file that each declare `save`: each FormModal reads its own component's.
+  it("fails on a copy of the categories card with busy removed and onSubmit={save}, after another component's save with no from", () => {
+    const other = `function Other() {\n  async function save(e: React.FormEvent) {\n    e.preventDefault();\n    await addCategoryAction({ scope: "wishlist", name: "x" });\n  }\n  return <FormModal isOpen onClose={() => {}} title="x" onSubmit={save}>x</FormModal>;\n}\n\n`;
+    const copy = categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", "onSubmit={save}").replace("export function CategoriesCard(", `${other}export function CategoriesCard(`);
+    expect(copy).toContain(`${other}export function CategoriesCard(`);
+    expect(fromForms(copy)).toEqual([{ handler: "save", held: false }]);
   });
 
   it.each(Object.entries(sources))("%s", (_file, text) => {
