@@ -124,17 +124,33 @@ describe("field messages end with no full stop", () => {
   });
 });
 
-// The body of the function or arrow `name` declared in `text`, from its first `{` to the matching `}`.
-const bodyOf = (text: string, name: string) => {
-  const start = text.search(new RegExp(`(function ${name}\\b|const ${name} = )`));
-  if (start < 0) return "";
-  const open = text.indexOf("{", text.indexOf(")", start));
+// Where the `(` or `{` at `open` closes, counting the pairs inside it; -1 if it never does.
+const closing = (text: string, open: number) => {
+  const [o, c] = text[open] === "(" ? ["(", ")"] : ["{", "}"];
   let depth = 0;
   for (let i = open; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}" && --depth === 0) return text.slice(open, i + 1);
+    if (text[i] === o) depth++;
+    else if (text[i] === c && --depth === 0) return i;
   }
-  return "";
+  return -1;
+};
+
+// The body of the function `name` declared in `text`, from its `{` to the matching `}`. It is read only from
+// `function name(…) {` or `const name = (…) => {` (also `async`, or one bare param `e => {`), with the `{` right after
+// the `)` or `=>` (a return type may sit between); any other declaration (an expression-bodied arrow, `useCallback(…)`)
+// or none gives "".
+const bodyOf = (text: string, name: string) => {
+  const at = text.search(new RegExp(`\\b(?:function ${name}\\b|const ${name}\\s*=)`));
+  const declared = at < 0 ? null : /^(?:function \w+\s*(?=\()|const \w+\s*=\s*(?:async\s+)?(?=\(|\w+\s*=>))/.exec(text.slice(at));
+  if (!declared) return "";
+  const after = at + declared[0].length;
+  const params = text[after] === "(" ? closing(text, after) : text.indexOf("=>", after) - 1;
+  const head = declared[0].startsWith("function") ? /^\s*(?::[^{};=]*)?\{/ : /^\s*(?::[^{};=]*)?=>\s*\{/;
+  const opens = params < 0 ? null : head.exec(text.slice(params + 1));
+  if (!opens) return "";
+  const open = params + opens[0].length;
+  const close = closing(text, open);
+  return close < 0 ? "" : text.slice(open, close + 1);
 };
 
 // D-043: a form whose save sends a compare-and-set `from` (the value it last saw) holds Save until the answer comes, or a
@@ -145,8 +161,10 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b/.test(code);
   // Each FormModal in `text` whose onSubmit handler (or a function of this file it calls) sends a `from`, and whether it
   // holds Save. The handler is read only from `onSubmit={name}` or an arrow whose whole body is one call of a name,
-  // `onSubmit={(…) => name(…)}`, and only when `name` is declared in this file; any other shape, or a name declared
-  // elsewhere (a prop, an import), is an unknown handler and fails.
+  // `onSubmit={(…) => name(…)}`, and only when `name` is declared in this file in a shape `bodyOf` reads (it fails
+  // closed); any other shape, or a name declared elsewhere (a prop, an import), is an unknown handler and fails.
+  // Accepted limit: it reads the handler's own body and the bodies of this file's functions that body calls, so a `from`
+  // sent further down, or from a called helper declared in a shape `bodyOf` does not read, is not followed.
   const fromForms = (text: string) =>
     [...text.matchAll(/<FormModal\b([^>]*?(?:\{[^}]*\}[^>]*?)*)>/g)].flatMap(([, props]) => {
       const read = /onSubmit=\{(?:(\w+)|\([^)]*\)\s*=>\s*(\w+)\([^)]*\))\}/.exec(props);
@@ -173,11 +191,24 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   });
 
   // Only `onSubmit={name}` and an arrow that calls a name, `(…) => name(…)`, are read, and only when `name` is declared in
-  // the file; any other shape, or a name from elsewhere such as a prop (`Inner({ onSave })`), is an unknown handler and
-  // fails, so a shape the guard cannot read never passes unseen.
-  it.each(["async (e) => submit(e)", "e => submit(e)", "(e) => void submit(e)", "onSave", "(e) => onSave(e)"])("fails on a copy of the categories card with busy removed and onSubmit={%s}", (shape) => {
-    const copy = categoriesCard.replace("busy={busy}", "").replace("onSubmit={submit}", `onSubmit={${shape}}`);
+  // the file with a brace body; any other shape, a name from elsewhere such as a prop (`Inner({ onSave })`), or a handler
+  // declared another way (put before `function submit`) is an unknown handler and fails, so it never passes unseen.
+  it.each([
+    ["async (e) => submit(e)", ""],
+    ["e => submit(e)", ""],
+    ["(e) => void submit(e)", ""],
+    ["onSave", ""],
+    ["(e) => onSave(e)", ""],
+    ["save", "const save = (e) => api.rename(from, to);"],
+    ["save", "const save = (e) => renameCategoryAction(input);"],
+    ["save", "const save = useCallback(async (e) => { await renameCategoryAction({ scope, from, to }); }, []);"],
+  ])("fails on a copy of the categories card with busy removed and onSubmit={%s} %s", (shape, declared) => {
+    const copy = categoriesCard
+      .replace("busy={busy}", "")
+      .replace("onSubmit={submit}", `onSubmit={${shape}}`)
+      .replace("  function submit(", `  ${declared}\n  function submit(`);
     expect(copy).toContain(`onSubmit={${shape}}`);
+    expect(copy).toContain(`  ${declared}\n  function submit(`);
     expect(fromForms(copy).filter(({ held }) => !held)).not.toEqual([]);
   });
 
