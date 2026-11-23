@@ -1,6 +1,6 @@
 ---
 summary: Where the project stands: roadmap, work in progress, next steps, open questions and tracked migrations.
-last_verified: 2026-11-22
+last_verified: 2026-11-23
 ---
 
 # Status
@@ -32,7 +32,7 @@ last_verified: 2026-11-22
 ## Next steps
 1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
 2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A, B, C, D and E merged (#169, #170, #172, #171, #173, #174), M run on live; the milestone audit's cleanup (unused props, exports and KB drift) is done; the audit leftovers that need no owner decision are being fixed (F1 gym merged, F2 shared UI and health merged (#177), F3 cleanup and e2e helpers in its PR); the leftovers that need an owner decision wait for their decision round; open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046; the owner's choices are in their private report.
+3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers is decided (D-047) and being built in batches (H1 Tasks and test plumbing, H2 Gym and shell, then the form hook, the second-device helper and the action names last); open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045 and D-046.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -44,11 +44,7 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 - Data storage: the database, backups, limits and what stays on the device.
 
 ## Open questions
-- The audit leftovers that need an owner decision (about 22: shared form hook, toast timing and placement, double-tap guards, a `set_order` index, test helpers and others) are on the owner's list for their decision round, taken one at a time.
-- A one-word category name wraps mid-word at 375 px (found by the F3c verify, older than F3): a small UI fix still to do.
-- The theme toast's Undo names no `touches` (it changes no row; `tests/toast.test.ts` lets it pass): keep that exception, or give it a key? Found by the F2 review 2026-11-22; the owner decides.
-- Long lists have two More forms (inline `useMore` on Gym history, the dialog `useMoreDialog` on Health meals, D-029): which one wins? Asked the owner 2026-11-19.
-- The `recipes` and `recipe_ingredients` tables (and their seeded rows) have no reader or writer left, and nothing sets `meals.forgotten` (read only, it keeps old hidden meals hidden) (audit fixes, steps 15 and 16): drop them? Dropping is a non-additive migration, so it waits for the owner.
+None open: the owner's round settled the audit leftovers (D-047), including the theme toast's `touches`, the two More forms, the recipe tables and the 375 category-name wrap (being fixed in H1).
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.
