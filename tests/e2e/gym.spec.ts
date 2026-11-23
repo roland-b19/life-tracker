@@ -81,6 +81,21 @@ async function otherDevice(browser: Browser, page: Page) {
 }
 const history = (page: Page) => page.getByRole("region", { name: "History" });
 
+// The refresh the last answer left due, on screen on a page whose clock stands still (`otherDevice`'s), with the clock
+// moved only as far as the refresh needs: 1 s for its timer (600 ms after the answer), then one frame (16 ms) at a time
+// until <head> has been quiet for a whole frame. A toast stays 5 s of the page's clock, so it cannot run out however
+// long the server takes to render the refresh, or the page to commit it. A plain loop, not `expect.poll`: under load the
+// page's main thread was seen busy for more than the 15 s an expect allows, right after the refresh committed.
+async function refreshOnStoppedClock(page: Page) {
+  const refreshed = page.waitForResponse((r) => isRefresh(page, r.request()));
+  await page.clock.runFor(1000);
+  await (await refreshed).finished();
+  let quiet = false;
+  const done = page.evaluate(headIsQuiet).then(() => void (quiet = true));
+  while (!quiet) await page.clock.runFor(16);
+  await done;
+}
+
 // Tests tagged @a11y run on every project (desktop and phone width, dark and light); the rest run on desktop only, because only the
 // axe scan depends on the width and the color scheme (see playwright.config.ts).
 test("the Gym page has no serious violations, also with a day's editor open and a workout started", { tag: "@a11y" }, async ({ signedInPage: page }) => {
@@ -822,14 +837,19 @@ test("Start on another day after today's workout is finished is refused, and the
 });
 
 // D-040, D-047: an Undo the server refuses says why, in the server's words, with no Retry: the server has answered.
+// The page's clock stands still from Finish on and moves 1 s only, for the refresh, so the Removed toast does not run
+// out while the other device loads and starts its workout.
 test("Undo of a workout removed for having no sets, refused because another device started one, shows the server's reason", async ({ signedInPage: page, browser }) => {
   const removed = "No sets logged: the workout was removed";
+  await page.clock.install();
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
+  await pauseClock(page);
   await andSettle(page, () => page.getByRole("button", { name: "Finish workout" }).click());
   await expect(page.getByText(removed)).toBeVisible();
   // This page's own refresh first: after the other device's Start, a refresh would show its workout here.
+  await page.clock.runFor(1000);
   await refreshesDone(page);
   const other = await otherDevice(browser, page);
   await startWorkout(other, DAY);
@@ -1901,8 +1921,8 @@ test("a double tap on the banner's Resume resumes once", async ({ signedInPage: 
 
 // A write refused because the workout ended elsewhere (finished: WORKOUT_FINISHED; cancelled: WORKOUT_GONE) takes the
 // workout off the screen at once, with one toast, and sends no other write after it; the refresh that follows shows no
-// second toast. The other device's clock stands still, so the workout leaves before any refresh; the clock then runs
-// again for the refresh. Notes typed and not saved yet go with the tap's blur, so Exit and Finish then send nothing of
+// second toast. The other device's clock stands still, so the workout leaves before any refresh; the clock then moves
+// only for the refresh (`refreshOnStoppedClock`), so the toast stays however long the refresh takes. Notes typed and not saved yet go with the tap's blur, so Exit and Finish then send nothing of
 // their own. A set's Delete in a cancelled workout finds no set (SET_GONE, which says nothing of the workout), so that
 // workout leaves on the refresh that follows the answer, with the same one toast.
 const ENDINGS = ["finished", "cancelled"] as const;
@@ -1980,10 +2000,7 @@ for (const { write, act, onRefresh } of STALE_WRITES) {
         await expect(other.getByRole("timer", { name: "Workout time" })).toBeHidden();
         await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
       }
-      const refreshed = other.waitForResponse((r) => isRefresh(other, r.request()));
-      await other.clock.resume();
-      await refreshed;
-      await other.evaluate(headIsQuiet);
+      await refreshOnStoppedClock(other);
       expect(writes).toHaveLength(1);
       await expect(toast(other, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(1);
       await expect(toast(other, WORKOUT_FINISHED)).toHaveCount(0);
