@@ -1709,6 +1709,36 @@ test("a bodyweight exercise charts reps or added weight, and the progress contro
   await expect(added).toBeVisible();
 });
 
+// D-047: History shows 10 workouts, and More opens all of them in a dialog drawn with the same rows, which open into
+// their sets there too. A row open in both lists names its details with an id of its own in each (no duplicate id;
+// axe does not look behind the open dialog, so the ids are checked here).
+test("History's More opens every workout in a dialog, where a row opens into its sets", async ({ signedInPage: page }) => {
+  const today = toISODate();
+  // Newest first: 40 kg a week ago, 51 kg twelve weeks ago.
+  await pastWorkouts(page, Array.from({ length: 12 }, (_, i) => ({ date: addDays(today, -7 * (i + 1)), exercise: EXERCISE, load: 40 + i })));
+  const rows = (list: Locator) => list.getByRole("button", { name: /^Upper \(chest\)/ });
+  await expect(history(page).getByText("12 workouts", { exact: true })).toBeVisible();
+  await expect(rows(history(page))).toHaveCount(10);
+
+  await history(page).getByRole("button", { name: "More" }).click();
+  const all = page.getByRole("dialog", { name: "All workouts" });
+  await expect(rows(all)).toHaveCount(12);
+  await rows(all).last().click();
+  await expect(rows(all).last()).toHaveAttribute("aria-expanded", "true");
+  await expect(all.getByText("8 × 51 kg", { exact: true })).toBeVisible();
+  // The newest row is in both lists: open, it shows its sets in each.
+  await rows(all).first().click();
+  await expect(all.getByText("8 × 40 kg", { exact: true })).toBeVisible();
+  await expect(history(page).getByText("8 × 40 kg", { exact: true })).toBeAttached();
+  // Each toggle names the details of its own list, and no id is on the page twice.
+  for (const list of [all, history(page)]) {
+    const controls = await rows(list).first().getAttribute("aria-controls");
+    await expect(list.locator(`[id="${controls}"]`)).toContainText("8 × 40 kg");
+    await expect(page.locator(`[id="${controls}"]`)).toHaveCount(1);
+  }
+  await expectNoSeriousViolations(page);
+});
+
 // GYMA-18, GYMC-07: a deload week is left out whole, also a workout in it not started as a deload; the week after
 // compares with the week before the deload.
 test("History leaves deload weeks out of the comparison and compares past them", async ({ signedInPage: page }) => {

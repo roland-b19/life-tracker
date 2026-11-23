@@ -6,14 +6,55 @@ import { useState } from "react";
 import { Badge, Card, EmptyNote } from "../components/blocks";
 import { useFolded } from "../components/categories-card";
 import { ChevronRightIcon } from "../components/icons";
-import { ListBox, useMore } from "../components/lists";
+import { ListBox, useMoreDialog } from "../components/lists";
 import { setText } from "./types";
 
-/** Finished workouts, newest first, each opening into its exercises and sets. */
+/** Finished workouts, newest first, each opening into its exercises and sets; More shows them all in a dialog. */
 export function HistoryCard({ history }: { history: HistoryEntry[] }) {
   const [isFolded, toggleFolded] = useFolded("gym");
-  const [shown, more] = useMore(history);
   const [openId, setOpenId] = useState<string | null>(null);
+  // One workout's row, in the card and in More's dialog; the dialog's rows name their details with their own ids, as
+  // both lists are on the page at once.
+  const row = (h: HistoryEntry, idPrefix: string) => {
+    const open = openId === h.id;
+    return (
+      <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
+        <button
+          type="button"
+          className="history-toggle"
+          aria-expanded={open}
+          aria-controls={`${idPrefix}-${h.id}`}
+          onClick={() => setOpenId(open ? null : h.id)}
+        >
+          <span className="history-entry-head">
+            <strong>{h.dayName ?? "Workout"}</strong>
+            {h.isDeload && <Badge kind="rest">Deload</Badge>}
+            <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
+            <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
+          </span>
+          <span className="muted number-tabular history-progress">
+            {h.deloadWeek
+              ? "Deload week, left out of progress"
+              : h.progress !== null
+                ? `Weight ${kgDelta(h.progress)} vs the week before`
+                : "Nothing to compare with yet"}
+          </span>
+        </button>
+        {open && (
+          <div id={`${idPrefix}-${h.id}`} className="history-details">
+            {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
+            {h.exercises.map((ex) => (
+              <p key={ex.id} className="history-exercise">
+                <strong>{ex.name}</strong>
+                <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  const [shown, more, dialog] = useMoreDialog(history, "All workouts", (h) => row(h, "all-workouts"));
   return (
     <Card
       id="history-title"
@@ -29,51 +70,14 @@ export function HistoryCard({ history }: { history: HistoryEntry[] }) {
       <ListBox wash className="entries">
         {history.length > 0 ? (
           <>
-            {shown.map((h) => {
-              const open = openId === h.id;
-              return (
-                <div key={h.id} className={`entry-row history-entry${open ? " open" : ""}`}>
-                  <button
-                    type="button"
-                    className="history-toggle"
-                    aria-expanded={open}
-                    aria-controls={`history-${h.id}`}
-                    onClick={() => setOpenId(open ? null : h.id)}
-                  >
-                    <span className="history-entry-head">
-                      <strong>{h.dayName ?? "Workout"}</strong>
-                      {h.isDeload && <Badge kind="rest">Deload</Badge>}
-                      <span className="muted number-tabular history-entry-side">{formatDMY(h.date)}</span>
-                      <ChevronRightIcon size={14} className="history-chevron" aria-hidden />
-                    </span>
-                    <span className="muted number-tabular history-progress">
-                      {h.deloadWeek
-                        ? "Deload week, left out of progress"
-                        : h.progress !== null
-                          ? `Weight ${kgDelta(h.progress)} vs the week before`
-                          : "Nothing to compare with yet"}
-                    </span>
-                  </button>
-                  {open && (
-                    <div id={`history-${h.id}`} className="history-details">
-                      {h.durationMinutes ? <div className="muted number-tabular history-duration">{h.durationMinutes} min</div> : null}
-                      {h.exercises.map((ex) => (
-                        <p key={ex.id} className="history-exercise">
-                          <strong>{ex.name}</strong>
-                          <span className="muted number-tabular">{ex.sets.map(setText).join("  ·  ")}</span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {shown.map((h) => row(h, "history"))}
             {more}
           </>
         ) : (
           <EmptyNote>No finished workouts yet.</EmptyNote>
         )}
       </ListBox>
+      {dialog}
     </Card>
   );
 }
