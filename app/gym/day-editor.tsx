@@ -118,6 +118,13 @@ export function DayEditor({
   // "Create and add" acts once per tap burst (D-043); the tapped button is set before its own handler runs.
   const once = useOnce();
   const tappedButton = useRef<Element | null>(null);
+  // The new exercise's id, made when its form opens and kept until that opening closes (D-040, D-047): Create and add
+  // sent again after a lost answer is the same exercise, and the name check skips it, as the refresh already lists it.
+  const customId = useRef("");
+  function openCustom() {
+    customId.current = crypto.randomUUID();
+    setShowCustom(true);
+  }
 
   // Cancel runs `cancel` and then `close`, like Escape, a click outside and the close button; this tells `close` the
   // exercises are being dealt with, so it does not also offer the discarded changes back.
@@ -219,7 +226,7 @@ export function DayEditor({
   async function addCustomExercise() {
     const name = customName.trim();
     if (!visible(name)) return;
-    const problem = exerciseNameProblem(name, known);
+    const problem = exerciseNameProblem(name, known.filter((e) => e.id !== customId.current));
     if (problem) {
       setErrorMsg(problem);
       return;
@@ -227,18 +234,17 @@ export function DayEditor({
     setErrorMsg("");
     setBusy(true);
     try {
-      // The id is made here (D-040), so an add sent twice is one exercise.
-      const made = { id: crypto.randomUUID(), name, muscleGroup: customMuscle, equipmentType: customEquipment };
-      const res = await addCustomExerciseAction(made);
+      const res = await addCustomExerciseAction({ id: customId.current, name, muscleGroup: customMuscle, equipmentType: customEquipment });
       if (res.success) {
-        // A new exercise is made for this day, so it goes straight into the routine.
-        const exerciseId = res.exercise.id;
+        // A new exercise is made for this day, so it goes straight into the routine. A repeat answers the row the first
+        // add made, so the screen takes the server's row.
+        const { id: exerciseId, name: madeName, muscleGroup, equipmentType } = res.exercise;
         setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
-        setCreated((list) => [...list, made]);
+        setCreated((list) => [...list, { id: exerciseId, name: madeName, muscleGroup, equipmentType }]);
         setShowCustom(false);
         setCustomName("");
         showToast({
-          message: `Created "${name}"`,
+          message: `Created "${madeName}"`,
           type: "success",
           touches: [`exercises:${exerciseId}`],
           // Refused once a routine or a set uses it, so Undo never deletes data.
@@ -259,7 +265,7 @@ export function DayEditor({
         setErrorMsg(res.error);
       }
     } catch {
-      setErrorMsg("Failed to create exercise");
+      setErrorMsg("Failed to add exercise");
     } finally {
       setBusy(false);
     }
@@ -450,7 +456,7 @@ export function DayEditor({
                 />
               </div>
             ) : (
-              <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={() => setShowCustom(true)}>
+              <button type="button" className="secondary btn-sm custom-exercise-btn" onClick={openCustom}>
                 <PlusIcon size={14} />
                 New exercise
               </button>

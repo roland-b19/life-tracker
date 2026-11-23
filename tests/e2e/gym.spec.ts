@@ -15,6 +15,7 @@ import {
   headIsQuiet,
   holdWrites,
   hydrationWarnings,
+  loseAnswerOnce,
   installStoppedClock,
   isRefresh,
   pauseClock,
@@ -245,6 +246,34 @@ test("a signed-in user adds an exercise to a training day, with Undo, also after
   await openGym(page);
   await pickDay(page, DAY);
   await expect(page.getByRole("region", { name: DAY }).getByText(`8. ${name}`)).toBeVisible();
+});
+
+// D-040, D-047: the new exercise's form makes its id when it opens, so Create and add again after a lost answer sends
+// the same exercise, which the server answers with the row the first add made: it goes into the routine, once.
+test("Create and add again after a lost answer adds the new exercise to the routine once", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const name = exerciseName();
+  const editor = await openEditor(page);
+  await editor.getByRole("button", { name: "New exercise" }).click();
+  await editor.getByLabel("New exercise").fill(name);
+  await loseAnswerOnce(page, `"name":"${name}"`);
+  await editor.getByRole("button", { name: "Create and add" }).click();
+  await expect(page.getByText("Couldn't confirm the change. Reloaded.")).toBeVisible();
+  await expect(editor.getByText("Failed to add exercise")).toBeVisible();
+  // The refresh after the lost answer lists the exercise the first add made.
+  await refreshesDone(page);
+  await page.evaluate(headIsQuiet);
+
+  // Shift ends the tap burst (D-043): this tap is a second one, on purpose.
+  await page.keyboard.press("Shift");
+  await andSettle(page, () => editor.getByRole("button", { name: "Create and add" }).click(), `"name":"${name}"`);
+  await expect(editor.getByText(`8. ${name}`)).toBeVisible();
+  await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(page.getByRole("region", { name: DAY }).getByText(`8. ${name}`)).toBeVisible();
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) => admin.query("SELECT count(*)::int AS n FROM exercises WHERE user_id = $1 AND name = $2", [userId, name]));
+  expect(rows).toEqual([{ n: 1 }]);
 });
 
 test("a signed-in user creates and deletes a custom exercise, with Undo, also after a reload", async ({ signedInPage: page }) => {
