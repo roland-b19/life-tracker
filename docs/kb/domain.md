@@ -32,4 +32,4 @@ last_verified: 2026-11-18
 
 ## Configuration
 - `APP_TZ = "Europe/Bucharest"`, a constant in `src/lib/format-date.ts`. Servers run in UTC, so "today" is computed in this zone. The week starts on Sunday. Reminder times such as 09:00 are Bucharest time.
-- Query budgets per page with two years of data (gym 14 queries, health 13, todos 12 and its list reload 13, wishlist 4, each with the session row check, D-041) protect the Neon and Vercel free-tier limits; they are enforced by `tests/query-count.test.ts`.
+- Query budgets per page with two years of data (gym 14 queries, health 13, todos 12, wishlist 4, each with the session row check, D-041) protect the Neon and Vercel free-tier limits; they are enforced by `tests/query-count.test.ts`.

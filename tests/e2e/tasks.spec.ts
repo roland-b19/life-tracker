@@ -248,7 +248,7 @@ test("an Undo of a tick that fails says so and keeps a Retry, which puts the box
   await addTask(page, title, "New task");
   await dismissToast(page);
   await andSettle(page, () => page.getByRole("button", { name: `Mark ${title} as complete` }).click(), `"isCompleted":true`);
-  // The Undo's write gets a server error; the list's reload still goes through.
+  // Only the Undo's write gets a server error; the box stays ticked until its Retry succeeds.
   await page.route("**/todos", (route) =>
     route.request().method() === "POST" && (route.request().postData() ?? "").includes(`"isCompleted":false`)
       ? route.fulfill({ status: 500, contentType: "text/plain", body: "boom" })

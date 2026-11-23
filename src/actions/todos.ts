@@ -112,10 +112,6 @@ export async function deleteTodoAction(todoId: string) {
   });
 }
 
-/**
- * Everything the Tasks page shows for today, in one round trip: Next runs server actions one at a time,
- * so separate calls would cost a session, a network trip and a wait each, in a row.
- */
 export async function savePushSubscriptionAction(rawInput: unknown) {
   assertPushEnabled();
   return respond(async () => {
