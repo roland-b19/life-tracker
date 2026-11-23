@@ -525,6 +525,23 @@ test("the categories card's move and delete show their toast before the server a
   await expect(rows).toHaveText([b, a]);
 });
 
+// A one-word name of a usual length stays on one line at phone width on every page with the card; only a name longer
+// than the line breaks (overflow-wrap: anywhere).
+test("the categories card keeps a one-word name on one line on a phone", async ({ signedInPage: page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  for (const surface of [tasksDaily, wishlist, healthShopping]) {
+    await surface.open(page);
+    await addCategory(page, "browsercheck");
+    await dismissToast(page);
+    const name = card(page).locator(".category-name", { hasText: "browsercheck" });
+    const { height, lineHeight } = await name.evaluate((el) => ({
+      height: el.getBoundingClientRect().height,
+      lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+    }));
+    expect(height, page.url()).toBeLessThan(1.5 * lineHeight);
+  }
+});
+
 // A refused write shows the server's own message (D-040), not a generic "Failed to ...".
 test("the categories card shows why the server refused a delete or an Undo", async ({ signedInPage: page }) => {
   const [a, b, c] = [`e2e-cat-${hex()}`, `e2e-cat-${hex()}`, `e2e-cat-${hex()}`];
