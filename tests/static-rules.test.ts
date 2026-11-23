@@ -144,13 +144,15 @@ const varsIn = (scope: ts.Node): ts.VariableDeclaration[] => {
   return found;
 };
 
-// The declaration `name` means where `at` sits: the nearest scope around `at` (a function's parameters, a block, the
-// file) that declares it, a `var` counting in its function's body. A scope that declares it more than once gives
-// undefined, as no declaration does.
+// The declaration `name` means where `at` sits: the nearest scope around `at` (a function's parameters, a `for`
+// statement's `let` or `const`, a block, the file) that declares it, a `var` counting in its function's body. A scope that
+// declares it more than once gives undefined, as no declaration does.
 const declarationOf = (name: string, at: ts.Node): ts.Node | undefined => {
   for (let scope = at.parent; scope; scope = scope.parent) {
     const found: ts.Node[] = [];
     if (ts.isFunctionLike(scope)) found.push(...scope.parameters.filter((p) => binds(p.name, name)));
+    if ((ts.isForStatement(scope) || ts.isForInStatement(scope) || ts.isForOfStatement(scope)) && scope.initializer && ts.isVariableDeclarationList(scope.initializer) && scope.initializer.flags & ts.NodeFlags.BlockScoped)
+      found.push(...scope.initializer.declarations.filter((d) => binds(d.name, name)));
     if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
       for (const s of scope.statements) {
         if (ts.isFunctionDeclaration(s) && s.body && s.name?.text === name) found.push(s);
@@ -194,40 +196,88 @@ const isReference = (n: ts.Identifier) => {
   return !((ts.isPropertyAssignment(p) || ts.isPropertySignature(p) || ts.isMethodSignature(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) || ts.isJsxAttribute(p)) && p.name === n) && !(ts.isBindingElement(p) && p.propertyName === n);
 };
 
-// A name's code: its declaration (a function's whole code, a variable's value, a parameter's default values) and each
-// expression in the scope that declares it that writes to it, the name resolved to that same declaration: an assignment
-// to it or to a member of it (`name = …`, `name.current = …`, `name++`, `delete name.x`, `for (name of list)`) and,
-// unless it is a function (declared as one, or called anywhere), a call or JSX prop it or a member of it is handed to
-// (`Object.assign(name, …)`, `<C v={name} />`) or a call of a method of it (`name.push(…)`). For `const [value,
-// setValue] = useState(…)` (or `useReducer`), `value`'s code also holds each call of `setValue` and what it is handed to.
+// A node that only wraps the expression in it: parentheses, `as`, `!`, `satisfies` or a type assertion.
+const wraps = (n: ts.Node) => ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n);
+
+// Each reference to one of `names` in the scope that declares `declaration` (its function, its block for a `let` or
+// `const`, the file), resolved to that same declaration; a name where it is declared is not one.
+const referencesTo = (declaration: ts.Node, names: string[]) => {
+  let scope = declaration.parent;
+  const blockScoped = !ts.isVariableDeclaration(declaration) || declaration.parent.flags & ts.NodeFlags.BlockScoped;
+  while (!ts.isSourceFile(scope) && !ts.isFunctionLike(scope) && !(ts.isBlock(scope) && blockScoped)) scope = scope.parent;
+  const references: ts.Identifier[] = [];
+  const visit = (n: ts.Node) => {
+    const bound = (p: ts.Node) => (ts.isVariableDeclaration(p) || ts.isParameter(p) || ts.isBindingElement(p) || ts.isFunctionDeclaration(p)) && p.name === n;
+    if (ts.isIdentifier(n) && names.includes(n.text) && isReference(n) && !bound(n.parent) && declarationOf(n.text, n) === declaration) references.push(n);
+    ts.forEachChild(n, visit);
+  };
+  visit(scope);
+  return references;
+};
+
+// The call or JSX prop `n`, or a member of it, is handed to (`Object.assign(n, …)`, `f(n.x)`, `<C v={n} />`), or the
+// call of a method of it (`n.push(…)`); a JSX prop with its element's tag, so a component of this file is read.
+const handedTo = (n: ts.Node): ts.Node[] => {
+  let at = n;
+  let member = false;
+  for (let p = at.parent; ; p = at.parent) {
+    if ((ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === at) member = true;
+    else if (!wraps(p)) break;
+    at = p;
+  }
+  const p = at.parent;
+  if ((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.arguments?.includes(at as ts.Expression)) return [p];
+  if (ts.isCallExpression(p) && p.expression === at && member) return [p];
+  if (ts.isJsxSpreadAttribute(p)) return [p, p.parent.parent.tagName];
+  if (ts.isJsxExpression(p) && ts.isJsxAttribute(p.parent)) return [p.parent, p.parent.parent.parent.tagName];
+  return [];
+};
+
+// What a function handed at `n` is called with: handed to a call, that call's callee chain and other arguments
+// (`getDraft().then((d) => …)` reads `getDraft().then`); handed to a JSX prop, its element's tag (`<Picker onPick={…} />`
+// reads `Picker`).
+const callerOf = (n: ts.Node): ts.Node[] => {
+  let at = n;
+  while (wraps(at.parent)) at = at.parent;
+  const p = at.parent;
+  if ((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.arguments?.includes(at as ts.Expression)) return [p.expression, ...p.arguments.filter((a) => a !== at)];
+  if (ts.isJsxExpression(p) && ts.isJsxAttribute(p.parent)) return [p.parent.parent.parent.tagName];
+  return [];
+};
+
+// A name's code: its declaration (a function's whole code, a variable's value, a parameter's default values, what a
+// `for (const c of list)` takes it from) and each expression in the scope that declares it that writes to it, the name
+// resolved to that same declaration: an assignment to it or to a member of it (`name = …`, `name.current = …`, `name++`,
+// `delete name.x`, `for (name of list)`) and, unless it is a function (declared as one, or called anywhere), a call or JSX
+// prop it or a member of it is handed to (`Object.assign(name, …)`, `<C v={name} />`, with C's code) or a call of a method
+// of it (`name.push(…)`). For `const [value, setValue] = useState(…)` (or `useReducer`, `value` also a pattern such as
+// `[{ value }, setForm]`), `value`'s code also holds each call of `setValue` and what it is handed to. A callback's
+// parameter also holds what calls the callback (callerOf), the callback inline or named (`function pick`, `const pick =`
+// an arrow or `useCallback(…)`), at each place it is handed.
 const nameCode = (name: string, declaration: ts.Node): ts.Node[] => {
   const own: ts.Node[] = [];
   if (ts.isFunctionDeclaration(declaration)) own.push(declaration);
   if (ts.isVariableDeclaration(declaration) && declaration.initializer) own.push(declaration.initializer);
+  const loop = ts.isVariableDeclaration(declaration) ? declaration.parent.parent : undefined;
+  if (loop && (ts.isForOfStatement(loop) || ts.isForInStatement(loop)) && loop.initializer === declaration.parent) own.push(loop.expression);
   if (ts.isParameter(declaration)) {
     const visit = (n: ts.Node) => {
       if ((ts.isParameter(n) || ts.isBindingElement(n)) && n.initializer) own.push(n.initializer);
       if (!ts.isTypeNode(n)) ts.forEachChild(n, visit);
     };
     visit(declaration);
+    const fn = declaration.parent;
+    own.push(...callerOf(fn));
+    const named = [fn, fn.parent, fn.parent?.parent].find((d) => d && functionOf(d) === fn) as ts.FunctionDeclaration | ts.VariableDeclaration | undefined;
+    if (named?.name && ts.isIdentifier(named.name)) own.push(...referencesTo(named, [named.name.text]).flatMap(callerOf));
   }
   let setter: string | undefined;
   const call = ts.isVariableDeclaration(declaration) && declaration.initializer;
   if (call && ts.isCallExpression(call) && /^(React\.)?use(State|Reducer)$/.test(call.expression.getText()) && ts.isArrayBindingPattern(declaration.name)) {
-    const [value, set] = declaration.name.elements.map((e) => (ts.isBindingElement(e) && ts.isIdentifier(e.name) ? e.name.text : undefined));
-    if (value === name) setter = set;
+    const [value, set] = declaration.name.elements;
+    if (value && ts.isBindingElement(value) && binds(value.name, name) && set && ts.isBindingElement(set) && ts.isIdentifier(set.name)) setter = set.name.text;
   }
-  let scope = declaration.parent;
-  const blockScoped = !ts.isVariableDeclaration(declaration) || declaration.parent.flags & ts.NodeFlags.BlockScoped;
-  while (!ts.isSourceFile(scope) && !ts.isFunctionLike(scope) && !(ts.isBlock(scope) && blockScoped)) scope = scope.parent;
-  // The references to the name (or its setter), as resolved to this declaration; a name where it is declared is not one.
-  const references: ts.Identifier[] = [];
-  const visit = (n: ts.Node) => {
-    const bound = (p: ts.Node) => (ts.isVariableDeclaration(p) || ts.isParameter(p) || ts.isBindingElement(p) || ts.isFunctionDeclaration(p)) && p.name === n;
-    if (ts.isIdentifier(n) && (n.text === name || n.text === setter) && isReference(n) && !bound(n.parent) && declarationOf(n.text, n) === declaration) references.push(n);
-    ts.forEachChild(n, visit);
-  };
-  visit(scope);
+  const references = referencesTo(declaration, setter ? [name, setter] : [name]);
   // The assignment that writes a reference (`name = …`, `name.x += …`, `[name] = …`, `name++`, `delete name.x`), or
   // what a `for (name of …)` takes it from.
   const assignment = (n: ts.Node) => {
@@ -239,28 +289,17 @@ const nameCode = (name: string, declaration: ts.Node): ts.Node[] => {
       if ((ts.isForInStatement(p) || ts.isForOfStatement(p)) && p.initializer === at) return p.expression;
     }
   };
-  // The call or JSX prop a reference, or a member of it, is handed to (`Object.assign(name, …)`, `f(name.x)`,
-  // `<C v={name} />`), or the call of a method of it (`name.push(…)`).
-  const handedTo = (n: ts.Node) => {
-    let at = n;
-    let member = false;
-    for (let p = at.parent; ; p = at.parent) {
-      if ((ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === at) member = true;
-      else if (!ts.isAsExpression(p) && !ts.isParenthesizedExpression(p) && !ts.isNonNullExpression(p) && !ts.isSatisfiesExpression(p) && !ts.isTypeAssertionExpression(p)) break;
-      at = p;
-    }
-    const p = at.parent;
-    if ((ts.isCallExpression(p) || ts.isNewExpression(p)) && p.arguments?.includes(at as ts.Expression)) return p;
-    if ((ts.isCallExpression(p) && p.expression === at && member) || ts.isJsxSpreadAttribute(p)) return p;
-    if (ts.isJsxExpression(p) && ts.isJsxAttribute(p.parent)) return p.parent;
-  };
   // A function (declared as one, or called somewhere) runs what is assigned to it, so only its assignments are read.
   const calledAt = (n: ts.Identifier) => ts.isCallExpression(n.parent) && n.parent.expression === n;
   const runs = Boolean(functionOf(declaration)) || references.some((n) => n.text === name && calledAt(n));
   for (const n of references) {
-    if (n.text === setter) own.push(calledAt(n) ? n.parent : (handedTo(n) ?? n));
-    const write = assignment(n) ?? (runs ? undefined : handedTo(n));
+    if (n.text === setter) {
+      const handed = handedTo(n);
+      own.push(...(calledAt(n) ? [n.parent] : handed.length ? handed : [n]));
+    }
+    const write = assignment(n);
     if (write) own.push(write);
+    else if (!runs) own.push(...handedTo(n));
   }
   return own;
 };
@@ -293,20 +332,26 @@ const codeOf = (node: ts.Node) => {
 // second Save sends the same `from` again and is refused with a false "changed on another device". FormModal holds it
 // for a form that passes `sendsFrom` (D-047), or for one still on the deprecated `busy` bridge (conventions.md, Busy flags).
 describe("a FormModal whose save sends a compare-and-set from holds Save while it is out [D-043]", () => {
-  // `{ from: x, to: y }`, `{ to, from }` or a call such as `rename(from, to)`: the old value next to the new one (a quoted
-  // key, or more than 60 characters between the two, is not seen).
+  // `{ from: x, to: y }`, `{ to, from }` or a call such as `rename(from, to)`: the old value next to the new one. Not seen:
+  // a quoted key (`{ "from": x }`), the two set in two statements (`o.from = x; o.to = y`), or more than 60 characters
+  // between them.
   const sendsFrom = (code: string) => /\bfrom\b\s*[:,][^;]{0,60}?\bto\b|\bto\b\s*[:,][^;]{0,60}?\bfrom\b\s*[:,}]/.test(code);
   // Each `<FormModal>` in `text` whose save sends a `from`, and whether it holds Save (passes `sendsFrom` or `busy={…}`).
   // A FormModal is a tag written `FormModal` or a name of this file declared as one (`const Modal = FormModal`, directly or
   // through another such name). The handler is the name `onSubmit` gives, `{save}` or an inline arrow that only calls one,
   // `{(e) => save(e)}`, or else the inline function itself. A name is looked up from the FormModal out (declarationOf) and
   // must be a function of this file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another
-  // kind, is an unknown handler and fails. The save sends a `from` when the code the handler runs matches sendsFrom,
-  // comments included: the handler and, however deep, the code of each name it uses (codeOf, nameCode: a name's
-  // declaration and each expression that writes to it). This reads more than the save may run, so a form that sends no
-  // `from` can be flagged. Limits: code from another file is not read (an import, what a prop runs: `function submit(e) {
-  // onSave(e); }` is checked without `onSave`'s code, or a namespace member: `<B.FormModal>` is not found), and a
-  // FormModal imported under another name is not found.
+  // kind, is an unknown handler and fails. The save sends a `from` when the code the handler runs (codeOf) matches
+  // sendsFrom, comments included. That code follows, however deep and each name looked up by scope in this file, exactly
+  // these flows (nameCode): calls to functions of this file; a name's declaration and every write to it; a state value's
+  // setter calls, plain (`[value, setValue]`) or destructured (`[{ value }, setForm]`); a callback's parameter, read as the
+  // call it is handed to (`getDraft().then((d) => …)` reads `getDraft().then`); a `for…of` variable, read as its iterable;
+  // a component of this file handed a value or setter in JSX (`<Picker onPick={setInput} />` reads `Picker`); parameter
+  // defaults. Any other flow is not followed, for example: code from another file (an import, what a prop runs: `function
+  // submit(e) { onSave(e); }` is checked without `onSave`'s code, a namespace member: `<B.FormModal>` is not found), a
+  // FormModal imported under another name, an alias of a setter (`const update = setInput`), a custom hook of this file
+  // (`const [v, setV] = useDraft()`), and a value aliased then changed through the alias (`const t = input;
+  // Object.assign(t, …)`). This reads more than the save may run, so a form that sends no `from` can be flagged.
   // A tag written `FormModal`, or a name of this file declared `const X = FormModal` (directly or through another such name).
   const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
     if (!ts.isIdentifier(tag)) return false;
@@ -426,6 +471,42 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
     expect(copy(declared)).toContain(`  ${declared}\n  function submit(`);
     expect(fromForms(copy(declared)).filter(({ held }) => !held)).not.toEqual([]);
     expect(fromForms(copy(without))).toEqual([]);
+  });
+
+  // A `from` that reaches the save through a callback's parameter (`.then((d) => …)`, a callback handed to a helper,
+  // `forEach`, a `for…of` variable), a component of this file handed a setter, a ref or a callback in JSX, or a
+  // destructured state value's setter fails; the same copy without that `from` gives none.
+  const SEND = (sent: string) => `\n  function send(e: React.FormEvent) { e.preventDefault(); void renameCategoryAction(${sent}); }`;
+  const STATE = "const [input, setInput] = useState<never>(null as never);";
+  const PICKER = "function Picker({ onPick }: { onPick: (v: never) => void }) {\n  return <button type=\"button\" onClick={() => onPick({ scope, from: prev, to: next } as never)}>p</button>;\n}\n\n";
+  const FILLER = "function Filler({ target }: { target: { current: never } }) {\n  target.current = { scope, from: prev, to: next } as never;\n  return null;\n}\n\n";
+  it.each([
+    ["", `${STATE}\n  useEffect(() => load((v) => setInput(v)), []);\n  function load(set: (v: never) => void) { set({ scope, from: prev, to: next } as never); }${SEND("input")}`, ""],
+    ["", `${STATE}\n  useEffect(() => { void getDraft().then((d) => setInput(d)); }, []);\n  async function getDraft() { return { scope, from: prev, to: next } as never; }${SEND("input")}`, ""],
+    ["", `const pending = useRef<never>(null as never);\n  useEffect(() => { void getDraft().then((d) => { pending.current = d; }); }, []);\n  async function getDraft() { return { scope, from: prev, to: next } as never; }${SEND("pending.current")}`, ""],
+    ["", `const changes = [{ scope, from: prev, to: next }];\n  const batch: never[] = [];\n  changes.forEach((c) => batch.push(c as never));${SEND("batch[0]")}`, ""],
+    ["", `const changes = [{ scope, from: prev, to: next }];\n  const batch: never[] = [];\n  for (const c of changes) batch.push(c as never);${SEND("batch[0]")}`, ""],
+    [PICKER, `${STATE}${SEND("input")}`, "<Picker onPick={setInput} />"],
+    [FILLER, `const pending = useRef<never>(null as never);${SEND("pending.current")}`, "<Filler target={pending} />"],
+    [PICKER, `${STATE}\n  const pick = useCallback((v: never) => setInput(v), []);${SEND("input")}`, "<Picker onPick={pick} />"],
+    [PICKER, `${STATE}${SEND("input")}`, "<Picker onPick={(v) => setInput(v)} />"],
+    ["", `const [{ input }, setForm] = useState<{ input: never }>({ input: null as never });\n  function edit() { setForm({ input: { scope, from: prev, to: next } as never }); }${SEND("input")}`, ""],
+    ["", `const [[input], setForm] = useState<[never]>([null as never]);\n  function edit() { setForm([{ scope, from: prev, to: next } as never]); }${SEND("input")}`, ""],
+  ])("fails on a copy of the categories card with busy removed, onSubmit={send}, %s %s and %s in the form, and not without its from", (top, declared, child) => {
+    const copy = (code: string, component: string) =>
+      categoriesCard
+        .replace("busy={busy}", "")
+        .replace("onSubmit={submit}", "onSubmit={send}")
+        .replace("export function CategoriesCard(", `${component}export function CategoriesCard(`)
+        .replace("        <Field label=\"Name\"", `        ${child}\n        <Field label="Name"`)
+        .replace("  function submit(", `  ${code}\n  function submit(`);
+    const without = (code: string) => code.replace(/, from: prev\b/g, "");
+    expect(without(declared + top)).not.toBe(declared + top);
+    expect(copy(declared, top)).toContain(`${top}export function CategoriesCard(`);
+    expect(copy(declared, top)).toContain(`        ${child}\n        <Field label="Name"`);
+    expect(copy(declared, top)).toContain(`  ${declared}\n  function submit(`);
+    expect(fromForms(copy(declared, top)).filter(({ held }) => !held)).not.toEqual([]);
+    expect(fromForms(copy(without(declared), without(top)))).toEqual([]);
   });
 
   // Two components in one file that each declare `save`: each FormModal reads its own component's.
