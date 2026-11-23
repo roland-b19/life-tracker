@@ -19,9 +19,10 @@ const OPTIONS: { value: Theme; label: string }[] = [
  * browser follows a change; `ShellListeners` applies it to the page.
  */
 export function useTheme() {
-  const [stored, set] = useDeviceState<string>(THEME_STORAGE, "auto");
+  const [stored, set] = useDeviceState<Theme>(THEME_STORAGE, "auto");
+  // A stored value can be any string, so it is narrowed here.
   const theme: Theme = stored === "light" || stored === "dark" ? stored : "auto";
-  return [theme, set as (next: Theme) => void] as const;
+  return [theme, set] as const;
 }
 
 /** Auto (follow the system), Light or Dark for this device; the script in the root layout applies it on every load. */

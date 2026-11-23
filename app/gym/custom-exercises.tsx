@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { visible } from "@/lib/validations/common";
 import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL } from "@/lib/gym-muscles";
 import { Card, EmptyNote, Field, FieldPair, FormModal, SelectField, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { ListBox, RowActions } from "../components/lists";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -24,6 +25,7 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 /** The user's own exercises: rename or re-file one, or delete it while no routine or workout uses it. Both have an Undo. */
 export function CustomExercises({ exercises, fold }: { exercises: CustomExercise[]; fold: { folded: boolean; onToggle: () => void } }) {
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   const [editing, setEditing] = useState<CustomExercise | null>(null);
   const [form, setForm] = useState({ name: "", muscleGroup: "chest", equipmentType: "barbell" });
   const [errorMsg, setErrorMsg] = useState("");
@@ -36,9 +38,10 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
   const tappedButton = useRef<Element | null>(null);
   const touches = (id: string) => [`exercises:${id}`];
 
-  function open(e: CustomExercise) {
-    setEditing(e);
-    setForm({ name: e.name, muscleGroup: e.muscleGroup, equipmentType: e.equipmentType });
+  // A new opening starts from the exercise as listed; the save's opening, shown again, from what it sent.
+  function start(sent?: typeof form) {
+    if (!editing) return;
+    setForm(sent ?? { name: editing.name, muscleGroup: editing.muscleGroup, equipmentType: editing.equipmentType });
     setErrorMsg("");
   }
 
@@ -49,21 +52,17 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
     const name = form.name.trim();
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const res = await updateCustomExerciseAction({ id: before.id, ...form, name });
-      if (!res.success) return refused(res.error);
-      if (stillOpen()) setEditing(null);
-      showToast({
-        message: `Saved "${name}"`,
-        type: "success",
-        touches: touches(before.id),
-        // Refused, with the reason, when another exercise has taken the old name since.
-        onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
-      });
-    } catch {
-      refused("Failed to save exercise");
-    }
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const res = await updateCustomExerciseAction({ id: before.id, ...form, name }).catch(() => null);
+    if (!res?.success) return refused(res?.error ?? "Failed to save exercise");
+    if (stillOpen()) setEditing(null);
+    showToast({
+      message: `Saved "${name}"`,
+      type: "success",
+      touches: touches(before.id),
+      // Refused, with the reason, when another exercise has taken the old name since.
+      onUndo: undoWith(showToast, () => updateCustomExerciseAction({ ...before }), (back) => (back && !back.success ? back.error : "Failed to undo the edit")),
+    });
   }
 
   // The row leaves and the toast shows at once (D-047); a refused delete, or one with no answer, puts the row back, takes
@@ -106,13 +105,27 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
                 <MuscleTag group={e.muscleGroup} />
                 <span className="muted entry-detail">{cap(e.equipmentType)}</span>
               </div>
-              <RowActions onEdit={() => open(e)} onDelete={() => once(e.id, () => remove(e), tappedButton.current)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
+              <RowActions onEdit={() => setEditing(e)} onDelete={() => once(e.id, () => remove(e), tappedButton.current)} editLabel={`Edit ${e.name}`} deleteLabel={`Delete ${e.name}`} />
             </div>
           ))}
         </ListBox>
       </Card>
 
-      <FormModal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit exercise" onSubmit={save} error={errorMsg} canSubmit={visible(form.name)}>
+      {/* The save sends the whole form, so the form keeps its opening while it is out (D-047): opened again for the same
+          exercise before the answer, also after another one, it waits for that save with what it sent, as a fresh opening
+          would show the exercise from before it and its Save would undo it. Opened for another exercise, it is a fresh opening. */}
+      <FormModal
+        isOpen={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit exercise"
+        onSubmit={save}
+        error={errorMsg}
+        keepsOpening
+        subject={editing?.id}
+        snapshot={() => form}
+        onOpen={start}
+        canSubmit={visible(form.name)}
+      >
         <Field label="Name" type="text" required maxLength={GYM_LIMITS.exerciseName} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <FieldPair>
           <SelectField

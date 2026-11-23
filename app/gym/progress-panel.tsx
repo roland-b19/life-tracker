@@ -5,6 +5,7 @@ import { Card, ChartCaption, ChartControls, ChartNote, EmptyNote, Field, FormMod
 import { LineChart } from "../components/charts";
 import { useFolded } from "../components/categories-card";
 import { useDeviceState } from "../components/device-state";
+import { refusal } from "../components/forms";
 import { EditButton } from "../components/lists";
 import { Segmented } from "../components/segmented";
 import { useServerState } from "../components/server-state";
@@ -76,6 +77,7 @@ export function ProgressPanel({
   const [editing, setEditing] = useState<{ exerciseId: string; name: string; kg: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
 
   const exercises = useMemo(() => {
     const names = new Map<string, string>();
@@ -121,31 +123,27 @@ export function ProgressPanel({
     const kg = Number(editing.kg);
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const saved = await savePlateWeightAction({ exerciseId: id, kg });
-      if (!saved.success) return refused(saved.error);
-      const { previous } = saved;
-      showPlate(id, kg);
-      if (stillOpen()) setEditing(null);
-      showToast({
-        message: `1 plate of ${exercise} = ${kgText(kg)}`,
-        type: "success",
-        touches: [`exercise_plate_weights:${id}`],
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            showPlate(id, previous);
-            const back = await savePlateWeightAction({ exerciseId: id, kg: previous }).catch(() => null);
-            if (!back?.success) showPlate(id, kg);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the plate weight"),
-        ),
-      });
-    } catch {
-      refused("Failed to save the plate weight");
-    }
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const saved = await savePlateWeightAction({ exerciseId: id, kg }).catch(() => null);
+    if (!saved?.success) return refused(saved?.error ?? "Failed to save the plate weight");
+    const { previous } = saved;
+    showPlate(id, kg);
+    if (stillOpen()) setEditing(null);
+    showToast({
+      message: `1 plate of ${exercise} = ${kgText(kg)}`,
+      type: "success",
+      touches: [`exercise_plate_weights:${id}`],
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          showPlate(id, previous);
+          const back = await savePlateWeightAction({ exerciseId: id, kg: previous }).catch(() => null);
+          if (!back?.success) showPlate(id, kg);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the plate weight"),
+      ),
+    });
   }
 
   return (

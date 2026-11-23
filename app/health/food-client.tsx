@@ -14,7 +14,7 @@ import {
   type ValueChange,
 } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, type FormOpening, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
-import { changedFields } from "../components/forms";
+import { changedFields, refusal } from "../components/forms";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
@@ -104,6 +104,9 @@ const METRICS = ["water", "steps"] as const;
  * sends back only these, reversed.
  */
 type MetricChange = { amount?: ValueChange; goal?: ValueChange };
+/** A water or steps form: what its fields hold, and what they showed when it opened (`base`). */
+type MetricForm = { amount: string; goal: string; base: { amount: number; goal: number } };
+const NO_METRIC_FORM: MetricForm = { amount: "", goal: "", base: { amount: 0, goal: 0 } };
 const reversed = (change?: ValueChange) => change && { from: change.to, to: change.from };
 
 // The open tab is kept on this device (D-041); a stored tab the page does not have shows Today.
@@ -139,11 +142,12 @@ export function FoodClient({
   const [errorMsg, setErrorMsg] = useState("");
   // The water or steps form open, if any: each is its own form, so a save out in one never holds the other.
   const [metricOpen, setMetricOpen] = useState<Metric | null>(null);
-  const [metricInput, setMetricInput] = useState("");
-  const [metricGoalInput, setMetricGoalInput] = useState("");
-  // What an edit form showed when it opened: a save sends only the fields changed from these, each with the value it
-  // showed, so a refresh while the form is open (another tab's save) is neither written back nor overwritten (D-040).
-  const [metricBase, setMetricBase] = useState({ amount: 0, goal: 0 });
+  // Each form's fields, its own so the one opened again while its save is out shows what it sent. `base` is what the
+  // form showed when it opened: a save sends only the fields changed from it, each with the value it showed, so a
+  // refresh while the form is open (another tab's save) is neither written back nor overwritten (D-040).
+  const [metricForms, setMetricForms] = useState<Record<Metric, MetricForm>>({ water: NO_METRIC_FORM, steps: NO_METRIC_FORM });
+  const setMetricForm = (metric: Metric, patch: Partial<MetricForm>) =>
+    setMetricForms((forms) => ({ ...forms, [metric]: { ...forms[metric], ...patch } }));
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [goalInputs, setGoalInputs] = useState<Record<NutritionGoal, string>>({ calories: "", proteinGrams: "", carbsGrams: "", fatGrams: "" });
   const [goalsBase, setGoalsBase] = useState<Goals>(targets);
@@ -192,9 +196,9 @@ export function FoodClient({
   // A refused save shows in its form while that opening is on screen, and as a warning toast once it is not. A value
   // another device changed first closes the form with the reason, so the refresh shows the current value.
   const refused = (error: string, stillOpen: () => boolean, close: () => void) => {
-    if (stillOpen() && error !== CHANGED_ELSEWHERE) return setErrorMsg(error);
-    if (stillOpen()) close();
-    setStatusMessage(error);
+    const elsewhere = error === CHANGED_ELSEWHERE;
+    if (elsewhere && stillOpen()) close();
+    refusal(() => !elsewhere && stillOpen(), setErrorMsg, setStatusMessage)(error);
   };
 
   const mealKeys = (meals: MealData[]) => meals.map((m) => `meals:${m.id}`);
@@ -277,8 +281,8 @@ export function FoodClient({
     e.preventDefault();
     if (!mealHasValue(entered)) return;
     // The server's own check, so the form refuses with its limits and words, in its order.
-    const refusal = mealAmounts.safeParse(entered).error?.issues[0]?.message;
-    if (refusal) return setErrorMsg(refusal);
+    const problem = mealAmounts.safeParse(entered).error?.issues[0]?.message;
+    if (problem) return setErrorMsg(problem);
 
     setErrorMsg("");
     // The id comes from the form's opening, so a repeat of the same save after a lost answer adds nothing (D-040).
@@ -375,23 +379,26 @@ export function FoodClient({
 
   function openMetricEdit(metric: Metric) {
     setErrorMsg("");
-    const base = { amount: summary.metrics[METRIC_KEY[metric]], goal: goals[METRIC_KEY[metric]] };
-    setMetricBase(base);
-    setMetricInput(String(base.amount));
-    setMetricGoalInput(String(base.goal));
     setMetricOpen(metric);
+  }
+
+  // A new opening of a water or steps form starts from the day's total and goal.
+  function startMetricForm(metric: Metric) {
+    const base = { amount: summary.metrics[METRIC_KEY[metric]], goal: goals[METRIC_KEY[metric]] };
+    setMetricForm(metric, { amount: String(base.amount), goal: String(base.goal), base });
   }
 
   async function handleMetricSubmit(e: React.FormEvent, metric: Metric, { stillOpen }: FormOpening) {
     e.preventDefault();
-    const value = Number(metricInput);
-    const goal = Number(metricGoalInput);
+    const form = metricForms[metric];
+    const value = Number(form.amount);
+    const goal = Number(form.goal);
     const range = METRIC_GOAL[metric];
     if (!Number.isInteger(value)) return setErrorMsg(NOT_WHOLE);
     if (value < 0 || value > METRIC_MAX[metric]) return setErrorMsg(`The total must be between 0 and ${formatNumber(METRIC_MAX[metric])}`);
     if (!Number.isInteger(goal) || goal < range.min || goal > range.max)
       return setErrorMsg(`The goal must be between ${formatNumber(range.min)} and ${formatNumber(range.max)}`);
-    const before = metricBase;
+    const before = form.base;
     const patch = changedFields(before, { amount: value, goal });
     const change: MetricChange = Object.fromEntries(Object.entries(patch).map(([key, to]) => [key, { from: before[key as keyof typeof before], to }]));
     if (change.amount === undefined && change.goal === undefined) return setMetricOpen(null);
@@ -399,42 +406,43 @@ export function FoodClient({
     const close = () => setMetricOpen((open) => (open === metric ? null : open));
     setErrorMsg("");
     if (metric === "water") setWaterSaving(true);
-    try {
-      const res = await writeMetric(metric, change);
-      if (!res?.success) return refused(res?.error ?? `Failed to save ${metric}`, stillOpen, close);
-      showSaved(metric, res);
-      if (stillOpen()) close();
-      const name = metric === "water" ? "Water" : "Steps";
-      const unit = metric === "water" ? " ml" : "";
-      const amount = `${formatNumber(value)}${unit}`;
-      const target = `${formatNumber(goal)}${unit}`;
-      showToast({
-        message:
-          change.goal === undefined ? `${name} set to ${amount}` : change.amount === undefined ? `${name} goal set to ${target}` : `${name} set to ${amount}, goal ${target}`,
-        type: "success",
-        touches: metricKeys(metric, change),
-        onUndo: undoWith(
-          showToast,
-          async () => {
-            showChange(metric, undo);
-            const back = await writeMetric(metric, undo);
-            if (back?.success) showSaved(metric, back);
-            else showChange(metric, change);
-            return back;
-          },
-          (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-        ),
-      });
-    } finally {
-      if (metric === "water") setWaterSaving(false);
-    }
+    const res = await writeMetric(metric, change);
+    if (metric === "water") setWaterSaving(false);
+    if (!res?.success) return refused(res?.error ?? `Failed to save ${metric}`, stillOpen, close);
+    showSaved(metric, res);
+    if (stillOpen()) close();
+    const name = metric === "water" ? "Water" : "Steps";
+    const unit = metric === "water" ? " ml" : "";
+    const amount = `${formatNumber(value)}${unit}`;
+    const target = `${formatNumber(goal)}${unit}`;
+    showToast({
+      message:
+        change.goal === undefined ? `${name} set to ${amount}` : change.amount === undefined ? `${name} goal set to ${target}` : `${name} set to ${amount}, goal ${target}`,
+      type: "success",
+      touches: metricKeys(metric, change),
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          showChange(metric, undo);
+          const back = await writeMetric(metric, undo);
+          if (back?.success) showSaved(metric, back);
+          else showChange(metric, change);
+          return back;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   function openGoals() {
     setErrorMsg("");
+    setGoalsOpen(true);
+  }
+
+  // A new opening of the goals form starts from the goals on screen.
+  function startGoals() {
     setGoalsBase(goals);
     setGoalInputs(Object.fromEntries(NUTRITION_GOALS.map((g) => [g.key, String(goals[g.key])])) as Record<NutritionGoal, string>);
-    setGoalsOpen(true);
   }
 
   async function handleGoalsSubmit(e: React.FormEvent, { stillOpen }: FormOpening) {
@@ -487,33 +495,28 @@ export function FoodClient({
       setStatusMessage(message);
     };
 
-    try {
-      // The server reads only the last 10 turns and rejects more than 20.
-      const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
-      const res = await sendFoodChatMessageAction({
-        message: text,
-        history,
-        date: todayDate,
-        time: appTime(),
+    // The server reads only the last 10 turns and rejects more than 20.
+    const history = chatMessages.slice(-10).map((m) => ({ role: m.role, text: m.text }));
+    const res = await sendFoodChatMessageAction({
+      message: text,
+      history,
+      date: todayDate,
+      time: appTime(),
+    }).catch(() => null);
+    setChatLoading(false);
+    if (!res?.success) return takeBack(res?.error ?? "Failed to send message");
+    const { meals } = res;
+    setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
+    if (res.freshSummary) setSummary(res.freshSummary);
+    if (meals.length) {
+      showToast({
+        message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
+        type: "success",
+        touches: mealKeys(meals),
+        onUndo: undoLogged(meals, (removed) =>
+          setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
+        ),
       });
-      if (!res.success) return takeBack(res.error);
-      const { meals } = res;
-      setChatMessages((prev) => [...prev, { role: "assistant", text: res.reply, meals, leftOut: res.leftOut }]);
-      if (res.freshSummary) setSummary(res.freshSummary);
-      if (meals.length) {
-        showToast({
-          message: `Logged ${meals.length} meal${meals.length === 1 ? "" : "s"}`,
-          type: "success",
-          touches: mealKeys(meals),
-          onUndo: undoLogged(meals, (removed) =>
-            setChatMessages((prev) => prev.map((m) => (m.meals ? { ...m, meals: m.meals.filter((x) => !removed.has(x.id)) } : m))),
-          ),
-        });
-      }
-    } catch {
-      takeBack("Failed to send message");
-    } finally {
-      setChatLoading(false);
     }
   }
 
@@ -751,15 +754,16 @@ export function FoodClient({
           onSubmit={(e, opening) => handleMetricSubmit(e, metric, opening)}
           error={errorMsg}
           keepsOpening
-          canSubmit={metricInput !== "" && metricGoalInput !== ""}
+          onOpen={() => startMetricForm(metric)}
+          canSubmit={metricForms[metric].amount !== "" && metricForms[metric].goal !== ""}
         >
           <Field
             label={metric === "water" ? "Water today (ml)" : "Steps today"}
             type="number"
             inputMode="numeric"
             required
-            value={metricInput}
-            onChange={(e) => setMetricInput(e.target.value)}
+            value={metricForms[metric].amount}
+            onChange={(e) => setMetricForm(metric, { amount: e.target.value })}
             className="number-tabular"
           />
           <Field
@@ -767,8 +771,8 @@ export function FoodClient({
             type="number"
             inputMode="numeric"
             required
-            value={metricGoalInput}
-            onChange={(e) => setMetricGoalInput(e.target.value)}
+            value={metricForms[metric].goal}
+            onChange={(e) => setMetricForm(metric, { goal: e.target.value })}
             className="number-tabular"
           />
         </FormModal>
@@ -781,6 +785,7 @@ export function FoodClient({
         onSubmit={handleGoalsSubmit}
         error={errorMsg}
         keepsOpening
+        onOpen={startGoals}
         canSubmit={!Object.values(goalInputs).some((v) => v === "")}
       >
         {NUTRITION_GOALS.map((g) => (

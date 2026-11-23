@@ -7,6 +7,7 @@ import type { Answer } from "@/lib/validations/result";
 import { AddButton, Card, EmptyNote, Field, FormModal, GroupLabel, SelectField, type FormOpening } from "./blocks";
 import { useDeviceState } from "./device-state";
 import { ChevronRightIcon } from "./icons";
+import { refusal } from "./forms";
 import { DragHandle, ListBox, RowActions, useDragSort, useKeepPlace } from "./lists";
 import { useOnce } from "./once";
 import { undoWith, useToast } from "./toast";
@@ -66,6 +67,7 @@ interface Change {
 /** The card that adds, renames and deletes the categories of one list (Wishlist, or a Tasks space). */
 export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: Props) {
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   const noun = api.noun ?? "category";
   const builtIn = api.builtIn ?? "other";
   const [open, setOpen] = useState(false);
@@ -128,9 +130,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
   const dragRow = useDragSort(move);
 
   function openForm(edit: string | null) {
-    setErrorMsg("");
     setFrom(edit);
-    setName(edit ?? "");
     setOpen(true);
   }
 
@@ -170,54 +170,50 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
     if (to === builtIn) return setErrorMsg(`Please pick a name other than "${builtIn}"`);
     setErrorMsg("");
     // A refusal shows in the form while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      if (from === null) {
-        const added = await api.add(to);
-        if (!added.success) return refused(added.error);
-        onChange((prev) => [...prev, to]);
-        showToast({
-          message: `Added "${to}"`,
-          type: "success",
-          touches: touches([to]),
-          onUndo: undoWith(
-            showToast,
-            async () => {
-              // Filled in by the update below; a failure puts it back only where it was, and only if it was on screen.
-              let was = -1;
-              onChange((prev) => {
-                was = prev.indexOf(to);
-                return prev.filter((c) => c !== to);
-              });
-              const gone = await api.remove(to).catch(() => null);
-              if (!gone?.success) onChange((prev) => insertAt(prev, to, was));
-              // Items filed under it since go to the fallback, like any delete.
-              else onRefile(to, builtIn);
-              return gone;
-            },
-            undoFailed,
-          ),
-        });
-      } else {
-        const res = await api.rename(from, to);
-        if (!res.success) return refused(res.error);
-        const change = res.change;
-        const at = categories.indexOf(from);
-        onRefile(from, to);
-        onChange((prev) =>
-          prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
-        );
-        showToast({
-          message: `Renamed "${from}" to "${to}"`,
-          type: "success",
-          touches: touches([from, to], change.itemIds),
-          onUndo: undoWith(showToast, () => revert(from, to, change, !change.merged, at), undoFailed),
-        });
-      }
-      if (stillOpen()) setOpen(false);
-    } catch {
-      refused(`Failed to save ${noun}`);
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    if (from === null) {
+      const added = await api.add(to).catch(() => null);
+      if (!added?.success) return refused(added?.error ?? `Failed to save ${noun}`);
+      onChange((prev) => [...prev, to]);
+      showToast({
+        message: `Added "${to}"`,
+        type: "success",
+        touches: touches([to]),
+        onUndo: undoWith(
+          showToast,
+          async () => {
+            // Filled in by the update below; a failure puts it back only where it was, and only if it was on screen.
+            let was = -1;
+            onChange((prev) => {
+              was = prev.indexOf(to);
+              return prev.filter((c) => c !== to);
+            });
+            const gone = await api.remove(to).catch(() => null);
+            if (!gone?.success) onChange((prev) => insertAt(prev, to, was));
+            // Items filed under it since go to the fallback, like any delete.
+            else onRefile(to, builtIn);
+            return gone;
+          },
+          undoFailed,
+        ),
+      });
+    } else {
+      const res = await api.rename(from, to).catch(() => null);
+      if (!res?.success) return refused(res?.error ?? `Failed to save ${noun}`);
+      const change = res.change;
+      const at = categories.indexOf(from);
+      onRefile(from, to);
+      onChange((prev) =>
+        prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
+      );
+      showToast({
+        message: `Renamed "${from}" to "${to}"`,
+        type: "success",
+        touches: touches([from, to], change.itemIds),
+        onUndo: undoWith(showToast, () => revert(from, to, change, !change.merged, at), undoFailed),
+      });
     }
+    if (stillOpen()) setOpen(false);
   }
 
   // The row leaves, its items move to Other and the toast shows at once; a failed delete puts them back and takes the
@@ -294,6 +290,12 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
         onSubmit={submit}
         error={errorMsg}
         keepsOpening
+        subject={from ?? ""}
+        snapshot={() => name}
+        onOpen={(sent) => {
+          setErrorMsg("");
+          setName(sent ?? from ?? "");
+        }}
         canSubmit={!!name.trim()}
       >
         <Field label="Name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />

@@ -7,6 +7,7 @@ import { MUSCLE_GROUP_KEYS, MUSCLE_GROUP_LABEL, muscleLabel, type MuscleGroupKey
 import { useRef, useState } from "react";
 import { DeleteButton, DragHandle, ListBox, useDragSort } from "../components/lists";
 import { EmptyNote, Field, FieldPair, FormActions, FormModal, Label, SelectField, Toggle, type FormOpening } from "../components/blocks";
+import { refusal } from "../components/forms";
 import { PlusIcon } from "../components/icons";
 import { useOnce } from "../components/once";
 import { undoWith, useToast } from "../components/toast";
@@ -67,8 +68,8 @@ export interface DiscardedEdit {
 /**
  * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
  * arrow keys to reorder, new exercise). Mounted for as long as the page shows the day, so its form keeps its opening
- * while its save is out (D-047): opened again before the answer, it waits for that save, as a fresh opening would show
- * the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
+ * while its save is out (D-047): opened again before the answer, it waits for that save with the day it sent, as a fresh
+ * opening would show the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
  * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
  * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
  */
@@ -88,6 +89,7 @@ export function DayEditor({
   onReopen: (edit: DiscardedEdit) => void;
 }) {
   const { showToast } = useToast();
+  const warn = (message: string) => showToast({ message, type: "warning" });
   const [draft, setDraft] = useState<DayDraft>(() => resume?.draft ?? toDraft(day));
   const [created, setCreated] = useState<LibraryExercise[]>(() => resume?.created ?? []);
   const [errorMsg, setErrorMsg] = useState("");
@@ -126,23 +128,20 @@ export function DayEditor({
   // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
   // disables and labels, never the guard). It belongs to one opening: a new opening starts without it.
   const [creating, setCreating] = useState(false);
-  // Each opening starts from the day as saved, or from `resume`. The form itself knows whether the opening is new.
-  const [wasOpen, setWasOpen] = useState(isOpen);
-  if (wasOpen !== isOpen) {
-    setWasOpen(isOpen);
-    if (isOpen) {
-      setDraft(resume?.draft ?? toDraft(day));
-      setCreated(resume?.created ?? []);
-      setSeen(names());
-      setErrorMsg("");
-      setCreating(false);
-      setAddId("");
-      setQuery("");
-      setShowCustom(false);
-      setCustomName("");
-      setCustomMuscle("chest");
-      setCustomEquipment("barbell");
-    }
+  // Each new opening starts from the day as saved, or from `resume`; the form runs this only for a new opening, so one
+  // opened again while its save is out shows the day it sent.
+  function start() {
+    setDraft(resume?.draft ?? toDraft(day));
+    setCreated(resume?.created ?? []);
+    setSeen(names());
+    setErrorMsg("");
+    setCreating(false);
+    setAddId("");
+    setQuery("");
+    setShowCustom(false);
+    setCustomName("");
+    setCustomMuscle("chest");
+    setCustomEquipment("barbell");
   }
   function openCustom() {
     customId.current = crypto.randomUUID();
@@ -219,30 +218,23 @@ export function DayEditor({
     }
     setErrorMsg("");
     // A refusal shows in the editor while it is on screen, else as a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows });
-      if (res.success) {
-        if (stillOpen()) onClose();
-        showToast({
-          message: `Saved "${draft.name.trim()}"`,
-          type: "success",
-          // The day's row and its routine rows.
-          touches: [`workout_split_days:${day.id}`],
-          // Writes the old day back; the server refresh brings it to the list.
-          onUndo: undoWith(
-            showToast,
-            () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }),
-            (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
-          ),
-        });
-      } else {
-        // The editor stays open with the day as it was typed, so nothing is lost.
-        refused(res.error);
-      }
-    } catch {
-      refused("Failed to save day");
-    }
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows }).catch(() => null);
+    // The editor stays open with the day as it was typed, so nothing is lost.
+    if (!res?.success) return refused(res?.error ?? "Failed to save day");
+    if (stillOpen()) onClose();
+    showToast({
+      message: `Saved "${draft.name.trim()}"`,
+      type: "success",
+      // The day's row and its routine rows.
+      touches: [`workout_split_days:${day.id}`],
+      // Writes the old day back; the server refresh brings it to the list.
+      onUndo: undoWith(
+        showToast,
+        () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }),
+        (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
+      ),
+    });
   }
 
   // The answer changes the draft, the new exercise's form and the error only in the opening it was sent from (D-047): after
@@ -257,46 +249,38 @@ export function DayEditor({
     }
     setErrorMsg("");
     setCreating(true);
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : showToast({ message, type: "warning" }));
-    try {
-      const res = await addCustomExerciseAction({ id: customId.current, name, muscleGroup: customMuscle, equipmentType: customEquipment });
-      if (res.success) {
-        // A new exercise is made for this day, so it goes straight into the routine. A repeat answers the row the first
-        // add made, so the screen takes the server's row.
-        const { id: exerciseId, name: madeName, muscleGroup, equipmentType } = res.exercise;
-        const added = stillOpen();
-        if (added) {
-          setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
-          setCreated((list) => [...list, { id: exerciseId, name: madeName, muscleGroup, equipmentType }]);
-          setShowCustom(false);
-          setCustomName("");
-        }
-        showToast({
-          message: `Created "${madeName}"`,
-          type: "success",
-          touches: [`exercises:${exerciseId}`],
-          // Refused once a routine or a set uses it, so Undo never deletes data. It takes the row out of the draft it went into.
-          onUndo: undoWith(
-            showToast,
-            async () => {
-              const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
-              if (gone?.success && added) {
-                setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
-                setCreated((list) => list.filter((x) => x.id !== exerciseId));
-              }
-              return gone;
-            },
-            (back) => (back && !back.success ? back.error : "Failed to undo: the exercise is already in use"),
-          ),
-        });
-      } else {
-        refused(res.error);
-      }
-    } catch {
-      refused("Failed to add exercise");
-    } finally {
-      if (stillOpen()) setCreating(false);
+    const refused = refusal(stillOpen, setErrorMsg, warn);
+    const res = await addCustomExerciseAction({ id: customId.current, name, muscleGroup: customMuscle, equipmentType: customEquipment }).catch(() => null);
+    if (stillOpen()) setCreating(false);
+    if (!res?.success) return refused(res?.error ?? "Failed to add exercise");
+    // A new exercise is made for this day, so it goes straight into the routine. A repeat answers the row the first
+    // add made, so the screen takes the server's row.
+    const { id: exerciseId, name: madeName, muscleGroup, equipmentType } = res.exercise;
+    const added = stillOpen();
+    if (added) {
+      setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId, ...NEW_ROW }] }));
+      setCreated((list) => [...list, { id: exerciseId, name: madeName, muscleGroup, equipmentType }]);
+      setShowCustom(false);
+      setCustomName("");
     }
+    showToast({
+      message: `Created "${madeName}"`,
+      type: "success",
+      touches: [`exercises:${exerciseId}`],
+      // Refused once a routine or a set uses it, so Undo never deletes data. It takes the row out of the draft it went into.
+      onUndo: undoWith(
+        showToast,
+        async () => {
+          const gone = await deleteCustomExerciseAction(exerciseId).catch(() => null);
+          if (gone?.success && added) {
+            setDraft((d) => ({ ...d, exercises: d.exercises.filter((x) => x.exerciseId !== exerciseId) }));
+            setCreated((list) => list.filter((x) => x.id !== exerciseId));
+          }
+          return gone;
+        },
+        (back) => (back && !back.success ? back.error : "Failed to undo: the exercise is already in use"),
+      ),
+    });
   }
 
   return (
@@ -305,6 +289,7 @@ export function DayEditor({
       onClose={close}
       onCancel={() => void cancel()}
       keepsOpening
+      onOpen={start}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
       error={errorMsg}

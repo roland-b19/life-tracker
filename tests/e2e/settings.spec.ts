@@ -8,11 +8,13 @@ import {
   dismissToast,
   expectNoSeriousViolations,
   expectToastWithoutUndo,
+  holdWrites,
   hydrationWarnings,
   pauseClock,
   signInThroughForm,
   test,
   theme,
+  toast,
   undoIn,
   writesIn,
 } from "./helpers";
@@ -288,4 +290,26 @@ test("a double tap on Save connects once [D-043]", async ({ signedInPage: page }
   expect(await writesIn(page, center(await form.getByRole("button", { name: "Save" }).boundingBox()), token)).toBe(1);
   await expect(account(page)).toBeVisible();
   await expect(page.getByText("Connected Claude")).toHaveCount(1);
+});
+
+// An answer belongs to its opening (D-047): a connect lost after its form was cancelled says so in a toast, the form
+// opened next starts with no error, and Claude stays not connected.
+test("a token save lost after Cancel shows as a toast, not in the form [D-047]", async ({ signedInPage: page }) => {
+  await openSettings(page);
+  const token = fakeToken();
+  const release = await holdWrites(page, token);
+  await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
+  const form = page.getByRole("dialog", { name: "Connect Claude" });
+  await form.getByLabel("Token").fill(token);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release(true);
+  await expect(toast(page, "Failed to connect Claude")).toBeVisible();
+  await expect(notConnected(page)).toBeVisible();
+
+  await claudeCard(page).getByRole("button", { name: "Connect Claude" }).click();
+  await expect(form.getByLabel("Token")).toHaveValue("");
+  await expect(form.getByRole("alert")).toHaveCount(0);
 });

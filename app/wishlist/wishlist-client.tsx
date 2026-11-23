@@ -7,7 +7,7 @@ import { linkOf } from "@/lib/link";
 import { formatNumber, roundTo } from "@/lib/number-format";
 import { AnimatedNumber } from "../components/animated-number";
 import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect, type FormOpening } from "../components/blocks";
-import { changedFields } from "../components/forms";
+import { changedFields, refusal } from "../components/forms";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -157,7 +157,7 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
     const before = editing;
     // The answer belongs to the opening it came from: a form closed or opened since stays as it is, and a refusal is told
     // in a toast.
-    const refused = (message: string) => (stillOpen() ? setErrorMsg(message) : warn(message));
+    const refused = refusal(stillOpen, setErrorMsg, warn);
 
     if (before) {
       const changed = changedFields(toInput(before), input);

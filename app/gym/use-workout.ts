@@ -156,8 +156,9 @@ export function useWorkout({
   const clock = useClock((activeSession ?? paused)?.timer);
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
   // next save changes from, so the device is not refused again. The field shows the server's notes, then what was typed
-  // (D-047; a space between them, as the field is one line), unless it holds them already: the next save keeps the other
-  // device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
+  // (D-047; a space between them, as the field is one line), unless it holds them already, where this merge puts them
+  // (the whole field, or its start before a space; not anywhere inside it, so short notes such as "5" are not taken as
+  // held by "Bench 5x5"): the next save keeps the other device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
   // then sets what saves change from.
   const [notesStale, setNotesStale] = useState(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
@@ -172,7 +173,8 @@ export function useWorkout({
       const theirs = server.notes ?? "";
       setNotesStale(false);
       setTheirNotes({ text: theirs });
-      if (theirs) setSessionNotes((typed) => (typed.includes(theirs) ? typed : typed ? `${theirs} ${typed}` : theirs));
+      const holds = (typed: string) => typed === theirs || typed.startsWith(`${theirs} `);
+      if (theirs) setSessionNotes((typed) => (holds(typed) ? typed : typed ? `${theirs} ${typed}` : theirs));
     }
   }
   useEffect(() => {
@@ -193,18 +195,13 @@ export function useWorkout({
     if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
   };
   // A write of the workout's own (Start, Pause or Resume, Finish, Exit): one at a time, with the page's saving flag.
-  const write = (run: () => Promise<void>, failed: string, spot?: Element | null) =>
+  const write = (run: () => Promise<void>, spot?: Element | null) =>
     once(
       "workout",
       async () => {
         setBusy(true);
-        try {
-          await run();
-        } catch {
-          warn(failed);
-        } finally {
-          setBusy(false);
-        }
+        await run();
+        setBusy(false);
       },
       spot,
     );
@@ -214,8 +211,8 @@ export function useWorkout({
   function start(day: SplitDay, spot?: Element | null) {
     if (day.isRest) return;
     write(async () => {
-      const res = await addSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode });
-      if (!res.success) return warn(res.error);
+      const res = await addSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode }).catch(() => null);
+      if (!res?.success) return warn(res?.error ?? "Failed to start workout");
       const { session, sets, timer, from, splitDayName: name } = res;
       const started: ActiveSessionData = {
         id: session.id,
@@ -292,7 +289,7 @@ export function useWorkout({
           (back) => (back && !back.success ? back.error : "Failed to undo"),
         ),
       });
-    }, "Failed to start workout", spot);
+    }, spot);
   }
 
   /** The Pause and Resume button: the server stops or restarts the workout's timer, and Undo turns it back. */
@@ -306,15 +303,15 @@ export function useWorkout({
       return res;
     };
     write(async () => {
-      const res = await turn(run);
-      if (!res.success) return refused(session.id, res.error);
+      const res = await turn(run).catch(() => null);
+      if (!res?.success) return refused(session.id, res?.error ?? (run ? "Failed to resume the timer" : "Failed to pause the timer"));
       showToast({
         message: run ? "Resumed the timer" : "Paused the timer",
         type: "success",
         touches: touchesOf(session.id),
         onUndo: undoWith(showToast, () => turn(!run)),
       });
-    }, run ? "Failed to resume the timer" : "Failed to pause the timer", spot);
+    }, spot);
   }
 
   // The server numbers the set (D-040): two pages logging into one workout never repeat a number. The checks go back to
@@ -337,8 +334,8 @@ export function useWorkout({
         isPartial: state.isPartial,
         isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
-      });
-      if (!res.success) return refused(session.id, res.error);
+      }).catch(() => null);
+      if (!res?.success) return refused(session.id, res?.error ?? "Failed to add set");
       const logged: WorkoutSetData = {
         id: res.set.id,
         exerciseId: exercise.exerciseId,
@@ -379,7 +376,7 @@ export function useWorkout({
           (back) => (back && !back.success ? back.error : "Failed to undo"),
         ),
       });
-    }, "Failed to add set", spot);
+    }, spot);
   }
 
   // Nothing waits on the network: the row leaves and the toast shows at once (D-047); a refused delete, or one with no
@@ -496,25 +493,25 @@ export function useWorkout({
     if (!session) return;
     write(async () => {
       if (!(await saveNotes())) return;
-      const res = await pauseSessionAction({ id: session.id });
-      if (!res.success) return refused(session.id, res.error);
+      const res = await pauseSessionAction({ id: session.id }).catch(() => null);
+      if (!res?.success) return refused(session.id, res?.error ?? "Failed to leave the workout");
       setOpen({ ...session, timer: res.timer, notes: savedNotes.current || null });
       setConfirmCancel(false);
       setHandId(null);
-    }, "Failed to leave the workout", spot);
+    }, spot);
   }
 
   function resume(spot?: Element | null) {
     const session = paused;
     if (!session) return;
     write(async () => {
-      const res = await resumeSessionAction({ id: session.id });
-      if (!res.success) return warn(res.error);
+      const res = await resumeSessionAction({ id: session.id }).catch(() => null);
+      if (!res?.success) return warn(res?.error ?? "Failed to resume the workout");
       showDay(session.splitDayId);
       setOpen({ ...session, timer: res.timer });
       take(session.id);
       showNotes(session.notes);
-    }, "Failed to resume the workout", spot);
+    }, spot);
   }
 
   // Undo hands a workout back as it was, unless another one was started in the meantime. A refusal shows the server's
@@ -595,9 +592,9 @@ export function useWorkout({
       // A refusal (of the notes or of the Cancel) closes the Keep/Delete question too: the toast says why.
       if (!(await saveNotes())) return setConfirmCancel(false);
       const snap = { ...session, notes: savedNotes.current || null };
-      const res = await cancelSessionAction({ id: session.id });
-      setConfirmCancel(false);
-      if (!res.success) return refused(session.id, res.error);
+      const res = await cancelSessionAction({ id: session.id }).catch(() => null);
+      if (res) setConfirmCancel(false); // with no answer the question stays, to try again
+      if (!res?.success) return refused(session.id, res?.error ?? "Failed to cancel workout");
       setOpen(null);
       setHandId(null);
       setSessionNotes("");
@@ -607,7 +604,7 @@ export function useWorkout({
         touches: touchesOf(snap.id, snap.sets),
         onUndo: takeBack(restore(snap, res.timer), "Failed to restore the workout"),
       });
-    }, "Failed to cancel workout", spot);
+    }, spot);
   }
 
   // The server counts the duration (D-039); a workout with no sets is deleted, and Undo brings it back open. Notes typed
@@ -618,8 +615,8 @@ export function useWorkout({
     write(async () => {
       if (!(await saveNotes())) return;
       const snap = { ...session, notes: savedNotes.current || null };
-      const done = await finishSessionAction({ id: session.id });
-      if (!done.success) return refused(session.id, done.error);
+      const done = await finishSessionAction({ id: session.id }).catch(() => null);
+      if (!done?.success) return refused(session.id, done?.error ?? "Failed to finish workout");
       setOpen(null);
       setHandId(null);
       setSessionNotes("");
@@ -646,7 +643,7 @@ export function useWorkout({
           "Failed to reopen the workout",
         ),
       });
-    }, "Failed to finish workout", spot);
+    }, spot);
   }
 
   return {
