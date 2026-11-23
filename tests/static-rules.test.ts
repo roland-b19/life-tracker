@@ -254,7 +254,9 @@ const callerOf = (n: ts.Node): ts.Node[] => {
 // `[{ value }, setForm]`), `value`'s code also holds each call of `setValue` and the call it is handed to (`load(setValue)`,
 // `.then(setValue)`). A callback's parameter also holds what calls the callback (callerOf), the callback inline or named
 // (`function pick`, `const pick =` an arrow or `useCallback(…)`), at each place it is handed to a call or a JSX prop. A
-// callback or setter inside an options object (`load({ done: (v) => setValue(v) })`) is not followed.
+// callback or setter inside an options object (`load({ done: (v) => setValue(v) })`) is not followed. It may read more than
+// this list, which can only flag more; two known examples: a write keyed by a name (`table[key] = …` counts as a write to
+// `key`), and a `catch (x)` parameter resolving to an outer `x`.
 const nameCode = (name: string, declaration: ts.Node): ts.Node[] => {
   const own: ts.Node[] = [];
   if (ts.isFunctionDeclaration(declaration)) own.push(declaration);
@@ -343,7 +345,7 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   // `{(e) => save(e)}`, or else the inline function itself. A name is looked up from the FormModal out (declarationOf) and
   // must be a function of this file (functionOf); any other name (a prop, an import, a value), or an `onSubmit` of another
   // kind, is an unknown handler and fails. The save sends a `from` when the code the handler runs (codeOf) matches
-  // sendsFrom, comments included. That code follows, however deep and each name looked up by scope in this file, exactly
+  // sendsFrom, comments included. That code follows, however deep and each name looked up by scope in this file, at least
   // these flows (nameCode): calls to functions of this file; a name's declaration and every write to it (an assignment, and
   // for a value that is not a function a call or JSX prop it is handed to or a method called on it); a state value's setter
   // calls, plain (`[value, setValue]`) or destructured (`[{ value }, setForm]`), and the call a setter is handed to
@@ -355,7 +357,9 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   // is not found), a FormModal imported under another name, an alias of a setter (`const update = setInput`), a callback
   // or setter inside an options object (`load({ done: (v) => setInput(v) })`), a custom hook of this file (`const [v, setV]
   // = useDraft()`), and a value aliased then changed through the alias (`const t = input; Object.assign(t, …)`). This reads
-  // more than the save may run, so a form that sends no `from` can be flagged.
+  // more than the save may run, so a form that sends no `from` can be flagged. It may also read more than this list, which
+  // can only flag more; two known examples: a write keyed by a name (`table[key] = …` counts as a write to `key`), and a
+  // `catch (x)` parameter resolving to an outer `x`.
   // A tag written `FormModal`, or a name of this file declared `const X = FormModal` (directly or through another such name).
   const isFormModal = (tag: ts.Node, seen = new Set<ts.Node>()): boolean => {
     if (!ts.isIdentifier(tag)) return false;
