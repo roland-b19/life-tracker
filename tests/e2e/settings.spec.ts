@@ -237,6 +237,29 @@ test("a theme kept before D-047 (a raw light or dark) still applies and is kept 
   await expect(appearance(page).getByRole("tab", { name: "Auto", exact: true })).toHaveAttribute("aria-selected", "true");
 });
 
+// The head script (app/components/theme.ts) must read the stored JSON: if it misses it, the page paints in the system's
+// mode and switches once React applies the choice, a flash. An init script records `data-theme` on <html> when <body>
+// first appears (the head script has run, React has not) and every value it takes after that.
+test("a theme stored as JSON is on <html> from the first paint after a reload, with no change after (no flash) [D-024, D-047]", async ({ signedInPage: page }) => {
+  await openSettings(page);
+  await pick(page, "Light"); // against this project's dark system scheme
+  expect(await page.evaluate(() => localStorage.getItem("lt-theme"))).toBe(JSON.stringify("light"));
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { themes: string[] }).themes = seen;
+    new MutationObserver(() => {
+      if (!document.body) return; // <html> too may not be there yet when this script runs
+      const now = document.documentElement.dataset.theme ?? "auto";
+      if (seen.length === 0) seen.push(`body:${now}`);
+      else if (!seen.at(-1)!.endsWith(`:${now}`)) seen.push(`attr:${now}`);
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-theme"] });
+  });
+  await openSettings(page);
+  await expect(appearance(page).getByRole("tab", { name: "Light", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => theme(page)).toBe("light"); // hydrated, and the choice applied by then whatever the head did
+  expect(await page.evaluate(() => (window as unknown as { themes: string[] }).themes)).toEqual(["body:light"]);
+});
+
 test("a signed-out visit to /settings comes back to /settings after sign-in, and the connect date is the app's day [PATH, MORE-02]", async ({ page }) => {
   await signInThroughForm(
     page,
