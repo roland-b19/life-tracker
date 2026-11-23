@@ -154,17 +154,29 @@ export function useWorkout({
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
   const clock = useClock((activeSession ?? paused)?.timer);
   // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
-  // next save changes from, so the device is not refused again; the field keeps what was typed.
-  const notesStale = useRef(false);
+  // next save changes from, so the device is not refused again. The field shows the server's notes, then what was typed
+  // (D-047; a space between them, as the field is one line), unless it holds them already: the next save keeps the other
+  // device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
+  // then sets what saves change from.
+  const [notesStale, setNotesStale] = useState(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
   const notesAnswered = (res: Answer | null) => {
-    if (res && !res.success && res.error === NOTES_CHANGED) notesStale.current = true;
+    if (res && !res.success && res.error === NOTES_CHANGED) setNotesStale(true);
   };
+  const [notesSeen, setNotesSeen] = useState(server);
+  const [theirNotes, setTheirNotes] = useState<{ text: string } | null>(null);
+  if (notesSeen !== server) {
+    setNotesSeen(server);
+    if (notesStale && server && server.id === (activeSession ?? paused)?.id) {
+      const theirs = server.notes ?? "";
+      setNotesStale(false);
+      setTheirNotes({ text: theirs });
+      if (theirs) setSessionNotes((typed) => (typed.includes(theirs) ? typed : typed ? `${theirs} ${typed}` : theirs));
+    }
+  }
   useEffect(() => {
-    if (!notesStale.current || !server || server.id !== live.current?.id) return;
-    notesStale.current = false;
-    savedNotes.current = server.notes ?? "";
-  }, [server]);
+    if (theirNotes) savedNotes.current = theirNotes.text;
+  }, [theirNotes]);
 
   const dropSet = (id: string) => setOpen((prev) => prev && { ...prev, sets: prev.sets.filter((s) => s.id !== id) });
   const putBackSet = (set: WorkoutSetData) => {

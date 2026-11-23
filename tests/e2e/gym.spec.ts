@@ -1098,8 +1098,9 @@ test("a workout finished on another device before the first refresh after Start 
   }
 });
 
-// D-040: notes changed on another page refuse this page's save; the next save changes the server's notes and keeps the typed text.
-test("notes refused because another page changed them are saved on the next try, with the text typed here", async ({ signedInPage: page }) => {
+// D-040, D-047: notes changed on another page refuse this page's save; the field then shows the server's notes and the
+// text typed here (a space between them, as the field is one line), and the next save keeps both.
+test("notes refused because another page changed them show the other page's notes before the text typed here, and the next try saves both", async ({ signedInPage: page }) => {
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
@@ -1118,6 +1119,7 @@ test("notes refused because another page changed them are saved on the next try,
   // The refresh after the refusal brings the server's notes; React commits it a few tasks after its response.
   await refreshesDone(page);
   await page.evaluate(headIsQuiet);
+  await expect(notes(page)).toHaveValue("From the other page From this page");
   // Only a workout that ended elsewhere leaves the screen on a refusal (D-039): this one stays in hand.
   await expect(page.getByRole("timer", { name: "Workout time" })).toBeVisible();
   await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toHaveCount(0);
@@ -1125,7 +1127,7 @@ test("notes refused because another page changed them are saved on the next try,
   await expect(banner(page)).toBeVisible();
   const userId = await signedInUserId(page);
   const { rows } = await asOwner((admin) => admin.query("SELECT notes FROM workout_sessions WHERE user_id = $1", [userId]));
-  expect(rows).toEqual([{ notes: "From this page" }]);
+  expect(rows).toEqual([{ notes: "From the other page From this page" }]);
 });
 
 // D-046: a refused Undo of "Saved the notes" takes the server's notes as the next save's start, as a refused save does.
