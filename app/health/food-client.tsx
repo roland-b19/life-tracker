@@ -699,12 +699,23 @@ export function FoodClient({
         </Card>
       )}
 
+      {/* Opened again while its add is out, also after the page was left, it waits for that add with the amounts it sent,
+          so a second Save cannot add the meal again (D-047). A fresh opening keeps what was typed. */}
       <FormModal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
         title="New meal"
         onSubmit={handleLogMeal}
         error={errorMsg}
+        keepsOpening
+        snapshot={() => ({ calories: mealCalories, protein: mealProtein, carbs: mealCarbs, fat: mealFat })}
+        onOpen={(sent) => {
+          if (!sent) return;
+          setMealCalories(sent.calories);
+          setMealProtein(sent.protein);
+          setMealCarbs(sent.carbs);
+          setMealFat(sent.fat);
+        }}
         canSubmit={mealHasValue(entered)}
       >
         <FieldPair>

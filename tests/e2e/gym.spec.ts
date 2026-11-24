@@ -736,6 +736,155 @@ test("the custom exercise form opened again after another exercise's save still 
   expect(rows.map((r) => r.name)).toEqual([aNew, bNew].sort());
 });
 
+// Cancel or Escape while the day's save is out only closes the editor, as in every other form (D-047): the save goes on,
+// and its answer shows as a toast. Before, Cancel also deleted the exercises created in this opening, which the save puts
+// in the routine, and Escape said "Changes discarded" about changes being saved.
+test("Cancel or Escape while the day's save is out only closes the editor, and the save's answer shows as a toast [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const name = exerciseName();
+  await openGym(page);
+  let editor = await openEditor(page);
+  await createExercise(page, editor, name, 8);
+  const writes = countWrites(page);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await refreshesDone(page);
+  expect(writes).toHaveLength(1);
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+  await expect(mine(page).getByText(name, { exact: true })).toBeVisible();
+  await openGym(page);
+  await pickDay(page, DAY);
+  await expect(page.getByRole("region", { name: DAY }).getByText(`8. ${name}`, { exact: true })).toBeVisible();
+});
+
+// Holds the page's refreshes (D-034) until the function it answers is called, which lets them through and waits for them.
+async function holdRefreshes(page: Page) {
+  let open = () => {};
+  const held = new Promise<void>((resolve) => (open = resolve));
+  const path = new URL(page.url()).pathname;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      if (!isRefresh(page, route.request())) return route.fallback();
+      await held;
+      await route.fallback();
+    },
+  );
+  return async () => {
+    open();
+    await refreshesDone(page);
+  };
+}
+
+// A form opened again after its save answered, before the refresh brings the saved data (D-034), starts from what the
+// save sent (D-047). Before, it showed the values from before the save, and its Save would have undone the save.
+test("the day editor, deload and custom exercise forms opened again before the refresh after a save show what was saved [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const [old, renamed] = [exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [old]);
+  await refreshesDone(page);
+
+  let release = await holdRefreshes(page);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+  await release();
+
+  release = await holdRefreshes(page);
+  const thisWeek = weekStart(toISODate());
+  const edit = page.getByRole("button", { name: "Edit deload weeks" });
+  const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+  await edit.click();
+  await dialog.getByLabel("Last deload").selectOption(thisWeek);
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"last":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await edit.click();
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await release();
+
+  release = await holdRefreshes(page);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  await mine(page).getByRole("button", { name: `Edit ${old}` }).click();
+  await field.fill(renamed);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${renamed}"`);
+  await expect(form).toBeHidden();
+  // The list still has the old name until the refresh.
+  await mine(page).getByRole("button", { name: `Edit ${old}` }).click();
+  await expect(field).toHaveValue(renamed);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release();
+  await expect(mine(page).getByText(renamed, { exact: true })).toBeVisible();
+});
+
+// The custom exercise form's held save is kept for the tab's life, not the page's (D-047): after the page was left and
+// opened again through the app's links (each tap lets through after 10 s of the page's clock while a write is out,
+// D-034), the exercise's form waits with the name it sent until the answer, and a Save after that keeps the rename.
+// Before, the form opened again with the old name, and its Save undid the rename.
+test("the custom exercise form opened again after leaving the page while its save is out waits with what it sent [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const [name, renamed] = [exerciseName(), exerciseName()];
+  await page.clock.install();
+  await openGym(page);
+  await customExercises(page, [name]);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  const writes = countWrites(page, `"name":"${renamed}"`);
+  const release = await holdWrites(page, `"name":"${renamed}"`);
+  await mine(page).getByRole("button", { name: `Edit ${name}` }).click();
+  await field.fill(renamed);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await nav.getByRole("link", { name: "Gym" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/gym$/);
+  await mine(page).getByRole("button", { name: `Edit ${name}` }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(renamed);
+  await andSettle(page, () => release(), `"name":"${renamed}"`);
+  await expect(toast(page, `Saved "${renamed}"`)).toBeVisible();
+  await expect(field).toHaveValue(renamed);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${renamed}"`);
+  await expect(form).toBeHidden();
+  expect(writes).toHaveLength(2);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) => admin.query("SELECT name FROM exercises WHERE user_id = $1 AND name = ANY($2)", [userId, [name, renamed]]));
+  expect(rows.map((r: { name: string }) => r.name)).toEqual([renamed]);
+});
+
 // "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
 // Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
 // in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a
