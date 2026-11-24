@@ -1,6 +1,6 @@
 ---
 summary: Where the project stands: roadmap, work in progress, next steps, open questions and tracked migrations.
-last_verified: 2026-11-23
+last_verified: 2026-11-24
 ---
 
 # Status
@@ -30,18 +30,16 @@ last_verified: 2026-11-23
 - Color palette: steps 2–8, 11 and 12 built (tokens, light scans, surfaces, neutral small buttons, numerals, the Appearance switch, icons, docs), plus the owner's changes after trying it (D-025, D-026 and D-028: no navigation dot, the tab bar in the segmented colors swapped with the thumb's shadow, a fixed glow, a fade between modes, opaque secondary buttons, the app opening on Tasks), the data export, which froze the iPhone app, removed (D-027, D-028), and the owner's per-page round (D-029: one turquoise glow, card edges on buttons and page-level tabs, category boxes, Wishlist, Tasks and Health fixes) and the owner's general round (D-030: one raised look for every button, card and tab, one set of in-card gaps on every page, the Tasks ring centered on the card, no Health section icons) and the owner's Gym round (D-031: only actionable controls raised, Gym layout fixes, the workout timer counting while the app is closed) and its follow-ups (D-032: the sign-in glow on iOS 26, Log set at rest, the muscle map's day lines, one detail style); merged into `main` at the owner's word before steps 9 and 10, which wait on the owner's iOS status bar check (`statusBarStyle` stays `black-translucent` until then).
 
 ## Next steps
-1. The owner's final aesthetics run over the whole app (round 1: D-033), then a full functionality run, page by page: the owner lists what to fix or check on each page.
-2. Color palette steps 9 and 10: the owner's iOS status bar check, then keep `black-translucent` or switch to `default`.
-3. The functional audit's fixes (2026-11-20, D-034 to D-042): [plan](plans/audit-fixes.md), approved 2026-11-20; parts M, A to E and the leftovers F1 to F3 merged (#169 to #178), M run on live; the owner's round on the last leftovers (D-047) is built and verified on one integration branch, in its PR; open: the owner's iPhone edge-swipe check and their final round; accepted edges in D-045, D-046 and D-047.
-4. Two e2e loose ends seen under load, not caused by a change: an ECONNRESET in the spec helper `signedInUserId` (`tests/e2e/helpers.ts`), and the Gym page's main thread stalled for about 14 s after a refresh.
-5. `updateWishlistItem` parses its input twice (the action and `src/lib`); drop one parse.
-6. Gym day editor: Cancel and Escape still work while a day save is out; after Cancel the day is saved anyway, and Escape shows a misleading "Changes discarded" (seen in the review of the D-047 round; it predates it).
-7. Health meal form: reopened and saved again before the first save answers, it adds the same meal twice (predates D-047).
-8. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
-9. Reopening a form after its save succeeded but before the D-034 refresh lands (about 600 ms) shows the old values: custom exercise, day editor, deload (predates D-047).
-10. FormModal forgets a held save when the page is left and opened again while it is out (`app/components/blocks.tsx`): a Save then could undo a rename.
-11. `write()` in `app/gym/use-workout.ts` no longer turns a throw from its own follow-up code (not the action) into "Failed to …"; the notes-merge prefix there reads oddly.
-12. The e2e log shows next-auth `client_fetch_error` lines from aborted session fetches; harmless, worth silencing.
+1. Close the color palette and audit-fixes plans: every owner check is done (2026-11-24: the edge swipe works, the status bar reads well in both modes so `black-translucent` stays, the aesthetics and functionality runs are fine; small fixes come ad hoc). The palette's remaining done criteria are checked by this round's final verify.
+2. Two e2e loose ends seen under load, not caused by a change: an ECONNRESET in the spec helper `signedInUserId` (`tests/e2e/helpers.ts`), and the Gym page's main thread stalled for about 14 s after a refresh.
+3. `updateWishlistItem` parses its input twice (the action and `src/lib`); drop one parse.
+4. Gym day editor: Cancel and Escape still work while a day save is out; after Cancel the day is saved anyway, and Escape shows a misleading "Changes discarded" (seen in the review of the D-047 round; it predates it).
+5. Health meal form: reopened and saved again before the first save answers, it adds the same meal twice (predates D-047).
+6. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
+7. Reopening a form after its save succeeded but before the D-034 refresh lands (about 600 ms) shows the old values: custom exercise, day editor, deload (predates D-047).
+8. FormModal forgets a held save when the page is left and opened again while it is out (`app/components/blocks.tsx`): a Save then could undo a rename.
+9. `write()` in `app/gym/use-workout.ts` no longer turns a throw from its own follow-up code (not the action) into "Failed to …"; the notes-merge prefix there reads oddly.
+10. The e2e log shows next-auth `client_fetch_error` lines from aborted session fetches; harmless, worth silencing.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
@@ -51,6 +49,7 @@ Each needs its own plan (golden rule 6) when the owner picks it up.
 - Animations.
 - New features (each with its plan, in its own session).
 - Data storage: the database, backups, limits and what stays on the device.
+- Rotate the Neon database password (the owner deferred it, 2026-11-24).
 
 ## Open questions
 None open: the owner's round settled the audit leftovers (D-047), including the theme toast's `touches`, the two More forms and the recipe tables.

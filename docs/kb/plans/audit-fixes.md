@@ -1,6 +1,6 @@
 ---
 summary: Plan for the functional audit's fixes: every finding the owner chose to fix, plus open copies kept in sync, the midnight rollover and no swipe navigation.
-last_verified: 2026-11-22
+last_verified: 2026-11-24
 ---
 
 # Plan: audit fixes
@@ -17,14 +17,14 @@ The findings' IDs (GYMA-01, X-STALE, ...) come from the owner's private audit re
 ## Done criteria
 - [x] A save in one tab shows in a second tab of the same browser within 2 s, and in another browser within 60 s or on focus — checked by `tests/e2e/app-shell.spec.ts` (two pages, one context; a second context with focus).
 - [x] When the browser clock passes 00:00 `Europe/Bucharest`, an open page refreshes once by itself (no reload, no click), and the server's day logic gives the new day for a time after midnight while a workout started before midnight keeps its start day — checked by `tests/e2e/app-shell.spec.ts` (Playwright `page.clock`, asserting the refresh request), `tests/day-watch.test.ts` and `tests/gym.test.ts` (`vi.setSystemTime`). The server gets no clock override.
-- [ ] Moving through the tab bar and the More menu leaves `history.length` unchanged, and a `touchstart` within 20px of either edge is cancelled — checked by `tests/e2e/navigation.spec.ts`; the owner tries an edge swipe on the iPhone app.
+- [x] Moving through the tab bar and the More menu leaves `history.length` unchanged, and a `touchstart` within 20px of either edge is cancelled — checked by `tests/e2e/navigation.spec.ts`; the owner tried an edge swipe on the iPhone app and it works (2026-11-24).
 - [x] Every number reads `1.500,5`, typing `1500.5` or `1500,5` gives `1.500,5`, and a letter shows an error and stays in the field — checked by `tests/number-format.test.ts` and the area specs.
 - [x] Every finding named in a step has a unit test or an e2e assertion for its fixed behavior in that step's `tests:` — checked by each part's PR proof table, one row per finding ID.
 - [x] Each new or changed action refuses another user and a signed-out caller with `{ success: false, error }`, never a 500 — checked by the area test files and `tests/actions-anonymous.test.ts`; after part E, no action calls `requireUser()` outside `respond` (a `grep` in step 21).
 - [x] Signing out on one device leaves another device signed in, and a request with the signed-out token is refused — checked by `tests/auth-guard.test.ts`.
 - [x] Query budgets hold: `/gym` 14, `/health` 13, `/todos` 12, `/wishlist` 4, `loadTodosViewAction` 13 — checked by `tests/query-count.test.ts`. Since D-047 `loadTodosViewAction` and its budget are gone (Tasks no longer reloads its list).
 - [x] `npm run check` and `npm run e2e` pass; CI is green on every part's PR.
-- [ ] Every build agent's work is checked, as soon as that agent finishes, by a fresh verify agent (no build context) that walks a checklist for that agent's steps in the browser on local test users and finds no open item — checked by its report, read by the owner. This session writes each checklist from the steps and the private report (what to open, type and see, and what to check in the test database) and keeps it in the session's notes folder outside the repo, since it quotes the report.
+- [x] Every build agent's work is checked, as soon as that agent finishes, by a fresh verify agent (no build context) that walks a checklist for that agent's steps in the browser on local test users and finds no open item — checked by its report, read by the owner. This session writes each checklist from the steps and the private report (what to open, type and see, and what to check in the test database) and keeps it in the session's notes folder outside the repo, since it quotes the report.
 
 ## Decisions
 - D-034: open copies stay in sync; the day rolls over at midnight
