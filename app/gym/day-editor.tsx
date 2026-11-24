@@ -16,9 +16,9 @@ import { addCustomExerciseAction, deleteCustomExerciseAction, restoreCustomExerc
 
 const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 
-/** The days' routine as the server stores it: whole numbers, none for a rest day. */
-const toRows = (day: Pick<SplitDay, "isRest" | "exercises">) =>
-  day.isRest ? [] : day.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: x.targetSets, minReps: x.minReps, maxReps: x.maxReps }));
+/** A draft's routine as the server takes it: numbers. */
+const toRows = (draft: DayDraft) =>
+  draft.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: Number(x.targetSets), minReps: Number(x.minReps), maxReps: Number(x.maxReps) }));
 
 /** The form's copy of a saved day. */
 const toDraft = (day: SplitDay): DayDraft => ({
@@ -67,11 +67,12 @@ export interface DiscardedEdit {
 
 /**
  * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
- * arrow keys to reorder, new exercise). Mounted for as long as the page shows the day, so its form keeps its opening
- * while its save is out (D-047): opened again before the answer, it waits for that save with the day it sent, as a fresh
- * opening would show the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
- * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
- * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
+ * arrow keys to reorder, new exercise). Its form keeps its opening while its save is out (D-047): opened again before
+ * the answer, also after the page was left, it waits for that save with the day it sent, as a fresh opening would show
+ * the day from before it and its Save would undo it. Each new opening starts from the day as saved (what the last save
+ * sent, until the refresh brings it), or from `resume`. Cancel discards on purpose and deletes the exercises created
+ * here; Escape, a click outside or the close button discards with "Changes discarded" and an Undo that reopens it with
+ * the edits (D-039). Left while its save is out, it only closes: the save goes on, so nothing is discarded.
  */
 export function DayEditor({
   isOpen,
@@ -128,10 +129,15 @@ export function DayEditor({
   // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
   // disables and labels, never the guard). It belongs to one opening: a new opening starts without it.
   const [creating, setCreating] = useState(false);
-  // Each new opening starts from the day as saved, or from `resume`; the form runs this only for a new opening, so one
-  // opened again while its save is out shows the day it sent.
-  function start() {
-    setDraft(resume?.draft ?? toDraft(day));
+  // The day as this opening found it saved: what its Save's Undo writes back and its edits are compared with. A save
+  // that succeeded is the day as saved until the refresh brings it (`saved`).
+  const [base, setBase] = useState<DayDraft | null>(null);
+  const saved = base ?? toDraft(day);
+  // Each new opening starts from the day as saved, or from `resume`; one opened again while its save is out shows the
+  // day it sent.
+  function start(sent?: DayDraft, done?: boolean) {
+    setBase(done && sent ? sent : null);
+    setDraft(resume?.draft ?? sent ?? toDraft(day));
     setCreated(resume?.created ?? []);
     setSeen(names());
     setErrorMsg("");
@@ -148,14 +154,9 @@ export function DayEditor({
     setShowCustom(true);
   }
 
-  // Cancel runs `cancel` and then `close`, like Escape, a click outside and the close button; this tells `close` the
-  // exercises are being dealt with, so it does not also offer the discarded changes back.
-  const cancelled = useRef(false);
-
-  function close() {
-    onClose();
-    if (cancelled.current) return void (cancelled.current = false);
-    if (JSON.stringify(draft) === JSON.stringify(toDraft(day))) return;
+  // Escape, a click outside or the close button, with no save out: the edits can come back with Undo.
+  function discarded() {
+    if (JSON.stringify(draft) === JSON.stringify(saved)) return;
     const kept = { draft, created };
     showToast({
       message: "Changes discarded",
@@ -170,7 +171,6 @@ export function DayEditor({
 
   // Cancel deletes the exercises created in this session (only those), with an Undo that brings them back.
   async function cancel() {
-    cancelled.current = true;
     if (!created.length) return;
     const answers = await Promise.all(created.map((x) => deleteCustomExerciseAction(x.id).catch(() => null)));
     const gone = created.filter((_, i) => answers[i]?.success);
@@ -203,14 +203,9 @@ export function DayEditor({
     setAddId("");
   }
 
-  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
+  async function save(e: React.FormEvent, { stillOpen, saved: succeeded }: FormOpening) {
     e.preventDefault();
-    const rows = draft.exercises.map((x) => ({
-      exerciseId: x.exerciseId,
-      targetSets: Number(x.targetSets),
-      minReps: Number(x.minReps),
-      maxReps: Number(x.maxReps),
-    }));
+    const rows = toRows(draft);
     const problem = dayProblem(draft.name, rows, nameOf);
     if (problem) {
       setErrorMsg(problem);
@@ -219,19 +214,21 @@ export function DayEditor({
     setErrorMsg("");
     // A refusal shows in the editor while it is on screen, else as a toast.
     const refused = refusal(stillOpen, setErrorMsg, warn);
+    const before = saved;
     const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows }).catch(() => null);
     // The editor stays open with the day as it was typed, so nothing is lost.
     if (!res?.success) return refused(res?.error ?? "Failed to save day");
+    succeeded();
     if (stillOpen()) onClose();
     showToast({
       message: `Saved "${draft.name.trim()}"`,
       type: "success",
       // The day's row and its routine rows.
       touches: [`workout_split_days:${day.id}`],
-      // Writes the old day back; the server refresh brings it to the list.
+      // Writes back the day as this opening found it saved; the server refresh brings it to the list.
       onUndo: undoWith(
         showToast,
-        () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }),
+        () => saveSplitDayAction({ id: before.id, name: before.name, isRest: before.isRest, exercises: before.isRest ? [] : toRows(before) }),
         (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
@@ -286,9 +283,11 @@ export function DayEditor({
   return (
     <FormModal
       isOpen={isOpen}
-      onClose={close}
-      onCancel={() => void cancel()}
+      onClose={onClose}
+      onDiscard={(how) => (how === "cancel" ? void cancel() : discarded())}
       keepsOpening
+      snapshot={() => draft}
+      data={day}
       onOpen={start}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
