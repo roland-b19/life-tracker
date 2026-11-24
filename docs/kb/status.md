@@ -30,15 +30,13 @@ last_verified: 2026-11-24
 - Color palette: steps 2–8, 11 and 12 built (tokens, light scans, surfaces, neutral small buttons, numerals, the Appearance switch, icons, docs), plus the owner's changes after trying it (D-025, D-026 and D-028: no navigation dot, the tab bar in the segmented colors swapped with the thumb's shadow, a fixed glow, a fade between modes, opaque secondary buttons, the app opening on Tasks), the data export, which froze the iPhone app, removed (D-027, D-028), and the owner's per-page round (D-029: one turquoise glow, card edges on buttons and page-level tabs, category boxes, Wishlist, Tasks and Health fixes) and the owner's general round (D-030: one raised look for every button, card and tab, one set of in-card gaps on every page, the Tasks ring centered on the card, no Health section icons) and the owner's Gym round (D-031: only actionable controls raised, Gym layout fixes, the workout timer counting while the app is closed) and its follow-ups (D-032: the sign-in glow on iOS 26, Log set at rest, the muscle map's day lines, one detail style); merged into `main` at the owner's word before steps 9 and 10, which wait on the owner's iOS status bar check (`statusBarStyle` stays `black-translucent` until then).
 
 ## Next steps
+The owner stopped the round here (2026-11-24): P and Q are merged into `chore/audit-edges`; what follows waits for their word.
 1. Close the color palette and audit-fixes plans: every owner check is done (2026-11-24: the edge swipe works, the status bar reads well in both modes so `black-translucent` stays, the aesthetics and functionality runs are fine; small fixes come ad hoc). The palette's remaining done criteria are checked by this round's final verify.
-2. Two e2e loose ends seen under load, not caused by a change: an ECONNRESET in the spec helper `signedInUserId` (`tests/e2e/helpers.ts`), and the Gym page's main thread stalled for about 14 s after a refresh.
-3. `updateWishlistItem` parses its input twice (the action and `src/lib`); drop one parse.
-4. Gym day editor: Cancel and Escape still work while a day save is out; after Cancel the day is saved anyway, and Escape shows a misleading "Changes discarded" (seen in the review of the D-047 round; it predates it).
-5. Health meal form: reopened and saved again before the first save answers, it adds the same meal twice (predates D-047).
-6. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
-7. Reopening a form after its save succeeded but before the D-034 refresh lands (about 600 ms) shows the old values: custom exercise, day editor, deload (predates D-047).
-8. FormModal forgets a held save when the page is left and opened again while it is out (`app/components/blocks.tsx`): a Save then could undo a rename.
-9. `write()` in `app/gym/use-workout.ts` no longer turns a throw from its own follow-up code (not the action) into "Failed to …"; the notes-merge prefix there reads oddly.
+2. Cleanups listed by the D-047 round's simplify review, not done (over the round's cap): `ToastProvider` could await `saved` before an Undo, so the 7 Undo bodies that do it drop their first line; one `valuesOf(obj, keys)` helper for the hand-built old values (food goals, todos, wishlist Undo); the day editor's picker lists computed while closed.
+3. Gym day editor: while a save is out, the drag handles still reorder rows with a mouse (Chromium sends pointer events to the disabled button; `useDragSort` in `app/components/lists.tsx`, `DragHandle`); the reorder is dropped silently when the save answers. Predates D-047; iOS touch not checked.
+4. Then the final verify of `chore/audit-edges` and its PR to `main`.
+
+Known, not a bug: under heavy e2e load the Gym page's main thread can stall while headless Chromium's software GL (SwiftShader) reads back the muscle map's WebGL draws. It now draws 2 times on load, not 5 (longest task about 2850 → 1140 ms with 4 workers); real devices composite on the GPU and do no readback.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
