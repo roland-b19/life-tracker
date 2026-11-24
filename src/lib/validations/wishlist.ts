@@ -40,6 +40,6 @@ export const restoreWishlistItemSchema = wishlistFields.extend({
   createdAt: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 60_000, FUTURE_DATE),
 });
 
-export type AddWishlistItemInput = z.input<typeof addWishlistItemSchema>;
+export type AddWishlistItemInput = z.infer<typeof addWishlistItemSchema>;
 export type UpdateWishlistItemInput = z.infer<typeof updateWishlistItemSchema>;
-export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;
+export type RestoreWishlistItemInput = z.infer<typeof restoreWishlistItemSchema>;
