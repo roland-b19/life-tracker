@@ -20,6 +20,7 @@ import {
   installStoppedClock,
   isRefresh,
   newDevice,
+  onNewConnection,
   pauseClock,
   refreshesDone,
   settled,
@@ -1349,10 +1350,12 @@ async function holdRefreshAfterCancel(page: Page) {
     async (route) => {
       if (stale || !isRefresh(page, route.request())) return route.fallback();
       stale = route.request();
-      const answer = await route.fetch();
-      done();
-      await held;
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(stale!);
+        done();
+        await held;
+        await route.fulfill({ response: answer });
+      });
     },
   );
   return { rendered, release, stale: () => stale! };
@@ -1448,9 +1451,11 @@ test("a refresh rendered before Start and answered after it, offline since, leav
     async (route) => {
       if (answered || route.request().method() !== "POST") return route.fallback();
       answered = true;
-      const answer = await route.fetch();
-      await page.context().setOffline(true);
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(route.request());
+        await page.context().setOffline(true);
+        await route.fulfill({ response: answer });
+      });
     },
   );
   await startWorkout(page, DAY);
@@ -1833,11 +1838,13 @@ test("a set log whose answer the page cannot read says it failed, and the workou
   await page.route("**/gym", async (route) => {
     const body = route.request().postData() ?? "";
     if (route.request().method() !== "POST" || !body.includes('"sessionId"') || !body.includes('"reps"')) return route.fallback();
-    const answer = await route.fetch();
-    const text = (await answer.text()).replace('"set":', '"unread":');
-    // The body is read decoded and changed, so its length and encoding headers no longer apply.
-    const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-    await route.fulfill({ response: answer, body: text, headers });
+    await onNewConnection(page, async (api) => {
+      const answer = await api.fetch(route.request());
+      const text = (await answer.text()).replace('"set":', '"unread":');
+      // The body is read decoded and changed, so its length and encoding headers no longer apply.
+      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
+      await route.fulfill({ response: answer, body: text, headers });
+    });
   });
   await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await page.getByLabel("Value").fill("60");
@@ -2044,11 +2051,13 @@ test("Start shows the day of the server's answer, not the day that was tapped", 
   await page.route("**/gym", async (route) => {
     const body = route.request().postData() ?? "";
     if (route.request().method() !== "POST" || !body.includes('"splitDayId"') || !body.includes('"isDeload"')) return route.fallback();
-    const answer = await route.fetch();
-    const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
-    // The body is read decoded and changed, so its length and encoding headers no longer apply.
-    const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-    await route.fulfill({ response: answer, body: text, headers });
+    await onNewConnection(page, async (api) => {
+      const answer = await api.fetch(route.request());
+      const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
+      // The body is read decoded and changed, so its length and encoding headers no longer apply.
+      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
+      await route.fulfill({ response: answer, body: text, headers });
+    });
   });
   await pickDay(page, DAY);
   await startWorkout(page, DAY);

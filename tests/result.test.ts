@@ -148,3 +148,12 @@ it("opens another browser context in the e2e specs only through newDevice (tests
   expect(specs.length).toBeGreaterThan(5);
   expect(specs.filter(([, text]) => /\bbrowser\.newContex[t]\(/.test(text)).map(([file]) => file)).toEqual(["./e2e/helpers.ts"]);
 });
+
+// One way for a browser spec to send a request itself: onNewConnection (tests/e2e/helpers.ts), a request context of its
+// own, so no request reuses a connection the dev server may have closed. The brackets keep these lines out.
+it("sends a spec's own requests in the e2e specs only through onNewConnection (tests/e2e/helpers.ts)", () => {
+  const specs = Object.entries(tests).filter(([file]) => file.startsWith("./e2e/"));
+  expect(specs.length).toBeGreaterThan(5);
+  expect(specs.filter(([, text]) => /\.reques[t]\.(get|post|put|patch|delete|head|fetch)\(|\broute\.fetc[h]\(/.test(text)).map(([file]) => file)).toEqual([]);
+  expect(specs.filter(([, text]) => /\brequests?\.newContex[t]\(/.test(text)).map(([file]) => file)).toEqual(["./e2e/helpers.ts"]);
+});

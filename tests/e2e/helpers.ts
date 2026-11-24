@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, request as requests, test as base, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
+import { expect, request as requests, test as base, type APIRequestContext, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
 // After a server action answers HTTP 2xx the app refreshes the router 600 ms after the last answer, and it also
@@ -288,7 +288,7 @@ export async function loseAnswerOnce(page: Page, marker: string) {
       const body = request.postData() ?? "";
       if (sent || !isWrite(request, marker)) return route.fallback();
       sent = body;
-      await route.fetch();
+      await onNewConnection(page, (api) => api.fetch(request));
       await route.abort();
     },
   );
@@ -415,18 +415,26 @@ export async function devUserCount(...names: string[]) {
 }
 
 /**
- * The signed-in user's id, from the session the page has, for the SQL that checks or seeds their rows. It asks on a new
- * connection, from a request context of its own with the page's cookies. `page.request` keeps its connection open
- * between calls, and the dev server closes one idle for 5 s (Node's keepAliveTimeout). A request sent on it a few
+ * Runs `send` with a request context of its own holding the page's cookies, and disposes it afterwards, also when `send`
+ * throws: the one way a spec sends a request itself (sign-in, a check, a route's request sent on to the server). Each
+ * context opens a new connection. A context kept between requests (`page.request`, which a route's `fetch()` also sends on)
+ * reuses its connection, and the dev server closes one idle for 5 s (Node's keepAliveTimeout). A request sent on it a few
  * seconds after the last one, while the server's event loop is busy (other workers' pages, a compile), reaches the
- * server after that timeout has fired: the server drops the connection and the call fails with ECONNRESET.
+ * server after that timeout has fired: the server drops the connection and the request fails with ECONNRESET.
  */
-export async function signedInUserId(page: Page) {
+export async function onNewConnection<T>(page: Page, send: (api: APIRequestContext) => Promise<T>) {
   const cookies = await page.context().cookies();
   const api = await requests.newContext({ baseURL: base.info().project.use.baseURL, storageState: { cookies, origins: [] } });
-  const { user } = await (await api.get("/api/auth/session")).json();
-  await api.dispose();
-  return user.id as string;
+  try {
+    return await send(api);
+  } finally {
+    await api.dispose();
+  }
+}
+
+/** The signed-in user's id, from the session the page has, for the SQL that checks or seeds their rows. */
+export function signedInUserId(page: Page) {
+  return onNewConnection(page, async (api) => (await (await api.get("/api/auth/session")).json()).user.id as string);
 }
 
 /**
@@ -465,12 +473,15 @@ export async function signInThroughForm(page: Page, path: string, landed: (page:
 
 async function signIn(page: Page, name: string) {
   // Sign in through NextAuth's own endpoints instead of the form: faster, and the form itself is tested in
-  // navigation.spec.ts. The request context shares its cookie jar with the page.
-  const { csrfToken } = await (await page.request.get("/api/auth/csrf")).json();
-  const response = await page.request.post("/api/auth/callback/credentials", {
-    form: { csrfToken, name, json: "true" },
+  // navigation.spec.ts. The session cookie the answer sets goes to the page.
+  await onNewConnection(page, async (api) => {
+    const { csrfToken } = await (await api.get("/api/auth/csrf")).json();
+    const response = await api.post("/api/auth/callback/credentials", {
+      form: { csrfToken, name, json: "true" },
+    });
+    expect(response.ok()).toBe(true);
+    await page.context().addCookies((await api.storageState()).cookies);
   });
-  expect(response.ok()).toBe(true);
   // Without a session the next page would bounce back to /signin.
   await page.goto("/health");
   await expect(page).toHaveURL(/\/health$/);
