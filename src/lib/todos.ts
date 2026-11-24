@@ -8,7 +8,6 @@ import {
   AddTodoInput,
   PushSubscriptionInput,
   RestoreTodoInput,
-  restoreTodoSchema,
   TodoSpace,
   ToggleTodoInput,
   UpdateTodoInput,
@@ -174,8 +173,7 @@ export async function addTodo(userId: string, input: AddTodoInput & { id?: strin
 }
 
 /** Puts a deleted task back as it was. An id that is already taken is left alone and returns null. */
-export async function restoreTodo(userId: string, rawInput: RestoreTodoInput): Promise<TodoItem | null> {
-  const input = restoreTodoSchema.parse(rawInput);
+export async function restoreTodo(userId: string, input: RestoreTodoInput): Promise<TodoItem | null> {
   const [restored] = await db
     .insert(todos)
     .values({

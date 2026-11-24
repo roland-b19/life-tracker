@@ -4,11 +4,8 @@ import { wishlistItems } from "@/db/schema";
 import { ensureCategory } from "./categories";
 import {
   AddWishlistItemInput,
-  addWishlistItemSchema,
   RestoreWishlistItemInput,
-  restoreWishlistItemSchema,
   UpdateWishlistItemInput,
-  updateWishlistItemSchema,
 } from "./validations/wishlist";
 import { priorityForPrice } from "./rules";
 
@@ -49,30 +46,28 @@ export async function getWishlist(userId: string): Promise<WishlistItemData[]> {
  */
 export async function addWishlistItem(
   userId: string,
-  rawInput: AddWishlistItemInput,
+  input: AddWishlistItemInput,
 ): Promise<{ item: WishlistItemData | null; repeated: boolean }> {
-  const validated = addWishlistItemSchema.parse(rawInput);
-
   const [item] = await db
     .insert(wishlistItems)
     .values({
-      id: validated.id,
+      id: input.id,
       userId,
-      name: validated.name,
-      url: validated.url || null,
-      estimatedPrice: String(validated.estimatedPrice),
-      priority: priorityForPrice(validated.estimatedPrice),
-      category: validated.category,
+      name: input.name,
+      url: input.url || null,
+      estimatedPrice: String(input.estimatedPrice),
+      priority: priorityForPrice(input.estimatedPrice),
+      category: input.category,
     })
     .onConflictDoNothing()
     .returning(wishlistColumns);
 
   if (item) {
-    await ensureCategory(userId, "wishlist", validated.category);
+    await ensureCategory(userId, "wishlist", input.category);
     return { item: item as WishlistItemData, repeated: false };
   }
-  if (!validated.id) return { item: null, repeated: false };
-  const own = await findWishlistItem(userId, validated.id);
+  if (!input.id) return { item: null, repeated: false };
+  const own = await findWishlistItem(userId, input.id);
   return { item: own, repeated: own !== null };
 }
 
@@ -91,26 +86,24 @@ async function findWishlistItem(userId: string, itemId: string): Promise<Wishlis
  */
 export async function restoreWishlistItem(
   userId: string,
-  rawInput: RestoreWishlistItemInput,
+  input: RestoreWishlistItemInput,
 ): Promise<WishlistItemData | null> {
-  const validated = restoreWishlistItemSchema.parse(rawInput);
-
   const [item] = await db
     .insert(wishlistItems)
     .values({
-      id: validated.id,
+      id: input.id,
       userId,
-      name: validated.name,
-      url: validated.url || null,
-      estimatedPrice: String(validated.estimatedPrice),
-      priority: priorityForPrice(validated.estimatedPrice),
-      category: validated.category,
-      createdAt: validated.createdAt,
+      name: input.name,
+      url: input.url || null,
+      estimatedPrice: String(input.estimatedPrice),
+      priority: priorityForPrice(input.estimatedPrice),
+      category: input.category,
+      createdAt: input.createdAt,
     })
     .onConflictDoNothing()
     .returning(wishlistColumns);
 
-  if (item) await ensureCategory(userId, "wishlist", validated.category);
+  if (item) await ensureCategory(userId, "wishlist", input.category);
   return (item as WishlistItemData | undefined) ?? null;
 }
 
@@ -118,8 +111,8 @@ export async function restoreWishlistItem(
  * Edits an item in place: only the fields the edit sent (the ones it changed, D-040), so another tab's change to another
  * field stays. A new price brings its priority. Null when the item is not the user's.
  */
-export async function updateWishlistItem(userId: string, rawInput: UpdateWishlistItemInput): Promise<WishlistItemData | null> {
-  const { id: itemId, ...validated } = updateWishlistItemSchema.parse(rawInput);
+export async function updateWishlistItem(userId: string, input: UpdateWishlistItemInput): Promise<WishlistItemData | null> {
+  const { id: itemId, ...validated } = input;
   const changes = {
     ...(validated.name !== undefined && { name: validated.name }),
     ...(validated.url !== undefined && { url: validated.url || null }),

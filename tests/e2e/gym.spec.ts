@@ -20,6 +20,7 @@ import {
   installStoppedClock,
   isRefresh,
   newDevice,
+  onNewConnection,
   pauseClock,
   refreshesDone,
   settled,
@@ -1540,10 +1541,12 @@ async function holdRefreshAfterCancel(page: Page) {
     async (route) => {
       if (stale || !isRefresh(page, route.request())) return route.fallback();
       stale = route.request();
-      const answer = await route.fetch();
-      done();
-      await held;
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(stale!);
+        done();
+        await held;
+        await route.fulfill({ response: answer });
+      });
     },
   );
   return { rendered, release, stale: () => stale! };
@@ -1639,9 +1642,11 @@ test("a refresh rendered before Start and answered after it, offline since, leav
     async (route) => {
       if (answered || route.request().method() !== "POST") return route.fallback();
       answered = true;
-      const answer = await route.fetch();
-      await page.context().setOffline(true);
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(route.request());
+        await page.context().setOffline(true);
+        await route.fulfill({ response: answer });
+      });
     },
   );
   await startWorkout(page, DAY);
@@ -1816,8 +1821,8 @@ test("a second notes refusal after the merged notes were saved elsewhere does no
   await exitSaves(page, "X Mine more");
 });
 
-// The field holds the server's notes only where the merge puts them (the whole field, or its start before a space), so
-// short notes that the typed text holds elsewhere ("5" in "Bench 5x5") still come first, and the save keeps them.
+// The field holds the server's notes only as whole words, so short notes that are only part of a word ("5" in
+// "Bench 5x5") still come first, and the save keeps them.
 test("short server notes inside the typed text are still put first after a notes refusal [D-047]", async ({ signedInPage: page }) => {
   await openGym(page);
   await startWorkout(page, DAY);
@@ -1827,6 +1832,18 @@ test("short server notes inside the typed text are still put first after a notes
   await refusedNotes(page, "Bench 5x5");
   await expect(notes(page)).toHaveValue("5 Bench 5x5");
   await exitSaves(page, "5 Bench 5x5");
+});
+
+// Server notes that the typed text holds as a whole word, though not at its start, are not put first again.
+test("server notes held as a whole word inside the typed text are not doubled after a notes refusal [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await refreshesDone(page);
+  await setServerNotes(page, "squat");
+  await refusedNotes(page, "bench squat");
+  await expect(notes(page)).toHaveValue("bench squat");
+  await exitSaves(page, "bench squat");
 });
 
 // Notes the server takes as over its limit, typed past the field's own limit (an older page, a paste the field let by).
@@ -2001,6 +2018,31 @@ test("a set log whose answer is lost says it failed, and the workout's buttons w
   await expect(page.getByRole("button", { name: "Finish workout" })).toBeEnabled();
   await expect(page.getByText(SET_LINE)).toBeHidden();
   expect(await setCount(await signedInUserId(page))).toBe(0);
+});
+
+// A workout write whose code after the answer fails says so too, and the saving flag still goes off: here the set log's
+// answer is changed on its way so that it names no set.
+test("a set log whose answer the page cannot read says it failed, and the workout's buttons work again [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await page.route("**/gym", async (route) => {
+    const body = route.request().postData() ?? "";
+    if (route.request().method() !== "POST" || !body.includes('"sessionId"') || !body.includes('"reps"')) return route.fallback();
+    await onNewConnection(page, async (api) => {
+      const answer = await api.fetch(route.request());
+      const text = (await answer.text()).replace('"set":', '"unread":');
+      // The body is read decoded and changed, so its length and encoding headers no longer apply.
+      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
+      await route.fulfill({ response: answer, body: text, headers });
+    });
+  });
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+  await page.getByLabel("Value").fill("60");
+  await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click(), '"reps"');
+  await expect(toast(page, "Failed to add set")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log set" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Finish workout" })).toBeEnabled();
 });
 
 // D-046, D-047: a set already gone from the server (another device deleted it) counts as removed: the set stays off
@@ -2200,11 +2242,13 @@ test("Start shows the day of the server's answer, not the day that was tapped", 
   await page.route("**/gym", async (route) => {
     const body = route.request().postData() ?? "";
     if (route.request().method() !== "POST" || !body.includes('"splitDayId"') || !body.includes('"isDeload"')) return route.fallback();
-    const answer = await route.fetch();
-    const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
-    // The body is read decoded and changed, so its length and encoding headers no longer apply.
-    const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-    await route.fulfill({ response: answer, body: text, headers });
+    await onNewConnection(page, async (api) => {
+      const answer = await api.fetch(route.request());
+      const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
+      // The body is read decoded and changed, so its length and encoding headers no longer apply.
+      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
+      await route.fulfill({ response: answer, body: text, headers });
+    });
   });
   await pickDay(page, DAY);
   await startWorkout(page, DAY);
