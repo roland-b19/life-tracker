@@ -39,7 +39,6 @@ last_verified: 2026-11-24
 7. Reopening a form after its save succeeded but before the D-034 refresh lands (about 600 ms) shows the old values: custom exercise, day editor, deload (predates D-047).
 8. FormModal forgets a held save when the page is left and opened again while it is out (`app/components/blocks.tsx`): a Save then could undo a rename.
 9. `write()` in `app/gym/use-workout.ts` no longer turns a throw from its own follow-up code (not the action) into "Failed to …"; the notes-merge prefix there reads oddly.
-10. The e2e log shows next-auth `client_fetch_error` lines from aborted session fetches; harmless, worth silencing.
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
