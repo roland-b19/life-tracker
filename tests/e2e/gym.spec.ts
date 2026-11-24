@@ -885,6 +885,48 @@ test("the custom exercise form opened again after leaving the page while its sav
   expect(rows.map((r: { name: string }) => r.name)).toEqual([renamed]);
 });
 
+// A day save answered after the page was left and opened again, while the editor opened again waits for it and before
+// the refresh brings the saved day (D-034), leaves that opening as a save answered before would (D-047): it shows the
+// day as saved and compares its edits with it, so Escape discards nothing. Before, the opening compared with the day
+// from before the save and said "Changes discarded" about values that were saved. The page's clock stands still after
+// the return, so the refresh after the answer waits until the end.
+test("the day editor opened again after leaving the page, whose save then answers, shows the day as saved and Escape discards nothing [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await page.clock.install();
+  await openGym(page);
+  const writes = countWrites(page, `"name":"${DAY}"`);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await nav.getByRole("link", { name: "Gym" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/gym$/);
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+
+  await refreshesDone(page, { tick: 1000 });
+  expect(writes).toHaveLength(1);
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+});
+
 // "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
 // Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
 // in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a

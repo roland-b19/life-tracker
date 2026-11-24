@@ -565,7 +565,8 @@ export function FormModal<Sent = never>({
   /**
    * The server data the form opens from, for a form whose screen follows the server only on the refresh after a write
    * (D-034): after a save the handler marked `saved`, a fresh opening starts from what that save sent until this data
-   * changes, so it never shows the values from before the save.
+   * changes, so it never shows the values from before the save. A kept opening on screen whose save succeeds after the
+   * form was mounted again goes on as such a fresh opening.
    */
   data?: unknown;
   /**
@@ -605,6 +606,10 @@ export function FormModal<Sent = never>({
     if (isOpen) setCurrent(openingAfter(current.made));
   }
   const out = saves.get(key);
+  // The save of the opening on screen succeeded after the form was mounted again, so its answer could not close this
+  // opening (its `stillOpen` is the old mount's): the opening goes on as a fresh one from what was saved, as one opened
+  // after the answer would, so it shows what was saved and its edits are compared with that.
+  if (isOpen && out?.saved && out.opening === current.opening) setCurrent(openingAfter(current.made));
   const saving = isOpen && !!out && !out.saved && out.opening === current.opening;
   // The last opening `onOpen` ran for: its fields are set in the same commit, before the browser paints the form.
   const started = useRef<string | null>(null);
