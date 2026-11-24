@@ -154,12 +154,12 @@ export function useWorkout({
   // Per-exercise quick log input state
   const [inputStates, setInputStates] = useState<Record<string, SetInput>>({});
   const clock = useClock((activeSession ?? paused)?.timer);
-  // After a NOTES_CHANGED refusal, the page's next server data (every answer brings a refresh, D-034) gives the notes the
-  // next save changes from, so the device is not refused again. The field shows the server's notes, then what was typed
-  // (D-047; a space between them, as the field is one line), unless it holds them already, where this merge puts them
-  // (the whole field, or its start before a space; not anywhere inside it, so short notes such as "5" are not taken as
-  // held by "Bench 5x5"): the next save keeps the other device's notes and nothing typed is lost. As in `useServerState`, the field changes while rendering and the effect
-  // then sets what saves change from.
+  // After a NOTES_CHANGED refusal, the page's next server data holds the other device's notes (every answer brings a
+  // refresh, D-034). The next save changes from them, so it is not refused again. The field shows their notes, a space
+  // (the field is one line), then what was typed (D-047). It stays as typed when it holds their notes already, as whole
+  // words: "squat" is held by "bench squat", "5" is not held by "Bench 5x5". Either way the next save keeps their notes
+  // and loses nothing typed. As in `useServerState`, the field changes while rendering, and the effect then sets what
+  // saves change from.
   const [notesStale, setNotesStale] = useState(false);
   /** Every notes write (a save, its Undo) calls this with its answer: a NOTES_CHANGED refusal marks the notes stale. */
   const notesAnswered = (res: Answer | null) => {
@@ -173,7 +173,7 @@ export function useWorkout({
       const theirs = server.notes ?? "";
       setNotesStale(false);
       setTheirNotes({ text: theirs });
-      const holds = (typed: string) => typed === theirs || typed.startsWith(`${theirs} `);
+      const holds = (typed: string) => ` ${typed} `.includes(` ${theirs} `);
       if (theirs) setSessionNotes((typed) => (holds(typed) ? typed : typed ? `${theirs} ${typed}` : theirs));
     }
   }
@@ -195,12 +195,14 @@ export function useWorkout({
     if (dayId && days.some((d) => d.id === dayId)) selectDay(dayId);
   };
   // A write of the workout's own (Start, Pause or Resume, Finish, Exit): one at a time, with the page's saving flag.
-  const write = (run: () => Promise<void>, spot?: Element | null) =>
+  // `run` warns about its own refusals; when it throws (its code after the answer failed), `failed` is the warning.
+  // Either way the saving flag goes off, so the workout's controls work again.
+  const write = (run: () => Promise<void>, failed: string, spot?: Element | null) =>
     once(
       "workout",
       async () => {
         setBusy(true);
-        await run();
+        await run().catch(() => warn(failed));
         setBusy(false);
       },
       spot,
@@ -210,9 +212,10 @@ export function useWorkout({
   // The screen shows the workout the server answered (its day and sets), never just the day that was tapped.
   function start(day: SplitDay, spot?: Element | null) {
     if (day.isRest) return;
+    const failed = "Failed to start workout";
     write(async () => {
       const res = await addSessionAction({ id: crypto.randomUUID(), date: toISODate(), splitDayId: day.id, isDeload: isDeloadMode }).catch(() => null);
-      if (!res?.success) return warn(res?.error ?? "Failed to start workout");
+      if (!res?.success) return warn(res?.error ?? failed);
       const { session, sets, timer, from, splitDayName: name } = res;
       const started: ActiveSessionData = {
         id: session.id,
@@ -289,7 +292,7 @@ export function useWorkout({
           (back) => (back && !back.success ? back.error : "Failed to undo"),
         ),
       });
-    }, spot);
+    }, failed, spot);
   }
 
   /** The Pause and Resume button: the server stops or restarts the workout's timer, and Undo turns it back. */
@@ -302,16 +305,17 @@ export function useWorkout({
       if (res.success) setTimer(session.id, res.timer);
       return res;
     };
+    const failed = run ? "Failed to resume the timer" : "Failed to pause the timer";
     write(async () => {
       const res = await turn(run).catch(() => null);
-      if (!res?.success) return refused(session.id, res?.error ?? (run ? "Failed to resume the timer" : "Failed to pause the timer"));
+      if (!res?.success) return refused(session.id, res?.error ?? failed);
       showToast({
         message: run ? "Resumed the timer" : "Paused the timer",
         type: "success",
         touches: touchesOf(session.id),
         onUndo: undoWith(showToast, () => turn(!run)),
       });
-    }, spot);
+    }, failed, spot);
   }
 
   // The server numbers the set (D-040): two pages logging into one workout never repeat a number. The checks go back to
@@ -321,6 +325,7 @@ export function useWorkout({
     if (!session) return;
     const state = inputStates[exercise.exerciseId] || emptyInput(exercise);
     if (!canLog(state)) return; // the button stays disabled until the set is complete
+    const failed = "Failed to add set";
     write(async () => {
       // The id is made here (D-040), so a set sent twice is one set.
       const res = await addSetAction({
@@ -335,7 +340,7 @@ export function useWorkout({
         isGoodForm: state.isGoodForm,
         notes: state.notes || undefined,
       }).catch(() => null);
-      if (!res?.success) return refused(session.id, res?.error ?? "Failed to add set");
+      if (!res?.success) return refused(session.id, res?.error ?? failed);
       const logged: WorkoutSetData = {
         id: res.set.id,
         exerciseId: exercise.exerciseId,
@@ -376,7 +381,7 @@ export function useWorkout({
           (back) => (back && !back.success ? back.error : "Failed to undo"),
         ),
       });
-    }, spot);
+    }, failed, spot);
   }
 
   // Nothing waits on the network: the row leaves and the toast shows at once (D-047); a refused delete, or one with no
@@ -491,27 +496,29 @@ export function useWorkout({
   function exit(spot?: Element | null) {
     const session = activeSession;
     if (!session) return;
+    const failed = "Failed to leave the workout";
     write(async () => {
       if (!(await saveNotes())) return;
       const res = await pauseSessionAction({ id: session.id }).catch(() => null);
-      if (!res?.success) return refused(session.id, res?.error ?? "Failed to leave the workout");
+      if (!res?.success) return refused(session.id, res?.error ?? failed);
       setOpen({ ...session, timer: res.timer, notes: savedNotes.current || null });
       setConfirmCancel(false);
       setHandId(null);
-    }, spot);
+    }, failed, spot);
   }
 
   function resume(spot?: Element | null) {
     const session = paused;
     if (!session) return;
+    const failed = "Failed to resume the workout";
     write(async () => {
       const res = await resumeSessionAction({ id: session.id }).catch(() => null);
-      if (!res?.success) return warn(res?.error ?? "Failed to resume the workout");
+      if (!res?.success) return warn(res?.error ?? failed);
       showDay(session.splitDayId);
       setOpen({ ...session, timer: res.timer });
       take(session.id);
       showNotes(session.notes);
-    }, spot);
+    }, failed, spot);
   }
 
   // Undo hands a workout back as it was, unless another one was started in the meantime. A refusal shows the server's
@@ -588,13 +595,14 @@ export function useWorkout({
   function cancel(spot?: Element | null) {
     const session = activeSession;
     if (!session) return;
+    const failed = "Failed to cancel workout";
     write(async () => {
       // A refusal (of the notes or of the Cancel) closes the Keep/Delete question too: the toast says why.
       if (!(await saveNotes())) return setConfirmCancel(false);
       const snap = { ...session, notes: savedNotes.current || null };
       const res = await cancelSessionAction({ id: session.id }).catch(() => null);
       if (res) setConfirmCancel(false); // with no answer the question stays, to try again
-      if (!res?.success) return refused(session.id, res?.error ?? "Failed to cancel workout");
+      if (!res?.success) return refused(session.id, res?.error ?? failed);
       setOpen(null);
       setHandId(null);
       setSessionNotes("");
@@ -604,7 +612,7 @@ export function useWorkout({
         touches: touchesOf(snap.id, snap.sets),
         onUndo: takeBack(restore(snap, res.timer), "Failed to restore the workout"),
       });
-    }, spot);
+    }, failed, spot);
   }
 
   // The server counts the duration (D-039); a workout with no sets is deleted, and Undo brings it back open. Notes typed
@@ -612,11 +620,12 @@ export function useWorkout({
   function finish(spot?: Element | null) {
     const session = activeSession;
     if (!session) return;
+    const failed = "Failed to finish workout";
     write(async () => {
       if (!(await saveNotes())) return;
       const snap = { ...session, notes: savedNotes.current || null };
       const done = await finishSessionAction({ id: session.id }).catch(() => null);
-      if (!done?.success) return refused(session.id, done?.error ?? "Failed to finish workout");
+      if (!done?.success) return refused(session.id, done?.error ?? failed);
       setOpen(null);
       setHandId(null);
       setSessionNotes("");
@@ -643,7 +652,7 @@ export function useWorkout({
           "Failed to reopen the workout",
         ),
       });
-    }, spot);
+    }, failed, spot);
   }
 
   return {

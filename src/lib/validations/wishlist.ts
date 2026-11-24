@@ -41,5 +41,5 @@ export const restoreWishlistItemSchema = wishlistFields.extend({
 });
 
 export type AddWishlistItemInput = z.input<typeof addWishlistItemSchema>;
-export type UpdateWishlistItemInput = z.input<typeof updateWishlistItemSchema>;
+export type UpdateWishlistItemInput = z.infer<typeof updateWishlistItemSchema>;
 export type RestoreWishlistItemInput = z.input<typeof restoreWishlistItemSchema>;

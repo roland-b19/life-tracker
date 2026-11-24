@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test as base, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
+import { expect, request as requests, test as base, type Browser, type BrowserContextOptions, type Locator, type Page, type Request } from "@playwright/test";
 import { Pool } from "pg";
 
 // After a server action answers HTTP 2xx the app refreshes the router 600 ms after the last answer, and it also
@@ -414,9 +414,18 @@ export async function devUserCount(...names: string[]) {
   return (await asOwner((db) => db.query("SELECT 1 FROM users WHERE issuer = 'dev' AND subject = ANY($1)", [names]))).rowCount;
 }
 
-/** The signed-in user's id, from the session the page has, for the SQL that checks or seeds their rows. */
+/**
+ * The signed-in user's id, from the session the page has, for the SQL that checks or seeds their rows. It asks on a new
+ * connection, from a request context of its own with the page's cookies. `page.request` keeps its connection open
+ * between calls, and the dev server closes one idle for 5 s (Node's keepAliveTimeout). A request sent on it a few
+ * seconds after the last one, while the server's event loop is busy (other workers' pages, a compile), reaches the
+ * server after that timeout has fired: the server drops the connection and the call fails with ECONNRESET.
+ */
 export async function signedInUserId(page: Page) {
-  const { user } = await (await page.request.get("/api/auth/session")).json();
+  const cookies = await page.context().cookies();
+  const api = await requests.newContext({ baseURL: base.info().project.use.baseURL, storageState: { cookies, origins: [] } });
+  const { user } = await (await api.get("/api/auth/session")).json();
+  await api.dispose();
   return user.id as string;
 }
 

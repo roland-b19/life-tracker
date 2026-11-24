@@ -14,6 +14,7 @@ import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAct
 import { priorityForPrice } from "@/lib/rules";
 import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
+import { updateWishlistItemSchema } from "@/lib/validations/wishlist";
 
 // The item an add made (tests that look at a repeated add call addWishlistItem itself).
 const add = async (userId: string, input: Parameters<typeof addWishlistItem>[1]) => (await addWishlistItem(userId, input)).item!;
@@ -144,6 +145,18 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     succeeded(await updateWishlistItemAction({ id: item.id, ...edit }));
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor 4K");
     authState.id = "";
+  });
+
+  // The action parses its input, and the lib takes what it parsed, as every other action does.
+  it("parses an edit once, in the action", async () => {
+    authState.id = userA;
+    const item = await add(userA, { name: "Desk", estimatedPrice: 200 });
+    const parse = vi.spyOn(updateWishlistItemSchema, "parse");
+    succeeded(await updateWishlistItemAction({ id: item.id, name: "Standing desk" }));
+    const parses = parse.mock.calls.length;
+    parse.mockRestore();
+    authState.id = "";
+    expect(parses).toBe(1);
   });
 
   it("rejects a price that rounds to zero and a malformed id", async () => {
