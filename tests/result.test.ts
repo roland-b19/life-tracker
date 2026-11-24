@@ -1,3 +1,4 @@
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { Refusal, respond, SIGNED_OUT } from "@/lib/validations/result";
@@ -150,10 +151,43 @@ it("opens another browser context in the e2e specs only through newDevice (tests
 });
 
 // One way for a browser spec to send a request itself: onNewConnection (tests/e2e/helpers.ts), a request context of its
-// own, so no request reuses a connection the dev server may have closed. The brackets keep these lines out.
+// own, so no request reuses a connection the dev server may have closed. The specs are read with the type checker, so a
+// call is found by what it calls, whatever name it goes through (Playwright's `request` fixture, `page.request` or an alias
+// of it, a renamed import, a route handler's parameter), and a comment or a string never counts: a request context's
+// get/post/put/patch/delete/head/fetch only on the context onNewConnection hands its `send`, a route's fetch() never, and
+// a new request context (`newContext` of Playwright's `request`) only in helpers.ts.
 it("sends a spec's own requests in the e2e specs only through onNewConnection (tests/e2e/helpers.ts)", () => {
-  const specs = Object.entries(tests).filter(([file]) => file.startsWith("./e2e/"));
-  expect(specs.length).toBeGreaterThan(5);
-  expect(specs.filter(([, text]) => /\.reques[t]\.(get|post|put|patch|delete|head|fetch)\(|\broute\.fetc[h]\(/.test(text)).map(([file]) => file)).toEqual([]);
-  expect(specs.filter(([, text]) => /\brequests?\.newContex[t]\(/.test(text)).map(([file]) => file)).toEqual(["./e2e/helpers.ts"]);
+  const files = ts.sys.readDirectory("tests/e2e", [".ts"]);
+  expect(files.length).toBeGreaterThan(5);
+  const { options } = ts.parseJsonConfigFileContent(ts.readConfigFile("tsconfig.json", ts.sys.readFile).config, ts.sys, ".");
+  const program = ts.createProgram(files, options);
+  const checker = program.getTypeChecker();
+  // Whether `receiver` is the context onNewConnection hands its `send`: the first parameter of its second argument.
+  const isSendContext = (receiver: ts.Expression) => {
+    const declaration = ts.isIdentifier(receiver) ? checker.getSymbolAtLocation(receiver)?.valueDeclaration : undefined;
+    const send = declaration && ts.isParameter(declaration) ? declaration.parent : undefined;
+    const call = send?.parent;
+    return !!call && ts.isCallExpression(call) && call.expression.getText() === "onNewConnection" && call.arguments[1] === send && send.parameters[0] === declaration;
+  };
+  const sent: string[] = [];
+  for (const name of files) {
+    const file = program.getSourceFile(name)!;
+    const visit = (n: ts.Node) => {
+      const called = ts.isCallExpression(n) ? checker.getResolvedSignature(n)?.declaration : undefined;
+      if (called && ts.isMethodSignature(called) && ts.isInterfaceDeclaration(called.parent)) {
+        const method = `${called.parent.name.text}.${called.name.getText()}`;
+        const callee = (n as ts.CallExpression).expression;
+        const onSendContext = ts.isPropertyAccessExpression(callee) && isSendContext(callee.expression);
+        if (
+          (/^APIRequestContext\.(get|post|put|patch|delete|head|fetch)$/.test(method) && !onSendContext) ||
+          method === "Route.fetch" ||
+          (method === "APIRequest.newContext" && name !== "tests/e2e/helpers.ts")
+        )
+          sent.push(`${name}:${file.getLineAndCharacterOfPosition(n.getStart()).line + 1} ${method}`);
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(file);
+  }
+  expect(sent).toEqual([]);
 });
