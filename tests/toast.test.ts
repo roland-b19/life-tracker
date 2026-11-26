@@ -1,7 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
-import { touchesOverlap, undoWith } from "@/../app/components/toast";
+import { afterSaved, touchesOverlap, undoWith } from "@/../app/components/toast";
 import { pushSubscriptions } from "@/db/schema";
 
 const sources = import.meta.glob("../app/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -50,6 +50,59 @@ describe("undoWith offers Retry only when no answer came [D-047]", () => {
   it("says nothing when the write succeeded", async () => {
     expect(await undoAnswering(async () => ({ success: true }))).toEqual([]);
     expect(await undoAnswering(async () => true)).toEqual([]);
+  });
+});
+
+// conventions.md, Undo keys: the toast waits for the write it reports (`saved`) before it runs an Undo, so an Undo tapped
+// before the write answers still undoes it once it succeeds, and one whose write failed writes nothing.
+describe("an Undo runs once the toast's write has succeeded, never after it failed", () => {
+  // A write that answers when the test says so.
+  const pending = () => {
+    let answer: (back: unknown) => void = () => {};
+    let fail: () => void = () => {};
+    const saved = new Promise<{ success?: boolean } | boolean | null | undefined>((resolve, reject) => {
+      answer = resolve as (back: unknown) => void;
+      fail = () => reject(new Error("lost"));
+    });
+    return { saved, answer, fail };
+  };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("is the provider's Undo button", () => {
+    expect(sources["../app/components/toast.tsx"]).toContain("if (undo) afterSaved(t.saved, () => undo({ touches: t.touches }));");
+  });
+  it("runs at once when the toast reports no write", () => {
+    const undo = vi.fn();
+    afterSaved(undefined, undo);
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+  it("tapped while the write is out, runs once it succeeds", async () => {
+    for (const back of [{ success: true }, true]) {
+      const write = pending();
+      const undo = vi.fn();
+      afterSaved(write.saved, undo);
+      await tick();
+      expect(undo).not.toHaveBeenCalled();
+      write.answer(back);
+      await tick();
+      expect(undo).toHaveBeenCalledTimes(1);
+    }
+  });
+  it("never runs when the write was refused, gave no answer or threw", async () => {
+    for (const end of [
+      (w: ReturnType<typeof pending>) => w.answer({ success: false, error: "No" }),
+      (w: ReturnType<typeof pending>) => w.answer(null),
+      (w: ReturnType<typeof pending>) => w.answer(undefined),
+      (w: ReturnType<typeof pending>) => w.answer(false),
+      (w: ReturnType<typeof pending>) => w.fail(),
+    ]) {
+      const write = pending();
+      const undo = vi.fn();
+      afterSaved(write.saved, undo);
+      end(write);
+      await tick();
+      expect(undo).not.toHaveBeenCalled();
+    }
   });
 });
 

@@ -88,7 +88,6 @@ export function CustomExercises({ exercises, fold }: { exercises: CustomExercise
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the delete never happened; the failure above said why
           const back = await restoreCustomExerciseAction(e).catch(() => null);
           if (back?.success) setGone((g) => g.filter((id) => id !== e.id));
           return back;

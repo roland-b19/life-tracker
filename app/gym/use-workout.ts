@@ -400,7 +400,8 @@ export function useWorkout({
           // A set already gone counts as removed (D-046, D-047): the toast stays.
           saved: deleted.then((res) => (res && !res.success && res.error === SET_GONE ? { success: true as const } : res)),
           onUndo: undoWith(showToast, async () => {
-            if (!(await deleted)?.success) return true; // the refusal below put it back, or it was gone already
+            // The toast runs Undo once the delete counts as done, a set already gone included: that one has nothing to put back.
+            if (!(await deleted)?.success) return true;
             const res = await addSetAction({
               id: set.id,
               createdAt: set.createdAt,

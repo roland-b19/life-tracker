@@ -9,6 +9,15 @@ export function changedFields<T extends object>(from: Partial<Record<keyof T, un
 }
 
 /**
+ * The values `obj` holds for `keys`, each with its own type: an edit's Undo takes the old values of the fields the edit
+ * changed (`valuesOf(before, keys of changedFields(...))`), so it writes back only those and leaves another device's
+ * change to the rest alone (D-040).
+ */
+export function valuesOf<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> {
+  return Object.fromEntries(keys.map((k) => [k, obj[k]])) as Pick<T, K>;
+}
+
+/**
  * Where a refused save says why (D-047): in its form while the opening it came from is still on screen, else in a warning
  * toast, so a late answer never marks a form opened since. `inForm` is the form's `setErrorMsg`.
  */
