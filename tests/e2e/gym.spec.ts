@@ -1032,6 +1032,44 @@ test("the day editor reorders its routine with the arrow keys, kept after a save
   for (const row of order) await expect(page.getByRole("region", { name: DAY }).getByText(row, { exact: true })).toBeVisible();
 });
 
+// Chromium sends pointer events to a disabled button, so before, a handle disabled while the day's save was out still
+// dragged its row, and the save's answer then dropped that order without a word.
+test("the day editor reorders its routine by dragging a row's handle, but not while its save is out", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const editor = await openEditor(page);
+  const handle = (name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
+  // Drags a row by its handle with the mouse, down past the middle of the row under it (a disabled handle is not
+  // scrolled to by Playwright, and Save scrolled the dialog).
+  const dragDown = async (name: string, below: string) => {
+    await handle(name).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const from = center(await handle(name).boundingBox());
+    const to = center(await handle(below).boundingBox());
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x, to.y + 10, { steps: 5 });
+    await page.mouse.up();
+  };
+  const FLY = "Cable fly (push down)";
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
+  await dragDown(EXERCISE, FLY);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(handle(FLY)).toBeDisabled();
+  await dragDown(FLY, EXERCISE);
+  await settled(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await openGym(page);
+  await pickDay(page, DAY);
+  for (const row of order) await expect(page.getByRole("region", { name: DAY }).getByText(row, { exact: true })).toBeVisible();
+});
+
 // Escape, a click outside and the close button discard the edits with an Undo that reopens the editor with them (D-039).
 test("the day editor closed with Escape or a click outside keeps the edits behind an Undo", async ({ signedInPage: page }) => {
   const name = `Upper ${randomUUID().slice(0, 8)}`;

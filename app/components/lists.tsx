@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode, type SyntheticEvent } from "react";
 import { GripIcon, PencilIcon, TrashIcon } from "./icons";
 import { Modal } from "./modal";
 
@@ -53,9 +53,33 @@ export function DeleteButton({ label, title = "Delete", onClick }: { label: stri
   return <IconButton icon={<TrashIcon size={17} />} label={label} title={title} onClick={onClick} />;
 }
 
-/** The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. */
-export function DragHandle({ label, ...handlers }: { label: string } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "children" | "aria-label" | "title">) {
-  return <IconButton edit className="drag-handle" icon={<GripIcon size={22} />} label={label} title="Drag to reorder" {...handlers} />;
+/**
+ * The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. A disabled handle (in
+ * a form whose save is out) moves nothing: Chromium still sends pointer events to a disabled button.
+ */
+export function DragHandle({
+  label,
+  onPointerDown,
+  onKeyDown,
+  ...handlers
+}: { label: string } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "children" | "aria-label" | "title">) {
+  const live =
+    <E extends SyntheticEvent<HTMLButtonElement>>(run?: (e: E) => void) =>
+    (e: E) => {
+      if (!e.currentTarget.matches(":disabled")) run?.(e);
+    };
+  return (
+    <IconButton
+      edit
+      className="drag-handle"
+      icon={<GripIcon size={22} />}
+      label={label}
+      title="Drag to reorder"
+      onPointerDown={live(onPointerDown)}
+      onKeyDown={live(onKeyDown)}
+      {...handlers}
+    />
+  );
 }
 
 /**

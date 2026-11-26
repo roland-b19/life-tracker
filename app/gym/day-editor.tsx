@@ -109,11 +109,6 @@ export function DayEditor({
   const names = () => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]);
   const [seen, setSeen] = useState(names);
   const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? seen.get(id) ?? "Exercise";
-  const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
-  // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
-  const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));
-  const groups = [...new Set(found.map((e) => e.muscleGroup))];
-  const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
 
   // New exercise form
   const [showCustom, setShowCustom] = useState(false);
@@ -197,9 +192,8 @@ export function DayEditor({
     setDraft((d) => ({ ...d, exercises: d.exercises.filter((e) => e.exerciseId !== id) }));
   }
 
-  function addRow() {
-    if (!pick) return;
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: pick, ...NEW_ROW }] }));
+  function addRow(id: string) {
+    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: id, ...NEW_ROW }] }));
     setAddId("");
   }
 
@@ -374,45 +368,8 @@ export function DayEditor({
                 })}
               </ListBox>
 
-              {addable.length > 0 && draft.exercises.length < 20 && (
-                <div className="routine-add">
-                  <Field
-                    label="Search exercises"
-                    type="text"
-                    enterKeyHint="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Enter only searches; it does not submit the whole day.
-                      if (e.key === "Enter") e.preventDefault();
-                    }}
-                  />
-                  {found.length === 0 ? (
-                    <EmptyNote>No exercise matches.</EmptyNote>
-                  ) : (
-                    <>
-                      <Label text="Exercise">
-                        <select value={pick} onChange={(e) => setAddId(e.target.value)}>
-                          {groups.map((g) => (
-                            <optgroup key={g} label={muscleLabel(g)}>
-                              {found
-                                .filter((e) => e.muscleGroup === g)
-                                .map((e) => (
-                                  <option key={e.id} value={e.id}>
-                                    {e.name}
-                                  </option>
-                                ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </Label>
-                      <button type="button" className="secondary btn-sm" onClick={addRow}>
-                        <PlusIcon size={14} />
-                        Add exercise
-                      </button>
-                    </>
-                  )}
-                </div>
+              {draft.exercises.length < 20 && (
+                <ExercisePicker exercises={exercises} routine={draft.exercises} query={query} onQuery={setQuery} addId={addId} onPick={setAddId} onAdd={addRow} />
               )}
 
               {draft.exercises.length < 20 &&
@@ -474,5 +431,75 @@ export function DayEditor({
         </>
       )}
     </FormModal>
+  );
+}
+
+/**
+ * The day editor's picker: a search and the library's exercises not in the routine, by muscle group, to add one. Its
+ * lists are built only while it is on screen (the editor stays mounted while closed, D-047). Nothing when every
+ * exercise is in the routine.
+ */
+function ExercisePicker({
+  exercises,
+  routine,
+  query,
+  onQuery,
+  addId,
+  onPick,
+  onAdd,
+}: {
+  exercises: LibraryExercise[];
+  routine: DraftExercise[];
+  query: string;
+  onQuery: (query: string) => void;
+  addId: string;
+  onPick: (id: string) => void;
+  onAdd: (id: string) => void;
+}) {
+  const addable = exercises.filter((e) => !routine.some((d) => d.exerciseId === e.id));
+  // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
+  const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));
+  const groups = [...new Set(found.map((e) => e.muscleGroup))];
+  const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
+  if (addable.length === 0) return null;
+  return (
+    <div className="routine-add">
+      <Field
+        label="Search exercises"
+        type="text"
+        enterKeyHint="search"
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter only searches; it does not submit the whole day.
+          if (e.key === "Enter") e.preventDefault();
+        }}
+      />
+      {found.length === 0 ? (
+        <EmptyNote>No exercise matches.</EmptyNote>
+      ) : (
+        <>
+          <Label text="Exercise">
+            <select value={pick} onChange={(e) => onPick(e.target.value)}>
+              {groups.map((g) => (
+                <optgroup key={g} label={muscleLabel(g)}>
+                  {found
+                    .filter((e) => e.muscleGroup === g)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+          </Label>
+          <button type="button" className="secondary btn-sm" onClick={() => onAdd(pick)}>
+            <PlusIcon size={14} />
+            Add exercise
+          </button>
+        </>
+      )}
+    </div>
   );
 }
