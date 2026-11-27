@@ -28,7 +28,7 @@ last_verified: 2026-11-27
 | Functional audit fixes, open copies kept in sync, the midnight rollover, no swipe navigation (D-034 to D-047) | done, [plan](archive/plans/audit-fixes.md) (parts M and A to F and the owner's round in `main`; the last edges on `chore/audit-edges`, going to `main` with its PR) |
 
 ## In progress
-- `chore/audit-edges`: the functional audit's last edges, the D-047 round's simplify cleanups and the Gym day editor's drag-while-saving edge. Review round 1's two Important bugs are fixed and verified (the deload card saves the weeks the server stored; a drag under way ends as its handle is disabled, with no pointer event); round 2 found no Important bug, and its two test Nits are being fixed.
+- `chore/audit-edges`: the functional audit's last edges, the D-047 round's simplify cleanups and the Gym day editor's drag-while-saving edge. Review round 1's two Important bugs are fixed and verified (the deload card saves the weeks the server stored; a drag under way ends as its handle is disabled, with no pointer event); round 2 found no Important bug, and its test Nits are fixed and verified. The milestone audit's cleanup is in (Card's unused `busy`, tests import app code with `../`).
 
 ## Next steps
 1. Finish the review of `chore/audit-edges` and open its PR to `main`; the owner said to merge it once it is green (2026-11-27).
