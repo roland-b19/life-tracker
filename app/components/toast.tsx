@@ -22,7 +22,8 @@ interface Toast {
   touches?: string[];
   /**
    * The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. An Undo tapped
-   * meanwhile waits for it and runs only once it has succeeded, so an Undo body never waits for it itself.
+   * meanwhile waits for it and runs only once it has succeeded, so an Undo body waits for the write itself only when it
+   * needs the write's answer (the shopping tick, the category delete, the gym set delete).
    */
   saved?: Promise<Written>;
 }
