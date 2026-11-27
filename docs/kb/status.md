@@ -28,12 +28,14 @@ last_verified: 2026-11-27
 | Functional audit fixes, open copies kept in sync, the midnight rollover, no swipe navigation (D-034 to D-047) | done, [plan](archive/plans/audit-fixes.md) (parts M and A to F and the owner's round in `main`; the last edges on `chore/audit-edges`, going to `main` with its PR) |
 
 ## In progress
-- `chore/audit-edges`: the functional audit's last edges, the D-047 round's simplify cleanups and the Gym day editor's drag-while-saving edge. Review round 1 found two Important bugs, being fixed on agent branches: the deload card keeps a Next week the server stored as Last, and a drag under way ends only at the disabled handle's next pointer event, which WebKit may never send.
+- `chore/audit-edges`: the functional audit's last edges, the D-047 round's simplify cleanups and the Gym day editor's drag-while-saving edge. Review round 1's two Important bugs are fixed and verified (the deload card saves the weeks the server stored; a drag under way ends as its handle is disabled, with no pointer event); round 2 found no Important bug, and its two test Nits are being fixed.
 
 ## Next steps
 1. Finish the review of `chore/audit-edges` and open its PR to `main`; the owner said to merge it once it is green (2026-11-27).
 
 Known, not a bug: under heavy e2e load the Gym page's main thread can stall while headless Chromium's software GL (SwiftShader) reads back the muscle map's WebGL draws. It now draws 2 times on load, not 5 (longest task about 2850 → 1140 ms with 4 workers); real devices composite on the GPU and do no readback.
+
+Known, not fixed (listed by review, outside the change's scope): a second finger pressing another handle in the same list mid-drag ends the first drag, but the first finger's moves then drive the second row (`useDragSort` keeps no `pointerId`); a muscle map hidden at 0x0 and shown at the same size skips its redraw, which might leave the canvas blank where a browser drops the drawing buffer (not reproducible in Chromium).
 
 ## Later (noted by the owner, not started)
 Each needs its own plan (golden rule 6) when the owner picks it up.
