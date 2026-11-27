@@ -20,6 +20,9 @@ const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 const toRows = (draft: DayDraft) =>
   draft.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: Number(x.targetSets), minReps: Number(x.minReps), maxReps: Number(x.maxReps) }));
 
+/** A draft as the day's save sends it: no routine for a rest day. */
+const toDay = (draft: DayDraft) => ({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : toRows(draft) });
+
 /** The form's copy of a saved day. */
 const toDraft = (day: SplitDay): DayDraft => ({
   id: day.id,
@@ -125,9 +128,10 @@ export function DayEditor({
   // disables and labels, never the guard). It belongs to one opening: a new opening starts without it.
   const [creating, setCreating] = useState(false);
   // The day as this opening found it saved: what its Save's Undo writes back and its edits are compared with. A save
-  // that succeeded is the day as saved until the refresh brings it (`saved`).
+  // that succeeded is the day as saved until the refresh brings it (`saved`). Built only when read, as the editor stays
+  // mounted while closed.
   const [base, setBase] = useState<DayDraft | null>(null);
-  const saved = base ?? toDraft(day);
+  const savedDay = () => base ?? toDraft(day);
   // Each new opening starts from the day as saved, or from `resume`; one opened again while its save is out shows the
   // day it sent.
   function start(sent?: DayDraft, done?: boolean) {
@@ -151,7 +155,7 @@ export function DayEditor({
 
   // Escape, a click outside or the close button, with no save out: the edits can come back with Undo.
   function discarded() {
-    if (JSON.stringify(draft) === JSON.stringify(saved)) return;
+    if (JSON.stringify(draft) === JSON.stringify(savedDay())) return;
     const kept = { draft, created };
     showToast({
       message: "Changes discarded",
@@ -208,8 +212,8 @@ export function DayEditor({
     setErrorMsg("");
     // A refusal shows in the editor while it is on screen, else as a toast.
     const refused = refusal(stillOpen, setErrorMsg, warn);
-    const before = saved;
-    const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows }).catch(() => null);
+    const before = savedDay();
+    const res = await saveSplitDayAction(toDay(draft)).catch(() => null);
     // The editor stays open with the day as it was typed, so nothing is lost.
     if (!res?.success) return refused(res?.error ?? "Failed to save day");
     succeeded();
@@ -222,7 +226,7 @@ export function DayEditor({
       // Writes back the day as this opening found it saved; the server refresh brings it to the list.
       onUndo: undoWith(
         showToast,
-        () => saveSplitDayAction({ id: before.id, name: before.name, isRest: before.isRest, exercises: before.isRest ? [] : toRows(before) }),
+        () => saveSplitDayAction(toDay(before)),
         (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
@@ -458,7 +462,8 @@ function ExercisePicker({
 }) {
   const addable = exercises.filter((e) => !routine.some((d) => d.exerciseId === e.id));
   // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
-  const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));
+  const search = exerciseNameKey(query);
+  const found = addable.filter((e) => exerciseNameKey(e.name).includes(search));
   const groups = [...new Set(found.map((e) => e.muscleGroup))];
   const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
   if (addable.length === 0) return null;

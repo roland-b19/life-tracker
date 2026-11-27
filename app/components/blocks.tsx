@@ -491,7 +491,6 @@ type TrackedSave = { form: string; opening: string; id: string; sent?: unknown; 
  * leaves when it is answered, or, saved by a form that passes `data`, when that data changes.
  */
 let trackedSaves: ReadonlyMap<string, TrackedSave> = new Map();
-const NO_SAVES: ReadonlyMap<string, TrackedSave> = new Map();
 const saveListeners = new Set<() => void>();
 function track(change: (now: ReadonlyMap<string, TrackedSave>) => ReadonlyMap<string, TrackedSave>) {
   const next = change(trackedSaves);
@@ -587,13 +586,13 @@ export function FormModal<Sent = never>({
   const pathname = usePathname();
   const form = JSON.stringify([pathname, title]);
   const key = JSON.stringify([pathname, title, subject ?? null]);
-  const saves = useSyncExternalStore(watchSaves, () => trackedSaves, () => NO_SAVES);
+  // This form's tracked save. A change makes a new entry, never edits one, so the form renders again only for its own.
+  const out = useSyncExternalStore(watchSaves, () => trackedSaves.get(key), () => undefined);
   // Openings are named by this mount and a count, so a kept opening found after the page was opened again is never
   // mistaken for one of the new mount's.
   const mount = useId();
   type Opening = { opening: string; made: number; id?: string; sent?: Sent; saved?: boolean };
   const openingAfter = (made: number): Opening => {
-    const out = saves.get(key);
     if (keepsOpening && out && !out.saved) return { opening: out.opening, made, id: out.id, sent: out.sent as Sent };
     const fresh = { opening: `${mount}:${made + 1}`, made: made + 1 };
     return out?.saved ? { ...fresh, sent: out.sent as Sent, saved: true } : fresh;
@@ -605,7 +604,6 @@ export function FormModal<Sent = never>({
     setWasOpen(isOpen);
     if (isOpen) setCurrent(openingAfter(current.made));
   }
-  const out = saves.get(key);
   // The save of the opening on screen succeeded after the form was mounted again, so its answer could not close this
   // opening (its `stillOpen` is the old mount's): the opening goes on as a fresh one from what was saved, as one opened
   // after the answer would, so it shows what was saved and its edits are compared with that.

@@ -9,11 +9,13 @@ import {
   asOwner,
   burst,
   center,
+  changeAnswers,
   countWrites,
   dismissToast,
   expectNoSeriousViolations,
   expectToastWithoutUndo,
   headIsQuiet,
+  holdRefreshes,
   holdWrites,
   hydrationWarnings,
   loseAnswerOnce,
@@ -35,6 +37,7 @@ import {
 // depends on the date and some days are rest days, so the spec always picks a day by its name, never by the date.
 const DAY = "Upper (chest)"; // Sunday; 7 exercises, the first is "Incline barbell press" (a barbell: its load is in kg)
 const EXERCISE = "Incline barbell press";
+const FLY = "Cable fly (push down)"; // the second exercise of DAY
 // The set line in the workout card, in the app's number format (D-037).
 const SET_LINE = /Set 1: 5 × 60 kg/;
 
@@ -42,6 +45,17 @@ async function openGym(page: Page) {
   await page.goto("/gym");
   await expect(page).toHaveURL(/\/gym$/);
   await expect(page.getByRole("region", { name: "Training days" })).toBeVisible();
+}
+
+// Leaves the Gym page for the Wishlist by the main navigation and comes back, on a page clock installed by the test.
+async function leaveAndReturn(page: Page) {
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await nav.getByRole("link", { name: "Gym" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/gym$/);
 }
 
 // The day's button in "Training days" (its name starts with the weekday; the Start buttons' names do not).
@@ -209,6 +223,9 @@ async function openEditor(page: Page) {
   await expect(editor).toBeVisible();
   return editor;
 }
+
+// A routine row's drag handle in the day editor.
+const dragHandle = (editor: Locator, name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
 
 // Creates an exercise from the open editor: "Create and add" puts it into the routine being edited, as row `row`.
 async function createExercise(page: Page, editor: Locator, name: string, row: number) {
@@ -772,25 +789,6 @@ test("Cancel or Escape while the day's save is out only closes the editor, and t
   await expect(page.getByRole("region", { name: DAY }).getByText(`8. ${name}`, { exact: true })).toBeVisible();
 });
 
-// Holds the page's refreshes (D-034) until the function it answers is called, which lets them through and waits for them.
-async function holdRefreshes(page: Page) {
-  let open = () => {};
-  const held = new Promise<void>((resolve) => (open = resolve));
-  const path = new URL(page.url()).pathname;
-  await page.route(
-    (url) => url.pathname === path,
-    async (route) => {
-      if (!isRefresh(page, route.request())) return route.fallback();
-      await held;
-      await route.fallback();
-    },
-  );
-  return async () => {
-    open();
-    await refreshesDone(page);
-  };
-}
-
 // A form opened again after its save answered, before the refresh brings the saved data (D-034), starts from what the
 // save sent (D-047). Before, it showed the values from before the save, and its Save would have undone the save.
 test("the day editor, deload and custom exercise forms opened again before the refresh after a save show what was saved [D-047]", async ({
@@ -864,13 +862,7 @@ test("the custom exercise form opened again after leaving the page while its sav
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(form).toBeHidden();
 
-  const nav = page.getByRole("navigation", { name: "Main Navigation" });
-  await nav.getByRole("link", { name: "Wishlist" }).click();
-  await page.clock.runFor(10_000);
-  await expect(page).toHaveURL(/\/wishlist$/);
-  await nav.getByRole("link", { name: "Gym" }).click();
-  await page.clock.runFor(10_000);
-  await expect(page).toHaveURL(/\/gym$/);
+  await leaveAndReturn(page);
   await mine(page).getByRole("button", { name: `Edit ${name}` }).click();
   await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await expect(field).toBeDisabled();
@@ -905,13 +897,7 @@ test("the day editor opened again after leaving the page, whose save then answer
   await editor.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toBeHidden();
 
-  const nav = page.getByRole("navigation", { name: "Main Navigation" });
-  await nav.getByRole("link", { name: "Wishlist" }).click();
-  await page.clock.runFor(10_000);
-  await expect(page).toHaveURL(/\/wishlist$/);
-  await nav.getByRole("link", { name: "Gym" }).click();
-  await page.clock.runFor(10_000);
-  await expect(page).toHaveURL(/\/gym$/);
+  await leaveAndReturn(page);
   editor = await openEditor(page);
   await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
   await andSettle(page, () => release(), `"name":"${DAY}"`);
@@ -1019,11 +1005,11 @@ test("saving this week as a deload week turns the deload switch on without a rel
 test("the day editor reorders its routine with the arrow keys, kept after a save and a reload", async ({ signedInPage: page }) => {
   await openGym(page);
   const editor = await openEditor(page);
-  await editor.getByRole("button", { name: `Drag ${EXERCISE} to reorder` }).focus();
+  await dragHandle(editor, EXERCISE).focus();
   await page.keyboard.press("ArrowDown");
-  await editor.getByRole("button", { name: "Drag Bayesian curl (high) to reorder" }).focus();
+  await dragHandle(editor, "Bayesian curl (high)").focus();
   await page.keyboard.press("ArrowUp");
-  const order = ["1. Cable fly (push down)", `2. ${EXERCISE}`, "6. Bayesian curl (high)", "7. Cable overhead extension (high)"];
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`, "6. Bayesian curl (high)", "7. Cable overhead extension (high)"];
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
   await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
   await expect(editor).toBeHidden();
@@ -1037,19 +1023,17 @@ test("the day editor reorders its routine with the arrow keys, kept after a save
 test("the day editor reorders its routine by dragging a row's handle, but not while its save is out", async ({ signedInPage: page }) => {
   await openGym(page);
   const editor = await openEditor(page);
-  const handle = (name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
   // Drags a row by its handle with the mouse, down past the middle of the row under it (a disabled handle is not
   // scrolled to by Playwright, and Save scrolled the dialog).
   const dragDown = async (name: string, below: string) => {
-    await handle(name).evaluate((el) => el.scrollIntoView({ block: "center" }));
-    const from = center(await handle(name).boundingBox());
-    const to = center(await handle(below).boundingBox());
+    await dragHandle(editor, name).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const from = center(await dragHandle(editor, name).boundingBox());
+    const to = center(await dragHandle(editor, below).boundingBox());
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(from.x, to.y + 10, { steps: 5 });
     await page.mouse.up();
   };
-  const FLY = "Cable fly (push down)";
   const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
   await dragDown(EXERCISE, FLY);
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
@@ -1057,7 +1041,7 @@ test("the day editor reorders its routine by dragging a row's handle, but not wh
   const release = await holdWrites(page, `"name":"${DAY}"`);
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
-  await expect(handle(FLY)).toBeDisabled();
+  await expect(dragHandle(editor, FLY)).toBeDisabled();
   await dragDown(FLY, EXERCISE);
   await settled(page);
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
@@ -1075,16 +1059,14 @@ test("the day editor reorders its routine by dragging a row's handle, but not wh
 test("the day editor puts back a row being dragged when its save goes out, and keeps the order it sent", async ({ signedInPage: page }) => {
   await openGym(page);
   const editor = await openEditor(page);
-  const handle = (name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
-  const FLY = "Cable fly (push down)";
   const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
-  await handle(EXERCISE).focus();
+  await dragHandle(editor, EXERCISE).focus();
   await page.keyboard.press("ArrowDown"); // a change for the save to send
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
 
   // The fly is pressed and dragged below the press, and the save goes out (held) with the pointer still down.
-  const from = center(await handle(FLY).boundingBox());
-  const below = center(await handle(EXERCISE).boundingBox()).y + 10;
+  const from = center(await dragHandle(editor, FLY).boundingBox());
+  const below = center(await dragHandle(editor, EXERCISE).boundingBox()).y + 10;
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(from.x, below, { steps: 5 });
@@ -1111,7 +1093,7 @@ test("the day editor puts back a row being dragged when its save goes out, and k
 test("the day editor closed by its save in the middle of a drag leaves the page free to pan", async ({ signedInPage: page }) => {
   await openGym(page);
   const editor = await openEditor(page);
-  const handle = editor.getByRole("button", { name: `Drag ${EXERCISE} to reorder` });
+  const handle = dragHandle(editor, EXERCISE);
   await handle.focus();
   await page.keyboard.press("ArrowDown"); // a change for the save to send
   const at = center(await handle.boundingBox());
@@ -1164,7 +1146,7 @@ test("the day editor closed with Escape or a click outside keeps the edits behin
   await openGym(page);
   await pickDay(page, name);
   await expect(page.getByRole("region", { name }).getByText(EXERCISE)).toBeHidden();
-  await expect(page.getByRole("region", { name }).getByText("1. Cable fly (push down)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name }).getByText(`1. ${FLY}`, { exact: true })).toBeVisible();
 });
 
 test("the day editor's Cancel deletes the exercises created in it, with Undo, also after a reload", async ({ signedInPage: page }) => {
@@ -1771,15 +1753,7 @@ test("a refresh rendered before Start and answered after it, offline since, leav
 // before Start, and shows none again) still leaves the screen, with the toast.
 test("a workout finished on another device before the first refresh after Start leaves this page too", async ({ signedInPage: page, browser }) => {
   await openGym(page);
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route(
-    (url) => url.pathname === "/gym",
-    async (route) => {
-      if (isRefresh(page, route.request())) await held;
-      await route.fallback();
-    },
-  );
+  const release = await holdRefreshes(page);
   await startWorkout(page, DAY);
   const other = await otherDevice(browser, page);
   try {
@@ -1788,8 +1762,7 @@ test("a workout finished on another device before the first refresh after Start 
     await other.keyboard.press("Shift");
     await andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click());
     await expect(other.getByText("No sets logged: the workout was removed")).toBeVisible();
-    release();
-    await refreshesDone(page);
+    await release();
     await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
     await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
     await expect(banner(page)).toBeHidden();
@@ -2122,17 +2095,7 @@ test("a set log whose answer the page cannot read says it failed, and the workou
   await openGym(page);
   await startWorkout(page, DAY);
   await dismissToast(page, `Started "${DAY}"`);
-  await page.route("**/gym", async (route) => {
-    const body = route.request().postData() ?? "";
-    if (route.request().method() !== "POST" || !body.includes('"sessionId"') || !body.includes('"reps"')) return route.fallback();
-    await onNewConnection(page, async (api) => {
-      const answer = await api.fetch(route.request());
-      const text = (await answer.text()).replace('"set":', '"unread":');
-      // The body is read decoded and changed, so its length and encoding headers no longer apply.
-      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-      await route.fulfill({ response: answer, body: text, headers });
-    });
-  });
+  await changeAnswers(page, '"reps"', (text) => text.replace('"set":', '"unread":'));
   await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
   await page.getByLabel("Value").fill("60");
   await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click(), '"reps"');
@@ -2335,17 +2298,7 @@ test("Start shows the day of the server's answer, not the day that was tapped", 
       (r) => [r.name, r.id],
     ),
   );
-  await page.route("**/gym", async (route) => {
-    const body = route.request().postData() ?? "";
-    if (route.request().method() !== "POST" || !body.includes('"splitDayId"') || !body.includes('"isDeload"')) return route.fallback();
-    await onNewConnection(page, async (api) => {
-      const answer = await api.fetch(route.request());
-      const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
-      // The body is read decoded and changed, so its length and encoding headers no longer apply.
-      const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-      await route.fulfill({ response: answer, body: text, headers });
-    });
-  });
+  await changeAnswers(page, '"isDeload"', (text) => text.replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other)));
   await pickDay(page, DAY);
   await startWorkout(page, DAY);
   await expect(page.getByRole("region", { name: other })).toBeVisible();
