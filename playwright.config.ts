@@ -18,8 +18,9 @@ for (const url of [databaseUrl, process.env.DATABASE_URL_MIGRATE!]) {
 export default defineConfig({
   testDir: "tests/e2e",
   globalSetup: "./tests/global-setup.ts",
-  fullyParallel: false,
-  workers: 1,
+  // Each test signs in a user of its own, so tests run in parallel against the one dev server and database (D-048).
+  fullyParallel: true,
+  workers: 4,
   retries: 0,
   reporter: process.env.CI ? "html" : "line",
   timeout: 60_000,

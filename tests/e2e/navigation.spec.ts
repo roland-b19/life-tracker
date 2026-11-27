@@ -342,6 +342,10 @@ test("the phone More menu is a modal dialog: focus moves in, stays in, and retur
   await more.click();
   await expect(moreMenu(page)).toHaveAttribute("aria-modal", "true");
   expect(await focusInMenu(page)).toBe(true);
+  // The menu takes the Tab step itself: Safari's own Tab passes over links and buttons, and would leave the menu.
+  await page.evaluate(() => addEventListener("keydown", (e) => (document.body.dataset.tabTaken = String(e.defaultPrevented))));
+  await page.keyboard.press("Tab");
+  await expect(page.locator("body")).toHaveAttribute("data-tab-taken", "true");
   // Sign out, Close and Settings: Tab and Shift+Tab go round them and never leave the menu.
   for (let i = 0; i < 5; i++) {
     await page.keyboard.press("Tab");

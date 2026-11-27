@@ -67,15 +67,12 @@ export function Navigation({ userName }: NavigationProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return setMoreOpen(false);
       if (e.key !== "Tab" || !menu) return;
-      const stops = [...menu.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      const first = stops[0];
-      const last = stops[stops.length - 1];
-      const inside = menu.contains(document.activeElement);
-      const wrapBack = e.shiftKey && (!inside || document.activeElement === first || document.activeElement === menu);
-      const wrapForward = !e.shiftKey && (!inside || document.activeElement === last);
-      if (!wrapBack && !wrapForward) return;
+      // Every step is taken here: Safari's own Tab passes over links and buttons, and would leave the menu.
       e.preventDefault();
-      (wrapBack ? last : first)?.focus();
+      const stops = [...menu.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      const from = stops.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey ? (from <= 0 ? stops.length : from) - 1 : (from + 1) % stops.length;
+      stops[next]?.focus();
     };
     window.addEventListener("keydown", onKey);
     return () => {
