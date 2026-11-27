@@ -219,7 +219,7 @@ Newest at the bottom. Entry format: `.claude/skills/maintain-kb/assets/decisions
 - **Status:** active
 
 ## D-043: One way for a double tap to act once (2026-11-20)
-- **Why:** The owner's pick. A fast double tap must neither repeat a write nor land on what slid under the finger (the next row's button, or the button under a form that closed). The categories card's guard does both: one write at a time per target (a row's key, or the form), so a tap on another row still writes, as every other write in the app is queued; and for 500 ms the clicks on the tapped button's spot are swallowed, never a click on the toast. It becomes one shared helper; `FormModal`'s own submit lock and every "double taps act once" step of the [audit fixes plan](../plans/audit-fixes.md) use it.
+- **Why:** The owner's pick. A fast double tap must neither repeat a write nor land on what slid under the finger (the next row's button, or the button under a form that closed). The categories card's guard does both: one write at a time per target (a row's key, or the form), so a tap on another row still writes, as every other write in the app is queued; and for 500 ms the clicks on the tapped button's spot are swallowed, never a click on the toast. It becomes one shared helper; `FormModal`'s own submit lock and every "double taps act once" step of the [audit fixes plan](../archive/plans/audit-fixes.md) use it.
 - **Rejected:** keeping only `FormModal`'s lock (a second tap on Save then opens the Edit form under the closed dialog); a guard per component (two ways for one job).
 - **Status:** active
 

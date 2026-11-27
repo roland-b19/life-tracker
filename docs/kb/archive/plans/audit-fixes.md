@@ -1,6 +1,6 @@
 ---
 summary: Plan for the functional audit's fixes: every finding the owner chose to fix, plus open copies kept in sync, the midnight rollover and no swipe navigation.
-last_verified: 2026-11-24
+last_verified: 2026-11-27
 ---
 
 # Plan: audit fixes
@@ -103,4 +103,4 @@ Build agents write the code; this session writes their briefs and the verify che
 - `useServerState` must not throw away a list the user is editing — settled by step 5's e2e test (edit open in one tab while another saves).
 
 ## Approval
-Status: approved 2026-11-20
+Status: done 2026-11-27
