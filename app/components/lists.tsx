@@ -49,8 +49,9 @@ export function DeleteButton({ label, title = "Delete", onClick }: { label: stri
 
 /**
  * The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. A disabled handle (in
- * a form whose save is out) moves nothing: the key handler is skipped here, and useDragSort checks the pointer events
- * itself, as Chromium still sends them to a disabled button.
+ * a form whose save is out) moves nothing: the key handler is skipped here, as is a drag in useDragSort, which also
+ * ends a drag under way as its handle is disabled (Chromium still sends pointer events to a disabled button; WebKit may
+ * send none).
  */
 export function DragHandle({
   label,
@@ -154,24 +155,34 @@ const noPan = (e: TouchEvent) => e.preventDefault();
  * Drag a row by its handle to any place in its list. Rows are the list's children marked `data-sort`; the dragged
  * row follows the pointer, the rows in between step aside, and on drop `move(from, to)` reorders them.
  * Spread the result on the handle; it needs `touch-action: none`. A disabled handle (its form's save is out, and that
- * save sent the order from before) moves nothing: it starts no drag, and a drag under way when it is disabled puts its
- * row back at the next pointer event and drops nothing.
+ * save sent the order from before) moves nothing: it starts no drag, and a drag under way ends as it is disabled, its
+ * row back in place and nothing dropped, with no further pointer event (a browser may send none to a disabled button).
  */
 export function useDragSort(move: (from: number, to: number) => void) {
-  const drag = useRef<{ handle: HTMLElement; rows: HTMLElement[]; i: number; to: number; y: number; mids: number[]; step: number } | null>(null);
+  const drag = useRef<{
+    handle: HTMLElement;
+    watch: MutationObserver;
+    rows: HTMLElement[];
+    i: number;
+    to: number;
+    y: number;
+    mids: number[];
+    step: number;
+  } | null>(null);
 
   // Ends the drag under way, if any, with every row back in its place; returns it.
   const settle = useCallback(() => {
     const d = drag.current;
     drag.current = null;
     if (!d) return null;
+    d.watch.disconnect();
     document.removeEventListener("touchmove", noPan);
     d.rows[d.i].classList.remove("dragging");
     for (const r of d.rows) r.style.transform = "";
     return d;
   }, []);
 
-  // A handle removed mid-drag (a save closed its form while the pointer was down) gets no pointer event any more, so
+  // A handle removed mid-drag (its form closed while the pointer was down) gets no pointer event any more, so
   // its drag ends as it goes. Stable, so no render runs it.
   const ref = useCallback(
     (el: HTMLElement | null) => () => {
@@ -182,13 +193,25 @@ export function useDragSort(move: (from: number, to: number) => void) {
 
   const onPointerDown = (e: PointerEvent<HTMLElement>) => {
     if ((e.pointerType === "mouse" && e.button !== 0) || e.currentTarget.matches(":disabled")) return;
-    const row = e.currentTarget.closest<HTMLElement>("[data-sort]")!;
+    settle(); // a drag another pointer left under way
+    const handle = e.currentTarget;
+    const pointer = e.pointerId;
+    const row = handle.closest<HTMLElement>("[data-sort]")!;
     const rows = [...row.parentElement!.children].filter((c): c is HTMLElement => c instanceof HTMLElement && "sort" in c.dataset);
     const rects = rows.map((r) => r.getBoundingClientRect());
     const i = rows.indexOf(row);
     const gap = parseFloat(getComputedStyle(row.parentElement!).rowGap) || 0;
+    // The handle is disabled by its own `disabled` or a fieldset's around it (the form's save went out); the drag ends
+    // as that happens, as no pointer event may follow.
+    const watch = new MutationObserver(() => {
+      if (!handle.matches(":disabled")) return;
+      if (handle.hasPointerCapture(pointer)) handle.releasePointerCapture(pointer);
+      settle();
+    });
+    watch.observe(document.body, { attributes: true, attributeFilter: ["disabled"], subtree: true });
     drag.current = {
-      handle: e.currentTarget,
+      handle,
+      watch,
       rows,
       i,
       to: i,
@@ -197,7 +220,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
       step: rects[i].height + gap,
     };
     e.preventDefault(); // no text selection while dragging
-    e.currentTarget.setPointerCapture(e.pointerId);
+    handle.setPointerCapture(pointer);
     document.addEventListener("touchmove", noPan, { passive: false });
     row.classList.add("dragging");
   };
@@ -205,10 +228,6 @@ export function useDragSort(move: (from: number, to: number) => void) {
   const onPointerMove = (e: PointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d) return;
-    if (e.currentTarget.matches(":disabled")) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-      return void settle();
-    }
     const dy = e.clientY - d.y;
     const mid = d.mids[d.i] + dy;
     let to = d.i;
