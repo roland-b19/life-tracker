@@ -29,7 +29,7 @@ import {
 import { addDays, toISODate } from "@/lib/format-date";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { FUTURE_DATE } from "@/lib/validations/common";
-import { TODO_GONE } from "@/lib/validations/todos";
+import { restoreTodoSchema, TODO_GONE } from "@/lib/validations/todos";
 import { resetDb } from "./db";
 
 // The task an add made (tests that look at a repeated add call addTodo itself).
@@ -551,6 +551,19 @@ describe("To-Do & Habits module: Data Access, Rollover & Authorization", () => {
       const [back] = (await getDailyTodos(userA, "personal", today)).todos;
       expect(back).toMatchObject({ id: habit.id, isCompleted: true });
       expect((await admin.query("SELECT * FROM todos WHERE id = $1", [habit.id])).rows[0]).toEqual(rowBefore);
+    });
+
+    // The action parses its input, and the lib takes what it parsed, as every other action does.
+    it("parses a restore once, in the action", async () => {
+      const today = toISODate();
+      const task = await add(userA, { space: "personal", title: "Water plants", dueDate: today, isRecurring: false, recurrencePattern: "none" });
+      const [before] = (await getDailyTodos(userA, "personal", today)).todos;
+      await deleteTodoAction(task.id);
+      const parse = vi.spyOn(restoreTodoSchema, "parse");
+      succeeded(await restoreTodoAction({ ...before, reminderTime: null }));
+      const parses = parse.mock.calls.length;
+      parse.mockRestore();
+      expect(parses).toBe(1);
     });
 
     it("restores a ticked task with the time it was ticked, not the time of the Undo", async () => {

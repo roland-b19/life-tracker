@@ -16,9 +16,12 @@ import { addCustomExerciseAction, deleteCustomExerciseAction, restoreCustomExerc
 
 const NEW_ROW = { targetSets: "2", minReps: "5", maxReps: "8" };
 
-/** The days' routine as the server stores it: whole numbers, none for a rest day. */
-const toRows = (day: Pick<SplitDay, "isRest" | "exercises">) =>
-  day.isRest ? [] : day.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: x.targetSets, minReps: x.minReps, maxReps: x.maxReps }));
+/** A draft's routine as the server takes it: numbers. */
+const toRows = (draft: DayDraft) =>
+  draft.exercises.map((x) => ({ exerciseId: x.exerciseId, targetSets: Number(x.targetSets), minReps: Number(x.minReps), maxReps: Number(x.maxReps) }));
+
+/** A draft as the day's save sends it: no routine for a rest day. */
+const toDay = (draft: DayDraft) => ({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : toRows(draft) });
 
 /** The form's copy of a saved day. */
 const toDraft = (day: SplitDay): DayDraft => ({
@@ -67,11 +70,12 @@ export interface DiscardedEdit {
 
 /**
  * The dialog that edits one training day: its name, whether it is a rest day, and its routine (add, remove, drag or
- * arrow keys to reorder, new exercise). Mounted for as long as the page shows the day, so its form keeps its opening
- * while its save is out (D-047): opened again before the answer, it waits for that save with the day it sent, as a fresh
- * opening would show the day from before it and its Save would undo it. Each new opening starts fresh, or from `resume`.
- * Cancel discards on purpose and deletes the exercises created here; Escape, a click outside or the close button
- * discards with "Changes discarded" and an Undo that reopens it with the edits (D-039).
+ * arrow keys to reorder, new exercise). Its form keeps its opening while its save is out (D-047): opened again before
+ * the answer, also after the page was left, it waits for that save with the day it sent, as a fresh opening would show
+ * the day from before it and its Save would undo it. Each new opening starts from the day as saved (what the last save
+ * sent, until the refresh brings it), or from `resume`. Cancel discards on purpose and deletes the exercises created
+ * here; Escape, a click outside or the close button discards with "Changes discarded" and an Undo that reopens it with
+ * the edits (D-039). Left while its save is out, it only closes: the save goes on, so nothing is discarded.
  */
 export function DayEditor({
   isOpen,
@@ -108,11 +112,6 @@ export function DayEditor({
   const names = () => new Map([...day.exercises.map((e) => [e.exerciseId, e.exerciseName] as const), ...exercises.map((e) => [e.id, e.name] as const)]);
   const [seen, setSeen] = useState(names);
   const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? seen.get(id) ?? "Exercise";
-  const addable = exercises.filter((e) => !draft.exercises.some((d) => d.exerciseId === e.id));
-  // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
-  const found = addable.filter((e) => exerciseNameKey(e.name).includes(exerciseNameKey(query)));
-  const groups = [...new Set(found.map((e) => e.muscleGroup))];
-  const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
 
   // New exercise form
   const [showCustom, setShowCustom] = useState(false);
@@ -128,10 +127,16 @@ export function DayEditor({
   // While "Create and add" is out, its fields wait and the day's Save waits for the exercise it adds (D-047: a flag that
   // disables and labels, never the guard). It belongs to one opening: a new opening starts without it.
   const [creating, setCreating] = useState(false);
-  // Each new opening starts from the day as saved, or from `resume`; the form runs this only for a new opening, so one
-  // opened again while its save is out shows the day it sent.
-  function start() {
-    setDraft(resume?.draft ?? toDraft(day));
+  // The day as this opening found it saved: what its Save's Undo writes back and its edits are compared with. A save
+  // that succeeded is the day as saved until the refresh brings it (`saved`). Built only when read, as the editor stays
+  // mounted while closed.
+  const [base, setBase] = useState<DayDraft | null>(null);
+  const savedDay = () => base ?? toDraft(day);
+  // Each new opening starts from the day as saved, or from `resume`; one opened again while its save is out shows the
+  // day it sent.
+  function start(sent?: DayDraft, done?: boolean) {
+    setBase(done && sent ? sent : null);
+    setDraft(resume?.draft ?? sent ?? toDraft(day));
     setCreated(resume?.created ?? []);
     setSeen(names());
     setErrorMsg("");
@@ -148,14 +153,9 @@ export function DayEditor({
     setShowCustom(true);
   }
 
-  // Cancel runs `cancel` and then `close`, like Escape, a click outside and the close button; this tells `close` the
-  // exercises are being dealt with, so it does not also offer the discarded changes back.
-  const cancelled = useRef(false);
-
-  function close() {
-    onClose();
-    if (cancelled.current) return void (cancelled.current = false);
-    if (JSON.stringify(draft) === JSON.stringify(toDraft(day))) return;
+  // Escape, a click outside or the close button, with no save out: the edits can come back with Undo.
+  function discarded() {
+    if (JSON.stringify(draft) === JSON.stringify(savedDay())) return;
     const kept = { draft, created };
     showToast({
       message: "Changes discarded",
@@ -170,7 +170,6 @@ export function DayEditor({
 
   // Cancel deletes the exercises created in this session (only those), with an Undo that brings them back.
   async function cancel() {
-    cancelled.current = true;
     if (!created.length) return;
     const answers = await Promise.all(created.map((x) => deleteCustomExerciseAction(x.id).catch(() => null)));
     const gone = created.filter((_, i) => answers[i]?.success);
@@ -197,20 +196,14 @@ export function DayEditor({
     setDraft((d) => ({ ...d, exercises: d.exercises.filter((e) => e.exerciseId !== id) }));
   }
 
-  function addRow() {
-    if (!pick) return;
-    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: pick, ...NEW_ROW }] }));
+  function addRow(id: string) {
+    setDraft((d) => ({ ...d, exercises: [...d.exercises, { exerciseId: id, ...NEW_ROW }] }));
     setAddId("");
   }
 
-  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
+  async function save(e: React.FormEvent, { stillOpen, saved: succeeded }: FormOpening) {
     e.preventDefault();
-    const rows = draft.exercises.map((x) => ({
-      exerciseId: x.exerciseId,
-      targetSets: Number(x.targetSets),
-      minReps: Number(x.minReps),
-      maxReps: Number(x.maxReps),
-    }));
+    const rows = toRows(draft);
     const problem = dayProblem(draft.name, rows, nameOf);
     if (problem) {
       setErrorMsg(problem);
@@ -219,19 +212,21 @@ export function DayEditor({
     setErrorMsg("");
     // A refusal shows in the editor while it is on screen, else as a toast.
     const refused = refusal(stillOpen, setErrorMsg, warn);
-    const res = await saveSplitDayAction({ id: draft.id, name: draft.name, isRest: draft.isRest, exercises: draft.isRest ? [] : rows }).catch(() => null);
+    const before = savedDay();
+    const res = await saveSplitDayAction(toDay(draft)).catch(() => null);
     // The editor stays open with the day as it was typed, so nothing is lost.
     if (!res?.success) return refused(res?.error ?? "Failed to save day");
+    succeeded();
     if (stillOpen()) onClose();
     showToast({
       message: `Saved "${draft.name.trim()}"`,
       type: "success",
       // The day's row and its routine rows.
       touches: [`workout_split_days:${day.id}`],
-      // Writes the old day back; the server refresh brings it to the list.
+      // Writes back the day as this opening found it saved; the server refresh brings it to the list.
       onUndo: undoWith(
         showToast,
-        () => saveSplitDayAction({ id: day.id, name: day.name, isRest: day.isRest, exercises: toRows(day) }),
+        () => saveSplitDayAction(toDay(before)),
         (back) => (back && !back.success ? back.error : "Failed to undo the edit"),
       ),
     });
@@ -286,9 +281,11 @@ export function DayEditor({
   return (
     <FormModal
       isOpen={isOpen}
-      onClose={close}
-      onCancel={() => void cancel()}
+      onClose={onClose}
+      onDiscard={(how) => (how === "cancel" ? void cancel() : discarded())}
       keepsOpening
+      snapshot={() => draft}
+      data={day}
       onOpen={start}
       title={`Edit ${DAY_NAMES[draft.dayOfWeek]}`}
       onSubmit={save}
@@ -375,45 +372,8 @@ export function DayEditor({
                 })}
               </ListBox>
 
-              {addable.length > 0 && draft.exercises.length < 20 && (
-                <div className="routine-add">
-                  <Field
-                    label="Search exercises"
-                    type="text"
-                    enterKeyHint="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Enter only searches; it does not submit the whole day.
-                      if (e.key === "Enter") e.preventDefault();
-                    }}
-                  />
-                  {found.length === 0 ? (
-                    <EmptyNote>No exercise matches.</EmptyNote>
-                  ) : (
-                    <>
-                      <Label text="Exercise">
-                        <select value={pick} onChange={(e) => setAddId(e.target.value)}>
-                          {groups.map((g) => (
-                            <optgroup key={g} label={muscleLabel(g)}>
-                              {found
-                                .filter((e) => e.muscleGroup === g)
-                                .map((e) => (
-                                  <option key={e.id} value={e.id}>
-                                    {e.name}
-                                  </option>
-                                ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </Label>
-                      <button type="button" className="secondary btn-sm" onClick={addRow}>
-                        <PlusIcon size={14} />
-                        Add exercise
-                      </button>
-                    </>
-                  )}
-                </div>
+              {draft.exercises.length < 20 && (
+                <ExercisePicker exercises={exercises} routine={draft.exercises} query={query} onQuery={setQuery} addId={addId} onPick={setAddId} onAdd={addRow} />
               )}
 
               {draft.exercises.length < 20 &&
@@ -475,5 +435,76 @@ export function DayEditor({
         </>
       )}
     </FormModal>
+  );
+}
+
+/**
+ * The day editor's picker: a search and the library's exercises not in the routine, by muscle group, to add one. Its
+ * lists are built only while it is on screen (the editor stays mounted while closed, D-047). Nothing when every
+ * exercise is in the routine.
+ */
+function ExercisePicker({
+  exercises,
+  routine,
+  query,
+  onQuery,
+  addId,
+  onPick,
+  onAdd,
+}: {
+  exercises: LibraryExercise[];
+  routine: DraftExercise[];
+  query: string;
+  onQuery: (query: string) => void;
+  addId: string;
+  onPick: (id: string) => void;
+  onAdd: (id: string) => void;
+}) {
+  const addable = exercises.filter((e) => !routine.some((d) => d.exerciseId === e.id));
+  // The search matches the way names are compared: spaces, case and a trailing "." do not matter.
+  const search = exerciseNameKey(query);
+  const found = addable.filter((e) => exerciseNameKey(e.name).includes(search));
+  const groups = [...new Set(found.map((e) => e.muscleGroup))];
+  const pick = found.some((e) => e.id === addId) ? addId : (found[0]?.id ?? "");
+  if (addable.length === 0) return null;
+  return (
+    <div className="routine-add">
+      <Field
+        label="Search exercises"
+        type="text"
+        enterKeyHint="search"
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter only searches; it does not submit the whole day.
+          if (e.key === "Enter") e.preventDefault();
+        }}
+      />
+      {found.length === 0 ? (
+        <EmptyNote>No exercise matches.</EmptyNote>
+      ) : (
+        <>
+          <Label text="Exercise">
+            <select value={pick} onChange={(e) => onPick(e.target.value)}>
+              {groups.map((g) => (
+                <optgroup key={g} label={muscleLabel(g)}>
+                  {found
+                    .filter((e) => e.muscleGroup === g)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+          </Label>
+          <button type="button" className="secondary btn-sm" onClick={() => onAdd(pick)}>
+            <PlusIcon size={14} />
+            Add exercise
+          </button>
+        </>
+      )}
+    </div>
   );
 }

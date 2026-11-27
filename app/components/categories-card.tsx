@@ -111,7 +111,6 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the failure path below put it back
           reorder(previous);
           const back = await api.reorder(previous).catch(() => null);
           if (!back?.success) reorder(next);
@@ -217,7 +216,7 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
   }
 
   // The row leaves, its items move to Other and the toast shows at once; a failed delete puts them back and takes the
-  // toast away. Undo waits for the delete, then re-files exactly the items the server moved to Other.
+  // toast away. Undo (run once the delete has succeeded) re-files exactly the items the server moved to Other.
   function remove(cat: string) {
     const at = categories.indexOf(cat);
     const moved = idsIn(cat);
@@ -232,8 +231,9 @@ export function CategoriesCard({ api, categories, onChange, onRefile, idsIn }: P
       onUndo: undoWith(
         showToast,
         async () => {
+          // The toast runs Undo only once the delete has succeeded; its answer names the items it moved.
           const done = await saved;
-          if (!done?.success) return true; // the failure path below put it back
+          if (!done?.success) return true;
           return revert(cat, builtIn, done.change, false, at);
         },
         undoFailed,

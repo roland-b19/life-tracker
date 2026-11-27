@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { msToNextDay, watchDay } from "@/../app/components/day-watch";
+import { msToNextDay, watchDay } from "../app/components/day-watch";
 
 const HOUR = 60 * 60_000;
 

@@ -14,7 +14,7 @@ import {
   type ValueChange,
 } from "@/lib/validations/food";
 import { AddButton, BigNumber, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FieldPair, FormModal, type FormOpening, Page, ProgressBar, SmallButton, Toolbar } from "../components/blocks";
-import { changedFields, refusal } from "../components/forms";
+import { changedFields, refusal, valuesOf } from "../components/forms";
 import { AnimatedNumber } from "../components/animated-number";
 import { Segmented } from "../components/segmented";
 import { isClaudeEnabled } from "@/lib/features";
@@ -256,7 +256,6 @@ export function FoodClient({
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the delete never happened
           const back = await restoreMealAction({
             id: meal.id,
             date: meal.date,
@@ -364,7 +363,6 @@ export function FoodClient({
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the add never happened
           setMetric("waterMl", previous);
           const back = await writeMetric("water", { amount: { from: total, to: previous } });
           if (back?.success) showSaved("water", back);
@@ -455,7 +453,7 @@ export function FoodClient({
     const patch: Partial<Goals> = changedFields(goalsBase, next);
     const changed = Object.keys(patch) as NutritionGoal[];
     if (changed.length === 0) return setGoalsOpen(false);
-    const previous: Partial<Goals> = Object.fromEntries(changed.map((key) => [key, goalsBase[key]]));
+    const previous: Partial<Goals> = valuesOf(goalsBase, changed);
     const fromTo = (from: Partial<Goals>, to: Partial<Goals>) => Object.fromEntries(changed.map((key) => [key, { from: from[key], to: to[key] }]));
     setErrorMsg("");
     const res = await updateTargetsAction(fromTo(previous, patch)).catch(() => null);
@@ -699,12 +697,23 @@ export function FoodClient({
         </Card>
       )}
 
+      {/* Opened again while its add is out, also after the page was left, it waits for that add with the amounts it sent,
+          so a second Save cannot add the meal again (D-047). A fresh opening keeps what was typed. */}
       <FormModal
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
         title="New meal"
         onSubmit={handleLogMeal}
         error={errorMsg}
+        keepsOpening
+        snapshot={() => ({ calories: mealCalories, protein: mealProtein, carbs: mealCarbs, fat: mealFat })}
+        onOpen={(sent) => {
+          if (!sent) return;
+          setMealCalories(sent.calories);
+          setMealProtein(sent.protein);
+          setMealCarbs(sent.carbs);
+          setMealFat(sent.fat);
+        }}
         canSubmit={mealHasValue(entered)}
       >
         <FieldPair>

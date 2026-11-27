@@ -9,17 +9,20 @@ import {
   asOwner,
   burst,
   center,
+  changeAnswers,
   countWrites,
   dismissToast,
   expectNoSeriousViolations,
   expectToastWithoutUndo,
   headIsQuiet,
+  holdRefreshes,
   holdWrites,
   hydrationWarnings,
   loseAnswerOnce,
   installStoppedClock,
   isRefresh,
   newDevice,
+  onNewConnection,
   pauseClock,
   refreshesDone,
   settled,
@@ -34,6 +37,7 @@ import {
 // depends on the date and some days are rest days, so the spec always picks a day by its name, never by the date.
 const DAY = "Upper (chest)"; // Sunday; 7 exercises, the first is "Incline barbell press" (a barbell: its load is in kg)
 const EXERCISE = "Incline barbell press";
+const FLY = "Cable fly (push down)"; // the second exercise of DAY
 // The set line in the workout card, in the app's number format (D-037).
 const SET_LINE = /Set 1: 5 × 60 kg/;
 
@@ -41,6 +45,17 @@ async function openGym(page: Page) {
   await page.goto("/gym");
   await expect(page).toHaveURL(/\/gym$/);
   await expect(page.getByRole("region", { name: "Training days" })).toBeVisible();
+}
+
+// Leaves the Gym page for the Wishlist by the main navigation and comes back, on a page clock installed by the test.
+async function leaveAndReturn(page: Page) {
+  const nav = page.getByRole("navigation", { name: "Main Navigation" });
+  await nav.getByRole("link", { name: "Wishlist" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  await nav.getByRole("link", { name: "Gym" }).click();
+  await page.clock.runFor(10_000);
+  await expect(page).toHaveURL(/\/gym$/);
 }
 
 // The day's button in "Training days" (its name starts with the weekday; the Start buttons' names do not).
@@ -208,6 +223,9 @@ async function openEditor(page: Page) {
   await expect(editor).toBeVisible();
   return editor;
 }
+
+// A routine row's drag handle in the day editor.
+const dragHandle = (editor: Locator, name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
 
 // Creates an exercise from the open editor: "Create and add" puts it into the routine being edited, as row `row`.
 async function createExercise(page: Page, editor: Locator, name: string, row: number) {
@@ -736,6 +754,189 @@ test("the custom exercise form opened again after another exercise's save still 
   expect(rows.map((r) => r.name)).toEqual([aNew, bNew].sort());
 });
 
+// Cancel or Escape while the day's save is out only closes the editor, as in every other form (D-047): the save goes on,
+// and its answer shows as a toast. Before, Cancel also deleted the exercises created in this opening, which the save puts
+// in the routine, and Escape said "Changes discarded" about changes being saved.
+test("Cancel or Escape while the day's save is out only closes the editor, and the save's answer shows as a toast [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const name = exerciseName();
+  await openGym(page);
+  let editor = await openEditor(page);
+  await createExercise(page, editor, name, 8);
+  const writes = countWrites(page);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await refreshesDone(page);
+  expect(writes).toHaveLength(1);
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+  await expect(mine(page).getByText(name, { exact: true })).toBeVisible();
+  await openGym(page);
+  await pickDay(page, DAY);
+  await expect(page.getByRole("region", { name: DAY }).getByText(`8. ${name}`, { exact: true })).toBeVisible();
+});
+
+// A form opened again after its save answered, before the refresh brings the saved data (D-034), starts from what the
+// save sent (D-047). Before, it showed the values from before the save, and its Save would have undone the save.
+test("the day editor, deload and custom exercise forms opened again before the refresh after a save show what was saved [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const [old, renamed] = [exerciseName(), exerciseName()];
+  await openGym(page);
+  await customExercises(page, [old]);
+  await refreshesDone(page);
+
+  let release = await holdRefreshes(page);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+  await release();
+
+  release = await holdRefreshes(page);
+  const thisWeek = weekStart(toISODate());
+  const edit = page.getByRole("button", { name: "Edit deload weeks" });
+  const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+  await edit.click();
+  await dialog.getByLabel("Last deload").selectOption(thisWeek);
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"last":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await edit.click();
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await release();
+
+  release = await holdRefreshes(page);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  await mine(page).getByRole("button", { name: `Edit ${old}` }).click();
+  await field.fill(renamed);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${renamed}"`);
+  await expect(form).toBeHidden();
+  // The list still has the old name until the refresh.
+  await mine(page).getByRole("button", { name: `Edit ${old}` }).click();
+  await expect(field).toHaveValue(renamed);
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+  await release();
+  await expect(mine(page).getByText(renamed, { exact: true })).toBeVisible();
+});
+
+// The server stores a Next that is this week as a Last (a week that has started is past), so the form opened again
+// before the refresh shows what it stored: this week as the Last and no Next. Before, it kept the chosen Next, and
+// its Save was refused (the next must come after the last).
+test("the deload form opened again before the refresh shows what the server stored when Next is this week", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const thisWeek = weekStart(toISODate());
+  const release = await holdRefreshes(page);
+  const edit = page.getByRole("button", { name: "Edit deload weeks" });
+  const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+  await edit.click();
+  await dialog.getByLabel("Next deload").selectOption(thisWeek);
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"next":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await edit.click();
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
+  await expect(dialog.getByLabel("Next deload")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeEnabled();
+  // Its Save is accepted, not refused.
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"last":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await release();
+});
+
+// The custom exercise form's held save is kept for the tab's life, not the page's (D-047): after the page was left and
+// opened again through the app's links (each tap lets through after 10 s of the page's clock while a write is out,
+// D-034), the exercise's form waits with the name it sent until the answer, and a Save after that keeps the rename.
+// Before, the form opened again with the old name, and its Save undid the rename.
+test("the custom exercise form opened again after leaving the page while its save is out waits with what it sent [D-047]", async ({
+  signedInPage: page,
+}) => {
+  const [name, renamed] = [exerciseName(), exerciseName()];
+  await page.clock.install();
+  await openGym(page);
+  await customExercises(page, [name]);
+  const form = page.getByRole("dialog", { name: "Edit exercise" });
+  const field = form.getByLabel("Name", { exact: true });
+  const writes = countWrites(page, `"name":"${renamed}"`);
+  const release = await holdWrites(page, `"name":"${renamed}"`);
+  await mine(page).getByRole("button", { name: `Edit ${name}` }).click();
+  await field.fill(renamed);
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await leaveAndReturn(page);
+  await mine(page).getByRole("button", { name: `Edit ${name}` }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(field).toBeDisabled();
+  await expect(field).toHaveValue(renamed);
+  await andSettle(page, () => release(), `"name":"${renamed}"`);
+  await expect(toast(page, `Saved "${renamed}"`)).toBeVisible();
+  await expect(field).toHaveValue(renamed);
+  await andSettle(page, () => form.getByRole("button", { name: "Save" }).click(), `"name":"${renamed}"`);
+  await expect(form).toBeHidden();
+  expect(writes).toHaveLength(2);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((admin) => admin.query("SELECT name FROM exercises WHERE user_id = $1 AND name = ANY($2)", [userId, [name, renamed]]));
+  expect(rows.map((r: { name: string }) => r.name)).toEqual([renamed]);
+});
+
+// A day save answered after the page was left and opened again, while the editor opened again waits for it and before
+// the refresh brings the saved day (D-034), leaves that opening as a save answered before would (D-047): it shows the
+// day as saved and compares its edits with it, so Escape discards nothing. Before, the opening compared with the day
+// from before the save and said "Changes discarded" about values that were saved. The page's clock stands still after
+// the return, so the refresh after the answer waits until the end.
+test("the day editor opened again after leaving the page, whose save then answers, shows the day as saved and Escape discards nothing [D-047]", async ({
+  signedInPage: page,
+}) => {
+  await page.clock.install();
+  await openGym(page);
+  const writes = countWrites(page, `"name":"${DAY}"`);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  let editor = await openEditor(page);
+  await editor.getByLabel("Sets", { exact: true }).first().fill("5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeHidden();
+
+  await leaveAndReturn(page);
+  editor = await openEditor(page);
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  expect(await toast(page, "Changes discarded").count()).toBe(0);
+
+  await refreshesDone(page, { tick: 1000 });
+  expect(writes).toHaveLength(1);
+  editor = await openEditor(page);
+  await expect(editor.getByLabel("Sets", { exact: true }).first()).toHaveValue("5");
+});
+
 // "Create and add" inside the day editor answers only the opening it was sent from (D-047). Sent, then the editor's
 // Cancel and the editor opened again: the new opening starts with its own Save free, and the held answer changes nothing
 // in it. Its toasts still show: a new exercise stays in the library with its "Created" toast, whose Undo deletes it; a
@@ -827,17 +1028,161 @@ test("saving this week as a deload week turns the deload switch on without a rel
 test("the day editor reorders its routine with the arrow keys, kept after a save and a reload", async ({ signedInPage: page }) => {
   await openGym(page);
   const editor = await openEditor(page);
-  await editor.getByRole("button", { name: `Drag ${EXERCISE} to reorder` }).focus();
+  await dragHandle(editor, EXERCISE).focus();
   await page.keyboard.press("ArrowDown");
-  await editor.getByRole("button", { name: "Drag Bayesian curl (high) to reorder" }).focus();
+  await dragHandle(editor, "Bayesian curl (high)").focus();
   await page.keyboard.press("ArrowUp");
-  const order = ["1. Cable fly (push down)", `2. ${EXERCISE}`, "6. Bayesian curl (high)", "7. Cable overhead extension (high)"];
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`, "6. Bayesian curl (high)", "7. Cable overhead extension (high)"];
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
   await andSettle(page, () => editor.getByRole("button", { name: "Save" }).click(), `"name":"${DAY}"`);
   await expect(editor).toBeHidden();
   await openGym(page);
   await pickDay(page, DAY);
   for (const row of order) await expect(page.getByRole("region", { name: DAY }).getByText(row, { exact: true })).toBeVisible();
+});
+
+// Chromium sends pointer events to a disabled button, so before, a handle disabled while the day's save was out still
+// dragged its row, and the save's answer then dropped that order without a word.
+test("the day editor reorders its routine by dragging a row's handle, but not while its save is out", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const editor = await openEditor(page);
+  // Drags a row by its handle with the mouse, down past the middle of the row under it (a disabled handle is not
+  // scrolled to by Playwright, and Save scrolled the dialog).
+  const dragDown = async (name: string, below: string) => {
+    await dragHandle(editor, name).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const from = center(await dragHandle(editor, name).boundingBox());
+    const to = center(await dragHandle(editor, below).boundingBox());
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x, to.y + 10, { steps: 5 });
+    await page.mouse.up();
+  };
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
+  await dragDown(EXERCISE, FLY);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(dragHandle(editor, FLY)).toBeDisabled();
+  await dragDown(FLY, EXERCISE);
+  await settled(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await openGym(page);
+  await pickDay(page, DAY);
+  for (const row of order) await expect(page.getByRole("region", { name: DAY }).getByText(row, { exact: true })).toBeVisible();
+});
+
+// Opens the day editor, moves the press down with its arrow key (a change for the save to send), then presses the fly
+// and drags it below the press with the mouse: the drag is under way and the pointer stays down.
+async function dragFlyBelowPress(page: Page) {
+  await openGym(page);
+  const editor = await openEditor(page);
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
+  await dragHandle(editor, EXERCISE).focus();
+  await page.keyboard.press("ArrowDown");
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+  const from = center(await dragHandle(editor, FLY).boundingBox());
+  const below = center(await dragHandle(editor, EXERCISE).boundingBox()).y + 10;
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x, below, { steps: 5 });
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  return { editor, order, from, below };
+}
+
+// The save sends the order on screen as it goes out (Enter in Name, or Save tapped with another finger), so a drag under
+// way then must drop nothing: before, its drop reordered the editor, and the save's answer closed it with that order lost.
+test("the day editor puts back a row being dragged when its save goes out, and keeps the order it sent", async ({ signedInPage: page }) => {
+  const { editor, order, from, below } = await dragFlyBelowPress(page);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByLabel("Name", { exact: true }).press("Enter");
+  await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await page.mouse.move(from.x, below + 10);
+  const top = async (row: string) => (await editor.getByText(row, { exact: true }).boundingBox())!.y;
+  expect(await top(order[0])).toBeLessThan(await top(order[1])); // the fly is back in its place
+  await page.mouse.up();
+  await settled(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+  await openGym(page);
+  await openEditor(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+});
+
+// A browser may send no pointer event to a disabled button (WebKit, on the owner's iPhone), so a drag under way ends as
+// its handle is disabled, not at the next pointer event: before, with the pointer still, the row stayed lifted and the
+// page could not pan until the editor closed.
+test("the day editor ends a drag as its save goes out, with no further pointer event", async ({ signedInPage: page }) => {
+  const { editor, order } = await dragFlyBelowPress(page);
+  // A pan in the form's own scroll, which the dialog's lock leaves alone, so only a drag under way blocks it.
+  const panBlocked = () =>
+    editor.locator(".modal-body").evaluate((body) => {
+      if (body.scrollHeight <= body.clientHeight) throw new Error("the form must scroll for this check");
+      const pan = new Event("touchmove", { bubbles: true, cancelable: true });
+      body.dispatchEvent(pan);
+      return pan.defaultPrevented;
+    });
+  expect(await panBlocked()).toBe(true);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByLabel("Name", { exact: true }).press("Enter");
+  await expect(dragHandle(editor, FLY)).toBeDisabled();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(0);
+  await expect(editor.locator('.routine-row[style*="transform"]')).toHaveCount(0);
+  expect(await panBlocked()).toBe(false);
+
+  await page.mouse.up();
+  await settled(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+});
+
+// Only the dragged handle's own disabling ends its drag: another element of the page gaining `disabled` (here Cancel,
+// outside the handle's fieldset) leaves the row lifted, and the drop still reorders.
+test("the day editor keeps a drag going when another button of the page is disabled", async ({ signedInPage: page }) => {
+  const { editor, from, below } = await dragFlyBelowPress(page);
+  const cancel = editor.getByRole("button", { name: "Cancel" });
+  await cancel.evaluate((el) => el.setAttribute("disabled", ""));
+  await expect(cancel).toBeDisabled();
+  await cancel.evaluate((el) => el.removeAttribute("disabled"));
+  await expect(cancel).toBeEnabled();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  await page.mouse.move(from.x, below + 10);
+  await page.mouse.up();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(0);
+  // Dropped: the fly is second and the press first.
+  for (const row of [`1. ${EXERCISE}`, `2. ${FLY}`]) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+});
+
+// A save that closes the day editor while a handle is still pressed ends that drag there: before, the listener that keeps
+// the page from panning under a dragging finger stayed on after the press was lifted, and no touch could pan the page.
+test("the day editor closed by its save in the middle of a drag leaves the page free to pan", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const editor = await openEditor(page);
+  const handle = dragHandle(editor, EXERCISE);
+  await handle.focus();
+  await page.keyboard.press("ArrowDown"); // a change for the save to send
+  const at = center(await handle.boundingBox());
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await andSettle(page, () => editor.getByLabel("Name", { exact: true }).press("Enter"), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await page.mouse.up();
+  const panBlocked = await page.evaluate(() => {
+    const pan = new Event("touchmove", { bubbles: true, cancelable: true });
+    document.body.dispatchEvent(pan);
+    return pan.defaultPrevented;
+  });
+  expect(panBlocked).toBe(false);
 });
 
 // Escape, a click outside and the close button discard the edits with an Undo that reopens the editor with them (D-039).
@@ -876,7 +1221,7 @@ test("the day editor closed with Escape or a click outside keeps the edits behin
   await openGym(page);
   await pickDay(page, name);
   await expect(page.getByRole("region", { name }).getByText(EXERCISE)).toBeHidden();
-  await expect(page.getByRole("region", { name }).getByText("1. Cable fly (push down)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name }).getByText(`1. ${FLY}`, { exact: true })).toBeVisible();
 });
 
 test("the day editor's Cancel deletes the exercises created in it, with Undo, also after a reload", async ({ signedInPage: page }) => {
@@ -1349,10 +1694,12 @@ async function holdRefreshAfterCancel(page: Page) {
     async (route) => {
       if (stale || !isRefresh(page, route.request())) return route.fallback();
       stale = route.request();
-      const answer = await route.fetch();
-      done();
-      await held;
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(stale!);
+        done();
+        await held;
+        await route.fulfill({ response: answer });
+      });
     },
   );
   return { rendered, release, stale: () => stale! };
@@ -1448,9 +1795,11 @@ test("a refresh rendered before Start and answered after it, offline since, leav
     async (route) => {
       if (answered || route.request().method() !== "POST") return route.fallback();
       answered = true;
-      const answer = await route.fetch();
-      await page.context().setOffline(true);
-      await route.fulfill({ response: answer });
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(route.request());
+        await page.context().setOffline(true);
+        await route.fulfill({ response: answer });
+      });
     },
   );
   await startWorkout(page, DAY);
@@ -1479,15 +1828,7 @@ test("a refresh rendered before Start and answered after it, offline since, leav
 // before Start, and shows none again) still leaves the screen, with the toast.
 test("a workout finished on another device before the first refresh after Start leaves this page too", async ({ signedInPage: page, browser }) => {
   await openGym(page);
-  let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route(
-    (url) => url.pathname === "/gym",
-    async (route) => {
-      if (isRefresh(page, route.request())) await held;
-      await route.fallback();
-    },
-  );
+  const release = await holdRefreshes(page);
   await startWorkout(page, DAY);
   const other = await otherDevice(browser, page);
   try {
@@ -1496,8 +1837,7 @@ test("a workout finished on another device before the first refresh after Start 
     await other.keyboard.press("Shift");
     await andSettle(other, () => other.getByRole("button", { name: "Finish workout" }).click());
     await expect(other.getByText("No sets logged: the workout was removed")).toBeVisible();
-    release();
-    await refreshesDone(page);
+    await release();
     await expect(toast(page, WORKOUT_ENDED_ELSEWHERE)).toBeVisible();
     await expect(page.getByRole("timer", { name: "Workout time" })).toBeHidden();
     await expect(banner(page)).toBeHidden();
@@ -1625,8 +1965,8 @@ test("a second notes refusal after the merged notes were saved elsewhere does no
   await exitSaves(page, "X Mine more");
 });
 
-// The field holds the server's notes only where the merge puts them (the whole field, or its start before a space), so
-// short notes that the typed text holds elsewhere ("5" in "Bench 5x5") still come first, and the save keeps them.
+// The field holds the server's notes only as whole words, so short notes that are only part of a word ("5" in
+// "Bench 5x5") still come first, and the save keeps them.
 test("short server notes inside the typed text are still put first after a notes refusal [D-047]", async ({ signedInPage: page }) => {
   await openGym(page);
   await startWorkout(page, DAY);
@@ -1636,6 +1976,18 @@ test("short server notes inside the typed text are still put first after a notes
   await refusedNotes(page, "Bench 5x5");
   await expect(notes(page)).toHaveValue("5 Bench 5x5");
   await exitSaves(page, "5 Bench 5x5");
+});
+
+// Server notes that the typed text holds as a whole word, though not at its start, are not put first again.
+test("server notes held as a whole word inside the typed text are not doubled after a notes refusal [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await refreshesDone(page);
+  await setServerNotes(page, "squat");
+  await refusedNotes(page, "bench squat");
+  await expect(notes(page)).toHaveValue("bench squat");
+  await exitSaves(page, "bench squat");
 });
 
 // Notes the server takes as over its limit, typed past the field's own limit (an older page, a paste the field let by).
@@ -1810,6 +2162,21 @@ test("a set log whose answer is lost says it failed, and the workout's buttons w
   await expect(page.getByRole("button", { name: "Finish workout" })).toBeEnabled();
   await expect(page.getByText(SET_LINE)).toBeHidden();
   expect(await setCount(await signedInUserId(page))).toBe(0);
+});
+
+// A workout write whose code after the answer fails says so too, and the saving flag still goes off: here the set log's
+// answer is changed on its way so that it names no set.
+test("a set log whose answer the page cannot read says it failed, and the workout's buttons work again [D-047]", async ({ signedInPage: page }) => {
+  await openGym(page);
+  await startWorkout(page, DAY);
+  await dismissToast(page, `Started "${DAY}"`);
+  await changeAnswers(page, '"reps"', (text) => text.replace('"set":', '"unread":'));
+  await page.getByRole("button", { name: `Show ${EXERCISE}`, exact: true }).click();
+  await page.getByLabel("Value").fill("60");
+  await andSettle(page, () => page.getByRole("button", { name: "Log set" }).click(), '"reps"');
+  await expect(toast(page, "Failed to add set")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log set" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Finish workout" })).toBeEnabled();
 });
 
 // D-046, D-047: a set already gone from the server (another device deleted it) counts as removed: the set stays off
@@ -2006,15 +2373,7 @@ test("Start shows the day of the server's answer, not the day that was tapped", 
       (r) => [r.name, r.id],
     ),
   );
-  await page.route("**/gym", async (route) => {
-    const body = route.request().postData() ?? "";
-    if (route.request().method() !== "POST" || !body.includes('"splitDayId"') || !body.includes('"isDeload"')) return route.fallback();
-    const answer = await route.fetch();
-    const text = (await answer.text()).replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other));
-    // The body is read decoded and changed, so its length and encoding headers no longer apply.
-    const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
-    await route.fulfill({ response: answer, body: text, headers });
-  });
+  await changeAnswers(page, '"isDeload"', (text) => text.replaceAll(ids[DAY], ids[other]).replaceAll(JSON.stringify(DAY), JSON.stringify(other)));
   await pickDay(page, DAY);
   await startWorkout(page, DAY);
   await expect(page.getByRole("region", { name: other })).toBeVisible();

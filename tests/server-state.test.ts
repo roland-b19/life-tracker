@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rowsGone } from "@/../app/components/server-state";
+import { rowsGone } from "../app/components/server-state";
 
 describe("rowsGone [X-EDIT-DELETED]", () => {
   it("names the rows a new server value no longer has", () => {

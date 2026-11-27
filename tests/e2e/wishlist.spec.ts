@@ -10,6 +10,7 @@ import {
   dismissToast,
   expectNoSeriousViolations,
   expectToastWithoutUndo,
+  holdRefreshes,
   holdWrites,
   isRefresh,
   itemName,
@@ -87,6 +88,51 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(row).toBeVisible();
   await expectTotal("1\\.234");
+});
+
+// The toast waits for the write it reports before it runs an Undo (conventions, Undo keys): an Undo tapped while the
+// delete is still out puts the item back once the delete has answered, for good.
+test("an Undo tapped while the delete is unanswered restores the item once the delete answers", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = itemName();
+  const row = page.getByText(name, { exact: true });
+  await addItem(page, name);
+  await dismissToast(page, `Added "${name}" (100 RON)`);
+
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(row).toBeHidden();
+  await undoIn(page, `Removed "${name}"`).click();
+  // The restore is the write that sends the item's createdAt; the delete sends only its id.
+  await andSettle(page, async () => release(), `"createdAt"`);
+  await expect(row).toBeVisible();
+
+  await page.reload();
+  await expect(row).toBeVisible();
+});
+
+// ...and one whose delete is then lost writes nothing: there was nothing to undo, and the failed delete has put the item
+// back and said why.
+test("an Undo tapped while the delete is unanswered sends no restore when the delete is lost", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = itemName();
+  const row = page.getByText(name, { exact: true });
+  await addItem(page, name);
+  await dismissToast(page, `Added "${name}" (100 RON)`);
+
+  const restores = countWrites(page, `"createdAt"`);
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(row).toBeHidden();
+  await undoIn(page, `Removed "${name}"`).click();
+  await release(true);
+  await expect(toast(page, "Failed to remove item")).toBeVisible();
+  await expect(row).toBeVisible();
+  await settled(page);
+  expect(restores).toHaveLength(0);
+
+  await page.reload();
+  await expect(row).toBeVisible();
 });
 
 // A quick double tap on a form's Save (FormModal, D-043) saves once, and its second tap does not land on what lies under
@@ -489,20 +535,12 @@ test("an edit's Undo keeps on screen another tab's change made after the save, a
   // is the one the answer put on screen, not one the refresh corrected: the page asks for that refresh 600 ms after the
   // answer, by when the answer is on screen.
   await page.unroute("**/wishlist");
-  let releaseRefresh = () => {};
-  const refreshHeld = new Promise<void>((resolve) => (releaseRefresh = resolve));
-  await page.route(
-    (url) => url.pathname === "/wishlist",
-    async (route) => {
-      if (isRefresh(page, route.request())) await refreshHeld;
-      await route.fallback();
-    },
-  );
+  const releaseRefresh = await holdRefreshes(page);
   const refreshAsked = page.waitForRequest((r) => isRefresh(page, r));
   await andSettle(page, () => page.getByRole("button", { name: "Retry" }).click(), `"name":"${name}"`);
   await refreshAsked;
   await expect(itemRow(page, name)).toContainText("300 RON");
-  releaseRefresh();
+  await releaseRefresh();
 });
 
 // The browser keeps a copy of each page seen (staleTimes in next.config.ts), and only a refresh drops it. A tap on a

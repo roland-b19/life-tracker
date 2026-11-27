@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GET } from "@/../app/api/health/route";
+import { GET } from "../app/api/health/route";
 
 describe("health endpoint", () => {
   it("returns a cache-disabled liveness response without application data", async () => {

@@ -269,8 +269,9 @@ export function ShoppingTab({
         showToast,
         async () => {
           setBought(!next, item.checkedAt);
+          // The toast runs Undo only once the tick has saved; its answer holds the time the server gave the box.
           const done = await saved;
-          if (!done?.success) return true; // the failure path below put it back
+          if (!done?.success) return true;
           const back = await toggleShoppingItemAction({ id: item.id, isBought: !next, checkedAt: item.checkedAt }).catch(() => null);
           if (!back?.success) setBought(next, done.item.checkedAt);
           return back;
@@ -300,7 +301,6 @@ export function ShoppingTab({
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the failure path below puts it back
           upsertShop(item);
           const back = await restoreShoppingItemsAction({ itemIds: [item.id] }).catch(() => null);
           if (back?.success) showRestored([item.id], back.items as ShoppingItemData[], back.merged);
@@ -341,7 +341,6 @@ export function ShoppingTab({
         showToast,
         async () => {
           putBack();
-          if (!(await saved)?.success) return true; // the clear never happened
           const back = await restoreShoppingItemsAction({ itemIds: ids }).catch(() => null);
           if (back?.success) showRestored(ids, back.items as ShoppingItemData[], back.merged);
           else drop();

@@ -71,7 +71,6 @@ export function WeightCard({ today, initial }: { today: string; initial: WeightE
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the delete never happened; the failure path above said why
           const back = await restoreWeightAction({ id: entry.id, date: entry.date, kilograms: Number(entry.kilograms) }).catch(() => null);
           if (back?.success) upsert(entry);
           return back;

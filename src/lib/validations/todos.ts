@@ -69,7 +69,7 @@ export const pushSubscriptionSchema = z.object({
 export type TodoSpace = z.infer<typeof todoSpaceSchema>;
 // Callers that never file a task (tests, the carry-over) can leave the category out: it is then "other".
 export type AddTodoInput = Omit<z.infer<typeof todoFields>, "category"> & { category?: string };
-export type RestoreTodoInput = z.input<typeof restoreTodoSchema>;
+export type RestoreTodoInput = z.infer<typeof restoreTodoSchema>;
 export type ToggleTodoInput = z.infer<typeof toggleTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;

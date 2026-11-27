@@ -351,7 +351,7 @@ test("the phone More menu is a modal dialog: focus moves in, stays in, and retur
     await page.keyboard.press("Shift+Tab");
     expect(await focusInMenu(page)).toBe(true);
   }
-  // The Settings link, styled as a button, gets the buttons' 2px keyboard ring.
+  // The Settings entry, styled as a button, gets the buttons' 2px keyboard ring.
   const settings = moreMenu(page).getByRole("link", { name: "Settings" });
   while (!(await settings.evaluate((el) => el === document.activeElement))) await page.keyboard.press("Tab");
   await expect(settings).toHaveCSS("outline-style", "solid");

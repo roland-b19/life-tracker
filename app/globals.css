@@ -362,11 +362,9 @@ h3 {
 }
 
 /* The active item has the navigation's thumb, as in the tab bar (D-026), with its edge and shadow (D-030); a link in
-   the More menu is a button like Sign out, so it has the same look */
+   the More menu is a button like Sign out, so it has the same look. Their fill is the secondary buttons' (below). */
 .nav-link.active,
 .more-links .nav-link {
-  background: var(--surface-secondary);
-  color: var(--text);
   border-color: var(--card-edge);
   box-shadow: var(--card-shadow);
 }
@@ -960,8 +958,17 @@ button:disabled {
 }
 
 /* Secondary, small and icon buttons share one opaque fill: the tab bar's selected item and the fields (--surface-secondary),
-   so they read clearly on a card in both modes */
-button.secondary {
+   so they read clearly on a card in both modes. This is the one rule that sets it for them, the toast's actions, the
+   category title boxes, the sidebar's active link and the More menu's links; each keeps its own shape in its own rule.
+   The hover fills (Shared polish, below) and the context fills (.side-user, .split-day-card) are more specific, so they
+   still win. */
+.nav-link.active,
+.more-links .nav-link,
+button.secondary,
+.delete-icon-btn,
+.toast-action-btn,
+button.btn-sm,
+:is(.group-label, .section-title, .exercise-title) > .group-toggle {
   color: var(--text);
   background: var(--surface-secondary);
 }
@@ -1073,8 +1080,6 @@ button.signin-continue:disabled {
 
 /* Icon-only row actions (edit, delete): the same neutral fill, edge and height as the small text buttons */
 .delete-icon-btn {
-  background: var(--surface-secondary);
-  color: var(--text);
   cursor: pointer;
   padding: 0;
   border-radius: 0.85rem;
@@ -1315,8 +1320,6 @@ button.signin-continue:disabled {
 }
 
 .toast-action-btn {
-  background: var(--surface-secondary);
-  color: var(--text);
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.7rem;
@@ -1371,8 +1374,6 @@ button.btn-sm {
   padding: 0.35rem 0.85rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text);
-  background: var(--surface-secondary);
   /* Corner radius scales with height (about 0.31 x) so small and large buttons share one shape */
   border-radius: 0.7rem;
 }
@@ -2280,8 +2281,6 @@ select.sort-select:open { background-color: color-mix(in srgb, var(--surface-sec
   min-height: 1.875rem;
   padding: 0.25rem 0.55rem 0.25rem 0.7rem;
   gap: 0.35rem;
-  color: var(--text);
-  background: var(--surface-secondary);
   border: 1px solid var(--card-edge);
   border-radius: 0.6rem;
   box-shadow: var(--card-shadow);
