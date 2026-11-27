@@ -1111,6 +1111,49 @@ test("the day editor puts back a row being dragged when its save goes out, and k
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
 });
 
+// A browser may send no pointer event to a disabled button (WebKit, on the owner's iPhone), so a drag under way ends as
+// its handle is disabled, not at the next pointer event: before, with the pointer still, the row stayed lifted and the
+// page could not pan until the editor closed.
+test("the day editor ends a drag as its save goes out, with no further pointer event", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const editor = await openEditor(page);
+  const handle = (name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
+  const FLY = "Cable fly (push down)";
+  const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
+  await handle(EXERCISE).focus();
+  await page.keyboard.press("ArrowDown"); // a change for the save to send
+
+  // The fly is pressed and dragged below the press, then the save goes out (held); the pointer stays still and down.
+  const from = center(await handle(FLY).boundingBox());
+  const below = center(await handle(EXERCISE).boundingBox()).y + 10;
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x, below, { steps: 5 });
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  // A pan in the form's own scroll, which the dialog's lock leaves alone, so only a drag under way blocks it.
+  const panBlocked = () =>
+    editor.locator(".modal-body").evaluate((body) => {
+      if (body.scrollHeight <= body.clientHeight) throw new Error("the form must scroll for this check");
+      const pan = new Event("touchmove", { bubbles: true, cancelable: true });
+      body.dispatchEvent(pan);
+      return pan.defaultPrevented;
+    });
+  expect(await panBlocked()).toBe(true);
+  const release = await holdWrites(page, `"name":"${DAY}"`);
+  await editor.getByLabel("Name", { exact: true }).press("Enter");
+  await expect(handle(FLY)).toBeDisabled();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(0);
+  await expect(editor.locator('.routine-row[style*="transform"]')).toHaveCount(0);
+  expect(await panBlocked()).toBe(false);
+
+  await page.mouse.up();
+  await settled(page);
+  for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
+  await andSettle(page, () => release(), `"name":"${DAY}"`);
+  await expect(editor).toBeHidden();
+  await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+});
+
 // A save that closes the day editor while a handle is still pressed ends that drag there: before, the listener that keeps
 // the page from panning under a dragging finger stayed on after the press was lifted, and no touch could pan the page.
 test("the day editor closed by its save in the middle of a drag leaves the page free to pan", async ({ signedInPage: page }) => {
