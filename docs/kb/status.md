@@ -28,11 +28,11 @@ last_verified: 2026-11-27
 | Functional audit fixes, open copies kept in sync, the midnight rollover, no swipe navigation (D-034 to D-047) | done 2026-11-27, [plan](archive/plans/audit-fixes.md) (parts M and A to F, the owner's round and the last edges, PR #181, all in `main`) |
 
 ## In progress
-Nothing: the functional audit's last edges, the review's fixes and the milestone audit's cleanup went to `main` with PR #181 (2026-11-27).
+Nothing: the leftover fixes outside Later went to `main` with PR #182 (2026-11-27).
 
 ## Next steps
 1. The owner picks the next item from Later; each starts with its own plan, in its own session (golden rule 6).
-2. On the owner's word: a check of the app on the personal deploy and one Azure iteration. It needs their OK for the Azure resources (they cost money) and the course requirements, which are not in the repo.
+2. On the owner's word: one Azure iteration, checking the app and the course requirements there. It needs their OK for the Azure resources (they cost money) and those requirements, which are not in the repo.
 
 Known, not a bug: under heavy e2e load the Gym page's main thread can stall while headless Chromium's software GL (SwiftShader) reads back the muscle map's WebGL draws. It now draws 2 times on load, not 5 (longest task about 2850 → 1140 ms with 4 workers); real devices composite on the GPU and do no readback.
 
