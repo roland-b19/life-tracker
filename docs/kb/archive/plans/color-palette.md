@@ -1,6 +1,6 @@
 ---
 summary: Plan for the new color palette: slate surfaces, one turquoise accent, dark and light modes (system or a manual switch), glass cards with a hairline and soft shadow, a segmented-style tab bar.
-last_verified: 2026-11-24
+last_verified: 2026-11-27
 ---
 
 # Plan: color palette
@@ -15,17 +15,19 @@ A clickable prototype of the result (one basic view of each page, dark and light
 - Out: animation (a separate later iteration; the existing animation exceptions stay); the font (D-023); the muscle map's group colors; syncing the mode choice across devices; different accents per page; new screens, new features or layout changes; the rounded corner radius; any new dependency.
 
 ## Done criteria
-- [ ] The new styles sit on the general structure and the direct containers, with no duplicated per-page declarations — checked by a look at the diff of `app/globals.css` and the owner's review.
-- [ ] Dark mode uses the dark values and light mode the light values of each `light-dark()` token, chosen by the system with Auto and by the switch otherwise, with no flash of the other mode on load — checked by `npm run e2e` (the `@a11y` scans run in both schemes, step 4; the switch spec, step 7) and by a look at `/wishlist`, `/todos`, `/gym` and `/health` in both modes.
-- [ ] Every pair under "Contrast pairs" meets its target in both modes: text at least 4.5:1, colored fills at least 3:1 — checked by `tests/palette-contrast.test.ts` (Vitest).
-- [ ] No accent or status token is used as a text color: no `color:` declaration in `app/globals.css` takes `--tint`, `--success`, `--warning` or `--danger` (fills, borders, `fill` and `stroke` may) — checked by `tests/palette-contrast.test.ts`.
-- [ ] No color literal (`#hex`, `rgb()`, `rgba()`, `hsl()`, `white`, `black`) is left in `app/globals.css` outside `:root` rules (the token block and the ones inside the `prefers-contrast` and `prefers-reduced-transparency` media queries) — checked by `tests/palette-contrast.test.ts`.
-- [ ] Cards, modals and the toast show the hairline and soft shadow; with `prefers-contrast: more` or `prefers-reduced-transparency` emulated in devtools (no e2e spec covers them) they fall back to solid surfaces with a visible outline — checked by a look in both modes.
-- [ ] Key metrics (calories, weight, tasks done, wishlist total) use the big numeral style, and the accent appears only on progress, the active state and the primary action — checked by a look at the four pages, with the owner's OK.
-- [ ] The bottom tab bar has the segmented selector's shape and raised active item, and checkboxes are round with one tick style — checked by a look at the four pages on a phone width, with the owner's OK.
+- [x] The new styles sit on the general structure and the direct containers, with no duplicated per-page declarations — checked by a look at the diff of `app/globals.css` and the owner's review.
+- [x] Dark mode uses the dark values and light mode the light values of each `light-dark()` token, chosen by the system with Auto and by the switch otherwise, with no flash of the other mode on load — checked by `npm run e2e` (the `@a11y` scans run in both schemes, step 4; the switch spec, step 7) and by a look at `/wishlist`, `/todos`, `/gym` and `/health` in both modes.
+- [x] Every pair under "Contrast pairs" meets its target in both modes: text at least 4.5:1, colored fills at least 3:1 — checked by `tests/palette-contrast.test.ts` (Vitest).
+- [x] No accent or status token is used as a text color: no `color:` declaration in `app/globals.css` takes `--tint`, `--success`, `--warning` or `--danger` (fills, borders, `fill` and `stroke` may) — checked by `tests/palette-contrast.test.ts`.
+- [x] No color literal (`#hex`, `rgb()`, `rgba()`, `hsl()`, `white`, `black`) is left in `app/globals.css` outside `:root` rules (the token block and the ones inside the `prefers-contrast` and `prefers-reduced-transparency` media queries) — checked by `tests/palette-contrast.test.ts`.
+- [x] Cards, modals and the toast show the hairline and soft shadow; with `prefers-contrast: more` or `prefers-reduced-transparency` emulated in devtools (no e2e spec covers them) they fall back to solid surfaces with a visible outline — checked by a look in both modes.
+- [x] Key metrics (calories, weight, tasks done, wishlist total) use the big numeral style, and the accent appears only on progress, the active state and the primary action — checked by a look at the four pages, with the owner's OK.
+- [x] The bottom tab bar has the segmented selector's shape and raised active item, and checkboxes are round with one tick style — checked by a look at the four pages on a phone width, with the owner's OK.
 - [x] The iOS Home Screen app shows a readable status bar in light and dark — checked by the owner on a Vercel preview or the local fallback (step 9). The browser bar color follows the system, not the manual switch (see the defaults).
-- [ ] `npm run check` and `npm run e2e` pass, with no React hydration warning on `<html>` in the console; 58 e2e runs from step 4 plus the switch tests of step 7, and the docs give the final count Playwright reports.
-- [ ] No rule, doc, comment or code still describes the app as dark only or Graphite — checked by `grep -rIniE "dark only|dark theme|light theme|graphite|no shadows|two chromium" CLAUDE.md app tests docs/kb/domain.md docs/kb/conventions.md docs/kb/architecture.md docs/kb/status.md` finding nothing (the decision log, the plan and the session log are history and are not searched); and nothing still says Settings is hidden without the Claude flag — checked by `grep -rIniE "settings link|404 without the flag|only (exists )?with the claude flag|answers notFound" CLAUDE.md app tests playwright.config.ts docs/kb/conventions.md docs/kb/architecture.md docs/kb/domain.md` finding nothing.
+- [x] `npm run check` and `npm run e2e` pass, with no React hydration warning on `<html>` in the console; 58 e2e runs from step 4 plus the switch tests of step 7, and the docs give the final count Playwright reports.
+- [x] No rule, doc, comment or code still describes the app as dark only or Graphite — checked by `grep -rIniE "dark only|dark theme|light theme|graphite|no shadows|two chromium" CLAUDE.md app tests docs/kb/domain.md docs/kb/conventions.md docs/kb/architecture.md docs/kb/status.md` finding nothing (the decision log, the plan and the session log are history and are not searched); and nothing still says Settings is hidden without the Claude flag — checked by `grep -rIniE "settings link|404 without the flag|only (exists )?with the claude flag|answers notFound" CLAUDE.md app tests playwright.config.ts docs/kb/conventions.md docs/kb/architecture.md docs/kb/domain.md` finding nothing.
+
+Closed on 2026-11-27 by the final verify of `chore/audit-edges` (verify-T fixed (a) and (k)). The two criteria that need the owner's OK, (g) the accent's places and (h) the tab bar and checkboxes, rest on the owner's per-page, general and Gym rounds (D-029 to D-032), which set where the accent goes. Left as built: under `prefers-reduced-transparency` the outline stays the faint hairline, while `prefers-contrast: more` gives a full `--text` border.
 
 ## Decisions
 - D-020: slate surfaces, one turquoise accent, dark and light modes that follow the system or a manual switch
@@ -133,4 +135,4 @@ The `prefers-contrast: more` block keeps its job (`--separator`, `--edge` and `-
 - A flash of the system mode before the stored choice applies — settled by step 7's inline `<head>` script, which runs before the first paint.
 
 ## Approval
-Status: approved 2026-11-19
+Status: done 2026-11-27
