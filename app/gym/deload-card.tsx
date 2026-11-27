@@ -42,12 +42,11 @@ export function DeloadCard({
   const { showToast } = useToast();
   const warn = (message: string) => showToast({ message, type: "warning" });
   const [open, setOpen] = useState(false);
-  // Last and next deload week being edited (Sundays, "" for none); kept while the dialog is closed, so the form opened
-  // again while its save is out shows the weeks it sent.
+  // Last and next deload week being edited (Sundays, "" for none).
   const [draft, setDraft] = useState({ last: "", next: "" });
   const [errorMsg, setErrorMsg] = useState("");
 
-  async function save(e: React.FormEvent, { stillOpen }: FormOpening) {
+  async function save(e: React.FormEvent, { stillOpen, saved }: FormOpening) {
     e.preventDefault();
     const problem = deloadProblem(draft.last, draft.next);
     if (problem) {
@@ -59,8 +58,10 @@ export function DeloadCard({
     const refused = refusal(stillOpen, setErrorMsg, warn);
     const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null }).catch(() => null);
     if (!res?.success) return refused(res?.error ?? "Failed to save deload weeks");
+    const { last, next, added, removed } = res;
+    // What the server stored, not what was chosen: a Next that is this week or earlier is stored as a past week.
+    saved({ last: last ?? "", next: next ?? "" });
     if (stillOpen()) setOpen(false);
-    const { last, added, removed } = res;
     showToast({
       // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.
       message: last && last !== (draft.last || null) && last !== draft.next ? `Saved. Past deload weeks stay: the last is ${formatDMY(last)}.` : "Saved deload weeks",
@@ -99,8 +100,9 @@ export function DeloadCard({
       >
         <Toggle label="Deload session" checked={isDeloadMode} disabled={busy} onChange={(e) => onDeloadMode(e.target.checked)} />
       </Card>
-      {/* Opened again while its save is out, it waits for that save with the weeks it sent: a fresh opening would show the
-          weeks from before it, and its Save would undo it (D-047). */}
+      {/* Opened again while its save is out, also after the page was left, it waits for that save with the weeks it sent:
+          a fresh opening would show the weeks from before it, and its Save would undo it (D-047). After the save, a fresh
+          opening shows the weeks saved until the refresh brings them. */}
       <FormModal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -108,9 +110,11 @@ export function DeloadCard({
         onSubmit={save}
         error={errorMsg}
         keepsOpening
-        onOpen={() => {
+        snapshot={() => draft}
+        data={deload}
+        onOpen={(sent) => {
           setErrorMsg("");
-          setDraft({ last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
+          setDraft(sent ?? { last: deload.lastDeloadWeek ?? "", next: deload.nextDeloadWeek ?? "" });
         }}
       >
         <p className="muted move-hint">Weeks run Sunday to Saturday. Week x of y counts from the last deload to the next one; with no next deload it counts 5 weeks.</p>

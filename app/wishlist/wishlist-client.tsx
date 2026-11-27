@@ -7,7 +7,7 @@ import { linkOf } from "@/lib/link";
 import { formatNumber, roundTo } from "@/lib/number-format";
 import { AnimatedNumber } from "../components/animated-number";
 import { AddButton, Badge, Card, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SortSelect, type FormOpening } from "../components/blocks";
-import { changedFields, refusal } from "../components/forms";
+import { changedFields, refusal, valuesOf } from "../components/forms";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -123,7 +123,8 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
   const toInput = (item: WishlistItemData) => ({
     name: item.name,
     estimatedPrice: Number(item.estimatedPrice),
-    url: item.url || undefined,
+    // An empty link is null, so an Undo that writes it back clears the link.
+    url: item.url || null,
     category: item.category,
   });
 
@@ -170,10 +171,11 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
         return warn(res.error);
       }
       const updated = res.item as WishlistItemData;
+      const keys = Object.keys(changed) as (keyof typeof changed)[];
       // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
-      const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, toInput(before)[k as keyof typeof changed] ?? null]));
+      const undo = valuesOf(toInput(before), keys);
       // Those fields of a row as the screen holds them: the Undo puts back on screen only what it writes back.
-      const fieldsOf = (item: WishlistItemData) => Object.fromEntries(Object.keys(changed).map((k) => [k, item[k as keyof typeof changed]]));
+      const fieldsOf = (item: WishlistItemData) => valuesOf(item, keys);
       replace(updated);
       keepCategory(updated.category);
       if (stillOpen()) closeForm();
@@ -250,7 +252,6 @@ export function WishlistClient({ userName, initialItems, initialCategories }: Wi
       onUndo: undoWith(
         showToast,
         async () => {
-          if (!(await saved)?.success) return true; // the failure path below puts it back
           putBack(target);
           const back = await restoreWishlistItemAction({
             ...toInput(target),

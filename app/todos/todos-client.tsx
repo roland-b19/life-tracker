@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CategoriesCard, CategoryField, GroupedList, groupOrder, scopedCategories, useFolded } from "../components/categories-card";
 import { AddButton, Badge, BigNumber, Card, Checkbox, Dashboard, DashboardAside, DashboardMain, EmptyNote, Field, FormModal, Page, SmallButton, Toolbar, ToolbarGroup, type FormOpening } from "../components/blocks";
-import { changedFields, refusal } from "../components/forms";
+import { changedFields, refusal, valuesOf } from "../components/forms";
 import { BellIcon } from "../components/icons";
 import { ListBox, RowActions } from "../components/lists";
 import { Segmented } from "../components/segmented";
@@ -135,8 +135,6 @@ export function TodosClient({
     setIsTaskModalOpen(true);
   };
 
-  type Editable = Pick<TodoItem, "title" | "reminderTime" | "category">;
-
   const handleSubmit = async (e: React.FormEvent, { id, stillOpen }: FormOpening) => {
     e.preventDefault();
     const title = titleInput.trim();
@@ -159,7 +157,7 @@ export function TodosClient({
         return warn(res.error);
       }
       // The old values of the fields this edit changed, so its Undo leaves another tab's change to the rest alone.
-      const undo = Object.fromEntries(Object.keys(changed).map((k) => [k, before[k as keyof Editable]])) as Partial<Editable>;
+      const undo = valuesOf(before, Object.keys(changed) as (keyof typeof changed)[]);
       const after = { ...before, ...changed };
       putFields(before, changed);
       keepCategory(after);
@@ -304,7 +302,6 @@ export function TodosClient({
           if ((await deleted) === "gone") return true; // deleted elsewhere: Undo must not bring it back
           // Only onto the list it was on, if that is still the one on screen.
           if (shows(target)) putBack(target);
-          if (!(await deleted)) return true; // the delete never happened
           const back = await restoreTodoAction(snapshot(target)).catch(() => null);
           if (back?.success) keepCategory(target);
           else if (shows(target)) drop(target);

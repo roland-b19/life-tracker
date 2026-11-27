@@ -1063,6 +1063,42 @@ test("the water form opened again while its save is out shows what it sent, afte
   await expect(water).toContainText("1.100 / 3.000 ml");
 });
 
+// The meal form keeps its opening while its add is out (D-047): opened again before the answer, it waits with the
+// amounts it sent, so a second Save (one that gets past the disabled button, as Enter would) adds nothing. Before, it
+// was a fresh opening with a new id, and its Save added the meal a second time.
+test("the meal form opened again while its add is out waits with what it sent, and the meal is added once [D-047]", async ({ signedInPage: page }) => {
+  await openHealth(page, "Today");
+  // A number no other meal test uses, to find this meal's writes.
+  const kcal = 500 + Math.floor(Math.random() * 400);
+  const marker = `"calories":${kcal}`;
+  const writes = countWrites(page, marker);
+  const release = await holdWrites(page, marker);
+  const form = page.getByRole("dialog", { name: "New meal" });
+  const calories = form.getByLabel("Calories (kcal)");
+  await page.getByRole("button", { name: "Add meal" }).click();
+  await calories.fill(String(kcal));
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form).toBeHidden();
+
+  await page.getByRole("button", { name: "Add meal" }).click();
+  await expect(calories).toHaveValue(String(kcal));
+  await form.evaluate((dialog) => dialog.querySelector("form")!.requestSubmit());
+  await expect(form.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  await expect(calories).toBeDisabled();
+  await andSettle(page, () => release(), marker);
+  await expect(form).toBeHidden();
+  await expect(page.getByText(`Added meal (${kcal} kcal)`)).toBeVisible();
+  // A second add would go out right after this answer, before its refresh.
+  await refreshesDone(page);
+  expect(writes).toHaveLength(1);
+  await expect(page.getByRole("button", { name: deleteMeal(String(kcal)) })).toHaveCount(1);
+  const userId = await signedInUserId(page);
+  const { rows } = await asOwner((db) => db.query("SELECT count(*) FROM meals WHERE user_id = $1 AND calories = $2", [userId, kcal]));
+  expect(rows).toEqual([{ count: "1" }]);
+});
+
 test("a meal deleted in one tab leaves another tab after its refresh, without a reload [SERVER-STATE]", async ({ signedInPage: page }) => {
   await openHealth(page, "Today");
   await addMeal(page);

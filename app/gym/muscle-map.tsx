@@ -84,7 +84,13 @@ function MuscleMap({
         const back = new THREE.DirectionalLight(0xffffff, 0.8);
         back.position.set(-2, 2, -4);
         scene.add(back);
-        const render = () => renderer.render(scene, camera);
+        // A draw of the whole model is costly where WebGL runs in software (a weak device, a headless browser), and the
+        // page's main thread can wait for it. So the setup at the end of this effect (camera, size, colors) draws once,
+        // when it is done, not at each of its steps.
+        let drawing = false;
+        const render = () => {
+          if (drawing) renderer.render(scene, camera);
+        };
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enablePan = false;
         controls.addEventListener("change", render);
@@ -175,10 +181,13 @@ function MuscleMap({
           render();
         };
 
+        // The observer also calls it with the size the canvas has already (its first call): that draws nothing.
+        let size = "";
         const resize = () => {
           const w = el.clientWidth;
           const h = el.clientHeight;
-          if (!w || !h) return;
+          if (!w || !h || size === `${w}x${h}`) return;
+          size = `${w}x${h}`;
           renderer.setSize(w, h);
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
@@ -220,6 +229,8 @@ function MuscleMap({
         setView("front");
         resize();
         paint(selectedRef.current);
+        drawing = true;
+        render();
         setStatus("ready");
 
         cleanup = () => {

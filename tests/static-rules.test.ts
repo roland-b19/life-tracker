@@ -416,7 +416,7 @@ describe("a FormModal whose save sends a compare-and-set from holds Save while i
   });
 
   it("fails on a copy of the Health form or of the categories card with keepsOpening removed, also with a busy in its place", () => {
-    const withoutKeepsOpening = foodClient.replace(/^\s*keepsOpening\n/m, "");
+    const withoutKeepsOpening = foodClient.replace(/^\s*keepsOpening\n/gm, "");
     expect(withoutKeepsOpening).not.toBe(foodClient);
     expect(fromForms(withoutKeepsOpening)).toContainEqual({ handler: "handleMetricSubmit", held: false });
     expect(categoriesUnheld).not.toBe(categoriesCard);

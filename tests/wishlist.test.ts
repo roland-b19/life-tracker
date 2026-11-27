@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 
 vi.mock("@/server/auth", async () => (await import("./auth")).authModule);
 import { authState, seedUser } from "./auth";
@@ -14,9 +15,12 @@ import { addWishlistItemAction, deleteWishlistItemAction, restoreWishlistItemAct
 import { priorityForPrice } from "@/lib/rules";
 import { refused, succeeded } from "./succeeded";
 import { SIGNED_OUT } from "@/lib/validations/result";
+import { FUTURE_DATE } from "@/lib/validations/common";
+import { addWishlistItemSchema, restoreWishlistItemSchema, updateWishlistItemSchema } from "@/lib/validations/wishlist";
 
-// The item an add made (tests that look at a repeated add call addWishlistItem itself).
-const add = async (userId: string, input: Parameters<typeof addWishlistItem>[1]) => (await addWishlistItem(userId, input)).item!;
+// The item an add made, its input parsed as the action parses it (tests that look at a repeated add call the action).
+const add = async (userId: string, input: z.input<typeof addWishlistItemSchema>) =>
+  (await addWishlistItem(userId, addWishlistItemSchema.parse(input))).item!;
 
 describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   let userA: string;
@@ -105,10 +109,12 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("rejects names that are only spaces and trims the rest", async () => {
-    await expect(addWishlistItem(userA, { name: "   ", estimatedPrice: 10 })).rejects.toThrow();
-    expect((await add(userA, { name: "  Lamp  ", estimatedPrice: 10 })).name).toBe("Lamp");
-    await expect(addWishlistItem(userA, { name: "x".repeat(121), estimatedPrice: 10 })).rejects.toThrow();
-    expect((await add(userA, { name: "x".repeat(120), estimatedPrice: 10 })).name).toHaveLength(120);
+    authState.id = userA;
+    expect(await addWishlistItemAction({ name: "   ", estimatedPrice: 10 })).toEqual(refused("Name is required"));
+    expect(succeeded(await addWishlistItemAction({ name: "  Lamp  ", estimatedPrice: 10 })).item.name).toBe("Lamp");
+    expect(await addWishlistItemAction({ name: "x".repeat(121), estimatedPrice: 10 })).toEqual(refused("Too long (max 120)"));
+    expect(succeeded(await addWishlistItemAction({ name: "x".repeat(120), estimatedPrice: 10 })).item.name).toHaveLength(120);
+    authState.id = "";
   });
 
   it("accepts any text as a link", async () => {
@@ -117,19 +123,10 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
   });
 
   it("rejects invalid input and negative prices", async () => {
-    await expect(
-      addWishlistItem(userA, {
-        name: "",
-        estimatedPrice: 100,
-      }),
-    ).rejects.toThrow();
-
-    await expect(
-      addWishlistItem(userA, {
-        name: "Negative item",
-        estimatedPrice: -50,
-      }),
-    ).rejects.toThrow();
+    authState.id = userA;
+    expect(await addWishlistItemAction({ name: "", estimatedPrice: 100 })).toEqual(refused("Name is required"));
+    expect(await addWishlistItemAction({ name: "Negative item", estimatedPrice: -50 })).toEqual(refused("Price must be at least 0.01"));
+    authState.id = "";
   });
 
   it("updates an item for the owner only", async () => {
@@ -144,6 +141,28 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     succeeded(await updateWishlistItemAction({ id: item.id, ...edit }));
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.name).toBe("Monitor 4K");
     authState.id = "";
+  });
+
+  // Each action parses its input, and the lib takes what it parsed, as every other action does.
+  it("parses an add, an edit and a restore once, in the action", async () => {
+    authState.id = userA;
+    const item = await add(userA, { name: "Desk", estimatedPrice: 200 });
+    await deleteWishlistItem(userA, item.id);
+    // In this order: the restore puts the desk back, then the edit changes it.
+    const writes = [
+      { name: "add", schema: addWishlistItemSchema, run: () => addWishlistItemAction({ name: "Chair", estimatedPrice: 90 }) },
+      { name: "restore", schema: restoreWishlistItemSchema, run: () => restoreWishlistItemAction(item) },
+      { name: "edit", schema: updateWishlistItemSchema, run: () => updateWishlistItemAction({ id: item.id, name: "Standing desk" }) },
+    ];
+    const parses: Record<string, number> = {};
+    for (const { name, schema, run } of writes) {
+      const parse = vi.spyOn(schema, "parse");
+      succeeded(await run());
+      parses[name] = parse.mock.calls.length;
+      parse.mockRestore();
+    }
+    authState.id = "";
+    expect(parses).toEqual({ add: 1, restore: 1, edit: 1 });
   });
 
   it("rejects a price that rounds to zero and a malformed id", async () => {
@@ -173,16 +192,18 @@ describe("Wishlist Module: Data Access & Multi-User Isolation", () => {
     expect((await getWishlist(userA)).find((i) => i.id === item.id)?.priority).toBe("medium");
 
     // A second restore of a live row is a no-op.
-    expect(await restoreWishlistItem(userA, input)).toBeNull();
+    expect(await restoreWishlistItem(userA, restoreWishlistItemSchema.parse(input))).toBeNull();
     authState.id = "";
   });
 
   it("rejects a restore with a bad id or a future date", async () => {
+    authState.id = userA;
     const base = { name: "X", estimatedPrice: 10 };
-    await expect(restoreWishlistItem(userA, { ...base, id: "nope", createdAt: new Date() })).rejects.toThrow();
-    await expect(
-      restoreWishlistItem(userA, { ...base, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000) }),
-    ).rejects.toThrow();
+    expect(await restoreWishlistItemAction({ ...base, id: "nope", createdAt: new Date() })).toEqual(refused("Invalid id"));
+    expect(
+      await restoreWishlistItemAction({ ...base, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000) }),
+    ).toEqual(refused(FUTURE_DATE));
+    authState.id = "";
   });
 
   it("answers a repeated add with the item already there, once, and never another user's [D-040]", async () => {

@@ -741,7 +741,8 @@ export async function getDeloadStatus(userId: string): Promise<DeloadStatus> {
 /**
  * Sets the last and the next deload week (Sundays). Both become deload weeks, and every other one from this week on is
  * dropped (the plan). Weeks before this week are history and stay, so "Not set" or an earlier Last never deletes one:
- * the card's Last is then still the latest of them, answered as `last`. Only the plan changes: a workout is a deload
+ * the card's Last is then still the latest of them, answered as `last`; a Next that is this week or earlier is a past
+ * week too, so the card's Next (`next`) is the first week after this one, if any. Only the plan changes: a workout is a deload
  * workout when it was started as one (decision 2026-11-16), so choosing a week never rewrites workouts already logged.
  * Answers the weeks it added and removed, which Undo (`restoreDeloadWeeks`) swaps back exactly.
  */
@@ -755,7 +756,7 @@ export async function saveDeloadWeeks(userId: string, { last, next }: { last: st
     const added = keep.filter((w) => !had.includes(w)).sort();
     await swapDeloadWeeks(tx, userId, added, removed);
     const weeks = [...had.filter((w) => !removed.includes(w)), ...added].sort();
-    return { last: weeks.filter((w) => w <= thisWeek).at(-1) ?? null, added, removed };
+    return { last: weeks.filter((w) => w <= thisWeek).at(-1) ?? null, next: weeks.find((w) => w > thisWeek) ?? null, added, removed };
   });
 }
 
