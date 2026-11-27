@@ -12,7 +12,8 @@ export function stepFocus(e: KeyboardEvent, dialog: HTMLElement) {
   if (document.activeElement?.matches("input[type='time']")) return;
   e.preventDefault();
   const stops = [...dialog.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")].filter(
-    (el) => el.tabIndex >= 0 && !el.matches(":disabled") && el.offsetParent !== null,
+    // offsetParent is null under display:none; a visibility:hidden control refuses focus and would stop the steps.
+    (el) => el.tabIndex >= 0 && !el.matches(":disabled") && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden",
   );
   // On none of them (the dialog itself, at first) Tab goes to the first and Shift+Tab to the last.
   const at = stops.indexOf(document.activeElement as HTMLElement);

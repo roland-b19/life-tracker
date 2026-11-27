@@ -83,6 +83,11 @@ test("Tab in a dialog steps through its fields and buttons, selects a field's te
   await step("Tab", cancel);
   await step("Tab", save);
   await step("Tab", close);
+
+  // A control that is not shown takes no step either, and does not stop the ones after it.
+  await cancel.evaluate((el) => (el.style.visibility = "hidden"));
+  await step("Tab", field);
+  await step("Tab", save);
 });
 
 test("a signed-in user adds, completes, edits and deletes a task, with Undo for each, also after a reload", async ({ signedInPage: page }) => {
