@@ -30,6 +30,23 @@ Next.js 16 has breaking changes against older versions: read the relevant guide 
 - Never disable or weaken a security check, test or scanner to make something pass.
 - UI: the Wishlist page (`app/wishlist/`, `app/globals.css`, `app/components/`) is the reference; every page matches it. Dark and light modes (the system's, or a manual switch in Settings), no animations except the existing ones, every change has an Undo toast.
 
+## Subagents
+
+Every Agent call sets `model` and `effort`, picked from the task. Model is how strong the reasoning is; effort is how long it thinks on that model.
+
+| Model, effort | Use it for |
+|---|---|
+| haiku, low | Run commands and report counts, grep sweeps, cleanup |
+| haiku, medium | A known few-line edit, a rename from an exact list, removing code proven dead |
+| sonnet, low | Fill a template from given facts (PR body, log entry), re-run one failing spec |
+| sonnet, medium | A build from a precise brief, a routine verify, simplify |
+| sonnet, high | New e2e tests, a verify with probes or mutation proofs, a fix whose cause is already found |
+| opus, medium | A review of a small diff, a plan review, a design choice with clear options |
+| opus, high | Subtle logic (concurrency, ordering, CSS cascade, time zones), a failure with an unclear cause, a whole-branch review or final verify |
+
+- Never `xhigh` or `max`: they cost more tokens than the plan allows.
+- Between two rows, take the higher one for reviews and verifies, the lower one for builds from an exact brief. A resumed agent keeps its model.
+
 ## Git
 
 - `main` must always work. Short branches (`feat/`, `fix/`, `chore/`) merged through a PR; Conventional Commits. Never force-push `main`.
