@@ -187,8 +187,11 @@ function MuscleMap({
         const resize = () => {
           const w = el.clientWidth;
           const h = el.clientHeight;
-          if (!w || !h) size = "";
-          if (!w || !h || size === `${w}x${h}`) return;
+          if (!w || !h) {
+            size = "";
+            return;
+          }
+          if (size === `${w}x${h}`) return;
           size = `${w}x${h}`;
           renderer.setSize(w, h);
           camera.aspect = w / h;
