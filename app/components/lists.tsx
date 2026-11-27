@@ -20,17 +20,15 @@ type IconButtonProps = {
   icon: ReactNode;
   label: string;
   title?: string;
-  /** The neutral look (Edit, drag); without it the button is the red one (Delete). */
-  edit?: boolean;
   ref?: Ref<HTMLButtonElement>;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "title" | "aria-label" | "children">;
 
 /** A round icon button of a row or a card head: the shared look of Edit, Delete and the drag handle. */
-function IconButton({ icon, label, title, edit, className, ...rest }: IconButtonProps) {
+function IconButton({ icon, label, title, className, ...rest }: IconButtonProps) {
   return (
     <button
       type="button"
-      className={["delete-icon-btn", edit && "edit", className].filter(Boolean).join(" ")}
+      className={["delete-icon-btn", className].filter(Boolean).join(" ")}
       aria-label={label}
       title={title}
       {...rest}
@@ -41,7 +39,7 @@ function IconButton({ icon, label, title, edit, className, ...rest }: IconButton
 }
 
 export function EditButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
-  return <IconButton edit icon={<PencilIcon size={17} />} label={label} title="Edit" disabled={disabled} onClick={onClick} />;
+  return <IconButton icon={<PencilIcon size={17} />} label={label} title="Edit" disabled={disabled} onClick={onClick} />;
 }
 
 /** `title` is the tooltip (a disconnect says "Disconnect"). */
@@ -58,10 +56,9 @@ export function DragHandle({
   label,
   onKeyDown,
   ...handlers
-}: { label: string } & Omit<IconButtonProps, "icon" | "label" | "title" | "edit">) {
+}: { label: string } & Omit<IconButtonProps, "icon" | "label" | "title">) {
   return (
     <IconButton
-      edit
       className="drag-handle"
       icon={<GripIcon size={22} />}
       label={label}
