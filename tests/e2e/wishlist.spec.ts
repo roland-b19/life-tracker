@@ -89,6 +89,51 @@ test("a signed-in user adds, undoes, deletes and restores a wishlist item", asyn
   await expectTotal("1\\.234");
 });
 
+// The toast waits for the write it reports before it runs an Undo (conventions, Undo keys): an Undo tapped while the
+// delete is still out puts the item back once the delete has answered, for good.
+test("an Undo tapped while the delete is unanswered restores the item once the delete answers", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = itemName();
+  const row = page.getByText(name, { exact: true });
+  await addItem(page, name);
+  await dismissToast(page, `Added "${name}" (100 RON)`);
+
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(row).toBeHidden();
+  await undoIn(page, `Removed "${name}"`).click();
+  // The restore is the write that sends the item's createdAt; the delete sends only its id.
+  await andSettle(page, async () => release(), `"createdAt"`);
+  await expect(row).toBeVisible();
+
+  await page.reload();
+  await expect(row).toBeVisible();
+});
+
+// ...and one whose delete is then lost writes nothing: there was nothing to undo, and the failed delete has put the item
+// back and said why.
+test("an Undo tapped while the delete is unanswered sends no restore when the delete is lost", async ({ signedInPage: page }) => {
+  await openWishlist(page);
+  const name = itemName();
+  const row = page.getByText(name, { exact: true });
+  await addItem(page, name);
+  await dismissToast(page, `Added "${name}" (100 RON)`);
+
+  const restores = countWrites(page, `"createdAt"`);
+  const release = await holdWrites(page);
+  await page.getByRole("button", { name: `Delete ${name}` }).click();
+  await expect(row).toBeHidden();
+  await undoIn(page, `Removed "${name}"`).click();
+  await release(true);
+  await expect(toast(page, "Failed to remove item")).toBeVisible();
+  await expect(row).toBeVisible();
+  await settled(page);
+  expect(restores).toHaveLength(0);
+
+  await page.reload();
+  await expect(row).toBeVisible();
+});
+
 // A quick double tap on a form's Save (FormModal, D-043) saves once, and its second tap does not land on what lies under
 // the closed dialog: here another item's Edit button, lined up under Save. Both at desktop and at phone width.
 for (const size of [

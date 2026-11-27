@@ -20,7 +20,11 @@ interface Toast {
    * an older Undo never writes over a newer change.
    */
   touches?: string[];
-  /** The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. */
+  /**
+   * The write the toast reports, when the toast shows before it answers: if it fails, the toast goes. An Undo tapped
+   * meanwhile waits for it and runs only once it has succeeded, so an Undo body waits for the write itself only when it
+   * needs the write's answer (the shopping tick, the category delete, the gym set delete).
+   */
   saved?: Promise<Written>;
 }
 
@@ -79,7 +83,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   className="toast-action-btn"
                   onClick={() => {
-                    t.onUndo?.({ touches: t.touches });
+                    const undo = t.onUndo;
+                    if (undo) afterSaved(t.saved, () => undo({ touches: t.touches }));
                     removeToast(t.id);
                   }}
                 >
@@ -177,6 +182,18 @@ export function useToast() {
 type Written = boolean | { success?: boolean } | null | undefined;
 
 const succeeded = (back: Written) => back === true || (!!back && typeof back === "object" && !!back.success);
+
+/**
+ * Runs an Undo once the write its toast reports (`saved`) has succeeded, at once when there is none; never when it failed
+ * or gave no answer, since nothing happened to undo and the failure path has put the screen back and said why.
+ */
+export function afterSaved(saved: Promise<Written> | undefined, undo: () => void) {
+  if (!saved) return undo();
+  void saved.then(
+    (answer) => succeeded(answer) && undo(),
+    () => {},
+  );
+}
 
 /** A refusal's reason: the `error` of a `{ success: false, error }` answer. */
 const reason = (back: Written) =>
