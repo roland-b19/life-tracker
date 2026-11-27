@@ -181,12 +181,17 @@ function MuscleMap({
           render();
         };
 
-        // The observer also calls it with the size the canvas has already (its first call): that draws nothing.
+        // The observer also calls it with the size the canvas has already (its first call): that draws nothing. A hidden
+        // canvas (0x0) forgets the size, as a browser may drop its drawing buffer: shown again, it is drawn again.
         let size = "";
         const resize = () => {
           const w = el.clientWidth;
           const h = el.clientHeight;
-          if (!w || !h || size === `${w}x${h}`) return;
+          if (!w || !h) {
+            size = "";
+            return;
+          }
+          if (size === `${w}x${h}`) return;
           size = `${w}x${h}`;
           renderer.setSize(w, h);
           camera.aspect = w / h;

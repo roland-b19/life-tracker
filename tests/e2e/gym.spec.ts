@@ -1163,6 +1163,23 @@ test("the day editor keeps a drag going when another button of the page is disab
   for (const row of [`1. ${EXERCISE}`, `2. ${FLY}`]) await expect(editor.getByText(row, { exact: true })).toBeVisible();
 });
 
+// Another pointer's events are not the drag's: before, once a second finger had pressed another handle, the first
+// finger's moves drove that second row and its lift dropped it.
+test("the day editor's drag follows only the pointer that started it", async ({ signedInPage: page }) => {
+  const { editor } = await dragFlyBelowPress(page);
+  const row = editor.locator(".routine-row.dragging");
+  const lifted = (await row.getAttribute("style"))!;
+  await dragHandle(editor, EXERCISE).evaluate((handle) => {
+    for (const type of ["pointermove", "pointerup", "pointercancel"]) {
+      handle.dispatchEvent(new PointerEvent(type, { pointerId: 99, pointerType: "touch", clientY: 0, bubbles: true }));
+    }
+  });
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute("style", lifted);
+  await page.mouse.up();
+  for (const text of [`1. ${EXERCISE}`, `2. ${FLY}`]) await expect(editor.getByText(text, { exact: true })).toBeVisible();
+});
+
 // A save that closes the day editor while a handle is still pressed ends that drag there: before, the listener that keeps
 // the page from panning under a dragging finger stayed on after the press was lifted, and no touch could pan the page.
 test("the day editor closed by its save in the middle of a drag leaves the page free to pan", async ({ signedInPage: page }) => {
@@ -2444,6 +2461,37 @@ test("the progress card, the muscle map and History render the server's day, wit
   await expect(history(page).getByText("2 workouts", { exact: true })).toBeVisible();
   await settled(page);
   expect(warnings).toEqual([]);
+});
+
+// A browser may drop a hidden canvas's drawing buffer, so the model is drawn again when it comes back, at the same size
+// too: before, that size counted as drawn already and nothing drew it.
+test("the muscle map draws again when it is shown at the size it had before it was hidden", async ({ signedInPage: page }) => {
+  await page.addInitScript(() => {
+    const draw = WebGL2RenderingContext.prototype.drawElements;
+    WebGL2RenderingContext.prototype.drawElements = function (...args) {
+      document.documentElement.dataset.draws = String(Number(document.documentElement.dataset.draws ?? 0) + 1);
+      draw.apply(this, args);
+    };
+  });
+  await openGym(page);
+  await expect(page.getByRole("tab", { name: "Front" })).toBeVisible(); // the model is up
+  const canvas = page.locator(".muscle-canvas");
+  const draws = () => page.evaluate(() => Number(document.documentElement.dataset.draws ?? 0));
+  // Two frames: the size observer has run for the change before them.
+  const display = (value: string) =>
+    canvas.evaluate(
+      (el, next) =>
+        new Promise<void>((done) => {
+          el.style.display = next;
+          requestAnimationFrame(() => requestAnimationFrame(() => done()));
+        }),
+      value,
+    );
+  await display("none");
+  const before = await draws();
+  expect(before).toBeGreaterThan(0);
+  await display("");
+  await expect.poll(draws).toBeGreaterThan(before);
 });
 
 // GYMC-05: plate sets chart in plates until 1 plate has a weight, then in kg; the weight is saved per exercise, with Undo.

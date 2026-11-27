@@ -120,8 +120,8 @@ jobs:
         # Blocks on high advisories in production dependencies only.
         run: npm audit --audit-level=high --omit=dev --omit=optional
       - name: Dependency audit (dev tools, report only)
-        # Dev tools never ship. A high advisory with no fix there (picomatch, GHSA-fc5q-39xc-vjpf)
-        # must not block merges, but it stays visible in the log.
+        # Dev tools never ship. A high advisory there, which may have no fix, must not block merges
+        # (D-004), but it stays visible in the log.
         continue-on-error: true
         run: npm audit --audit-level=high --omit=optional
       - name: Secret scan v2

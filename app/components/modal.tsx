@@ -4,6 +4,25 @@ import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
+/**
+ * One Tab step inside a dialog, wrapping at both ends. Every step is taken here: Safari's own Tab passes over links and
+ * buttons, and would leave the dialog. A time field keeps the browser's Tab, which walks its hours and minutes.
+ */
+export function stepFocus(e: KeyboardEvent, dialog: HTMLElement) {
+  if (document.activeElement?.matches("input[type='time']")) return;
+  e.preventDefault();
+  const stops = [...dialog.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")].filter(
+    // offsetParent is null under display:none; a visibility:hidden control refuses focus and would stop the steps.
+    (el) => el.tabIndex >= 0 && !el.matches(":disabled") && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden",
+  );
+  // On none of them (the dialog itself, at first) Tab goes to the first and Shift+Tab to the last.
+  const at = stops.indexOf(document.activeElement as HTMLElement);
+  const next = stops[e.shiftKey ? (at <= 0 ? stops.length : at) - 1 : (at + 1) % stops.length];
+  next?.focus();
+  // As the browser's own Tab does, a field reached this way has its text selected.
+  if (next instanceof HTMLInputElement) next.select();
+}
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,11 +48,6 @@ export function Modal({
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
     // Keyboard and screen-reader users stay inside the dialog: focus moves to it (the card, not a field: no form autofocuses),
     // the page behind is inert, Tab wraps, and closing returns focus to the button that opened it.
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -43,21 +57,11 @@ export function Modal({
       (el) => !el.matches("script, .modal-scrim, .modal-backdrop, .toast-container") && !el.hasAttribute("inert"),
     );
     behind.forEach((el) => el.setAttribute("inert", ""));
-    const trap = (e: KeyboardEvent) => {
-      if (e.key !== "Tab" || !card) return;
-      const stops = [...card.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter(
-        (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
-      );
-      if (!stops.length) return e.preventDefault();
-      const first = stops[0];
-      const last = stops[stops.length - 1];
-      const from = e.shiftKey && (document.activeElement === first || document.activeElement === card);
-      const past = !e.shiftKey && document.activeElement === last;
-      if (!from && !past) return;
-      e.preventDefault();
-      (from ? last : first).focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Tab" && card) stepFocus(e, card);
     };
-    window.addEventListener("keydown", trap);
+    window.addEventListener("keydown", handleKeyDown);
 
     // The page behind must not scroll. Not pinned with position:fixed on the body: on iOS that reflowed the whole
     // page as the form opened (jank) and left a bare black strip at the bottom. A touchmove lock (below) stops
@@ -133,7 +137,6 @@ export function Modal({
       document.removeEventListener("touchmove", lock);
       window.removeEventListener("scroll", pin);
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keydown", trap);
       behind.forEach((el) => el.removeAttribute("inert"));
       if (opener?.isConnected) opener.focus({ preventScroll: true });
       vv?.removeEventListener("resize", fit);

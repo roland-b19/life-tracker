@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useToast } from "./toast";
 import { CloseIcon } from "./icons";
+import { stepFocus } from "./modal";
 import { clearPageCache } from "./page-cache";
 import { usePageNotOpened } from "../providers";
 import { isPushEnabled } from "@/lib/features";
@@ -30,9 +31,6 @@ async function forgetThisDevicePush() {
   }
 }
 
-// What Tab can reach inside the More menu.
-const FOCUSABLE = "a[href], button:not([disabled])";
-
 interface NavigationProps {
   userName: string;
 }
@@ -55,8 +53,8 @@ export function Navigation({ userName }: NavigationProps) {
   // A More-menu link leaves the menu open (the new page replaces it on arrival), so the old page never shows through while Settings loads.
   const goFromMenu = (href: string) => (href === pathname ? setMoreOpen(false) : setTarget({ href, from: pathname, seen: notOpened }));
 
-  // The phone More menu is a modal dialog, like Modal: focus moves into it, Tab wraps inside it, Escape and Close shut it,
-  // and focus returns to the More button.
+  // The phone More menu is a modal dialog, like Modal: focus moves into it, Tab wraps inside it (stepFocus), Escape and
+  // Close shut it, and focus returns to the More button.
   const moreButton = useRef<HTMLButtonElement>(null);
   const moreMenu = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -66,16 +64,7 @@ export function Navigation({ userName }: NavigationProps) {
     menu?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return setMoreOpen(false);
-      if (e.key !== "Tab" || !menu) return;
-      const stops = [...menu.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      const first = stops[0];
-      const last = stops[stops.length - 1];
-      const inside = menu.contains(document.activeElement);
-      const wrapBack = e.shiftKey && (!inside || document.activeElement === first || document.activeElement === menu);
-      const wrapForward = !e.shiftKey && (!inside || document.activeElement === last);
-      if (!wrapBack && !wrapForward) return;
-      e.preventDefault();
-      (wrapBack ? last : first)?.focus();
+      if (e.key === "Tab" && menu) stepFocus(e, menu);
     };
     window.addEventListener("keydown", onKey);
     return () => {

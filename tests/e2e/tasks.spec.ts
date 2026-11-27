@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import {
   andSettle,
   asOwner,
@@ -49,6 +49,45 @@ test("the Tasks page has no serious violations, also with the New task form open
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible();
   await expectNoSeriousViolations(page);
+});
+
+// A dialog takes every Tab step itself: Safari's own Tab passes over buttons and leaves the dialog.
+test("Tab in a dialog steps through its fields and buttons, selects a field's text and stays inside", async ({ signedInPage: page }) => {
+  await openTasks(page, "Today");
+  await page.getByRole("button", { name: "Add task" }).click();
+  const form = page.getByRole("dialog", { name: "New task" });
+  const close = form.getByRole("button", { name: "Close modal" });
+  const field = form.getByLabel("Title");
+  const cancel = form.getByRole("button", { name: "Cancel" });
+  const save = form.getByRole("button", { name: "Save" });
+  await expect(close).toBeVisible();
+  await page.evaluate(() => addEventListener("keydown", (e) => (document.body.dataset.tabTaken = String(e.defaultPrevented))));
+  const step = async (key: "Tab" | "Shift+Tab", to: Locator) => {
+    await page.keyboard.press(key);
+    await expect(page.locator("body")).toHaveAttribute("data-tab-taken", "true");
+    await expect(to).toBeFocused();
+  };
+
+  // Save is off until there is a title, so the steps pass over it and wrap at both ends.
+  await step("Tab", close);
+  await step("Tab", field);
+  await step("Tab", cancel);
+  await step("Tab", close);
+  await step("Shift+Tab", cancel);
+  await step("Shift+Tab", field);
+
+  await field.fill("Water the plants");
+  await step("Tab", cancel);
+  await step("Shift+Tab", field);
+  expect(await field.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, "Water the plants".length]);
+  await step("Tab", cancel);
+  await step("Tab", save);
+  await step("Tab", close);
+
+  // A control that is not shown takes no step either, and does not stop the ones after it.
+  await cancel.evaluate((el) => (el.style.visibility = "hidden"));
+  await step("Tab", field);
+  await step("Tab", save);
 });
 
 test("a signed-in user adds, completes, edits and deletes a task, with Undo for each, also after a reload", async ({ signedInPage: page }) => {

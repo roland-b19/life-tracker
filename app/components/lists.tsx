@@ -160,6 +160,7 @@ const noPan = (e: TouchEvent) => e.preventDefault();
  */
 export function useDragSort(move: (from: number, to: number) => void) {
   const drag = useRef<{
+    pointer: number;
     handle: HTMLElement;
     watch: MutationObserver;
     rows: HTMLElement[];
@@ -210,6 +211,7 @@ export function useDragSort(move: (from: number, to: number) => void) {
     });
     watch.observe(document.body, { attributes: true, attributeFilter: ["disabled"], subtree: true });
     drag.current = {
+      pointer,
       handle,
       watch,
       rows,
@@ -225,8 +227,11 @@ export function useDragSort(move: (from: number, to: number) => void) {
     row.classList.add("dragging");
   };
 
+  // The drag under way, for an event of the pointer that started it: another finger's events leave it alone.
+  const dragOf = (e: PointerEvent<HTMLElement>) => (drag.current?.pointer === e.pointerId ? drag.current : null);
+
   const onPointerMove = (e: PointerEvent<HTMLElement>) => {
-    const d = drag.current;
+    const d = dragOf(e);
     if (!d) return;
     const dy = e.clientY - d.y;
     const mid = d.mids[d.i] + dy;
@@ -243,9 +248,15 @@ export function useDragSort(move: (from: number, to: number) => void) {
   };
 
   const onPointerUp = (e: PointerEvent<HTMLElement>) => {
-    const d = settle();
-    if (d && d.to !== d.i && !e.currentTarget.matches(":disabled")) move(d.i, d.to);
+    const d = dragOf(e);
+    if (!d) return;
+    settle();
+    if (d.to !== d.i && !e.currentTarget.matches(":disabled")) move(d.i, d.to);
   };
 
-  return { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel: () => void settle() };
+  const onPointerCancel = (e: PointerEvent<HTMLElement>) => {
+    if (dragOf(e)) settle();
+  };
+
+  return { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
 }
