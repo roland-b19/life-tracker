@@ -1077,22 +1077,28 @@ test("the day editor reorders its routine by dragging a row's handle, but not wh
   for (const row of order) await expect(page.getByRole("region", { name: DAY }).getByText(row, { exact: true })).toBeVisible();
 });
 
-// The save sends the order on screen as it goes out (Enter in Name, or Save tapped with another finger), so a drag under
-// way then must drop nothing: before, its drop reordered the editor, and the save's answer closed it with that order lost.
-test("the day editor puts back a row being dragged when its save goes out, and keeps the order it sent", async ({ signedInPage: page }) => {
+// Opens the day editor, moves the press down with its arrow key (a change for the save to send), then presses the fly
+// and drags it below the press with the mouse: the drag is under way and the pointer stays down.
+async function dragFlyBelowPress(page: Page) {
   await openGym(page);
   const editor = await openEditor(page);
   const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
   await dragHandle(editor, EXERCISE).focus();
-  await page.keyboard.press("ArrowDown"); // a change for the save to send
+  await page.keyboard.press("ArrowDown");
   for (const row of order) await expect(editor.getByText(row, { exact: true })).toBeVisible();
-
-  // The fly is pressed and dragged below the press, and the save goes out (held) with the pointer still down.
   const from = center(await dragHandle(editor, FLY).boundingBox());
   const below = center(await dragHandle(editor, EXERCISE).boundingBox()).y + 10;
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(from.x, below, { steps: 5 });
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  return { editor, order, from, below };
+}
+
+// The save sends the order on screen as it goes out (Enter in Name, or Save tapped with another finger), so a drag under
+// way then must drop nothing: before, its drop reordered the editor, and the save's answer closed it with that order lost.
+test("the day editor puts back a row being dragged when its save goes out, and keeps the order it sent", async ({ signedInPage: page }) => {
+  const { editor, order, from, below } = await dragFlyBelowPress(page);
   const release = await holdWrites(page, `"name":"${DAY}"`);
   await editor.getByLabel("Name", { exact: true }).press("Enter");
   await expect(editor.getByRole("button", { name: "Saving..." })).toBeDisabled();
@@ -1115,21 +1121,7 @@ test("the day editor puts back a row being dragged when its save goes out, and k
 // its handle is disabled, not at the next pointer event: before, with the pointer still, the row stayed lifted and the
 // page could not pan until the editor closed.
 test("the day editor ends a drag as its save goes out, with no further pointer event", async ({ signedInPage: page }) => {
-  await openGym(page);
-  const editor = await openEditor(page);
-  const handle = (name: string) => editor.getByRole("button", { name: `Drag ${name} to reorder` });
-  const FLY = "Cable fly (push down)";
-  const order = [`1. ${FLY}`, `2. ${EXERCISE}`];
-  await handle(EXERCISE).focus();
-  await page.keyboard.press("ArrowDown"); // a change for the save to send
-
-  // The fly is pressed and dragged below the press, then the save goes out (held); the pointer stays still and down.
-  const from = center(await handle(FLY).boundingBox());
-  const below = center(await handle(EXERCISE).boundingBox()).y + 10;
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x, below, { steps: 5 });
-  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  const { editor, order } = await dragFlyBelowPress(page);
   // A pan in the form's own scroll, which the dialog's lock leaves alone, so only a drag under way blocks it.
   const panBlocked = () =>
     editor.locator(".modal-body").evaluate((body) => {
@@ -1141,7 +1133,7 @@ test("the day editor ends a drag as its save goes out, with no further pointer e
   expect(await panBlocked()).toBe(true);
   const release = await holdWrites(page, `"name":"${DAY}"`);
   await editor.getByLabel("Name", { exact: true }).press("Enter");
-  await expect(handle(FLY)).toBeDisabled();
+  await expect(dragHandle(editor, FLY)).toBeDisabled();
   await expect(editor.locator(".routine-row.dragging")).toHaveCount(0);
   await expect(editor.locator('.routine-row[style*="transform"]')).toHaveCount(0);
   expect(await panBlocked()).toBe(false);
@@ -1152,6 +1144,23 @@ test("the day editor ends a drag as its save goes out, with no further pointer e
   await andSettle(page, () => release(), `"name":"${DAY}"`);
   await expect(editor).toBeHidden();
   await expect(toast(page, `Saved "${DAY}"`)).toBeVisible();
+});
+
+// Only the dragged handle's own disabling ends its drag: another element of the page gaining `disabled` (here Cancel,
+// outside the handle's fieldset) leaves the row lifted, and the drop still reorders.
+test("the day editor keeps a drag going when another button of the page is disabled", async ({ signedInPage: page }) => {
+  const { editor, from, below } = await dragFlyBelowPress(page);
+  const cancel = editor.getByRole("button", { name: "Cancel" });
+  await cancel.evaluate((el) => el.setAttribute("disabled", ""));
+  await expect(cancel).toBeDisabled();
+  await cancel.evaluate((el) => el.removeAttribute("disabled"));
+  await expect(cancel).toBeEnabled();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(1);
+  await page.mouse.move(from.x, below + 10);
+  await page.mouse.up();
+  await expect(editor.locator(".routine-row.dragging")).toHaveCount(0);
+  // Dropped: the fly is second and the press first.
+  for (const row of [`1. ${EXERCISE}`, `2. ${FLY}`]) await expect(editor.getByText(row, { exact: true })).toBeVisible();
 });
 
 // A save that closes the day editor while a handle is still pressed ends that drag there: before, the listener that keeps
