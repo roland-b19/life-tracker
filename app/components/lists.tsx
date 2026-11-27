@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type PointerEvent, type ReactNode, type Ref } from "react";
 import { GripIcon, PencilIcon, TrashIcon } from "./icons";
 import { Modal } from "./modal";
 
@@ -16,21 +16,17 @@ export function ListBox({ className, wash, children }: { className?: string; was
   );
 }
 
-/** A round icon button of a row or a card head: the shared look of Edit, Delete and the drag handle. */
-function IconButton({
-  icon,
-  label,
-  title,
-  edit,
-  className,
-  ...rest
-}: {
+type IconButtonProps = {
   icon: ReactNode;
   label: string;
   title?: string;
   /** The neutral look (Edit, drag); without it the button is the red one (Delete). */
   edit?: boolean;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "title" | "aria-label" | "children">) {
+  ref?: Ref<HTMLButtonElement>;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "title" | "aria-label" | "children">;
+
+/** A round icon button of a row or a card head: the shared look of Edit, Delete and the drag handle. */
+function IconButton({ icon, label, title, edit, className, ...rest }: IconButtonProps) {
   return (
     <button
       type="button"
@@ -53,9 +49,29 @@ export function DeleteButton({ label, title = "Delete", onClick }: { label: stri
   return <IconButton icon={<TrashIcon size={17} />} label={label} title={title} onClick={onClick} />;
 }
 
-/** The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. */
-export function DragHandle({ label, ...handlers }: { label: string } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "children" | "aria-label" | "title">) {
-  return <IconButton edit className="drag-handle" icon={<GripIcon size={22} />} label={label} title="Drag to reorder" {...handlers} />;
+/**
+ * The grip a row is dragged by (see useDragSort); spread the drag handlers and key handler on it. A disabled handle (in
+ * a form whose save is out) moves nothing: the key handler is skipped here, and useDragSort checks the pointer events
+ * itself, as Chromium still sends them to a disabled button.
+ */
+export function DragHandle({
+  label,
+  onKeyDown,
+  ...handlers
+}: { label: string } & Omit<IconButtonProps, "icon" | "label" | "title" | "edit">) {
+  return (
+    <IconButton
+      edit
+      className="drag-handle"
+      icon={<GripIcon size={22} />}
+      label={label}
+      title="Drag to reorder"
+      onKeyDown={(e) => {
+        if (!e.currentTarget.matches(":disabled")) onKeyDown?.(e);
+      }}
+      {...handlers}
+    />
+  );
 }
 
 /**
@@ -140,25 +156,42 @@ const noPan = (e: TouchEvent) => e.preventDefault();
 /**
  * Drag a row by its handle to any place in its list. Rows are the list's children marked `data-sort`; the dragged
  * row follows the pointer, the rows in between step aside, and on drop `move(from, to)` reorders them.
- * Spread the result on the handle; it needs `touch-action: none`.
+ * Spread the result on the handle; it needs `touch-action: none`. A disabled handle (its form's save is out, and that
+ * save sent the order from before) moves nothing: it starts no drag, and a drag under way when it is disabled puts its
+ * row back at the next pointer event and drops nothing.
  */
 export function useDragSort(move: (from: number, to: number) => void) {
-  const drag = useRef<{ rows: HTMLElement[]; i: number; to: number; y: number; mids: number[]; step: number } | null>(null);
+  const drag = useRef<{ handle: HTMLElement; rows: HTMLElement[]; i: number; to: number; y: number; mids: number[]; step: number } | null>(null);
 
-  const settle = (rows: HTMLElement[], i: number) => {
+  // Ends the drag under way, if any, with every row back in its place; returns it.
+  const settle = useCallback(() => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return null;
     document.removeEventListener("touchmove", noPan);
-    rows[i].classList.remove("dragging");
-    for (const r of rows) r.style.transform = "";
-  };
+    d.rows[d.i].classList.remove("dragging");
+    for (const r of d.rows) r.style.transform = "";
+    return d;
+  }, []);
+
+  // A handle removed mid-drag (a save closed its form while the pointer was down) gets no pointer event any more, so
+  // its drag ends as it goes. Stable, so no render runs it.
+  const ref = useCallback(
+    (el: HTMLElement | null) => () => {
+      if (el && drag.current?.handle === el) settle();
+    },
+    [settle],
+  );
 
   const onPointerDown = (e: PointerEvent<HTMLElement>) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if ((e.pointerType === "mouse" && e.button !== 0) || e.currentTarget.matches(":disabled")) return;
     const row = e.currentTarget.closest<HTMLElement>("[data-sort]")!;
     const rows = [...row.parentElement!.children].filter((c): c is HTMLElement => c instanceof HTMLElement && "sort" in c.dataset);
     const rects = rows.map((r) => r.getBoundingClientRect());
     const i = rows.indexOf(row);
     const gap = parseFloat(getComputedStyle(row.parentElement!).rowGap) || 0;
     drag.current = {
+      handle: e.currentTarget,
       rows,
       i,
       to: i,
@@ -175,6 +208,10 @@ export function useDragSort(move: (from: number, to: number) => void) {
   const onPointerMove = (e: PointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d) return;
+    if (e.currentTarget.matches(":disabled")) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      return void settle();
+    }
     const dy = e.clientY - d.y;
     const mid = d.mids[d.i] + dy;
     let to = d.i;
@@ -189,19 +226,10 @@ export function useDragSort(move: (from: number, to: number) => void) {
     d.rows[d.i].style.transform = `translateY(${dy}px)`;
   };
 
-  const onPointerUp = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d) return;
-    settle(d.rows, d.i);
-    if (d.to !== d.i) move(d.i, d.to);
+  const onPointerUp = (e: PointerEvent<HTMLElement>) => {
+    const d = settle();
+    if (d && d.to !== d.i && !e.currentTarget.matches(":disabled")) move(d.i, d.to);
   };
 
-  const onPointerCancel = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (d) settle(d.rows, d.i);
-  };
-
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
+  return { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel: () => void settle() };
 }
