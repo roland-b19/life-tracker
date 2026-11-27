@@ -1035,6 +1035,8 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
     // The next week is this one: "Deload week chosen"
     await saveDeloadWeeksAction({ last: at(-5), next: at(0) });
     expect(await getDeloadStatus(userA)).toMatchObject({ inDeloadWeek: true, isDeloadDue: false, lastDeloadWeek: at(0), nextDeloadWeek: null });
+    // ...and the save answers what it stored, so a form opened before the refresh shows that: this week is the Last, no Next
+    expect(succeeded(await saveDeloadWeeksAction({ last: at(-5), next: at(0) }))).toMatchObject({ last: at(0), next: null });
     // Only a next week: counted back from it with the default 5 (past weeks cleared first, since a save keeps them)
     await admin.query("DELETE FROM deload_weeks WHERE user_id = $1", [userA]);
     await saveDeloadWeeksAction({ last: null, next: at(2) });
@@ -1056,7 +1058,7 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     // A new next replaces the planned one; an earlier last adds that week and the later past week stays
     const saved = succeeded(await saveDeloadWeeksAction({ last: at(-6), next: at(3) }));
-    expect(saved).toMatchObject({ last: at(-1), added: [at(-6), at(3)], removed: [at(4)] });
+    expect(saved).toMatchObject({ last: at(-1), next: at(3), added: [at(-6), at(3)], removed: [at(4)] });
     expect(await getDeloadStatus(userA)).toMatchObject({ lastDeloadWeek: at(-1), nextDeloadWeek: at(3) });
     // ...and a workout counts as deload only when it was started as one (decision 2026-11-16): none is rewritten
     expect([await flag(0), await flag(1)]).toEqual([false, true]);
@@ -1079,14 +1081,14 @@ describe("Gym module: Data Access, Logic & Authorization", () => {
 
     // "Not set": the plan (this week on) goes, the past stays, and the card's Last is the latest past week
     const cleared = succeeded(await saveDeloadWeeksAction({ last: null, next: null }));
-    expect(cleared).toEqual({ success: true, last: at(-3), added: [], removed: [at(0), at(2)] });
+    expect(cleared).toEqual({ success: true, last: at(-3), next: null, added: [], removed: [at(0), at(2)] });
     expect(await weeksOf(userA)).toEqual([at(-8), at(-3)]);
     succeeded(await restoreDeloadWeeksAction({ add: cleared.removed, remove: cleared.added }));
     expect(await weeksOf(userA)).toEqual(before);
 
     // An earlier week as Last: added, and the later past week still stands as the last one
     const earlier = succeeded(await saveDeloadWeeksAction({ last: at(-5), next: at(2) }));
-    expect(earlier).toEqual({ success: true, last: at(-3), added: [at(-5)], removed: [at(0)] });
+    expect(earlier).toEqual({ success: true, last: at(-3), next: at(2), added: [at(-5)], removed: [at(0)] });
     expect(await weeksOf(userA)).toEqual([at(-8), at(-5), at(-3), at(2)]);
     succeeded(await restoreDeloadWeeksAction({ add: earlier.removed, remove: earlier.added }));
     expect(await weeksOf(userA)).toEqual(before);

@@ -58,8 +58,9 @@ export function DeloadCard({
     const refused = refusal(stillOpen, setErrorMsg, warn);
     const res = await saveDeloadWeeksAction({ last: draft.last || null, next: draft.next || null }).catch(() => null);
     if (!res?.success) return refused(res?.error ?? "Failed to save deload weeks");
-    const { last, added, removed } = res;
-    saved({ last: last ?? "", next: draft.next });
+    const { last, next, added, removed } = res;
+    // What the server stored, not what was chosen: a Next that is this week or earlier is stored as a past week.
+    saved({ last: last ?? "", next: next ?? "" });
     if (stillOpen()) setOpen(false);
     showToast({
       // Past deload weeks are history and stay: a Last cleared or moved earlier leaves the latest of them as Last.

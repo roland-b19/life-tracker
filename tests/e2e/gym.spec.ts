@@ -840,6 +840,29 @@ test("the day editor, deload and custom exercise forms opened again before the r
   await expect(mine(page).getByText(renamed, { exact: true })).toBeVisible();
 });
 
+// The server stores a Next that is this week as a Last (a week that has started is past), so the form opened again
+// before the refresh shows what it stored: this week as the Last and no Next. Before, it kept the chosen Next, and
+// its Save was refused (the next must come after the last).
+test("the deload form opened again before the refresh shows what the server stored when Next is this week", async ({ signedInPage: page }) => {
+  await openGym(page);
+  const thisWeek = weekStart(toISODate());
+  const release = await holdRefreshes(page);
+  const edit = page.getByRole("button", { name: "Edit deload weeks" });
+  const dialog = page.getByRole("dialog", { name: "Deload weeks" });
+  await edit.click();
+  await dialog.getByLabel("Next deload").selectOption(thisWeek);
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"next":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await edit.click();
+  await expect(dialog.getByLabel("Last deload")).toHaveValue(thisWeek);
+  await expect(dialog.getByLabel("Next deload")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeEnabled();
+  // Its Save is accepted, not refused.
+  await andSettle(page, () => dialog.getByRole("button", { name: "Save" }).click(), `"last":"${thisWeek}"`);
+  await expect(dialog).toBeHidden();
+  await release();
+});
+
 // The custom exercise form's held save is kept for the tab's life, not the page's (D-047): after the page was left and
 // opened again through the app's links (each tap lets through after 10 s of the page's clock while a write is out,
 // D-034), the exercise's form waits with the name it sent until the answer, and a Save after that keeps the rename.
