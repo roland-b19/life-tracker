@@ -105,7 +105,6 @@ export function Card({
   below,
   end,
   label,
-  busy,
   fold,
   className,
   ref,
@@ -119,8 +118,6 @@ export function Card({
   below?: boolean;
   end?: ReactNode;
   label?: string;
-  /** The card is loading. */
-  busy?: boolean;
   /** A small arrow after the count that folds the card's body away; the head stays. */
   fold?: { folded: boolean; onToggle: () => void };
   className?: string;
@@ -145,7 +142,7 @@ export function Card({
     </h2>
   );
   return (
-    <section ref={ref} className={cx("surface", className)} aria-labelledby={title ? id : undefined} aria-label={title ? undefined : label} aria-busy={busy || undefined}>
+    <section ref={ref} className={cx("surface", className)} aria-labelledby={title ? id : undefined} aria-label={title ? undefined : label}>
       {title && (
         <div className="section-head">
           {sub ? (

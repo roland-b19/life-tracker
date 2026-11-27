@@ -1,7 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
-import { afterSaved, touchesOverlap, undoWith } from "@/../app/components/toast";
+import { afterSaved, touchesOverlap, undoWith } from "../app/components/toast";
 import { pushSubscriptions } from "@/db/schema";
 
 const sources = import.meta.glob("../app/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<string, string>;

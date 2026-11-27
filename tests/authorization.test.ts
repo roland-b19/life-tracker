@@ -17,7 +17,7 @@ import { addDays, toISODate } from "@/lib/format-date";
 import { addCustomExercise, EXERCISE_GONE, getExercises, getPlateWeights } from "@/lib/gym";
 import { SIGNED_OUT } from "@/lib/validations/result";
 import { WEIGHT_ENTRY_GONE } from "@/lib/validations/food";
-import { securityHeaders } from "@/../next.config";
+import { securityHeaders } from "../next.config";
 import { resetDb } from "./db";
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL_MIGRATE });

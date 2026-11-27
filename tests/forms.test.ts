@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { refusal, valuesOf } from "@/../app/components/forms";
+import { refusal, valuesOf } from "../app/components/forms";
 
 describe("refusal: a refused save says why in its form while that opening is up, else in a warning toast [D-047]", () => {
   const record = (open: { now: boolean }) => {

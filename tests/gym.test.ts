@@ -66,12 +66,12 @@ import {
 import { alreadyExists, SIGNED_OUT } from "@/lib/validations/result";
 import { FUTURE_DATE, NOTHING_TO_SAVE, TWO_DECIMALS } from "@/lib/validations/common";
 import { refused, succeeded } from "./succeeded";
-import { setExercises } from "@/../app/gym/active-workout";
-import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "@/../app/gym/exercise-logger";
-import { plateKgProblem } from "@/../app/gym/progress-panel";
-import { dayProblem, exerciseNameProblem } from "@/../app/gym/day-editor";
-import { deloadProblem } from "@/../app/gym/deload-card";
-import { setText } from "@/../app/gym/types";
+import { setExercises } from "../app/gym/active-workout";
+import { canLog, emptyInput, inputProblem, outlierBest, type SetInput } from "../app/gym/exercise-logger";
+import { plateKgProblem } from "../app/gym/progress-panel";
+import { dayProblem, exerciseNameProblem } from "../app/gym/day-editor";
+import { deloadProblem } from "../app/gym/deload-card";
+import { setText } from "../app/gym/types";
 import { resetDb } from "./db";
 
 const TODAY = toISODate();
