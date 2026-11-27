@@ -25,13 +25,13 @@ last_verified: 2026-11-27
 | Axe scans wait for the refresh a write left due (second `document-title` flake, D-019) | done |
 | Unused manual scripts: kept and documented (D-008) | done |
 | New color palette: slate, one turquoise accent, dark and light modes with a manual switch (D-020 to D-032) | done 2026-11-27, [plan](archive/plans/color-palette.md) |
-| Functional audit fixes, open copies kept in sync, the midnight rollover, no swipe navigation (D-034 to D-047) | done, [plan](archive/plans/audit-fixes.md) (parts M and A to F and the owner's round in `main`; the last edges on `chore/audit-edges`, going to `main` with its PR) |
+| Functional audit fixes, open copies kept in sync, the midnight rollover, no swipe navigation (D-034 to D-047) | done 2026-11-27, [plan](archive/plans/audit-fixes.md) (parts M and A to F, the owner's round and the last edges, PR #181, all in `main`) |
 
 ## In progress
-- `chore/audit-edges`: the functional audit's last edges, the D-047 round's simplify cleanups and the Gym day editor's drag-while-saving edge. Review round 1's two Important bugs are fixed and verified (the deload card saves the weeks the server stored; a drag under way ends as its handle is disabled, with no pointer event); round 2 found no Important bug, and its test Nits are fixed and verified. The milestone audit's cleanup is in (Card's unused `busy`, tests import app code with `../`).
+Nothing: the functional audit's last edges, the review's fixes and the milestone audit's cleanup went to `main` with PR #181 (2026-11-27).
 
 ## Next steps
-1. Finish the review of `chore/audit-edges` and open its PR to `main`; the owner said to merge it once it is green (2026-11-27).
+1. The owner picks the next item from Later; each starts with its own plan, in its own session (golden rule 6).
 
 Known, not a bug: under heavy e2e load the Gym page's main thread can stall while headless Chromium's software GL (SwiftShader) reads back the muscle map's WebGL draws. It now draws 2 times on load, not 5 (longest task about 2850 → 1140 ms with 4 workers); real devices composite on the GPU and do no readback.
 
