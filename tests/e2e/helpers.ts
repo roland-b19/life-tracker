@@ -296,6 +296,45 @@ export async function loseAnswerOnce(page: Page, marker: string) {
 }
 
 /**
+ * Every server action of the page on screen whose body holds `marker` reaches the server, and its answer is changed on
+ * the way back: the page gets `change(text)` in place of the answer's text.
+ */
+export async function changeAnswers(page: Page, marker: string, change: (text: string) => string) {
+  const path = new URL(page.url()).pathname;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      if (!isWrite(route.request(), marker)) return route.fallback();
+      await onNewConnection(page, async (api) => {
+        const answer = await api.fetch(route.request());
+        // The body is read decoded and changed, so its length and encoding headers no longer apply.
+        const headers = Object.fromEntries(Object.entries(answer.headers()).filter(([k]) => !["content-length", "content-encoding", "transfer-encoding"].includes(k)));
+        await route.fulfill({ response: answer, body: change(await answer.text()), headers });
+      });
+    },
+  );
+}
+
+/** Holds the page's refreshes (D-034) from now on until the returned `release()`, which lets them through and waits for them. */
+export async function holdRefreshes(page: Page) {
+  let open = () => {};
+  const held = new Promise<void>((resolve) => (open = resolve));
+  const path = new URL(page.url()).pathname;
+  await page.route(
+    (url) => url.pathname === path,
+    async (route) => {
+      if (!isRefresh(page, route.request())) return route.fallback();
+      await held;
+      await route.fallback();
+    },
+  );
+  return async () => {
+    open();
+    await refreshesDone(page);
+  };
+}
+
+/**
  * Records each state the page shows from now on, as `sample(arg)` reads it in the page (undefined: nothing to record
  * now), and answers a function that reads the states seen so far. A MutationObserver sees each change of the DOM, so no
  * state slips between two checks; the document stays across client navigations (a reload would drop the record).

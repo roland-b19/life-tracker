@@ -89,13 +89,14 @@ describe("an Undo runs once the toast's write has succeeded, never after it fail
     }
   });
   it("never runs when the write was refused, gave no answer or threw", async () => {
-    for (const end of [
-      (w: ReturnType<typeof pending>) => w.answer({ success: false, error: "No" }),
-      (w: ReturnType<typeof pending>) => w.answer(null),
-      (w: ReturnType<typeof pending>) => w.answer(undefined),
-      (w: ReturnType<typeof pending>) => w.answer(false),
-      (w: ReturnType<typeof pending>) => w.fail(),
-    ]) {
+    const ends: ((w: ReturnType<typeof pending>) => void)[] = [
+      (w) => w.answer({ success: false, error: "No" }),
+      (w) => w.answer(null),
+      (w) => w.answer(undefined),
+      (w) => w.answer(false),
+      (w) => w.fail(),
+    ];
+    for (const end of ends) {
       const write = pending();
       const undo = vi.fn();
       afterSaved(write.saved, undo);

@@ -112,15 +112,15 @@ export async function restoreWishlistItem(
  * field stays. A new price brings its priority. Null when the item is not the user's.
  */
 export async function updateWishlistItem(userId: string, input: UpdateWishlistItemInput): Promise<WishlistItemData | null> {
-  const { id: itemId, ...validated } = input;
+  const { id: itemId, ...fields } = input;
   const changes = {
-    ...(validated.name !== undefined && { name: validated.name }),
-    ...(validated.url !== undefined && { url: validated.url || null }),
-    ...(validated.estimatedPrice !== undefined && {
-      estimatedPrice: String(validated.estimatedPrice),
-      priority: priorityForPrice(validated.estimatedPrice),
+    ...(fields.name !== undefined && { name: fields.name }),
+    ...(fields.url !== undefined && { url: fields.url || null }),
+    ...(fields.estimatedPrice !== undefined && {
+      estimatedPrice: String(fields.estimatedPrice),
+      priority: priorityForPrice(fields.estimatedPrice),
     }),
-    ...(validated.category !== undefined && { category: validated.category }),
+    ...(fields.category !== undefined && { category: fields.category }),
   };
   if (Object.keys(changes).length === 0) return findWishlistItem(userId, itemId);
 
@@ -130,7 +130,7 @@ export async function updateWishlistItem(userId: string, input: UpdateWishlistIt
     .where(and(eq(wishlistItems.id, itemId), eq(wishlistItems.userId, userId)))
     .returning(wishlistColumns);
 
-  if (item && validated.category) await ensureCategory(userId, "wishlist", validated.category);
+  if (item && fields.category) await ensureCategory(userId, "wishlist", fields.category);
   return (item as WishlistItemData | undefined) ?? null;
 }
 
