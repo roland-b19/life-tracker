@@ -6,15 +6,19 @@ import { CloseIcon } from "./icons";
 
 /**
  * One Tab step inside a dialog, wrapping at both ends. Every step is taken here: Safari's own Tab passes over links and
- * buttons, and would leave the dialog. A time field keeps the browser's Tab, which walks its hours and minutes.
+ * buttons, and would leave the dialog. A time field keeps the browser's Tab, which walks its hours and minutes; each stop
+ * gets its tabindex written out first, because Safari's Tab out of that field passes over a button without one.
  */
 export function stepFocus(e: KeyboardEvent, dialog: HTMLElement) {
-  if (document.activeElement?.matches("input[type='time']")) return;
-  e.preventDefault();
   const stops = [...dialog.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")].filter(
     // offsetParent is null under display:none; a visibility:hidden control refuses focus and would stop the steps.
     (el) => el.tabIndex >= 0 && !el.matches(":disabled") && el.offsetParent !== null && getComputedStyle(el).visibility !== "hidden",
   );
+  if (document.activeElement?.matches("input[type='time']")) {
+    stops.forEach((el) => el.setAttribute("tabindex", String(el.tabIndex)));
+    return;
+  }
+  e.preventDefault();
   // On none of them (the dialog itself, at first) Tab goes to the first and Shift+Tab to the last.
   const at = stops.indexOf(document.activeElement as HTMLElement);
   const next = stops[e.shiftKey ? (at <= 0 ? stops.length : at) - 1 : (at + 1) % stops.length];
