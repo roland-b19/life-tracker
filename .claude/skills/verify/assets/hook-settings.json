@@ -1,7 +1,0 @@
-{
-  "hooks": {
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/verify/scripts/verify_hook.py\" <the one check command>", "timeout": 300 }] }
-    ]
-  }
-}

@@ -12,9 +12,8 @@ A plan is complete when every core item passes, and every conditional item passe
 7. **Hand-off.** A new session with only the repo, the KB and this page could build the feature. Test: the page doesn't say "as discussed", "see above in chat" or name anything only the chat explains.
 
 ## Conditional items
-8. **Work split** — when two or more parts can be built at the same time. Each part names its steps, the files only it may change, and the parts it needs merged first; rows are in merge order (script: no file owned by two parts, and each part needs only parts listed above it). Steps that touch the same files go in the same part. KB files and the plan page are shared and need no owner.
-9. **Data migration** — when stored data, a schema or a config format changes. Names the migration step, how it is tested on a copy, and how to go back.
-10. **Risks and spikes** — when a step depends on something not yet proven (an API's limits, a library's behaviour, performance). Each risk names a spike step that settles it before the steps that depend on it.
+8. **Data migration** — when stored data, a schema or a config format changes. Names the migration step, how it is tested on a copy, and how to go back.
+9. **Risks and spikes** — when a step depends on something not yet proven (an API's limits, a library's behaviour, performance). Each risk names a spike step that settles it before the steps that depend on it.
 
 ## Status (script)
 The page ends with `Status: draft`, `Status: approved YYYY-MM-DD` or `Status: done YYYY-MM-DD`.

@@ -27,12 +27,6 @@ last_verified: <YYYY-MM-DD>
 
 <!-- Conditional sections: keep each only when its condition holds (see the checklist).
 
-## Work split
-| Part | Steps | Owns (only this part changes) | Needs merged first |
-|---|---|---|---|
-| A | 1–3 | `src/api/` | — |
-| B | 4–5 | `src/ui/settings.tsx`, `tests/ui/` | A |
-
 ## Data migration
 <The migration step, how it is tested on a copy, how to go back.>
 
