@@ -29,13 +29,14 @@ last_verified: 2026-11-28
 | Workflow update: one check command and `/code-review medium` before each PR, no hooks, session log or KB archive (D-049) | done 2026-11-28 |
 
 ## In progress
-Nothing: the leftover fixes outside Later went to `main` with PR #182 (2026-11-27).
+Nothing: only the Later list is left (the last open questions were closed on 2026-11-28).
 
 ## Next steps
 1. The owner picks the next item from Later; a new feature starts with a plan (golden rule 6).
-2. On the owner's word: one Azure iteration, checking the app and the course requirements there. It needs their OK for the Azure resources (they cost money) and those requirements, which are not in the repo.
 
 Known, not a bug: under heavy e2e load the Gym page's main thread can stall while headless Chromium's software GL (SwiftShader) reads back the muscle map's WebGL draws. It now draws 2 times on load, not 5 (longest task about 2850 → 1140 ms with 4 workers); real devices composite on the GPU and do no readback.
+
+Known, waiting on upstream: `npm audit` and Dependabot report a moderate `esbuild` advisory (GHSA-67mh-4wv8-2f99) in a dev-only package that comes through `drizzle-kit` and is never in the published app. The only fix npm offers is a breaking downgrade of `drizzle-kit`, so the owner chose to wait (2026-11-28).
 
 ## Later (noted by the owner, not started)
 A new feature among them starts with a plan (golden rule 6) when the owner picks it up.
@@ -45,11 +46,10 @@ A new feature among them starts with a plan (golden rule 6) when the owner picks
 - Animations.
 - New features.
 - Data storage: the database, backups, limits and what stays on the device.
+- Azure: one iteration that checks the app and the course requirements there, on the owner's word only. It needs their OK for the Azure resources (they cost money) and those requirements, which are not in the repo.
 
 ## Open questions
-- Dependabot has 2 moderate alerts in dev-only transitive packages: `esbuild` 0.18.20 (through `drizzle-kit`) and `minimatch` (through `eslint-config-next`). Wait for upstream, or force newer versions (a dependency change)?
-- Safari's Tab from the task reminder time field can leave the task form (older than PR #182, which left time fields to the browser's Tab). Fix it?
-- The old Docker volume `scripts-cleanup-a4281a_postgres-data` is still on the owner's Mac. Delete it?
+None.
 
 ## Tracked migrations
 Deprecated patterns still in use (golden rule 1). New code never uses them; migrating is its own change.

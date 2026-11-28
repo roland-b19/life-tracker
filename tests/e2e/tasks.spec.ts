@@ -84,6 +84,17 @@ test("Tab in a dialog steps through its fields and buttons, selects a field's te
   await step("Tab", save);
   await step("Tab", close);
 
+  // A time field keeps the browser's Tab, and Safari's passes over a button with no tabindex of its own, so each stop
+  // gets one first. The reminder field needs push, off here (D-012): a plain time field stands in.
+  await field.evaluate((el) => el.after(Object.assign(document.createElement("input"), { type: "time" })));
+  const time = form.locator("input[type='time']");
+  await time.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("body")).toHaveAttribute("data-tab-taken", "false");
+  for (const button of [close, cancel, save]) await expect(button).toHaveAttribute("tabindex", "0");
+  await time.evaluate((el) => el.remove());
+  await close.focus();
+
   // A control that is not shown takes no step either, and does not stop the ones after it.
   await cancel.evaluate((el) => (el.style.visibility = "hidden"));
   await step("Tab", field);
