@@ -2,7 +2,8 @@
 name: review-plan
 description: Reviews a feature plan page with no chat history, against the plan checklist, the KB and the code, and lists the gaps and the questions a builder would hit. Use when the user says "review the plan".
 tools: Read, Grep, Glob
-model: inherit
+model: sonnet
+effort: high
 omitClaudeMd: true
 ---
 

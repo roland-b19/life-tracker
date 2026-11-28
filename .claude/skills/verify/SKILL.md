@@ -9,8 +9,8 @@ Committed tests are the "done" gate: they give the same answer on every run and 
 
 ## 1. Find the project's checks
 1. Read the Checks entry on the KB conventions page. It names the commands: the fast checks and how to run one end-to-end spec.
-2. The fast checks are the project's one check command, as `.claude/skills/merge-branch/references/setup-github.md` step 2 defines it. CI runs it on every PR, and the verify Stop hook in `.claude/settings.json` runs it when Claude stops, blocking while it fails (the command is the arguments after `verify_hook.py`).
-3. If the project has no tests, no Checks entry or no Stop hook, read `.claude/skills/verify/references/setup.md` and set testing up before going on.
+2. The fast checks are the project's one check command, as `.claude/skills/merge-branch/references/setup-github.md` step 2 defines it. CI runs it on every PR.
+3. If the project has no tests or no Checks entry, read `.claude/skills/verify/references/setup.md` and set testing up before going on.
 
 ## 2. Write the tests the change needs
 Write them before running anything, in the project's existing test style (golden rule 1).

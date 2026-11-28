@@ -7,10 +7,8 @@ Exit code 1 if there are errors.
 Checks: INDEX exists and is under its line cap; every page is reachable from
 INDEX; no broken relative links; pages have summary/last_verified frontmatter;
 pages over the size cap (errors); stale last_verified; covered code committed after
-last_verified (git); past log months without a rollup summary; a bullet over the
-length cap in the newest log entry; a decision number
-used twice; leftover merge conflict markers; template placeholders such as
-<Title> left in a page's prose; pages under plans/ pass the plan checks of the
+last_verified (git); a decision number used twice; leftover merge conflict
+markers; template placeholders such as <Title> left in a page's prose; pages under plans/ pass the plan checks of the
 plan-feature skill (its scripts/check_plan.py).
 """
 import argparse
@@ -24,10 +22,7 @@ from pathlib import Path
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"```.*?```", re.S)
 INLINE_CODE = re.compile(r"`[^`\n]*`")
-# COMMENT, DECISION and is_decision_file are also used by merge-branch/scripts/renumber_decisions.py;
-# COMMENT, EXEMPT and frontmatter by kb_search.py;
-# COMMENT, FENCE, INLINE_CODE and placeholders by plan-feature/scripts/check_plan.py
-# and review-change/scripts/review_hook.py;
+# COMMENT, FENCE, INLINE_CODE and placeholders are also used by plan-feature/scripts/check_plan.py;
 # COMMENT and is_decision_file by the workflow repo's installer (setup/setup.py there).
 COMMENT = re.compile(r"<!--.*?-->", re.S)
 DECISION = re.compile(r"^## D-(\d+):", re.M)
@@ -45,19 +40,16 @@ def placeholders(prose):
     return sorted(set(PLACEHOLDER.findall(prose)))
 
 
-EXEMPT = ("log", "archive")  # history folders: no frontmatter, need not be indexed
 PLANS = "plans"  # feature plan pages, written by the plan-feature skill
 INDEX_MAX, PAGE_MAX = 60, 250  # caps from maintain-kb SKILL.md rule 6
 STALE_DAYS = 60  # a page whose last_verified is older than this many days gets a warning
-LOG_BULLET_MAX = 200  # characters per bullet in a log entry (maintain-kb Update step 4)
 
 
 def is_decision_file(rel):
     """True for a page that holds decisions, by its path relative to the KB folder: one page per area
-    in decisions/, plus archive/decisions.md."""
+    in decisions/."""
     parts = rel.split("/")
-    return rel == "archive/decisions.md" or (
-        len(parts) == 2 and parts[0] == "decisions" and parts[1].endswith(".md"))
+    return len(parts) == 2 and parts[0] == "decisions" and parts[1].endswith(".md")
 
 
 def frontmatter(text):
@@ -126,7 +118,7 @@ def main():
             for n in DECISION.findall(uncommented):
                 d = f"D-{n}"
                 if d in decided:
-                    errors.append(f"ERROR {rel}: decision {d} also in {decided[d]}; renumber one (merge-branch)")
+                    errors.append(f"ERROR {rel}: decision {d} also in {decided[d]}; renumber one by hand")
                 else:
                     decided[d] = rel
 
@@ -142,14 +134,12 @@ def main():
                 targets.add(dest)
         links[p] = targets
 
-        if rel.split("/")[0] not in EXEMPT + (PLANS,):  # plan pages get this from the plan checks
+        if rel.split("/")[0] != PLANS:  # plan pages get this from the plan checks
             errors += [f"ERROR {rel}: template placeholder {m} left (fill it in, or put literal text in backticks)" for m in placeholders(prose)]
 
         if p == index:
             if lines > INDEX_MAX:
                 errors.append(f"ERROR INDEX.md: {lines} lines > {INDEX_MAX}; move detail into pages or section indexes")
-            continue
-        if rel.split("/")[0] in EXEMPT:
             continue
 
         if rel.split("/")[0] == PLANS:
@@ -192,24 +182,8 @@ def main():
             stack.extend(links.get(p, ()))
     for p in files:
         rel = p.relative_to(kb).as_posix()
-        if p not in seen and rel.split("/")[0] not in EXEMPT:
+        if p not in seen:
             errors.append(f"ERROR {rel}: not reachable from INDEX.md; add it to the index")
-
-    current_month = today.strftime("%Y-%m")
-    log_dir = kb / "log"
-    months = sorted(log_dir.glob("*.md")) if log_dir.is_dir() else []
-    for p in months:
-        if p.stem < current_month and "## Summary" not in p.read_text(encoding="utf-8"):
-            warns.append(f"WARN log/{p.name}: past month has no '## Summary'; roll it up (see .claude/skills/maintain-kb/references/lint.md)")
-    if months:
-        # Only the newest entry, the one being written: older entries stay as they were written.
-        entries = [e for e in re.split(r"^## ", months[-1].read_text(encoding="utf-8"), flags=re.M)[1:]
-                   if not e.startswith("Summary")]
-        long = [line for line in (entries[-1].splitlines() if entries else [])
-                if line.lstrip().startswith("- ") and len(line.strip()) > LOG_BULLET_MAX]
-        if long:
-            warns.append(f"WARN log/{months[-1].name}: {len(long)} bullet(s) in the newest entry over "
-                         f"{LOG_BULLET_MAX} characters; keep each to one short line, details go in the decision or PR")
 
     for msg in errors + warns:
         print(msg)

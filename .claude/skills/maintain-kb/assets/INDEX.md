@@ -11,6 +11,3 @@
 - decisions (D-NNN), with reasons and rejected alternatives, one page per area: [general](decisions/general.md)
 - [conventions](conventions.md) — <one-line summary>
 - [status](status.md) — in progress, next steps, open questions
-
-## History
-Session logs: `log/YYYY-MM.md` (newest: <YYYY-MM>). Superseded and removed content: `archive/`.
